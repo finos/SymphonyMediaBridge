@@ -1,0 +1,388 @@
+#pragma once
+#include "LockFreeList.h"
+#include <algorithm>
+#include <atomic>
+#include <functional>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <vector>
+namespace concurrency
+{
+
+// wait-free
+// Keys may be 0
+// No value may be zero !!
+// key is 40bits and will be truncated to 40 bits.
+// elementCount must be power of two and <= 16777216
+class MurmurHashIndex
+{
+public:
+    explicit MurmurHashIndex(size_t elementCount);
+
+    bool add(uint64_t key, uint32_t value);
+    bool remove(uint64_t key);
+    bool get(uint64_t key, uint32_t& value) const;
+    bool containsKey(uint64_t key) const;
+
+    uint32_t removeNext(uint32_t index, uint32_t& position);
+    size_t capacity() const { return _index.size(); }
+
+    // not thread safe
+    void reInitialize();
+
+private:
+    // produce hash key
+    static uint64_t hash(uint64_t key)
+    {
+        key ^= key >> 16;
+        key *= 0x85ebca6b;
+        key ^= key >> 13;
+        key *= 0xc2b2ae35;
+        key ^= key >> 16;
+        key *= 0x85ebca6b;
+        key ^= key >> 16;
+        return key;
+    }
+
+    uint32_t position(uint64_t hashValue, uint32_t offset) const { return (hashValue + offset) & (_index.size() - 1); }
+
+    // Key and value will be stored atomically and is therefore exactly 64 bits.
+    // A value of zero means empty slot
+
+    struct KeyValue
+    {
+        KeyValue() : key(0), value(0) {}
+        KeyValue(uint64_t key_, uint32_t value_) : key(key_ & 0xFFFFFFFFF), value(value_) {}
+
+        uint64_t key : 40;
+        uint64_t value : 24;
+    };
+
+    class Entry
+    {
+    public:
+        Entry() { cacheLineSeparator[0] = {0}; }
+        std::atomic<KeyValue> keyValue;
+
+    private:
+        uint64_t cacheLineSeparator[7];
+    };
+
+    void updateSpread(uint32_t i);
+
+    std::vector<Entry> _index;
+    std::atomic_uint32_t _maxSpread;
+};
+
+// how much larger do we make the hash index to reduce collisions
+
+// wait-free
+// bounded
+// mpmc
+// optimistic reuse once all empty slots are consumed.
+// If recycling is too intensive you will step into corrupt data.
+// Be careful when recycling near container capacity.
+// key is 40bit max
+// Calling the destructor of the element stored is delayed until the
+// slot is recycled or hashmap is destroyed. This is to reduce risk of
+// bad access when items are removed.
+// If key type or value type requires heap alloc construction, it is no longer wait free
+template <typename KeyT, typename T>
+class MpmcHashmap32
+{
+    enum class State : uint32_t
+    {
+        empty, // under construction
+        committed,
+        tombstone
+    };
+
+    struct Entry : public ListItem
+    {
+        template <typename... Args>
+        explicit Entry(const KeyT& key, Args&&... args)
+            : element(std::piecewise_construct,
+                  std::forward_as_tuple(key),
+                  std::forward_as_tuple(std::forward<Args>(args)...))
+        {
+            assert(state.is_lock_free());
+        }
+
+        std::atomic<State> state;
+        std::pair<KeyT, T> element;
+    };
+
+public:
+    template <typename ValueType>
+    class IterBase
+    {
+    public:
+        IterBase(Entry* entries, uint32_t pos, uint32_t endPos) : _elements(entries), _pos(pos), _end(endPos) {}
+        IterBase(const IterBase& it) : _elements(it._elements), _pos(it._pos), _end(it._end) {}
+
+        IterBase& operator++()
+        {
+            if (_pos == _end)
+            {
+                return *this; // cannot advance a logical end iterator
+            }
+
+            ++_pos;
+            while (_pos != _end && _elements[_pos].state.load() != State::committed)
+            {
+                ++_pos;
+            }
+
+            return *this;
+        }
+
+        ValueType& operator*() { return _elements[_pos].element; }
+        ValueType* operator->() { return &_elements[_pos].element; }
+        const ValueType& operator*() const { return _elements[_pos].element; }
+        const ValueType* operator->() const { return &_elements[_pos].element; }
+        bool operator==(const IterBase& it) const { return _pos == it._pos || (isEnd() && it.isEnd()); }
+
+        bool operator!=(const IterBase& it) const
+        {
+            if (!isEnd() && !it.isEnd())
+            {
+                return _pos != it._pos;
+            }
+            return isEnd() != it.isEnd();
+        }
+
+    private:
+        bool isEnd() const { return _pos == _end; }
+        Entry* _elements;
+        uint32_t _pos;
+        uint32_t _end;
+    };
+
+    typedef const IterBase<std::pair<KeyT, T>> const_iterator;
+    typedef IterBase<std::pair<KeyT, T>> iterator;
+    typedef std::pair<KeyT, T> value_type;
+
+    explicit MpmcHashmap32(size_t maxElements) : _end(0), _capacity(maxElements), _index(maxElements * 4)
+    {
+        void* mem = mmap(nullptr,
+            blockSizeFor(_capacity, sizeof(Entry)),
+            (PROT_READ | PROT_WRITE),
+            (MAP_PRIVATE | MAP_ANONYMOUS),
+            -1,
+            0);
+        _elements = reinterpret_cast<Entry*>(mem);
+        assert(reinterpret_cast<intptr_t>(_elements) != -1);
+        assert(reinterpret_cast<intptr_t>(&_elements[1]) != -1);
+        std::memset(mem, 0, blockSizeFor(_capacity, sizeof(Entry)));
+        for (size_t i = 0; i < _capacity; ++i)
+        {
+            _elements[i].state = State::empty;
+            _freeItems.push(&_elements[i]);
+        }
+    }
+
+    ~MpmcHashmap32()
+    {
+        for (size_t i = 0; i < _end.load(); ++i)
+        {
+            if (_elements[i].state.load() != State::empty)
+            {
+                _elements[i].~Entry();
+            }
+        }
+        munmap(_elements, blockSizeFor(_capacity, sizeof(Entry)));
+    }
+
+    template <typename... Args>
+    std::pair<iterator, bool> emplace(const KeyT& key, Args&&... args)
+    {
+        {
+            auto existingIt = find(key);
+            if (existingIt != end())
+            {
+                return std::make_pair(existingIt, false);
+            }
+        }
+
+        Entry* entry = nullptr;
+        ListItem* listItem = nullptr;
+        if (_freeItems.pop(listItem))
+        {
+            entry = reinterpret_cast<Entry*>(listItem);
+            auto state = entry->state.load();
+            if (state == State::empty)
+            {
+                _end.fetch_add(1);
+            }
+            else if (state == State::tombstone)
+            {
+                entry->~Entry();
+            }
+        }
+        else
+        {
+            return std::make_pair(end(), false);
+        }
+
+        const uint32_t pos = std::distance(_elements, reinterpret_cast<Entry*>(entry));
+        new (entry) Entry(key, std::forward<Args>(args)...);
+        entry->state.store(State::committed);
+        if (!_index.add(preHash(key), pos + 1))
+        {
+            // index must be full or duplicate key
+            entry->state.store(State::tombstone);
+            _freeItems.push(entry);
+
+            auto existingIt = find(key);
+            return std::make_pair(existingIt, false);
+        }
+
+        return std::make_pair(iterator(_elements, pos, pos + 1), true);
+    }
+
+    void erase(const KeyT& key)
+    {
+        const uint64_t key64 = preHash(key);
+        uint32_t pos = 0;
+        if (!_index.get(key64, pos))
+        {
+            return;
+        }
+        assert(pos > 0);
+
+        if (_index.remove(key64))
+        {
+            --pos;
+            _elements[pos].state.store(State::tombstone);
+            _freeItems.push(&_elements[pos]);
+        }
+    }
+
+    bool contains(const KeyT& key) const { return _index.containsKey(preHash(key)); }
+
+    iterator find(const KeyT& key)
+    {
+        uint32_t pos = 0;
+        if (_index.get(preHash(key), pos))
+        {
+            --pos;
+            if (_elements[pos].state.load() == State::committed)
+            {
+                return iterator(_elements, pos, pos + 1);
+            }
+            else
+            {
+                return end();
+            }
+        }
+        return end();
+    }
+
+    const_iterator find(const KeyT& key) const
+    {
+        auto& map = const_cast<MpmcHashmap32<KeyT, T>&>(*this);
+        auto it = map.find(key);
+        return const_iterator(it);
+    }
+
+    // concurrent version
+    void clear()
+    {
+        for (size_t i = 0; i < _index.capacity();)
+        {
+            uint32_t pos;
+            i = _index.removeNext(i, pos);
+            if (pos != 0)
+            {
+                --pos;
+                _elements[pos].state.store(State::tombstone);
+                _freeItems.push(&_elements[pos]);
+            }
+        }
+    }
+
+    // not thread safe
+    void reInitialize()
+    {
+        _index.reInitialize();
+        ListItem* item = nullptr;
+        while (_freeItems.pop(item)) {}
+
+        for (size_t i = 0; i < _capacity; ++i)
+        {
+            if (_elements[i].state.load() != State::empty)
+            {
+                _elements[i].~Entry();
+            }
+
+            _elements[i].state.store(State::empty);
+            _freeItems.push(&_elements[i]);
+        }
+        _end = 0;
+    }
+
+    size_t capacity() const { return _capacity; }
+    size_t size() const { return _capacity - _freeItems.size(); }
+
+    const_iterator cbegin() const
+    {
+        uint32_t first = 0;
+        const uint32_t theEnd = _end.load(std::memory_order_acquire);
+        while (first != theEnd && _elements[first].state.load() != State::committed)
+        {
+            ++first;
+        }
+        return const_iterator(_elements, first, theEnd);
+    }
+
+    const_iterator cend() const
+    {
+        const uint32_t currentEnd = _end.load(std::memory_order_acquire);
+        return const_iterator(_elements, currentEnd, currentEnd);
+    }
+
+    const_iterator begin() const { return cbegin(); }
+    const_iterator end() const { return cend(); }
+    iterator begin()
+    {
+        uint32_t first = 0;
+        const uint32_t theEnd = _end.load(std::memory_order_acquire);
+        while (first != theEnd && _elements[first].state.load() != State::committed)
+        {
+            ++first;
+        }
+        return iterator(_elements, first, theEnd);
+    }
+    iterator end()
+    {
+        const uint32_t currentEnd = _end.load(std::memory_order_acquire);
+        return iterator(_elements, currentEnd, currentEnd);
+    }
+
+private:
+    static size_t blockSizeFor(size_t count, size_t size)
+    {
+        const auto pageSize = getpagesize();
+        const auto used = (count * size);
+        const auto remaining = used % pageSize;
+        if (remaining != 0)
+        {
+            return used + (pageSize - remaining);
+        }
+        return used;
+    }
+
+    static uint64_t preHash(const KeyT& key) { return preHash(key, std::is_integral<KeyT>()); }
+    static uint64_t preHash(const KeyT& key, std::true_type) { return key; }
+    static uint64_t preHash(const KeyT& key, std::false_type) { return static_cast<uint64_t>(std::hash<KeyT>{}(key)); }
+
+    Entry* _elements;
+    std::atomic_uint32_t _end;
+
+    const uint32_t _capacity;
+
+    MurmurHashIndex _index;
+
+    LockFreeList _freeItems;
+};
+} // namespace concurrency

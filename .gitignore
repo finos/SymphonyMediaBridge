@@ -1,0 +1,33 @@
+.idea
+.vscode
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/settings.json
+!.vscode/build-tools.sh
+cmake-build-debug
+cmake-build-release
+*.o
+bulkstore*
+googletest-*
+CMakeFiles*
+Makefile
+CMakeCache.*
+doc/trace*
+*.pcap*
+*.log
+cores/*
+*.so*
+*.a
+tools/vagrantdev/.vagrant/*
+tools/vagrant/.vagrant/*
+
+# Docker
+el7/smb/
+
+# Xcode
+build/
+*.build/
+Debug/
+Release/
+*.xcodeproj/
+coverage/*

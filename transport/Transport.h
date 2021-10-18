@@ -1,0 +1,42 @@
+#pragma once
+
+#include "jobmanager/JobManager.h"
+#include "memory/PacketPoolAllocator.h"
+
+namespace jobmanager
+{
+class SerialJobManager;
+}
+
+namespace transport
+{
+
+class DataReceiver;
+
+class Transport
+{
+public:
+    virtual ~Transport() = default;
+
+    virtual bool isInitialized() const = 0;
+    virtual const logger::LoggableId& getLoggableId() const = 0;
+
+    /** Numeric unique id. It's used instead of object's address to make
+     * maps traversal order deterministic in UTs when map's key is TransportId. */
+    virtual size_t getId() const = 0;
+
+    virtual size_t getEndpointIdHash() const = 0;
+    virtual void stop() = 0;
+    virtual bool isRunning() const = 0;
+    virtual bool hasPendingJobs() const = 0;
+    virtual std::atomic_uint32_t& getJobCounter() = 0;
+    virtual void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& allocator) = 0;
+    virtual bool unprotect(memory::Packet* packet) = 0;
+    virtual void setDataReceiver(DataReceiver* dataReceiver) = 0;
+    virtual bool isConnected() = 0;
+    virtual bool start() = 0;
+    virtual void connect() = 0;
+    virtual jobmanager::SerialJobManager& getJobManager() = 0;
+};
+
+} // namespace transport

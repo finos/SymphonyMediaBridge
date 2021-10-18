@@ -1,0 +1,31 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
+// https://github.com/microsoft/vscode-dev-containers/tree/v0.163.1/containers/docker-existing-dockerfile
+{
+	"name": "Docker from Image",
+	"image": "gcr.io/sym-dev-rtc/buildsmb-el7:latest",
+	"runArgs": [
+		"--security-opt",
+		"seccomp=unconfined"
+	],
+	"extensions": [
+		"ms-vscode.cpptools",
+		"twxs.cmake",
+		"streetsidesoftware.code-spell-checker",
+		"vadimcn.vscode-lldb@1.6.1",
+		"mhutchie.git-graph",
+		"davidschuldenfrei.gtest-adapter",
+		"gruntfuggly.todo-tree",
+		"shardulm94.trailing-spaces",
+		"ilich8086.untabify"
+	],
+	"remoteEnv": {
+		"LOCAL_WORKSPACE_FOLDER": "${localWorkspaceFolder}"
+	},
+	"containerEnv": {
+		"CC": "clang",
+		"CXX": "clang++",
+		"LD_LIBRARY_PATH": "/usr/local/lib/:/usr/local/lib64/",
+		"LD_PRELOAD": "/usr/lib64/libgcc_s.so.1"
+	},
+	"postCreateCommand": "./.devcontainer/scripts/post-create.sh",
+}

@@ -1,0 +1,5 @@
+{
+  "port": 8080,
+  "logLevel": "DEBUG",
+  "ice.singlePort": 10000
+}

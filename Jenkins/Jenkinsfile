@@ -1,0 +1,126 @@
+@Library('SFE-RTC-pipeline') _
+
+properties([
+    buildDiscarder(logRotator(artifactNumToKeepStr: "15", numToKeepStr: "15")),
+    parameters([
+        string(name: "ARTIFACTORY_CREDENTIALS_ID", defaultValue: "jenkins-artifactory-credentials", description: "Id of credentials for artifactory access for mt scripts"),
+    ])
+])
+
+node('be-integration') {
+    def artifactoryServer = Artifactory.server 'Symphony-Production-Artifactory'
+    def baseName = "rtc-smb"
+    def version = "0.0.2-${currentBuild.number}"
+    def promotion = true
+    def buildInfo
+    def scmVars
+    def isReleaseBuild = false
+    try {
+        cleanWs()
+
+        stage('Checkout') {
+            scmVars = checkout scm
+            env.GIT_COMMIT = scmVars.GIT_COMMIT
+            env.GIT_BRANCH = scmVars.GIT_BRANCH
+
+            if (env.GIT_BRANCH.equals("master")) {
+                version = "2.1.0-${currentBuild.number}"
+                isReleaseBuild = true
+            } else if (env.GIT_BRANCH.equals("2.0.0")) {
+                version = "2.0.0-${currentBuild.number}"
+                isReleaseBuild = true
+            }
+
+            // Set the version env variable so that it's picked up by versioninfo.sh run as part of the build
+            env.VERSION=version
+        }
+
+        docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:latest').inside {
+            stage('Build Centos 7') {
+                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
+                sh "docker/el7/buildscript.sh Release"
+            }
+
+            stage('Run tests centos7') {
+                sh "docker/el7/runtests.sh"
+            }
+        }
+
+        docker.image('gcr.io/sym-dev-rtc/buildsmb-el8:latest').inside {
+            stage('Build RHEL 8') {
+                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
+                sh "docker/el8/buildscript.sh Release"
+            }
+
+            stage('Run tests RHEL 8') {
+                sh "docker/el8/runtests.sh"
+            }
+        }
+
+        docker.image('gcr.io/sym-dev-rtc/buildsmb-ubuntu-focal:latest').inside {
+            stage('Build Ubuntu Focal') {
+                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
+                sh "docker/ubuntu-focal/buildscript.sh Release"
+            }
+
+            stage('Run tests Ubuntu Focal') {
+                sh "docker/ubuntu-focal/runtests.sh"
+            }
+        }
+
+        docker.image('gcr.io/sym-dev-rtc/buildsmb7:latest').inside {
+            stage('Create archive') {
+                sh "zip -r ${baseName}-${version}.zip el7/smb/smb el7/smb/versioninfo.txt el7/smb/libs/ el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-focal/smb/smb ubuntu-focal/smb/versioninfo.txt ubuntu-focal/smb/libs/"
+            }
+        }
+
+        withCredentials([
+            [$class: "UsernamePasswordMultiBinding", credentialsId: "jenkins-artifactory-credentials", usernameVariable: "ARTIFACTORY_USERNAME", passwordVariable: "ARTIFACTORY_PASSWORD"]
+        ]) {
+            stage('Publish Artifactory [rtc-local-dev]') {
+                def uploadSpec = """
+                { "files": [
+                {
+                    "pattern" : "${baseName}-${version}.zip",
+                    "target"  : "rtc-local-dev/${baseName}/"
+                }
+                ]}"""
+
+                buildInfo = artifactoryServer.upload(uploadSpec)
+                artifactoryServer.publishBuildInfo(buildInfo)
+            }
+
+            if (promotion && isReleaseBuild) {
+                stage('Publish Artifactory [services]') {
+                    def uploadSpec = """
+                    { "files": [
+                        {
+                            "pattern" : "${baseName}-${version}.zip",
+                            "target"  : "services/${baseName}/"
+                        }
+                    ]}"""
+
+                    buildInfo = artifactoryServer.upload(uploadSpec)
+                    artifactoryServer.publishBuildInfo(buildInfo)
+                }
+            }
+        }
+
+        if (isReleaseBuild) {
+            stage('Publish Git Tag') {
+                withGitCredentials('githubaccess') {
+                    sh "git tag ${version} -m \"Tag created by jenkins build: ${BUILD_URL}\""
+                    sh "git push origin ${version}"
+                }
+            }
+        }
+
+    } finally {
+        stage('Cleanup') {
+            cleanWs()
+        }
+    }
+}
