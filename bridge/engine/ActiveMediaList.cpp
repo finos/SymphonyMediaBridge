@@ -1,34 +1,18 @@
 #include "bridge/engine/ActiveMediaList.h"
+#include "api/DataChannelMessage.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
-#include "api/DataChannelMessage.h"
 #include "logger/Logger.h"
+#include "utils/ScopedInvariantChecker.h"
 #include "utils/ScopedReentrancyBlocker.h"
-
-namespace
-{
-
-#if DEBUG
-template <typename T>
-class ScopedInvariantChecker
-{
-public:
-    ScopedInvariantChecker(T& instance) : _instance(instance) { _instance.checkInvariant(); }
-    ~ScopedInvariantChecker() { _instance.checkInvariant(); }
-
-private:
-    T& _instance;
-};
-#endif
-
-} // namespace
 
 namespace bridge
 {
 
 ActiveMediaList::AudioParticipant::AudioParticipant()
-    : _index(lengthShortWindow - 1),
+    : _levels({0}),
+      _index(lengthShortWindow - 1),
       _indexEndShortWindow(0),
       _totalLevelLongWindow(0),
       _totalLevelShortWindow(0),
@@ -92,7 +76,7 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
 {
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
-    ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
+    utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
     const auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
@@ -129,7 +113,7 @@ bool ActiveMediaList::removeAudioParticipant(const size_t endpointIdHash)
 {
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
-    ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
+    utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
     _audioParticipants.erase(endpointIdHash);
@@ -152,7 +136,7 @@ bool ActiveMediaList::addVideoParticipant(const size_t endpointIdHash,
 {
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
-    ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
+    utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
     const auto videoParticipantsItr = _videoParticipants.find(endpointIdHash);
@@ -210,7 +194,7 @@ void ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
 {
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
-    ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
+    utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
     if (!_videoParticipants.contains(endpointIdHash))
@@ -403,7 +387,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
 bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
 {
 #if DEBUG
-    ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
+    utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
     if (!endpointIdHash)
@@ -463,7 +447,7 @@ bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
 bool ActiveMediaList::updateActiveVideoList(const size_t endpointIdHash)
 {
 #if DEBUG
-    ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
+    utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
     const auto videoParticipantsItr = _videoParticipants.find(endpointIdHash);
@@ -554,9 +538,7 @@ bool ActiveMediaList::makeLastNListMessage(const size_t lastN,
         const auto videoStreamItr = engineVideoStreams.find(pinTargetEndpointIdHash);
         if (videoStreamItr != engineVideoStreams.cend())
         {
-            api::DataChannelMessage::makeLastNAppend(outMessage,
-                videoStreamItr->second->_endpointId,
-                isFirstElement);
+            api::DataChannelMessage::makeLastNAppend(outMessage, videoStreamItr->second->_endpointId, isFirstElement);
             isFirstElement = false;
             ++i;
         }

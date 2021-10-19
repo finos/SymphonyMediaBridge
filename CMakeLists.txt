@@ -339,7 +339,7 @@ set(FILES
         webrtc/DataChannel.h
         webrtc/WebRtcDataStream.cpp
         webrtc/WebRtcDataStream.h
-        )
+        memory/PriorityQueue.h utils/ScopedInvariantChecker.h)
 
 add_executable(smb
         ${FILES}
@@ -463,7 +463,7 @@ set(TEST_FILES
     test/transport/EndpointListenerMock.h
     test/transport/recp/RecStartStopEventBuilderTest.cpp
     test/transport/recp/RecStreamAddedEventBuilderTest.cpp
-    test/bridge/UnackedPacketsTrackerTest.cpp)
+    test/bridge/UnackedPacketsTrackerTest.cpp test/memory/PriorityQueueTest.cpp)
 
 add_executable(UnitTest
     ${FILES}
