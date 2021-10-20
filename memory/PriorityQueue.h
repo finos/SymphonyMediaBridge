@@ -12,8 +12,8 @@ class PriorityQueue
 public:
     explicit PriorityQueue() : _nextFree(0)
     {
+        static_assert(std::is_trivial<T>(), "T must be a trivial type");
         static_assert((MAX_ELEMENTS & (MAX_ELEMENTS - 1)) == 0, "MAX_ELEMENTS must be a power of two");
-        memset(_data.data(), 0, sizeof(T) * _data.size());
     }
 
     void push(const T& element)
