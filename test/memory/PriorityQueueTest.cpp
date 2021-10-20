@@ -5,6 +5,14 @@
 #include <random>
 #include <vector>
 
+namespace
+{
+
+static const size_t queueSize = 16384;
+using TestPriorityQueue = memory::PriorityQueue<uint32_t, queueSize>;
+
+} // namespace
+
 class PriorityQueueTest : public ::testing::Test
 {
 public:
@@ -18,7 +26,7 @@ private:
 
 TEST_F(PriorityQueueTest, topReturnsMax)
 {
-    memory::PriorityQueue<uint32_t, 64> priorityQueue;
+    TestPriorityQueue priorityQueue;
 
     priorityQueue.push(1);
     priorityQueue.push(2);
@@ -29,7 +37,7 @@ TEST_F(PriorityQueueTest, topReturnsMax)
 
 TEST_F(PriorityQueueTest, popRemovesMax)
 {
-    memory::PriorityQueue<uint32_t, 64> priorityQueue;
+    TestPriorityQueue priorityQueue;
 
     priorityQueue.push(1);
     priorityQueue.push(2);
@@ -47,8 +55,7 @@ TEST_F(PriorityQueueTest, popRemovesMax)
 
 TEST_F(PriorityQueueTest, pushPop)
 {
-    static const size_t queueSize = 16384;
-    memory::PriorityQueue<uint32_t, queueSize> priorityQueue;
+    TestPriorityQueue priorityQueue;
 
     std::vector<uint32_t> values;
 
@@ -64,6 +71,7 @@ TEST_F(PriorityQueueTest, pushPop)
     for (const auto value : values)
     {
         priorityQueue.push(value);
+        priorityQueue.checkInvariant();
     }
 
     std::sort(values.begin(), values.end(), [](const auto left, const auto right) { return left > right; });
@@ -71,6 +79,7 @@ TEST_F(PriorityQueueTest, pushPop)
     {
         EXPECT_EQ(value, priorityQueue.top());
         priorityQueue.pop();
+        priorityQueue.checkInvariant();
     }
 
     EXPECT_TRUE(priorityQueue.isEmpty());

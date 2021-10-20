@@ -463,7 +463,7 @@ set(TEST_FILES
     test/transport/EndpointListenerMock.h
     test/transport/recp/RecStartStopEventBuilderTest.cpp
     test/transport/recp/RecStreamAddedEventBuilderTest.cpp
-    test/bridge/UnackedPacketsTrackerTest.cpp test/memory/PriorityQueueTest.cpp)
+    test/bridge/UnackedPacketsTrackerTest.cpp test/memory/PriorityQueueTest.cpp test/bridge/ActiveMediaListTestLevels.h)
 
 add_executable(UnitTest
     ${FILES}

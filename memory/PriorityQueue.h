@@ -1,6 +1,5 @@
 #pragma once
 
-#include "utils/ScopedInvariantChecker.h"
 #include <array>
 #include <cassert>
 
@@ -11,18 +10,14 @@ template <typename T, size_t MAX_ELEMENTS>
 class PriorityQueue
 {
 public:
-    PriorityQueue() : _nextFree(0)
+    explicit PriorityQueue() : _nextFree(0)
     {
         static_assert((MAX_ELEMENTS & (MAX_ELEMENTS - 1)) == 0, "MAX_ELEMENTS must be a power of two");
-        static_assert(std::is_trivial<T>(), "T must be trivial type");
         memset(_data.data(), 0, sizeof(T) * _data.size());
     }
 
     void push(const T& element)
     {
-#if DEBUG
-        utils::ScopedInvariantChecker<PriorityQueue> invariantChecker(*this);
-#endif
         if (_nextFree >= MAX_ELEMENTS)
         {
             assert(false);
@@ -32,30 +27,20 @@ public:
         _data[_nextFree] = element;
         size_t i = _nextFree;
         ++_nextFree;
-        if (i == 0)
-        {
-            return;
-        }
 
-        while (true)
+        while (i != 0)
         {
             const auto parent = getParent(i);
-            const auto oldParentValue = _data[parent];
-            const auto currentValue = _data[i];
-
-            if (oldParentValue >= currentValue)
+            if (_data[parent] >= _data[i])
             {
                 return;
             }
 
-            _data[parent] = currentValue;
+            const auto oldParentValue = _data[parent];
+            _data[parent] = _data[i];
             _data[i] = oldParentValue;
 
             i = parent;
-            if (i == 0)
-            {
-                return;
-            }
         }
     }
 
@@ -71,10 +56,6 @@ public:
 
     void pop()
     {
-#if DEBUG
-        utils::ScopedInvariantChecker<PriorityQueue> invariantChecker(*this);
-#endif
-
         if (_nextFree == 0)
         {
             assert(false);
@@ -114,6 +95,7 @@ public:
     }
 
     bool isEmpty() const { return _nextFree == 0; }
+    void clear() { _nextFree = 0; }
 
 #if DEBUG
     bool isValidNode(const size_t index) const
