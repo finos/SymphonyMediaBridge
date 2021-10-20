@@ -397,7 +397,8 @@ bool ActiveMediaList::updateActiveAudioList(
 #endif
 
     bool listUpdated = false;
-    for (int32_t i = highestScoringSpeakers.size() - 1; i >= 0; --i)
+    const auto numItemsToAdd = std::min(highestScoringSpeakers.size(), _maxActiveListSize);
+    for (size_t i = 0; i < numItemsToAdd; ++i)
     {
         const auto endpointIdHash = highestScoringSpeakers[i];
         if (!endpointIdHash || _audioSsrcRewriteMap.contains(endpointIdHash))
