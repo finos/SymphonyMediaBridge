@@ -71,9 +71,6 @@ TEST_F(PriorityQueueTest, pushPop)
     for (const auto value : values)
     {
         priorityQueue.push(value);
-#if DEBUG
-        priorityQueue.checkInvariant();
-#endif
     }
 
     std::sort(values.begin(), values.end(), [](const auto left, const auto right) { return left > right; });
@@ -81,9 +78,6 @@ TEST_F(PriorityQueueTest, pushPop)
     {
         EXPECT_EQ(value, priorityQueue.top());
         priorityQueue.pop();
-#if DEBUG
-    priorityQueue.checkInvariant();
-#endif
     }
 
     EXPECT_TRUE(priorityQueue.isEmpty());

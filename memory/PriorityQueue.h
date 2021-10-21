@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cassert>
 
@@ -25,23 +26,8 @@ public:
         }
 
         _data[_nextFree] = element;
-        size_t i = _nextFree;
         ++_nextFree;
-
-        while (i != 0)
-        {
-            const auto parent = getParent(i);
-            if (_data[parent] >= _data[i])
-            {
-                return;
-            }
-
-            const auto oldParentValue = _data[parent];
-            _data[parent] = _data[i];
-            _data[i] = oldParentValue;
-
-            i = parent;
-        }
+        std::push_heap<>(_data.begin(), _data.begin() + _nextFree);
     }
 
     const T& top() const
@@ -62,88 +48,16 @@ public:
             return;
         }
 
+        std::pop_heap(_data.begin(), _data.begin() + _nextFree);
         --_nextFree;
-        _data[0] = _data[_nextFree];
-        size_t i = 0;
-
-        while (true)
-        {
-            auto largest = i;
-            const auto leftChild = getLeftChild(i);
-            const auto rightChild = getRightChild(i);
-
-            if (leftChild < _nextFree && _data[leftChild] > _data[largest])
-            {
-                largest = leftChild;
-            }
-
-            if (rightChild < _nextFree && _data[rightChild] > _data[largest])
-            {
-                largest = rightChild;
-            }
-
-            if (largest == i)
-            {
-                return;
-            }
-
-            const auto oldValue = _data[largest];
-            _data[largest] = _data[i];
-            _data[i] = oldValue;
-            i = largest;
-        }
     }
 
     bool isEmpty() const { return _nextFree == 0; }
     void clear() { _nextFree = 0; }
 
-#if DEBUG
-    bool isValidNode(const size_t index) const
-    {
-        const auto leftChild = getLeftChild(index);
-        if (leftChild < _nextFree)
-        {
-            if (_data[index] >= _data[leftChild])
-            {
-                return isValidNode(leftChild);
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        const auto rightChild = getRightChild(index);
-        if (rightChild < _nextFree)
-        {
-            if (_data[index] >= _data[rightChild])
-            {
-                return isValidNode(rightChild);
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    void checkInvariant() const { assert(isValidNode(0)); }
-#endif
-
 private:
     std::array<T, MAX_ELEMENTS> _data;
     size_t _nextFree;
-
-    constexpr size_t getParent(const size_t index) const
-    {
-        assert(index > 0);
-        return (index - 1) / 2;
-    }
-
-    constexpr size_t getRightChild(const size_t index) const { return 2 * index + 2; }
-    constexpr size_t getLeftChild(const size_t index) const { return 2 * index + 1; }
 };
 
 } // namespace memory
