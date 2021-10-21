@@ -1,6 +1,6 @@
 FROM redhat/ubi8:latest
 
-RUN yum -y update
+RUN yum -y update && yum -y upgrade
 
 # Install build dependenices
 RUN yum -y install git llvm-toolset cmake libtool wget lsof python3 make perl-Pod-Html xz
