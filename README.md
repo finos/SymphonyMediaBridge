@@ -1,90 +1,81 @@
-# OSX develop and test
+# Symphony Media Bridge
 
-## Homebrew packages
+The Symphony Media Bridge (SMB) is a media server application that handles audio, video and screen sharing media streams in an RTC conference system.
 
-- cmake
-- srtp
-- openssl@1.1
-- libmicrohttpd
-- opus
+In RTC conferencing systems, when more than two participants are in a conference there is usually a media server component involved. Each participant in the conference will send their audio and video streams to the media server. The media server is then responsible for sending the correct media streams to each receiving participant.
 
-## Generate workspace
-Run either
-```
-./generate_codelite_project.sh
-./generate_xcode_project.sh
-```
-If you want to switch you need to remove CMakeCache.txt, CMakeFiles and the googletest folders first.
+Conferencing media servers are typically divided into two categories, multipoint conference units (MCU) and selective forwarding units (SFU).
+ MCUs decode, mix and transcode media streams delivering a single or a few output streams to each receiver. SFUs do not decode or transcode media streams from participants, but forwards a selection of the incoming media streams to each receiver in some intelligent way. Not all incoming streams are forwarded, but typically more than one stream to each receiver.
 
-To build locally on MacOSX run
-./generate_localmake.sh Debug
-make -j8
+SMB is an SFU at its core, but has some hybrid MCU like solutions. Video streams are forwarded and not transcoded, but participants can request a mixed, transcoded audio stream instead of forwarded streams. SMB can also be run in a mode where multiple streams are forwarded, but the contents of each stream can vary between different participants in the conference. This allows for larger conferences than SFUs can typically handle.
 
-## Running unit tests
-Some tests require an audio file "jpsample.raw" (2 x 48kHz 16-bit). 
-You can download and run with
-```
-gsutil cp gs://rtc-smb-test/jpsample.raw .
-./UnitTest
-```
+Written as a high performance native application with efficient resource management, SMB is designed to scale efficiently as the number of conferences and participants grow.
 
-# OSX cross dev CentOS 7
-You can develop, compile and test in CentOS7 with vscode on Mac. Compiling is done in docker and test is run in vagrant.
-## Requirements
-* docker installed on local computer.
-* setup gcloud docker registry. https://cloud.google.com/container-registry/docs/pushing-and-pulling/
-* docker image buildsmb:latest available in gcr. If not you should build and push one in Jenkins.
-* vagrant installed locally
-* vagrant plugin install vagrant-hostsupdater
-* vagrant plugin install vagrant-vbguest
-* In VSCODE install CodeLLDB extension v1.5.3.
+## Installing
 
-## Build debug build in docker
-Vscode has built in support for opening project inside a container. SMB project files have support for this. See folder .devcontainer.
-This means you can click the left corner and select reopen in container and your environment switches to use the container only. 
-Press shift-F6 and select flavour to build. You Debug as usual with F5.
-The GTest extension also works fine insode docker container but you have to install the extensions you need once again 
-while in the container environment.
+Supported platforms for the release builds are
+- Ubuntu Server 20.04
+- Centos 7
+- RedHat Enterprise Linux 7
+- RedHat Enterprise Linux 8
 
-## Debug in vagrant
-Start vagrant with following command sequence. It will place vagrantdev entry in /etc/hosts so lldb can connect.
-```
-cd tools/vagrantdev
-vagrant up
-sudo ./vagrant-extract-ip.sh
-vagrant ssh
-rtc-smb/tools/vagrantdev/start-lldb-server.sh
-```
+For Ubuntu Server 20.04, the following additional dependencies need to be installed:
 
-In vscode enter debug view and select `Remote LLDB` or `Remote UnitTest`. Then press `F5`.
+```apt-get install libc++-dev libc++abi-dev```
 
-You can bind `SHIFT-F6` in vscode to build and make centos-build task the default build task.
+### 1. Download and extract the zip file of a release
 
-## Load CentOS core dump
-* use "ulimit -c unlimited" to enable core dumps. Edit /etc/security/limits.conf to set permanently.
-* set core_pattern if needed with sudo echo "/tmp/core.%e.%p.%h.%t" > /proc/sys/kernel/core_pattern
-* Copy the core.dump file, the executable, and the libs files into a local folder.
-* Edit the launch.json `lldb coredump` setting to point to your executable, dump file and libs folder.
-* Press `F5`
-* To provoke a core dump on a stalled SMB, use kill -4 <pid> to inject an illegal instruction crash.
-* Once you loaded the dump you can find out the expected source paths with  source info -a $pc
-and write those into launch.json
+### 2. Navigate to rtc-smb/\<target os\>/smb
 
-## Configuring CentOS
-SMB tries to run engine thread at real time prio. But this requires you to allow this from linux.
-* sudo setcap CAP_SYS_NICE+ep smb
-will enable this for the smb file. If you replace the file, you will have to set the cap again.
+### 3. Add RT priority capabilities to the smb binary
 
-# Build and smoke test with release scripts
-## Build in docker
-Create an smb.zip file with the following command.
-* ./docker/dockerbuild.sh <flavour> with `dbg` or `rel`.
+```setcap CAP_SYS_NICE+ep smb```
 
-## Vagrant setup smoke test
-There is a Vagrant setup for running the Centos build locally. To use:
+### 3. Create a config file
 
-1. first make a local build according to above
-2. from tools/vagrant run `vagrant up --provision`
-3. `vagrant ssh`
-4. start the smb using ./startsmb.sh
+```echo "{}" > config.json"```
 
+### 4. Start
+
+Start manually by executing the smb binary
+
+```./smb config.json```
+
+## Usage example
+
+## Development setup
+
+The Symphony Media Bridge is a cmake based project that can be built and run for development purposes on Linux as well as MacOSX. Here are instruction on what dependencies are needed to build and run locally. SMB currently only supports compiling with clang/llvm and linking with libc++ on both Linux and MacOSX.
+
+### Building for Ubuntu Linux 21.10
+
+#### 1. Install the required dependencies
+
+```apt-get install cmake llvm clang lldb libc++-dev libc++abi-dev libssl-dev libsrtp2-dev libmicrohttpd-dev libopus-dev libunwind-13-dev```
+
+#### 2. Set Clang as compiler
+
+``` export CC=clang && export CXX=clang++```
+
+#### 3. Generate the Makefile
+
+```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .```
+
+
+### Building for MacOSX
+
+#### 1. Install the required dependencies using brew
+
+```brew install cmake srtp openssl@1.1 libmicrohttpd opus```
+
+#### 2.1 Generate the Makefile
+
+```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .```
+
+#### 2.2 Alternatively generate Xcode project files
+
+```cmake -G "Xcode" .```
+
+### Running
+
+``` ./smb config.json ```
