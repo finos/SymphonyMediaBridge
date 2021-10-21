@@ -125,6 +125,8 @@ void Bridge::initialize()
         return;
     }
 
+    _rateControllerConfig.enabled = _config.rctl.enable;
+
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPacketAllocator);
     _bweConfig.sanitize();
     _transportFactory = transport::createTransportFactory(*_jobManager,
@@ -133,6 +135,7 @@ void Bridge::initialize()
         _sctpConfig,
         _iceConfig,
         _bweConfig,
+        _rateControllerConfig,
         _localInterfaces,
         *_network,
         *_mainPacketAllocator);

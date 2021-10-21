@@ -254,6 +254,13 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         engineVideoStream->_transport.getLoggableId().c_str(),
         endpointIdHash);
 
+    auto* outboundContext = obtainOutboundSsrcContext(*engineVideoStream, engineVideoStream->_localSsrc);
+    if (outboundContext)
+    {
+        engineVideoStream->_transport.setMixVideoSource(engineVideoStream->_localSsrc,
+            &outboundContext->_sequenceCounter);
+    }
+
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
     if (engineVideoStream->_simulcastStream._numLevels > 0)
     {
@@ -2074,6 +2081,11 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                     }
                     ssrc = rewriteMapItr->second._ssrc;
                 }
+            }
+            else
+            {
+                uint32_t fbSsrc = 0;
+                _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
             }
 
             auto* ssrcOutboundContext = obtainOutboundSsrcContext(*videoStream, ssrc);

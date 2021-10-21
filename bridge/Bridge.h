@@ -1,5 +1,6 @@
 #pragma once
 #include "bwe/BandwidthEstimator.h"
+#include "bwe/RateController.h"
 #include "config/Config.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/RtcePoll.h"
@@ -52,6 +53,7 @@ private:
     ice::IceConfig _iceConfig;
     sctp::SctpConfig _sctpConfig;
     bwe::Config _bweConfig;
+    bwe::RateControllerConfig _rateControllerConfig;
     const std::unique_ptr<utils::IdGenerator> _idGenerator;
     const std::unique_ptr<utils::SsrcGenerator> _ssrcGenerator;
     std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;

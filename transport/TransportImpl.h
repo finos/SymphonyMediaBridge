@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bwe/BandwidthEstimator.h"
+#include "bwe/RateController.h"
 #include "concurrency/MpmcHashmap.h"
 #include "config/Config.h"
 #include "dtls/SrtpClient.h"
@@ -69,6 +70,7 @@ public:
         const ice::IceConfig& iceConfig,
         const ice::IceRole iceRole,
         const bwe::Config& bweConfig,
+        const bwe::RateControllerConfig& rateControllerConfig,
         const std::vector<Endpoint*>& rtpEndPoints,
         const std::vector<ServerEndpoint*>& tcpEndPoints,
         TcpEndpointFactory* tcpEndpointFactory,
@@ -80,6 +82,7 @@ public:
         const config::Config& config,
         const sctp::SctpConfig& sctpConfig,
         const bwe::Config& bweConfig,
+        const bwe::RateControllerConfig& rateControllerConfig,
         const std::vector<Endpoint*>& rtpEndPoints,
         const std::vector<Endpoint*>& rtcpEndPoints,
         memory::PacketPoolAllocator& allocator);
@@ -98,7 +101,7 @@ public: // Transport
     bool hasPendingJobs() const override { return _jobCounter.load() > 0; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
 
-    /** Called from worker threads*/
+    /** Called from Transport thread threads*/
     void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator) override;
     bool unprotect(memory::Packet* packet) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
@@ -169,6 +172,8 @@ public: // Transport
     uint16_t allocateOutboundSctpStream() override;
     void setSctp(uint16_t localPort, uint16_t remotePort) override;
     void connectSctp() override;
+
+    void setMixVideoSource(uint32_t ssrc, uint32_t* sequenceCounter) override;
 
 public: // SslWriteBioListener
     // Called from Transport serial thread
@@ -274,6 +279,12 @@ private:
         const SocketAddress& target,
         Endpoint* endpoint,
         memory::PacketPoolAllocator& allocator);
+    void sendPadding(uint64_t timestamp,
+        uint32_t ssrc,
+        RtpSenderState& sendState,
+        uint32_t rtpTimestamp,
+        uint16_t nextPacketSize,
+        memory::PacketPoolAllocator& sendAllocator);
 
     void processRtcpReport(const rtp::RtcpHeader& packet,
         uint64_t timestamp,
@@ -284,22 +295,19 @@ private:
         const std::string& fingerprintHash,
         const bool dtlsClientSide);
 
-    void doBandwidthEstimation(uint64_t receiveTime, const utils::Optional<uint32_t>& absSendTime, uint32_t packetSize);
+    bool doBandwidthEstimation(uint64_t receiveTime, const utils::Optional<uint32_t>& absSendTime, uint32_t packetSize);
     void doConnect();
     void doConnectSctp();
 
-    void appendAndSendRtcp(memory::Packet* rtcpPacket, memory::PacketPoolAllocator& allocator, uint64_t timestamp);
-    memory::Packet* appendSendReceiveReport(memory::Packet* rtcpPacket,
-        memory::PacketPoolAllocator& allocator,
-        uint64_t timestamp,
+    void appendRemb(memory::Packet* rtcpPacket,
+        const uint64_t timestamp,
+        uint32_t senderSsrc,
         const uint32_t* activeInbound,
         int activeInboundCount);
-    memory::Packet* appendRemb(memory::Packet* rtcpPacket,
-        memory::PacketPoolAllocator& allocator,
-        uint64_t timestamp,
-        const uint32_t* activeInbound,
-        int activeInboundCount);
-    void onTriggerRtcp();
+
+    void sendReports(uint64_t timestamp, bool rembReady = false);
+    void sendRtcp(memory::Packet* rtcpPacket, memory::PacketPoolAllocator& allocator, const uint64_t timestamp);
+
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 
     RtpReceiveState& getInboundSsrc(uint32_t ssrc);
@@ -381,17 +389,15 @@ private:
 
     struct RtcpMaintenance
     {
-        RtcpMaintenance(uint64_t reportIntervalNs)
-            : lastSendTime(0),
-              lastReportedEstimateKbps(0),
-              reportInterval(reportIntervalNs)
-        {
-        }
+        RtcpMaintenance() : lastSendTime(0), lastReportedEstimateKbps(0) {}
 
         uint64_t lastSendTime;
         uint32_t lastReportedEstimateKbps;
-        uint64_t reportInterval;
     } _rtcp;
+
+    bwe::RateController _rateController;
+    uint32_t _mixVideoSsrc;
+    uint32_t* _mixVideoSequenceCounter;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
 #ifdef DEBUG

@@ -25,6 +25,7 @@ public:
     virtual int64_t timeToRelease(uint64_t timestamp) const = 0;
     virtual void setBandwidth(uint32_t kbps) = 0;
     virtual uint32_t getBandwidth() const = 0;
+    virtual uint32_t getSsrc() const = 0;
 };
 
 uint32_t randomSize(uint32_t originalSize, double ratio);

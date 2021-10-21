@@ -2,6 +2,7 @@
 #include "bridge/RtpMap.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "bwe/BandwidthEstimator.h"
+#include "bwe/RateController.h"
 #include "codec/Opus.h"
 #include "codec/OpusDecoder.h"
 #include "concurrency/MpmcPublish.h"
@@ -51,6 +52,7 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
     ice::IceConfig _iceConfig;
     sctp::SctpConfig _sctpConfig;
     bwe::Config _bweConfig;
+    bwe::RateControllerConfig _rateControlConfig;
     utils::Pacer _pacer;
     std::unique_ptr<TransportFactory> _transportFactory;
 
@@ -85,6 +87,7 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
             _sctpConfig,
             _iceConfig,
             _bweConfig,
+            _rateControlConfig,
             interfaces,
             *_network,
             *_mainPoolAllocator);
@@ -248,6 +251,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
             auto audioCounters = sender->getAudioReceiveCounters(timestamp);
             auto videoCounters = sender->getVideoReceiveCounters(timestamp);
             report.receivedByteCount = (audioCounters + videoCounters).octets;
+            logger::debug("report %" PRIu64, "", report.receivedByteCount);
             if ((audioCounters + videoCounters).lostPackets > 0)
             {
                 report.lossCount += (audioCounters + videoCounters).lostPackets;
@@ -432,7 +436,8 @@ INSTANTIATE_TEST_SUITE_P(RecPerformance,
 
 TEST(TransportStats, packetLoss)
 {
-    transport::RtpReceiveState state;
+    config::Config config;
+    transport::RtpReceiveState state(config);
 
     auto timestamp = utils::Time::getAbsoluteTime();
     for (int i = 0; i < 200; ++i)
@@ -459,7 +464,8 @@ TEST(TransportStats, packetLoss)
 
 TEST(TransportStats, outboundLoss)
 {
-    transport::RtpSenderState state(16000);
+    config::Config config;
+    transport::RtpSenderState state(16000, config);
 
     memory::Packet packet;
 

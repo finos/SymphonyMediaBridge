@@ -55,6 +55,7 @@ std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager&
     const sctp::SctpConfig& sctpConfig,
     const ice::IceConfig& iceConfig,
     const bwe::Config& bweConfig,
+    const bwe::RateControllerConfig& rateControllerConfig,
     const std::vector<SocketAddress>& interfaces,
     transport::RtcePoll& rtcePoll,
     memory::PacketPoolAllocator& mainAllocator);

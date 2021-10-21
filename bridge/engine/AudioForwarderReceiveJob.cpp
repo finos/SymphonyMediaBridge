@@ -158,6 +158,7 @@ void AudioForwarderReceiveJob::run()
         }
     }
 
+    // TODO it is better if this job is run on the sender job queue so we do not have to sync this.
     if (!_sender->unprotect(_packet))
     {
         logger::error("Failed to unprotect srtp %u, mixer %s",

@@ -19,7 +19,8 @@ class Config;
 namespace bwe
 {
 struct Config;
-}
+struct RateControllerConfig;
+} // namespace bwe
 namespace sctp
 {
 struct SctpConfig;
@@ -81,6 +82,8 @@ public:
     virtual PacketCounters getAudioSendCounters(uint64_t idleTimestamp) const = 0;
     virtual PacketCounters getVideoSendCounters(uint64_t idleTimestamp) const = 0;
     virtual void getReportSummary(std::unordered_map<uint32_t, ReportSummary>& outReportSummary) const = 0;
+
+    virtual void setMixVideoSource(uint32_t ssrc, uint32_t* sequenceCounter) = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
@@ -89,6 +92,7 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     const config::Config& config,
     const sctp::SctpConfig& sctpConfig,
     const bwe::Config& bweConfig,
+    const bwe::RateControllerConfig& rateControllerConfig,
     const std::vector<Endpoint*>& rtpEndPoints,
     const std::vector<Endpoint*>& rtcpEndPoints,
     memory::PacketPoolAllocator& allocator);
@@ -101,6 +105,7 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     const ice::IceConfig& iceConfig,
     ice::IceRole iceRole,
     const bwe::Config& bweConfig,
+    const bwe::RateControllerConfig& rateControllerConfig,
     const std::vector<Endpoint*>& sharedEndPoints,
     const std::vector<ServerEndpoint*>& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
