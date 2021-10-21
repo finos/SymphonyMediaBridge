@@ -401,9 +401,24 @@ bool ActiveMediaList::updateActiveAudioList(
     for (size_t i = 0; i < numItemsToAdd; ++i)
     {
         const auto endpointIdHash = highestScoringSpeakers[i];
-        if (!endpointIdHash || _audioSsrcRewriteMap.contains(endpointIdHash))
+        if (!endpointIdHash)
         {
             continue;
+        }
+
+        {
+            const auto audioSsrcRewriteMapItr = _audioSsrcRewriteMap.find(endpointIdHash);
+            if (audioSsrcRewriteMapItr != _audioSsrcRewriteMap.end())
+            {
+                if (!_activeAudioList.remove(endpointIdHash))
+                {
+                    assert(false);
+                    return false;
+                }
+                const auto pushResult = _activeAudioList.pushToTail(endpointIdHash);
+                assert(pushResult);
+                continue;
+            }
         }
 
         if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
