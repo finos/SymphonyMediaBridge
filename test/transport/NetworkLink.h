@@ -25,6 +25,7 @@ public:
     explicit NetworkLink(uint32_t bandwidthKbps, size_t bufferSize, size_t mtu)
         : _releaseTime(0),
           _bandwidthKbps(bandwidthKbps),
+          _staticDelay(0),
           _mtu(mtu),
           _queuedBytes(0),
           _bufferCapacity(bufferSize),
@@ -37,8 +38,8 @@ public:
     bool push(memory::Packet* packet, uint64_t timestamp);
     memory::Packet* pop(uint64_t timestamp);
     memory::Packet* pop();
-    size_t count() const { return _queue.size(); }
-    bool empty() const { return _queue.empty(); }
+    size_t count() const { return _queue.size() + _delayQueue.size(); }
+    bool empty() const { return _queue.empty() && _delayQueue.empty(); }
     void setMTU(size_t mtu) { _mtu = mtu; }
     size_t getSctpMTU() const { return _mtu - IPOVERHEAD; }
 
@@ -47,6 +48,7 @@ public:
     void setLossRate(double rate) { _lossRate = std::max(0.0, std::min(1.0, rate)); }
     void setBurstDeliveryInterval(uint32_t ms);
     void injectDelaySpike(uint32_t ms);
+    void setStaticDelay(uint32_t ms);
 
     double getBitRateKbps(uint64_t timestamp) const
     {
@@ -58,13 +60,22 @@ public:
     uint32_t getBandwidthKbps() const { return _bandwidthKbps; }
     void setBandwidthKbps(uint32_t bandwidth) { _bandwidthKbps = bandwidth; }
 
-    static const int IPOVERHEAD = 20 + 13; // IP and DTLS header
+    static const int IPOVERHEAD = 20 + 14; // IP and DTLS header
 private:
     void addBurstDelay();
+    memory::Packet* popDelayQueue(uint64_t timestamp);
 
     std::queue<memory::Packet*> _queue;
     uint64_t _releaseTime;
     uint32_t _bandwidthKbps;
+
+    struct DelayEntry
+    {
+        memory::Packet* packet = nullptr;
+        uint64_t releaseTime = 0;
+    };
+    std::queue<DelayEntry> _delayQueue;
+    uint64_t _staticDelay;
 
     size_t _mtu;
     size_t _queuedBytes;

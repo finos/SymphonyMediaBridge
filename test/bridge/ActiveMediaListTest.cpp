@@ -106,6 +106,8 @@ public:
     uint16_t allocateOutboundSctpStream() override { return 0; }
     const transport::SocketAddress& getRemotePeer() const override { return _socketAddress; }
 
+    void setMixVideoSource(uint32_t ssrc, uint32_t* sequenceCounter) override {}
+
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
     jobmanager::JobQueue& _jobQueue;

@@ -14,6 +14,8 @@ public:
     void setBandwidth(uint32_t kbps) override;
     uint32_t getBandwidth() const override { return _bandwidthKbps; }
     static const char CROSS_TRAFFIC_PROTOCOL = 64; // to distinguish from stun, dtls, rtp
+    uint32_t getSsrc() const override { return 0; }
+
 private:
     size_t randomPacketSize();
 

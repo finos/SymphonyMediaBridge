@@ -1,5 +1,6 @@
 #include "RtpSenderState.h"
 #include "concurrency/MpmcPublish.h"
+#include "config/Config.h"
 #include "logger/Logger.h"
 #include "rtp/RtpHeader.h"
 #include "utils/Time.h"
@@ -15,11 +16,20 @@ RtpSenderState::SendCounters operator-(RtpSenderState::SendCounters a, const Rtp
     return a;
 }
 
-RtpSenderState::RtpSenderState(uint32_t rtpFrequency) : payloadType(0xFF), _sendTime(0), _rtpFrequency(rtpFrequency) {}
+RtpSenderState::RtpSenderState(uint32_t rtpFrequency, const config::Config& config)
+    : payloadType(0xFF),
+      _rtpSendTime(0),
+      _senderReportSendTime(0),
+      _senderReportNtp(0),
+      _config(config),
+      _scheduledSenderReport(0),
+      _rtpFrequency(rtpFrequency)
+{
+}
 
 void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
 {
-    _sendTime = timestamp;
+    _rtpSendTime = timestamp;
     auto* header = rtp::RtpHeader::fromPacket(packet);
     _rtpTimestampCorrelation.local = timestamp;
     _rtpTimestampCorrelation.rtp = header->timestamp;
@@ -48,6 +58,17 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
     }
 }
 
+void RtpSenderState::onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* header)
+{
+    if (header->packetType == rtp::RtcpPacketType::SENDER_REPORT)
+    {
+        auto* sr = rtp::RtcpSenderReport::fromPtr(header, header->size());
+        _senderReportSendTime = timestamp;
+        _senderReportNtp = sr->ntpSeconds << 16 | sr->ntpFractions >> 16;
+        _scheduledSenderReport = timestamp + _config.rtcp.senderReport.resubmitInterval;
+    }
+}
+
 uint32_t RtpSenderState::getRtpTimestamp(uint64_t timestamp) const
 {
     const auto diff = static_cast<int64_t>(timestamp - _rtpTimestampCorrelation.local) / 1000;
@@ -63,27 +84,44 @@ void RtpSenderState::fillInReport(rtp::RtcpSenderReport& report, uint64_t timest
     report.ntpFractions = (wallClockNtp & 0xFFFFFFFFu);
 }
 
+// An RB may reference sender report from this ssrc but it may reference another SR by ntp timestamp.
+// If the SR was not received, the ntp will be 0 and and SR is needed.
+// We must reschedule our next SR regardless.
 void RtpSenderState::onReceiverBlockReceived(uint64_t timestamp,
     uint32_t receiveTimeNtp32,
     const rtp::ReportBlock& report)
 {
     RemoteCounters newReport;
 
-    newReport.rttNtp = receiveTimeNtp32 - report.lastSR - report.delaySinceLastSR;
-    if (report.loss.getCumulativeLoss() + 1 < _remoteReport.cumulativeLossCount)
+    if (report.lastSR != 0 && report.delaySinceLastSR != 0)
+    {
+        newReport.rttNtp = receiveTimeNtp32 - report.lastSR - report.delaySinceLastSR;
+        if (utils::Time::diffGT(timestamp, _scheduledSenderReport, _config.rtcp.senderReport.interval))
+        {
+            _scheduledSenderReport = timestamp + _config.rtcp.senderReport.interval;
+        }
+    }
+    else
+    {
+        _scheduledSenderReport = timestamp + 20 * utils::Time::ms;
+        newReport.rttNtp = 0;
+    }
+
+    if (report.loss.getCumulativeLoss() + 1 < _remoteReport.cumulativeLoss)
     {
         logger::debug("negative loss reported %u, %u",
             "SendState",
             report.loss.getCumulativeLoss(),
-            _remoteReport.cumulativeLossCount);
+            _remoteReport.cumulativeLoss);
     }
-    newReport.cumulativeLossCount = report.loss.getCumulativeLoss();
+    newReport.cumulativeLoss = report.loss.getCumulativeLoss();
     newReport.lossFraction = report.loss.getFractionLost();
     newReport.extendedSeqNoReceived = report.extendedSeqNoReceived;
     newReport.timestampNtp32 = receiveTimeNtp32;
+    newReport.timestamp = timestamp;
 
     PacketCounters counters;
-    counters.lostPackets = newReport.cumulativeLossCount - _remoteReport.cumulativeLossCount;
+    counters.lostPackets = newReport.cumulativeLoss - _remoteReport.cumulativeLoss;
     counters.packets = newReport.extendedSeqNoReceived - _remoteReport.extendedSeqNoReceived;
     counters.period = timestamp - _remoteReport.timestamp;
     _counters.write(counters);
@@ -107,7 +145,7 @@ ReportSummary RtpSenderState::getSummary() const
     return s;
 }
 
-PacketCounters RtpSenderState::getCounters()
+PacketCounters RtpSenderState::getCounters() const
 {
     PacketCounters s;
     _counters.read(s);
@@ -125,8 +163,21 @@ PacketCounters RtpSenderState::getCounters()
 uint32_t RtpSenderState::getRttNtp() const
 {
     ReportSummary s;
-    _summary.read(s);
+    if (!_summary.read(s) || s.rttNtp == 0)
+    {
+        return ~0u;
+    }
     return s.rttNtp;
 }
 
+// return ns until next sender report should be sent for this ssrc
+int64_t RtpSenderState::timeToSenderReport(const uint64_t timestamp) const
+{
+    if (_scheduledSenderReport == 0)
+    {
+        return _sendCounters.packets > 4 ? 0 : _config.rtcp.senderReport.resubmitInterval;
+    }
+
+    return std::max(int64_t(0), static_cast<int64_t>(_scheduledSenderReport - timestamp));
+}
 } // namespace transport

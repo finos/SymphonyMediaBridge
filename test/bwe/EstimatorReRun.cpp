@@ -185,7 +185,7 @@ TEST(BweReRun, DISABLED_fromTrace)
             break;
         }
 
-        const char* outputFolder = "./st2mobilep/";
+        const char* outputFolder = "./st2mobilem/";
         bwe::BandwidthEstimator estimator(config);
         bwe::BwBurstTracker burstTracker;
         rtp::SendTimeDial sendTimeDial;

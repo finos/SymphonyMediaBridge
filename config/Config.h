@@ -57,13 +57,16 @@ public:
     CFG_GROUP()
     CFG_PROP(bool, useUplinkEstimate, false);
     CFG_PROP(bool, logUplinkEstimates, false);
-    CFG_PROP(uint32_t, uplinkEstimatesPaddingIntervalMs, 10);
-    CFG_PROP(uint32_t, uplinkEstimatesPaddingPackets, 15);
-    CFG_PROP(uint32_t, uplinkEstimatesPaddingIterations, 500);
     CFG_PROP(bool, logDownlinkEstimates, true);
     CFG_PROP(std::string, packetLogLocation, "");
     CFG_PROP(double, packetOverhead, 0.1);
     CFG_GROUP_END(bwe);
+
+    CFG_GROUP() // rate control
+    CFG_PROP(bool, enable, true);
+    CFG_PROP(uint32_t, floor, 300);
+    CFG_PROP(uint32_t, ceiling, 5000);
+    CFG_GROUP_END(rctl)
 
     CFG_GROUP()
     CFG_PROP(uint16_t, singlePort, 10500);
@@ -73,7 +76,16 @@ public:
     struct RtcpConfig
     {
         uint32_t mtu = 1440;
-        uint64_t reportInterval = utils::Time::ms * 500;
+        struct SenderReports
+        {
+            uint64_t interval = utils::Time::ms * 600;
+            uint64_t resubmitInterval = utils::Time::sec * 7;
+        } senderReport;
+        struct ReceiveReports
+        {
+            uint64_t delayAfterSR = utils::Time::ms * 400;
+            uint64_t idleInterval = utils::Time::sec * 6;
+        } receiveReport;
     } rtcp; // can be made configurable later
 
     struct RecordingRtcpConfig

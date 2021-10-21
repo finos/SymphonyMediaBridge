@@ -3,7 +3,11 @@
 #include "concurrency/MpmcPublish.h"
 #include "rtp/RtcpHeader.h"
 #include "transport/PacketCounters.h"
-#include <chrono>
+
+namespace config
+{
+class Config;
+}
 
 namespace transport
 {
@@ -23,21 +27,24 @@ struct ReportSummary
 class RtpSenderState
 {
 public:
-    explicit RtpSenderState(uint32_t rtpFrequency);
+    explicit RtpSenderState(uint32_t rtpFrequency, const config::Config& config);
 
+    // Transport interface
     void onRtpSent(uint64_t timestamp, memory::Packet& packet);
     void onReceiverBlockReceived(uint64_t timestamp, uint32_t wallClockNtp32, const rtp::ReportBlock& report);
+    void onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* report);
+    int64_t timeToSenderReport(uint64_t timestamp) const;
 
-    ReportSummary getSummary() const;
-    PacketCounters getCounters();
-
-    uint32_t getRttNtp() const;
-    uint64_t getLastSendTime() const { return _sendTime; }
-
+    uint64_t getLastSendTime() const { return _rtpSendTime; }
+    uint32_t getSentSequenceNumber() const { return _sendCounters.sequenceNumber; }
     void fillInReport(rtp::RtcpSenderReport& report, uint64_t timestamp, uint64_t wallClockNtp) const;
 
     void setRtpFrequency(uint32_t rtpFrequency);
 
+    // thread safe interface
+    ReportSummary getSummary() const;
+    PacketCounters getCounters() const;
+    uint32_t getRttNtp() const;
     std::atomic_uint8_t payloadType;
 
     struct SendCounters
@@ -53,15 +60,16 @@ private:
     struct RemoteCounters
     {
         RemoteCounters()
-            : cumulativeLossCount(0),
+            : cumulativeLoss(0),
               rttNtp(0),
               lossFraction(0),
               extendedSeqNoReceived(0),
-              timestampNtp32(0)
+              timestampNtp32(0),
+              timestamp(0)
         {
         }
 
-        uint32_t cumulativeLossCount;
+        uint32_t cumulativeLoss;
         uint32_t rttNtp;
         double lossFraction;
         uint32_t extendedSeqNoReceived;
@@ -78,7 +86,13 @@ private:
         uint64_t local = 0;
     } _rtpTimestampCorrelation;
 
-    uint64_t _sendTime;
+    uint64_t _rtpSendTime;
+    uint64_t _senderReportSendTime;
+    uint32_t _senderReportNtp;
+
+    const config::Config& _config;
+    uint64_t _scheduledSenderReport;
+
     RemoteCounters _remoteReport;
 
     uint32_t _rtpFrequency;

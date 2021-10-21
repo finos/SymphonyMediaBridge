@@ -25,6 +25,7 @@ public:
     uint32_t getBandwidth() const override { return _bandwidthKbps; }
 
     double getBitRate() const { return _avgRate.get() / 1000; }
+    uint32_t getSsrc() const override { return _ssrc; }
 
 private:
     void setNextFrameSize();

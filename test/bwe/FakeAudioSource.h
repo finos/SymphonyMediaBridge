@@ -29,6 +29,8 @@ public:
 
     uint8_t getPayloadType() const { return _payloadType; }
 
+    uint32_t getSsrc() const override { return _ssrc; }
+
 private:
     size_t randomPacketSize();
 

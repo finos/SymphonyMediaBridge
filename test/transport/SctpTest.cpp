@@ -1,4 +1,5 @@
 #include "bwe/BandwidthEstimator.h"
+#include "bwe/RateController.h"
 #include "config/Config.h"
 #include "jobmanager/WorkerThread.h"
 #include "logger/Logger.h"
@@ -48,6 +49,7 @@ struct SctpTransportTest : public ::testing::Test
     std::unique_ptr<transport::RtcePoll> _network;
     ice::IceConfig _iceConfig;
     bwe::Config _bweConfig;
+    bwe::RateControllerConfig _rateControlConfig;
     sctp::SctpConfig _sctpConfig;
     utils::Pacer _pacer;
 
@@ -86,6 +88,7 @@ struct SctpTransportTest : public ::testing::Test
             _sctpConfig,
             _iceConfig,
             _bweConfig,
+            _rateControlConfig,
             interfaces,
             *_network,
             *_mainAllocator);
@@ -106,6 +109,38 @@ struct SctpTransportTest : public ::testing::Test
 
 struct ClientPair : public transport::DataReceiver
 {
+
+    class SendJob : public jobmanager::CountedJob
+    {
+    public:
+        SendJob(Transport& transport, memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
+            : CountedJob(transport.getJobCounter()),
+              _transport(transport),
+              _packet(packet),
+              _sendAllocator(sendAllocator)
+        {
+        }
+
+        ~SendJob()
+        {
+            if (_packet)
+            {
+                _sendAllocator.free(_packet);
+            }
+        }
+
+        void run() override
+        {
+            _transport.protectAndSend(_packet, _sendAllocator);
+            _packet = nullptr;
+        }
+
+    private:
+        Transport& _transport;
+        memory::Packet* _packet;
+        memory::PacketPoolAllocator& _sendAllocator;
+    };
+
     ClientPair(TransportFactory* transportFactory,
         uint32_t ssrc,
         memory::PacketPoolAllocator& allocator,

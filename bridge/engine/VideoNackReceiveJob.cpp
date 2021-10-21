@@ -8,7 +8,7 @@
 #include "rtp/RtpHeader.h"
 #include "transport/RtcTransport.h"
 
-#define DEBUG_RECEIVE_NACK 0
+#define NACK_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
 
 namespace bridge
 {
@@ -31,13 +31,12 @@ VideoNackReceiveJob::VideoNackReceiveJob(SsrcOutboundContext& ssrcOutboundContex
 
 void VideoNackReceiveJob::run()
 {
-#if DEBUG_RECEIVE_NACK
-    logger::debug("Incoming rtcp feedback NACK, feedbackSsrc %u, pid %u, blp 0x%x",
+    NACK_LOG("Incoming rtcp feedback NACK, feedbackSsrc %u, pid %u, blp 0x%x",
         "VideoNackReceiveJob",
         _feedbackSsrc,
         _pid,
         _blp);
-#endif
+
     if (!_sender.isConnected())
     {
         return;
@@ -96,13 +95,11 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     memcpy(copyHead, cachedPayload, cachedPacket->getLength() - cachedRtpHeaderLength);
     packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
 
-#if DEBUG_RECEIVE_NACK
-    logger::debug("Sending cached packet seq %u, feedbackSsrc %u, seq %u",
+    NACK_LOG("Sending cached packet seq %u, feedbackSsrc %u, seq %u",
         "VideoNackReceiveJob",
         sequenceNumber,
         _feedbackSsrc,
         _ssrcOutboundContext._sequenceCounter);
-#endif
 
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     if (!rtpHeader)

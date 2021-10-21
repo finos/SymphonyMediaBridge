@@ -16,6 +16,7 @@ enum RtcpPacketType : uint8_t
     RECEIVER_REPORT = 201,
     SOURCE_DESCRIPTION = 202,
     GOODBYE = 203,
+    APP_SPECIFIC = 204,
     RTPTRANSPORT_FB = 205,
     PAYLOADSPECIFIC_FB = 206
 };
@@ -38,7 +39,7 @@ struct RtcpHeader
     bool isValid() const;
     void addPadding(size_t wordCount);
 
-    uint32_t getReporterSsrc() const { return *reinterpret_cast<const uint32_t*>(this + 1); }
+    uint32_t getReporterSsrc() const { return reinterpret_cast<const nwuint32_t*>(this + 1)->get(); }
 };
 
 // Generic rtcp head that can be used on encrypted packets
@@ -48,6 +49,7 @@ struct RtcpReport
     nwuint32_t ssrc;
 
     static const RtcpReport* fromPtr(const void* p, size_t length);
+    inline static const RtcpReport* fromPacket(memory::Packet& p) { return fromPtr(p.get(), p.getLength()); }
 };
 
 // use to iterate through compound RTCP packet
@@ -216,7 +218,7 @@ public:
         return fromPtr(const_cast<void*>(buffer), length);
     }
     void setNtp(std::chrono::system_clock::time_point timestamp);
-    uint64_t getNtp() const { return (static_cast<uint64_t>(ntpSeconds) << 32) | ntpFractions; }
+    uint64_t getNtp() const { return (static_cast<uint64_t>(ntpSeconds.get()) << 32) | ntpFractions.get(); }
 
     ReportBlock& addReportBlock(uint32_t ssrc);
     size_t size() const { return header.size(); }
@@ -234,6 +236,18 @@ public:
     static RtcpGoodbye* create(void* buffer);
     static RtcpGoodbye* create(void* buffer, uint32_t ssrc);
     void addSsrc(uint32_t ssrc);
+};
+
+class RtcpApplicationSpecific
+{
+public:
+    RtcpHeader header;
+    nwuint32_t ssrc;
+    char name[4];
+
+    RtcpApplicationSpecific();
+
+    static RtcpApplicationSpecific* create(void* target, uint32_t ssrc, const char* name, uint16_t dataSize);
 };
 
 constexpr bool isRtcpPacket(const void* buffer, const uint32_t length)

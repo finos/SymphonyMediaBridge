@@ -8,6 +8,8 @@ namespace fakenet
 class NetworkNode
 {
 public:
+    virtual ~NetworkNode() {}
+
     virtual void sendTo(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
@@ -70,7 +72,7 @@ class Firewall : public Gateway
 {
 public:
     Firewall(const transport::SocketAddress& publicIp, Gateway& internet);
-    ~Firewall() = default;
+    virtual ~Firewall() = default;
 
     void addLocal(NetworkNode* endpoint) override { _endpoints.push_back(endpoint); }
     void addPublic(NetworkNode* endpoint) override { _publicEndpoints.push_back(endpoint); }
@@ -94,8 +96,5 @@ private:
     std::vector<NetworkNode*> _publicEndpoints;
     Gateway& _internet;
     int _portCount = 1000;
-
-    NetworkLink _upLink;
-    NetworkLink _downLink;
 };
 } // namespace fakenet

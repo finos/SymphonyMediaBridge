@@ -1,4 +1,5 @@
 #include "RtpReceiveState.h"
+#include "config/Config.h"
 #include "rtp/RtpHeader.h"
 #include "utils/Time.h"
 namespace transport
@@ -86,15 +87,28 @@ void RtpReceiveState::onRtcpReceived(const rtp::RtcpHeader& report, uint64_t tim
         _lastReceivedSenderReport._receiveTimeNtp = ntpWallclock;
         _lastReceivedSenderReport._ntp = senderReport->getNtp();
         _lastReceivedSenderReport._rtpTimestamp = senderReport->rtpTimestamp;
+        _lastReceivedSenderReport._receiveTime = timestamp;
+        _scheduledReceiveReport = timestamp + _config.rtcp.receiveReport.delayAfterSR;
     }
 }
 
-void RtpReceiveState::fillInReportBlock(rtp::ReportBlock& reportBlock, uint64_t ntpNow) const
+void RtpReceiveState::fillInReportBlock(uint64_t timestamp, rtp::ReportBlock& reportBlock, uint64_t ntpNow)
 {
     reportBlock.extendedSeqNoReceived = _receiveCounters.extendedSequenceNumber;
-    reportBlock.delaySinceLastSR = utils::Time::toNtp32(ntpNow - _lastReceivedSenderReport._receiveTimeNtp.load());
     reportBlock.interarrivalJitter = 0; // TODO measure jitter
-    reportBlock.lastSR = utils::Time::toNtp32(_lastReceivedSenderReport._ntp);
+
+    if (!_lastReceivedSenderReport.empty())
+    {
+        reportBlock.delaySinceLastSR = utils::Time::toNtp32(ntpNow - _lastReceivedSenderReport._receiveTimeNtp.load());
+        reportBlock.lastSR = utils::Time::toNtp32(_lastReceivedSenderReport._ntp);
+    }
+    else
+    {
+        reportBlock.delaySinceLastSR = 0;
+        reportBlock.lastSR = 0;
+    }
+    _scheduledReceiveReport = timestamp + _config.rtcp.receiveReport.idleInterval;
+
     reportBlock.loss.setCumulativeLoss(_receiveCounters.lostPackets);
     reportBlock.loss.setFractionLost(_receiveCounters.packetLossRatio());
 }
@@ -104,7 +118,7 @@ uint32_t RtpReceiveState::getExtendedSequenceNumber() const
     return _receiveCounters.extendedSequenceNumber;
 }
 
-PacketCounters RtpReceiveState::getCounters()
+PacketCounters RtpReceiveState::getCounters() const
 {
     PacketCounters counters;
     _counters.read(counters);
@@ -113,7 +127,7 @@ PacketCounters RtpReceiveState::getCounters()
     return counters;
 }
 
-PacketCounters RtpReceiveState::getCumulativeCounters()
+PacketCounters RtpReceiveState::getCumulativeCounters() const
 {
     ReceiveCounters report;
     _cumulativeReport.read(report);
@@ -124,6 +138,25 @@ PacketCounters RtpReceiveState::getCumulativeCounters()
     counters.octets = report.octets;
 
     return counters;
+}
+
+// return time left to send next receive report block
+int64_t RtpReceiveState::timeToReceiveReport(uint64_t timestamp) const
+{
+    if (utils::Time::diffGE(_activeAt, timestamp, _config.rtcp.receiveReport.idleInterval))
+    {
+        return _config.rtcp.receiveReport.idleInterval;
+    }
+
+    if (_lastReceivedSenderReport.empty())
+    {
+        if (_scheduledReceiveReport == 0)
+        {
+            return (_receiveCounters.packets > 4 ? 0 : utils::Time::sec);
+        }
+    }
+
+    return std::max(int64_t(0), static_cast<int64_t>(_scheduledReceiveReport - timestamp));
 }
 
 } // namespace transport

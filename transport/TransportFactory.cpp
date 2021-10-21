@@ -23,6 +23,7 @@ public:
         const sctp::SctpConfig& sctpConfig,
         const ice::IceConfig& iceConfig,
         const bwe::Config& bweConfig,
+        const bwe::RateControllerConfig& rateControllerConfig,
         const std::vector<SocketAddress>& interfaces,
         transport::RtcePoll& rtcePoll,
         memory::PacketPoolAllocator& mainAllocator)
@@ -32,6 +33,7 @@ public:
           _sctpConfig(sctpConfig),
           _iceConfig(iceConfig),
           _bweConfig(bweConfig),
+          _rateControllerConfig(rateControllerConfig),
           _interfaces(interfaces),
           _rtcePoll(rtcePoll),
           _sharedEndpointListIndex(0),
@@ -313,6 +315,7 @@ public:
                 _iceConfig,
                 iceRole,
                 _bweConfig,
+                _rateControllerConfig,
                 rtpPorts,
                 _tcpServerEndpoints,
                 this,
@@ -335,6 +338,7 @@ public:
             _iceConfig,
             iceRole,
             _bweConfig,
+            _rateControllerConfig,
             _sharedEndpoints[index],
             _tcpServerEndpoints,
             this,
@@ -353,6 +357,7 @@ public:
                 _config,
                 _sctpConfig,
                 _bweConfig,
+                _rateControllerConfig,
                 rtpPorts,
                 rtcpPorts,
                 _mainAllocator);
@@ -440,6 +445,7 @@ private:
     const sctp::SctpConfig& _sctpConfig;
     const ice::IceConfig& _iceConfig;
     const bwe::Config& _bweConfig;
+    const bwe::RateControllerConfig& _rateControllerConfig;
     const std::vector<SocketAddress> _interfaces;
     transport::RtcePoll& _rtcePoll;
     std::vector<std::vector<Endpoint*>> _sharedEndpoints;
@@ -461,6 +467,7 @@ std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager&
     const sctp::SctpConfig& sctpConfig,
     const ice::IceConfig& iceConfig,
     const bwe::Config& bweConfig,
+    const bwe::RateControllerConfig& rateControllerConfig,
     const std::vector<SocketAddress>& interfaces,
     transport::RtcePoll& rtcePoll,
     memory::PacketPoolAllocator& mainAllocator)
@@ -471,6 +478,7 @@ std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager&
         sctpConfig,
         iceConfig,
         bweConfig,
+        rateControllerConfig,
         interfaces,
         rtcePoll,
         mainAllocator);

@@ -42,9 +42,7 @@ void Internet::process(const uint64_t timestamp)
 
 Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet)
     : _publicInterface(publicIp),
-      _internet(internet),
-      _upLink(1000, 65000, 1480),
-      _downLink(1000, 65000, 1480)
+      _internet(internet)
 {
     assert(!publicIp.empty());
     internet.addLocal(this);

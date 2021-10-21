@@ -41,14 +41,21 @@ bool NetworkLink::push(memory::Packet* packet, uint64_t timestamp)
 
 memory::Packet* NetworkLink::pop()
 {
-    if (_queue.empty())
+    if (!_delayQueue.empty())
     {
-        return nullptr;
+        auto* packet = _delayQueue.front().packet;
+        _delayQueue.pop();
+        return packet;
     }
-    auto* packet = _queue.front();
-    _queue.pop();
-    _queuedBytes -= packet->getLength();
-    return packet;
+
+    if (!_queue.empty())
+    {
+        auto* packet = _queue.front();
+        _queue.pop();
+        _queuedBytes -= packet->getLength();
+        return packet;
+    }
+    return nullptr;
 }
 
 memory::Packet* NetworkLink::pop(uint64_t timestamp)
@@ -59,7 +66,7 @@ memory::Packet* NetworkLink::pop(uint64_t timestamp)
         {
             _releaseTime += utils::Time::ms * 20; // let see what it is like then
             _bitRate.update(0, timestamp);
-            return nullptr;
+            return popDelayQueue(timestamp);
         }
 
         auto* packet = _queue.front();
@@ -71,6 +78,17 @@ memory::Packet* NetworkLink::pop(uint64_t timestamp)
                 _releaseTime + (IPOVERHEAD + _queue.front()->getLength()) * 8 * utils::Time::ms / _bandwidthKbps;
         }
         _bitRate.update(packet->getLength() * 8, timestamp);
+        _delayQueue.push({packet, timestamp + _staticDelay});
+    }
+    return popDelayQueue(timestamp);
+}
+
+memory::Packet* NetworkLink::popDelayQueue(uint64_t timestamp)
+{
+    if (!_delayQueue.empty() && utils::Time::diffLE(timestamp, _delayQueue.front().releaseTime, 0))
+    {
+        auto* packet = _delayQueue.front().packet;
+        _delayQueue.pop();
         return packet;
     }
     return nullptr;
@@ -78,12 +96,27 @@ memory::Packet* NetworkLink::pop(uint64_t timestamp)
 
 int64_t NetworkLink::timeToRelease(uint64_t timestamp) const
 {
-    return empty() ? 60 * utils::Time::sec : std::max(int64_t(0), static_cast<int64_t>(_releaseTime - timestamp));
+    int64_t period = 60 * utils::Time::sec;
+    if (!_delayQueue.empty())
+    {
+        period = std::max(int64_t(0), static_cast<int64_t>(_delayQueue.front().releaseTime - timestamp));
+    }
+    if (!_queue.empty())
+    {
+        const auto period2 = std::max(int64_t(0), static_cast<int64_t>(_releaseTime - timestamp));
+        period = std::min(period, period2);
+    }
+    return period;
 }
 
 void NetworkLink::injectDelaySpike(uint32_t ms)
 {
     _releaseTime += ms * utils::Time::ms;
+}
+
+void NetworkLink::setStaticDelay(uint32_t ms)
+{
+    _staticDelay = ms * utils::Time::ms;
 }
 
 void NetworkLink::setBurstDeliveryInterval(uint32_t ms)

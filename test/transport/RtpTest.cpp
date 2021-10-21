@@ -1,3 +1,4 @@
+#include "config/Config.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RtpSenderState.h"
 #include "utils/Time.h"
@@ -5,6 +6,7 @@
 
 struct RtcpTest : public ::testing::Test
 {
+    config::Config _config;
 };
 
 TEST_F(RtcpTest, SourceDescription)
@@ -61,7 +63,7 @@ TEST_F(RtcpTest, SourceDescSymphony)
 
 TEST_F(RtcpTest, NTP)
 {
-    transport::RtpSenderState state(8000);
+    transport::RtpSenderState state(8000, _config);
 
     const auto start = utils::Time::getAbsoluteTime();
     memory::Packet p;
@@ -82,7 +84,7 @@ TEST_F(RtcpTest, NTP)
 
 TEST_F(RtcpTest, SenderReport)
 {
-    transport::RtpSenderState state(8000);
+    transport::RtpSenderState state(8000, _config);
     const auto start = utils::Time::getAbsoluteTime();
     const auto timepoint = std::chrono::system_clock::now();
     memory::Packet p;
@@ -127,7 +129,7 @@ TEST_F(RtcpTest, SenderReport)
 
 TEST_F(RtcpTest, padding)
 {
-    transport::RtpSenderState state(8000);
+    transport::RtpSenderState state(8000, _config);
     const auto timepoint = std::chrono::system_clock::now();
     const auto start = utils::Time::getAbsoluteTime();
     memory::Packet p;

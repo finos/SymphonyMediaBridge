@@ -144,6 +144,8 @@ set(FILES
         bwe/BandwidthEstimator.h
         bwe/BandwidthUtils.cpp
         bwe/BandwidthUtils.h
+        bwe/RateController.h
+        bwe/RateController.cpp
         codec/AudioLevel.cpp
         codec/AudioLevel.h
         codec/Opus.h
@@ -439,6 +441,7 @@ set(TEST_FILES
     test/bwe/EstimatorReRun.cpp
     test/bwe/BwBurstTracker.h
     test/bwe/BwBurstTracker.cpp
+    test/bwe/RateControllerTest.cpp
     test/transport/IceTest.cpp
     test/utils/Crc32Test.cpp
     test/utils/StringBuilderTest.cpp
