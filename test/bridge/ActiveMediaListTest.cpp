@@ -4,6 +4,7 @@
 #include "bridge/engine/SimulcastStream.h"
 #include "jobmanager/JobManager.h"
 #include "nlohmann/json.hpp"
+#include "test/bridge/ActiveMediaListTestLevels.h"
 #include "transport/RtcTransport.h"
 #include <gtest/gtest.h>
 #include <memory>
@@ -363,6 +364,114 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
     EXPECT_EQ(3, audioRewriteMap.size());
 }
 
+TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominant)
+{
+    const size_t numParticipants = 10;
+    for (size_t i = 1; i <= numParticipants; ++i)
+    {
+        _activeMediaList->addAudioParticipant(i);
+        for (const auto element : ActiveMediaListTestLevels::silence)
+        {
+            _activeMediaList->onNewAudioLevel(i, element);
+        }
+    }
+
+    bool dominantSpeakerChanged = false;
+    bool userMediaMapChanged = false;
+    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+
+    for (const auto element : ActiveMediaListTestLevels::longUtterance)
+    {
+        _activeMediaList->onNewAudioLevel(1, element);
+    }
+
+    for (const auto element : ActiveMediaListTestLevels::longUtterance)
+    {
+        _activeMediaList->onNewAudioLevel(2, element);
+    }
+
+    for (const auto element : ActiveMediaListTestLevels::shortUtterance)
+    {
+        _activeMediaList->onNewAudioLevel(4, element);
+    }
+
+    _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
+
+    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(4));
+    EXPECT_EQ(3, audioRewriteMap.size());
+}
+
+TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallList)
+{
+    const size_t numParticipants = 2;
+    for (size_t i = 1; i <= numParticipants; ++i)
+    {
+        _activeMediaList->addAudioParticipant(i);
+        for (const auto element : ActiveMediaListTestLevels::silence)
+        {
+            _activeMediaList->onNewAudioLevel(i, element);
+        }
+    }
+
+    bool dominantSpeakerChanged = false;
+    bool userMediaMapChanged = false;
+    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+
+    for (const auto element : ActiveMediaListTestLevels::longUtterance)
+    {
+        _activeMediaList->onNewAudioLevel(1, element);
+    }
+
+    for (const auto element : ActiveMediaListTestLevels::shortUtterance)
+    {
+        _activeMediaList->onNewAudioLevel(2, element);
+    }
+
+    _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
+
+    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(2));
+    EXPECT_EQ(2, audioRewriteMap.size());
+}
+
+TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallLastN)
+{
+    auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, 1);
+
+    smallActiveMediaList->addAudioParticipant(1);
+    smallActiveMediaList->addAudioParticipant(2);
+    smallActiveMediaList->addAudioParticipant(3);
+    smallActiveMediaList->addAudioParticipant(4);
+
+    for (const auto element : ActiveMediaListTestLevels::longUtterance)
+    {
+        smallActiveMediaList->onNewAudioLevel(1, element);
+    }
+
+    for (const auto element : ActiveMediaListTestLevels::longUtterance)
+    {
+        smallActiveMediaList->onNewAudioLevel(2, element);
+    }
+
+    for (const auto element : ActiveMediaListTestLevels::silence)
+    {
+        smallActiveMediaList->onNewAudioLevel(3, element);
+    }
+
+    for (const auto element : ActiveMediaListTestLevels::shortUtterance)
+    {
+        smallActiveMediaList->onNewAudioLevel(4, element);
+    }
+
+    bool dominantSpeakerChanged = false;
+    bool userMediaMapChanged = false;
+    smallActiveMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+
+    const auto& audioRewriteMap = smallActiveMediaList->getAudioSsrcRewriteMap();
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
+}
+
 TEST_F(ActiveMediaListTest, videoParticipantsAddedToVideoRewriteMap)
 {
     auto videoStream1 = addEngineVideoStream(1);
@@ -498,3 +607,4 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     EXPECT_FALSE(endpointsContainsId(messageJson, "3"));
     EXPECT_TRUE(endpointsContainsId(messageJson, "4"));
 }
+

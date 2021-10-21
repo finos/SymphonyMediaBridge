@@ -5,6 +5,7 @@
 #include "concurrency/MpmcHashmap.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
+#include "memory/PriorityQueue.h"
 #include "utils/StringBuilder.h"
 #include <array>
 #include <atomic>
@@ -22,6 +23,9 @@ class ActiveMediaList
 {
 public:
     static const size_t maxParticipants = 1024;
+
+    /** The max number of considered active speakers for switching in to the active audio list per process iteration. */
+    static const size_t numConsideredActiveSpeakers = 3;
 
     struct VideoScreenShareSsrcMapping
     {
@@ -169,6 +173,17 @@ private:
         utils::Optional<SimulcastStream> _secondarySimulcastStream;
     };
 
+    struct AudioParticipantScore
+    {
+        size_t _participant;
+        float _score;
+
+        bool operator<(const AudioParticipantScore& rhs) const { return _score < rhs._score; }
+        bool operator>(const AudioParticipantScore& rhs) const { return _score > rhs._score; }
+        bool operator<=(const AudioParticipantScore& rhs) const { return _score <= rhs._score; }
+        bool operator>=(const AudioParticipantScore& rhs) const { return _score >= rhs._score; }
+    };
+
     uint32_t _defaultLastN;
     size_t _maxActiveListSize;
 
@@ -180,7 +195,7 @@ private:
 
     size_t _dominantSpeaker;
     size_t _prevWinningDominantSpeaker;
-    size_t _highestScoringSpeaker;
+    memory::PriorityQueue<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
     int32_t _consecutiveDominantSpeakerWins;
 
     concurrency::MpmcHashmap32<size_t, VideoParticipant> _videoParticipants;
@@ -200,7 +215,7 @@ private:
     uint64_t _lastRunTimestampMs;
     uint64_t _lastChangeTimestampMs;
 
-    bool updateActiveAudioList(const size_t endpointIdHash);
+    bool updateActiveAudioList(const std::array<size_t, numConsideredActiveSpeakers>& highestScoringSpeakers);
     bool updateActiveVideoList(const size_t endpointIdHash);
 };
 
