@@ -1839,7 +1839,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         auto emplaceResult =
             _ssrcInboundContexts.emplace(ssrc, ssrc, _jobManager, videoStream->_feedbackRtpMap, -1, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
-        inboundContext._rewriteSsrc = videoStream->_simulcastStream._levels[0]._feedbackSsrc;
+        inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getMainSsrcFor(ssrc);
 
         logger::debug(
