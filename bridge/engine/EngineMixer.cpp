@@ -475,16 +475,6 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
         (simulcastStream._numLevels == 0 ||
             simulcastStream._levels[0]._ssrc != engineVideoStream->_simulcastStream._levels[0]._ssrc))
     {
-        for (size_t i = 0; i < engineVideoStream->_simulcastStream._numLevels; ++i)
-        {
-            markInboundContextForDeletion(engineVideoStream->_simulcastStream._levels[i]._ssrc);
-            markInboundContextForDeletion(engineVideoStream->_simulcastStream._levels[i]._feedbackSsrc);
-        }
-
-        markAssociatedVideoOutboundContextsForDeletion(engineVideoStream,
-            engineVideoStream->_simulcastStream._levels[0]._ssrc,
-            engineVideoStream->_simulcastStream._levels[0]._feedbackSsrc);
-
         removeVideoSsrcFromRecording(*engineVideoStream, engineVideoStream->_simulcastStream._levels[0]._ssrc);
     }
 
@@ -494,16 +484,6 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
             secondarySimulcastStream->_levels[0]._ssrc !=
                 engineVideoStream->_secondarySimulcastStream.get()._levels[0]._ssrc))
     {
-        for (size_t i = 0; i < engineVideoStream->_simulcastStream._numLevels; ++i)
-        {
-            markInboundContextForDeletion(engineVideoStream->_secondarySimulcastStream.get()._levels[i]._ssrc);
-            markInboundContextForDeletion(engineVideoStream->_secondarySimulcastStream.get()._levels[i]._feedbackSsrc);
-        }
-
-        markAssociatedVideoOutboundContextsForDeletion(engineVideoStream,
-            engineVideoStream->_secondarySimulcastStream.get()._levels[0]._ssrc,
-            engineVideoStream->_secondarySimulcastStream.get()._levels[0]._feedbackSsrc);
-
         removeVideoSsrcFromRecording(*engineVideoStream,
             engineVideoStream->_secondarySimulcastStream.get()._levels[0]._ssrc);
     }
