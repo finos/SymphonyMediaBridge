@@ -150,7 +150,7 @@ public: // Transport
 
     void connect() override;
 
-    jobmanager::SerialJobManager& getJobManager() override { return _serialJobmanager; }
+    jobmanager::SerialJobManager& getJobQueue() override { return _serialJobmanager; }
 
     uint32_t getSenderLossCount() const override;
     uint32_t getUplinkEstimateKbps() const override;
@@ -272,7 +272,6 @@ private:
     friend class ConnectJob;
     friend class ConnectSctpJob;
 
-    void doProtectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator);
     void doProtectAndSend(memory::Packet* packet,
         const SocketAddress& target,
         Endpoint* endpoint,

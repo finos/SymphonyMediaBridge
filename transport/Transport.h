@@ -36,7 +36,7 @@ public:
     virtual bool isConnected() = 0;
     virtual bool start() = 0;
     virtual void connect() = 0;
-    virtual jobmanager::SerialJobManager& getJobManager() = 0;
+    virtual jobmanager::SerialJobManager& getJobQueue() = 0;
 };
 
 } // namespace transport

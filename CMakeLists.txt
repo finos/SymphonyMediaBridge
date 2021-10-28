@@ -105,8 +105,6 @@ set(FILES
         bridge/engine/EngineStats.h
         bridge/engine/EngineStreamDirector.h
         bridge/engine/EngineVideoStream.h
-        bridge/engine/ForwarderSendJob.cpp
-        bridge/engine/ForwarderSendJob.h
         bridge/engine/OpusDecodeJob.cpp
         bridge/engine/OpusDecodeJob.h
         bridge/engine/PacketCache.cpp
@@ -127,8 +125,6 @@ set(FILES
         bridge/engine/SendPliJob.h
         bridge/engine/SendRtcpJob.cpp
         bridge/engine/SendRtcpJob.h
-        bridge/engine/SendRtpPaddingJob.cpp
-        bridge/engine/SendRtpPaddingJob.h
         bridge/engine/SimulcastLevel.h
         bridge/engine/SimulcastStream.h
         bridge/engine/SsrcInboundContext.h

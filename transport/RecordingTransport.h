@@ -5,8 +5,8 @@
 #include "crypto/SslHelper.h"
 #include "jobmanager/JobManager.h"
 #include "transport/DataReceiver.h"
-#include "transport/Transport.h"
 #include "transport/RecordingEndpoint.h"
+#include "transport/Transport.h"
 
 namespace transport
 {
@@ -43,7 +43,7 @@ public:
     bool isConnected() override;
     bool start() override;
     void connect() override{};
-    jobmanager::SerialJobManager& getJobManager() override { return _serialJobManager; }
+    jobmanager::SerialJobManager& getJobQueue() override { return _serialJobManager; }
 
     void onRecControlReceived(RecordingEndpoint& endpoint,
         const SocketAddress& source,

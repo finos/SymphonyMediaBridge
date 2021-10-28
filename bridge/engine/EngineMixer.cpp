@@ -17,7 +17,6 @@
 #include "bridge/engine/RequestPliJob.h"
 #include "bridge/engine/SendEngineMessageJob.h"
 #include "bridge/engine/SendRtcpJob.h"
-#include "bridge/engine/SendRtpPaddingJob.h"
 #include "bridge/engine/SsrcWhitelist.h"
 #include "bridge/engine/VideoForwarderReceiveJob.h"
 #include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
@@ -191,7 +190,7 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
         auto* context = obtainOutboundSsrcContext(*engineAudioStream, engineAudioStream->_localSsrc);
         if (context)
         {
-            engineAudioStream->_transport.getJobManager().addJob<SendRtcpJob>(
+            engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(
                 createGoodBye(context->_ssrc, context->_allocator),
                 engineAudioStream->_transport,
                 context->_allocator);
@@ -220,7 +219,7 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
     EngineMessage::Message message = {EngineMessage::Type::AudioStreamRemoved};
     message._command.audioStreamRemoved._mixer = this;
     message._command.audioStreamRemoved._engineStream = engineAudioStream;
-    engineAudioStream->_transport.getJobManager().addJob<SendEngineMessageJob>(engineAudioStream->_transport,
+    engineAudioStream->_transport.getJobQueue().addJob<SendEngineMessageJob>(engineAudioStream->_transport,
         _messageListener,
         message);
 }
@@ -259,7 +258,7 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
 
 void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
 {
-    engineVideoStream->_transport.getJobManager().getJobManager().abortTimedJob(engineVideoStream->_transport.getId(),
+    engineVideoStream->_transport.getJobQueue().getJobManager().abortTimedJob(engineVideoStream->_transport.getId(),
         engineVideoStream->_localSsrc);
 
     auto* outboundContext = getOutboundSsrcContext(*engineVideoStream, engineVideoStream->_localSsrc);
@@ -268,7 +267,7 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
         outboundContext->_markedForDeletion = true;
         if (engineVideoStream->_transport.isConnected())
         {
-            engineVideoStream->_transport.getJobManager().addJob<SendRtcpJob>(
+            engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(
                 createGoodBye(outboundContext->_ssrc, outboundContext->_allocator),
                 engineVideoStream->_transport,
                 outboundContext->_allocator);
@@ -319,7 +318,7 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
     EngineMessage::Message message = {EngineMessage::Type::VideoStreamRemoved};
     message._command.videoStreamRemoved._mixer = this;
     message._command.videoStreamRemoved._engineStream = engineVideoStream;
-    engineVideoStream->_transport.getJobManager().addJob<SendEngineMessageJob>(engineVideoStream->_transport,
+    engineVideoStream->_transport.getJobQueue().addJob<SendEngineMessageJob>(engineVideoStream->_transport,
         _messageListener,
         message);
 }
@@ -772,7 +771,7 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
         }
         auto videoStream = videoStreamItr->second;
 
-        videoStream->_transport.getJobManager().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
+        videoStream->_transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
             videoStream->_localSsrc,
             videoStream->_transport,
             _sendAllocator);
@@ -943,7 +942,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
             }
 
             // if previous remove job is still pending, we may add another nop job
-            inboundContext._sender->getJobManager().addJob<RemoveInboundSsrcContextJob>(ssrc,
+            inboundContext._sender->getJobQueue().addJob<RemoveInboundSsrcContextJob>(ssrc,
                 *inboundContext._sender,
                 *this);
         }
@@ -1239,42 +1238,6 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
         auto videoStream = videoStreamEntry.second;
         if (&videoStream->_transport == sender)
         {
-            if (!_config.bwe.useUplinkEstimate)
-            {
-                continue;
-            }
-
-            const auto localSsrc = videoStream->_localSsrc;
-            auto ssrcOutboundContext = obtainOutboundSsrcContext(*videoStream, localSsrc);
-            if (!ssrcOutboundContext)
-            {
-                continue;
-            }
-
-            const auto targetBitrateKbps = _engineStreamDirector->getTargetBitrateKbps(_lastN);
-
-            logger::info("Starting RTP padding, ssrc %u, transport %s, targetBitrateKbps %u",
-                _loggableId.c_str(),
-                localSsrc,
-                sender->getLoggableId().c_str(),
-                targetBitrateKbps);
-
-            ssrcOutboundContext->_isSendingRtpPadding = true;
-            videoStream->_transport.getJobManager().getJobManager().addTimedJob<bridge::SendRtpPaddingJob>(
-                videoStream->_transport.getId(),
-                localSsrc,
-                0,
-                *ssrcOutboundContext,
-                videoStream->_transport,
-                localSsrc,
-                _config.bwe.uplinkEstimatesPaddingPackets,
-                _config.bwe.uplinkEstimatesPaddingIntervalMs,
-                videoStream->_absSendTimeExtensionId,
-                _rtpTimestampSource,
-                _config.bwe.uplinkEstimatesPaddingIterations,
-                0,
-                _engineStreamDirector->getTargetBitrateKbps(_lastN));
-
             continue;
         }
 
@@ -1633,8 +1596,7 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(EngineAudioStream& a
         return &ssrcOutboundContextItr->second;
     }
 
-    auto emplaceResult =
-        audioStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, _jobManager, audioStream._rtpMap);
+    auto emplaceResult = audioStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream._rtpMap);
 
     if (!emplaceResult.second && emplaceResult.first == audioStream._ssrcOutboundContexts.end())
     {
@@ -1660,8 +1622,7 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(EngineVideoStream& v
         return &ssrcOutboundContextItr->second;
     }
 
-    auto emplaceResult =
-        videoStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, _jobManager, videoStream._rtpMap);
+    auto emplaceResult = videoStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream._rtpMap);
 
     if (!emplaceResult.second && emplaceResult.first == videoStream._ssrcOutboundContexts.end())
     {
@@ -1898,8 +1859,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                     logger::warn("send allocator depleted FwdSend", _loggableId.c_str());
                 }
                 if (packet &&
-                    !audioStream->_transport.getJobManager().addJob<AudioForwarderRewriteAndSendJob>(
-                        *ssrcOutboundContext,
+                    !audioStream->_transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                         packet,
                         packetInfo._extendedSequenceNumber,
                         audioStream->_transport))
@@ -2064,7 +2024,6 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
             auto ssrc = inboundSsrcContext->_rewriteSsrc;
             if (videoStream->_ssrcRewrite)
             {
-
                 const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
                 if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
                     screenShareSsrcMapping.get().second._ssrc == ssrc)
@@ -2125,8 +2084,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 }
                 ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
                 if (packet &&
-                    !ssrcOutboundContext->_serialJobManager.addJob<VideoForwarderRewriteAndSendJob>(
-                        *ssrcOutboundContext,
+                    !videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                         packet,
                         videoStream->_transport,
                         packetInfo._extendedSequenceNumber))
@@ -2168,8 +2126,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 // marks that we have active jobs on this ssrc context
                 ssrcOutboundContext->onRtpSent(timestamp);
                 if (packet &&
-                    !ssrcOutboundContext->_serialJobManager.addJob<VideoForwarderRewriteAndSendJob>(
-                        *ssrcOutboundContext,
+                    !transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                         packet,
                         transportEntry.second,
                         packetInfo._extendedSequenceNumber))
@@ -2325,7 +2282,8 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::Transpor
     {
         feedbackSsrcOutboundContext->onRtpSent(timestamp);
         rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
-        feedbackSsrcOutboundContext->_serialJobManager.addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+        rtcpSenderVideoStream->_transport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(
+            *feedbackSsrcOutboundContext,
             rtcpSenderVideoStream->_transport,
             *(mediaSsrcOutboundContext->_packetCache.get()),
             pid,
@@ -2420,7 +2378,7 @@ inline void EngineMixer::processAudioStreams()
 
         auto* ssrcContext = obtainOutboundSsrcContext(*audioStream, audioStream->_localSsrc);
         if (!ssrcContext ||
-            !ssrcContext->_serialJobManager.addJob<EncodeJob>(rtpPacket,
+            !audioStream->_transport.getJobQueue().addJob<EncodeJob>(rtpPacket,
                 *ssrcContext,
                 audioStream->_transport,
                 _rtpTimestampSource,
@@ -2892,11 +2850,8 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
 
-            auto emplaceResult = targetStream._ssrcOutboundContexts.emplace(ssrc,
-                ssrc,
-                _sendAllocator,
-                _jobManager,
-                audioStream._rtpMap);
+            auto emplaceResult =
+                targetStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream._rtpMap);
 
             if (!emplaceResult.second && emplaceResult.first == targetStream._ssrcOutboundContexts.end())
             {
@@ -3023,11 +2978,8 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
 
-            auto emplaceResult = targetStream._ssrcOutboundContexts.emplace(ssrc,
-                ssrc,
-                _sendAllocator,
-                _jobManager,
-                videoStream._rtpMap);
+            auto emplaceResult =
+                targetStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream._rtpMap);
 
             if (!emplaceResult.second && emplaceResult.first == targetStream._ssrcOutboundContexts.end())
             {
@@ -3167,7 +3119,7 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
             }
 
             auto& transport = transportItr->second;
-            transport.getJobManager().addJob<ProcessUnackedRecordingEventPacketsJob>(
+            transport.getJobQueue().addJob<ProcessUnackedRecordingEventPacketsJob>(
                 engineRecordingStream->_recordingEventsOutboundContext,
                 recEventMissingPacketsTracker,
                 transport,

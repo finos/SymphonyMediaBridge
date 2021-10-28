@@ -2,9 +2,9 @@
 
 #include "bridge/RtpMap.h"
 #include "codec/OpusEncoder.h"
-#include "jobmanager/SerialJobManager.h"
 #include "memory/PacketPoolAllocator.h"
 #include "utils/Optional.h"
+#include "utils/Time.h"
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -20,10 +20,7 @@ class PacketCache;
 class SsrcOutboundContext
 {
 public:
-    SsrcOutboundContext(const uint32_t ssrc,
-        memory::PacketPoolAllocator& packetAllocator,
-        jobmanager::JobManager& jobManager,
-        const bridge::RtpMap& rtpMap)
+    SsrcOutboundContext(const uint32_t ssrc, memory::PacketPoolAllocator& packetAllocator, const bridge::RtpMap& rtpMap)
         : _ssrc(ssrc),
           _allocator(packetAllocator),
           _rtpMap(rtpMap),
@@ -39,7 +36,6 @@ public:
           _lastRewrittenSsrc(ssrc),
           _needsKeyframe(false),
           _highestSeenExtendedSequenceNumber(0xFFFFFFFF),
-          _serialJobManager(jobManager),
           _lastSendTime(utils::Time::getAbsoluteTime()),
           _markedForDeletion(false),
           _idle(false),
@@ -77,7 +73,6 @@ public:
     // Used to keep track of offset between inbound and outbound sequence numbers
     uint32_t _highestSeenExtendedSequenceNumber;
 
-    jobmanager::SerialJobManager _serialJobManager;
     utils::Optional<PacketCache*> _packetCache;
     uint64_t _lastSendTime;
     bool _markedForDeletion;

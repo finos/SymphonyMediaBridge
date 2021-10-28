@@ -80,7 +80,7 @@ public:
     bool isIceEnabled() const override { return true; }
     bool isDtlsEnabled() const override { return true; }
     void connect() override {}
-    jobmanager::SerialJobManager& getJobManager() override { return _serialJobManager; }
+    jobmanager::SerialJobManager& getJobQueue() override { return _serialJobManager; }
     uint32_t getSenderLossCount() const override { return 0; }
     uint32_t getUplinkEstimateKbps() const override { return 0; }
     uint32_t getDownlinkEstimateKbps() const override { return 0; }
@@ -607,4 +607,3 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     EXPECT_FALSE(endpointsContainsId(messageJson, "3"));
     EXPECT_TRUE(endpointsContainsId(messageJson, "4"));
 }
-

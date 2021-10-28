@@ -213,40 +213,6 @@ private:
     TransportImpl& _transport;
 };
 
-class SendJob : public jobmanager::CountedJob
-{
-public:
-    SendJob(TransportImpl& transport,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& sendAllocator,
-        std::atomic_uint32_t& ownerCount)
-        : CountedJob(ownerCount),
-          _transport(transport),
-          _packet(packet),
-          _sendAllocator(sendAllocator)
-    {
-    }
-
-    ~SendJob()
-    {
-        if (_packet)
-        {
-            _sendAllocator.free(_packet);
-        }
-    }
-
-    void run() override
-    {
-        _transport.doProtectAndSend(_packet, _sendAllocator);
-        _packet = nullptr;
-    }
-
-private:
-    TransportImpl& _transport;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _sendAllocator;
-};
-
 class SctpSendJob : public jobmanager::CountedJob
 {
     struct SctpDataChunk
@@ -1302,11 +1268,6 @@ uint32_t TransportImpl::getDownlinkEstimateKbps() const
     return _inboundMetrics.estimatedKbps;
 }
 
-void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
-{
-    _serialJobmanager.addJob<SendJob>(*this, packet, sendAllocator, _jobCounter);
-}
-
 void TransportImpl::doProtectAndSend(memory::Packet* packet,
     const SocketAddress& target,
     Endpoint* endpoint,
@@ -1323,7 +1284,7 @@ void TransportImpl::doProtectAndSend(memory::Packet* packet,
     }
 }
 
-void TransportImpl::doProtectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
+void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
 {
     assert(_srtpClient);
     const auto timestamp = utils::Time::getAbsoluteTime();
