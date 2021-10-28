@@ -13,16 +13,6 @@ namespace
 
 static const uint32_t outboundSsrc = 12345;
 
-void threadFunction(jobmanager::JobManager* jobManager)
-{
-    auto job = jobManager->wait();
-    if (job)
-    {
-        job->run();
-        jobManager->freeJob(job);
-    }
-}
-
 } // namespace
 
 class Vp8RewriterTest : public ::testing::Test
@@ -36,9 +26,14 @@ class Vp8RewriterTest : public ::testing::Test
     }
     void TearDown() override
     {
-        auto thread = std::make_unique<std::thread>(threadFunction, _jobManager.get());
+        while (_jobManager->getCount() > 0)
+        {
+            auto job = _jobManager->wait();
+            job->run();
+            _jobManager->freeJob(job);
+        }
+        _jobManager->stop();
         _ssrcOutboundContext.reset();
-        thread->join();
     }
 
 protected:
