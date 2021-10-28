@@ -1,12 +1,12 @@
 #include "SrtpClient.h"
 #include "SslDtls.h"
 #include "concurrency/ScopedMutexGuard.h"
-#include "concurrency/ScopedSpinLocker.h"
 #include "crypto/SslHelper.h"
 #include "logger/Logger.h"
 #include "rtp/RtcpHeader.h"
 #include "rtp/RtpHeader.h"
 #include "utils/CheckedCast.h"
+#include "utils/Time.h"
 #include <openssl/err.h>
 #include <srtp2/srtp.h>
 
@@ -168,7 +168,7 @@ void SrtpClient::setSslWriteBioListener(SslWriteBioListener* sslWriteBioListener
 
 void SrtpClient::dtlsHandShake()
 {
-    concurrency::ScopedMutexGuard singleThreadCheck(_mutexGuard);
+    STHREAD_GUARD(_mutexGuard);
     assert(_isInitialized);
     if (_nullCipher)
     {
@@ -213,7 +213,7 @@ void SrtpClient::dtlsHandShake()
 // -1 means no more timeouts
 int64_t SrtpClient::nextTimeout()
 {
-    concurrency::ScopedMutexGuard singleThreadCheck(_mutexGuard);
+    STHREAD_GUARD(_mutexGuard);
     if (_state < State::CONNECTING)
     {
         return utils::Time::ms * 100;
@@ -233,7 +233,7 @@ int64_t SrtpClient::nextTimeout()
 
 int64_t SrtpClient::processTimeout()
 {
-    concurrency::ScopedMutexGuard singleThreadCheck(_mutexGuard);
+    STHREAD_GUARD(_mutexGuard);
     if (_state == State::IDLE)
     {
         // waiting for credentials
@@ -257,6 +257,7 @@ bool SrtpClient::unprotect(memory::Packet* packet)
 {
     assert(_isInitialized);
     assert(packet);
+
     if (_nullCipher)
     {
         return true;
@@ -270,7 +271,7 @@ bool SrtpClient::unprotect(memory::Packet* packet)
     // srtp_unprotect assumes data is word aligned
     assert(reinterpret_cast<uintptr_t>(packet->get()) % 4 == 0);
 
-    concurrency::ScopedSpinLocker locker(_unprotectLock);
+    STHREAD_GUARD(_mutexGuard);
 
     auto bufferLength = utils::checkedCast<int32_t>(packet->getLength());
     if (rtp::isRtpPacket(*packet))
@@ -321,7 +322,7 @@ bool SrtpClient::protect(memory::Packet* packet)
     // srtp_protect assumes data is word aligned
     assert(reinterpret_cast<uintptr_t>(packet->get()) % 4 == 0);
 
-    concurrency::ScopedSpinLocker locker(_protectLock);
+    STHREAD_GUARD(_mutexGuard);
 
     auto bufferLength = utils::checkedCast<int32_t>(packet->getLength());
     assert(bufferLength > 0);
@@ -364,7 +365,7 @@ bool SrtpClient::protect(memory::Packet* packet)
 
 void SrtpClient::removeLocalSsrc(const uint32_t ssrc)
 {
-    concurrency::ScopedSpinLocker locker(_protectLock);
+    STHREAD_GUARD(_mutexGuard);
     const auto result = srtp_remove_stream(_localSrtp, hton(ssrc));
     if (result == srtp_err_status_ok)
     {
@@ -374,7 +375,7 @@ void SrtpClient::removeLocalSsrc(const uint32_t ssrc)
 
 bool SrtpClient::setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
-    concurrency::ScopedSpinLocker locker(_unprotectLock);
+    STHREAD_GUARD(_mutexGuard);
     const auto result = srtp_set_stream_roc(_remoteSrtp, ssrc, rolloverCounter);
     if (result != srtp_err_status_ok)
     {
@@ -389,10 +390,9 @@ bool SrtpClient::setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t ro
     return true;
 }
 
-// TODO unused
 bool SrtpClient::setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
-    concurrency::ScopedSpinLocker locker(_protectLock);
+    STHREAD_GUARD(_mutexGuard);
     const auto result = srtp_set_stream_roc(_localSrtp, ssrc, rolloverCounter);
     if (result != srtp_err_status_ok)
     {
@@ -558,7 +558,7 @@ bool SrtpClient::createSrtp()
 
 void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
 {
-    concurrency::ScopedMutexGuard singleThreadCheck(_mutexGuard);
+    STHREAD_GUARD(_mutexGuard);
     assert(_isInitialized);
 
     if (_state != State::CONNECTING && _state != State::CONNECTED)
@@ -625,6 +625,7 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
 
 bool SrtpClient::unprotectApplicationData(memory::Packet* packet)
 {
+    STHREAD_GUARD(_mutexGuard);
     assert(*packet->get() == transport::DTLSContentType::applicationData);
     if (_nullCipher)
     {
@@ -661,7 +662,7 @@ bool SrtpClient::unprotectApplicationData(memory::Packet* packet)
 
 void SrtpClient::sendApplicationData(const void* data, size_t length)
 {
-    concurrency::ScopedMutexGuard singleThreadCheck(_mutexGuard);
+    STHREAD_GUARD(_mutexGuard);
 
     auto bytesWritten = SSL_write(_ssl, data, length);
     if (bytesWritten < 0)

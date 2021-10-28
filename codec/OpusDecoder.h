@@ -10,27 +10,25 @@ class OpusDecoder
 {
 public:
     OpusDecoder();
+    OpusDecoder(const OpusDecoder&) = delete;
     ~OpusDecoder();
 
     bool isInitialized() const { return _initialized; }
 
-    uint32_t getSequenceNumber() const { return _sequenceNumber; }
-
-    int32_t decode(const unsigned char* payloadStart,
-        int32_t payloadLength,
-        unsigned char* decodedData,
-        const size_t framesInDecodedPacket,
-        const bool decodeFec);
-
-    int32_t getLastPacketDuration();
+    bool decode(const unsigned char* payloadStart,
+        const size_t payloadLength,
+        const uint16_t sequenceNumber,
+        uint32_t decodeBufferSize,
+        int16_t* decodedData,
+        uint32_t& bytesProduced);
 
 private:
     struct OpaqueDecoderState;
 
     bool _initialized;
+    bool _hasReceivedFirstPacket;
     OpaqueDecoderState* _state;
-    uint32_t _sequenceNumber;
-    std::atomic_flag _lock = ATOMIC_FLAG_INIT;
+    uint16_t _sequenceNumber;
 };
 
 } // namespace codec

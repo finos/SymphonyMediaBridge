@@ -303,7 +303,7 @@ private:
     SessionCredentials _credentials;
     uint64_t _sessionStart;
 
-    concurrency::MutexGuard _mutexGuard;
+    STHREAD_MUTEX(_mutexGuard);
 };
 
 } // namespace ice

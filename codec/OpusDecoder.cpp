@@ -1,6 +1,5 @@
 #include "codec/OpusDecoder.h"
 #include "codec/Opus.h"
-#include "concurrency/ScopedSpinLocker.h"
 #include "utils/CheckedCast.h"
 #include <cassert>
 #include <opus/opus.h>
@@ -14,7 +13,11 @@ struct OpusDecoder::OpaqueDecoderState
     ::OpusDecoder* _state;
 };
 
-OpusDecoder::OpusDecoder() : _initialized(false), _state(new OpaqueDecoderState{nullptr}), _sequenceNumber(0)
+OpusDecoder::OpusDecoder()
+    : _initialized(false),
+      _hasReceivedFirstPacket(false),
+      _state(new OpaqueDecoderState{nullptr}),
+      _sequenceNumber(0)
 {
     int32_t opusError = 0;
     _state->_state = opus_decoder_create(Opus::sampleRate, Opus::channelsPerFrame, &opusError);
@@ -35,11 +38,13 @@ OpusDecoder::~OpusDecoder()
     delete _state;
 }
 
-int32_t OpusDecoder::decode(const unsigned char* payloadStart,
-    int32_t payloadLength,
-    unsigned char* decodedData,
-    const size_t framesInDecodedPacket,
-    const bool decodeFec)
+// return true if there is more output frames
+bool OpusDecoder::decode(const unsigned char* payloadStart,
+    const size_t payloadLength,
+    const uint16_t sequenceNumber,
+    uint32_t decodeBufferSize,
+    int16_t* decodedData,
+    uint32_t& bytesProduced)
 {
     if (!_initialized)
     {
@@ -48,29 +53,43 @@ int32_t OpusDecoder::decode(const unsigned char* payloadStart,
     }
     assert(_state->_state);
 
-    concurrency::ScopedSpinLocker locker(_lock);
-
-    return opus_decode(_state->_state,
-        payloadStart,
-        payloadLength,
-        reinterpret_cast<int16_t*>(decodedData),
-        utils::checkedCast<int32_t>(framesInDecodedPacket),
-        decodeFec ? 1 : 0);
-}
-
-int32_t OpusDecoder::getLastPacketDuration()
-{
-    if (!_initialized)
+    int heal = 0;
+    if (!_hasReceivedFirstPacket)
     {
-        assert(false);
-        return -1;
+        _sequenceNumber = sequenceNumber - 1;
+        _hasReceivedFirstPacket = true;
     }
 
-    concurrency::ScopedSpinLocker locker(_lock);
+    const auto seqDiff = static_cast<int16_t>(sequenceNumber - _sequenceNumber);
+    if (seqDiff == 1 || seqDiff > 10)
+    {
+        _sequenceNumber = sequenceNumber;
+        heal = 0;
+    }
+    else if (seqDiff > 1)
+    {
+        heal = 1;
+        ++_sequenceNumber;
+        int32_t lastPacketDuration = 0;
+        opus_decoder_ctl(_state->_state, OPUS_GET_LAST_PACKET_DURATION(&lastPacketDuration));
+        decodeBufferSize = lastPacketDuration * Opus::channelsPerFrame * Opus::bytesPerSample;
+    }
+    else
+    {
+        // old packet
+        bytesProduced = 0;
+        return false;
+    }
 
-    int32_t lastPacketDuration = 0;
-    opus_decoder_ctl(_state->_state, OPUS_GET_LAST_PACKET_DURATION(&lastPacketDuration));
-    return lastPacketDuration;
+    auto framesProduced = opus_decode(_state->_state,
+        payloadStart,
+        payloadLength,
+        decodedData,
+        utils::checkedCast<int32_t>(decodeBufferSize / (Opus::channelsPerFrame * Opus::bytesPerSample)),
+        heal);
+
+    bytesProduced = framesProduced * Opus::channelsPerFrame * Opus::bytesPerSample;
+    return heal == 1;
 }
 
 } // namespace codec
