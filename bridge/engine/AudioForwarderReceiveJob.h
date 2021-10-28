@@ -45,6 +45,9 @@ public:
     void run() override;
 
 private:
+    bool decodeOpus(const memory::Packet& opusPacket);
+    void onPacketDecoded(const memory::Packet& opusPacket, const uint32_t bytesProduced, const int16_t* decodedData);
+
     memory::Packet* _packet;
     memory::PacketPoolAllocator& _allocator;
     EngineMixer& _engineMixer;

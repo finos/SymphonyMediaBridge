@@ -63,7 +63,7 @@ void EncodeJob::run()
         const uint32_t headerLength = rtpPacket->headerLength();
         const uint32_t payloadLength = _packet->getLength() - headerLength;
         const size_t frames = payloadLength / EngineMixer::bytesPerSample / EngineMixer::channelsPerFrame;
-        const auto payloadStart = rtpPacket->getPayload();
+        int16_t* payloadStart = reinterpret_cast<int16_t*>(rtpPacket->getPayload());
 
         const size_t payloadMaxSize = memory::Packet::size - headerLength;
         const size_t payloadMaxFrames = payloadMaxSize / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;

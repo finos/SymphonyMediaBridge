@@ -105,8 +105,6 @@ set(FILES
         bridge/engine/EngineStats.h
         bridge/engine/EngineStreamDirector.h
         bridge/engine/EngineVideoStream.h
-        bridge/engine/OpusDecodeJob.cpp
-        bridge/engine/OpusDecodeJob.h
         bridge/engine/PacketCache.cpp
         bridge/engine/PacketCache.h
         bridge/engine/ProcessMissingVideoPacketsJob.cpp
@@ -420,6 +418,7 @@ set(TEST_FILES
     test/integration/RtpDump.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
+    test/codec/OpusCodecTest.cpp
     test/gtest_main.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp

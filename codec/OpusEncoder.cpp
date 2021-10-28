@@ -1,6 +1,5 @@
 #include "codec/OpusEncoder.h"
 #include "codec/Opus.h"
-#include "concurrency/ScopedSpinLocker.h"
 #include "utils/CheckedCast.h"
 #include <opus/opus.h>
 
@@ -37,7 +36,7 @@ OpusEncoder::~OpusEncoder()
     delete _state;
 }
 
-int32_t OpusEncoder::encode(const uint8_t* decodedData,
+int32_t OpusEncoder::encode(const int16_t* decodedData,
     const size_t frames,
     unsigned char* payloadStart,
     const size_t payloadMaxFrames)
@@ -49,10 +48,8 @@ int32_t OpusEncoder::encode(const uint8_t* decodedData,
     }
     assert(_state->_state);
 
-    concurrency::ScopedSpinLocker locker(_lock);
-
     return opus_encode(_state->_state,
-        reinterpret_cast<const int16_t*>(decodedData),
+        decodedData,
         utils::checkedCast<int32_t>(frames),
         payloadStart,
         utils::checkedCast<int32_t>(payloadMaxFrames));

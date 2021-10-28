@@ -35,4 +35,13 @@ public:
 private:
     MutexGuard& _mutexBlock;
 };
+
+#ifdef DEBUG
+#define STHREAD_GUARD(x) concurrency::ScopedMutexGuard singleThreadCheck(x)
+#define STHREAD_MUTEX(x) concurrency::MutexGuard x
+#else
+#define STHREAD_GUARD(x)
+#define STHREAD_MUTEX(x)
+#endif
+
 } // namespace concurrency

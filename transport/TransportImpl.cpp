@@ -63,9 +63,8 @@ public:
 
     void run() override
     {
-#ifdef DEBUG
-        concurrency::ScopedMutexGuard ensureSingleThreaded(_transport._singleThreadMutex);
-#endif
+        STHREAD_GUARD(_transport._singleThreadMutex);
+
         (_transport.*_receiveMethod)(_endpoint, _source, _packet, _allocator, _timestamp);
         _packet = nullptr;
     }
@@ -1289,9 +1288,8 @@ void TransportImpl::doProtectAndSend(memory::Packet* packet,
 
 void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
 {
-#ifdef DEBUG
-    concurrency::ScopedMutexGuard ensureSingleThreaded(_singleThreadMutex);
-#endif
+    STHREAD_GUARD(_singleThreadMutex);
+
     assert(_srtpClient);
     const auto timestamp = utils::Time::getAbsoluteTime();
 

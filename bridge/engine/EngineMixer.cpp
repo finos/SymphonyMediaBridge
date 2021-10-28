@@ -1147,7 +1147,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         return;
     }
 
-    if (!ssrcContext->_jobQueue.addJob<bridge::VideoForwarderReceiveJob>(packet,
+    if (!sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(packet,
             receiveAllocator,
             sender,
             *this,
@@ -1217,7 +1217,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         return;
     }
 
-    if (!mainSsrcContext._jobQueue.addJob<bridge::VideoForwarderRtxReceiveJob>(packet,
+    if (!sender->getJobQueue().addJob<bridge::VideoForwarderRtxReceiveJob>(packet,
             receiveAllocator,
             sender,
             *this,
@@ -1484,7 +1484,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     case bridge::RtpMap::Format::OPUS:
         ssrcContext->onRtpPacket(timestamp);
         if (_engineAudioStreams.size() == 0 ||
-            !ssrcContext->_jobQueue.addJob<bridge::AudioForwarderReceiveJob>(packet,
+            !sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(packet,
                 receiveAllocator,
                 sender,
                 *this,
@@ -2407,7 +2407,7 @@ void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
         if (ssrcIt != _ssrcInboundContexts.end())
         {
             logger::debug("RequestPliJob created for inbound ssrc %u", _loggableId.c_str(), ssrcIt->second._ssrc);
-            ssrcIt->second._jobQueue.getJobManager().addJob<RequestPliJob>(ssrcIt->second);
+            ssrcIt->second._pliScheduler.triggerPli();
         }
     }
 
@@ -2426,7 +2426,7 @@ void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
             auto ssrcIt = _ssrcInboundContexts.find(simulcastLevel._ssrc);
             if (ssrcIt != _ssrcInboundContexts.end())
             {
-                ssrcIt->second._jobQueue.getJobManager().addJob<RequestPliJob>(ssrcIt->second);
+                ssrcIt->second._pliScheduler.triggerPli();
             }
         }
     }

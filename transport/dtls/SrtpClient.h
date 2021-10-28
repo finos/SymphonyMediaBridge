@@ -88,12 +88,9 @@ private:
 
     bool _nullCipher;
 
-    std::atomic_flag _unprotectLock = ATOMIC_FLAG_INIT;
-    std::atomic_flag _protectLock = ATOMIC_FLAG_INIT;
-
     IEvents* _eventSink;
 
-    concurrency::MutexGuard _mutexGuard;
+    STHREAD_MUTEX(_mutexGuard);
 
     memory::PacketPoolAllocator& _allocator;
     concurrency::MpmcQueue<memory::Packet*> _pendingPackets;
