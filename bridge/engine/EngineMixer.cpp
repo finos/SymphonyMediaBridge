@@ -69,6 +69,23 @@ private:
     uint32_t _ssrc;
 };
 
+class RemoveSrtpSsrcJob : public jobmanager::CountedJob
+{
+public:
+    RemoveSrtpSsrcJob(transport::RtcTransport& transport, uint32_t ssrc)
+        : CountedJob(transport.getJobCounter()),
+          _transport(transport),
+          _ssrc(ssrc)
+    {
+    }
+
+    void run() override { _transport.removeSrtpLocalSsrc(_ssrc); }
+
+private:
+    transport::RtcTransport& _transport;
+    uint32_t _ssrc;
+};
+
 /**
  * @return true if this ssrc should be skipped and not forwarded to the videoStream.
  */
@@ -981,7 +998,9 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                         feedbackSsrc,
                         outboundContextEntry.first,
                         endpointIdHash);
-                    videoStreamEntry.second->_transport.removeSrtpLocalSsrc(feedbackSsrc);
+                    videoStreamEntry.second->_transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
+                        videoStreamEntry.second->_transport,
+                        feedbackSsrc);
                     videoStreamEntry.second->_ssrcOutboundContexts.erase(feedbackSsrc);
                 }
 
@@ -999,7 +1018,9 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                     _loggableId.c_str(),
                     outboundContextEntry.first,
                     endpointIdHash);
-                videoStreamEntry.second->_transport.removeSrtpLocalSsrc(outboundContextEntry.first);
+                videoStreamEntry.second->_transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
+                    videoStreamEntry.second->_transport,
+                    outboundContextEntry.first);
                 videoStreamEntry.second->_ssrcOutboundContexts.erase(outboundContextEntry.first);
             }
         }

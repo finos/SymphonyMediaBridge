@@ -1556,7 +1556,6 @@ bool TransportImpl::unprotect(memory::Packet* packet)
     return false;
 }
 
-// TODO this should be done in transport Job so we do not need lock in SrtpClient
 void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 {
     if (_srtpClient && _srtpClient->isInitialized())
@@ -1565,7 +1564,6 @@ void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
     }
 }
 
-// TODO put on transport job so we do not need to lock in srtp
 bool TransportImpl::setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
     if (_srtpClient && _srtpClient->isInitialized())
