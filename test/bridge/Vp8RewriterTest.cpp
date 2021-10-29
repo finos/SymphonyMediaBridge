@@ -19,25 +19,13 @@ class Vp8RewriterTest : public ::testing::Test
 {
     void SetUp() override
     {
-        _jobManager = std::make_unique<jobmanager::JobManager>();
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "Vp8RewriterTest");
         _ssrcOutboundContext =
             std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc, *_allocator, bridge::RtpMap::vp8());
     }
-    void TearDown() override
-    {
-        while (_jobManager->getCount() > 0)
-        {
-            auto job = _jobManager->wait();
-            job->run();
-            _jobManager->freeJob(job);
-        }
-        _jobManager->stop();
-        _ssrcOutboundContext.reset();
-    }
+    void TearDown() override { _ssrcOutboundContext.reset(); }
 
 protected:
-    std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<memory::PacketPoolAllocator> _allocator;
     std::unique_ptr<bridge::SsrcOutboundContext> _ssrcOutboundContext;
 };
