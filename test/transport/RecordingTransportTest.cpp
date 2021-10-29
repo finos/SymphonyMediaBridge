@@ -4,6 +4,7 @@
 #include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
 #include "test/transport/EndpointListenerMock.h"
+#include "test/transport/SendJob.h"
 #include "transport/RtcePoll.h"
 #include "transport/RtpSenderState.h"
 #include "transport/recp/RecStreamAddedEventBuilder.h"
@@ -177,7 +178,7 @@ TEST_F(RecordingTransportTest, protectAndSend)
         auto packet = packetGenerator.generate();
         if (packet)
         {
-            transport->protectAndSend(packet, senderAllocator);
+            transport->getJobQueue().addJob<transport::SendJob>(*transport, packet, senderAllocator);
             packet = nullptr;
             this_thread::sleep_for(chrono::milliseconds(5));
         }
@@ -270,14 +271,16 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     PacketGenerator packetGenerator(senderAllocator);
 
     // To receive RTCP packets we have to first send StreamAdd event to make the transport aware of this ssrc
-    transport->protectAndSend(packetGenerator.generateStreamAddEvent(), senderAllocator);
+    transport->getJobQueue().addJob<transport::SendJob>(*transport,
+        packetGenerator.generateStreamAddEvent(),
+        senderAllocator);
 
     for (auto i = 0; i < 100; ++i)
     {
         auto packet = packetGenerator.generate();
         if (packet)
         {
-            transport->protectAndSend(packet, senderAllocator);
+            transport->getJobQueue().addJob<transport::SendJob>(*transport, packet, senderAllocator);
             packet = nullptr;
             this_thread::sleep_for(chrono::milliseconds(5));
         }

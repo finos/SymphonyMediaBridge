@@ -4,6 +4,7 @@
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "test/macros.h"
+#include "test/transport/SendJob.h"
 #include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
@@ -195,7 +196,7 @@ struct ClientPair : public transport::DataReceiver
             rtpHeader->marker = 0;
             rtpHeader->sequenceNumber = _sequenceNumber++;
 
-            _transport1->protectAndSend(packet, _sendAllocator);
+            _transport1->getJobQueue().addJob<transport::SendJob>(*_transport1, packet, _sendAllocator);
         }
     }
 

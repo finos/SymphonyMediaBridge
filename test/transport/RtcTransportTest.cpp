@@ -14,6 +14,7 @@
 #include "test/bwe/FakeAudioSource.h"
 #include "test/bwe/FakeVideoSource.h"
 #include "test/macros.h"
+#include "test/transport/SendJob.h"
 #include "transport/RtcePoll.h"
 #include "transport/Transport.h"
 #include "transport/TransportFactory.h"
@@ -229,7 +230,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     {
         for (auto packet = src.getPacket(timestamp); packet; packet = src.getPacket(timestamp))
         {
-            transport->protectAndSend(packet, _sendAllocator);
+            transport->getJobQueue().addJob<transport::SendJob>(*transport, packet, _sendAllocator);
         }
     }
 

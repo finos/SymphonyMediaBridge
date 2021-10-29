@@ -266,8 +266,6 @@ public: // end point callbacks
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
 
 private:
-    friend class SendJob;
-    friend class RtcpTriggerJob;
     friend class IceSetRemoteJob;
     friend class ConnectJob;
     friend class ConnectSctpJob;
@@ -396,6 +394,10 @@ private:
     } _rtcp;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
+#ifdef DEBUG
+public:
+    concurrency::MutexGuard _singleThreadMutex;
+#endif
 };
 
 } // namespace transport
