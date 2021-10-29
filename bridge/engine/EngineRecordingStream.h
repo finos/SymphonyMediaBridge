@@ -28,7 +28,7 @@ struct EngineRecordingStream
           _isReady(false),
           _ssrcOutboundContexts(1024),
           _recordingEventsOutboundContext(recordingEventPacketCache),
-          _serialJobManager(jobManager),
+          _jobQueue(jobManager),
           _jobsCounter(jobsCounter),
           _recEventUnackedPacketsTracker(2)
     {
@@ -45,7 +45,7 @@ struct EngineRecordingStream
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> _ssrcOutboundContexts;
     RecordingOutboundContext _recordingEventsOutboundContext;
 
-    jobmanager::SerialJobManager _serialJobManager;
+    jobmanager::JobQueue _jobQueue;
     std::atomic_uint32_t& _jobsCounter;
 
     // missing packet trackers per transport peer

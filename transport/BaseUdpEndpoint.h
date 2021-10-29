@@ -1,7 +1,7 @@
 #pragma once
 
 #include "concurrency/MpmcHashmap.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/Endpoint.h"
 #include "transport/RtcSocket.h"
@@ -74,8 +74,8 @@ protected:
         memory::PacketPoolAllocator* allocator;
     };
 
-    jobmanager::SerialJobManager _receiveJobs;
-    jobmanager::SerialJobManager _sendJobs;
+    jobmanager::JobQueue _receiveJobs;
+    jobmanager::JobQueue _sendJobs;
     memory::PacketPoolAllocator& _allocator;
     concurrency::MpmcQueue<OutboundPacket> _sendQueue;
 

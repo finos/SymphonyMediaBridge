@@ -21,7 +21,7 @@ private:
     std::vector<memory::Packet> _sentPackets;
     std::atomic_uint32_t _ownerRefCounter;
     std::function<void()> _stopHandler;
-    jobmanager::SerialJobManager _serialJobManager;
+    jobmanager::JobQueue _jobQueue;
     transport::SocketAddress _remoteSocketAddr;
 
 public:
@@ -29,7 +29,7 @@ public:
         : _loggableId("TransportStub"),
           _endpointIdHash(endpointIdHash),
           _receiveAllocator(memory::packetPoolSize, "TransportStub"),
-          _serialJobManager(jobManager)
+          _jobQueue(jobManager)
     {
     }
 
@@ -160,7 +160,7 @@ public: // transport::Transport
 
     void connect() override { _ready.Notify(); }
 
-    jobmanager::SerialJobManager& getJobManager() override { return _serialJobManager; }
+    jobmanager::JobQueue& getJobManager() override { return _jobQueue; }
 
     uint32_t getSenderLossCount() const override { return 0; }
     uint32_t getUplinkEstimateKbps() const override { return 250; }

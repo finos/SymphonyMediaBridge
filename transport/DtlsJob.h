@@ -9,7 +9,7 @@ class SrtpClient;
 
 namespace jobmanager
 {
-class SerialJobManager;
+class JobQueue;
 }
 
 namespace memory
@@ -23,9 +23,9 @@ class DtlsTimerJob : public jobmanager::CountedJob
 {
 public:
     static const uint32_t TIMER_ID = 0xFFFF7E01;
-    DtlsTimerJob(jobmanager::SerialJobManager& serialJobManager, Transport& transport, SrtpClient& srtpClient);
+    DtlsTimerJob(jobmanager::JobQueue& jobQueue, Transport& transport, SrtpClient& srtpClient);
 
-    void static start(jobmanager::SerialJobManager& serialJobManager,
+    void static start(jobmanager::JobQueue& jobQueue,
         Transport& transport,
         SrtpClient& srtpClient,
         uint64_t initialDelay);
@@ -33,7 +33,7 @@ public:
     void run() override;
 
 protected:
-    jobmanager::SerialJobManager& _serialJobManager;
+    jobmanager::JobQueue& _jobQueue;
     Transport& _transport;
     SrtpClient& _srtpClient;
 };

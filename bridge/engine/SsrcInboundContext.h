@@ -4,7 +4,7 @@
 #include "bridge/engine/PliScheduler.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "codec/OpusDecoder.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "transport/RtpReceiveState.h"
 #include "utils/Optional.h"
 #include <cstdint>
@@ -38,7 +38,7 @@ public:
         transport::RtcTransport* sender,
         uint64_t timestamp)
         : _ssrc(ssrc),
-          _serialJobManager(jobManager),
+          _jobQueue(jobManager),
           _rtpMap(rtpMap),
           _audioLevelExtensionId(audioLevelExtensionId),
           _sender(sender),
@@ -64,7 +64,7 @@ public:
     }
 
     uint32_t _ssrc;
-    jobmanager::SerialJobManager _serialJobManager;
+    jobmanager::JobQueue _jobQueue;
     const bridge::RtpMap _rtpMap;
     int32_t _audioLevelExtensionId;
     transport::RtcTransport* _sender;

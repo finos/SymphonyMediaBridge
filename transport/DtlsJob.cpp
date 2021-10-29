@@ -1,7 +1,7 @@
 #include "DtlsJob.h"
 #include "Transport.h"
 #include "dtls/SrtpClient.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 
 namespace transport
 {
@@ -9,8 +9,8 @@ namespace transport
 class DtlsTimerTriggerJob : public DtlsTimerJob
 {
 public:
-    DtlsTimerTriggerJob(jobmanager::SerialJobManager& serialJobManager, Transport& transport, SrtpClient& srtpClient)
-        : DtlsTimerJob(serialJobManager, transport, srtpClient)
+    DtlsTimerTriggerJob(jobmanager::JobQueue& jobQueue, Transport& transport, SrtpClient& srtpClient)
+        : DtlsTimerJob(jobQueue, transport, srtpClient)
     {
     }
 
@@ -18,16 +18,16 @@ public:
     {
         if (_transport.isRunning())
         {
-            _serialJobManager.addJob<DtlsTimerJob>(_serialJobManager, _transport, _srtpClient);
+            _jobQueue.addJob<DtlsTimerJob>(_jobQueue, _transport, _srtpClient);
         }
     }
 };
 
-DtlsTimerJob::DtlsTimerJob(jobmanager::SerialJobManager& serialJobManager,
+DtlsTimerJob::DtlsTimerJob(jobmanager::JobQueue& jobQueue,
     transport::Transport& transport,
     transport::SrtpClient& srtpClient)
     : CountedJob(transport.getJobCounter()),
-      _serialJobManager(serialJobManager),
+      _jobQueue(jobQueue),
       _transport(transport),
       _srtpClient(srtpClient)
 {
@@ -38,24 +38,24 @@ void DtlsTimerJob::run()
     const auto timeoutNs = _srtpClient.processTimeout();
     if (timeoutNs >= 0 && _transport.isRunning())
     {
-        _serialJobManager.getJobManager().replaceTimedJob<DtlsTimerTriggerJob>(_transport.getId(),
+        _jobQueue.getJobManager().replaceTimedJob<DtlsTimerTriggerJob>(_transport.getId(),
             TIMER_ID,
             timeoutNs / 1000,
-            _serialJobManager,
+            _jobQueue,
             _transport,
             _srtpClient);
     }
 }
 
-void DtlsTimerJob::start(jobmanager::SerialJobManager& serialJobManager,
+void DtlsTimerJob::start(jobmanager::JobQueue& jobQueue,
     Transport& transport,
     SrtpClient& srtpClient,
     uint64_t initialDelay)
 {
-    serialJobManager.getJobManager().replaceTimedJob<DtlsTimerTriggerJob>(transport.getId(),
+    jobQueue.getJobManager().replaceTimedJob<DtlsTimerTriggerJob>(transport.getId(),
         TIMER_ID,
         initialDelay / 1000,
-        serialJobManager,
+        jobQueue,
         transport,
         srtpClient);
 }

@@ -150,7 +150,7 @@ public: // Transport
 
     void connect() override;
 
-    jobmanager::SerialJobManager& getJobQueue() override { return _serialJobmanager; }
+    jobmanager::JobQueue& getJobQueue() override { return _serialJobmanager; }
 
     uint32_t getSenderLossCount() const override;
     uint32_t getUplinkEstimateKbps() const override;
@@ -336,7 +336,7 @@ private:
 
     memory::PacketPoolAllocator& _mainAllocator; // for DTLS and RTCP
 
-    jobmanager::SerialJobManager _serialJobmanager;
+    jobmanager::JobQueue _serialJobmanager;
 
     struct ChannelMetrics
     {

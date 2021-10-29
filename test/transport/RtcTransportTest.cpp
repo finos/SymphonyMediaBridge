@@ -317,7 +317,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     std::atomic_uint32_t _jobsCounter2;
 
     jobmanager::JobManager& _jobManager;
-    jobmanager::SerialJobManager _inboundJobs;
+    jobmanager::JobQueue _inboundJobs;
 
     FakeMediaSources _media1;
     FakeMediaSources _media2;

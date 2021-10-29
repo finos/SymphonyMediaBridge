@@ -186,7 +186,7 @@ set(FILES
         httpd/Response.h
         jobmanager/Job.h
         jobmanager/JobManager.h
-        jobmanager/SerialJobManager.h
+        jobmanager/JobQueue.h
         jobmanager/TimerQueue.cpp
         jobmanager/TimerQueue.h
         jobmanager/WorkerThread.cpp

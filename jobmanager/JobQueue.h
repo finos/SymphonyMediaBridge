@@ -12,10 +12,10 @@
 namespace jobmanager
 {
 
-class SerialJobManager
+class JobQueue
 {
 public:
-    explicit SerialJobManager(JobManager& jobManager, size_t poolSize = 4096)
+    explicit JobQueue(JobManager& jobManager, size_t poolSize = 4096)
         : _jobManager(jobManager),
           _running(false),
           _jobQueue(poolSize),
@@ -27,7 +27,7 @@ public:
     template <typename JOB_TYPE, typename... U>
     bool addJob(U&&... args)
     {
-        static_assert(sizeof(JOB_TYPE) <= maxJobSize, "JOB_TYPE has to be <= SerialJobManager::maxJobSize");
+        static_assert(sizeof(JOB_TYPE) <= maxJobSize, "JOB_TYPE has to be <= JobQueue::maxJobSize");
 
         auto jobArea = _jobPool.allocate();
         if (!jobArea)
@@ -47,7 +47,7 @@ public:
         return true;
     }
 
-    ~SerialJobManager()
+    ~JobQueue()
     {
         concurrency::Semaphore sema;
         addJob<StopJob>(sema);
@@ -64,11 +64,11 @@ public:
 private:
     struct RunJob : public jobmanager::Job
     {
-        explicit RunJob(SerialJobManager* owner) : _owner(owner) {}
+        explicit RunJob(JobQueue* owner) : _owner(owner) {}
 
         void run() override { _owner->run(*this); }
 
-        SerialJobManager* _owner;
+        JobQueue* _owner;
     };
 
     struct StopJob : public jobmanager::Job

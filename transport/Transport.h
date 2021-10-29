@@ -5,7 +5,7 @@
 
 namespace jobmanager
 {
-class SerialJobManager;
+class JobQueue;
 }
 
 namespace transport
@@ -36,7 +36,7 @@ public:
     virtual bool isConnected() = 0;
     virtual bool start() = 0;
     virtual void connect() = 0;
-    virtual jobmanager::SerialJobManager& getJobQueue() = 0;
+    virtual jobmanager::JobQueue& getJobQueue() = 0;
 };
 
 } // namespace transport

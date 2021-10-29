@@ -231,10 +231,10 @@ public:
         const void* data,
         uint16_t length,
         memory::PacketPoolAllocator& allocator,
-        jobmanager::SerialJobManager& serialJobManager,
+        jobmanager::JobQueue& jobQueue,
         TransportImpl& transport)
         : CountedJob(transport.getJobCounter()),
-          _serialJobManager(serialJobManager),
+          _jobQueue(jobQueue),
           _sctpAssociation(association),
           _packet(memory::makePacket(allocator)),
           _allocator(allocator),
@@ -304,7 +304,7 @@ public:
         }
         if (nextTimeout >= 0 && (current < 0 || current > nextTimeout))
         {
-            SctpTimerJob::start(_serialJobManager, _transport, _sctpAssociation, nextTimeout);
+            SctpTimerJob::start(_jobQueue, _transport, _sctpAssociation, nextTimeout);
         }
 
         _allocator.free(_packet);
@@ -312,7 +312,7 @@ public:
     }
 
 private:
-    jobmanager::SerialJobManager& _serialJobManager;
+    jobmanager::JobQueue& _jobQueue;
     sctp::SctpAssociation& _sctpAssociation;
     memory::Packet* _packet;
     memory::PacketPoolAllocator& _allocator;

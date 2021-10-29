@@ -9,7 +9,7 @@
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "memory/RingBuffer.h"
 #include "transport/RecordingTransport.h"

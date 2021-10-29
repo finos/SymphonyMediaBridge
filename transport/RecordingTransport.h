@@ -43,7 +43,7 @@ public:
     bool isConnected() override;
     bool start() override;
     void connect() override{};
-    jobmanager::SerialJobManager& getJobQueue() override { return _serialJobManager; }
+    jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
 
     void onRecControlReceived(RecordingEndpoint& endpoint,
         const SocketAddress& source,
@@ -95,7 +95,7 @@ private:
     std::atomic<DataReceiver*> _dataReceiver;
 
     std::atomic_uint32_t _jobCounter;
-    jobmanager::SerialJobManager _serialJobManager;
+    jobmanager::JobQueue _jobQueue;
 
     std::unique_ptr<crypto::AES> _aes;
     std::unique_ptr<crypto::AesGcmIvGenerator> _ivGenerator;

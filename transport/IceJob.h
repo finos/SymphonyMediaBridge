@@ -4,7 +4,7 @@
 namespace jobmanager
 {
 class JobManager;
-class SerialJobManager;
+class JobQueue;
 } // namespace jobmanager
 namespace memory
 {
@@ -23,11 +23,11 @@ class IceJob : public jobmanager::CountedJob
 {
 public:
     static const uint32_t TIMER_ID = 0xFFFF7E00;
-    IceJob(Transport& transport, jobmanager::SerialJobManager& serialJobManager, ice::IceSession& session);
+    IceJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session);
 
 protected:
     Transport& _transport;
-    jobmanager::SerialJobManager& _serialJobManager;
+    jobmanager::JobQueue& _jobQueue;
     ice::IceSession& _session;
 };
 
@@ -35,8 +35,8 @@ protected:
 class IceTimerJob : public IceJob
 {
 public:
-    IceTimerJob(Transport& transport, jobmanager::SerialJobManager& serialJobManager, ice::IceSession& session)
-        : IceJob(transport, serialJobManager, session)
+    IceTimerJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session)
+        : IceJob(transport, jobQueue, session)
     {
     }
     void run() override;
@@ -46,8 +46,8 @@ public:
 class IceTimerTriggerJob : public IceJob
 {
 public:
-    IceTimerTriggerJob(Transport& transport, jobmanager::SerialJobManager& serialJobManager, ice::IceSession& session)
-        : IceJob(transport, serialJobManager, session)
+    IceTimerTriggerJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session)
+        : IceJob(transport, jobQueue, session)
     {
     }
     void run() override;
@@ -56,8 +56,8 @@ public:
 class IceStartJob : public IceJob
 {
 public:
-    IceStartJob(Transport& transport, jobmanager::SerialJobManager& serialJobManager, ice::IceSession& session)
-        : IceJob(transport, serialJobManager, session)
+    IceStartJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session)
+        : IceJob(transport, jobQueue, session)
     {
     }
     void run() override;

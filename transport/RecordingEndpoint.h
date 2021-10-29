@@ -1,5 +1,5 @@
 #include "concurrency/MpmcHashmap.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/Endpoint.h"
 #include "transport/RtcSocket.h"
