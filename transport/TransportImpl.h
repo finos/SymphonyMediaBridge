@@ -106,6 +106,7 @@ public: // Transport
     bool unprotect(memory::Packet* packet) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override;
+    void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) override;
 
     /** Called from httpd threads */
     bool isGatheringComplete() const override;
@@ -172,8 +173,6 @@ public: // Transport
     uint16_t allocateOutboundSctpStream() override;
     void setSctp(uint16_t localPort, uint16_t remotePort) override;
     void connectSctp() override;
-
-    void setMixVideoSource(uint32_t ssrc, uint32_t* sequenceCounter) override;
 
 public: // SslWriteBioListener
     // Called from Transport serial thread
@@ -275,7 +274,8 @@ private:
     friend class ConnectJob;
     friend class ConnectSctpJob;
 
-    void doProtectAndSend(memory::Packet* packet,
+    void doProtectAndSend(uint64_t timestamp,
+        memory::Packet* packet,
         const SocketAddress& target,
         Endpoint* endpoint,
         memory::PacketPoolAllocator& allocator);
@@ -351,8 +351,7 @@ private:
               bytesCount(0),
               estimatedKbps(initialEstimateKbps),
               estimatedKbpsMin(initialEstimateKbps),
-              estimatedKbpsMax(initialEstimateKbps),
-              lastLogTimestamp(0)
+              estimatedKbpsMax(initialEstimateKbps)
         {
         }
 
@@ -361,10 +360,12 @@ private:
         std::atomic_uint32_t estimatedKbps;
         std::atomic_uint32_t estimatedKbpsMin;
         std::atomic_uint32_t estimatedKbpsMax;
-        uint64_t lastLogTimestamp;
     };
     ChannelMetrics _inboundMetrics;
     ChannelMetrics _outboundMetrics;
+    uint32_t _outboundRembEstimateKbps;
+    utils::RateTracker<10> _sendRateTracker; // B/ns
+    uint64_t _lastLogTimestamp;
     std::atomic_uint32_t _rttNtp;
 
     concurrency::MpmcHashmap32<uint32_t, RtpSenderState> _outboundSsrcCounters;

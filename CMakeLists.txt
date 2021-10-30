@@ -469,6 +469,7 @@ set(TEST_FILES
     test/transport/recp/RecStreamAddedEventBuilderTest.cpp
     test/bridge/UnackedPacketsTrackerTest.cpp
     test/memory/PriorityQueueTest.cpp
+    test/memory/BacklogTest.cpp
     test/bridge/ActiveMediaListTestLevels.h)
 
 add_executable(UnitTest

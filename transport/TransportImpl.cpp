@@ -420,6 +420,9 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _jobQueue(jobmanager),
       _inboundMetrics(bweConfig.estimate.initialKbpsDownlink),
       _outboundMetrics(bweConfig.estimate.initialKbpsUplink),
+      _outboundRembEstimateKbps(bweConfig.estimate.initialKbpsUplink),
+      _sendRateTracker(utils::Time::ms * 100),
+      _lastLogTimestamp(0),
       _outboundSsrcCounters(256),
       _inboundSsrcCounters(16),
       _isRunning(true),
@@ -501,6 +504,9 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _jobQueue(jobmanager),
       _inboundMetrics(bweConfig.estimate.initialKbpsDownlink),
       _outboundMetrics(bweConfig.estimate.initialKbpsUplink),
+      _outboundRembEstimateKbps(bweConfig.estimate.initialKbpsUplink),
+      _sendRateTracker(utils::Time::ms * 100),
+      _lastLogTimestamp(0),
       _outboundSsrcCounters(256),
       _inboundSsrcCounters(16),
       _isRunning(true),
@@ -1102,15 +1108,10 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
     {
         const auto& remb = reinterpret_cast<const rtp::RtcpRembFeedback&>(header);
         const uint32_t estimatedKbps = remb.getBitRate() / 1000LLU;
+        _outboundRembEstimateKbps = estimatedKbps;
         if (!_config.rctl.enable)
         {
             _outboundMetrics.estimatedKbps = estimatedKbps;
-        }
-
-        if (_config.bwe.logUplinkEstimates && timestamp - _outboundMetrics.lastLogTimestamp >= utils::Time::sec * 5)
-        {
-            logger::info("Last uplink estimate, estimate %u kbps", _loggableId.c_str(), estimatedKbps);
-            _outboundMetrics.lastLogTimestamp = timestamp;
         }
     }
 
@@ -1323,7 +1324,8 @@ uint32_t TransportImpl::getDownlinkEstimateKbps() const
     return _inboundMetrics.estimatedKbps;
 }
 
-void TransportImpl::doProtectAndSend(memory::Packet* packet,
+void TransportImpl::doProtectAndSend(uint64_t timestamp,
+    memory::Packet* packet,
     const SocketAddress& target,
     Endpoint* endpoint,
     memory::PacketPoolAllocator& allocator)
@@ -1331,6 +1333,7 @@ void TransportImpl::doProtectAndSend(memory::Packet* packet,
     assert(packet->getLength() + 24 <= _config.mtu);
     if (endpoint && _srtpClient->protect(packet))
     {
+        _sendRateTracker.update(packet->getLength(), timestamp);
         endpoint->sendTo(target, packet, allocator);
     }
     else
@@ -1376,7 +1379,7 @@ void TransportImpl::sendPadding(uint64_t timestamp,
                     hton<uint16_t>(sendState.getSentSequenceNumber() - 20000);
 
                 padSsrcState.onRtpSent(timestamp, *padPacket);
-                doProtectAndSend(padPacket, _peerRtpPort, _selectedRtp, sendAllocator);
+                doProtectAndSend(timestamp, padPacket, _peerRtpPort, _selectedRtp, sendAllocator);
                 _rateController.onRtpPaddingSent(timestamp,
                     _mixVideoSsrc,
                     padRtpHeader->sequenceNumber,
@@ -1399,7 +1402,7 @@ void TransportImpl::sendPadding(uint64_t timestamp,
             {
                 auto* rtcpPadding = rtp::RtcpApplicationSpecific::create(padPacket->get(), ssrc, "BRPP", padding);
                 padPacket->setLength(rtcpPadding->header.size());
-                doProtectAndSend(padPacket, _peerRtcpPort, _selectedRtcp, sendAllocator);
+                doProtectAndSend(timestamp, padPacket, _peerRtcpPort, _selectedRtcp, sendAllocator);
                 _rateController.onRtcpPaddingSent(timestamp, ssrc, padPacket->getLength());
             }
         }
@@ -1441,7 +1444,7 @@ void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAll
 
         ssrcState.onRtpSent(timestamp, *packet);
         _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
-        doProtectAndSend(packet, _peerRtpPort, _selectedRtp, sendAllocator);
+        doProtectAndSend(timestamp, packet, _peerRtpPort, _selectedRtp, sendAllocator);
     }
     else if (_selectedRtcp)
     {
@@ -1618,20 +1621,25 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
 
     auto& remb = rtp::RtcpRembFeedback::create(rtcpPacket->get() + rtcpPacket->getLength(), senderSsrc);
 
-    if (_config.bwe.logDownlinkEstimates && timestamp - _inboundMetrics.lastLogTimestamp >= utils::Time::sec * 5)
+    if (_config.bwe.logDownlinkEstimates && timestamp - _lastLogTimestamp >= utils::Time::sec * 5)
     {
         const auto oldMin = _inboundMetrics.estimatedKbpsMin.load();
         const auto oldMax = _inboundMetrics.estimatedKbpsMax.load();
 
-        logger::info("Downlink estimates interval 5s, estimate %u - %u kbps, rate %.3f kbps",
+        logger::info("Estimates 5s, Downlink %u - %ukbps, rate %.1fkbps, Uplink rctl %.0fkbps, rate %.1fkbps, remb "
+                     "%ukbps, rtt %.1fms",
             _loggableId.c_str(),
             oldMin,
             oldMax,
-            _bwe->getReceiveRate(timestamp));
+            _bwe->getReceiveRate(timestamp),
+            _rateController.getTargetRate(),
+            _sendRateTracker.get(utils::Time::ms * 600) * 8 * utils::Time::ms,
+            _outboundRembEstimateKbps,
+            _rttNtp * 1000.0 / 0x10000);
 
         _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
         _inboundMetrics.estimatedKbpsMax = 0;
-        _inboundMetrics.lastLogTimestamp = timestamp;
+        _lastLogTimestamp = timestamp;
     }
 
     const uint64_t mediaBps = _inboundMetrics.estimatedKbps * 1000 * (1.0 - _config.bwe.packetOverhead);
@@ -1678,7 +1686,7 @@ void TransportImpl::sendRtcp(memory::Packet* rtcpPacket,
     }
 
     onSendingRtcp(*rtcpPacket, timestamp);
-    doProtectAndSend(rtcpPacket, _peerRtcpPort, _selectedRtcp, allocator);
+    doProtectAndSend(timestamp, rtcpPacket, _peerRtcpPort, _selectedRtcp, allocator);
 }
 
 void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64_t timestamp)
@@ -2257,7 +2265,7 @@ uint64_t TransportImpl::getRtt() const
     return (static_cast<uint64_t>(_rttNtp) * utils::Time::sec) >> 16;
 }
 
-void TransportImpl::setMixVideoSource(uint32_t ssrc, uint32_t* sequenceCounter)
+void TransportImpl::setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter)
 {
     // TODO create a job for this due to transport thread already using this while se set it
     _mixVideoSsrc = ssrc;

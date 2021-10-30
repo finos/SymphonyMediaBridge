@@ -1,75 +1,115 @@
 #pragma once
 #include <array>
+#include <type_traits>
 
 namespace memory
 {
 
-template <typename T, size_t S>
+template <typename T, size_t N>
 class RandomAccessBacklog
 {
-    static_assert(((S - 1) & S) == 0, "Size must be a power of 2");
+    static_assert(((N - 1) & N) == 0, "Size must be a power of 2");
+    template <typename D>
+    class base_iterator
+    {
+    public:
+        base_iterator(const RandomAccessBacklog<T, N>& backlog, size_t index)
+            : _backlog(const_cast<RandomAccessBacklog<T, N>&>(backlog)),
+              _index(index)
+        {
+        }
+
+        D& operator*() { return _backlog[_index]; }
+        D& operator->() { return _backlog[_index]; }
+
+        base_iterator operator++(int i)
+        {
+            iterator iter(*this);
+            ++(*this);
+            return iter;
+        }
+
+        base_iterator& operator++()
+        {
+            ++_index;
+            return *this;
+        }
+
+        bool operator==(const base_iterator<D>& a) { return a._index == _index; }
+        bool operator!=(const base_iterator<D>& a) { return a._index != _index; }
+
+    private:
+        RandomAccessBacklog<T, N>& _backlog;
+        size_t _index;
+    };
 
 public:
-    RandomAccessBacklog() : _head(0), _tail(0) {}
+    typedef base_iterator<const T> const_iterator;
+    typedef base_iterator<T> iterator;
 
-    inline T& operator[](uint32_t index) { return _data[index % _data.size()]; }
-    inline const T& operator[](uint32_t index) const { return _data[index % _data.size()]; }
+    RandomAccessBacklog() : _head(0), _count(0) {}
+    ~RandomAccessBacklog() { clear(); }
 
-    size_t size() const { return _tail - _head; }
-    bool empty() const { return _tail == _head; }
-
-    uint32_t tailIndex() const
+    inline T& operator[](uint32_t index) { return *reinterpret_cast<T*>(&_data[(_head + index) % N]); }
+    inline const T& operator[](uint32_t index) const
     {
-        if (empty())
-        {
-            return _tail;
-        }
-        return (_tail - 1);
+        return *reinterpret_cast<const T*>(&_data[(_head + index) % N]);
     }
 
-    uint32_t headIndex() const { return _head; }
-    T& tail()
-    {
-        if (size() > 0)
-        {
-            return (*this)[tailIndex()];
-        }
-        return _data[_tail % _data.size()];
-    }
+    size_t size() const { return _count; }
+    bool empty() const { return _count == 0; }
 
-    void push_back(const T& item)
+    const_iterator cbegin() const { return const_iterator(*this, 0); }
+    iterator begin() { return iterator(*this, 0); }
+    const_iterator cend() const { return const_iterator(*this, size()); }
+    iterator end() { return iterator(*this, size()); }
+    const_iterator begin() const { return cbegin(); }
+    const_iterator end() const { return cend(); }
+
+    T& front() { return (*this)[0]; }
+    const T& front() const { return (*this)[0]; }
+    T& back() { return (*this)[_count - 1]; }
+    const T& back() const { return (*this)[_count - 1]; }
+
+    void push_front(const T& item)
     {
-        if (size() == _data.size())
+        --_head;
+        if (size() == N)
         {
-            _data[_head++ % _data.size()].~T();
+            reinterpret_cast<T*>(&_data[_head % N])->~T();
+            --_count;
         }
-        _data[_tail++ % _data.size()] = item;
+
+        new (&_data[_head % N]) T(item);
+        ++_count;
     }
 
     template <typename... Args>
-    void emplace_back(Args&&... args)
+    void emplace_front(Args&&... args)
     {
-        if (size() == _data.size())
+        --_head;
+        if (size() == N)
         {
-            _data[_head++ % _data.size()].~T();
+            reinterpret_cast<T*>(&_data[_head % N])->~T();
+            --_count;
         }
-        new (&_data[_tail++ % _data.size()]) T(std::forward<Args>(args)...);
+        new (&_data[_head % N]) T(std::forward<Args>(args)...);
+        ++_count;
     }
 
     void clear()
     {
-        for (auto i = _head; i < _tail; ++i)
+        for (size_t i = 0; i < _count; ++i)
         {
-            _data[i].~T();
+            reinterpret_cast<T*>(&_data[(_head + i) % N])->~T();
         }
-        _head = 0;
-        _tail = 0;
+        _count = 0;
     }
 
 private:
-    std::array<T, S> _data;
+    typename std::aligned_storage<sizeof(T), alignof(T)>::type _data[N];
     uint32_t _head;
-    uint32_t _tail;
+    uint32_t _count;
 };
 
 } // namespace memory

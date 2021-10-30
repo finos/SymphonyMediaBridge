@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
-#define RCTL_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#define RCTL_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
 
 namespace bwe
 {
@@ -16,7 +16,6 @@ const uint32_t ntp32Second = 0x10000u;
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
     : _logId("RateCtrl", instanceId),
       _minRttNtp(~0u),
-      _rtt(500000),
       _config(config)
 {
 }
@@ -34,7 +33,7 @@ void RateController::onRtpSent(uint64_t timestamp, uint32_t ssrc, uint32_t seque
     }
 
     _model.onPacketSent(timestamp, size + _config.ipOverhead);
-    _backlog.emplace_back(timestamp, ssrc, sequenceNumber, size + _config.ipOverhead, PacketMetaData::RTP);
+    _backlog.emplace_front(timestamp, ssrc, sequenceNumber, size + _config.ipOverhead, PacketMetaData::RTP);
 }
 
 void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint32_t reportNtp, uint16_t size)
@@ -49,18 +48,21 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     PacketMetaData metaPacket(timestamp, ssrc, 0, size, PacketMetaData::SR);
     metaPacket.reportNtp = reportNtp;
     metaPacket.queueSize = _model.queue;
-    _backlog.push_back(metaPacket);
+    _backlog.push_front(metaPacket);
     RCTL_LOG("SR sent ssrc %u, size %u, ntp %x", _logId.c_str(), ssrc, size, reportNtp);
 
-    _timestamp.lastSenderReport = timestamp;
+    const bool canSendProbe = _model.queue < _model.targetQueue &&
+        (_probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval));
 
-    if (_model.networkQueue < _model.targetQueue &&
-        (_probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval)))
+    if ((_probe.count < 5 && _probe.start == 0) || canSendProbe)
     {
         RCTL_LOG("starting pad", _logId.c_str());
         _probe.start = timestamp;
         _probe.duration = 700 * utils::Time::ms; // could take previous SR to RR delay into account
-        _probe.initialQueue = _model.networkQueue;
+        _probe.initialNetworkQueue = _model.networkQueue;
+        _model.queue = size;
+        _backlog.front().queueSize = size;
+        ++_probe.count;
     }
 }
 
@@ -75,31 +77,25 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
     }
 
     ReceiveBlockSample* sample = nullptr;
-    for (size_t i = _receiveBlocks.headIndex(); i < _receiveBlocks.tailIndex(); ++i)
+    for (auto& sampleBlock : _receiveBlocks)
     {
-        auto& sampleBlock = _receiveBlocks[i];
-        if (sampleBlock.empty())
-        {
-            break;
-        }
         if (sampleBlock.ssrc == ssrc)
         {
             sample = &sampleBlock;
+            break;
         }
     }
     if (!sample)
     {
-        _receiveBlocks.emplace_back(ssrc);
-        sample = &_receiveBlocks.tail();
+        _receiveBlocks.emplace_front(ssrc);
+        sample = &_receiveBlocks.front();
     }
 
     const uint32_t lossCount = cumulativeLossCount - std::min(cumulativeLossCount, sample->lossCount);
     sample->lossCount = cumulativeLossCount;
 
-    for (size_t i = _backlog.tailIndex(); i != _backlog.headIndex(); --i)
+    for (auto& item : _backlog)
     {
-        auto& item = _backlog[i];
-
         if (item.ssrc == ssrc && (item.type == PacketMetaData::RTP || item.type == PacketMetaData::RTP_PADDING) &&
             item.sequenceNumber == receivedSequenceNumber)
         {
@@ -113,25 +109,35 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
 namespace
 {
 template <typename T>
-bool isProbe(const T& backlog, double bandwidthKbps, size_t srIndex, size_t tailIndex)
+bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t srIndex)
 {
+    if (srIndex < 1)
+    {
+        return false;
+    }
+
     const auto& sr = backlog[srIndex];
-    uint32_t queueSize = sr.queueSize;
+    uint32_t queueSize = sr.size;
     uint64_t lastTransmission = sr.transmissionTime;
 
-    for (size_t i = srIndex + 1; i <= tailIndex; ++i)
+    for (uint32_t i = srIndex - 1;; --i)
     {
         const auto& item = backlog[i];
         queueSize -= std::min(queueSize,
             static_cast<uint32_t>(
                 utils::Time::diff(lastTransmission, item.transmissionTime) * bandwidthKbps / (8 * utils::Time::ms)));
-        if (queueSize < 100)
+        if (queueSize < std::min(sr.size, 100u))
         {
             return false;
         }
 
         queueSize += item.size;
         lastTransmission = item.transmissionTime;
+
+        if (i == 0)
+        {
+            break;
+        }
     }
 
     return queueSize > 100;
@@ -156,20 +162,19 @@ RateController::PacketMetaData* RateController::analyzeBacklog(uint32_t ssrc,
     lossSinceSR = 0;
     probing = false;
 
-    size_t tailIndex = 0;
+    uint32_t trainEnd = 0;
     bool hasReceived = false;
     uint64_t transmissionEnd = 0;
-    for (size_t i = 0; i < _backlog.size(); ++i)
+    for (uint32_t i = 0; i < _backlog.size(); ++i)
     {
-        auto& item = _backlog[_backlog.tailIndex() - i];
-
+        auto& item = _backlog[i];
         if (item.type == PacketMetaData::SR && item.reportNtp == reportNtp)
         {
             transmissionPeriod = transmissionEnd - item.transmissionTime;
 
             if (receivedAfterSR > 0)
             {
-                probing = isProbe(_backlog, modelBandwidthKbps, _backlog.tailIndex() - i, tailIndex);
+                probing = isProbe(_backlog, modelBandwidthKbps, trainEnd, i);
             }
             return &item;
         }
@@ -178,7 +183,7 @@ RateController::PacketMetaData* RateController::analyzeBacklog(uint32_t ssrc,
         {
             if (receivedAfterSR == 0)
             {
-                tailIndex = _backlog.tailIndex() - i;
+                trainEnd = i;
             }
             item.received = true;
             lossSinceSR += item.lossCount;
@@ -212,6 +217,7 @@ void RateController::onReportReceived(uint64_t timestamp,
         return;
     }
 
+    const uint32_t minTargetQueue = 4 * _config.mtu;
     _minRttNtp = std::min(_minRttNtp, rttNtp);
 
     uint32_t networkQueue = ~0u;
@@ -272,27 +278,32 @@ void RateController::onReportReceived(uint64_t timestamp,
     {
         _model.networkQueue = networkQueue;
 
-        if (isProbing && _model.queue > _model.targetQueue / 4 && maxRateKbps != 0)
+        if (isProbing && _model.queue > _model.targetQueue / 5 && maxRateKbps != 0)
         {
             _model.bandwidthKbps +=
                 (maxRateKbps > _model.bandwidthKbps ? 1.0 : 0.1) * (maxRateKbps - _model.bandwidthKbps);
         }
-        else if (networkQueue * 2 < _model.queue && isProbing)
+        else if (isProbing && networkQueue + _config.mtu < _model.queue &&
+            utils::Time::diffGT(_probe.start, timestamp, 0))
         {
-            const auto extraBw = (_model.queue - std::min(_model.queue, networkQueue + _probe.initialQueue)) * 8 *
-                utils::Time::ms / (timestamp - _probe.start);
-            _model.bandwidthKbps += extraBw * 3 / 4;
+            // More rare case. We did not get useful info about receive rate but we see that the network queue is
+            // shorter than anticipated
+            const auto extraBw = (_model.queue - std::min(_model.queue, networkQueue + _probe.initialNetworkQueue)) *
+                8 * utils::Time::ms / (timestamp - _probe.start);
+            _model.bandwidthKbps += extraBw;
         }
-        else if (isProbing)
+        else if (isProbing && maxRateKbps != 0)
         {
             _model.bandwidthKbps +=
                 (maxRateKbps > _model.bandwidthKbps ? 0.5 : 0.05) * (maxRateKbps - _model.bandwidthKbps);
         }
+
         if (_minRttNtp != ~0u && _minRttNtp != 0)
         {
             // aim at 100ms queue build up. Some network buffers are 75K so it is wise to not exceed
-            _model.targetQueue = std::max(_model.bandwidthKbps, maxRateKbps) * 100 * 125;
-            _model.targetQueue = std::max(_model.targetQueue, 8 * _config.mtu);
+            _model.targetQueue =
+                std::max(_model.bandwidthKbps, maxRateKbps) * (80 + _minRttNtp * 500 / ntp32Second) / 8;
+            _model.targetQueue = std::max(_model.targetQueue, minTargetQueue);
             _model.targetQueue = std::min(_model.targetQueue, 60000u);
         }
         else
@@ -308,7 +319,7 @@ void RateController::onReportReceived(uint64_t timestamp,
 
     _model.bandwidthKbps = std::min(_model.bandwidthKbps, static_cast<double>(_config.bandwidthCeilingKbps));
     _model.bandwidthKbps = std::max(_model.bandwidthKbps, static_cast<double>(_config.bandwidthFloorKbps));
-    _model.targetQueue = std::max(8 * _config.mtu, _model.targetQueue);
+    _model.targetQueue = std::max(minTargetQueue, _model.targetQueue);
 
     auto sendRate = calculateSendRate(timestamp);
     RCTL_LOG("model %.1fkbps mQ %uB tQ %uB, netQueue %u, rxRate %.fkbps txRate %.fkbps rtt %.1fms loss %u, probing %s",
@@ -342,10 +353,11 @@ void RateController::onRtcpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint16
     }
 
     _model.onPacketSent(timestamp, size + _config.ipOverhead);
+    _probe.lastPaddingSendTime = timestamp;
 
     if (!_backlog.empty())
     {
-        auto& item = _backlog.tail();
+        auto& item = _backlog.front();
         if (item.type == PacketMetaData::RTCP_PADDING && item.transmissionTime == timestamp)
         {
             item.size += size;
@@ -353,7 +365,7 @@ void RateController::onRtcpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint16
         }
     }
 
-    _backlog.emplace_back(timestamp, ssrc, 0, size + _config.ipOverhead, PacketMetaData::RTCP_PADDING);
+    _backlog.emplace_front(timestamp, ssrc, 0, size + _config.ipOverhead, PacketMetaData::RTCP_PADDING);
 }
 
 void RateController::onRtpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size)
@@ -363,34 +375,34 @@ void RateController::onRtpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint32_
         return;
     }
 
+    _probe.lastPaddingSendTime = timestamp;
     _model.onPacketSent(timestamp, size + _config.ipOverhead);
-    _backlog.emplace_back(timestamp, ssrc, sequenceNumber, size + _config.ipOverhead, PacketMetaData::RTP_PADDING);
+    _backlog.emplace_front(timestamp, ssrc, sequenceNumber, size + _config.ipOverhead, PacketMetaData::RTP_PADDING);
 }
 
 uint32_t RateController::getPadding(const uint64_t timestamp,
     const uint32_t ssrc,
     const uint16_t size,
-    uint16_t& paddingSize)
+    uint16_t& paddingSize) const
 {
     if (!_config.enabled)
     {
         return 0;
     }
 
-    if (_model.networkQueue > _model.targetQueue || _probe.start == 0 ||
+    if (_model.queue > _model.targetQueue || _probe.start == 0 ||
         utils::Time::diffGE(_probe.start, timestamp, _probe.duration))
     {
         if (_probe.lastPaddingSendTime == 0 ||
             utils::Time::diffGE(_probe.lastPaddingSendTime, timestamp, _config.minPadPinInterval))
         {
-            _probe.lastPaddingSendTime = timestamp;
             paddingSize = rtp::MIN_RTP_HEADER_SIZE + 4; // tiny packet to keep flow on padding ssrc
             return 1;
         }
         return 0;
     }
 
-    if (_model.queue + size < _model.targetQueue / 2)
+    if (_model.queue + size < _model.targetQueue)
     {
         auto batchSize = std::min(_model.targetQueue - _model.queue, _config.mtu * 5) - size;
         auto count = 1 + batchSize / _config.maxPaddingSize;
@@ -399,7 +411,7 @@ uint32_t RateController::getPadding(const uint64_t timestamp,
         {
             return 0;
         }
-        _probe.lastPaddingSendTime = timestamp;
+
         return count;
     }
     return 0;
@@ -409,9 +421,8 @@ double RateController::calculateSendRate(const uint64_t timestamp) const
 {
     double byteCount = 0;
 
-    for (size_t i = 0; i < _backlog.size(); ++i)
+    for (const auto& item : _backlog)
     {
-        const auto& item = _backlog[_backlog.tailIndex() - i];
         byteCount += item.size;
         auto period = timestamp - item.transmissionTime;
         if (period > utils::Time::ms * 600)
