@@ -44,7 +44,7 @@ public:
     RateControllerTest()
         : _allocator(4096 * 32, "ratemain"),
           _mixVideoSendState(90000, _globalConfig),
-          _timeStart(utils::Time::getAbsoluteTime()),
+          _timeStart(1000),
           _wallClockStartNtp(0x000000000)
     {
         _timeCursor = _timeStart;
@@ -250,18 +250,18 @@ public:
                 {
                     logger::debug("%" PRIu64 "ms received SR %u",
                         "",
-                        (_timeCursor & 0xFFFFFFFF) / utils::Time::ms,
+                        (_timeCursor & 0xFFFFFFFFFF) / utils::Time::ms,
                         rtcpReport->ssrc.get());
                     auto& recvState = itPair->second;
                     recvState.onRtcpReceived(rtcpReport->header, _timeCursor, getWallClock());
                 }
                 else
                 {
-                    logger::debug("%" PRIu64 "ms received RTCP %u, size %zu",
+                    /*logger::debug("%" PRIu64 "ms received RTCP %u, size %zu",
                         "",
-                        (_timeCursor & 0xFFFFFFFF) / utils::Time::ms,
+                        _timeCursor / utils::Time::ms,
                         rtcpReport->ssrc.get(),
-                        packet->getLength());
+                        packet->getLength());*/
                 }
             }
 
@@ -476,7 +476,7 @@ TEST_F(RateControllerTest, plain500kbps)
 
     run(utils::Time::sec * 15);
 
-    EXPECT_GE(_rateControl->getTargetRate(), 450);
+    EXPECT_GE(_rateControl->getTargetRate(), 470);
 }
 
 TEST_F(RateControllerTest, long500kbps)
@@ -509,11 +509,11 @@ TEST_F(RateControllerTest, plain4000kbps)
     run(utils::Time::sec * 10);
 
     videoChannel->setBandwidth(_rateControl->getTargetRate() - 200);
-    EXPECT_GE(_rateControl->getTargetRate(), 1300);
+    EXPECT_GE(_rateControl->getTargetRate(), 1000);
 
     run(utils::Time::sec * 25);
 
-    EXPECT_GE(_rateControl->getTargetRate(), 3000);
+    EXPECT_GE(_rateControl->getTargetRate(), 3800);
 }
 
 TEST_F(RateControllerTest, long4000kbps)
@@ -534,5 +534,5 @@ TEST_F(RateControllerTest, long4000kbps)
 
     run(utils::Time::sec * 25);
 
-    EXPECT_GE(_rateControl->getTargetRate(), 2700);
+    EXPECT_GE(_rateControl->getTargetRate(), 3700);
 }

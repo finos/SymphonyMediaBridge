@@ -16,7 +16,6 @@ const uint32_t ntp32Second = 0x10000u;
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
     : _logId("RateCtrl", instanceId),
       _minRttNtp(~0u),
-      _rtt(500000),
       _config(config)
 {
 }
@@ -51,8 +50,6 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     metaPacket.queueSize = _model.queue;
     _backlog.push_back(metaPacket);
     RCTL_LOG("SR sent ssrc %u, size %u, ntp %x", _logId.c_str(), ssrc, size, reportNtp);
-
-    _timestamp.lastSenderReport = timestamp;
 
     if (_model.networkQueue < _model.targetQueue &&
         (_probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval)))
@@ -272,27 +269,29 @@ void RateController::onReportReceived(uint64_t timestamp,
     {
         _model.networkQueue = networkQueue;
 
-        if (isProbing && _model.queue > _model.targetQueue / 4 && maxRateKbps != 0)
+        if (isProbing && _model.queue > _model.targetQueue / 5 && maxRateKbps != 0)
         {
             _model.bandwidthKbps +=
                 (maxRateKbps > _model.bandwidthKbps ? 1.0 : 0.1) * (maxRateKbps - _model.bandwidthKbps);
         }
-        else if (networkQueue * 2 < _model.queue && isProbing)
+        else if (isProbing && networkQueue + _config.mtu < _model.queue && timestamp - _probe.start > 0)
         {
             const auto extraBw = (_model.queue - std::min(_model.queue, networkQueue + _probe.initialQueue)) * 8 *
                 utils::Time::ms / (timestamp - _probe.start);
-            _model.bandwidthKbps += extraBw * 3 / 4;
+            _model.bandwidthKbps += extraBw;
         }
         else if (isProbing)
         {
             _model.bandwidthKbps +=
                 (maxRateKbps > _model.bandwidthKbps ? 0.5 : 0.05) * (maxRateKbps - _model.bandwidthKbps);
         }
+
         if (_minRttNtp != ~0u && _minRttNtp != 0)
         {
             // aim at 100ms queue build up. Some network buffers are 75K so it is wise to not exceed
-            _model.targetQueue = std::max(_model.bandwidthKbps, maxRateKbps) * 100 * 125;
-            _model.targetQueue = std::max(_model.targetQueue, 8 * _config.mtu);
+            _model.targetQueue =
+                std::max(_model.bandwidthKbps, maxRateKbps) * (80 + _minRttNtp * 1000 / ntp32Second) / 8;
+            _model.targetQueue = std::max(_model.targetQueue, 4 * _config.mtu);
             _model.targetQueue = std::min(_model.targetQueue, 60000u);
         }
         else
@@ -308,7 +307,7 @@ void RateController::onReportReceived(uint64_t timestamp,
 
     _model.bandwidthKbps = std::min(_model.bandwidthKbps, static_cast<double>(_config.bandwidthCeilingKbps));
     _model.bandwidthKbps = std::max(_model.bandwidthKbps, static_cast<double>(_config.bandwidthFloorKbps));
-    _model.targetQueue = std::max(8 * _config.mtu, _model.targetQueue);
+    _model.targetQueue = std::max(4 * _config.mtu, _model.targetQueue);
 
     auto sendRate = calculateSendRate(timestamp);
     RCTL_LOG("model %.1fkbps mQ %uB tQ %uB, netQueue %u, rxRate %.fkbps txRate %.fkbps rtt %.1fms loss %u, probing %s",
@@ -390,7 +389,7 @@ uint32_t RateController::getPadding(const uint64_t timestamp,
         return 0;
     }
 
-    if (_model.queue + size < _model.targetQueue / 2)
+    if (_model.queue + size < _model.targetQueue)
     {
         auto batchSize = std::min(_model.targetQueue - _model.queue, _config.mtu * 5) - size;
         auto count = 1 + batchSize / _config.maxPaddingSize;

@@ -143,14 +143,6 @@ private:
         }
     } _model;
 
-    struct Timestamps
-    {
-        uint64_t lastCongestion = 0;
-        uint64_t lastIncrease = 0;
-        uint64_t lastSenderReport = 0;
-    };
-    Timestamps _timestamp;
-
     struct Probe
     {
         uint64_t start = 0;
@@ -161,7 +153,6 @@ private:
     } _probe;
 
     uint32_t _minRttNtp;
-    double _rtt;
     const RateControllerConfig& _config;
 };
 } // namespace bwe
