@@ -90,6 +90,10 @@ TEST_F(OpusTest, seqSkip)
     EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
 
     decodeResult = decoder.decode(_opusData, opusBytes, 16, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
+    EXPECT_TRUE(decodeResult);
+    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
+
+    decodeResult = decoder.decode(_opusData, opusBytes, 16, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
     EXPECT_FALSE(decodeResult);
     EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
 

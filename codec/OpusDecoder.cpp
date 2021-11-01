@@ -39,6 +39,8 @@ OpusDecoder::~OpusDecoder()
 }
 
 // return true if there is more output frames
+// When healing: the packet reproduced previous to the one received is done with payload as input. All packet reproduced
+// before that are done with null as payload.
 bool OpusDecoder::decode(const unsigned char* payloadStart,
     const size_t payloadLength,
     const uint16_t sequenceNumber,
@@ -60,11 +62,17 @@ bool OpusDecoder::decode(const unsigned char* payloadStart,
         _hasReceivedFirstPacket = true;
     }
 
-    const auto seqDiff = static_cast<int16_t>(sequenceNumber - _sequenceNumber);
-    if (seqDiff == 1 || seqDiff > 10)
+    auto seqDiff = static_cast<int16_t>(sequenceNumber - _sequenceNumber);
+    if (seqDiff == 1)
     {
         _sequenceNumber = sequenceNumber;
         heal = 0;
+    }
+    else if (seqDiff > 10)
+    {
+        _sequenceNumber = sequenceNumber - 1;
+        seqDiff = 2;
+        heal = 1;
     }
     else if (seqDiff > 1)
     {
@@ -82,7 +90,7 @@ bool OpusDecoder::decode(const unsigned char* payloadStart,
     }
 
     auto framesProduced = opus_decode(_state->_state,
-        payloadStart,
+        seqDiff < 3 ? payloadStart : nullptr,
         payloadLength,
         decodedData,
         utils::checkedCast<int32_t>(decodeBufferSize / (Opus::channelsPerFrame * Opus::bytesPerSample)),
