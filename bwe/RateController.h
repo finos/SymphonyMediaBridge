@@ -32,16 +32,18 @@ figure out what bandwidth best describes the observation. Typically, a packets t
 - the size of the network queue at the time of insertion of packet
 - the distance to the receiver
 
-A RR contains information on which packet was last received and the time that has passed since the latest sender report
-(SR). By tracking sent packets, we can use that to calculate the receive rate in that window. We can also calculate
-roughly the number of bytes still in transit.
-By modelling the network queue according to the bandwidth we think there is, we can compare our model to the actual
-bytes in transit. It is not precise but if the actual queue is much lower than expected, the bandwidth is likely higher
-and the opposite if the actual queue is longer than expected.
+An RR contains information about which packet was last received and the time that has passed since the latest sender
+report (SR). By tracking sent packets, we can use that to calculate the receive rate in that window. We can also
+calculate roughly the number of bytes still in transit. By modelling the network queue according to the bandwidth we
+think it is, we can compare our model to the actual bytes in transit. It is not precise but if the actual queue is much
+lower than expected, the bandwidth is likely higher and the opposite if the actual queue is longer than expected.
 
-To get some useful data we need to probe the link by sending above the expected bandwidth over a short period of time.
+To get some useful data we need to probe the link by sending excess bandwidth over a short period of time.
 This is done by interleaving the media packets with RTCP padding packets and Video RTX packets with old
-sequence numbers. Both will be ignored by the receiver.
+sequence numbers. Both will be ignored by the receiver. To avoid packet loss this is done by filling the nework queue
+and then maintain estimated bandwidth of the link. Either the bandwidth is correctly assessed and the network queue
+remains after the probe, or it is higher and the receive rate is higher and the actual network queue is shorter than
+predicted.
  */
 class RateController
 {
