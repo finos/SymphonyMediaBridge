@@ -63,7 +63,7 @@ public:
     CFG_GROUP_END(bwe);
 
     CFG_GROUP() // rate control
-    CFG_PROP(bool, enable, true);
+    CFG_PROP(bool, enable, false);
     CFG_PROP(uint32_t, floor, 300);
     CFG_PROP(uint32_t, ceiling, 5000);
     CFG_GROUP_END(rctl)
