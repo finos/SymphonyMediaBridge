@@ -418,7 +418,6 @@ set(TEST_FILES
     test/integration/RtpDump.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
-    test/codec/OpusCodecTest.cpp
     test/gtest_main.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp

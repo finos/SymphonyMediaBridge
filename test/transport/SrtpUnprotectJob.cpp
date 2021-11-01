@@ -9,9 +9,8 @@ namespace transport
 SrtpUnprotectJob::SrtpUnprotectJob(RtcTransport* sender,
     memory::Packet* packet,
     memory::PacketPoolAllocator& receiveAllocator,
-    std::atomic_uint32_t& ownerJobsCounter,
     DecryptedPacketReceiver* receiver)
-    : jobmanager::CountedJob(ownerJobsCounter),
+    : jobmanager::CountedJob(sender->getJobCounter()),
       _sender(sender),
       _packet(packet),
       _receiveAllocator(receiveAllocator),
@@ -36,4 +35,4 @@ void SrtpUnprotectJob::run()
     }
 }
 
-}
+} // namespace transport
