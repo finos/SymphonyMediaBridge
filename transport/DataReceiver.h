@@ -1,6 +1,6 @@
 #pragma once
 
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"

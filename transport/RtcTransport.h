@@ -26,7 +26,7 @@ struct SctpConfig;
 }
 namespace jobmanager
 {
-class SerialJobManager;
+class JobQueue;
 }
 
 namespace transport

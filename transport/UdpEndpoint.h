@@ -2,7 +2,7 @@
 #include "concurrency/MpmcHashmap.h"
 #include "concurrency/MpmcQueue.h"
 #include "ice/IceSession.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/BaseUdpEndpoint.h"
 #include "transport/Endpoint.h"

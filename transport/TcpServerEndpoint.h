@@ -74,7 +74,7 @@ private:
     std::atomic<Endpoint::State> _state;
     logger::LoggableId _name;
     RtcSocket _socket;
-    jobmanager::SerialJobManager _receiveJobs;
+    jobmanager::JobQueue _receiveJobs;
     memory::PacketPoolAllocator& _allocator;
     concurrency::MpmcHashmap32<int, PendingTcp> _pendingConnections;
     uint32_t _pendingEpollRegistrations;

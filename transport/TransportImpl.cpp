@@ -63,6 +63,9 @@ public:
 
     void run() override
     {
+#ifdef DEBUG
+        concurrency::ScopedMutexGuard ensureSingleThreaded(_transport._singleThreadMutex);
+#endif
         (_transport.*_receiveMethod)(_endpoint, _source, _packet, _allocator, _timestamp);
         _packet = nullptr;
     }
@@ -213,40 +216,6 @@ private:
     TransportImpl& _transport;
 };
 
-class SendJob : public jobmanager::CountedJob
-{
-public:
-    SendJob(TransportImpl& transport,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& sendAllocator,
-        std::atomic_uint32_t& ownerCount)
-        : CountedJob(ownerCount),
-          _transport(transport),
-          _packet(packet),
-          _sendAllocator(sendAllocator)
-    {
-    }
-
-    ~SendJob()
-    {
-        if (_packet)
-        {
-            _sendAllocator.free(_packet);
-        }
-    }
-
-    void run() override
-    {
-        _transport.doProtectAndSend(_packet, _sendAllocator);
-        _packet = nullptr;
-    }
-
-private:
-    TransportImpl& _transport;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _sendAllocator;
-};
-
 class SctpSendJob : public jobmanager::CountedJob
 {
     struct SctpDataChunk
@@ -265,10 +234,10 @@ public:
         const void* data,
         uint16_t length,
         memory::PacketPoolAllocator& allocator,
-        jobmanager::SerialJobManager& serialJobManager,
+        jobmanager::JobQueue& jobQueue,
         TransportImpl& transport)
         : CountedJob(transport.getJobCounter()),
-          _serialJobManager(serialJobManager),
+          _jobQueue(jobQueue),
           _sctpAssociation(association),
           _packet(memory::makePacket(allocator)),
           _allocator(allocator),
@@ -338,7 +307,7 @@ public:
         }
         if (nextTimeout >= 0 && (current < 0 || current > nextTimeout))
         {
-            SctpTimerJob::start(_serialJobManager, _transport, _sctpAssociation, nextTimeout);
+            SctpTimerJob::start(_jobQueue, _transport, _sctpAssociation, nextTimeout);
         }
 
         _allocator.free(_packet);
@@ -346,7 +315,7 @@ public:
     }
 
 private:
-    jobmanager::SerialJobManager& _serialJobManager;
+    jobmanager::JobQueue& _jobQueue;
     sctp::SctpAssociation& _sctpAssociation;
     memory::Packet* _packet;
     memory::PacketPoolAllocator& _allocator;
@@ -442,7 +411,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _selectedRtcp(nullptr),
       _dataReceiver(nullptr),
       _mainAllocator(allocator),
-      _serialJobmanager(jobmanager),
+      _jobQueue(jobmanager),
       _inboundMetrics(bweConfig.estimate.initialKbpsDownlink),
       _outboundMetrics(bweConfig.estimate.initialKbpsUplink),
       _outboundSsrcCounters(256),
@@ -520,7 +489,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _selectedRtcp(nullptr),
       _dataReceiver(nullptr),
       _mainAllocator(allocator),
-      _serialJobmanager(jobmanager),
+      _jobQueue(jobmanager),
       _inboundMetrics(bweConfig.estimate.initialKbpsDownlink),
       _outboundMetrics(bweConfig.estimate.initialKbpsUplink),
       _outboundSsrcCounters(256),
@@ -663,7 +632,7 @@ bool TransportImpl::start()
 
 TransportImpl::~TransportImpl()
 {
-    if (_jobCounter.load() > 0 || _isRunning || _serialJobmanager.getCount() > 0)
+    if (_jobCounter.load() > 0 || _isRunning || _jobQueue.getCount() > 0)
     {
         logger::warn("~TransportImpl not idle %p running%u jobcount %u cbrefs %u, serialjobs %zu",
             _loggableId.c_str(),
@@ -671,7 +640,7 @@ TransportImpl::~TransportImpl()
             _isRunning.load(),
             _jobCounter.load(),
             _callbackRefCount.load(),
-            _serialJobmanager.getCount());
+            _jobQueue.getCount());
     }
 
     for (auto* endpoint : _rtpEndpoints)
@@ -692,7 +661,7 @@ TransportImpl::~TransportImpl()
 
 void TransportImpl::stop()
 {
-    _serialJobmanager.getJobManager().abortTimedJobs(getId());
+    _jobQueue.getJobManager().abortTimedJobs(getId());
     if (!_isRunning)
     {
         return;
@@ -746,7 +715,7 @@ void TransportImpl::stop()
         }
     }
 
-    _serialJobmanager.getJobManager().abortTimedJobs(getId());
+    _jobQueue.getJobManager().abortTimedJobs(getId());
     _isRunning = false;
 }
 
@@ -756,8 +725,8 @@ void TransportImpl::onUnregistered(Endpoint& endpoint)
     if (_callbackRefCount.fetch_sub(1) == 1)
     {
         // put a job last in queue to reduce owner count when all jobs are complete
-        _serialJobmanager.addJob<ShutdownJob>(_jobCounter);
-        _serialJobmanager.getJobManager().abortTimedJobs(getId());
+        _jobQueue.addJob<ShutdownJob>(_jobCounter);
+        _jobQueue.getJobManager().abortTimedJobs(getId());
         logger::debug("transport events stopped jobcount %u", _loggableId.c_str(), _jobCounter.load() - 1);
         _isInitialized = false;
         --_jobCounter;
@@ -770,7 +739,7 @@ void TransportImpl::onServerPortUnregistered(ServerEndpoint& endpoint)
     if (_callbackRefCount.fetch_sub(1) == 1)
     {
         // put a job last in queue to reduce owner count when all jobs are complete
-        _serialJobmanager.addJob<ShutdownJob>(_jobCounter);
+        _jobQueue.addJob<ShutdownJob>(_jobCounter);
         logger::debug("transport events stopped %u", _loggableId.c_str(), _jobCounter.load() - 1);
         _isInitialized = false;
         --_jobCounter;
@@ -783,7 +752,7 @@ void TransportImpl::onRtpReceived(Endpoint& endpoint,
     memory::Packet* packet,
     memory::PacketPoolAllocator& allocator)
 {
-    if (!_serialJobmanager
+    if (!_jobQueue
              .addJob<PacketReceiveJob>(*this, endpoint, source, packet, allocator, &TransportImpl::internalRtpReceived))
     {
         logger::error("job queue full RTCP", _loggableId.c_str());
@@ -856,7 +825,7 @@ void TransportImpl::onDtlsReceived(Endpoint& endpoint,
     memory::Packet* packet,
     memory::PacketPoolAllocator& allocator)
 {
-    if (!_serialJobmanager.addJob<PacketReceiveJob>(*this,
+    if (!_jobQueue.addJob<PacketReceiveJob>(*this,
             endpoint,
             source,
             packet,
@@ -900,7 +869,7 @@ void TransportImpl::onRtcpReceived(Endpoint& endpoint,
     memory::Packet* packet,
     memory::PacketPoolAllocator& allocator)
 {
-    if (!_serialJobmanager.addJob<PacketReceiveJob>(*this,
+    if (!_jobQueue.addJob<PacketReceiveJob>(*this,
             endpoint,
             source,
             packet,
@@ -974,7 +943,7 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
         }
     }
 
-    if (!_serialJobmanager
+    if (!_jobQueue
              .addJob<PacketReceiveJob>(*this, endpoint, source, packet, allocator, &TransportImpl::internalIceReceived))
     {
         logger::error("job queue full ICE", _loggableId.c_str());
@@ -1034,7 +1003,7 @@ void TransportImpl::onPortClosed(Endpoint& endpoint)
 {
     if (endpoint.getTransportType() == ice::TransportType::TCP)
     {
-        _serialJobmanager.addJob<IceDisconnectJob>(*this, endpoint);
+        _jobQueue.addJob<IceDisconnectJob>(*this, endpoint);
     }
     endpoint.unregisterListener(this);
 }
@@ -1302,11 +1271,6 @@ uint32_t TransportImpl::getDownlinkEstimateKbps() const
     return _inboundMetrics.estimatedKbps;
 }
 
-void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
-{
-    _serialJobmanager.addJob<SendJob>(*this, packet, sendAllocator, _jobCounter);
-}
-
 void TransportImpl::doProtectAndSend(memory::Packet* packet,
     const SocketAddress& target,
     Endpoint* endpoint,
@@ -1323,8 +1287,11 @@ void TransportImpl::doProtectAndSend(memory::Packet* packet,
     }
 }
 
-void TransportImpl::doProtectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
+void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
 {
+#ifdef DEBUG
+    concurrency::ScopedMutexGuard ensureSingleThreaded(_singleThreadMutex);
+#endif
     assert(_srtpClient);
     const auto timestamp = utils::Time::getAbsoluteTime();
 
@@ -1623,7 +1590,7 @@ bool TransportImpl::isConnected()
 
 void TransportImpl::connect()
 {
-    _serialJobmanager.addJob<ConnectJob>(*this);
+    _jobQueue.addJob<ConnectJob>(*this);
 }
 
 void TransportImpl::doConnect()
@@ -1635,11 +1602,11 @@ void TransportImpl::doConnect()
 
     if (_rtpIceSession)
     {
-        _serialJobmanager.addJob<IceStartJob>(*this, _serialJobmanager, *_rtpIceSession);
+        _jobQueue.addJob<IceStartJob>(*this, _jobQueue, *_rtpIceSession);
     }
     if (!_rtpIceSession && _srtpClient->getState() == SrtpClient::State::READY)
     {
-        DtlsTimerJob::start(_serialJobmanager, *this, *_srtpClient, utils::Time::ms * 10);
+        DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, utils::Time::ms * 10);
     }
     auto* dataReceiver = _dataReceiver.load();
     if (dataReceiver && isConnected() && !_peerRtpPort.empty())
@@ -1700,7 +1667,7 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
 {
     if (_rtpIceSession)
     {
-        _serialJobmanager.addJob<IceSetRemoteJob>(*this, credentials, candidates, allocator);
+        _jobQueue.addJob<IceSetRemoteJob>(*this, credentials, candidates, allocator);
     }
 }
 
@@ -1747,7 +1714,7 @@ void TransportImpl::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     _dtlsEnabled = true;
     if (_srtpClient->getState() == SrtpClient::State::IDLE)
     {
-        _serialJobmanager.addJob<DtlsSetRemoteJob>(*this,
+        _jobQueue.addJob<DtlsSetRemoteJob>(*this,
             *_srtpClient,
             fingerprintHash.c_str(),
             fingerprintType.c_str(),
@@ -1758,7 +1725,7 @@ void TransportImpl::setRemoteDtlsFingerprint(const std::string& fingerprintType,
 
 void TransportImpl::disableDtls()
 {
-    _serialJobmanager.addJob<DtlsSetRemoteJob>(*this, *_srtpClient, "", "", false, _mainAllocator);
+    _jobQueue.addJob<DtlsSetRemoteJob>(*this, *_srtpClient, "", "", false, _mainAllocator);
 }
 
 void TransportImpl::setSctp(const uint16_t localPort, const uint16_t remotePort)
@@ -1791,7 +1758,7 @@ void TransportImpl::onIcePreliminary(ice::IceSession* session,
         _peerRtpPort = sourcePort;
         if (_srtpClient->getState() == SrtpClient::State::READY)
         {
-            DtlsTimerJob::start(_serialJobmanager, *this, *_srtpClient, 1);
+            DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
         }
     }
 }
@@ -1913,11 +1880,11 @@ void TransportImpl::onDtlsStateChange(SrtpClient*, const SrtpClient::State state
     }
     else if (state == SrtpClient::State::CONNECTING)
     {
-        DtlsTimerJob::start(_serialJobmanager, *this, *_srtpClient, 1);
+        DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
     }
     else if (state == SrtpClient::State::READY && _selectedRtp)
     {
-        DtlsTimerJob::start(_serialJobmanager, *this, *_srtpClient, 1);
+        DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
     }
 }
 
@@ -1988,21 +1955,15 @@ bool TransportImpl::sendSctp(const uint16_t streamId,
         return false;
     }
 
-    _serialJobmanager.addJob<SctpSendJob>(*_sctpAssociation,
-        streamId,
-        protocolId,
-        data,
-        length,
-        _mainAllocator,
-        _serialJobmanager,
-        *this);
+    _jobQueue
+        .addJob<SctpSendJob>(*_sctpAssociation, streamId, protocolId, data, length, _mainAllocator, _jobQueue, *this);
 
     return true;
 }
 
 void TransportImpl::connectSctp()
 {
-    _serialJobmanager.addJob<ConnectSctpJob>(*this);
+    _jobQueue.addJob<ConnectSctpJob>(*this);
 }
 
 void TransportImpl::doConnectSctp()
@@ -2021,7 +1982,7 @@ void TransportImpl::doConnectSctp()
 
     const auto timestamp = utils::Time::getAbsoluteTime();
     _sctpAssociation->connect(0xFFFFu, 0xFFFFu, timestamp);
-    SctpTimerJob::start(_serialJobmanager, *this, *_sctpAssociation, _sctpAssociation->nextTimeout(timestamp));
+    SctpTimerJob::start(_jobQueue, *this, *_sctpAssociation, _sctpAssociation->nextTimeout(timestamp));
 }
 
 bool TransportImpl::sendSctpPacket(const void* data, size_t length)
@@ -2085,7 +2046,7 @@ void TransportImpl::onSctpReceived(sctp::SctpServerPort* serverPort,
 
         if (nextTimeout >= 0 && currentTimeout > nextTimeout)
         {
-            SctpTimerJob::start(_serialJobmanager, *this, *_sctpAssociation, nextTimeout);
+            SctpTimerJob::start(_jobQueue, *this, *_sctpAssociation, nextTimeout);
         }
     }
 }

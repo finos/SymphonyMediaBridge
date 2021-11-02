@@ -9,7 +9,7 @@ class SrtpClient;
 
 namespace jobmanager
 {
-class SerialJobManager;
+class JobQueue;
 }
 
 namespace sctp
@@ -22,18 +22,18 @@ class SctpTimerJob : public jobmanager::CountedJob
 {
 public:
     static const uint32_t TIMER_ID = 0xFFFF7E03;
-    SctpTimerJob(jobmanager::SerialJobManager& serialJobManager,
+    SctpTimerJob(jobmanager::JobQueue& jobQueue,
         transport::Transport& transport,
         sctp::SctpAssociation& sctpAssociation);
 
     void run() override;
-    static void start(jobmanager::SerialJobManager& serialJobManager,
+    static void start(jobmanager::JobQueue& jobQueue,
         transport::Transport& transport,
         sctp::SctpAssociation& sctpAssociation,
         int64_t nextTimeoutNs);
 
 protected:
-    jobmanager::SerialJobManager& _serialJobManager;
+    jobmanager::JobQueue& _jobQueue;
     transport::Transport& _transport;
     sctp::SctpAssociation& _sctpAssociation;
 };

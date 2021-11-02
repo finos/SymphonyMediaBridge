@@ -1,6 +1,5 @@
 #include "bridge/engine/VideoNackReceiveJob.h"
 #include "bridge/RtpMap.h"
-#include "bridge/engine/ForwarderSendJob.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Vp8Header.h"
@@ -39,6 +38,10 @@ void VideoNackReceiveJob::run()
         _pid,
         _blp);
 #endif
+    if (!_sender.isConnected())
+    {
+        return;
+    }
 
     auto sequenceNumber = _pid;
     sendIfCached(sequenceNumber);
@@ -94,10 +97,11 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
 
 #if DEBUG_RECEIVE_NACK
-    logger::debug("Sending cached packet seq %u, feedbackSsrc %u",
+    logger::debug("Sending cached packet seq %u, feedbackSsrc %u, seq %u",
         "VideoNackReceiveJob",
         sequenceNumber,
-        _feedbackSsrc);
+        _feedbackSsrc,
+        _ssrcOutboundContext._sequenceCounter);
 #endif
 
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
@@ -112,10 +116,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     rtpHeader->sequenceNumber = _ssrcOutboundContext._sequenceCounter & 0xFFFF;
     ++_ssrcOutboundContext._sequenceCounter;
 
-    _sender.getJobManager().addJob<ForwarderSendJob>(_ssrcOutboundContext,
-        packet,
-        _ssrcOutboundContext._sequenceCounter,
-        _sender);
+    _sender.protectAndSend(packet, _ssrcOutboundContext._allocator);
 }
 
 } // namespace bridge

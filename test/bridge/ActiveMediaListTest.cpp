@@ -31,12 +31,7 @@ void threadFunction(jobmanager::JobManager* jobManager)
 class DummyTransport : public transport::RtcTransport
 {
 public:
-    DummyTransport(jobmanager::SerialJobManager& serialJobManager)
-        : _loggableId(""),
-          _endpointIdHash(1),
-          _serialJobManager(serialJobManager)
-    {
-    }
+    DummyTransport(jobmanager::JobQueue& jobQueue) : _loggableId(""), _endpointIdHash(1), _jobQueue(jobQueue) {}
 
     bool isInitialized() const override { return true; }
     const logger::LoggableId& getLoggableId() const override { return _loggableId; }
@@ -80,7 +75,7 @@ public:
     bool isIceEnabled() const override { return true; }
     bool isDtlsEnabled() const override { return true; }
     void connect() override {}
-    jobmanager::SerialJobManager& getJobManager() override { return _serialJobManager; }
+    jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
     uint32_t getSenderLossCount() const override { return 0; }
     uint32_t getUplinkEstimateKbps() const override { return 0; }
     uint32_t getDownlinkEstimateKbps() const override { return 0; }
@@ -113,7 +108,7 @@ public:
 
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
-    jobmanager::SerialJobManager& _serialJobManager;
+    jobmanager::JobQueue& _jobQueue;
     std::atomic_uint32_t _jobCounter;
 
 private:
@@ -164,8 +159,8 @@ private:
         }
 
         _jobManager = std::make_unique<jobmanager::JobManager>();
-        _serialJobManager = std::make_unique<jobmanager::SerialJobManager>(*_jobManager);
-        _transport = std::make_unique<DummyTransport>(*_serialJobManager);
+        _jobQueue = std::make_unique<jobmanager::JobQueue>(*_jobManager);
+        _transport = std::make_unique<DummyTransport>(*_jobQueue);
 
         _activeMediaList = std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, defaultLastN);
 
@@ -185,7 +180,7 @@ private:
         _engineVideoStreams.clear();
 
         auto thread = std::make_unique<std::thread>(threadFunction, _jobManager.get());
-        _serialJobManager.reset();
+        _jobQueue.reset();
         _jobManager->stop();
         thread->join();
         _jobManager.reset();
@@ -197,7 +192,7 @@ protected:
     std::vector<bridge::SimulcastLevel> _videoPinSsrcs;
 
     std::unique_ptr<jobmanager::JobManager> _jobManager;
-    std::unique_ptr<jobmanager::SerialJobManager> _serialJobManager;
+    std::unique_ptr<jobmanager::JobQueue> _jobQueue;
     std::unique_ptr<DummyTransport> _transport;
     concurrency::MpmcHashmap32<size_t, bridge::EngineAudioStream*> _engineAudioStreams;
     concurrency::MpmcHashmap32<size_t, bridge::EngineVideoStream*> _engineVideoStreams;
@@ -607,4 +602,3 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     EXPECT_FALSE(endpointsContainsId(messageJson, "3"));
     EXPECT_TRUE(endpointsContainsId(messageJson, "4"));
 }
-

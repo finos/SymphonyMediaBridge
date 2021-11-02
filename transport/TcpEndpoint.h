@@ -1,7 +1,7 @@
 #pragma once
 #include "concurrency/MpmcHashmap.h"
 #include "config/Config.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/Endpoint.h"
 #include "transport/RtcSocket.h"
@@ -138,8 +138,8 @@ private:
     void onSocketWriteable(int fd) override;
     void onSocketShutdown(int fd) override;
 
-    jobmanager::SerialJobManager _receiveJobs;
-    jobmanager::SerialJobManager _sendJobs;
+    jobmanager::JobQueue _receiveJobs;
+    jobmanager::JobQueue _sendJobs;
     memory::PacketPoolAllocator& _allocator; // only for ICE
 
     IEvents* _defaultListener;

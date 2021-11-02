@@ -158,10 +158,7 @@ void VideoForwarderReceiveJob::run()
                 codec::Vp8Header::getTl0PicIdx(payload));
 
             _ssrcContext._pliScheduler.onPliSent(_timestamp);
-            _sender->getJobManager().getJobManager().addJob<SendPliJob>(_localVideoSsrc,
-                _ssrcContext._ssrc,
-                *_sender,
-                _allocator);
+            _sender->getJobQueue().addJob<SendPliJob>(_localVideoSsrc, _ssrcContext._ssrc, *_sender, _allocator);
         }
     }
     else
@@ -194,10 +191,7 @@ void VideoForwarderReceiveJob::run()
                     static_cast<uint32_t>(rttMs));
 
                 _ssrcContext._pliScheduler.onPliSent(_timestamp);
-                _sender->getJobManager().getJobManager().addJob<SendPliJob>(_localVideoSsrc,
-                    _ssrcContext._ssrc,
-                    *_sender,
-                    _allocator);
+                _sender->getJobQueue().addJob<SendPliJob>(_localVideoSsrc, _ssrcContext._ssrc, *_sender, _allocator);
             }
         }
     }

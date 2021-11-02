@@ -1,6 +1,6 @@
 #include "jobmanager/JobManager.h"
 #include "concurrency/Semaphore.h"
-#include "jobmanager/SerialJobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "jobmanager/WorkerThread.h"
 #include <cassert>
 #include <cstdint>
@@ -151,11 +151,11 @@ TEST_F(JobManagerTest, serialJobs)
     atomic_int32_t serialConcurrency1(0);
     atomic_int32_t serialConcurrency2(0);
 
-    SerialJobManager serialJobs1(jobManager);
-    SerialJobManager serialJobs2(jobManager);
+    JobQueue serialJobs1(jobManager);
+    JobQueue serialJobs2(jobManager);
 
-    thread writerThread1(writer<SerialJobManager>, ref(context), 0, n / 2, ref(serialJobs1), &serialConcurrency1);
-    thread writerThread2(writer<SerialJobManager>, ref(context), n / 2, n, ref(serialJobs2), &serialConcurrency2);
+    thread writerThread1(writer<JobQueue>, ref(context), 0, n / 2, ref(serialJobs1), &serialConcurrency1);
+    thread writerThread2(writer<JobQueue>, ref(context), n / 2, n, ref(serialJobs2), &serialConcurrency2);
     writerThread1.join();
     writerThread2.join();
 
@@ -203,7 +203,7 @@ public:
 
 TEST_F(JobManagerTest, serialJobQueueFull)
 {
-    SerialJobManager serialJobQ(jobManager, 32);
+    JobQueue serialJobQ(jobManager, 32);
 
     std::atomic_int mainCounter(0);
     std::atomic_int counter(0);

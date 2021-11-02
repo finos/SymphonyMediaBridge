@@ -13,38 +13,19 @@ namespace
 
 static const uint32_t outboundSsrc = 12345;
 
-void threadFunction(jobmanager::JobManager* jobManager)
-{
-    auto job = jobManager->wait();
-    if (job)
-    {
-        job->run();
-        jobManager->freeJob(job);
-    }
-}
-
 } // namespace
 
 class Vp8RewriterTest : public ::testing::Test
 {
     void SetUp() override
     {
-        _jobManager = std::make_unique<jobmanager::JobManager>();
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "Vp8RewriterTest");
-        _ssrcOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc,
-            *_allocator,
-            *_jobManager,
-            bridge::RtpMap::vp8());
+        _ssrcOutboundContext =
+            std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc, *_allocator, bridge::RtpMap::vp8());
     }
-    void TearDown() override
-    {
-        auto thread = std::make_unique<std::thread>(threadFunction, _jobManager.get());
-        _ssrcOutboundContext.reset();
-        thread->join();
-    }
+    void TearDown() override { _ssrcOutboundContext.reset(); }
 
 protected:
-    std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<memory::PacketPoolAllocator> _allocator;
     std::unique_ptr<bridge::SsrcOutboundContext> _ssrcOutboundContext;
 };

@@ -150,7 +150,7 @@ public: // Transport
 
     void connect() override;
 
-    jobmanager::SerialJobManager& getJobManager() override { return _serialJobmanager; }
+    jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
 
     uint32_t getSenderLossCount() const override;
     uint32_t getUplinkEstimateKbps() const override;
@@ -266,13 +266,10 @@ public: // end point callbacks
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
 
 private:
-    friend class SendJob;
-    friend class RtcpTriggerJob;
     friend class IceSetRemoteJob;
     friend class ConnectJob;
     friend class ConnectSctpJob;
 
-    void doProtectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator);
     void doProtectAndSend(memory::Packet* packet,
         const SocketAddress& target,
         Endpoint* endpoint,
@@ -337,7 +334,7 @@ private:
 
     memory::PacketPoolAllocator& _mainAllocator; // for DTLS and RTCP
 
-    jobmanager::SerialJobManager _serialJobmanager;
+    jobmanager::JobQueue _jobQueue;
 
     struct ChannelMetrics
     {
@@ -397,6 +394,10 @@ private:
     } _rtcp;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
+#ifdef DEBUG
+public:
+    concurrency::MutexGuard _singleThreadMutex;
+#endif
 };
 
 } // namespace transport

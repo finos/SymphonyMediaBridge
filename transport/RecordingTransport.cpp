@@ -91,7 +91,7 @@ RecordingTransport::RecordingTransport(jobmanager::JobManager& jobManager,
       _recordingEndpoint(recordingEndpoint),
       _peerPort(remotePeer),
       _jobCounter(0),
-      _serialJobManager(jobManager),
+      _jobQueue(jobManager),
       _aes(nullptr),
       _ivGenerator(nullptr),
       _previousSequenceNumber(256), // TODO what is a reasonable number?
@@ -127,13 +127,13 @@ void RecordingTransport::stop()
 
     _recordingEndpoint->unregisterRecordingListener(this);
 
-    _serialJobManager.getJobManager().abortTimedJobs(getId());
+    _jobQueue.getJobManager().abortTimedJobs(getId());
     _isRunning = false;
 }
 
 void RecordingTransport::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
 {
-    _serialJobManager.addJob<RecSendJob>(*this, packet, sendAllocator, _jobCounter);
+    _jobQueue.addJob<RecSendJob>(*this, packet, sendAllocator, _jobCounter);
 }
 
 void RecordingTransport::protectAndSend(memory::Packet* packet,
@@ -406,8 +406,8 @@ void RecordingTransport::onUnregistered(RecordingEndpoint& endpoint)
 {
     logger::debug("Unregistered %s, %p", _loggableId.c_str(), endpoint.getName(), this);
     logger::debug("Recording transport events stopped jobcount %u", _loggableId.c_str(), _jobCounter.load() - 1);
-    _serialJobManager.addJob<ShutdownJob>(_jobCounter);
-    _serialJobManager.getJobManager().abortTimedJobs(getId());
+    _jobQueue.addJob<ShutdownJob>(_jobCounter);
+    _jobQueue.getJobManager().abortTimedJobs(getId());
     _isInitialized = false;
     --_jobCounter;
 }

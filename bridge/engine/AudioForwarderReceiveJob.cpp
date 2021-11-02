@@ -118,7 +118,7 @@ void AudioForwarderReceiveJob::run()
         switch (_ssrcContext._rtpMap._format)
         {
         case bridge::RtpMap::Format::OPUS:
-            if (!_ssrcContext._serialJobManager
+            if (!_ssrcContext._jobQueue
                      .addJob<bridge::OpusDecodeJob>(mixerPacket, _allocator, _sender, _engineMixer, _ssrcContext))
             {
                 _allocator.free(mixerPacket);
