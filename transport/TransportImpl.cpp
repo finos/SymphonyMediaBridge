@@ -63,7 +63,7 @@ public:
 
     void run() override
     {
-        STHREAD_GUARD(_transport._singleThreadMutex);
+        DBGCHECK_SINGLETHREADED(_transport._singleThreadMutex);
 
         (_transport.*_receiveMethod)(_endpoint, _source, _packet, _allocator, _timestamp);
         _packet = nullptr;
@@ -1288,7 +1288,7 @@ void TransportImpl::doProtectAndSend(memory::Packet* packet,
 
 void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
 {
-    STHREAD_GUARD(_singleThreadMutex);
+    DBGCHECK_SINGLETHREADED(_singleThreadMutex);
 
     assert(_srtpClient);
     const auto timestamp = utils::Time::getAbsoluteTime();
@@ -1390,7 +1390,6 @@ memory::Packet* TransportImpl::appendSendReceiveReport(memory::Packet* rtcpPacke
             if (utils::Time::diffLT(it.second.getLastSendTime(), timestamp, utils::Time::sec * 15))
             {
                 senderSsrc = it.first;
-                // TODO need reliable mtu source
                 auto* senderReport = rtp::RtcpSenderReport::create(rtcpPacket->get() + rtcpPacket->getLength());
                 senderReport->ssrc = it.first;
                 it.second.fillInReport(*senderReport, timestamp, wallClock);

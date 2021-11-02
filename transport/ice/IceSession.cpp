@@ -167,7 +167,7 @@ void IceSession::sortCheckList()
 
 void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
 {
-    STHREAD_GUARD(_mutexGuard);
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     _credentials.role = role;
     _sessionStart = timestamp;
     if (_credentials.remote.second.empty())
@@ -645,7 +645,7 @@ void IceSession::onPacketReceived(IceEndpoint* socketEndpoint,
     size_t len,
     uint64_t timestamp)
 {
-    STHREAD_GUARD(_mutexGuard);
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
 
     if (!ice::isStunMessage(data, len))
     {
@@ -671,7 +671,7 @@ void IceSession::onPacketReceived(IceEndpoint* socketEndpoint,
 
 void IceSession::onTcpDisconnect(IceEndpoint* endpoint)
 {
-    STHREAD_GUARD(_mutexGuard);
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     auto candidatePairIt = std::find_if(_candidatePairs.begin(),
         _candidatePairs.end(),
         [endpoint](const std::unique_ptr<CandidatePair>& probe) { return probe->localEndpoint.endpoint == endpoint; });
@@ -951,7 +951,7 @@ int64_t IceSession::processTimeout(const uint64_t now)
         return -1;
     }
 
-    STHREAD_GUARD(_mutexGuard);
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     if (_state == State::CONNECTED)
     {
         for (auto& candidatePair : _candidatePairs)

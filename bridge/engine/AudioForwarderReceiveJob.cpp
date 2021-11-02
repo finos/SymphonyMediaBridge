@@ -55,7 +55,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
         return;
     }
 
-    uint8_t decodedData[memory::Packet::size]; // TODO may be misaligned
+    uint8_t decodedData[memory::Packet::size];
     auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpPacket)
     {
@@ -70,7 +70,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
     {
         const auto expectedSequenceNumber = decoder.getSequenceNumber() + 1;
 
-        if (sequenceNumber <= decoder.getSequenceNumber()) // TODO, this can wrap more or less immediately
+        if (static_cast<int32_t>(decoder.getSequenceNumber() - sequenceNumber) >= 0)
         {
             logger::debug("Old opus packet sequence %u expected %u, discarding",
                 "OpusDecodeJob",

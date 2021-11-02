@@ -90,7 +90,7 @@ private:
 
     IEvents* _eventSink;
 
-    STHREAD_MUTEX(_mutexGuard);
+    DBGCHECK_SINGLETHREADED_MUTEX(_mutexGuard);
 
     memory::PacketPoolAllocator& _allocator;
     concurrency::MpmcQueue<memory::Packet*> _pendingPackets;

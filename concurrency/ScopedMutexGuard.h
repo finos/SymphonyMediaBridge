@@ -37,11 +37,11 @@ private:
 };
 
 #ifdef DEBUG
-#define STHREAD_GUARD(x) concurrency::ScopedMutexGuard singleThreadCheck(x)
-#define STHREAD_MUTEX(x) concurrency::MutexGuard x
+#define DBGCHECK_SINGLETHREADED(x) concurrency::ScopedMutexGuard singleThreadCheck_dbg(x)
+#define DBGCHECK_SINGLETHREADED_MUTEX(x) concurrency::MutexGuard x
 #else
-#define STHREAD_GUARD(x)
-#define STHREAD_MUTEX(x)
+#define DBGCHECK_SINGLETHREADED(x)
+#define DBGCHECK_SINGLETHREADED_MUTEX(x)
 #endif
 
 } // namespace concurrency
