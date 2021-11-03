@@ -333,6 +333,11 @@ public:
                             block.loss.getCumulativeLoss(),
                             block.lastSR);
                     }
+                    if (rttNtp != ~0u)
+                    {
+                        _rtt = rttNtp;
+                    }
+
                     if (rr->header.fmtCount > 0)
                     {
                         _rateControl->onReportReceived(_timeCursor, rr->header.fmtCount, rr->reportBlocks, rttNtp);
@@ -379,10 +384,12 @@ public:
             if (utils::Time::diffGE(prevLog, _timeCursor, utils::Time::sec))
             {
                 prevLog = _timeCursor;
-                logger::debug("%" PRIu64 "ms link bit rate %.fkbsp ",
+                logger::debug("%" PRIu64 "ms link bit rate %.fkbsp, estimate %.1fkbps, rtt %ums",
                     "",
                     (_timeCursor % 0xFFFFFFFFu) / utils::Time::ms,
-                    _upLink->getBitRateKbps(_timeCursor));
+                    _upLink->getBitRateKbps(_timeCursor),
+                    _rateControl->getTargetRate(),
+                    _rtt * 1000 / 0x10000);
             }
         }
     }
@@ -390,6 +397,7 @@ public:
 private:
     const uint64_t _timeStart;
     const uint64_t _wallClockStartNtp;
+    uint32_t _rtt;
 };
 
 TEST_F(RateControllerTest, plain1Mbps)
@@ -401,9 +409,9 @@ TEST_F(RateControllerTest, plain1Mbps)
     auto videoChannel = new fakenet::FakeVideoSource(_allocator, 0, 10);
     addChannel(videoChannel, 90000, _timeCursor - utils::Time::sec * 4);
     videoChannel->setBandwidth(400);
-    run(utils::Time::sec * 5, 1050);
+    run(utils::Time::sec * 7, 1050);
 
-    EXPECT_GE(_rateControl->getTargetRate(), 900);
+    EXPECT_GE(_rateControl->getTargetRate(), 700);
 
     run(utils::Time::sec * 15, 1050);
 
@@ -421,7 +429,7 @@ TEST_F(RateControllerTest, long1Mbps)
     auto videoChannel = new fakenet::FakeVideoSource(_allocator, 0, 10);
     addChannel(videoChannel, 90000, _timeCursor - utils::Time::sec * 4);
     videoChannel->setBandwidth(250);
-    run(utils::Time::sec * 7, 1050);
+    run(utils::Time::sec * 9, 1050);
 
     EXPECT_GE(_rateControl->getTargetRate(), 900);
     videoChannel->setBandwidth(600);
