@@ -429,8 +429,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _sctpConfig(sctpConfig),
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
-      _mixVideoSsrc(0),
-      _mixVideoSequenceCounter(nullptr)
+      _rtxProbeSsrc(0),
+      _rtxProbeSequenceCounter(nullptr)
 {
     assert(endpointIdHash != 0);
 
@@ -513,8 +513,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _sctpConfig(sctpConfig),
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
-      _mixVideoSsrc(0),
-      _mixVideoSequenceCounter(nullptr)
+      _rtxProbeSsrc(0),
+      _rtxProbeSequenceCounter(nullptr)
 {
     assert(endpointIdHash != 0);
 
@@ -1354,9 +1354,9 @@ void TransportImpl::sendPadding(uint64_t timestamp,
         return;
     }
 
-    if (_mixVideoSequenceCounter)
+    if (_rtxProbeSequenceCounter)
     {
-        auto& padSsrcState = getOutboundSsrc(_mixVideoSsrc, 90000);
+        auto& padSsrcState = getOutboundSsrc(_rtxProbeSsrc, 90000);
         uint16_t padding = 0;
 
         const auto paddingCount = _rateController.getPadding(timestamp, ssrc, nextPacketSize, padding);
@@ -1368,12 +1368,12 @@ void TransportImpl::sendPadding(uint64_t timestamp,
                 std::memset(padPacket->get(), 0, memory::Packet::size);
                 padPacket->setLength(padding);
                 auto padRtpHeader = rtp::RtpHeader::create(padPacket->get(), padPacket->getLength());
-                padRtpHeader->ssrc = _mixVideoSsrc;
+                padRtpHeader->ssrc = _rtxProbeSsrc;
                 padRtpHeader->payloadType = rtxPayloadType;
                 padRtpHeader->padding = 0;
                 padRtpHeader->marker = 0;
                 padRtpHeader->timestamp = rtpTimestamp;
-                padRtpHeader->sequenceNumber = (*_mixVideoSequenceCounter)++ & 0xFFFF;
+                padRtpHeader->sequenceNumber = (*_rtxProbeSequenceCounter)++ & 0xFFFF;
                 // fake a really old packet
                 reinterpret_cast<uint16_t*>(padRtpHeader->getPayload())[0] =
                     hton<uint16_t>(sendState.getSentSequenceNumber() - 20000);
@@ -1381,7 +1381,7 @@ void TransportImpl::sendPadding(uint64_t timestamp,
                 padSsrcState.onRtpSent(timestamp, *padPacket);
                 doProtectAndSend(timestamp, padPacket, _peerRtpPort, _selectedRtp, sendAllocator);
                 _rateController.onRtpPaddingSent(timestamp,
-                    _mixVideoSsrc,
+                    _rtxProbeSsrc,
                     padRtpHeader->sequenceNumber,
                     padPacket->getLength());
             }
@@ -2267,8 +2267,7 @@ uint64_t TransportImpl::getRtt() const
 
 void TransportImpl::setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter)
 {
-    // TODO create a job for this due to transport thread already using this while se set it
-    _mixVideoSsrc = ssrc;
-    _mixVideoSequenceCounter = sequenceCounter;
+    _rtxProbeSsrc = ssrc;
+    _rtxProbeSequenceCounter = sequenceCounter;
 }
 } // namespace transport

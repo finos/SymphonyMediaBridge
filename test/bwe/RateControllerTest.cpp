@@ -86,7 +86,7 @@ public:
     std::unique_ptr<bwe::RateController> _rateControl;
     bwe::RateControllerConfig _config;
     config::Config _globalConfig;
-    utils::Optional<uint32_t> _mixVideoSsrc;
+    utils::Optional<uint32_t> _rtxProbeSsrc;
     transport::RtpSenderState _mixVideoSendState;
 
     void push(std::unique_ptr<fakenet::NetworkLink>& link, memory::Packet* packet)
@@ -105,7 +105,7 @@ public:
 
         if (rtpFrequency == 90000)
         {
-            _mixVideoSsrc.set(source->getSsrc() + 17000);
+            _rtxProbeSsrc.set(source->getSsrc() + 17000);
         }
     }
 
@@ -170,9 +170,9 @@ public:
 
             uint16_t paddingSize = 0;
             auto count = _rateControl->getPadding(_timeCursor, ssrc, rtcpPacket->getLength(), paddingSize);
-            if (_mixVideoSsrc.isSet())
+            if (_rtxProbeSsrc.isSet())
             {
-                sendRtpPadding(count, _mixVideoSsrc.get(), paddingSize);
+                sendRtpPadding(count, _rtxProbeSsrc.get(), paddingSize);
             }
             else
             {
@@ -192,9 +192,9 @@ public:
             uint16_t paddingSize = 0;
             auto count = _rateControl->getPadding(_timeCursor, rtpHeader->ssrc, packet->getLength(), paddingSize);
 
-            if (_mixVideoSsrc.isSet())
+            if (_rtxProbeSsrc.isSet())
             {
-                sendRtpPadding(count, _mixVideoSsrc.get(), paddingSize);
+                sendRtpPadding(count, _rtxProbeSsrc.get(), paddingSize);
             }
             else
             {
@@ -322,7 +322,7 @@ public:
                             it->second.sendState.onReceiverBlockReceived(_timeCursor, wallclockNtp32, block);
                             rttNtp = std::min(rttNtp, it->second.sendState.getRttNtp());
                         }
-                        else if (_mixVideoSsrc.isSet() && block.ssrc.get() == _mixVideoSsrc.get())
+                        else if (_rtxProbeSsrc.isSet() && block.ssrc.get() == _rtxProbeSsrc.get())
                         {
                             _mixVideoSendState.onReceiverBlockReceived(_timeCursor, wallclockNtp32, block);
                             rttNtp = std::min(rttNtp, _mixVideoSendState.getRttNtp());
@@ -356,9 +356,9 @@ public:
                 transmitChannel(channelIt.second, srClockOffset);
                 srClockOffset += 0x10000; // 1/65536 s to avoid SR having same ntp transmit time
             }
-            if (_mixVideoSsrc.isSet() && _mixVideoSendState.timeToSenderReport(_timeCursor) == 0)
+            if (_rtxProbeSsrc.isSet() && _mixVideoSendState.timeToSenderReport(_timeCursor) == 0)
             {
-                sendSR(_mixVideoSsrc.get(), _mixVideoSendState, getWallClock() + srClockOffset);
+                sendSR(_rtxProbeSsrc.get(), _mixVideoSendState, getWallClock() + srClockOffset);
             }
 
             processReceiverSide();

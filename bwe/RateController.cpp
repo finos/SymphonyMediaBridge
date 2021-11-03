@@ -321,7 +321,6 @@ void RateController::onReportReceived(uint64_t timestamp,
     _model.bandwidthKbps = std::max(_model.bandwidthKbps, static_cast<double>(_config.bandwidthFloorKbps));
     _model.targetQueue = std::max(minTargetQueue, _model.targetQueue);
 
-    auto sendRate = calculateSendRate(timestamp);
     RCTL_LOG("model %.1fkbps mQ %uB tQ %uB, netQueue %u, rxRate %.fkbps txRate %.fkbps rtt %.1fms loss %u, probing %s",
         _logId.c_str(),
         _model.bandwidthKbps,
@@ -329,7 +328,7 @@ void RateController::onReportReceived(uint64_t timestamp,
         _model.targetQueue,
         networkQueue,
         maxRateKbps,
-        sendRate,
+        calculateSendRate(timestamp),
         double(rttNtp) * 1000 / ntp32Second,
         lossCount,
         isProbing ? "t" : "f");

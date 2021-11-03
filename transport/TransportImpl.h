@@ -397,8 +397,8 @@ private:
     } _rtcp;
 
     bwe::RateController _rateController;
-    uint32_t _mixVideoSsrc;
-    uint32_t* _mixVideoSequenceCounter;
+    uint32_t _rtxProbeSsrc;
+    uint32_t* _rtxProbeSequenceCounter;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
 #ifdef DEBUG
