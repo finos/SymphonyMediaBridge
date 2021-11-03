@@ -13,7 +13,7 @@ class RandomAccessBacklog
     class base_iterator
     {
     public:
-        base_iterator(const RandomAccessBacklog<T, N>& backlog, size_t index)
+        base_iterator(const RandomAccessBacklog<T, N>& backlog, uint32_t index)
             : _backlog(const_cast<RandomAccessBacklog<T, N>&>(backlog)),
               _index(index)
         {
@@ -40,7 +40,7 @@ class RandomAccessBacklog
 
     private:
         RandomAccessBacklog<T, N>& _backlog;
-        size_t _index;
+        uint32_t _index;
     };
 
 public:
@@ -99,7 +99,7 @@ public:
 
     void clear()
     {
-        for (size_t i = 0; i < _count; ++i)
+        for (uint32_t i = 0; i < _count; ++i)
         {
             reinterpret_cast<T*>(&_data[(_head + i) % N])->~T();
         }
