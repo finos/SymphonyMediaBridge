@@ -63,9 +63,8 @@ public:
 
     void run() override
     {
-#ifdef DEBUG
-        concurrency::ScopedMutexGuard ensureSingleThreaded(_transport._singleThreadMutex);
-#endif
+        DBGCHECK_SINGLETHREADED(_transport._singleThreadMutex);
+
         (_transport.*_receiveMethod)(_endpoint, _source, _packet, _allocator, _timestamp);
         _packet = nullptr;
     }
@@ -1289,9 +1288,8 @@ void TransportImpl::doProtectAndSend(memory::Packet* packet,
 
 void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
 {
-#ifdef DEBUG
-    concurrency::ScopedMutexGuard ensureSingleThreaded(_singleThreadMutex);
-#endif
+    DBGCHECK_SINGLETHREADED(_singleThreadMutex);
+
     assert(_srtpClient);
     const auto timestamp = utils::Time::getAbsoluteTime();
 
@@ -1392,7 +1390,6 @@ memory::Packet* TransportImpl::appendSendReceiveReport(memory::Packet* rtcpPacke
             if (utils::Time::diffLT(it.second.getLastSendTime(), timestamp, utils::Time::sec * 15))
             {
                 senderSsrc = it.first;
-                // TODO need reliable mtu source
                 auto* senderReport = rtp::RtcpSenderReport::create(rtcpPacket->get() + rtcpPacket->getLength());
                 senderReport->ssrc = it.first;
                 it.second.fillInReport(*senderReport, timestamp, wallClock);
@@ -1558,7 +1555,6 @@ bool TransportImpl::unprotect(memory::Packet* packet)
     return false;
 }
 
-// TODO this should be done in transport Job so we do not need lock in SrtpClient
 void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 {
     if (_srtpClient && _srtpClient->isInitialized())
@@ -1567,7 +1563,6 @@ void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
     }
 }
 
-// TODO put on transport job so we do not need to lock in srtp
 bool TransportImpl::setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
     if (_srtpClient && _srtpClient->isInitialized())

@@ -1,7 +1,8 @@
 #include "bridge/engine/AudioForwarderReceiveJob.h"
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/EngineMixer.h"
-#include "bridge/engine/OpusDecodeJob.h"
+#include "codec/Opus.h"
+#include "codec/OpusDecoder.h"
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
@@ -11,6 +12,106 @@
 
 namespace bridge
 {
+
+void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, const uint8_t* decodedData)
+{
+    if (decodedFrames > 0)
+    {
+        auto pcmPacket = memory::makePacket(_allocator, *_packet);
+        if (!pcmPacket)
+        {
+            return;
+        }
+        auto rtpHeader = rtp::RtpHeader::fromPacket(*pcmPacket);
+        const auto decodedPayloadLength = decodedFrames * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
+        memcpy(rtpHeader->getPayload(), decodedData, decodedPayloadLength);
+        pcmPacket->setLength(rtpHeader->headerLength() + decodedPayloadLength);
+
+        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, pcmPacket, _allocator);
+        return;
+    }
+
+    logger::error("Unable to decode opus packet, error code %d", "OpusDecodeJob", decodedFrames);
+}
+
+void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
+{
+    const auto rtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
+    const uint16_t sequenceNumber = rtpHeader->sequenceNumber;
+
+    if (!_ssrcContext._opusDecoder)
+    {
+        logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
+            "OpusDecodeJob",
+            _ssrcContext._ssrc,
+            _engineMixer.getLoggableId().c_str());
+        _ssrcContext._opusDecoder.reset(new codec::OpusDecoder());
+    }
+
+    codec::OpusDecoder& decoder = *_ssrcContext._opusDecoder;
+
+    if (!decoder.isInitialized())
+    {
+        return;
+    }
+
+    uint8_t decodedData[memory::Packet::size];
+    auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
+    if (!rtpPacket)
+    {
+        return;
+    }
+
+    const uint32_t headerLength = rtpPacket->headerLength();
+    const uint32_t payloadLength = _packet->getLength() - headerLength;
+    auto payloadStart = rtpPacket->getPayload();
+
+    if (decoder.getSequenceNumber() != 0)
+    {
+        const auto expectedSequenceNumber = decoder.getSequenceNumber() + 1;
+
+        if (static_cast<int32_t>(decoder.getSequenceNumber() - sequenceNumber) >= 0)
+        {
+            logger::debug("Old opus packet sequence %u expected %u, discarding",
+                "OpusDecodeJob",
+                sequenceNumber,
+                expectedSequenceNumber);
+            return;
+        }
+
+        if (sequenceNumber > expectedSequenceNumber)
+        {
+            logger::debug("Lost opus packet sequence %u expected %u, fec",
+                "OpusDecodeJob",
+                sequenceNumber,
+                expectedSequenceNumber);
+            const auto lastPacketDuration = decoder.getLastPacketDuration();
+
+            for (auto i = expectedSequenceNumber; i < sequenceNumber - 2; ++i)
+            {
+                const auto decodedFrames = decoder.decode(nullptr,
+                    payloadLength,
+                    decodedData,
+                    utils::checkedCast<size_t>(lastPacketDuration),
+                    true);
+                onPacketDecoded(decodedFrames, decodedData);
+            }
+
+            const auto decodedFrames = decoder.decode(payloadStart,
+                payloadLength,
+                decodedData,
+                utils::checkedCast<size_t>(lastPacketDuration),
+                true);
+            onPacketDecoded(decodedFrames, decodedData);
+        }
+    }
+
+    const auto framesInPacketBuffer =
+        memory::Packet::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
+
+    const auto decodedFrames = decoder.decode(payloadStart, payloadLength, decodedData, framesInPacketBuffer, false);
+    onPacketDecoded(decodedFrames, decodedData);
+}
 
 AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
     memory::PacketPoolAllocator& allocator,
@@ -111,24 +212,9 @@ void AudioForwarderReceiveJob::run()
     }
     _ssrcContext._lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
 
-    if (_hasMixedAudioStreams)
+    if (_hasMixedAudioStreams && _ssrcContext._rtpMap._format == bridge::RtpMap::Format::OPUS)
     {
-        auto mixerPacket = memory::makePacket(_allocator, *_packet);
-
-        switch (_ssrcContext._rtpMap._format)
-        {
-        case bridge::RtpMap::Format::OPUS:
-            if (!_ssrcContext._jobQueue
-                     .addJob<bridge::OpusDecodeJob>(mixerPacket, _allocator, _sender, _engineMixer, _ssrcContext))
-            {
-                _allocator.free(mixerPacket);
-            }
-            break;
-
-        default:
-            _allocator.free(mixerPacket);
-            break;
-        }
+        decodeOpus(*_packet);
     }
 
     if (_ssrcContext._markNextPacket)

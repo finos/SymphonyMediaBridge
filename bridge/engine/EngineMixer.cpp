@@ -69,6 +69,23 @@ private:
     uint32_t _ssrc;
 };
 
+class RemoveSrtpSsrcJob : public jobmanager::CountedJob
+{
+public:
+    RemoveSrtpSsrcJob(transport::RtcTransport& transport, uint32_t ssrc)
+        : CountedJob(transport.getJobCounter()),
+          _transport(transport),
+          _ssrc(ssrc)
+    {
+    }
+
+    void run() override { _transport.removeSrtpLocalSsrc(_ssrc); }
+
+private:
+    transport::RtcTransport& _transport;
+    uint32_t _ssrc;
+};
+
 /**
  * @return true if this ssrc should be skipped and not forwarded to the videoStream.
  */
@@ -981,7 +998,9 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                         feedbackSsrc,
                         outboundContextEntry.first,
                         endpointIdHash);
-                    videoStreamEntry.second->_transport.removeSrtpLocalSsrc(feedbackSsrc);
+                    videoStreamEntry.second->_transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
+                        videoStreamEntry.second->_transport,
+                        feedbackSsrc);
                     videoStreamEntry.second->_ssrcOutboundContexts.erase(feedbackSsrc);
                 }
 
@@ -999,7 +1018,9 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                     _loggableId.c_str(),
                     outboundContextEntry.first,
                     endpointIdHash);
-                videoStreamEntry.second->_transport.removeSrtpLocalSsrc(outboundContextEntry.first);
+                videoStreamEntry.second->_transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
+                    videoStreamEntry.second->_transport,
+                    outboundContextEntry.first);
                 videoStreamEntry.second->_ssrcOutboundContexts.erase(outboundContextEntry.first);
             }
         }
@@ -1147,7 +1168,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         return;
     }
 
-    if (!ssrcContext->_jobQueue.addJob<bridge::VideoForwarderReceiveJob>(packet,
+    if (!sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(packet,
             receiveAllocator,
             sender,
             *this,
@@ -1217,7 +1238,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         return;
     }
 
-    if (!mainSsrcContext._jobQueue.addJob<bridge::VideoForwarderRtxReceiveJob>(packet,
+    if (!sender->getJobQueue().addJob<bridge::VideoForwarderRtxReceiveJob>(packet,
             receiveAllocator,
             sender,
             *this,
@@ -1484,7 +1505,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     case bridge::RtpMap::Format::OPUS:
         ssrcContext->onRtpPacket(timestamp);
         if (_engineAudioStreams.size() == 0 ||
-            !ssrcContext->_jobQueue.addJob<bridge::AudioForwarderReceiveJob>(packet,
+            !sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(packet,
                 receiveAllocator,
                 sender,
                 *this,
@@ -2407,7 +2428,7 @@ void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
         if (ssrcIt != _ssrcInboundContexts.end())
         {
             logger::debug("RequestPliJob created for inbound ssrc %u", _loggableId.c_str(), ssrcIt->second._ssrc);
-            ssrcIt->second._jobQueue.getJobManager().addJob<RequestPliJob>(ssrcIt->second);
+            ssrcIt->second._pliScheduler.triggerPli();
         }
     }
 
@@ -2426,7 +2447,7 @@ void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
             auto ssrcIt = _ssrcInboundContexts.find(simulcastLevel._ssrc);
             if (ssrcIt != _ssrcInboundContexts.end())
             {
-                ssrcIt->second._jobQueue.getJobManager().addJob<RequestPliJob>(ssrcIt->second);
+                ssrcIt->second._pliScheduler.triggerPli();
             }
         }
     }

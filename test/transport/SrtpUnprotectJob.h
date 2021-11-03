@@ -47,7 +47,6 @@ public:
     SrtpUnprotectJob(RtcTransport* sender,
         memory::Packet* packet,
         memory::PacketPoolAllocator& receiveAllocator,
-        std::atomic_uint32_t& ownerJobsCounter,
         DecryptedPacketReceiver* receiver);
     void run() override;
 

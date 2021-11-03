@@ -177,9 +177,9 @@ struct OpusBuilder : SampleDataUtils::RtpStreamBuilder
             const auto headerLength = rtpHeader->headerLength();
 
             const int32_t pcmDataSize = EngineMixer::samplesPerIteration * EngineMixer::bytesPerSample;
-            uint8_t pcmData[pcmDataSize];
+            int16_t pcmData[pcmDataSize / sizeof(int16_t)];
 
-            generator(reinterpret_cast<int16_t*>(pcmData), pcmDataSize / sizeof(int16_t));
+            generator(pcmData, pcmDataSize / sizeof(int16_t));
 
             const size_t frames = pcmDataSize / EngineMixer::bytesPerSample / EngineMixer::channelsPerFrame;
             const size_t payloadMaxSize = memory::Packet::size - headerLength;

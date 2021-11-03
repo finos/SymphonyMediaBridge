@@ -140,7 +140,6 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
           _jobsCounter1(1),
           _jobsCounter2(1),
           _jobManager(jobManager),
-          _inboundJobs(jobManager, 512),
           _media1(_sendAllocator, ssrc),
           _media2(_sendAllocator, ssrc + 2)
     {
@@ -271,11 +270,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
             report.previousReport = timestamp;
         }
 
-        _inboundJobs.addJob<transport::SrtpUnprotectJob>(sender,
-            packet,
-            receiveAllocator,
-            sender->getJobCounter(),
-            this);
+        sender->getJobQueue().addJob<transport::SrtpUnprotectJob>(sender, packet, receiveAllocator, this);
     }
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
@@ -318,7 +313,6 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     std::atomic_uint32_t _jobsCounter2;
 
     jobmanager::JobManager& _jobManager;
-    jobmanager::JobQueue _inboundJobs;
 
     FakeMediaSources _media1;
     FakeMediaSources _media2;

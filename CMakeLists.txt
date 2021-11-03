@@ -105,8 +105,6 @@ set(FILES
         bridge/engine/EngineStats.h
         bridge/engine/EngineStreamDirector.h
         bridge/engine/EngineVideoStream.h
-        bridge/engine/OpusDecodeJob.cpp
-        bridge/engine/OpusDecodeJob.h
         bridge/engine/PacketCache.cpp
         bridge/engine/PacketCache.h
         bridge/engine/ProcessMissingVideoPacketsJob.cpp

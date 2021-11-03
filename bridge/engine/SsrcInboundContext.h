@@ -38,7 +38,6 @@ public:
         transport::RtcTransport* sender,
         uint64_t timestamp)
         : _ssrc(ssrc),
-          _jobQueue(jobManager),
           _rtpMap(rtpMap),
           _audioLevelExtensionId(audioLevelExtensionId),
           _sender(sender),
@@ -64,7 +63,6 @@ public:
     }
 
     uint32_t _ssrc;
-    jobmanager::JobQueue _jobQueue;
     const bridge::RtpMap _rtpMap;
     int32_t _audioLevelExtensionId;
     transport::RtcTransport* _sender;
