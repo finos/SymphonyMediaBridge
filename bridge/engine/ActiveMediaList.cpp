@@ -148,20 +148,14 @@ bool ActiveMediaList::addVideoParticipant(const size_t endpointIdHash,
 
     if (simulcastStream.isSendingSlides())
     {
-        if (!_videoScreenShareSsrcMapping.isSet())
-        {
-            _videoScreenShareSsrcMapping.set(endpointIdHash,
-                VideoScreenShareSsrcMapping{simulcastStream._levels[0]._ssrc, _videoScreenShareSsrc._ssrc});
-        }
+        _videoScreenShareSsrcMapping.set(endpointIdHash,
+            VideoScreenShareSsrcMapping{simulcastStream._levels[0]._ssrc, _videoScreenShareSsrc._ssrc});
     }
     else if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingSlides())
     {
-        if (!_videoScreenShareSsrcMapping.isSet())
-        {
-            _videoScreenShareSsrcMapping.set(endpointIdHash,
-                VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc,
-                    _videoScreenShareSsrc._ssrc});
-        }
+        _videoScreenShareSsrcMapping.set(endpointIdHash,
+            VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc,
+                _videoScreenShareSsrc._ssrc});
     }
 
     if (_activeVideoListLookupMap.size() == _maxActiveListSize)
