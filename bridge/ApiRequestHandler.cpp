@@ -207,7 +207,7 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDes
             for (auto& ssrcAttribute : video._ssrcAttributes)
             {
                 if (ssrcAttribute._content.compare(api::EndpointDescription::SsrcAttribute::slidesContent) == 0 &&
-                    ssrcAttribute._sources[0] == sourcesSsrc)
+                    ssrcAttribute._ssrcs[0] == sourcesSsrc)
                 {
                     simulcastStream._contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
                 }
@@ -252,7 +252,7 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDes
             for (auto& ssrcAttribute : video._ssrcAttributes)
             {
                 if (ssrcAttribute._content.compare(api::EndpointDescription::SsrcAttribute::slidesContent) == 0 &&
-                    ssrcAttribute._sources[0] == sourcesSsrc)
+                    ssrcAttribute._ssrcs[0] == sourcesSsrc)
                 {
                     simulcastStream._contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
                 }
@@ -482,6 +482,10 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                 {
                     const auto recording = api::Parser::parseRecording(requestBodyJson);
                     return recordEndpoint(requestLogger, recording, conferenceId);
+                }
+                else if (action.compare("expire") == 0)
+                {
+                    return expireEndpoint(requestLogger, conferenceId, endpointId);
                 }
                 else
                 {
@@ -924,7 +928,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
             }
 
             api::EndpointDescription::SsrcAttribute responseSsrcAttribute;
-            responseSsrcAttribute._sources.push_back(responseVideo._ssrcs[1]);
+            responseSsrcAttribute._ssrcs.push_back(responseVideo._ssrcs[1]);
             responseSsrcAttribute._content = "slides";
             responseVideo._ssrcAttributes.push_back(responseSsrcAttribute);
         }
@@ -1384,6 +1388,29 @@ httpd::Response ApiRequestHandler::recordEndpoint(RequestLogger& requestLogger,
             throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
+
+    const auto responseBody = nlohmann::json::object();
+    auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
+    response._headers["Content-type"] = "text/json";
+    requestLogger.setResponse(response);
+    return response;
+}
+
+httpd::Response ApiRequestHandler::expireEndpoint(RequestLogger& requestLogger,
+    const std::string& conferenceId,
+    const std::string& endpointId)
+{
+    Mixer* mixer;
+    auto scopedMixerLock = _mixerManager.getMixer(conferenceId, mixer);
+    assert(scopedMixerLock.owns_lock());
+    if (!mixer)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
+    }
+
+    mixer->removeAudioStream(endpointId);
+    mixer->removeVideoStream(endpointId);
+    mixer->removeDataStream(endpointId);
 
     const auto responseBody = nlohmann::json::object();
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());

@@ -13,7 +13,7 @@ constexpr TO checkedCast(FROM value)
 #ifdef DEBUG
     if (std::is_signed<TO>())
     {
-        assert(value <= std::numeric_limits<TO>::max());
+        assert(value <= static_cast<FROM>(std::numeric_limits<TO>::max()));
         if (std::is_signed<FROM>())
         {
             assert(value >= std::numeric_limits<TO>::min());

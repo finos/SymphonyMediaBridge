@@ -129,7 +129,7 @@ api::EndpointDescription::Transport parsePatchEndpointTransport(const nlohmann::
         ice._ufrag = iceJson["ufrag"].get<std::string>();
         ice._pwd = iceJson["pwd"].get<std::string>();
 
-        for (const auto& candidateJson : data["candidates"])
+        for (const auto& candidateJson : iceJson["candidates"])
         {
             api::EndpointDescription::Candidate candidate;
             candidate._generation = candidateJson["generation"].get<uint32_t>();
@@ -196,10 +196,10 @@ api::EndpointDescription::PayloadType parsePatchEndpointPayloadType(const nlohma
     if (data.find("parameters") != data.end())
     {
         const auto& parametersJson = data["parameters"];
-        for (auto parameterJsonItr = parametersJson.cbegin(); parameterJsonItr != parametersJson.cend();
-             ++parameterJsonItr)
+        for (const auto& parameterJson : parametersJson)
         {
-            payloadType._parameters.emplace_back(std::make_pair(parameterJsonItr.key(), parameterJsonItr.value()));
+            payloadType._parameters.emplace_back(
+                std::make_pair(parameterJson["name"].get<std::string>(), parameterJson["value"].get<std::string>()));
         }
     }
 
@@ -295,9 +295,11 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
 
         if (audioJson.find("ssrcs") != audioJson.end())
         {
-            for (const auto& sourceJson : audioJson["ssrcs"])
+            for (const auto& ssrcJson : audioJson["ssrcs"])
             {
-                audioChannel._ssrcs.push_back(sourceJson.get<uint32_t>());
+                const auto ssrc =
+                    ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+                audioChannel._ssrcs.push_back(ssrc);
             }
         }
 
@@ -328,9 +330,10 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             videoChannel._transport.set(parsePatchEndpointTransport(videoJson["transport"]));
         }
 
-        for (const auto& sourceJson : videoJson["ssrcs"])
+        for (const auto& ssrcJson : videoJson["ssrcs"])
         {
-            videoChannel._ssrcs.push_back(sourceJson.get<uint32_t>());
+            const auto ssrc = ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+            videoChannel._ssrcs.push_back(ssrc);
         }
 
         for (const auto& payloadTypeJson : videoJson["payload-types"])
@@ -347,7 +350,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
         for (const auto& ssrcGroupJson : videoJson["ssrc-groups"])
         {
             api::EndpointDescription::SsrcGroup ssrcGroup;
-            for (const auto& ssrcJson : ssrcGroupJson["sources"])
+            for (const auto& ssrcJson : ssrcGroupJson["ssrcs"])
             {
                 const uint32_t ssrc =
                     ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
@@ -365,7 +368,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             {
                 const auto ssrc =
                     ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
-                ssrcAttribute._sources.push_back(ssrc);
+                ssrcAttribute._ssrcs.push_back(ssrc);
             }
             videoChannel._ssrcAttributes.push_back(ssrcAttribute);
         }

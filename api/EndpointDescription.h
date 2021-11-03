@@ -74,7 +74,7 @@ struct EndpointDescription
         static const char* slidesContent;
         static const char* videoContent;
 
-        std::vector<uint32_t> _sources;
+        std::vector<uint32_t> _ssrcs;
         std::string _content;
     };
 

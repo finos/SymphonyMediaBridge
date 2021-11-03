@@ -76,12 +76,14 @@ nlohmann::json generatePayloadType(const api::EndpointDescription::PayloadType& 
     payloadTypeJson["clockrate"] = payloadType._clockRate;
     setIfExists(payloadTypeJson, "channels", payloadType._channels);
 
-    nlohmann::json parametersJson;
+    payloadTypeJson["parameters"] = nlohmann::json::array();
+    nlohmann::json parameterJson;
     for (const auto& parameter : payloadType._parameters)
     {
-        parametersJson[parameter.first] = parameter.second;
+        parameterJson["name"] = parameter.first;
+        parameterJson["value"] = parameter.second;
+        payloadTypeJson["parameters"].push_back(parameterJson);
     }
-    payloadTypeJson["parameters"] = parametersJson;
 
     payloadTypeJson["rtcp-fbs"] = nlohmann::json::array();
     for (const auto& rtcpFeedback : payloadType._rtcpFeedbacks)
@@ -191,7 +193,7 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
         {
             nlohmann::json ssrcAttributeJson;
             ssrcAttributeJson["ssrcs"] = nlohmann::json::array();
-            for (const auto ssrc : ssrcAttribute._sources)
+            for (const auto ssrc : ssrcAttribute._ssrcs)
             {
                 ssrcAttributeJson["ssrcs"].push_back(ssrc);
             }

@@ -91,6 +91,10 @@ private:
     httpd::Response recordEndpoint(RequestLogger& requestLogger,
         const api::Recording& recording,
         const std::string& conferenceId);
+
+    httpd::Response expireEndpoint(RequestLogger& requestLogger,
+        const std::string& conferenceId,
+        const std::string& endpointId);
 };
 
 } // namespace bridge
