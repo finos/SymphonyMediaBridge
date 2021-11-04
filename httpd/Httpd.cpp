@@ -23,9 +23,9 @@ int32_t getHeaders(void* cls, MHD_ValueKind, const char* key, const char* value)
     return MHD_YES;
 }
 
-MHD_Result addCorsHeaders(const httpd::Request& request, MHD_Response* response)
+int32_t addCorsHeaders(const httpd::Request& request, MHD_Response* response)
 {
-    MHD_Result result = MHD_YES;
+    int32_t result = MHD_YES;
     result = MHD_add_response_header(response, "Access-Control-Allow-Origin", "*");
     if (result != MHD_YES)
     {

@@ -13,33 +13,38 @@ Written as a high performance native application with efficient resource managem
 
 ## Installing
 
-Supported platforms for the release builds are
-- Ubuntu Server 20.04
-- Centos 7
-- RedHat Enterprise Linux 7
-- RedHat Enterprise Linux 8
+The Supported platforms for the release builds are
+- Ubuntu Server 20.04 LTS
+- Ubuntu Server 21.10
 
-For Ubuntu Server 20.04, the following additional dependencies need to be installed:
+The following additional dependencies have to be installed:
 
-```apt-get install libc++-dev libc++abi-dev```
+```apt-get install libc++-dev libc++abi-dev libsrtp2-1 libmicrohttpd12 libopus0```
 
-### 1. Download and extract the zip file of a release
+### Alternative 1. Installing the .deb package
 
-### 2. Navigate to rtc-smb/\<target os\>/smb
+#### 1. Download the .deb file from a release
 
-### 3. Add RT priority capabilities to the smb binary
+#### 2. Install
+
+```dpkg -i symphonymediabridge_<version>.deb```
+
+#### 3. Start with the default empty config file
+
+```smb /etc/symphonymediabridge/config.json```
+
+### Alternative 2. Download the .tar.gz file 
+
+#### 1. Download and extract the .tar.gz file from a release
+
+#### 2. Add realtime priority capabilities to the smb binary
 
 ```setcap CAP_SYS_NICE+ep smb```
 
-### 3. Create a config file
-
-```echo "{}" > config.json"```
-
-### 4. Start
-
-Start manually by executing the smb binary
+#### 3. Start with the default empty config file
 
 ```./smb config.json```
+
 
 ## Usage example
 
@@ -76,6 +81,9 @@ The Symphony Media Bridge is a cmake based project that can be built and run for
 
 ```cmake -G "Xcode" .```
 
-### Running
+### Running the application
 
 ``` ./smb config.json ```
+
+### Running the local test suite
+```./UnitTest```
