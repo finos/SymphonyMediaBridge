@@ -169,7 +169,7 @@ public:
             push(_upLink, rtcpPacket);
 
             uint16_t paddingSize = 0;
-            auto count = _rateControl->getPadding(_timeCursor, ssrc, rtcpPacket->getLength(), paddingSize);
+            auto count = _rateControl->getPadding(_timeCursor, rtcpPacket->getLength(), paddingSize);
             if (_rtxProbeSsrc.isSet())
             {
                 sendRtpPadding(count, _rtxProbeSsrc.get(), paddingSize);
@@ -190,7 +190,7 @@ public:
             const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
             const uint32_t ssrc = rtpHeader->ssrc;
             uint16_t paddingSize = 0;
-            auto count = _rateControl->getPadding(_timeCursor, rtpHeader->ssrc, packet->getLength(), paddingSize);
+            auto count = _rateControl->getPadding(_timeCursor, packet->getLength(), paddingSize);
 
             if (_rtxProbeSsrc.isSet())
             {
@@ -386,7 +386,7 @@ public:
                 prevLog = _timeCursor;
                 logger::debug("%" PRIu64 "ms link bit rate %.fkbsp, estimate %.1fkbps, rtt %ums",
                     "",
-                    (_timeCursor % 0xFFFFFFFFu) / utils::Time::ms,
+                    (_timeCursor % utils::Time::minute) / utils::Time::ms,
                     _upLink->getBitRateKbps(_timeCursor),
                     _rateControl->getTargetRate(),
                     _rtt * 1000 / 0x10000);
@@ -431,7 +431,7 @@ TEST_F(RateControllerTest, long1Mbps)
     videoChannel->setBandwidth(250);
     run(utils::Time::sec * 9, 1050);
 
-    EXPECT_GE(_rateControl->getTargetRate(), 900);
+    EXPECT_GE(_rateControl->getTargetRate(), 700);
     videoChannel->setBandwidth(600);
     run(utils::Time::sec * 15, 1050);
 
@@ -543,5 +543,5 @@ TEST_F(RateControllerTest, long4000kbps)
 
     run(utils::Time::sec * 25, 4100);
 
-    EXPECT_GE(_rateControl->getTargetRate(), 3700);
+    EXPECT_GE(_rateControl->getTargetRate(), 3500);
 }

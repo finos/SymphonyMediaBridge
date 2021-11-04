@@ -1359,7 +1359,7 @@ void TransportImpl::sendPadding(uint64_t timestamp,
         auto& padSsrcState = getOutboundSsrc(_rtxProbeSsrc, 90000);
         uint16_t padding = 0;
 
-        const auto paddingCount = _rateController.getPadding(timestamp, ssrc, nextPacketSize, padding);
+        const auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
         for (uint32_t i = 0; i < paddingCount && _selectedRtp; ++i)
         {
             auto padPacket = memory::makePacket(sendAllocator);
@@ -1394,7 +1394,7 @@ void TransportImpl::sendPadding(uint64_t timestamp,
     else
     {
         uint16_t padding = 0;
-        const auto paddingCount = _rateController.getPadding(timestamp, ssrc, nextPacketSize, padding);
+        const auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
         for (uint32_t i = 0; i < paddingCount && _selectedRtcp; ++i)
         {
             auto padPacket = memory::makePacket(sendAllocator);

@@ -110,7 +110,7 @@ public:
     void onRtcpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint16_t size);
     void onRtpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size);
 
-    uint32_t getPadding(uint64_t timestamp, uint32_t ssrc, uint16_t size, uint16_t& paddingSize) const;
+    uint32_t getPadding(uint64_t timestamp, uint16_t size, uint16_t& paddingSize) const;
     double getTargetRate() const { return (_config.enabled ? _model.bandwidthKbps : 0); }
 
 private:
@@ -154,11 +154,13 @@ private:
     {
         uint64_t start = 0;
         uint64_t interval = utils::Time::sec;
-        uint64_t duration = utils::Time::ms * 600;
+        uint64_t duration = 0;
         uint32_t initialNetworkQueue = 0;
-        uint64_t lastPaddingSendTime = 0;
         uint32_t count = 0;
     } _probe;
+
+    uint32_t _canRtxPad = true;
+    uint64_t _rtxSendTime = 0;
 
     uint32_t _minRttNtp;
     const RateControllerConfig& _config;

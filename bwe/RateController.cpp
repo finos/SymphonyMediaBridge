@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <cmath>
 
-#define RCTL_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
+#define RCTL_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
 
 namespace bwe
 {
@@ -54,15 +54,18 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     const bool canSendProbe = _model.queue < _model.targetQueue &&
         (_probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval));
 
-    if ((_probe.count < 5 && _probe.start == 0) || canSendProbe)
+    if ((_probe.count < 5 && _probe.duration == 0) || canSendProbe)
     {
-        RCTL_LOG("starting pad", _logId.c_str());
         _probe.start = timestamp;
         _probe.duration = 700 * utils::Time::ms; // could take previous SR to RR delay into account
         _probe.initialNetworkQueue = _model.networkQueue;
         _model.queue = size;
         _backlog.front().queueSize = size;
         ++_probe.count;
+        RCTL_LOG("starting probe %" PRIu64 "ms target Q %uB",
+            _logId.c_str(),
+            _probe.duration / utils::Time::ms,
+            _model.targetQueue);
     }
 }
 
@@ -321,7 +324,7 @@ void RateController::onReportReceived(uint64_t timestamp,
     _model.bandwidthKbps = std::max(_model.bandwidthKbps, static_cast<double>(_config.bandwidthFloorKbps));
     _model.targetQueue = std::max(minTargetQueue, _model.targetQueue);
 
-    RCTL_LOG("model %.1fkbps mQ %uB tQ %uB, netQueue %u, rxRate %.fkbps txRate %.fkbps rtt %.1fms loss %u, probing %s",
+    RCTL_LOG("model %.1fkbps mQ %uB tQ %uB, nwQueue %u, rxRate %.fkbps txRate %.fkbps rtt %.1fms loss %u, probing %s",
         _logId.c_str(),
         _model.bandwidthKbps,
         _model.queue,
@@ -334,12 +337,10 @@ void RateController::onReportReceived(uint64_t timestamp,
         isProbing ? "t" : "f");
     _model.queue = std::min(_model.queue, networkQueue);
 
-    if (isProbing && _probe.duration != 0 &&
-        (lossCount > 0 || networkQueue > _model.targetQueue ||
-            utils::Time::diffGE(_probe.start, timestamp, utils::Time::ms * 400)))
+    if (_probe.duration != 0 && (lossCount > 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.duration)))
     {
         // there may be later RB after SR and need good measurements of bw
-        RCTL_LOG("turning probe off", _logId.c_str());
+        RCTL_LOG("stopping probe", _logId.c_str());
         _probe.duration = 0;
     }
 }
@@ -352,7 +353,7 @@ void RateController::onRtcpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint16
     }
 
     _model.onPacketSent(timestamp, size + _config.ipOverhead);
-    _probe.lastPaddingSendTime = timestamp;
+    _canRtxPad = false;
 
     if (!_backlog.empty())
     {
@@ -374,15 +375,13 @@ void RateController::onRtpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint32_
         return;
     }
 
-    _probe.lastPaddingSendTime = timestamp;
+    _canRtxPad = true;
+    _rtxSendTime = timestamp;
     _model.onPacketSent(timestamp, size + _config.ipOverhead);
     _backlog.emplace_front(timestamp, ssrc, sequenceNumber, size + _config.ipOverhead, PacketMetaData::RTP_PADDING);
 }
 
-uint32_t RateController::getPadding(const uint64_t timestamp,
-    const uint32_t ssrc,
-    const uint16_t size,
-    uint16_t& paddingSize) const
+uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t size, uint16_t& paddingSize) const
 {
     if (!_config.enabled)
     {
@@ -392,8 +391,8 @@ uint32_t RateController::getPadding(const uint64_t timestamp,
     if (_model.queue > _model.targetQueue || _probe.start == 0 ||
         utils::Time::diffGE(_probe.start, timestamp, _probe.duration))
     {
-        if (_probe.lastPaddingSendTime == 0 ||
-            utils::Time::diffGE(_probe.lastPaddingSendTime, timestamp, _config.minPadPinInterval))
+        if (_canRtxPad &&
+            (_rtxSendTime == 0 || utils::Time::diffGE(_rtxSendTime, timestamp, _config.minPadPinInterval)))
         {
             paddingSize = rtp::MIN_RTP_HEADER_SIZE + 4; // tiny packet to keep flow on padding ssrc
             return 1;
@@ -410,6 +409,7 @@ uint32_t RateController::getPadding(const uint64_t timestamp,
         {
             return 0;
         }
+
 
         return count;
     }
