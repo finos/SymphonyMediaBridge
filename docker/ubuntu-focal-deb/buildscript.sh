@@ -34,7 +34,9 @@ fi
 
 mkdir -p symphonymediabridge_${VERSION}/DEBIAN
 mkdir -p symphonymediabridge_${VERSION}/usr/bin
+mkdir -p symphonymediabridge_${VERSION}/usr/share/doc/symphonymediabridge
 cp smb symphonymediabridge_${VERSION}/usr/bin/.
+cp ../../README.md ../../NOTICE symphonymediabridge_${VERSION}/usr/share/doc/symphonymediabridge/.
 
 
 cat > symphonymediabridge_${VERSION}/DEBIAN/control << EOF
@@ -44,7 +46,7 @@ Section: base
 Priority: optional
 Architecture: amd64
 Depends: libc++-dev (>= 1:10.0), libc++abi-dev (>= 1:10.0), libssl1.1 (>= 1.1.1f), libsrtp2-1 (>= 2.3.0-2), libmicrohttpd12 (>= 0.9.66-1), libopus0 (>= 1.3.1)
-Maintainer: Marcus Spangenberg <marcus.spangenberg@symphony.com>
+Maintainer: Symphony LLC
 Description: Symphony Media Bridge
 EOF
 
@@ -64,8 +66,7 @@ dpkg-deb --build symphonymediabridge_${VERSION}
 rm -rf symphonymediabridge_${VERSION}
 
 mkdir symphonymediabridge_${VERSION}
-cp ../../README.md symphonymediabridge_${VERSION}/.
-cp smb versioninfo.txt symphonymediabridge_${VERSION}/.
+cp smb ../../README.md ../../NOTICE symphonymediabridge_${VERSION}/.
 echo "{}" > symphonymediabridge_${VERSION}/config.json
 
 tar cvf symphonymediabridge_${VERSION}.tar symphonymediabridge_${VERSION}
