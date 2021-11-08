@@ -319,6 +319,12 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
     }
 
     const auto endpointIdHash = engineVideoStream->_endpointIdHash;
+    
+    if (_activeMediaList->removeVideoParticipant(endpointIdHash))
+    {
+        sendUserMediaMapMessageToAll();
+    }
+    
     _engineStreamDirector->removeParticipant(endpointIdHash);
     _engineStreamDirector->removeParticipantPins(endpointIdHash);
     updateBandwidthFloor();

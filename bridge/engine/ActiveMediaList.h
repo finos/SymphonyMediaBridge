@@ -42,7 +42,7 @@ public:
     bool addVideoParticipant(const size_t endpointIdHash,
         const SimulcastStream& simulcastStream,
         const utils::Optional<SimulcastStream>& secondarySimulcastStream);
-    void removeVideoParticipant(const size_t endpointIdHash);
+    bool removeVideoParticipant(const size_t endpointIdHash);
 
     /**
      * @param level dBov levels adjusted to [0 .... 127] scale with 127 representing the highest volume (0 dBov) and

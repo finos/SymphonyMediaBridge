@@ -183,7 +183,7 @@ bool ActiveMediaList::addVideoParticipant(const size_t endpointIdHash,
     return endpointIdHash != _dominantSpeaker || updateActiveVideoList(_dominantSpeaker);
 }
 
-void ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
+bool ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
 {
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
@@ -192,7 +192,7 @@ void ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
 
     if (!_videoParticipants.contains(endpointIdHash))
     {
-        return;
+        return false;
     }
 
     _videoParticipants.erase(endpointIdHash);
@@ -212,6 +212,8 @@ void ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
 
     _activeVideoList.remove(endpointIdHash);
     _activeVideoListLookupMap.erase(endpointIdHash);
+    
+    return true;
 }
 
 // Algorithm:
