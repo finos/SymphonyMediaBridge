@@ -434,6 +434,8 @@ set(TEST_FILES
     test/bwe/FakeVideoSource.cpp
     test/bwe/FakeCall.h
     test/bwe/FakeCall.cpp
+    test/bwe/RcCall.h
+    test/bwe/RcCall.cpp
     test/bwe/FakeMedia.h
     test/bwe/FakeMedia.cpp
     test/bwe/FakeCrossTraffic.h
