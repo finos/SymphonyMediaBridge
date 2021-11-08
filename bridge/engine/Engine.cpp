@@ -269,7 +269,7 @@ void Engine::addAudioStream(EngineCommand::Command& nextCommand)
     assert(nextCommand._command.addAudioStream._engineStream);
 
     auto mixer = nextCommand._command.addAudioStream._mixer;
-    mixer->addAudioSteam(nextCommand._command.addAudioStream._engineStream);
+    mixer->addAudioStream(nextCommand._command.addAudioStream._engineStream);
 }
 
 void Engine::removeAudioStream(EngineCommand::Command& nextCommand)
