@@ -298,7 +298,7 @@ private:
         double _retransmitBackOffFactor;
 
         size_t _partialBytesAcked;
-        [[maybe_unused]] const logger::LoggableId& _loggableId;
+        const logger::LoggableId& _loggableId;
         const SctpConfig& _config;
     } _flow;
 

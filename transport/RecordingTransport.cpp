@@ -378,7 +378,7 @@ void RecordingTransport::onSendingStreamAddedEvent(memory::Packet* packet)
 
     if (frequency != 0)
     {
-        _outboundSsrcCounters.emplace(recordingEvent->ssrc, frequency);
+        _outboundSsrcCounters.emplace(recordingEvent->ssrc, frequency, _config);
     }
 }
 

@@ -86,6 +86,25 @@ private:
     uint32_t _ssrc;
 };
 
+class SetRtxProbeSourceJob : public jobmanager::CountedJob
+{
+public:
+    SetRtxProbeSourceJob(transport::RtcTransport& transport, uint32_t ssrc, uint32_t* sequenceCounter)
+        : CountedJob(transport.getJobCounter()),
+          _transport(transport),
+          _ssrc(ssrc),
+          _sequenceCounter(sequenceCounter)
+    {
+    }
+
+    void run() override { _transport.setRtxProbeSource(_ssrc, _sequenceCounter); }
+
+private:
+    transport::RtcTransport& _transport;
+    uint32_t _ssrc;
+    uint32_t* _sequenceCounter;
+};
+
 /**
  * @return true if this ssrc should be skipped and not forwarded to the videoStream.
  */
@@ -254,6 +273,14 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         engineVideoStream->_transport.getLoggableId().c_str(),
         endpointIdHash);
 
+    auto* outboundContext = obtainOutboundSsrcContext(*engineVideoStream, engineVideoStream->_localSsrc);
+    if (outboundContext)
+    {
+        engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
+            engineVideoStream->_localSsrc,
+            &outboundContext->_sequenceCounter);
+    }
+
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
     if (engineVideoStream->_simulcastStream._numLevels > 0)
     {
@@ -284,6 +311,9 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
         outboundContext->_markedForDeletion = true;
         if (engineVideoStream->_transport.isConnected())
         {
+            engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
+                engineVideoStream->_localSsrc,
+                nullptr);
             engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(
                 createGoodBye(outboundContext->_ssrc, outboundContext->_allocator),
                 engineVideoStream->_transport,
@@ -2080,6 +2110,11 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                     }
                     ssrc = rewriteMapItr->second._ssrc;
                 }
+            }
+            else
+            {
+                uint32_t fbSsrc = 0;
+                _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
             }
 
             auto* ssrcOutboundContext = obtainOutboundSsrcContext(*videoStream, ssrc);

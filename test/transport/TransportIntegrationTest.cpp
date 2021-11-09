@@ -54,6 +54,7 @@ bool TransportIntegrationTest::init(std::string configJson1, std::string configJ
         _sctpConfig,
         _iceConfig,
         _bweConfig,
+        _rateControlConfig,
         interfaces,
         *_network,
         *_mainPoolAllocator);
@@ -66,6 +67,7 @@ bool TransportIntegrationTest::init(std::string configJson1, std::string configJ
             _sctpConfig,
             _iceConfig,
             _bweConfig,
+            _rateControlConfig,
             interfaces,
             *_network,
             *_mainPoolAllocator);

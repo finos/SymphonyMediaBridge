@@ -1,4 +1,5 @@
 #include "bwe/BandwidthEstimator.h"
+#include "bwe/RateController.h"
 #include "config/Config.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/DataReceiver.h"
@@ -37,6 +38,7 @@ struct TransportIntegrationTest : public ::testing::Test
     ice::IceConfig _iceConfig;
     sctp::SctpConfig _sctpConfig;
     bwe::Config _bweConfig;
+    bwe::RateControllerConfig _rateControlConfig;
     utils::Pacer _pacer;
     std::unique_ptr<transport::TransportFactory> _transportFactory1;
     std::unique_ptr<transport::TransportFactory> _transportFactory2;

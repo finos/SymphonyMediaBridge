@@ -144,6 +144,8 @@ set(FILES
         bwe/BandwidthEstimator.h
         bwe/BandwidthUtils.cpp
         bwe/BandwidthUtils.h
+        bwe/RateController.h
+        bwe/RateController.cpp
         codec/AudioLevel.cpp
         codec/AudioLevel.h
         codec/Opus.h
@@ -420,6 +422,8 @@ set(TEST_FILES
     test/bwe/FakeVideoSource.cpp
     test/bwe/FakeCall.h
     test/bwe/FakeCall.cpp
+    test/bwe/RcCall.h
+    test/bwe/RcCall.cpp
     test/bwe/FakeMedia.h
     test/bwe/FakeMedia.cpp
     test/bwe/FakeCrossTraffic.h
@@ -427,6 +431,7 @@ set(TEST_FILES
     test/bwe/EstimatorReRun.cpp
     test/bwe/BwBurstTracker.h
     test/bwe/BwBurstTracker.cpp
+    test/bwe/RateControllerTest.cpp
     test/transport/IceTest.cpp
     test/utils/Crc32Test.cpp
     test/utils/StringBuilderTest.cpp
@@ -454,6 +459,7 @@ set(TEST_FILES
     test/transport/recp/RecStreamAddedEventBuilderTest.cpp
     test/bridge/UnackedPacketsTrackerTest.cpp
     test/memory/PriorityQueueTest.cpp
+    test/memory/BacklogTest.cpp
     test/bridge/ActiveMediaListTestLevels.h)
 
 add_executable(UnitTest

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bwe/BandwidthEstimator.h"
+#include "bwe/RateController.h"
 #include "concurrency/MpmcHashmap.h"
 #include "config/Config.h"
 #include "dtls/SrtpClient.h"
@@ -69,6 +70,7 @@ public:
         const ice::IceConfig& iceConfig,
         const ice::IceRole iceRole,
         const bwe::Config& bweConfig,
+        const bwe::RateControllerConfig& rateControllerConfig,
         const std::vector<Endpoint*>& rtpEndPoints,
         const std::vector<ServerEndpoint*>& tcpEndPoints,
         TcpEndpointFactory* tcpEndpointFactory,
@@ -80,6 +82,7 @@ public:
         const config::Config& config,
         const sctp::SctpConfig& sctpConfig,
         const bwe::Config& bweConfig,
+        const bwe::RateControllerConfig& rateControllerConfig,
         const std::vector<Endpoint*>& rtpEndPoints,
         const std::vector<Endpoint*>& rtcpEndPoints,
         memory::PacketPoolAllocator& allocator);
@@ -98,11 +101,12 @@ public: // Transport
     bool hasPendingJobs() const override { return _jobCounter.load() > 0; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
 
-    /** Called from worker threads*/
+    /** Called from Transport thread threads*/
     void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator) override;
     bool unprotect(memory::Packet* packet) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override;
+    void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) override;
 
     /** Called from httpd threads */
     bool isGatheringComplete() const override;
@@ -270,10 +274,17 @@ private:
     friend class ConnectJob;
     friend class ConnectSctpJob;
 
-    void doProtectAndSend(memory::Packet* packet,
+    void doProtectAndSend(uint64_t timestamp,
+        memory::Packet* packet,
         const SocketAddress& target,
         Endpoint* endpoint,
         memory::PacketPoolAllocator& allocator);
+    void sendPadding(uint64_t timestamp,
+        uint32_t ssrc,
+        RtpSenderState& sendState,
+        uint32_t rtpTimestamp,
+        uint16_t nextPacketSize,
+        memory::PacketPoolAllocator& sendAllocator);
 
     void processRtcpReport(const rtp::RtcpHeader& packet,
         uint64_t timestamp,
@@ -284,22 +295,19 @@ private:
         const std::string& fingerprintHash,
         const bool dtlsClientSide);
 
-    void doBandwidthEstimation(uint64_t receiveTime, const utils::Optional<uint32_t>& absSendTime, uint32_t packetSize);
+    bool doBandwidthEstimation(uint64_t receiveTime, const utils::Optional<uint32_t>& absSendTime, uint32_t packetSize);
     void doConnect();
     void doConnectSctp();
 
-    void appendAndSendRtcp(memory::Packet* rtcpPacket, memory::PacketPoolAllocator& allocator, uint64_t timestamp);
-    memory::Packet* appendSendReceiveReport(memory::Packet* rtcpPacket,
-        memory::PacketPoolAllocator& allocator,
-        uint64_t timestamp,
+    void appendRemb(memory::Packet* rtcpPacket,
+        const uint64_t timestamp,
+        uint32_t senderSsrc,
         const uint32_t* activeInbound,
         int activeInboundCount);
-    memory::Packet* appendRemb(memory::Packet* rtcpPacket,
-        memory::PacketPoolAllocator& allocator,
-        uint64_t timestamp,
-        const uint32_t* activeInbound,
-        int activeInboundCount);
-    void onTriggerRtcp();
+
+    void sendReports(uint64_t timestamp, bool rembReady = false);
+    void sendRtcp(memory::Packet* rtcpPacket, memory::PacketPoolAllocator& allocator, const uint64_t timestamp);
+
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 
     RtpReceiveState& getInboundSsrc(uint32_t ssrc);
@@ -343,8 +351,7 @@ private:
               bytesCount(0),
               estimatedKbps(initialEstimateKbps),
               estimatedKbpsMin(initialEstimateKbps),
-              estimatedKbpsMax(initialEstimateKbps),
-              lastLogTimestamp(0)
+              estimatedKbpsMax(initialEstimateKbps)
         {
         }
 
@@ -353,10 +360,12 @@ private:
         std::atomic_uint32_t estimatedKbps;
         std::atomic_uint32_t estimatedKbpsMin;
         std::atomic_uint32_t estimatedKbpsMax;
-        uint64_t lastLogTimestamp;
     };
     ChannelMetrics _inboundMetrics;
     ChannelMetrics _outboundMetrics;
+    uint32_t _outboundRembEstimateKbps;
+    utils::RateTracker<10> _sendRateTracker; // B/ns
+    uint64_t _lastLogTimestamp;
     std::atomic_uint32_t _rttNtp;
 
     concurrency::MpmcHashmap32<uint32_t, RtpSenderState> _outboundSsrcCounters;
@@ -381,17 +390,15 @@ private:
 
     struct RtcpMaintenance
     {
-        RtcpMaintenance(uint64_t reportIntervalNs)
-            : lastSendTime(0),
-              lastReportedEstimateKbps(0),
-              reportInterval(reportIntervalNs)
-        {
-        }
+        RtcpMaintenance() : lastSendTime(0), lastReportedEstimateKbps(0) {}
 
         uint64_t lastSendTime;
         uint32_t lastReportedEstimateKbps;
-        uint64_t reportInterval;
     } _rtcp;
+
+    bwe::RateController _rateController;
+    uint32_t _rtxProbeSsrc;
+    uint32_t* _rtxProbeSequenceCounter;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
 #ifdef DEBUG

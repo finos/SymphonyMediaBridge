@@ -39,7 +39,7 @@ memory::Packet* FakeAudioSource::getPacket(uint64_t timestamp)
             rtpHeader->sequenceNumber = _sequenceCounter++;
             rtpHeader->ssrc = _ssrc;
             rtpHeader->timestamp = _rtpTimestamp;
-            _rtpTimestamp += 16000;
+            _rtpTimestamp += 960;
 
             rtp::RtpHeaderExtension extensionHead(rtpHeader->getExtensionHeader());
             rtp::GeneralExtension1Byteheader absSendTime;

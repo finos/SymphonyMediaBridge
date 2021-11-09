@@ -478,4 +478,29 @@ void RtcpGoodbye::addSsrc(uint32_t ssrc)
     header.length = header.length + 1;
 }
 
+RtcpApplicationSpecific::RtcpApplicationSpecific()
+{
+    header.packetType = RtcpPacketType::APP_SPECIFIC;
+    name[0] = '\0';
+}
+
+RtcpApplicationSpecific* RtcpApplicationSpecific::create(void* target,
+    uint32_t ssrc,
+    const char* name,
+    uint16_t dataSize)
+{
+    dataSize = dataSize / sizeof(uint32_t);
+    auto rtcp = reinterpret_cast<rtp::RtcpApplicationSpecific*>(target);
+    rtcp->header = RtcpHeader();
+    rtcp->header.packetType = RtcpPacketType::APP_SPECIFIC;
+    rtcp->header.length = sizeof(RtcpApplicationSpecific) + dataSize - 1;
+
+    std::memset(rtcp->name, 0, 4);
+    std::strncpy(rtcp->name, name, 4);
+    rtcp->ssrc = ssrc;
+    std::memset(rtcp + 1, 0, dataSize * sizeof(uint32_t));
+
+    return rtcp;
+}
+
 } // namespace rtp
