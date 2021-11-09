@@ -162,7 +162,7 @@ EngineMixer::EngineMixer(const std::string& id,
 
 EngineMixer::~EngineMixer() {}
 
-void EngineMixer::addAudioSteam(EngineAudioStream* engineAudioStream)
+void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
 {
     const auto endpointIdHash = engineAudioStream->_transport.getEndpointIdHash();
     if (_engineAudioStreams.find(endpointIdHash) != _engineAudioStreams.end())
@@ -319,6 +319,12 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
     }
 
     const auto endpointIdHash = engineVideoStream->_endpointIdHash;
+    
+    if (_activeMediaList->removeVideoParticipant(endpointIdHash))
+    {
+        sendUserMediaMapMessageToAll();
+    }
+    
     _engineStreamDirector->removeParticipant(endpointIdHash);
     _engineStreamDirector->removeParticipantPins(endpointIdHash);
     updateBandwidthFloor();

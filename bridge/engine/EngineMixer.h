@@ -79,7 +79,7 @@ public:
     const std::string& getId() const { return _id; }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
-    void addAudioSteam(EngineAudioStream* engineAudioStream);
+    void addAudioStream(EngineAudioStream* engineAudioStream);
     void removeAudioStream(EngineAudioStream* engineAudioStream);
     void addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
     void addVideoStream(EngineVideoStream* engineVideoStream);
