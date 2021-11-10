@@ -149,16 +149,16 @@ void runQueueTest(const int consumerCount,
     utils::Time::initialize();
     producerRunning = true;
     consumerRunning = true;
-    std::thread* prod[producerCount];
+    std::unique_ptr<std::thread> prod[producerCount];
     for (int i = 0; i < producerCount; ++i)
     {
-        prod[i] = new std::thread(produceRun<LockQueue>, i, &queue, reports);
+        prod[i] = std::make_unique<std::thread>(produceRun<LockQueue>, i, &queue, reports);
     }
 
-    std::thread* cons[consumerCount];
+    std::unique_ptr<std::thread> cons[consumerCount];
     for (int i = 0; i < consumerCount; ++i)
     {
-        cons[i] = new std::thread(consumerRun<LockQueue>, &queue, reports, consumerCount == 1);
+        cons[i] = std::make_unique<std::thread>(consumerRun<LockQueue>, &queue, reports, consumerCount == 1);
     }
 
     utils::Time::usleep(durationMs * 1000ull);
