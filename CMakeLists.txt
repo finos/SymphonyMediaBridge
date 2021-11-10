@@ -6,6 +6,7 @@ set(CMAKE_CXX_FLAGS_DEBUG "-stdlib=libc++ -glldb -O0 -DDEBUG -DENABLE_LEGACY_API
 set(CMAKE_CXX_FLAGS_DCHECK "-stdlib=libc++ -glldb -O0 -DDEBUG -DENABLE_LEGACY_API=1 -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=address -fno-omit-frame-pointer \
                             -fprofile-arcs -ftest-coverage -fprofile-instr-generate -fcoverage-mapping")
 set(CMAKE_CXX_FLAGS_TCHECK "-stdlib=libc++ -glldb -O1 -DDEBUG -DENABLE_LEGACY_API=1 -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=thread -fno-omit-frame-pointer")
+set(CMAKE_CXX_FLAGS_LCHECK "-stdlib=libc++ -glldb -O1 -g -DDEBUG -DENABLE_LEGACY_API=1 -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=leak -fno-omit-frame-pointer")
 set(CMAKE_CXX_FLAGS_RELEASE "-stdlib=libc++ -O3 -DNDEBUG -DENABLE_LEGACY_API=1 -fno-rtti -Wno-missing-braces -Wuninitialized -Wsign-compare")
 set(CMAKE_C_FLAGS_DEBUG "-glldb -O0 -DDEBUG -Wall")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
