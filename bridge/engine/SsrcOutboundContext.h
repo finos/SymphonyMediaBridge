@@ -36,6 +36,9 @@ public:
           _lastRewrittenSsrc(ssrc),
           _needsKeyframe(false),
           _highestSeenExtendedSequenceNumber(0xFFFFFFFF),
+          _lastRespondedNackPid(0),
+          _lastRespondedNackBlp(0),
+          _lastRespondedNackTimestamp(0),
           _lastSendTime(utils::Time::getAbsoluteTime()),
           _markedForDeletion(false),
           _idle(false),
@@ -72,6 +75,11 @@ public:
 
     // Used to keep track of offset between inbound and outbound sequence numbers
     uint32_t _highestSeenExtendedSequenceNumber;
+
+    // Store the pid and blp of the last nack that was responded to, to avoid resending
+    uint16_t _lastRespondedNackPid;
+    uint16_t _lastRespondedNackBlp;
+    uint64_t _lastRespondedNackTimestamp;
 
     utils::Optional<PacketCache*> _packetCache;
     uint64_t _lastSendTime;

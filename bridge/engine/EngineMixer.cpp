@@ -349,12 +349,12 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
     }
 
     const auto endpointIdHash = engineVideoStream->_endpointIdHash;
-    
+
     if (_activeMediaList->removeVideoParticipant(endpointIdHash))
     {
         sendUserMediaMapMessageToAll();
     }
-    
+
     _engineStreamDirector->removeParticipant(endpointIdHash);
     _engineStreamDirector->removeParticipantPins(endpointIdHash);
     updateBandwidthFloor();
@@ -2204,7 +2204,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
     return numRtpPackets;
 }
 
-void EngineMixer::processIncomingRtcpPackets(uint64_t timestamp)
+void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
 {
     for (IncomingPacketInfo packetInfo; _incomingRtcp.pop(packetInfo);)
     {
@@ -2297,9 +2297,9 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     sendPliForUsedSsrcs(*videoStreamItr->second);
 }
 
-void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::Transport* transport,
+void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
     const rtp::RtcpHeader& rtcpPacket,
-    uint64_t timestamp)
+    const uint64_t timestamp)
 {
     auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
     if (rtcpFeedback->_header.fmtCount != rtp::TransportLayerFeedbackType::PacketNack)
@@ -2350,7 +2350,9 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::Transpor
             *(mediaSsrcOutboundContext->_packetCache.get()),
             pid,
             blp,
-            feedbackSsrc);
+            feedbackSsrc,
+            timestamp,
+            transport->getRtt());
     }
 }
 
