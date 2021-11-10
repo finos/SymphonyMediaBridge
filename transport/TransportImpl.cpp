@@ -927,6 +927,9 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     }
 
     const auto receiveTime = timestamp;
+
+    _bwe->onUnmarkedTraffic(packet->getLength(), timestamp);
+
     const auto now = std::chrono::system_clock::now();
     if (unprotect(packet) && rtp::isValidRtcpPacket(*packet))
     {
