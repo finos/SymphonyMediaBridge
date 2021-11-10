@@ -554,6 +554,7 @@ TEST(MpmcMap, socketAddErase)
             ASSERT_TRUE(!it2.second);
             ASSERT_EQ(it2.first->second, mock1);
             delete mock2;
+            delete mock1;
 
             if ((port & 1) == 1)
             {
