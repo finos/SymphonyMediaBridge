@@ -108,6 +108,14 @@ SrtpClient::~SrtpClient()
     {
         _allocator.free(packet);
     }
+    if (_localSrtp)
+    {
+        srtp_dealloc(_localSrtp);
+    }
+    if (_remoteSrtp)
+    {
+        srtp_dealloc(_remoteSrtp);
+    }
 }
 
 void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,

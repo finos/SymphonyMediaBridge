@@ -20,7 +20,7 @@ TEST(AES, EncryptAndDecrypt)
     uint8_t key[32];
     utils::Base64::decode(base64Key, key, 32);
     size_t ivLen = 12;
-    auto iv = new unsigned char[ivLen];
+    unsigned char iv[ivLen];
     RAND_bytes(iv, sizeof(iv));
 
     crypto::AES aes(key, 32);
@@ -84,7 +84,7 @@ TEST(AES, EncryptRtpPayload)
     ivGenerator.generateForRtp(ssrc, roc, sequenceNumber, iv, ivLen);
 
     const uint16_t keyLength = 32; // 32 bytes -> 256 bits
-   uint8_t key[keyLength];
+    uint8_t key[keyLength];
     generateKey(key, keyLength);
 
     crypto::AES aes(key, keyLength);

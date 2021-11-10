@@ -1,7 +1,7 @@
 #!/bin/bash
 
 if [ $# -eq 0 ]; then
-  pr "Usage generate_make.sh [Debug|Release|DCheck|TCheck]"
+  pr "Usage generate_make.sh [Debug|Release|DCheck|TCheck|LCheck]"
   exit 1
 fi
 
