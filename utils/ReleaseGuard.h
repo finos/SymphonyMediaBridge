@@ -11,8 +11,8 @@ public:
     ~ReleaseGuard() { _o.release(); }
 
     // copies are not allowed
-    ReleaseGuard(ReleaseGuard<T>&) = delete;
-    ReleaseGuard<T>& operator=(ReleaseGuard<T>&) = delete;
+    ReleaseGuard(const ReleaseGuard<T>&) = delete;
+    ReleaseGuard<T>& operator=(const ReleaseGuard<T>&) = delete;
 
 private:
     T& _o;
