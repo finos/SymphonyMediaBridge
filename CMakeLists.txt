@@ -144,8 +144,8 @@ set(FILES
         bwe/BandwidthEstimator.h
         bwe/BandwidthUtils.cpp
         bwe/BandwidthUtils.h
-        bwe/RateController.h
         bwe/RateController.cpp
+        bwe/RateController.h
         codec/AudioLevel.cpp
         codec/AudioLevel.h
         codec/Opus.h
@@ -460,7 +460,9 @@ set(TEST_FILES
     test/bridge/UnackedPacketsTrackerTest.cpp
     test/memory/PriorityQueueTest.cpp
     test/memory/BacklogTest.cpp
-    test/bridge/ActiveMediaListTestLevels.h)
+    test/bridge/ActiveMediaListTestLevels.h
+    test/bridge/VideoNackReceiveJobTest.cpp
+    test/bridge/DummyRtcTransport.h)
 
 add_executable(UnitTest
     ${FILES}

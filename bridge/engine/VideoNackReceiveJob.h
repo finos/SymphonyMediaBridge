@@ -23,7 +23,9 @@ public:
         PacketCache& videoPacketCache,
         const uint16_t pid,
         const uint16_t blp,
-        const uint32_t feedbackSsrc);
+        const uint32_t feedbackSsrc,
+        const uint64_t timestamp,
+        const uint64_t rtt);
 
     void run() override;
 
@@ -34,6 +36,8 @@ private:
     uint16_t _pid;
     uint16_t _blp;
     uint32_t _feedbackSsrc;
+    uint64_t _timestamp;
+    uint64_t _rtt;
 
     void sendIfCached(const uint16_t sequenceNumber);
 };

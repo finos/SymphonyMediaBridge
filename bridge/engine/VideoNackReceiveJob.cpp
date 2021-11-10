@@ -18,14 +18,18 @@ VideoNackReceiveJob::VideoNackReceiveJob(SsrcOutboundContext& ssrcOutboundContex
     PacketCache& videoPacketCache,
     const uint16_t pid,
     const uint16_t blp,
-    const uint32_t feedbackSsrc)
+    const uint32_t feedbackSsrc,
+    const uint64_t timestamp,
+    const uint64_t rtt)
     : jobmanager::CountedJob(sender.getJobCounter()),
       _ssrcOutboundContext(ssrcOutboundContext),
       _sender(sender),
       _videoPacketCache(videoPacketCache),
       _pid(pid),
       _blp(blp),
-      _feedbackSsrc(feedbackSsrc)
+      _feedbackSsrc(feedbackSsrc),
+      _timestamp(timestamp),
+      _rtt(rtt)
 {
 }
 
@@ -41,6 +45,24 @@ void VideoNackReceiveJob::run()
     {
         return;
     }
+
+    if (_pid == _ssrcOutboundContext._lastRespondedNackPid && _blp == _ssrcOutboundContext._lastRespondedNackBlp &&
+        _timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp < _rtt * utils::Time::ms)
+    {
+        NACK_LOG("Ignoring NACK, feedbackSsrc %u, pid %u, blp 0x%x, time since last response %" PRIi64
+                 " ms less than rtt %" PRIi64,
+            "VideoNackReceiveJob",
+            _feedbackSsrc,
+            _pid,
+            _blp,
+            (_timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp) / utils::Time::ms,
+            _rtt);
+        return;
+    }
+
+    _ssrcOutboundContext._lastRespondedNackPid = _pid;
+    _ssrcOutboundContext._lastRespondedNackBlp = _blp;
+    _ssrcOutboundContext._lastRespondedNackTimestamp = _timestamp;
 
     auto sequenceNumber = _pid;
     sendIfCached(sequenceNumber);

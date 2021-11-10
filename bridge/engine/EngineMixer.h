@@ -183,7 +183,7 @@ private:
 
         IncomingPacketInfo(memory::Packet* packet,
             memory::PacketPoolAllocator* allocator,
-            transport::Transport* transport)
+            transport::RtcTransport* transport)
             : _packet(packet),
               _allocator(allocator),
               _transport(transport),
@@ -193,7 +193,7 @@ private:
 
         IncomingPacketInfo(memory::Packet* packet,
             memory::PacketPoolAllocator* allocator,
-            transport::Transport* transport,
+            transport::RtcTransport* transport,
             const uint32_t extendedSequenceNumber)
             : _packet(packet),
               _allocator(allocator),
@@ -204,7 +204,7 @@ private:
 
         memory::Packet* _packet;
         memory::PacketPoolAllocator* _allocator;
-        transport::Transport* _transport;
+        transport::RtcTransport* _transport;
         uint32_t _extendedSequenceNumber;
 
         inline void lockOwner() const
@@ -270,33 +270,33 @@ private:
     uint32_t _lastN;
     uint32_t _numMixedAudioStreams;
 
-    void processIncomingRtpPackets(uint64_t timestamp);
-    uint32_t processIncomingVideoRtpPackets(uint64_t timestamp);
-    void processIncomingRtcpPackets(uint64_t timestamp);
+    void processIncomingRtpPackets(const uint64_t timestamp);
+    uint32_t processIncomingVideoRtpPackets(const uint64_t timestamp);
+    void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket);
-    void processIncomingTransportFbRtcpPacket(const transport::Transport* transport,
+    void processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
         const rtp::RtcpHeader& rtcpPacket,
-        uint64_t timestamp);
+        const uint64_t timestamp);
 
     void mixSsrcBuffers();
     void processAudioStreams();
     void runDominantSpeakerCheck(const uint64_t engineIterationStartTimestamp);
     void updateDirectorUplinkEstimates(const uint64_t engineIterationStartTimestamp);
     void processMissingPackets(const uint64_t timestamp);
-    void checkPacketCounters(uint64_t timestamp);
+    void checkPacketCounters(const uint64_t timestamp);
     void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
         memory::Packet* packet,
         memory::PacketPoolAllocator& receiveAllocator,
         const uint32_t extendedSequenceNumber,
-        uint64_t timestamp);
+        const uint64_t timestamp);
     void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
         memory::Packet* packet,
         memory::PacketPoolAllocator& receiveAllocator,
         const uint32_t extendedSequenceNumber,
-        uint64_t timestamp);
+        const uint64_t timestamp);
 
     bool enqueuePacket(const IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue);
 
@@ -304,7 +304,7 @@ private:
     SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,
         transport::RtcTransport* sender,
         const uint32_t payloadType,
-        uint64_t timestamp);
+        const uint64_t timestamp);
     SsrcOutboundContext* obtainOutboundSsrcContext(EngineAudioStream& audioStream, const uint32_t ssrc);
     SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
     SsrcOutboundContext* getOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
