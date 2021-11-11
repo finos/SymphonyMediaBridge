@@ -35,77 +35,6 @@ using ::testing::_;
 namespace
 {
 const char* theMessage = "My message is important";
-struct SctpTransportTest : public ::testing::Test
-{
-    std::unique_ptr<TransportFactory> _transportFactory;
-
-    memory::PacketPoolAllocator _sendAllocator;
-    std::unique_ptr<config::Config> _config;
-    std::unique_ptr<jobmanager::JobManager> _jobManager;
-    std::unique_ptr<memory::PacketPoolAllocator> _mainAllocator;
-    std::unique_ptr<transport::SslDtls> _sslDtls;
-    std::unique_ptr<transport::SrtpClientFactory> _srtpClientFactory;
-    std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;
-    std::unique_ptr<transport::RtcePoll> _network;
-    ice::IceConfig _iceConfig;
-    bwe::Config _bweConfig;
-    bwe::RateControllerConfig _rateControlConfig;
-    sctp::SctpConfig _sctpConfig;
-    utils::Pacer _pacer;
-
-    SctpTransportTest()
-        : _sendAllocator(memory::packetPoolSize, "TransportTest"),
-          _config(nullptr),
-          _jobManager(std::make_unique<jobmanager::JobManager>()),
-          _mainAllocator(std::make_unique<memory::PacketPoolAllocator>(1024, "SctpTest")),
-          _sslDtls(nullptr),
-          _srtpClientFactory(nullptr),
-          _network(transport::createRtcePoll()),
-          _pacer(10 * 1000000)
-    {
-        for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
-        {
-            _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
-        }
-    }
-
-    void SetUp() override
-    {
-        utils::Time::initialize();
-
-        _config = std::make_unique<config::Config>();
-        _sslDtls = std::make_unique<transport::SslDtls>();
-        _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainAllocator);
-
-        std::string configJson = "{\"rtc.ip\": \"127.0.0.1\"}";
-        _config->readFromString(configJson);
-        std::vector<transport::SocketAddress> interfaces;
-        interfaces.push_back(transport::SocketAddress::parse("127.0.0.1", 0));
-
-        _transportFactory = transport::createTransportFactory(*_jobManager,
-            *_srtpClientFactory,
-            *_config,
-            _sctpConfig,
-            _iceConfig,
-            _bweConfig,
-            _rateControlConfig,
-            interfaces,
-            *_network,
-            *_mainAllocator);
-    }
-
-    void TearDown() override
-    {
-        _transportFactory.reset();
-        _network->stop();
-        _jobManager->stop();
-
-        for (auto& wt : _workerThreads)
-        {
-            wt->stop();
-        }
-    }
-};
 
 struct ClientPair : public transport::DataReceiver
 {
@@ -326,6 +255,80 @@ struct ClientPair : public transport::DataReceiver
     int _messageBytesSent = 0;
 };
 
+struct SctpTransportTest : public ::testing::Test
+{
+    std::unique_ptr<TransportFactory> _transportFactory;
+
+    memory::PacketPoolAllocator _sendAllocator;
+    std::unique_ptr<config::Config> _config;
+    std::unique_ptr<jobmanager::JobManager> _jobManager;
+    std::unique_ptr<memory::PacketPoolAllocator> _mainAllocator;
+    std::unique_ptr<transport::SslDtls> _sslDtls;
+    std::unique_ptr<transport::SrtpClientFactory> _srtpClientFactory;
+    std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;
+    std::unique_ptr<transport::RtcePoll> _network;
+    ice::IceConfig _iceConfig;
+    bwe::Config _bweConfig;
+    bwe::RateControllerConfig _rateControlConfig;
+    sctp::SctpConfig _sctpConfig;
+    utils::Pacer _pacer;
+    std::vector<std::unique_ptr<ClientPair>> _testPairs;
+
+    SctpTransportTest()
+        : _sendAllocator(memory::packetPoolSize, "TransportTest"),
+          _config(nullptr),
+          _jobManager(std::make_unique<jobmanager::JobManager>()),
+          _mainAllocator(std::make_unique<memory::PacketPoolAllocator>(1024, "SctpTest")),
+          _sslDtls(nullptr),
+          _srtpClientFactory(nullptr),
+          _network(transport::createRtcePoll()),
+          _pacer(10 * 1000000)
+    {
+        for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
+        {
+            _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
+        }
+    }
+
+    void SetUp() override
+    {
+        utils::Time::initialize();
+
+        _config = std::make_unique<config::Config>();
+        _sslDtls = std::make_unique<transport::SslDtls>();
+        _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainAllocator);
+
+        std::string configJson = "{\"rtc.ip\": \"127.0.0.1\"}";
+        _config->readFromString(configJson);
+        std::vector<transport::SocketAddress> interfaces;
+        interfaces.push_back(transport::SocketAddress::parse("127.0.0.1", 0));
+
+        _transportFactory = transport::createTransportFactory(*_jobManager,
+            *_srtpClientFactory,
+            *_config,
+            _sctpConfig,
+            _iceConfig,
+            _bweConfig,
+            _rateControlConfig,
+            interfaces,
+            *_network,
+            *_mainAllocator);
+    }
+
+    void TearDown() override
+    {
+        _transportFactory.reset();
+        _testPairs.clear();
+        _network->stop();
+        _jobManager->stop();
+
+        for (auto& wt : _workerThreads)
+        {
+            wt->stop();
+        }
+    }
+};
+
 bool areAllConnected(std::vector<std::unique_ptr<ClientPair>>& testPairs)
 {
     for (size_t i = 0; i < testPairs.size(); ++i)
@@ -341,18 +344,17 @@ bool areAllConnected(std::vector<std::unique_ptr<ClientPair>>& testPairs)
 
 TEST_F(SctpTransportTest, messages)
 {
-    std::vector<std::unique_ptr<ClientPair>> testPairs;
     const int CLIENT_COUNT = 1;
     const int TEST_DURATION = 2000;
     const int TICK_DURATION = 10;
 
     for (int i = 0; i < CLIENT_COUNT; ++i)
     {
-        testPairs.emplace_back(
+        _testPairs.emplace_back(
             std::make_unique<ClientPair>(_transportFactory.get(), 1000 + i, _sendAllocator, *_sslDtls, *_jobManager));
     }
 
-    while (!areAllConnected(testPairs))
+    while (!areAllConnected(_testPairs))
     {
         usleep(100);
     }
@@ -364,7 +366,7 @@ TEST_F(SctpTransportTest, messages)
         _pacer.tick(start);
         for (int i = 0; i < CLIENT_COUNT; ++i)
         {
-            testPairs[i]->processTick();
+            _testPairs[i]->processTick();
         }
 
         int64_t toSleep = _pacer.timeToNextTick(utils::Time::getAbsoluteTime()) / 1000;
@@ -374,15 +376,13 @@ TEST_F(SctpTransportTest, messages)
         }
     }
 
-    for (auto& clientpair : testPairs)
+    for (auto& clientpair : _testPairs)
     {
         EXPECT_GT(clientpair->_receivedByteCount, 18000);
         EXPECT_EQ(clientpair->_recv1.size(), 0);
         EXPECT_EQ(clientpair->_recv2.size(), clientpair->_messageBytesSent);
         EXPECT_EQ(std::strcmp(theMessage, clientpair->_recv2.substr(0, strlen(theMessage)).c_str()), 0);
     }
-
-    testPairs.clear();
 }
 
 } // namespace
