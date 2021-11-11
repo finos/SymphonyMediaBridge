@@ -1,5 +1,6 @@
 #pragma once
 
+#include "api/Recording.h"
 #include "httpd/HttpRequestHandler.h"
 #include <atomic>
 #include <cstdint>
