@@ -6,4 +6,4 @@ fi
 echo "create make file for $build_type"
 export CC=clang
 export CXX=clang++
-cmake -D_CMAKE_TOOLCHAIN_PREFIX=llvm- -DCMAKE_BUILD_TYPE=$build_type -G "Unix Makefiles" ../../
+cmake -DENABLE_LEGACY_API=ON -D_CMAKE_TOOLCHAIN_PREFIX=llvm- -DCMAKE_BUILD_TYPE=$build_type -G "Unix Makefiles" ../../
