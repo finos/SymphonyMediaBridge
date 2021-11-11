@@ -34,6 +34,7 @@
 #include "transport/recp/RecStartStopEventBuilder.h"
 #include "transport/recp/RecStreamAddedEventBuilder.h"
 #include "transport/recp/RecStreamRemovedEventBuilder.h"
+#include "utils/ReleaseGuard.h"
 #include <cstring>
 
 namespace
@@ -770,7 +771,7 @@ void EngineMixer::flush()
         packetInfo.release();
     }
 
-    for (IncomingPacketInfo rtcpPacketInfo; _incomingRtcp.pop(rtcpPacketInfo); _incomingRtcp.pop(rtcpPacketInfo))
+    while (_incomingRtcp.pop(packetInfo))
     {
         packetInfo.release();
     }
@@ -1879,6 +1880,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
     for (IncomingPacketInfo packetInfo; _incomingForwarderAudioRtp.pop(packetInfo);)
     {
+        utils::ReleaseGuard<IncomingPacketInfo> autoRelease(packetInfo);
         ++numRtpPackets;
 
         for (auto& audioStreamEntry : _engineAudioStreams)
@@ -1958,8 +1960,6 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 }
             }
         }
-
-        packetInfo.release();
     }
 
     numRtpPackets += processIncomingVideoRtpPackets(timestamp);
@@ -1967,12 +1967,12 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
     for (IncomingPacketInfo packetInfo; _incomingMixerAudioRtp.pop(packetInfo);)
     {
+        utils::ReleaseGuard<IncomingPacketInfo> autoRelease(packetInfo);
         ++numRtpPackets;
 
         const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo._packet);
         if (!rtpHeader)
         {
-            packetInfo.release();
             continue;
         }
 
@@ -2018,8 +2018,6 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 overrunLogSpamGuard = true;
             }
         }
-
-        packetInfo.release();
     }
 
     if (numRtpPackets == 0)
@@ -2044,17 +2042,16 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
     for (IncomingPacketInfo packetInfo; _incomingForwarderVideoRtp.pop(packetInfo);)
     {
+        utils::ReleaseGuard<IncomingPacketInfo> autoRelease(packetInfo);
         ++numRtpPackets;
         auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo._packet);
         if (!rtpHeader)
         {
-            packetInfo.release();
             continue;
         }
         auto inboundSsrcContext = getInboundSsrcContext(rtpHeader->ssrc);
         if (!inboundSsrcContext)
         {
-            packetInfo.release();
             continue;
         }
         const auto senderEndpointIdHash = packetInfo._transport->getEndpointIdHash();
@@ -2197,8 +2194,6 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 }
             }
         }
-
-        packetInfo.release();
     }
 
     return numRtpPackets;
