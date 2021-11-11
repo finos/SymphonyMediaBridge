@@ -132,7 +132,7 @@ public:
     void onSocketWriteable(int fd) override { ++writeableCount; }
     void onSocketShutdown(int fd) override { ++disconnects; }
 
-    uint32_t disconnects;
+    std::atomic<uint32_t> disconnects;
     std::atomic<uint32_t> stopCount;
     std::atomic<uint32_t> startedCount;
     std::atomic<uint32_t> readableCount;
@@ -197,7 +197,7 @@ TEST_F(IceIntegrationTest, dosAttackTcpConnect)
     }
     logger::debug("attack counters disconnects %u, writeable %u, readable %u",
         "",
-        attackListener.disconnects,
+        attackListener.disconnects.load(),
         attackListener.writeableCount.load(),
         attackListener.readableCount.load());
 
@@ -209,7 +209,7 @@ TEST_F(IceIntegrationTest, dosAttackTcpConnect)
 
     logger::debug("attack counters disconnects %u, writeable %u, readable %u",
         "",
-        attackListener.disconnects,
+        attackListener.disconnects.load(),
         attackListener.writeableCount.load(),
         attackListener.readableCount.load());
 #ifdef __APPLE__
