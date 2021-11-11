@@ -84,6 +84,15 @@ void VideoNackReceiveJob::run()
 
 void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
 {
+    if (static_cast<int16_t>((_ssrcOutboundContext._lastKeyFrameSequenceNumber & 0xFFFFu) - sequenceNumber) > 0)
+    {
+        NACK_LOG("ignoring NACK for pre key frame packet %u, key frame at %u",
+            "VideoNackReceiveJob",
+            sequenceNumber,
+            _ssrcOutboundContext._lastKeyFrameSequenceNumber);
+        return;
+    }
+
     auto scopedRef = memory::RefCountedPacket::ScopedRef(_videoPacketCache.get(sequenceNumber));
     if (!scopedRef._refCountedPacket)
     {

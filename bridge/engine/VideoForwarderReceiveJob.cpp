@@ -196,6 +196,14 @@ void VideoForwarderReceiveJob::run()
         }
     }
 
+    if (rtpHeader->marker && isKeyframe)
+    {
+        logger::debug("end of key frame ssrc %u, seqno %u",
+            "VideoForwarderReceiveJob",
+            _ssrcContext._ssrc,
+            rtpHeader->sequenceNumber.get());
+    }
+
     if (videoDumpFile != nullptr)
     {
         dumpPacket(videoDumpFile, *_packet, std::min(size_t(36), _packet->getLength()));
