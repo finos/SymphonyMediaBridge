@@ -59,7 +59,7 @@ public:
     }
 };
 
-TEST(AutoReset, Pacer)
+TEST(Pacer, AutoReset)
 {
     const uint64_t INTERVAL = 10 * 1000000;
 
@@ -97,7 +97,7 @@ TEST(AutoReset, Pacer)
     }
 }
 
-TEST(Regular, Pacer)
+TEST(Pacer, Regular)
 {
     const int64_t INTERVAL = 10;
     utils::Pacer pacer(INTERVAL * 1000000);
@@ -119,7 +119,7 @@ TEST(Regular, Pacer)
     }
 }
 
-TEST(ClockWrap, Pacer)
+TEST(Pacer, ClockWrap)
 {
     const int64_t INTERVAL = 10;
     utils::Pacer pacer(INTERVAL * 1000000);
@@ -145,7 +145,7 @@ TEST(ClockWrap, Pacer)
     }
 }
 
-TEST(Hibernate, Pacer)
+TEST(Pacer, Hibernate)
 {
     const int64_t INTERVAL = 10;
     utils::Pacer pacer(INTERVAL * 1000000);

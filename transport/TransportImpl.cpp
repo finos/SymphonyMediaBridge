@@ -2260,6 +2260,7 @@ void TransportImpl::onSctpChunkDropped(sctp::SctpAssociation* session, size_t si
     logger::error("Sctp chunk dropped due to overload or unknown type", _loggableId.c_str());
 }
 
+// ns
 uint64_t TransportImpl::getRtt() const
 {
     return (static_cast<uint64_t>(_rttNtp) * utils::Time::sec) >> 16;

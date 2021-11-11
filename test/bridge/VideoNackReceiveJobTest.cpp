@@ -68,7 +68,7 @@ TEST_F(VideoNackReceiveJobTest, nacksNotAlreadyRespondedToAreHandled)
     uint16_t pid = 1;
     uint16_t blp = 3;
     uint64_t timestamp = 1000;
-    const uint64_t rtt = 100;
+    const uint64_t rtt = 100 * utils::Time::ms;
 
     auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
         *_transport,
@@ -108,7 +108,7 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
     const uint16_t pid = 1;
     const uint16_t blp = 3;
     const uint64_t timestamp = 1000;
-    const uint64_t rtt = 100;
+    const uint64_t rtt = 100 * utils::Time::ms;
 
     auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
         *_transport,
@@ -126,7 +126,7 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
         pid,
         blp,
         outboundFeedbackSsrc,
-        timestamp + (rtt - 1) * utils::Time::ms,
+        timestamp + rtt - utils::Time::ms,
         rtt);
     videoNackReceiveJob->run();
 
@@ -138,7 +138,7 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
     const uint16_t pid = 1;
     const uint16_t blp = 3;
     uint64_t timestamp = 1000;
-    const uint64_t rtt = 100;
+    const uint64_t rtt = 100 * utils::Time::ms;
 
     auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
         *_transport,
@@ -150,7 +150,7 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
         rtt);
     videoNackReceiveJob->run();
 
-    timestamp += (rtt + 1) * utils::Time::ms;
+    timestamp += rtt + utils::Time::ms;
 
     videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
         *_transport,

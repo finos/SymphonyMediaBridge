@@ -1766,11 +1766,12 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         }
 
         logger::info(
-            "Created new inbound context for audio stream ssrc %u, endpointIdHash %lu, audioLevelExtensionId %d",
+            "Created new inbound context for audio stream ssrc %u, endpointIdHash %lu, audioLevelExtensionId %d, %s",
             _loggableId.c_str(),
             ssrc,
             audioStream->_endpointIdHash,
-            audioStream->_audioLevelExtensionId);
+            audioStream->_audioLevelExtensionId,
+            sender->getLoggableId().c_str());
         return &emplaceResult.first->second;
     }
 
@@ -1816,13 +1817,14 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getFeedbackSsrcFor(ssrc);
 
-        logger::info(
-            "Created new inbound context for video stream ssrc %u, rewrite ssrc %u, endpointIdHash %lu, rtp format %u",
+        logger::info("Created new inbound context for video stream ssrc %u, rewrite ssrc %u, endpointIdHash %lu, rtp "
+                     "format %u, %s",
             _loggableId.c_str(),
             ssrc,
             inboundContext._rewriteSsrc,
             videoStream->_endpointIdHash,
-            static_cast<uint16_t>(inboundContext._rtpMap._format));
+            static_cast<uint16_t>(inboundContext._rtpMap._format),
+            sender->getLoggableId().c_str());
 
         return &inboundContext;
     }
@@ -1862,11 +1864,12 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         inboundContext._rtxSsrc = videoStream->getMainSsrcFor(ssrc);
 
         logger::debug(
-            "Created new inbound context for video stream feedback ssrc %u, endpointIdHash %lu, rtp format %u",
+            "Created new inbound context for video stream feedback ssrc %u, endpointIdHash %lu, rtp format %u, %s",
             _loggableId.c_str(),
             ssrc,
             videoStream->_endpointIdHash,
-            static_cast<uint16_t>(inboundContext._rtpMap._format));
+            static_cast<uint16_t>(inboundContext._rtpMap._format),
+            sender->getLoggableId().c_str());
 
         return &inboundContext;
     }

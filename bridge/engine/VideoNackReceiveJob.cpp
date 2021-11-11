@@ -35,11 +35,12 @@ VideoNackReceiveJob::VideoNackReceiveJob(SsrcOutboundContext& ssrcOutboundContex
 
 void VideoNackReceiveJob::run()
 {
-    NACK_LOG("Incoming rtcp feedback NACK, feedbackSsrc %u, pid %u, blp 0x%x",
+    NACK_LOG("Incoming rtcp feedback NACK, feedbackSsrc %u, pid %u, blp 0x%x, %s",
         "VideoNackReceiveJob",
         _feedbackSsrc,
         _pid,
-        _blp);
+        _blp,
+        _sender.getLoggableId().c_str());
 
     if (!_sender.isConnected())
     {
@@ -47,16 +48,16 @@ void VideoNackReceiveJob::run()
     }
 
     if (_pid == _ssrcOutboundContext._lastRespondedNackPid && _blp == _ssrcOutboundContext._lastRespondedNackBlp &&
-        _timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp < _rtt * utils::Time::ms)
+        _timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp < _rtt)
     {
         NACK_LOG("Ignoring NACK, feedbackSsrc %u, pid %u, blp 0x%x, time since last response %" PRIi64
-                 " ms less than rtt %" PRIi64,
+                 " us less than rtt %" PRIi64 "us",
             "VideoNackReceiveJob",
             _feedbackSsrc,
             _pid,
             _blp,
-            (_timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp) / utils::Time::ms,
-            _rtt);
+            (_timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp) / utils::Time::us,
+            _rtt / utils::Time::us);
         return;
     }
 
@@ -117,11 +118,11 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     memcpy(copyHead, cachedPayload, cachedPacket->getLength() - cachedRtpHeaderLength);
     packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
 
-    NACK_LOG("Sending cached packet seq %u, feedbackSsrc %u, seq %u",
+    NACK_LOG("Sending cached packet seq %u, feedbackSsrc %x, seq %u",
         "VideoNackReceiveJob",
         sequenceNumber,
         _feedbackSsrc,
-        _ssrcOutboundContext._sequenceCounter);
+        _ssrcOutboundContext._sequenceCounter & 0xFFFFu);
 
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     if (!rtpHeader)
