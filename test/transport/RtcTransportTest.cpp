@@ -40,71 +40,6 @@ using namespace concurrency;
 using namespace transport;
 using namespace testing;
 
-struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, bool>>
-{
-    std::unique_ptr<config::Config> _config;
-    std::unique_ptr<jobmanager::JobManager> _jobManager;
-    std::unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
-    std::unique_ptr<transport::SslDtls> _sslDtls;
-    std::unique_ptr<transport::SrtpClientFactory> _srtpClientFactory;
-    std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;
-    std::unique_ptr<transport::RtcePoll> _network;
-    ice::IceConfig _iceConfig;
-    sctp::SctpConfig _sctpConfig;
-    bwe::Config _bweConfig;
-    bwe::RateControllerConfig _rateControlConfig;
-    utils::Pacer _pacer;
-    std::unique_ptr<TransportFactory> _transportFactory;
-
-    RtcTransportTest()
-        : _config(std::make_unique<config::Config>()),
-          _jobManager(std::make_unique<jobmanager::JobManager>()),
-          _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096 * 32, "testMain")),
-          _sslDtls(std::make_unique<transport::SslDtls>()),
-          _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPoolAllocator)),
-          _network(transport::createRtcePoll()),
-          _pacer(5 * 1000000)
-    {
-
-        for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
-        {
-            _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
-        }
-    }
-
-    void SetUp() override
-    {
-        utils::Time::initialize();
-        _bweConfig.sanitize();
-
-        std::string configJson = "{\"rtc.ip\": \"127.0.0.1\", \"ice.singlePort\": 10008}";
-        std::vector<transport::SocketAddress> interfaces;
-        interfaces.push_back(transport::SocketAddress::parse("127.0.0.1", 0));
-        _config->readFromString(configJson);
-        _transportFactory = transport::createTransportFactory(*_jobManager,
-            *_srtpClientFactory,
-            *_config,
-            _sctpConfig,
-            _iceConfig,
-            _bweConfig,
-            _rateControlConfig,
-            interfaces,
-            *_network,
-            *_mainPoolAllocator);
-    }
-
-    void TearDown() override
-    {
-        _transportFactory.reset();
-        _network->stop();
-        _jobManager->stop();
-        for (auto& wt : _workerThreads)
-        {
-            wt->stop();
-        }
-    }
-};
-
 struct ClientPair : public transport::DataReceiver, public transport::DecryptedPacketReceiver
 {
     struct ReportTrack
@@ -324,6 +259,73 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     std::unordered_map<Transport*, ReportTrack> _report;
 };
 
+struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, bool>>
+{
+    std::unique_ptr<config::Config> _config;
+    std::unique_ptr<jobmanager::JobManager> _jobManager;
+    std::unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
+    std::unique_ptr<transport::SslDtls> _sslDtls;
+    std::unique_ptr<transport::SrtpClientFactory> _srtpClientFactory;
+    std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;
+    std::unique_ptr<transport::RtcePoll> _network;
+    ice::IceConfig _iceConfig;
+    sctp::SctpConfig _sctpConfig;
+    bwe::Config _bweConfig;
+    bwe::RateControllerConfig _rateControlConfig;
+    utils::Pacer _pacer;
+    std::unique_ptr<TransportFactory> _transportFactory;
+    std::vector<std::unique_ptr<ClientPair>> _testPairs;
+
+    RtcTransportTest()
+        : _config(std::make_unique<config::Config>()),
+          _jobManager(std::make_unique<jobmanager::JobManager>()),
+          _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096 * 32, "testMain")),
+          _sslDtls(std::make_unique<transport::SslDtls>()),
+          _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPoolAllocator)),
+          _network(transport::createRtcePoll()),
+          _pacer(5 * 1000000)
+    {
+
+        for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
+        {
+            _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
+        }
+    }
+
+    void SetUp() override
+    {
+        utils::Time::initialize();
+        _bweConfig.sanitize();
+
+        std::string configJson = "{\"rtc.ip\": \"127.0.0.1\", \"ice.singlePort\": 10008}";
+        std::vector<transport::SocketAddress> interfaces;
+        interfaces.push_back(transport::SocketAddress::parse("127.0.0.1", 0));
+        _config->readFromString(configJson);
+        _transportFactory = transport::createTransportFactory(*_jobManager,
+            *_srtpClientFactory,
+            *_config,
+            _sctpConfig,
+            _iceConfig,
+            _bweConfig,
+            _rateControlConfig,
+            interfaces,
+            *_network,
+            *_mainPoolAllocator);
+    }
+
+    void TearDown() override
+    {
+        _transportFactory.reset();
+        _testPairs.clear();
+        _network->stop();
+        _jobManager->stop();
+        for (auto& wt : _workerThreads)
+        {
+            wt->stop();
+        }
+    }
+};
+
 bool areAllConnected(std::vector<std::unique_ptr<ClientPair>>& testPairs)
 {
     for (size_t i = 0; i < testPairs.size(); ++i)
@@ -341,14 +343,13 @@ TEST_P(RtcTransportTest, packetLoad)
 {
     const int CLIENT_COUNT = std::get<0>(GetParam());
     const bool enableIce = std::get<1>(GetParam());
-    std::vector<std::unique_ptr<ClientPair>> testPairs;
 
     const auto TEST_DURATION = utils::Time::sec * 15;
     logger::info("running test with %d client channels", "packetLoadTest", CLIENT_COUNT);
 
     for (int i = 0; i < CLIENT_COUNT; ++i)
     {
-        testPairs.emplace_back(std::make_unique<ClientPair>(_transportFactory.get(),
+        _testPairs.emplace_back(std::make_unique<ClientPair>(_transportFactory.get(),
             1000 + i * 4,
             2048,
             *_sslDtls,
@@ -356,7 +357,7 @@ TEST_P(RtcTransportTest, packetLoad)
             enableIce));
     }
 
-    while (!areAllConnected(testPairs))
+    while (!areAllConnected(_testPairs))
     {
         utils::Time::nanoSleep(utils::Time::sec * 1);
         logger::debug("Not connected all yet", "");
@@ -374,14 +375,14 @@ TEST_P(RtcTransportTest, packetLoad)
 
         for (int i = 0; i < CLIENT_COUNT; ++i)
         {
-            testPairs[i]->processTick(tickStart);
+            _testPairs[i]->processTick(tickStart);
         }
 
         int64_t toSleep = utils::Time::ms * 20;
         const auto timestamp = utils::Time::getAbsoluteTime();
         for (int i = 0; i < CLIENT_COUNT; ++i)
         {
-            toSleep = std::min(toSleep, testPairs[i]->timeToNextTick(timestamp));
+            toSleep = std::min(toSleep, _testPairs[i]->timeToNextTick(timestamp));
             if (toSleep == 0)
             {
                 break;
@@ -407,7 +408,7 @@ TEST_P(RtcTransportTest, packetLoad)
         }
     }
 
-    for (auto& clientpair : testPairs)
+    for (auto& clientpair : _testPairs)
     {
         if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
         {
@@ -416,8 +417,6 @@ TEST_P(RtcTransportTest, packetLoad)
         }
         clientpair->stop();
     }
-
-    testPairs.clear();
 }
 
 INSTANTIATE_TEST_SUITE_P(DISABLED_Performance,
