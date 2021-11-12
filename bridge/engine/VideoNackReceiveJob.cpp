@@ -118,7 +118,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     memcpy(copyHead, cachedPayload, cachedPacket->getLength() - cachedRtpHeaderLength);
     packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
 
-    NACK_LOG("Sending cached packet seq %u, feedbackSsrc %x, seq %u",
+    NACK_LOG("Sending cached packet seq %u, feedbackSsrc %u, seq %u",
         "VideoNackReceiveJob",
         sequenceNumber,
         _feedbackSsrc,
