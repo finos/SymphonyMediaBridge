@@ -86,8 +86,9 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
 {
     if (static_cast<int16_t>((_ssrcOutboundContext._lastKeyFrameSequenceNumber & 0xFFFFu) - sequenceNumber) > 0)
     {
-        NACK_LOG("ignoring NACK for pre key frame packet %u, key frame at %u",
+        NACK_LOG("%u ignoring NACK for pre key frame packet %u, key frame at %u",
             "VideoNackReceiveJob",
+            _ssrcOutboundContext._ssrc,
             sequenceNumber,
             _ssrcOutboundContext._lastKeyFrameSequenceNumber);
         return;
@@ -127,7 +128,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     memcpy(copyHead, cachedPayload, cachedPacket->getLength() - cachedRtpHeaderLength);
     packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
 
-    NACK_LOG("Sending cached packet seq %u, feedbackSsrc %x, seq %u",
+    NACK_LOG("Sending cached packet seq %u, feedbackSsrc %u, seq %u",
         "VideoNackReceiveJob",
         sequenceNumber,
         _feedbackSsrc,
