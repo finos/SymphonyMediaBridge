@@ -381,6 +381,11 @@ ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager, transpo
       _legacyApiRequestHandler(std::make_unique<LegacyApiRequestHandler>(mixerManager, sslDtls))
 #endif
 {
+#if ENABLE_LEGACY_API
+    logger::logAlways("Legacy colibri API enabled", "ApiRequestHandler");
+#else
+    logger::logAlways("Legacy API disabled", "ApiRequestHandler");
+#endif
 }
 
 httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)

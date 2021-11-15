@@ -1110,7 +1110,7 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
     else if (rtp::isRemb(&header))
     {
         const auto& remb = reinterpret_cast<const rtp::RtcpRembFeedback&>(header);
-        const uint32_t estimatedKbps = remb.getBitRate() / 1000LLU;
+        const uint32_t estimatedKbps = remb.getBitrate() / 1000LLU;
         _outboundRembEstimateKbps = estimatedKbps;
         if (!_config.rctl.enable)
         {
@@ -1451,15 +1451,7 @@ void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAll
     }
     else if (_selectedRtcp)
     {
-        if (rtp::isValidRtcpPacket(*packet))
-        {
-            sendRtcp(packet, sendAllocator, timestamp);
-        }
-        else
-        {
-            logger::error("outbound rtcp report corrupt", _loggableId.c_str());
-            sendAllocator.free(packet);
-        }
+        sendRtcp(packet, sendAllocator, timestamp);
     }
     else
     {
@@ -1646,7 +1638,7 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
     }
 
     const uint64_t mediaBps = _inboundMetrics.estimatedKbps * 1000 * (1.0 - _config.bwe.packetOverhead);
-    remb.setBitRate(mediaBps);
+    remb.setBitrate(mediaBps);
     _rtcp.lastReportedEstimateKbps = _inboundMetrics.estimatedKbps;
     for (int i = 0; i < activeInboundCount; ++i)
     {
@@ -1686,6 +1678,13 @@ void TransportImpl::sendRtcp(memory::Packet* rtcpPacket,
 
         std::memcpy(rtcpPacket->get() + rtcpPacket->getLength(), originalReport, originalReportLength);
         rtcpPacket->setLength(rtcpPacket->getLength() + originalReportLength);
+    }
+
+    if (!rtp::CompoundRtcpPacket::isValid(rtcpPacket->get(), rtcpPacket->getLength()))
+    {
+        logger::warn("corrupt outbound rtcp packet", _loggableId.c_str());
+        allocator.free(rtcpPacket);
+        return;
     }
 
     onSendingRtcp(*rtcpPacket, timestamp);
@@ -2263,7 +2262,6 @@ void TransportImpl::onSctpChunkDropped(sctp::SctpAssociation* session, size_t si
     logger::error("Sctp chunk dropped due to overload or unknown type", _loggableId.c_str());
 }
 
-// ns
 uint64_t TransportImpl::getRtt() const
 {
     return (static_cast<uint64_t>(_rttNtp) * utils::Time::sec) >> 16;

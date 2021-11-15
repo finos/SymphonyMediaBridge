@@ -56,10 +56,10 @@ public:
         auto delay = estimator.getDelay();
         auto localTimestamp = uint32_t((receiveTime - _logStart) / 100000);
         auto localSendTime = uint32_t((sendTime - _sendTimeStart) / 100000);
-        _full.writeLine("%u,%.3f,%.3f,%.3f,%.3f,%.3f,%u,%u,%u",
+        _full.writeLine("%u,%.3f,%.1f,%.3f,%.3f,%.3f,%u,%u,%u",
             localTimestamp,
             bw,
-            state(0),
+            state(0) / 8.0,
             state(1),
             state(2),
             delay,
@@ -70,10 +70,10 @@ public:
         if ((_count % 1000 == 0) || std::fabs(delay - _prevDelay) > 10 || delay > 70 ||
             std::fabs((bw - _prevBw) / _prevBw) > 0.15)
         {
-            _summary.writeLine("%u,%.3f, %.3f,%.3f,%.3f,%.3f,%u,%u,%u",
+            _summary.writeLine("%u,%.3f,%.1f,%.3f,%.3f,%.3f,%u,%u,%u",
                 localTimestamp,
                 bw,
-                state(0),
+                state(0) / 8.0,
                 state(1),
                 state(2),
                 delay,
@@ -149,35 +149,36 @@ uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
 }
 } // namespace
 
-TEST(BweReRun, DISABLED_fromTrace)
+TEST(BweReRun, fromTrace)
 {
     bwe::Config config;
     config.congestion.cap.ratio = 0.5;
 
-    std::array<std::string, 58> traces = {"Transport-39_tcp",
-        "Transport-58_tcp",
-        "Transport-86_tcp_1ploss",
-        "Transport-105_tcp_1ploss",
-        "Transport-22-4G-2.3Mbps",
-        "Transport-1094-4G",
-        "Transport-3644-wifi",
-        "Transport-62-4G",
-        "Transport-3887-wifi",
-        "Transport-3629",
-        "Transport-14-wifi",
-        "Transport-4-wifi",
-        "Transport-6-4G-1-5Mbps",
-        "Transport-30-3G-1Mbps",
-        "Transport-32_Idre",
-        "Transport-30_oka",
-        "Transport-48_50_3G",
-        "Transport-48_60_3G",
-        "Transport-48_80_3G",
-        "Transport-22-3G",
-        "Transport-62-4G",
-        "Transport-4735-4G",
-        "Transport-42-clkdrift",
-        "Transport-44-clkdrift"};
+    /* std::array<std::string, 58> traces = {"Transport-39_tcp",
+         "Transport-58_tcp",
+         "Transport-86_tcp_1ploss",
+         "Transport-105_tcp_1ploss",
+         "Transport-22-4G-2.3Mbps",
+         "Transport-1094-4G",
+         "Transport-3644-wifi",
+         "Transport-62-4G",
+         "Transport-3887-wifi",
+         "Transport-3629",
+         "Transport-14-wifi",
+         "Transport-4-wifi",
+         "Transport-6-4G-1-5Mbps",
+         "Transport-30-3G-1Mbps",
+         "Transport-32_Idre",
+         "Transport-30_oka",
+         "Transport-48_50_3G",
+         "Transport-48_60_3G",
+         "Transport-48_80_3G",
+         "Transport-22-3G",
+         "Transport-62-4G",
+         "Transport-4735-4G",
+         "Transport-42-clkdrift",
+         "Transport-44-clkdrift"};*/
+    std::array<std::string, 2> traces = {"Transport-5", "Transport-7"};
     for (const auto& trace : traces)
     {
         if (trace.empty())
@@ -185,11 +186,11 @@ TEST(BweReRun, DISABLED_fromTrace)
             break;
         }
 
-        const char* outputFolder = "./st2mobilem/";
+        const char* outputFolder = "./_ssdata/";
         bwe::BandwidthEstimator estimator(config);
         bwe::BwBurstTracker burstTracker;
         rtp::SendTimeDial sendTimeDial;
-        logger::PacketLogReader reader(::fopen(("./st2mobile/" + trace).c_str(), "r"));
+        logger::PacketLogReader reader(::fopen(("./_bwelogs/" + trace).c_str(), "r"));
         uint32_t audioSsrc = identifyAudioSsrc(reader);
         reader.rewind();
 
@@ -269,82 +270,90 @@ TEST(BweReRun, DISABLED_fromTrace)
     }
 }
 
-TEST(BweReRun, DISABLED_limitedLink)
+class BweRerunLimit : public testing::TestWithParam<uint32_t>
+{
+};
+
+TEST_P(BweRerunLimit, limitedLink)
 {
     bwe::Config config;
+    /*
+        std::array<std::string, 56> trace = {"Transport-113",
+            "Transport-116",
+            "Transport-119",
+            "Transport-122",
+            "Transport-125",
+            "Transport-128",
+            "Transport-131",
+            "Transport-134",
+            "Transport-136",
+            "Transport-138",
+            "Transport-140",
+            "Transport-148",
+            "Transport-150",
+            "Transport-152",
+            "Transport-154",
+            "Transport-156",
+            "Transport-158",
+            "Transport-181",
+            "Transport-186",
+            "Transport-191",
+            "Transport-196",
+            "Transport-198",
+            "Transport-202",
+            "Transport-204",
+            "Transport-206",
+            "Transport-208",
+            "Transport-210",
+            "Transport-212",
+            "Transport-214",
+            "Transport-223",
+            "Transport-225",
+            "Transport-231",
+            "Transport-233",
+            "Transport-235",
+            "Transport-237",
+            "Transport-239",
+            "Transport-241",
+            "Transport-243",
+            "Transport-245",
+            "Transport-247",
+            "Transport-249",
+            "Transport-251",
+            "Transport-253",
+            "Transport-255",
+            "Transport-257",
+            "Transport-259",
+            "Transport-261",
+            "Transport-263",
+            "Transport-265",
+            "Transport-267",
+            "Transport-269",
+            "Transport-271",
+            "Transport-273",
+            "Transport-275",
+            "Transport-277",
+            "Transport-317"};*/
 
-    std::array<std::string, 56> trace = {"Transport-113",
-        "Transport-116",
-        "Transport-119",
-        "Transport-122",
-        "Transport-125",
-        "Transport-128",
-        "Transport-131",
-        "Transport-134",
-        "Transport-136",
-        "Transport-138",
-        "Transport-140",
-        "Transport-148",
-        "Transport-150",
-        "Transport-152",
-        "Transport-154",
-        "Transport-156",
-        "Transport-158",
-        "Transport-181",
-        "Transport-186",
-        "Transport-191",
-        "Transport-196",
-        "Transport-198",
-        "Transport-202",
-        "Transport-204",
-        "Transport-206",
-        "Transport-208",
-        "Transport-210",
-        "Transport-212",
-        "Transport-214",
-        "Transport-223",
-        "Transport-225",
-        "Transport-231",
-        "Transport-233",
-        "Transport-235",
-        "Transport-237",
-        "Transport-239",
-        "Transport-241",
-        "Transport-243",
-        "Transport-245",
-        "Transport-247",
-        "Transport-249",
-        "Transport-251",
-        "Transport-253",
-        "Transport-255",
-        "Transport-257",
-        "Transport-259",
-        "Transport-261",
-        "Transport-263",
-        "Transport-265",
-        "Transport-267",
-        "Transport-269",
-        "Transport-271",
-        "Transport-273",
-        "Transport-275",
-        "Transport-277",
-        "Transport-317"};
-
-    memory::PacketPoolAllocator allocator(1024, "rerun");
-    fakenet::NetworkLink link(3500, 1950 * 1024, 3000);
+    std::array<std::string, 56> trace = {"Transport-5"};
+    memory::PacketPoolAllocator allocator(8092, "rerun");
+    fakenet::NetworkLink link(GetParam(), 1950 * 1024, 3000);
     link.setLossRate(0);
     uint64_t wallClock = 0;
-    uint64_t prevOriginalReceiveTime = 0;
-    uint64_t prevOriginalSendTime = 0;
+    const char* formatLine = "%u, %.1f,%.1f,%.f,%.3f,%.3f,%u,%u,%.6f, %.2f";
+    const char* legend = "time, bwo, bw, q, co, delay, size, seqno, stime, rate";
+
     for (size_t t = 0; t < trace.size() && !trace[t].empty(); ++t)
     {
         bwe::BandwidthEstimator estimator(config);
         rtp::SendTimeDial sendTimeDial;
-        std::string path = "./doc/trace5";
+        std::string path = "./_bwelogs";
         logger::PacketLogReader reader(::fopen((path + "/" + trace[t]).c_str(), "r"));
         logger::PacketLogItem item;
 
-        CsvLogger csvLog(path + "v/", trace[t]);
+        CsvWriter csvLog(("./_ssdatall/" + trace[t] + std::to_string(GetParam()) + ".csv").c_str());
+
+        csvLog.writeLine("%s", legend);
 
         logger::info("processing %s", "bweRerun", trace[t].c_str());
         for (int i = 0; reader.getNext(item); ++i)
@@ -354,8 +363,7 @@ TEST(BweReRun, DISABLED_limitedLink)
                 wallClock = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, utils::Time::minute);
                 auto* packet = memory::makePacket(allocator, &item, sizeof(item));
                 packet->setLength(item.size);
-                prevOriginalReceiveTime = item.receiveTimestamp;
-                prevOriginalSendTime = wallClock;
+
                 if (!link.push(packet, wallClock))
                 {
                     allocator.free(packet);
@@ -380,11 +388,20 @@ TEST(BweReRun, DISABLED_limitedLink)
                             wallClock + utils::Time::sec * 10);
                         estimator.update(packetItem->size, packetSendTime, wallClock);
 
-                        csvLog.logToCsv(estimator,
+                        auto bw = estimator.getEstimate(item.receiveTimestamp);
+                        auto state = estimator.getState();
+                        auto delay = estimator.getDelay();
+                        csvLog.writeLine(formatLine,
+                            wallClock / utils::Time::ms,
+                            bw,
+                            state(1),
+                            state(0) / 8,
+                            state(2),
+                            delay,
                             packetItem->size,
-                            packetSendTime,
-                            wallClock,
-                            packetItem->sequenceNumber);
+                            packetItem->sequenceNumber,
+                            double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
+                            std::min(9000.0, estimator.getReceiveRate(wallClock)));
                     }
                     allocator.free(packet);
                 }
@@ -396,14 +413,7 @@ TEST(BweReRun, DISABLED_limitedLink)
                     {
                         allocator.free(packet);
                     }
-                    if (item.receiveTimestamp - prevOriginalReceiveTime > 100 * utils::Time::ms &&
-                        wallClock - prevOriginalSendTime < 100 * utils::Time::ms)
-                    {
-                        auto spike = item.receiveTimestamp - prevOriginalReceiveTime;
-                        link.injectDelaySpike(spike / utils::Time::ms);
-                    }
-                    prevOriginalReceiveTime = item.receiveTimestamp;
-                    prevOriginalSendTime = wallClock;
+
                     break;
                 }
             }
@@ -421,11 +431,27 @@ TEST(BweReRun, DISABLED_limitedLink)
             auto sendTime =
                 sendTimeDial.toAbsoluteTime(packetItem->transmitTimestamp, wallClock + utils::Time::sec * 10);
             estimator.update(packetItem->size, sendTime, wallClock);
-            csvLog.logToCsv(estimator, packetItem->size, sendTime, wallClock, packetItem->sequenceNumber);
-
+            auto bw = estimator.getEstimate(item.receiveTimestamp);
+            auto state = estimator.getState();
+            auto delay = estimator.getDelay();
+            csvLog.writeLine(formatLine,
+                wallClock / utils::Time::ms,
+                bw,
+                state(1),
+                state(0) / 8,
+                state(2),
+                delay,
+                packetItem->size,
+                packetItem->sequenceNumber,
+                double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
+                std::min(9000.0, estimator.getReceiveRate(wallClock)));
             allocator.free(packet);
             lastEstimate = estimator.getEstimate(wallClock);
         }
         logger::info("finished at %.3fkbps", "", lastEstimate);
     }
 }
+
+INSTANTIATE_TEST_SUITE_P(BwessRerun,
+    BweRerunLimit,
+    testing::Values(4500, 4800, 4900, 5000, 5100, 5200, 5600, 6500, 7000, 10000, 20000));

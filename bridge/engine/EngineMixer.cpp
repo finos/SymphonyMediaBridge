@@ -172,7 +172,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _lastUplinkEstimateUpdate(0),
       _config(config),
       _lastN(_config.defaultLastN),
-      _numMixedAudioStreams(0)
+      _numMixedAudioStreams(0),
+      _lastVideoBandwidthCheck(0)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -796,6 +797,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     if (_config.bwe.useUplinkEstimate)
     {
         updateDirectorUplinkEstimates(engineIterationStartTimestamp);
+        checkVideoBandwidth(engineIterationStartTimestamp);
     }
 
     // 4. Perform audio mixing
@@ -3185,6 +3187,89 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
                 engineRecordingStream->_recordingEventsOutboundContext,
                 recEventMissingPacketsTracker,
                 transport,
+                _sendAllocator);
+        }
+    }
+}
+
+class SetMaxMediaBitrateJob : public jobmanager::CountedJob
+{
+public:
+    SetMaxMediaBitrateJob(transport::RtcTransport& transport,
+        uint32_t reporterSsrc,
+        uint32_t ssrc,
+        uint32_t bitrate,
+        memory::PacketPoolAllocator& allocator)
+        : CountedJob(transport.getJobCounter()),
+          _transport(transport),
+          _ssrc(ssrc),
+          _reporterSsrc(reporterSsrc),
+          _bitrate(bitrate),
+          _allocator(allocator)
+    {
+    }
+
+    void run() override
+    {
+        auto* packet = memory::makePacket(_allocator);
+        if (!packet)
+        {
+            return;
+        }
+
+        auto& tmmbr = rtp::RtcpTemporaryMaxMediaBitrate::create(packet->get(), _reporterSsrc);
+        tmmbr.addEntry(_ssrc, _bitrate, 34);
+        packet->setLength(tmmbr.size());
+        _transport.protectAndSend(packet, _allocator);
+    }
+
+private:
+    transport::RtcTransport& _transport;
+    const uint32_t _ssrc;
+    const uint32_t _reporterSsrc;
+    const uint32_t _bitrate;
+    memory::PacketPoolAllocator& _allocator;
+};
+
+void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
+{
+    if (utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 5))
+    {
+        _lastVideoBandwidthCheck = timestamp;
+        uint32_t minUplinkEstimate = 800000;
+        bridge::SimulcastLevel* presenterSimulcastLevel = nullptr;
+        bridge::EngineVideoStream* presenterStream = nullptr;
+        for (auto videoIt : _engineVideoStreams)
+        {
+            auto& videoStream = *videoIt.second;
+            if (videoStream._simulcastStream._contentType == SimulcastStream::VideoContentType::SLIDES)
+            {
+                presenterSimulcastLevel = &videoStream._simulcastStream._levels[0];
+                presenterStream = videoIt.second;
+            }
+            else if (videoStream._secondarySimulcastStream.isSet() &&
+                videoStream._secondarySimulcastStream.get()._contentType == SimulcastStream::VideoContentType::SLIDES)
+            {
+                presenterSimulcastLevel = &videoStream._secondarySimulcastStream.get()._levels[0];
+                presenterStream = videoIt.second;
+            }
+            else
+            {
+                minUplinkEstimate = std::min(minUplinkEstimate, videoIt.second->_transport.getUplinkEstimateKbps());
+            }
+        }
+
+        if (presenterSimulcastLevel)
+        {
+            logger::debug("limiting bitrate for ssrc %u, at %u",
+                _loggableId.c_str(),
+                presenterSimulcastLevel->_ssrc,
+                minUplinkEstimate * 3 / 2);
+
+            presenterStream->_transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->_transport,
+                presenterStream->_localSsrc,
+                presenterSimulcastLevel->_ssrc,
+                minUplinkEstimate * 3 / 2,
                 _sendAllocator);
         }
     }

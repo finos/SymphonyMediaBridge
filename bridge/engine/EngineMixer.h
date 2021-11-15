@@ -270,6 +270,8 @@ private:
     uint32_t _lastN;
     uint32_t _numMixedAudioStreams;
 
+    uint64_t _lastVideoBandwidthCheck;
+
     void processIncomingRtpPackets(const uint64_t timestamp);
     uint32_t processIncomingVideoRtpPackets(const uint64_t timestamp);
     void processIncomingRtcpPackets(const uint64_t timestamp);
@@ -278,6 +280,7 @@ private:
     void processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
         const rtp::RtcpHeader& rtcpPacket,
         const uint64_t timestamp);
+    void checkVideoBandwidth(const uint64_t timestamp);
 
     void mixSsrcBuffers();
     void processAudioStreams();
