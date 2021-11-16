@@ -32,10 +32,17 @@ bool endpointsContainsId(const nlohmann::json& messageJson, const char* id)
 
     for (const auto& endpoint : endpoints)
     {
+#if ENABLE_LEGACY_API
         if (endpoint["id"].get<std::string>().compare(id) == 0)
         {
             return true;
         }
+#else
+        if (endpoint["endpoint"].get<std::string>().compare(id) == 0)
+        {
+            return true;
+        }
+#endif
     }
 
     return false;
