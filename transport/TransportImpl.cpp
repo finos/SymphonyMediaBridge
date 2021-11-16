@@ -344,6 +344,17 @@ public:
     void run() override {}
 };
 
+class RunTickJob : public jobmanager::CountedJob
+{
+public:
+    RunTickJob(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
+
+    void run() override { _transport.doRunTick(utils::Time::getAbsoluteTime()); }
+
+private:
+    TransportImpl& _transport;
+};
+
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
     SrtpClientFactory& srtpClientFactory,
     const size_t endpointIdHash,
@@ -430,7 +441,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
       _rtxProbeSsrc(0),
-      _rtxProbeSequenceCounter(nullptr)
+      _rtxProbeSequenceCounter(nullptr),
+      _pacingInUse(false)
 {
     assert(endpointIdHash != 0);
 
@@ -514,7 +526,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
       _rtxProbeSsrc(0),
-      _rtxProbeSequenceCounter(nullptr)
+      _rtxProbeSequenceCounter(nullptr),
+      _pacingInUse(false)
 {
     assert(endpointIdHash != 0);
 
@@ -673,6 +686,13 @@ TransportImpl::~TransportImpl()
         {
             delete endpoint;
         }
+    }
+
+    while (!_pacingQueue.empty())
+    {
+        auto& info = _pacingQueue.back();
+        info.allocator.free(info.packet);
+        _pacingQueue.pop_back();
     }
 }
 
@@ -1425,6 +1445,47 @@ void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAll
         return;
     }
 
+    if (rtp::isRtpPacket(*packet))
+    {
+        const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+        const auto payloadType = rtpHeader->payloadType;
+        const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
+
+        // push to pace queue if packets are waiting.
+        // process packets from queue if there is budget
+        const auto budget = _rateController.getPacingBudget(timestamp);
+        if (!isAudio && (!_pacingQueue.empty() || budget < packet->getLength() + _config.ipOverhead))
+        {
+            _pacingInUse = true;
+            if (_pacingQueue.full())
+            {
+                sendAllocator.free(packet);
+            }
+            else
+            {
+                _pacingQueue.push_front({packet, sendAllocator});
+                if (_pacingQueue.full())
+                {
+                    logger::warn("pacing buffer full", _loggableId.c_str());
+                }
+            }
+
+            if (budget >= packet->getLength() + _config.ipOverhead)
+            {
+                doRunTick(timestamp);
+            }
+            return;
+        }
+    }
+
+    // else send ahead
+    protectAndSendPhase2(timestamp, packet, sendAllocator);
+}
+
+void TransportImpl::protectAndSendPhase2(uint64_t timestamp,
+    memory::Packet* packet,
+    memory::PacketPoolAllocator& sendAllocator)
+{
     _outboundMetrics.bytesCount += packet->getLength();
     ++_outboundMetrics.packetCount;
 
@@ -1440,6 +1501,7 @@ void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAll
         const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
         const uint32_t ssrc = rtpHeader->ssrc;
         const uint32_t rtpFrequency = isAudio ? _audio.rtpFrequency : 90000;
+
         auto& ssrcState = getOutboundSsrc(rtpHeader->ssrc, rtpFrequency);
 
         sendReports(timestamp);
@@ -1622,7 +1684,7 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
         const auto oldMax = _inboundMetrics.estimatedKbpsMax.load();
 
         logger::info("Estimates 5s, Downlink %u - %ukbps, rate %.1fkbps, Uplink rctl %.0fkbps, rate %.1fkbps, remb "
-                     "%ukbps, rtt %.1fms",
+                     "%ukbps, rtt %.1fms, pacingQ %zu",
             _loggableId.c_str(),
             oldMin,
             oldMax,
@@ -1630,7 +1692,8 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
             _rateController.getTargetRate(),
             _sendRateTracker.get(utils::Time::ms * 600) * 8 * utils::Time::ms,
             _outboundRembEstimateKbps,
-            _rttNtp * 1000.0 / 0x10000);
+            _rttNtp * 1000.0 / 0x10000,
+            _pacingQueue.size());
 
         _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
         _inboundMetrics.estimatedKbpsMax = 0;
@@ -2272,4 +2335,34 @@ void TransportImpl::setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter)
     _rtxProbeSsrc = ssrc;
     _rtxProbeSequenceCounter = sequenceCounter;
 }
+
+void TransportImpl::runTick(uint64_t timestamp)
+{
+    if (_pacingInUse.load())
+    {
+        _jobQueue.addJob<RunTickJob>(*this);
+    }
+}
+
+void TransportImpl::doRunTick(const uint64_t timestamp)
+{
+    auto budget = _rateController.getPacingBudget(timestamp);
+    while (_pacingQueue.size() > 0)
+    {
+        auto& packetInfo = _pacingQueue.back();
+        if (packetInfo.packet->getLength() + _config.ipOverhead <= budget)
+        {
+            budget -= packetInfo.packet->getLength() + _config.ipOverhead;
+            protectAndSendPhase2(timestamp, packetInfo.packet, packetInfo.allocator);
+            _pacingQueue.pop_back();
+        }
+        else
+        {
+            return;
+        }
+    }
+
+    _pacingInUse = false;
+}
+
 } // namespace transport

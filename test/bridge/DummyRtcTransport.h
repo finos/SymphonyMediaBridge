@@ -49,6 +49,7 @@ public:
     bool isIceEnabled() const override { return true; }
     bool isDtlsEnabled() const override { return true; }
     void connect() override {}
+    void runTick(uint64_t timestamp) override {}
     jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
     uint32_t getSenderLossCount() const override { return 0; }
     uint32_t getUplinkEstimateKbps() const override { return 0; }

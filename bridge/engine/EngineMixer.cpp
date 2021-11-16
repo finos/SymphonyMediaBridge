@@ -3236,7 +3236,7 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     if (utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 5))
     {
         _lastVideoBandwidthCheck = timestamp;
-        uint32_t minUplinkEstimate = 800000;
+        uint32_t minUplinkEstimate = 10000000;
         bridge::SimulcastLevel* presenterSimulcastLevel = nullptr;
         bridge::EngineVideoStream* presenterStream = nullptr;
         for (auto videoIt : _engineVideoStreams)
@@ -3259,19 +3259,30 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             }
         }
 
+        minUplinkEstimate = std::max(minUplinkEstimate, _config.slides.minBitrate.get());
+
         if (presenterSimulcastLevel)
         {
             logger::debug("limiting bitrate for ssrc %u, at %u",
                 _loggableId.c_str(),
                 presenterSimulcastLevel->_ssrc,
-                minUplinkEstimate * 3 / 2);
+                static_cast<uint32_t>(minUplinkEstimate * _config.slides.allocFactor));
 
             presenterStream->_transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->_transport,
                 presenterStream->_localSsrc,
                 presenterSimulcastLevel->_ssrc,
-                minUplinkEstimate * 3 / 2,
+                static_cast<uint32_t>(minUplinkEstimate * _config.slides.allocFactor),
                 _sendAllocator);
         }
+    }
+}
+
+void EngineMixer::runTransportTicks(const uint64_t timestamp)
+{
+    for (auto videoIt : _engineVideoStreams)
+    {
+        auto& videoStream = *videoIt.second;
+        videoStream._transport.runTick(timestamp);
     }
 }
 

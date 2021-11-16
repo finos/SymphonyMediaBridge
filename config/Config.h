@@ -64,13 +64,18 @@ public:
     CFG_GROUP() // rate control
     CFG_PROP(bool, enable, false);
     CFG_PROP(uint32_t, floor, 300);
-    CFG_PROP(uint32_t, ceiling, 5000);
+    CFG_PROP(uint32_t, ceiling, 9000);
     CFG_GROUP_END(rctl)
 
     CFG_GROUP()
     CFG_PROP(uint16_t, singlePort, 10500);
     CFG_PROP(uint32_t, sharedPorts, 1);
     CFG_GROUP_END(recording)
+
+    CFG_GROUP()
+    CFG_PROP(uint32_t, minBitrate, 700);
+    CFG_PROP(double, allocFactor, 1.5);
+    CFG_GROUP_END(slides)
 
     struct RtcpConfig
     {
@@ -94,6 +99,7 @@ public:
     } recordingRtcp; // can be made configurable later
 
     uint32_t mtu = 1480;
+    uint32_t ipOverhead = 20 + 14;
 };
 
 } // namespace config

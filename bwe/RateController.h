@@ -18,10 +18,11 @@ struct RateControllerConfig
     uint32_t ipOverhead = 20 + 14;
     uint32_t mtu = 1480;
     uint32_t maxPaddingSize = 1200;
-    uint32_t bandwidthFloorKbps = 300;
-    uint32_t bandwidthCeilingKbps = 5000;
+    double bandwidthFloorKbps = 300;
+    double bandwidthCeilingKbps = 5000;
     uint64_t minPadPinInterval = 80 * utils::Time::ms;
     uint32_t minPadSize = 50;
+    double rtcpProbeCeiling = 600;
 };
 
 /*
@@ -112,6 +113,7 @@ public:
 
     uint32_t getPadding(uint64_t timestamp, uint16_t size, uint16_t& paddingSize) const;
     double getTargetRate() const { return (_config.enabled ? _model.bandwidthKbps : 0); }
+    uint32_t getPacingBudget(uint64_t timestamp) const;
 
 private:
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
@@ -124,7 +126,8 @@ private:
         uint32_t& receivedAfterSR,
         uint32_t& lossSinceSR,
         uint32_t& networkQueue,
-        bool& probing);
+        bool& probing,
+        bool& rtpProbe);
 
     double calculateSendRate(uint64_t timestamp) const;
 
