@@ -1,6 +1,7 @@
 #include "LoggerThread.h"
 #include "concurrency/ThreadUtils.h"
 #include "utils/Time.h"
+#include <cstring>
 #include <execinfo.h>
 
 namespace logger

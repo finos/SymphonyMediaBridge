@@ -1,5 +1,6 @@
-#include "EventSemaphore.h"
+#include "concurrency/EventSemaphore.h"
 #include <chrono>
+
 using namespace std::chrono_literals;
 
 namespace concurrency
@@ -12,7 +13,7 @@ void EventSemaphore::post()
     _condition.notify_all();
 }
 
-bool EventSemaphore::await(int timeoutMs)
+bool EventSemaphore::await(int32_t timeoutMs)
 {
     std::unique_lock<std::mutex> lock(_mutex);
     return _condition.wait_for(lock, timeoutMs * 1ms, [this]() { return this->_flag == 1; });
@@ -29,4 +30,5 @@ void EventSemaphore::reset()
     std::lock_guard<std::mutex> lock(_mutex);
     _flag = 0;
 }
-}
+
+} // namespace concurrency

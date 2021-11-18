@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
@@ -26,4 +27,4 @@ private:
     std::atomic_int32_t _count;
 };
 
-}
+} // namespace concurrency

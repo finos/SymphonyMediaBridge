@@ -1,8 +1,10 @@
 #pragma once
+
 #include <algorithm>
 #include <arpa/inet.h>
-#include <cstdint>
 #include <cassert>
+#include <cstdint>
+#include <cstring>
 
 inline bool isBigEndian() noexcept
 {

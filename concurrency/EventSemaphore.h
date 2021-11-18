@@ -1,7 +1,8 @@
 #pragma once
-#include <chrono>
+
+#include <condition_variable>
+#include <cstdint>
 #include <mutex>
-using namespace std::chrono_literals;
 
 namespace concurrency
 {
@@ -16,14 +17,14 @@ public:
     EventSemaphore(const EventSemaphore&) = delete;
 
     void post();
-    bool await(int timeoutMs);
+    bool await(int32_t timeoutMs);
     void await();
     void reset();
 
 private:
     std::mutex _mutex;
     std::condition_variable _condition;
-    int _flag = 0;
+    int32_t _flag = 0;
 };
 
 } // namespace concurrency

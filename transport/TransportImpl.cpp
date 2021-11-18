@@ -20,6 +20,7 @@
 #include "utils/SocketAddress.h"
 #include "utils/StdExtensions.h"
 #include <arpa/inet.h>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -1098,7 +1099,7 @@ uint32_t processReportBlocks(const uint32_t count,
 
 void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
     const uint64_t timestamp,
-    std::__1::chrono::system_clock::time_point wallClock)
+    std::chrono::system_clock::time_point wallClock)
 {
     uint32_t rttNtp = ~0u;
     uint32_t recvNtp32 = utils::Time::toNtp32(wallClock);

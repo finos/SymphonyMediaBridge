@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <unistd.h>
 
 namespace codec
 {

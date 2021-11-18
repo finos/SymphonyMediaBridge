@@ -287,7 +287,7 @@ private:
 
     void processRtcpReport(const rtp::RtcpHeader& packet,
         uint64_t timestamp,
-        std::__1::chrono::system_clock::time_point wallClock);
+        std::chrono::system_clock::time_point wallClock);
 
     void doSetRemoteIce(memory::Packet* packet, memory::PacketPoolAllocator& allocator);
     void doSetRemoteDtls(const std::string& fingerprintType,

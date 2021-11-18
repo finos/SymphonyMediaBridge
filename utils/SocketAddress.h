@@ -1,7 +1,9 @@
 #pragma once
+
 #include "utils/FowlerNollHash.h"
 #include <arpa/inet.h>
 #include <cassert>
+#include <cstring>
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <netdb.h>

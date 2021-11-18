@@ -10,7 +10,7 @@ else()
 endif (ENABLE_LEGACY_API)
 
 set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_FLAGS_DEBUG "-stdlib=libc++ -glldb -O0 -DDEBUG ${ENABLE_LEGACY_API_FLAG} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces")
+set(CMAKE_CXX_FLAGS_DEBUG "-ggdb -O0 -DDEBUG ${ENABLE_LEGACY_API_FLAG} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces")
 set(CMAKE_CXX_FLAGS_DCHECK "-stdlib=libc++ -glldb -O0 -DDEBUG ${ENABLE_LEGACY_API_FLAG} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=address -fno-omit-frame-pointer \
                             -fprofile-arcs -ftest-coverage -fprofile-instr-generate -fcoverage-mapping")
 set(CMAKE_CXX_FLAGS_TCHECK "-stdlib=libc++ -glldb -O1 -DDEBUG ${ENABLE_LEGACY_API_FLAG} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=thread -fno-omit-frame-pointer")

@@ -2,6 +2,7 @@
 
 #include "utils/ByteOrder.h"
 #include "utils/TlvIterator.h"
+#include <string>
 
 namespace crypto
 {
