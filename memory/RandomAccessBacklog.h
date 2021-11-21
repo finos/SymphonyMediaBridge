@@ -59,6 +59,7 @@ public:
     size_t size() const { return _count; }
     bool empty() const { return _count == 0; }
     bool full() const { return _count >= N; }
+    size_t capacity() const { return N; }
 
     const_iterator cbegin() const { return const_iterator(*this, 0); }
     iterator begin() { return iterator(*this, 0); }

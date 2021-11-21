@@ -173,6 +173,7 @@ public: // Transport
     uint16_t allocateOutboundSctpStream() override;
     void setSctp(uint16_t localPort, uint16_t remotePort) override;
     void connectSctp() override;
+    void runTick(uint64_t timestamp) override;
 
 public: // SslWriteBioListener
     // Called from Transport serial thread
@@ -273,18 +274,15 @@ private:
     friend class IceSetRemoteJob;
     friend class ConnectJob;
     friend class ConnectSctpJob;
+    friend class RunTickJob;
 
+    void protectAndSendRtp(uint64_t timestamp, memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator);
     void doProtectAndSend(uint64_t timestamp,
         memory::Packet* packet,
         const SocketAddress& target,
         Endpoint* endpoint,
         memory::PacketPoolAllocator& allocator);
-    void sendPadding(uint64_t timestamp,
-        uint32_t ssrc,
-        RtpSenderState& sendState,
-        uint32_t rtpTimestamp,
-        uint16_t nextPacketSize,
-        memory::PacketPoolAllocator& sendAllocator);
+    void sendPadding(uint64_t timestamp, uint32_t ssrc, uint32_t rtpTimestamp, uint16_t nextPacketSize);
 
     void processRtcpReport(const rtp::RtcpHeader& packet,
         uint64_t timestamp,
@@ -298,6 +296,7 @@ private:
     bool doBandwidthEstimation(uint64_t receiveTime, const utils::Optional<uint32_t>& absSendTime, uint32_t packetSize);
     void doConnect();
     void doConnectSctp();
+    void doRunTick(uint64_t timestamp);
 
     void appendRemb(memory::Packet* rtcpPacket,
         const uint64_t timestamp,
@@ -399,6 +398,15 @@ private:
     bwe::RateController _rateController;
     uint32_t _rtxProbeSsrc;
     uint32_t* _rtxProbeSequenceCounter;
+
+    struct PacketInfo
+    {
+        memory::Packet* packet;
+        memory::PacketPoolAllocator& allocator;
+    };
+    memory::RandomAccessBacklog<PacketInfo, 512> _pacingQueue;
+    memory::RandomAccessBacklog<PacketInfo, 512> _rtxPacingQueue;
+    std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
 #ifdef DEBUG

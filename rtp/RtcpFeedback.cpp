@@ -144,7 +144,7 @@ RtcpTemporaryMaxMediaBitrate& RtcpTemporaryMaxMediaBitrate::create(void* area, u
 
 uint64_t RtcpTemporaryMaxMediaBitrate::Entry::getBitrate() const
 {
-    uint32_t value = _data;
+    const uint32_t value = _data;
     const uint32_t exponent = value >> 26;
     const uint64_t mantissa = (value >> 9) & 0x1FFFFu;
     return mantissa << exponent;
@@ -155,7 +155,7 @@ void RtcpTemporaryMaxMediaBitrate::Entry::setBitrate(uint64_t bps)
     uint32_t exponent = 0; // 6 bit
     uint32_t mantissa = 0;
     extractMantissaExponent<17, 6>(bps, mantissa, exponent);
-    uint32_t overhead = _data.get() & 0x1FFu; // 9 bit
+    const uint32_t overhead = _data.get() & 0x1FFu; // 9 bit
 
     _data = (exponent << 26) | (mantissa << 9) | overhead;
 }
@@ -167,7 +167,7 @@ uint32_t RtcpTemporaryMaxMediaBitrate::Entry::getPacketOverhead() const
 
 void RtcpTemporaryMaxMediaBitrate::Entry::setPacketOverhead(uint32_t overhead)
 {
-    uint32_t value = _data;
+    const uint32_t value = _data;
     _data = (value & ~0x1FFu) | (overhead & 0x1FFu);
 }
 

@@ -11,6 +11,17 @@ constexpr std::size_t size(const T (&array)[N])
 }
 #endif
 
+template <typename T>
+T max(const T& a, const T& b, const T& c)
+{
+    return std::max(a, std::max(b, c));
+}
+
+template <typename T>
+T max(const T& a, const T& b, const T& c, const T& d)
+{
+    return std::max(a, std::max(b, std::max(c, d)));
+}
 } // namespace std
 
 namespace utils

@@ -3198,13 +3198,13 @@ public:
     SetMaxMediaBitrateJob(transport::RtcTransport& transport,
         uint32_t reporterSsrc,
         uint32_t ssrc,
-        uint32_t bitrate,
+        uint32_t bitrateKbps,
         memory::PacketPoolAllocator& allocator)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
           _ssrc(ssrc),
           _reporterSsrc(reporterSsrc),
-          _bitrate(bitrate),
+          _bitrate(bitrateKbps),
           _allocator(allocator)
     {
     }
@@ -3218,7 +3218,7 @@ public:
         }
 
         auto& tmmbr = rtp::RtcpTemporaryMaxMediaBitrate::create(packet->get(), _reporterSsrc);
-        tmmbr.addEntry(_ssrc, _bitrate, 34);
+        tmmbr.addEntry(_ssrc, _bitrate * 1000, 34);
         packet->setLength(tmmbr.size());
         _transport.protectAndSend(packet, _allocator);
     }
@@ -3233,7 +3233,7 @@ private:
 
 void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 {
-    if (utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 5))
+    if (utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3))
     {
         _lastVideoBandwidthCheck = timestamp;
         uint32_t minUplinkEstimate = 10000000;

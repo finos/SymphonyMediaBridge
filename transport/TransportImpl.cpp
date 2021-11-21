@@ -1,5 +1,6 @@
 #include "TransportImpl.h"
 #include "bwe/BandwidthEstimator.h"
+#include "codec/Vp8Header.h"
 #include "config/Config.h"
 #include "dtls/SrtpClient.h"
 #include "dtls/SrtpClientFactory.h"
@@ -1075,7 +1076,8 @@ uint32_t processReportBlocks(const uint32_t count,
             rateController.onReportBlockReceived(block.ssrc,
                 block.extendedSeqNoReceived,
                 block.loss.getCumulativeLoss(),
-                block.lastSR);
+                block.lastSR,
+                block.delaySinceLastSR);
         }
     }
 
@@ -1353,6 +1355,9 @@ void TransportImpl::doProtectAndSend(uint64_t timestamp,
     Endpoint* endpoint,
     memory::PacketPoolAllocator& allocator)
 {
+    _outboundMetrics.bytesCount += packet->getLength();
+    ++_outboundMetrics.packetCount;
+
     assert(packet->getLength() + 24 <= _config.mtu);
     if (endpoint && _srtpClient->protect(packet))
     {
@@ -1365,12 +1370,7 @@ void TransportImpl::doProtectAndSend(uint64_t timestamp,
     }
 }
 
-void TransportImpl::sendPadding(uint64_t timestamp,
-    uint32_t ssrc,
-    RtpSenderState& sendState,
-    uint32_t rtpTimestamp,
-    uint16_t nextPacketSize,
-    memory::PacketPoolAllocator& sendAllocator)
+void TransportImpl::sendPadding(uint64_t timestamp, uint32_t ssrc, uint32_t rtpTimestamp, uint16_t nextPacketSize)
 {
     if (!_config.rctl.enable)
     {
@@ -1379,13 +1379,29 @@ void TransportImpl::sendPadding(uint64_t timestamp,
 
     if (_rtxProbeSequenceCounter)
     {
-        auto& padSsrcState = getOutboundSsrc(_rtxProbeSsrc, 90000);
         uint16_t padding = 0;
 
-        const auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
-        for (uint32_t i = 0; i < paddingCount && _selectedRtp; ++i)
+        auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
+        if (paddingCount > 0 && !_pacingQueue.empty())
         {
-            auto padPacket = memory::makePacket(sendAllocator);
+            size_t totalPadding = paddingCount * padding;
+            while (totalPadding > 0 && !_pacingQueue.empty())
+            {
+                auto& packetInfo = _pacingQueue.back();
+                totalPadding -= std::min(totalPadding, packetInfo.packet->getLength());
+                protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+                _pacingQueue.pop_back();
+            }
+            if (totalPadding == 0)
+            {
+                return;
+            }
+            paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
+        }
+
+        for (uint32_t i = 0; padding > 100 && i < paddingCount && _selectedRtp; ++i)
+        {
+            auto padPacket = memory::makePacket(_mainAllocator);
             if (padPacket)
             {
                 std::memset(padPacket->get(), 0, memory::Packet::size);
@@ -1393,20 +1409,24 @@ void TransportImpl::sendPadding(uint64_t timestamp,
                 auto padRtpHeader = rtp::RtpHeader::create(padPacket->get(), padPacket->getLength());
                 padRtpHeader->ssrc = _rtxProbeSsrc;
                 padRtpHeader->payloadType = rtxPayloadType;
-                padRtpHeader->padding = 0;
-                padRtpHeader->marker = 0;
                 padRtpHeader->timestamp = rtpTimestamp;
                 padRtpHeader->sequenceNumber = (*_rtxProbeSequenceCounter)++ & 0xFFFF;
-                // fake a really old packet
-                reinterpret_cast<uint16_t*>(padRtpHeader->getPayload())[0] =
-                    hton<uint16_t>(sendState.getSentSequenceNumber() - 20000);
+                if (_absSendTimeExtensionId.isSet())
+                {
+                    padRtpHeader->extension = 1;
+                    rtp::RtpHeaderExtension extensionHead(padRtpHeader->getExtensionHeader());
+                    rtp::GeneralExtension1Byteheader absSendTime;
+                    absSendTime.id = _absSendTimeExtensionId.get();
+                    absSendTime.setDataLength(3);
+                    auto cursor = extensionHead.extensions().begin();
+                    extensionHead.addExtension(cursor, absSendTime);
+                    padRtpHeader->setExtensions(extensionHead);
+                }
 
-                padSsrcState.onRtpSent(timestamp, *padPacket);
-                doProtectAndSend(timestamp, padPacket, _peerRtpPort, _selectedRtp, sendAllocator);
-                _rateController.onRtpPaddingSent(timestamp,
-                    _rtxProbeSsrc,
-                    padRtpHeader->sequenceNumber,
-                    padPacket->getLength());
+                // fake a really old packet
+                reinterpret_cast<uint16_t*>(padRtpHeader->getPayload())[0] = hton<uint16_t>(23033);
+
+                protectAndSendRtp(timestamp, padPacket, _mainAllocator);
             }
             else
             {
@@ -1420,19 +1440,35 @@ void TransportImpl::sendPadding(uint64_t timestamp,
         const auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
         for (uint32_t i = 0; i < paddingCount && _selectedRtcp; ++i)
         {
-            auto padPacket = memory::makePacket(sendAllocator);
+            auto padPacket = memory::makePacket(_mainAllocator);
             if (padPacket)
             {
                 auto* rtcpPadding = rtp::RtcpApplicationSpecific::create(padPacket->get(), ssrc, "BRPP", padding);
                 padPacket->setLength(rtcpPadding->header.size());
-                doProtectAndSend(timestamp, padPacket, _peerRtcpPort, _selectedRtcp, sendAllocator);
                 _rateController.onRtcpPaddingSent(timestamp, ssrc, padPacket->getLength());
+                doProtectAndSend(timestamp, padPacket, _peerRtcpPort, _selectedRtcp, _mainAllocator);
             }
         }
     }
 }
 
-void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
+namespace
+{
+template <typename T>
+void clearPacingQueueIfFull(T& pacingQueue)
+{
+    if (pacingQueue.full())
+    {
+        while (!pacingQueue.empty())
+        {
+            auto& info = pacingQueue.back();
+            info.allocator.free(info.packet);
+            pacingQueue.pop_back();
+        }
+    }
+}
+} // namespace
+void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& allocator)
 {
     DBGCHECK_SINGLETHREADED(_singleThreadMutex);
 
@@ -1441,84 +1477,72 @@ void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAll
 
     if (!_srtpClient || !_selectedRtp || !isConnected())
     {
-        sendAllocator.free(packet);
+        allocator.free(packet);
         return;
     }
 
     if (rtp::isRtpPacket(*packet))
     {
-        const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
-        const auto payloadType = rtpHeader->payloadType;
-        const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
-
-        // push to pace queue if packets are waiting.
-        // process packets from queue if there is budget
-        const auto budget = _rateController.getPacingBudget(timestamp);
-        if (!isAudio && (!_pacingQueue.empty() || budget < packet->getLength() + _config.ipOverhead))
-        {
-            _pacingInUse = true;
-            if (_pacingQueue.full())
-            {
-                sendAllocator.free(packet);
-            }
-            else
-            {
-                _pacingQueue.push_front({packet, sendAllocator});
-                if (_pacingQueue.full())
-                {
-                    logger::warn("pacing buffer full", _loggableId.c_str());
-                }
-            }
-
-            if (budget >= packet->getLength() + _config.ipOverhead)
-            {
-                doRunTick(timestamp);
-            }
-            return;
-        }
-    }
-
-    // else send ahead
-    protectAndSendPhase2(timestamp, packet, sendAllocator);
-}
-
-void TransportImpl::protectAndSendPhase2(uint64_t timestamp,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& sendAllocator)
-{
-    _outboundMetrics.bytesCount += packet->getLength();
-    ++_outboundMetrics.packetCount;
-
-    if (rtp::isRtpPacket(*packet))
-    {
-        if (_absSendTimeExtensionId.isSet())
-        {
-            rtp::setTransmissionTimestamp(packet, _absSendTimeExtensionId.get(), timestamp);
-        }
-
-        const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
-        const auto payloadType = rtpHeader->payloadType;
-        const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
-        const uint32_t ssrc = rtpHeader->ssrc;
-        const uint32_t rtpFrequency = isAudio ? _audio.rtpFrequency : 90000;
-
-        auto& ssrcState = getOutboundSsrc(rtpHeader->ssrc, rtpFrequency);
-
         sendReports(timestamp);
-        sendPadding(timestamp, ssrc, ssrcState, rtpHeader->timestamp.get(), packet->getLength(), sendAllocator);
+        const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+        const auto payloadType = rtpHeader->payloadType;
+        const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
 
-        ssrcState.onRtpSent(timestamp, *packet);
-        _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
-        doProtectAndSend(timestamp, packet, _peerRtpPort, _selectedRtp, sendAllocator);
+        clearPacingQueueIfFull(_pacingQueue);
+        clearPacingQueueIfFull(_rtxPacingQueue);
+        if (payloadType == rtxPayloadType)
+        {
+            _rtxPacingQueue.push_front({packet, allocator});
+        }
+        else if (!isAudio)
+        {
+            _pacingQueue.push_front({packet, allocator});
+        }
+        else
+        {
+            sendPadding(timestamp, rtpHeader->ssrc, rtpHeader->timestamp.get(), packet->getLength());
+            protectAndSendRtp(timestamp, packet, allocator);
+        }
+
+        doRunTick(timestamp);
     }
     else if (_selectedRtcp)
     {
-        sendRtcp(packet, sendAllocator, timestamp);
+        sendRtcp(packet, allocator, timestamp);
     }
     else
     {
-        sendAllocator.free(packet);
+        allocator.free(packet);
     }
+}
+
+void TransportImpl::protectAndSendRtp(uint64_t timestamp,
+    memory::Packet* packet,
+    memory::PacketPoolAllocator& allocator)
+{
+    const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+    const auto payloadType = rtpHeader->payloadType;
+    const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
+    const uint32_t rtpFrequency = isAudio ? _audio.rtpFrequency : 90000;
+
+    if (_absSendTimeExtensionId.isSet())
+    {
+        rtp::setTransmissionTimestamp(packet, _absSendTimeExtensionId.get(), timestamp);
+    }
+
+    auto& ssrcState = getOutboundSsrc(rtpHeader->ssrc, rtpFrequency);
+    if (static_cast<int16_t>(rtpHeader->sequenceNumber.get() - (ssrcState.getSentSequenceNumber() & 0xFFFFu)) < 1)
+    {
+        logger::info("out of order transmission ssrc %u, seqno %u, last %u",
+            _loggableId.c_str(),
+            rtpHeader->ssrc.get(),
+            rtpHeader->sequenceNumber.get(),
+            ssrcState.getSentSequenceNumber() & 0xFFFFu);
+    }
+
+    ssrcState.onRtpSent(timestamp, *packet);
+    _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
+    doProtectAndSend(timestamp, packet, _peerRtpPort, _selectedRtp, allocator);
 }
 
 // Send sender reports and receiver reports as needed for the inbound and outbound ssrcs.
@@ -1693,7 +1717,7 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
             _sendRateTracker.get(utils::Time::ms * 600) * 8 * utils::Time::ms,
             _outboundRembEstimateKbps,
             _rttNtp * 1000.0 / 0x10000,
-            _pacingQueue.size());
+            _pacingQueue.size() + _rtxPacingQueue.size());
 
         _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
         _inboundMetrics.estimatedKbpsMax = 0;
@@ -2223,6 +2247,7 @@ void TransportImpl::doConnectSctp()
 
 bool TransportImpl::sendSctpPacket(const void* data, size_t length)
 {
+    _rateController.onSctpSent(utils::Time::getAbsoluteTime(), length);
     _srtpClient->sendApplicationData(data, length);
     return true;
 }
@@ -2334,6 +2359,10 @@ void TransportImpl::setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter)
 {
     _rtxProbeSsrc = ssrc;
     _rtxProbeSequenceCounter = sequenceCounter;
+    if (sequenceCounter)
+    {
+        _rateController.enableRtpProbing();
+    }
 }
 
 void TransportImpl::runTick(uint64_t timestamp)
@@ -2346,23 +2375,61 @@ void TransportImpl::runTick(uint64_t timestamp)
 
 void TransportImpl::doRunTick(const uint64_t timestamp)
 {
-    auto budget = _rateController.getPacingBudget(timestamp);
-    while (_pacingQueue.size() > 0)
+    if (!_config.rctl.enable || !_config.bwe.useUplinkEstimate)
     {
-        auto& packetInfo = _pacingQueue.back();
+        while (!_rtxPacingQueue.empty())
+        {
+            PacketInfo packetInfo = _rtxPacingQueue.back();
+            _rtxPacingQueue.pop_back();
+            protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+        }
+        while (!_pacingQueue.empty())
+        {
+            PacketInfo packetInfo = _pacingQueue.back();
+            _pacingQueue.pop_back();
+            protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+        }
+        _pacingInUse = false;
+        return;
+    }
+    else
+    {
+        _pacingInUse = false;
+    }
+
+    auto budget = _rateController.getPacingBudget(timestamp);
+    uint32_t ssrc = 0;
+    uint32_t rtpTimestamp = 0;
+    while (!_pacingQueue.empty() || !_rtxPacingQueue.empty())
+    {
+        auto* pacingQueue = &_pacingQueue;
+        if (!_rtxPacingQueue.empty())
+        {
+            pacingQueue = &_rtxPacingQueue;
+        }
+
+        PacketInfo packetInfo(pacingQueue->back());
         if (packetInfo.packet->getLength() + _config.ipOverhead <= budget)
         {
             budget -= packetInfo.packet->getLength() + _config.ipOverhead;
-            protectAndSendPhase2(timestamp, packetInfo.packet, packetInfo.allocator);
-            _pacingQueue.pop_back();
+            auto* rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet);
+            ssrc = rtpHeader->ssrc;
+            rtpTimestamp = rtpHeader->timestamp;
+            protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+            pacingQueue->pop_back();
         }
         else
         {
-            return;
+            break;
         }
     }
 
-    _pacingInUse = false;
+    if (ssrc != 0 && rtpTimestamp != 0)
+    {
+        sendPadding(timestamp, ssrc, rtpTimestamp, 0);
+    }
+
+    _pacingInUse = !_pacingQueue.empty() || !_rtxPacingQueue.empty();
 }
 
 } // namespace transport

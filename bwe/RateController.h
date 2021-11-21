@@ -19,10 +19,11 @@ struct RateControllerConfig
     uint32_t mtu = 1480;
     uint32_t maxPaddingSize = 1200;
     double bandwidthFloorKbps = 300;
-    double bandwidthCeilingKbps = 5000;
+    double bandwidthCeilingKbps = 9000;
     uint64_t minPadPinInterval = 80 * utils::Time::ms;
     uint32_t minPadSize = 50;
     double rtcpProbeCeiling = 600;
+    uint32_t maxTargetQueue = 128000;
 };
 
 /*
@@ -52,11 +53,12 @@ class RateController
     {
         uint64_t transmissionTime = 0;
         uint32_t ssrc = 0;
-        uint32_t sequenceNumber = 0;
-        uint32_t reportNtp = 0;
         uint32_t size = 0;
-        uint32_t lossCount = 0;
+        uint32_t reportNtp = 0;
         uint32_t queueSize = 0;
+        uint32_t sequenceNumber = 0;
+        uint32_t lossCount = 0;
+        uint32_t delaySinceSR = 0;
         bool received = false;
         enum Type : uint16_t
         {
@@ -64,7 +66,7 @@ class RateController
             RR,
             RTP,
             RTCP_PADDING,
-            RTP_PADDING
+            SCTP
         } type = RTP;
 
         PacketMetaData() = default;
@@ -76,11 +78,12 @@ class RateController
             Type packetType)
             : transmissionTime(timestamp),
               ssrc(streamSsrc),
-              sequenceNumber(packetSequenceNumber),
-              reportNtp(0),
               size(packetSize),
-              lossCount(0),
+              reportNtp(0),
               queueSize(0),
+              sequenceNumber(packetSequenceNumber),
+              lossCount(0),
+              delaySinceSR(0),
               received(false),
               type(packetType)
         {
@@ -105,31 +108,51 @@ public:
     void onReportBlockReceived(uint32_t ssrc,
         uint32_t receivedSequenceNumber,
         uint32_t cumulativeLossCount,
-        uint32_t reportNtp);
+        uint32_t reportNtp,
+        uint32_t delaySinceSR);
     void onReportReceived(uint64_t timestamp, uint32_t count, const rtp::ReportBlock blocks[], uint32_t rttNtp);
 
     void onRtcpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint16_t size);
-    void onRtpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size);
+    void onSctpSent(uint64_t timestamp, uint16_t size);
 
     uint32_t getPadding(uint64_t timestamp, uint16_t size, uint16_t& paddingSize) const;
     double getTargetRate() const { return (_config.enabled ? _model.bandwidthKbps : 0); }
     uint32_t getPacingBudget(uint64_t timestamp) const;
+    void enableRtpProbing() { _canRtxPad = true; }
 
 private:
+    struct BacklogAnalysis
+    {
+        uint32_t transmitPeriod = 0;
+        uint32_t receivedAfterSR = 0;
+        uint32_t lossCount = 0;
+        double lossRatio = 0;
+        uint32_t delaySinceSR = 0;
+        uint32_t packetsSent = 0;
+        uint32_t packetsReceived = 0;
+        uint32_t networkQueue = ~0u;
+        bool probing = false;
+        bool rtpProbe = true;
+        const PacketMetaData* senderReportItem = nullptr;
+
+        double getBitrateKbps() const
+        {
+            if (delaySinceSR == 0)
+            {
+                return 0;
+            }
+            const double ntp32Second = 0x10000u;
+            return receivedAfterSR * ntp32Second / (125.0 * delaySinceSR);
+        }
+    };
+
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
     uint64_t calculateModelQueueTransmitPeriod();
-    PacketMetaData* analyzeBacklog(uint32_t ssrc,
-        uint32_t reportNtp,
-        uint32_t receivedSequenceNumber,
-        double modelBandwidthKbps,
-        uint64_t& transmissionPeriod,
-        uint32_t& receivedAfterSR,
-        uint32_t& lossSinceSR,
-        uint32_t& networkQueue,
-        bool& probing,
-        bool& rtpProbe);
+    RateController::BacklogAnalysis analyzeProbe(const uint32_t probeEndIndex, const double modelBandwidthKbps) const;
+    BacklogAnalysis analyzeBacklog(uint32_t reportNtp, double modelBandwidthKbps) const;
 
     double calculateSendRate(uint64_t timestamp) const;
+    void dumpBacklog(uint32_t seqno, uint32_t ssrc, uint32_t lastSR);
 
     logger::LoggableId _logId;
     memory::RandomAccessBacklog<PacketMetaData, 512> _backlog;
@@ -162,10 +185,11 @@ private:
         uint32_t count = 0;
     } _probe;
 
-    uint32_t _canRtxPad = true;
+    bool _canRtxPad = true;
     uint64_t _rtxSendTime = 0;
 
     uint32_t _minRttNtp;
     const RateControllerConfig& _config;
+    uint64_t _lastLossBackoff = 0;
 };
 } // namespace bwe

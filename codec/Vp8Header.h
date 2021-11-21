@@ -34,6 +34,11 @@ constexpr uint8_t getK(const uint8_t* payload)
     return (payload[1] >> 0x4) & 0x1;
 }
 
+constexpr uint8_t getN(const uint8_t* payload)
+{
+    return (payload[0] >> 5) & 0x1;
+}
+
 constexpr size_t getPayloadDescriptorSize(const uint8_t* payload, const size_t payloadSize)
 {
     if (payloadSize == 0)

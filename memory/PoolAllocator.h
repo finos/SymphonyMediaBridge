@@ -76,10 +76,10 @@ public:
         munmap(_elements, _size);
     }
 
-    PoolAllocator(const PoolAllocator&) = default;
-    PoolAllocator& operator=(const PoolAllocator&) = default;
-    PoolAllocator(PoolAllocator&&) = default;
-    PoolAllocator& operator=(PoolAllocator&&) = default;
+    PoolAllocator(const PoolAllocator&) = delete;
+    PoolAllocator& operator=(const PoolAllocator&) = delete;
+    PoolAllocator(PoolAllocator&&) = delete;
+    PoolAllocator& operator=(PoolAllocator&&) = delete;
     const std::string& getName() const { return _name; }
 
     size_t size() const { return _count.load(std::memory_order_relaxed); }
