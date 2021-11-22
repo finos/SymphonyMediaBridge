@@ -117,7 +117,7 @@ public:
 
     uint32_t getPadding(uint64_t timestamp, uint16_t size, uint16_t& paddingSize) const;
     double getTargetRate() const { return (_config.enabled ? _model.bandwidthKbps : 0); }
-    uint32_t getPacingBudget(uint64_t timestamp) const;
+    size_t getPacingBudget(uint64_t timestamp) const;
     void enableRtpProbing() { _canRtxPad = true; }
 
 private:
@@ -144,6 +144,15 @@ private:
             const double ntp32Second = 0x10000u;
             return receivedAfterSR * ntp32Second / (125.0 * delaySinceSR);
         }
+
+        double getSendRateKbps() const
+        {
+            if (transmitPeriod == 0)
+            {
+                return 0;
+            }
+            return receivedAfterSR * utils::Time::ms * 8 / transmitPeriod;
+        }
     };
 
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
@@ -152,7 +161,7 @@ private:
     BacklogAnalysis analyzeBacklog(uint32_t reportNtp, double modelBandwidthKbps) const;
 
     double calculateSendRate(uint64_t timestamp) const;
-    void dumpBacklog(uint32_t seqno, uint32_t ssrc, uint32_t lastSR);
+    void dumpBacklog(uint32_t seqno, uint32_t ssrc);
 
     logger::LoggableId _logId;
     memory::RandomAccessBacklog<PacketMetaData, 512> _backlog;
@@ -163,7 +172,6 @@ private:
         double bandwidthKbps = 200.0;
         uint32_t queue = 0;
         uint32_t targetQueue = 3000;
-        uint32_t networkQueue = 0;
         uint64_t lastTransmission = 0;
 
         void onPacketSent(uint64_t timestamp, uint16_t size)
@@ -181,7 +189,6 @@ private:
         uint64_t start = 0;
         uint64_t interval = utils::Time::sec;
         uint64_t duration = 0;
-        uint32_t initialNetworkQueue = 0;
         uint32_t count = 0;
     } _probe;
 

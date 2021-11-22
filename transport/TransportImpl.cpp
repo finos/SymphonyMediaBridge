@@ -695,6 +695,12 @@ TransportImpl::~TransportImpl()
         info.allocator.free(info.packet);
         _pacingQueue.pop_back();
     }
+    while (!_rtxPacingQueue.empty())
+    {
+        auto& info = _pacingQueue.back();
+        info.allocator.free(info.packet);
+        _pacingQueue.pop_back();
+    }
 }
 
 void TransportImpl::stop()
@@ -1381,24 +1387,17 @@ void TransportImpl::sendPadding(uint64_t timestamp, uint32_t ssrc, uint32_t rtpT
     {
         uint16_t padding = 0;
 
-        auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
-        if (paddingCount > 0 && !_pacingQueue.empty())
+        auto budget = _rateController.getPacingBudget(timestamp);
+        auto* pacingQueue = _rtxPacingQueue.empty() ? &_pacingQueue : &_rtxPacingQueue;
+        while (!pacingQueue->empty() && budget >= pacingQueue->back().packet->getLength() + _config.ipOverhead)
         {
-            size_t totalPadding = paddingCount * padding;
-            while (totalPadding > 0 && !_pacingQueue.empty())
-            {
-                auto& packetInfo = _pacingQueue.back();
-                totalPadding -= std::min(totalPadding, packetInfo.packet->getLength());
-                protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
-                _pacingQueue.pop_back();
-            }
-            if (totalPadding == 0)
-            {
-                return;
-            }
-            paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
+            PacketInfo packetInfo = pacingQueue->back();
+            budget -= std::min(budget, packetInfo.packet->getLength() + _config.ipOverhead);
+            pacingQueue->pop_back();
+            protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
         }
 
+        auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
         for (uint32_t i = 0; padding > 100 && i < paddingCount && _selectedRtp; ++i)
         {
             auto padPacket = memory::makePacket(_mainAllocator);
