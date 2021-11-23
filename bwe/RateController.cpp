@@ -133,7 +133,7 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
     }
     if (lossCount > 0)
     {
-        dumpBacklog(receivedSequenceNumber, ssrc);
+        // dumpBacklog(receivedSequenceNumber, ssrc);
     }
 }
 
@@ -165,7 +165,7 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
         queueSize += item.size;
         lastTransmission = item.transmissionTime;
 
-        if (i == 0)
+        if (i == trainEnd)
         {
             return queueSize > 100;
         }
@@ -173,7 +173,13 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
 
     return false;
 }
+
 } // namespace
+
+bool RateController::isGood(const RateController::BacklogAnalysis& probe) const
+{
+    return probe.probing && probe.packetsReceived / probe.packetsSent > 0.85 && probe.delaySinceSR > ntp32Second / 10;
+}
 
 RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t probeEndIndex,
     const double modelBandwidthKbps) const
@@ -252,7 +258,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
             item.delaySinceSR > ntp32Second / 20)
         {
             auto reportCandidate = analyzeProbe(i, modelBandwidthKbps);
-            if (reportCandidate.probing && reportCandidate.lossRatio <= 0.02)
+            if (isGood(reportCandidate) && reportCandidate.lossRatio < 0.05)
             {
                 if (report.getBitrateKbps() < reportCandidate.getBitrateKbps())
                 {
@@ -265,12 +271,6 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
                 {
                     return report;
                 }
-                logger::debug("halt at probe ending at %u, seq %u, ntp %x loss %u",
-                    _logId.c_str(),
-                    item.ssrc,
-                    item.sequenceNumber,
-                    item.reportNtp,
-                    item.lossCount);
                 report = reportCandidate;
                 report.networkQueue = networkQueue;
                 return report;
@@ -384,7 +384,8 @@ void RateController::onReportReceived(uint64_t timestamp,
     }
 
     auto backlogReport = analyzeBacklog(limitNtp - ntp32Second * 9, _model.bandwidthKbps);
-    if (backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem)
+    if (backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem ||
+        !isGood(backlogReport))
     {
         return;
     }
@@ -394,7 +395,7 @@ void RateController::onReportReceived(uint64_t timestamp,
         : std::min(_config.rtcpProbeCeiling, backlogReport.getBitrateKbps());
 
     RCTL_LOG("delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %.2fkbps, txRate %.1fkbps found SR %s, "
-             "probe %u, rtpProbe %u networkQ %u",
+             "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
         _logId.c_str(),
         static_cast<double>(backlogReport.delaySinceSR * 1000 / ntp32Second),
         backlogReport.senderReportItem->reportNtp,
@@ -406,66 +407,48 @@ void RateController::onReportReceived(uint64_t timestamp,
         backlogReport.senderReportItem ? "t" : "f",
         backlogReport.probing,
         backlogReport.rtpProbe,
-        backlogReport.networkQueue);
+        backlogReport.networkQueue,
+        backlogReport.packetsSent,
+        backlogReport.packetsReceived);
 
-    if (backlogReport.lossCount < 3 && backlogReport.lossRatio <= 0.02)
+    if (isGood(backlogReport) && backlogReport.lossCount < 3 && backlogReport.lossRatio <= 0.02)
     {
-        const auto bandwidthChangeKbps = receiveRateKbps - std::min(receiveRateKbps, _model.bandwidthKbps);
-        const auto timeSinceSR = timestamp - backlogReport.senderReportItem->transmissionTime;
-        if (backlogReport.delaySinceSR > ntp32Second / 20 && receiveRateKbps > _model.bandwidthKbps)
+        if (receiveRateKbps > _model.bandwidthKbps)
         {
-            const auto extraDrain =
-                std::min(static_cast<double>(_model.queue), timeSinceSR * bandwidthChangeKbps / (8 * utils::Time::ms));
-
-            if (receiveRateKbps > _model.bandwidthKbps)
-            {
-                _model.bandwidthKbps = backlogReport.getBitrateKbps();
-
-                if (backlogReport.probing)
-                {
-                    _model.queue -= extraDrain;
-                }
-                logger::debug("bw increase drained %.1f", _logId.c_str(), extraDrain);
-            }
-            else
-            {
-                _model.bandwidthKbps -= 0.1 * (_model.bandwidthKbps - receiveRateKbps);
-                logger::debug("probe decrease", _logId.c_str());
-            }
+            _model.bandwidthKbps = std::min(_model.bandwidthKbps + 1000, backlogReport.getBitrateKbps());
+            logger::debug("bw increase %.1f", _logId.c_str(), _model.bandwidthKbps);
         }
         else if (backlogReport.networkQueue + _config.mtu < _model.queue)
         {
             // More rare case. We did not get useful info about receive rate but we see that the network
             // queue is shorter than anticipated
-            _model.bandwidthKbps += 100.0;
             _model.bandwidthKbps = std::min(_model.bandwidthKbps, _config.bandwidthCeilingKbps);
             logger::debug("increased rc estimate due to short network queue 200kbps, to %.1fkbps",
                 _logId.c_str(),
-                _model.bandwidthKbps);
-        }
+                _model.bandwidthKbps * 0.02);
 
-        if (_minRttNtp != ~0u)
+            _model.bandwidthKbps *= 1.02;
+        }
+        else
         {
-            // aim at 100ms queue build up. Some network buffers are 75K so it is wise to not exceed
-            _model.targetQueue =
-                std::max(_model.bandwidthKbps, receiveRateKbps) * (80 + _minRttNtp * 500 / ntp32Second) / 8;
+            _model.bandwidthKbps -= 0.1 * (_model.bandwidthKbps - receiveRateKbps);
+            logger::debug("probe decrease", _logId.c_str());
         }
     }
     else if (backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
         backlogReport.networkQueue > _model.targetQueue / 2 &&
         (_lastLossBackoff == 0 || utils::Time::diffGE(_lastLossBackoff, timestamp, utils::Time::sec * 5)))
     {
-        _model.bandwidthKbps = std::max(_config.bandwidthFloorKbps, _model.bandwidthKbps * 0.85);
-
-        _model.targetQueue = _model.bandwidthKbps * (80 + _minRttNtp * 500 / ntp32Second) / 8;
+        _model.bandwidthKbps = std::max(_config.bandwidthFloorKbps, _model.bandwidthKbps * 0.95);
         _lastLossBackoff = timestamp;
-        logger::debug("decrease due to loss %.3f %.1fkbps, targetQ %u",
+        RCTL_LOG("decrease due to loss %.3f %.1fkbps, targetQ %u",
             _logId.c_str(),
             backlogReport.lossRatio,
             _model.bandwidthKbps,
             _model.targetQueue);
     }
 
+    _model.targetQueue = _model.bandwidthKbps * (80 + _minRttNtp * 500 / ntp32Second) / 8;
     _model.bandwidthKbps = math::clamp(_model.bandwidthKbps, _config.bandwidthFloorKbps, _config.bandwidthCeilingKbps);
     _model.targetQueue = math::clamp(_model.targetQueue, 4 * _config.mtu, _config.maxTargetQueue);
     if (_model.queue > backlogReport.networkQueue)

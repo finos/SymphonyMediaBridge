@@ -155,6 +155,8 @@ private:
         }
     };
 
+    bool isGood(const BacklogAnalysis& probe) const;
+
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
     uint64_t calculateModelQueueTransmitPeriod();
     RateController::BacklogAnalysis analyzeProbe(const uint32_t probeEndIndex, const double modelBandwidthKbps) const;
