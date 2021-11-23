@@ -4,7 +4,7 @@ cmakeBuildType = "TCheck"
 
 abortPreviousRunningBuilds()
 
-notifyPRStatus("https://github.com/SymphonyOSF/SymphonyMediaBridge", "Build and Unit Testing of ${env.BRANCH_NAME} [$cmakeBuildType]") {
+notifyPRStatus("https://github.com/finos/SymphonyMediaBridge", "Build and Unit Testing of ${env.BRANCH_NAME} [$cmakeBuildType]") {
     node('be-integration') {
         stage('Checkout') {
             checkout scm
