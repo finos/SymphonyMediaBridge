@@ -1395,6 +1395,7 @@ void TransportImpl::sendPadding(uint64_t timestamp, uint32_t ssrc, uint32_t rtpT
             budget -= std::min(budget, packetInfo.packet->getLength() + _config.ipOverhead);
             pacingQueue->pop_back();
             protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+            pacingQueue = _rtxPacingQueue.empty() ? &_pacingQueue : &_rtxPacingQueue;
         }
 
         auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
@@ -1424,7 +1425,6 @@ void TransportImpl::sendPadding(uint64_t timestamp, uint32_t ssrc, uint32_t rtpT
 
                 // fake a really old packet
                 reinterpret_cast<uint16_t*>(padRtpHeader->getPayload())[0] = hton<uint16_t>(23033);
-
                 protectAndSendRtp(timestamp, padPacket, _mainAllocator);
             }
             else

@@ -125,6 +125,7 @@ private:
     {
         uint32_t transmitPeriod = 0;
         uint32_t receivedAfterSR = 0;
+        uint32_t sentAfterSR = 0;
         uint32_t lossCount = 0;
         double lossRatio = 0;
         uint32_t delaySinceSR = 0;
@@ -200,5 +201,10 @@ private:
     uint32_t _minRttNtp;
     const RateControllerConfig& _config;
     uint64_t _lastLossBackoff = 0;
+    struct
+    {
+        uint32_t ntp = 0;
+        uint32_t delaySinceSR = 0;
+    } _lastProbe;
 };
 } // namespace bwe

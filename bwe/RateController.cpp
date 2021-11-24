@@ -15,6 +15,14 @@ namespace bwe
 {
 const uint32_t ntp32Second = 0x10000u;
 
+uint32_t calculateTargetQueue(double bandwidthKbps, uint32_t minRttNtp, const RateControllerConfig& config)
+{
+    // 230ms queue at 300kbps then decay to 50ms. Add for min RTT/8 ms to allow for queue on long haul
+    const uint32_t targetQueue =
+        bandwidthKbps * (50 + 54000 / std::max(200.0, bandwidthKbps) + minRttNtp * 125 / ntp32Second) / 8;
+    return math::clamp(targetQueue, 4 * config.mtu, config.maxTargetQueue);
+}
+
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
     : _logId("RateCtrl", instanceId),
       _minRttNtp(~0u),
@@ -51,7 +59,6 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     metaPacket.reportNtp = reportNtp;
     metaPacket.queueSize = _model.queue;
     _backlog.push_front(metaPacket);
-    logger::debug("SR sent ssrc %u, size %u, ntp %x", _logId.c_str(), ssrc, size, reportNtp);
 
     const auto budget = getPacingBudget(timestamp);
 
@@ -178,7 +185,8 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
 
 bool RateController::isGood(const RateController::BacklogAnalysis& probe) const
 {
-    return probe.probing && probe.packetsReceived / probe.packetsSent > 0.85 && probe.delaySinceSR > ntp32Second / 10;
+    return probe.probing && static_cast<double>(probe.receivedAfterSR) / probe.sentAfterSR > 0.9 &&
+        probe.delaySinceSR > ntp32Second / 10 && probe.senderReportItem;
 }
 
 RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t probeEndIndex,
@@ -230,7 +238,9 @@ RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t prob
             largestPacketReceived = std::max(item.size, largestPacketReceived);
             if (item.type == PacketMetaData::RTP || item.type == PacketMetaData::RTCP_PADDING)
             {
+                // could include sctp and other SR
                 ++report.packetsSent;
+                report.sentAfterSR += item.size;
             }
         }
     }
@@ -258,19 +268,8 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
             item.delaySinceSR > ntp32Second / 20)
         {
             auto reportCandidate = analyzeProbe(i, modelBandwidthKbps);
-            if (isGood(reportCandidate) && reportCandidate.lossRatio < 0.05)
+            if (isGood(reportCandidate) || report.lossCount > 0)
             {
-                if (report.getBitrateKbps() < reportCandidate.getBitrateKbps())
-                {
-                    report = reportCandidate;
-                }
-            }
-            if (reportCandidate.lossCount > 0)
-            {
-                if (report.senderReportItem)
-                {
-                    return report;
-                }
                 report = reportCandidate;
                 report.networkQueue = networkQueue;
                 return report;
@@ -358,13 +357,15 @@ void RateController::onReportReceived(uint64_t timestamp,
     for (uint32_t i = 0; i < count; ++i)
     {
         auto& rb = blocks[i];
-        logger::debug("RB received %u, seq %u, ntp %x, %ums, loss %u",
+        RCTL_LOG("RB received %u, seq %u, ntp %x, %ums, loss %u, Q %u, tQ %u",
             _logId.c_str(),
             rb.ssrc.get(),
             rb.extendedSeqNoReceived.get(),
             rb.lastSR.get(),
             rb.delaySinceLastSR * 1000 / ntp32Second,
-            rb.loss.getCumulativeLoss());
+            rb.loss.getCumulativeLoss(),
+            _model.queue,
+            _model.targetQueue);
     }
 
     _minRttNtp = std::min(_minRttNtp, rttNtp);
@@ -384,58 +385,67 @@ void RateController::onReportReceived(uint64_t timestamp,
     }
 
     auto backlogReport = analyzeBacklog(limitNtp - ntp32Second * 9, _model.bandwidthKbps);
-    if (backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem ||
-        !isGood(backlogReport))
+    if (backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem)
     {
         return;
+    }
+
+    bool sameProbe = false;
+    if (backlogReport.senderReportItem->reportNtp == _lastProbe.ntp &&
+        backlogReport.delaySinceSR == _lastProbe.delaySinceSR)
+    {
+        sameProbe = true;
+    }
+    else
+    {
+        _lastProbe.ntp = backlogReport.senderReportItem->reportNtp;
+        _lastProbe.delaySinceSR = backlogReport.delaySinceSR;
+        RCTL_LOG(
+            "delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %.2fkbps, txRate %.1fkbps found SR %s, "
+            "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
+            _logId.c_str(),
+            static_cast<double>(backlogReport.delaySinceSR * 1000 / ntp32Second),
+            backlogReport.senderReportItem->reportNtp,
+            backlogReport.lossCount,
+            backlogReport.lossRatio,
+            backlogReport.receivedAfterSR,
+            backlogReport.getBitrateKbps(),
+            backlogReport.getSendRateKbps(),
+            backlogReport.senderReportItem ? "t" : "f",
+            backlogReport.probing,
+            backlogReport.rtpProbe,
+            backlogReport.networkQueue,
+            backlogReport.packetsSent,
+            backlogReport.packetsReceived);
     }
 
     double receiveRateKbps = backlogReport.rtpProbe
         ? std::min(_config.bandwidthCeilingKbps, backlogReport.getBitrateKbps())
         : std::min(_config.rtcpProbeCeiling, backlogReport.getBitrateKbps());
 
-    RCTL_LOG("delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %.2fkbps, txRate %.1fkbps found SR %s, "
-             "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
-        _logId.c_str(),
-        static_cast<double>(backlogReport.delaySinceSR * 1000 / ntp32Second),
-        backlogReport.senderReportItem->reportNtp,
-        backlogReport.lossCount,
-        backlogReport.lossRatio,
-        backlogReport.receivedAfterSR,
-        backlogReport.getBitrateKbps(),
-        backlogReport.getSendRateKbps(),
-        backlogReport.senderReportItem ? "t" : "f",
-        backlogReport.probing,
-        backlogReport.rtpProbe,
-        backlogReport.networkQueue,
-        backlogReport.packetsSent,
-        backlogReport.packetsReceived);
-
-    if (isGood(backlogReport) && backlogReport.lossCount < 3 && backlogReport.lossRatio <= 0.02)
+    if (!sameProbe && isGood(backlogReport) && backlogReport.lossCount < 3 && backlogReport.lossRatio <= 0.02)
     {
         if (receiveRateKbps > _model.bandwidthKbps)
         {
             _model.bandwidthKbps = std::min(_model.bandwidthKbps + 1000, backlogReport.getBitrateKbps());
-            logger::debug("bw increase %.1f", _logId.c_str(), _model.bandwidthKbps);
         }
         else if (backlogReport.networkQueue + _config.mtu < _model.queue)
         {
             // More rare case. We did not get useful info about receive rate but we see that the network
             // queue is shorter than anticipated
             _model.bandwidthKbps = std::min(_model.bandwidthKbps, _config.bandwidthCeilingKbps);
-            logger::debug("increased rc estimate due to short network queue 200kbps, to %.1fkbps",
+            RCTL_LOG("increased rc estimate due to short network queue 200kbps, to %.1fkbps",
                 _logId.c_str(),
                 _model.bandwidthKbps * 0.02);
 
             _model.bandwidthKbps *= 1.02;
         }
-        else
+        else if (backlogReport.packetsSent > 4)
         {
             _model.bandwidthKbps -= 0.1 * (_model.bandwidthKbps - receiveRateKbps);
-            logger::debug("probe decrease", _logId.c_str());
         }
     }
-    else if (backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
+    else if (!sameProbe && backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
         backlogReport.networkQueue > _model.targetQueue / 2 &&
         (_lastLossBackoff == 0 || utils::Time::diffGE(_lastLossBackoff, timestamp, utils::Time::sec * 5)))
     {
@@ -448,12 +458,10 @@ void RateController::onReportReceived(uint64_t timestamp,
             _model.targetQueue);
     }
 
-    _model.targetQueue = _model.bandwidthKbps * (80 + _minRttNtp * 500 / ntp32Second) / 8;
+    _model.targetQueue = calculateTargetQueue(_model.bandwidthKbps, _minRttNtp, _config);
     _model.bandwidthKbps = math::clamp(_model.bandwidthKbps, _config.bandwidthFloorKbps, _config.bandwidthCeilingKbps);
-    _model.targetQueue = math::clamp(_model.targetQueue, 4 * _config.mtu, _config.maxTargetQueue);
     if (_model.queue > backlogReport.networkQueue)
     {
-        logger::debug("nwqueue shorter ", _logId.c_str());
         _model.queue = backlogReport.networkQueue;
     }
 
@@ -534,7 +542,7 @@ uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t siz
 
     if (budget >= size)
     {
-        const auto batchSize = std::min(budget - size, static_cast<size_t>(_config.mtu * 4));
+        const auto batchSize = budget - size;
         const auto count = 1 + batchSize / _config.maxPaddingSize;
         paddingSize = batchSize / count;
         if (paddingSize < _config.minPadSize)
