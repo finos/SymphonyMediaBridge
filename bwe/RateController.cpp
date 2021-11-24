@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cmath>
 
-#define RCTL_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#define RCTL_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
 
 namespace bwe
 {
@@ -21,6 +21,25 @@ uint32_t calculateTargetQueue(double bandwidthKbps, uint32_t minRttNtp, const Ra
     const uint32_t targetQueue =
         bandwidthKbps * (50 + 54000 / std::max(200.0, bandwidthKbps) + minRttNtp * 125 / ntp32Second) / 8;
     return math::clamp(targetQueue, 4 * config.mtu, config.maxTargetQueue);
+}
+
+double RateController::BacklogAnalysis::getBitrateKbps() const
+{
+    if (delaySinceSR == 0)
+    {
+        return 0;
+    }
+
+    return receivedAfterSR * ntp32Second / (125.0 * delaySinceSR);
+}
+
+double RateController::BacklogAnalysis::getSendRateKbps() const
+{
+    if (transmitPeriod == 0)
+    {
+        return 0;
+    }
+    return receivedAfterSR * utils::Time::ms * 8 / transmitPeriod;
 }
 
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
@@ -68,7 +87,7 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     if ((_probe.count < 5 && _probe.duration == 0) || canSendProbe)
     {
         _probe.start = timestamp;
-        _probe.duration = 700 * utils::Time::ms; // could take previous SR to RR delay into account
+        _probe.duration = 700 * utils::Time::ms;
         ++_probe.count;
         RCTL_LOG("starting probe %" PRIu64 "ms target Q %uB",
             _logId.c_str(),
@@ -77,6 +96,15 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     }
 }
 
+/**
+ * Marks received packets in the backlog accoring to this ssrc and sequence number
+ *
+ * Improvement could be to mark the packets lost according to loss count. Sort the packets in heap and mark those with
+ * largest size between the received seqno and the last received seqno. This can be used to more accurately decide how
+ * many bytes were actually received after SR. At the moment we pick the largest packet and multiply with the loss count
+ * although it may be other packet sequences that are lost. Also we should take into account sequence number gaps in
+ * transmission due to dropping packets in pacing queue.
+ */
 void RateController::onReportBlockReceived(uint32_t ssrc,
     uint32_t receivedSequenceNumber,
     uint32_t cumulativeLossCount,
@@ -106,8 +134,6 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
     uint32_t lossCount = cumulativeLossCount - std::min(cumulativeLossCount, sample->lossCount);
     sample->lossCount = cumulativeLossCount;
 
-    // when walking we should calc expected loss due to sequence number gaps and if reported loss does not exceed that,
-    // we do have a loss free sequence.
     uint32_t receivedPackets = 0;
     for (auto& item : _backlog)
     {
@@ -122,7 +148,7 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
                 ++receivedPackets;
                 if (lossCount > 0)
                 {
-                    logger::debug("marking %u, %u with loss %u", _logId.c_str(), ssrc, item.sequenceNumber, lossCount);
+                    RCTL_LOG("marking %u, %u with loss %u", _logId.c_str(), ssrc, item.sequenceNumber, lossCount);
                 }
             }
             else if (item.received)
@@ -249,7 +275,7 @@ RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t prob
 }
 
 /**
- *  Walk the backlog and find complete probe sequences where no packets are lost adn receive time is at least 50ms.
+ *  Walk the backlog and find complete probe sequences where no packets are lost and receive time is at least 50ms.
  * Multiple receiver reports may be needed to complete such probes.
  * The RR may indicate that we have loss due to sequence number gaps, but in reality we have received all packets in the
  * sequence because all of those that were sent were also received.
@@ -354,9 +380,10 @@ void RateController::onReportReceived(uint64_t timestamp,
     {
         return;
     }
+
     for (uint32_t i = 0; i < count; ++i)
     {
-        auto& rb = blocks[i];
+        const auto& rb = blocks[i];
         RCTL_LOG("RB received %u, seq %u, ntp %x, %ums, loss %u, Q %u, tQ %u",
             _logId.c_str(),
             rb.ssrc.get(),
@@ -384,7 +411,7 @@ void RateController::onReportReceived(uint64_t timestamp,
         return;
     }
 
-    auto backlogReport = analyzeBacklog(limitNtp - ntp32Second * 9, _model.bandwidthKbps);
+    auto backlogReport = analyzeBacklog(limitNtp - ntp32Second * 10, _model.bandwidthKbps);
     if (backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem)
     {
         return;
@@ -419,7 +446,7 @@ void RateController::onReportReceived(uint64_t timestamp,
             backlogReport.packetsReceived);
     }
 
-    double receiveRateKbps = backlogReport.rtpProbe
+    const double receiveRateKbps = backlogReport.rtpProbe
         ? std::min(_config.bandwidthCeilingKbps, backlogReport.getBitrateKbps())
         : std::min(_config.rtcpProbeCeiling, backlogReport.getBitrateKbps());
 

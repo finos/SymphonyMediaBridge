@@ -282,7 +282,8 @@ private:
         const SocketAddress& target,
         Endpoint* endpoint,
         memory::PacketPoolAllocator& allocator);
-    void sendPadding(uint64_t timestamp, uint32_t ssrc, uint32_t rtpTimestamp, uint16_t nextPacketSize);
+    void sendPadding(uint64_t timestamp);
+    void sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t nextPacketSize);
 
     void processRtcpReport(const rtp::RtcpHeader& packet,
         uint64_t timestamp,

@@ -1,4 +1,5 @@
 #include "rtp/RtcpFeedback.h"
+#include "math/helpers.h"
 #include <cassert>
 #include <cmath>
 namespace
@@ -9,28 +10,6 @@ size_t getFeedbackControlInfoSize(const rtp::RtcpFeedback* rtcpFeedback)
     return rtcpFeedback->_header.size() - sizeof(rtp::RtcpFeedback);
 }
 
-template <uint8_t mantissaBits, uint8_t exponentBits>
-bool extractMantissaExponent(uint64_t value, uint32_t& mantissa, uint32_t& exponent)
-{
-    static_assert(mantissaBits <= 32, "mantissa too large");
-    static_assert(exponentBits < 16, "exponent too large");
-
-    exponent = 0;
-    const uint64_t maxMantissa = (uint64_t(1) << mantissaBits) - 1;
-    const uint32_t maxExponent = (1u << exponentBits) - 1;
-    while (value & ~maxMantissa)
-    {
-        ++exponent;
-        value >>= 1;
-    }
-
-    if (exponent > maxExponent)
-    {
-        return false;
-    }
-    mantissa = static_cast<uint32_t>(value);
-    return true;
-}
 } // namespace
 
 namespace rtp
@@ -83,7 +62,7 @@ void RtcpRembFeedback::setBitrate(uint64_t bps)
 {
     uint32_t exponent = 0;
     uint32_t mantissa = 0;
-    extractMantissaExponent<18, 6>(bps, mantissa, exponent);
+    math::extractMantissaExponent<18, 6>(bps, mantissa, exponent);
 
     _bitrate[0] = (exponent << 2) | (mantissa >> 16);
     _bitrate[1] = (mantissa >> 8) & 0xFFu;
@@ -154,7 +133,7 @@ void RtcpTemporaryMaxMediaBitrate::Entry::setBitrate(uint64_t bps)
 {
     uint32_t exponent = 0; // 6 bit
     uint32_t mantissa = 0;
-    extractMantissaExponent<17, 6>(bps, mantissa, exponent);
+    math::extractMantissaExponent<17, 6>(bps, mantissa, exponent);
     const uint32_t overhead = _data.get() & 0x1FFu; // 9 bit
 
     _data = (exponent << 26) | (mantissa << 9) | overhead;

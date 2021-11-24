@@ -73,7 +73,7 @@ public:
     CFG_GROUP_END(recording)
 
     CFG_GROUP()
-    CFG_PROP(uint32_t, minBitrate, 700);
+    CFG_PROP(uint32_t, minBitrate, 900);
     CFG_PROP(double, allocFactor, 1.0);
     CFG_GROUP_END(slides)
 

@@ -3263,15 +3263,17 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 
         if (presenterSimulcastLevel)
         {
+            const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
+
             logger::debug("limiting bitrate for ssrc %u, at %u",
                 _loggableId.c_str(),
                 presenterSimulcastLevel->_ssrc,
-                static_cast<uint32_t>(minUplinkEstimate * _config.slides.allocFactor));
+                slidesLimit);
 
             presenterStream->_transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->_transport,
                 presenterStream->_localSsrc,
                 presenterSimulcastLevel->_ssrc,
-                static_cast<uint32_t>(minUplinkEstimate * _config.slides.allocFactor),
+                slidesLimit,
                 _sendAllocator);
         }
     }

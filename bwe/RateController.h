@@ -35,10 +35,13 @@ figure out what bandwidth best describes the observation. Typically, a packets t
 - the distance to the receiver
 
 An RR contains information about which packet was last received and the time that has passed since the latest sender
-report (SR). By tracking sent packets, we can use that to calculate the receive rate in that window. We can also
-calculate roughly the number of bytes still in transit. By modelling the network queue according to the bandwidth we
-think it is, we can compare our model to the actual bytes in transit. It is not precise but if the actual queue is much
-lower than expected, the bandwidth is likely higher and the opposite if the actual queue is longer than expected.
+report (SR). By tracking sent packets, we can calculate the receive rate in that window. We can also
+calculate roughly the number of bytes still in transit. By modelling the network queue according to the expected
+bandwidth, we assess if we were utilizing the link fully and the receive rate after the SR can guide us to the link
+bandwidth. The probe receive rate is unreliable in that it can be highe rand lower than the actual through put. Also
+there are multiple streams that send receiver reports at different points in time. The actual number of confirmed
+received packets needs multiple receiver reports to establish. The confidence in the receive rate increases with the
+number of packets confirmed and the time passed since the SR was received.
 
 To get some useful data we need to probe the link by sending excess bandwidth over a short period of time.
 This is done by interleaving the media packets with RTCP padding packets and Video RTX packets with old
@@ -136,24 +139,8 @@ private:
         bool rtpProbe = true;
         const PacketMetaData* senderReportItem = nullptr;
 
-        double getBitrateKbps() const
-        {
-            if (delaySinceSR == 0)
-            {
-                return 0;
-            }
-            const double ntp32Second = 0x10000u;
-            return receivedAfterSR * ntp32Second / (125.0 * delaySinceSR);
-        }
-
-        double getSendRateKbps() const
-        {
-            if (transmitPeriod == 0)
-            {
-                return 0;
-            }
-            return receivedAfterSR * utils::Time::ms * 8 / transmitPeriod;
-        }
+        double getBitrateKbps() const;
+        double getSendRateKbps() const;
     };
 
     bool isGood(const BacklogAnalysis& probe) const;
