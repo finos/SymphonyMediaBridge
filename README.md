@@ -29,11 +29,11 @@ The following additional dependencies have to be installed:
 
 #### 2. Install
 
-```dpkg -i symphonymediabridge_<version>.deb```
+```dpkg -i finos-rtc-smb_<version>.deb```
 
 #### 3. Start with the default empty config file
 
-```smb /etc/symphonymediabridge/config.json```
+```smb /etc/finos-rtc-smb/config.json```
 
 ### Alternative 2. Download the .tar.gz file 
 

@@ -5,6 +5,7 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 VERSION=$2
+PACKAGE_NAME=finos-rtc-smb
 
 function pr() {
   echo -e ${GREEN}$1${NC}
@@ -32,15 +33,15 @@ if [ $? != 0 ]; then
     pr "Could not make."; exit 1
 fi
 
-mkdir -p symphonymediabridge_${VERSION}/DEBIAN
-mkdir -p symphonymediabridge_${VERSION}/usr/bin
-mkdir -p symphonymediabridge_${VERSION}/usr/share/doc/symphonymediabridge
-cp smb symphonymediabridge_${VERSION}/usr/bin/.
-cp ../../README.md ../../NOTICE symphonymediabridge_${VERSION}/usr/share/doc/symphonymediabridge/.
+mkdir -p ${PACKAGE_NAME}_${VERSION}/DEBIAN
+mkdir -p ${PACKAGE_NAME}_${VERSION}/usr/bin
+mkdir -p ${PACKAGE_NAME}_${VERSION}/usr/share/doc/${PACKAGE_NAME}
+cp smb ${PACKAGE_NAME}_${VERSION}/usr/bin/.
+cp ../../README.md ../../NOTICE ${PACKAGE_NAME}_${VERSION}/usr/share/doc/${PACKAGE_NAME}/.
 
 
-cat > symphonymediabridge_${VERSION}/DEBIAN/control << EOF
-Package: symphonymediabridge
+cat > ${PACKAGE_NAME}_${VERSION}/DEBIAN/control << EOF
+Package: ${PACKAGE_NAME}
 Version: ${VERSION}
 Section: base
 Priority: optional
@@ -51,26 +52,26 @@ Description: Symphony Media Bridge
 EOF
 
 
-cat > symphonymediabridge_${VERSION}/DEBIAN/postinst << EOF
+cat > ${PACKAGE_NAME}_${VERSION}/DEBIAN/postinst << EOF
 #!/bin/bash
-if [ ! -d "/etc/symphonymediabridge" ]; then
-    mkdir /etc/symphonymediabridge
-    echo "{}" > /etc/symphonymediabridge/config.json
+if [ ! -d "/etc/${PACKAGE_NAME}" ]; then
+    mkdir /etc/${PACKAGE_NAME}
+    echo "{}" > /etc/${PACKAGE_NAME}/config.json
 fi
 setcap CAP_SYS_NICE+ep /usr/bin/smb
 EOF
 
 
-chmod 755 symphonymediabridge_${VERSION}/DEBIAN/postinst
-dpkg-deb --build symphonymediabridge_${VERSION}
-rm -rf symphonymediabridge_${VERSION}
+chmod 755 ${PACKAGE_NAME}_${VERSION}/DEBIAN/postinst
+dpkg-deb --build ${PACKAGE_NAME}_${VERSION}
+rm -rf ${PACKAGE_NAME}_${VERSION}
 
-mkdir symphonymediabridge_${VERSION}
-cp smb ../../README.md ../../NOTICE symphonymediabridge_${VERSION}/.
-echo "{}" > symphonymediabridge_${VERSION}/config.json
+mkdir ${PACKAGE_NAME}_${VERSION}
+cp smb ../../README.md ../../NOTICE ${PACKAGE_NAME}_${VERSION}/.
+echo "{}" > ${PACKAGE_NAME}_${VERSION}/config.json
 
-tar cvf symphonymediabridge_${VERSION}.tar symphonymediabridge_${VERSION}
-gzip symphonymediabridge_${VERSION}.tar
+tar cvf ${PACKAGE_NAME}_${VERSION}.tar ${PACKAGE_NAME}_${VERSION}
+gzip ${PACKAGE_NAME}_${VERSION}.tar
 
 popd
 pr "Done building for Ubuntu Focal deb."

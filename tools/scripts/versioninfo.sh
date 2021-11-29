@@ -35,4 +35,3 @@ function getJenkinsUrl {
 echo "version    : $(getVersion)" > versioninfo.txt
 echo "branch     : $(getBranch)" >> versioninfo.txt
 echo "commit hash: $(getCommitHash)" >> versioninfo.txt
-echo "jenkins url: $(getJenkinsUrl)" >> versioninfo.txt
