@@ -155,8 +155,13 @@ SystemStatsCollector::SystemCpu operator-(SystemStatsCollector::SystemCpu a, con
     return a;
 }
 
-bool SystemStatsCollector::readProcStat(FILE* h, ProcStat& stat) const
+bool SystemStatsCollector::readProcStat(FILE* file, ProcStat& stat) const
 {
+    if (!file)
+    {
+        return false;
+    }
+
     char procName[30];
     unsigned long long dummyull;
     unsigned long dummy;
@@ -164,7 +169,7 @@ bool SystemStatsCollector::readProcStat(FILE* h, ProcStat& stat) const
     ProcStat sample;
 
     auto procInfoRead = (24 ==
-        fscanf(h,
+        fscanf(file,
             "%d %28s %c %lu %lu %lu %lu %lu"
             " %lu %lu %lu %lu %lu %lu %lu %ld"
             " %ld %ld %ld %ld %lu %llu %lu %ld",
@@ -339,17 +344,24 @@ ConnectionsStats SystemStatsCollector::collectNetStats()
 
 namespace
 {
-void readSocketInfo(FILE* fh, uid_t myUid, uint32_t& count)
+
+void readSocketInfo(FILE* file, uid_t myUid, uint32_t& count)
 {
+    if (!file)
+    {
+        count = 0;
+        return;
+    }
+
     uint32_t port = 0;
     char ignore[513];
     uid_t uid;
     const char* formatString = "%*d: %*32[^:]:%x %*32[^:]:%*x %*x %*8[^:]:%*8s %*x:%*x %*x %u";
-    fgets(ignore, sizeof(ignore), fh);
+    fgets(ignore, sizeof(ignore), file);
     for (int i = 0; i < 500; ++i)
     {
-        int items = fscanf(fh, formatString, &port, &uid);
-        fgets(ignore, sizeof(ignore), fh);
+        int items = fscanf(file, formatString, &port, &uid);
+        fgets(ignore, sizeof(ignore), file);
         if (items >= 2 && uid == myUid)
         {
             ++count;
@@ -360,6 +372,7 @@ void readSocketInfo(FILE* fh, uid_t myUid, uint32_t& count)
         }
     }
 }
+
 } // namespace
 
 ConnectionsStats SystemStatsCollector::collectLinuxNetStat()
