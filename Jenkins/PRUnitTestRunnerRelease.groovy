@@ -1,4 +1,4 @@
-@Library('SFE-RTC-pipeline') _
+@Library('SFE-RTC-pipeline@marcus/sha_check') _
 
 cmakeBuildType = "Release"
 
