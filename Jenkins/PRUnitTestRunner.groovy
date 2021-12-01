@@ -1,3 +1,5 @@
+@Library('SFE-RTC-pipeline') _
+
 void prRunner(String cmakeBuildType) {
     stage("Checkout") {
         checkout scm
