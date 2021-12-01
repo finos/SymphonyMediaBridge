@@ -104,7 +104,7 @@ private:
         SystemCpu systemSample;
     };
 
-    bool readProcStat(FILE* h, ProcStat& stat) const;
+    bool readProcStat(FILE* file, ProcStat& stat) const;
     bool readSystemStat(FILE* h, SystemCpu& stat) const;
 
     std::atomic_flag _collectingStats = ATOMIC_FLAG_INIT;

@@ -339,7 +339,7 @@ bool areAllConnected(std::vector<std::unique_ptr<ClientPair>>& testPairs)
     return true;
 }
 
-TEST_P(RtcTransportTest, packetLoad)
+TEST_P(RtcTransportTest, DISABLED_packetLoad)
 {
     const int CLIENT_COUNT = std::get<0>(GetParam());
     const bool enableIce = std::get<1>(GetParam());
