@@ -1,22 +1,19 @@
-@Library('SFE-RTC-pipeline@marcus/sha_check') _
-
 void prRunner(String cmakeBuildType) {
     stage("Checkout") {
         checkout scm
     }
 
     stage("Build and test") {
-        docker.image('gcr.io/sym-dev-rtc/buildsmb-ubuntu-focal:latest').inside {
+        docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:latest').inside {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
             env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-            sh "docker/ubuntu-focal/buildscript.sh $cmakeBuildType"
-            sh "docker/ubuntu-focal/runtests.sh"
+            sh "docker/el7/buildscript.sh $cmakeBuildType"
+            sh "docker/el7/runtests.sh"
         }
     }
 }
 
 abortPreviousRunningBuilds()
-
 
 parallel "Release": {
     node('be-integration') {
@@ -36,7 +33,7 @@ parallel "Release": {
             prRunner("DCheck")
         } finally {
             stage("Post Actions") {
-                dir ("ubuntu-focal/smb") {
+                dir ("el7/smb") {
                     junit testResults: "test-results.xml"
                     publishHTML(target: [
                             allowMissing         : false,
