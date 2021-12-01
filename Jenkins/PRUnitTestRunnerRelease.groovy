@@ -25,6 +25,7 @@ parallel {
         release: {
             node('be-integration') {
                 prRunner("Release")
+            }
         },
         lcheck: {
             node('be-integration') {
