@@ -17,22 +17,20 @@ void prRunner(String cmakeBuildType) {
 
 abortPreviousRunningBuilds()
 
+
 parallel "Release": {
     node('be-integration') {
         prRunner("Release")
     }
-},
-parallel "LCheck": {
+}, "LCheck": {
     node('be-integration') {
         prRunner("LCheck")
     }
-},
-parallel "TCheck": {
+}, "TCheck": {
     node('be-integration') {
         prRunner("TCheck")
     }
-},
-parallel "DCheck": {
+}, "DCheck": {
     node('be-integration') {
         try {
             prRunner("DCheck")
