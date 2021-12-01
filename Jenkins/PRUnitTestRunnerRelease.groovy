@@ -13,40 +13,38 @@ void prRunner(String cmakeBuildType) {
 
 abortPreviousRunningBuilds()
 
-stages {
-    parallel {
-        stage("Release") {
-            node('be-integration') {
-                prRunner("Release")
-            }
+parallel {
+    stage("Release") {
+        node('be-integration') {
+            prRunner("Release")
         }
-        stage("LCheck") {
-            node('be-integration') {
-                prRunner("LCheck")
-            }
+    }
+    stage("LCheck") {
+        node('be-integration') {
+            prRunner("LCheck")
         }
-        stage("TCheck") {
-            node('be-integration') {
-                prRunner("TCheck")
-            }
+    }
+    stage("TCheck") {
+        node('be-integration') {
+            prRunner("TCheck")
         }
-        stage("DCheck") {
-            node('be-integration') {
-                try {
-                    prRunner("DCheck")
-                } finally {
-                    stage("Post Actions") {
-                        dir ("ubuntu-focal/smb") {
-                            junit testResults: "test-results.xml"
-                            publishHTML(target: [
-                                    allowMissing         : false,
-                                    alwaysLinkToLastBuild: false,
-                                    keepAll              : true,
-                                    reportDir            : "coverage",
-                                    reportFiles          : "index.html",
-                                    reportName           : "Code Coverage Report"
-                            ])
-                        }
+    }
+    stage("DCheck") {
+        node('be-integration') {
+            try {
+                prRunner("DCheck")
+            } finally {
+                stage("Post Actions") {
+                    dir ("ubuntu-focal/smb") {
+                        junit testResults: "test-results.xml"
+                        publishHTML(target: [
+                                allowMissing         : false,
+                                alwaysLinkToLastBuild: false,
+                                keepAll              : true,
+                                reportDir            : "coverage",
+                                reportFiles          : "index.html",
+                                reportName           : "Code Coverage Report"
+                        ])
                     }
                 }
             }
