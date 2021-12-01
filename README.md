@@ -13,6 +13,10 @@ SMB is an SFU at its core, but has some hybrid MCU like solutions. Video streams
 
 Written as a high performance native application with efficient resource management, SMB is designed to scale efficiently as the number of conferences and participants grow.
 
+## Documentation
+
+- [Wiki](https://github.com/finos/SymphonyMediaBridge/wiki)
+
 ## Installing
 
 The Supported platforms for the release builds are
