@@ -16,6 +16,7 @@ Written as a high performance native application with efficient resource managem
 ## Documentation
 
 - [Wiki](https://github.com/finos/SymphonyMediaBridge/wiki)
+- [Usage example](https://github.com/finos/SymphonyMediaBridge/tree/master/examples)
 
 ## Installing
 
@@ -50,9 +51,6 @@ The following additional dependencies have to be installed:
 #### 3. Start with the default empty config file
 
 ```./smb config.json```
-
-
-## Usage example
 
 ## Development setup
 
