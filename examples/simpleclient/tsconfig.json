@@ -1,0 +1,9 @@
+{
+    "files": ["src/simulcast.ts", "src/main.ts"],
+    "compilerOptions": {
+      "noImplicitAny": true,
+      "skipLibCheck": true,
+      "target": "es6"
+    }
+  }
+  
