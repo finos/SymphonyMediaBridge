@@ -51,6 +51,7 @@ RateController::RateController(size_t instanceId, const RateControllerConfig& co
       _minRttNtp(~0u),
       _config(config)
 {
+    _model.bandwidthKbps = config.initialEstimateKbps;
 }
 
 void RateController::onRtpSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size)

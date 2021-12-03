@@ -31,6 +31,7 @@ TEST_P(RateControllerTestLongRtt, longRtt)
 {
     uint32_t capacityKbps = GetParam();
     bwe::RateControllerConfig rcConfig;
+    rcConfig.initialEstimateKbps = 300;
     bwe::RateController rateControl(1, rcConfig);
     auto* uplink = new fakenet::NetworkLink(capacityKbps, 75000, 1480);
     uplink->setStaticDelay(90);
@@ -79,6 +80,7 @@ TEST_P(RateControllerTestShortRtt, shortRtt)
 {
     uint32_t capacityKbps = GetParam();
     bwe::RateControllerConfig rcConfig;
+    rcConfig.initialEstimateKbps = 200;
     bwe::RateController rateControl(1, rcConfig);
     auto* uplink = new fakenet::NetworkLink(capacityKbps, 75000, 1480);
     uplink->setStaticDelay(0);

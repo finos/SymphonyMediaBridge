@@ -1,4 +1,3 @@
-#pragma once
 #include "SetMaxMediaBitrateJob.h"
 #include "memory/Packet.h"
 #include "rtp/RtcpFeedback.h"
@@ -21,7 +20,7 @@ SetMaxMediaBitrateJob::SetMaxMediaBitrateJob(transport::RtcTransport& transport,
 {
 }
 
-void SetMaxMediaBitrateJob::run() override
+void SetMaxMediaBitrateJob::run()
 {
     auto* packet = memory::makePacket(_allocator);
     if (!packet)

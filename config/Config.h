@@ -65,6 +65,7 @@ public:
     CFG_PROP(bool, enable, false);
     CFG_PROP(uint32_t, floor, 300);
     CFG_PROP(uint32_t, ceiling, 9000);
+    CFG_PROP(uint32_t, initialEstimate, 1200);
     CFG_GROUP_END(rctl)
 
     CFG_GROUP()

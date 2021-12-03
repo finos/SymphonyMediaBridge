@@ -149,6 +149,8 @@ set(FILES
         bridge/engine/VideoNackReceiveJob.cpp
         bridge/engine/VideoNackReceiveJob.h
         bridge/engine/Vp8Rewriter.h
+        bridge/engine/SetMaxMediaBitrateJob.h
+        bridge/engine/SetMaxMediaBitrateJob.cpp
         bwe/BandwidthEstimator.cpp
         bwe/BandwidthEstimator.h
         bwe/BandwidthUtils.cpp

@@ -24,6 +24,7 @@ struct RateControllerConfig
     uint32_t minPadSize = 50;
     double rtcpProbeCeiling = 600;
     uint32_t maxTargetQueue = 128000;
+    uint32_t initialEstimateKbps = 1200;
 };
 
 /*
