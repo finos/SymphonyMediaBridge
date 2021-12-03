@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <cmath>
 
-#define RCTL_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
+#define RCTL_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
 
 namespace
 {
@@ -25,7 +25,6 @@ uint32_t calculateTargetQueue(double bandwidthKbps, uint32_t minRttNtp, const bw
 } // namespace
 namespace bwe
 {
-// const uint32_t ntp32Second = 0x10000u;
 
 double RateController::BacklogAnalysis::getBitrateKbps() const
 {
@@ -34,7 +33,7 @@ double RateController::BacklogAnalysis::getBitrateKbps() const
         return 0;
     }
 
-    return receivedAfterSR * ntp32Second / (125.0 * delaySinceSR);
+    return static_cast<double>(receivedAfterSR) * ntp32Second / (125.0 * delaySinceSR);
 }
 
 double RateController::BacklogAnalysis::getSendRateKbps() const
@@ -43,7 +42,7 @@ double RateController::BacklogAnalysis::getSendRateKbps() const
     {
         return 0;
     }
-    return receivedAfterSR * utils::Time::ms * 8 / transmitPeriod;
+    return static_cast<double>(receivedAfterSR) * utils::Time::ms * 8 / transmitPeriod;
 }
 
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
