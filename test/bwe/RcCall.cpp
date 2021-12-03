@@ -90,10 +90,7 @@ void RcCall::sendRtpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize)
             reinterpret_cast<uint16_t*>(padRtpHeader->getPayload())[0] =
                 hton<uint16_t>(_mixVideoSendState.getSentSequenceNumber() - 10000);
 
-            _bwe.onRtpPaddingSent(_timeCursor,
-                padRtpHeader->ssrc,
-                padRtpHeader->sequenceNumber,
-                padPacket->getLength());
+            _bwe.onRtpSent(_timeCursor, padRtpHeader->ssrc, padRtpHeader->sequenceNumber, padPacket->getLength());
 
             _mixVideoSendState.onRtpSent(_timeCursor, *padPacket);
             push(_upLink, padPacket);
@@ -291,7 +288,8 @@ void RcCall::processReceiverReports()
                     _bwe.onReportBlockReceived(block.ssrc,
                         block.extendedSeqNoReceived,
                         block.loss.getCumulativeLoss(),
-                        block.lastSR);
+                        block.lastSR,
+                        block.delaySinceLastSR);
                 }
                 if (rttNtp != ~0u)
                 {

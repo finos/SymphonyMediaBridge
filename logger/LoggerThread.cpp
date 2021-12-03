@@ -34,10 +34,10 @@ inline void formatTo(FILE* fh, const char* localTime, const char* level, const v
     fprintf(fh, "%s %s [%p]%s\n", localTime, level, threadId, message);
 }
 
-void logStack(LogItem& item, const char* localTime, bool logStdOut, FILE* logFile)
+void logStack(const LogItem& item, const char* localTime, bool logStdOut, FILE* logFile)
 {
     int frames = 0;
-    auto stack = reinterpret_cast<void**>(item.message);
+    auto stack = reinterpret_cast<void**>(const_cast<LogItem&>(item).message);
     for (frames = 0; stack[frames] != nullptr; ++frames) {}
     auto logGroup = reinterpret_cast<const char*>(&stack[frames + 1]);
     char** strs = backtrace_symbols(stack, frames);
@@ -117,14 +117,22 @@ void LoggerThread::immediate(const LogItem& item)
     char localTime[timeStringLength];
 
     formatTime(item, localTime);
+#ifdef DEBUG
+    if (0 == std::strcmp(item.logLevel, "_STK_"))
+    {
+        logStack(item, localTime, _logStdOut, _logFile);
+        fflush(stdout);
+        return;
+    }
+#endif
     if (_logStdOut)
     {
-        fprintf(stdout, "%s %s [%p]%s\n", localTime, item.logLevel, item.threadId, item.message);
+        formatTo(stdout, localTime, item.logLevel, item.threadId, item.message);
         fflush(stdout);
     }
     if (_logFile)
     {
-        fprintf(_logFile, "%s %s [%p]%s\n", localTime, item.logLevel, item.threadId, item.message);
+        formatTo(_logFile, localTime, item.logLevel, item.threadId, item.message);
         fflush(_logFile);
     }
 }

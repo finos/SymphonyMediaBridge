@@ -32,3 +32,42 @@ TEST(BacklogTest, addRemove)
     EXPECT_EQ(backlog.front(), 65);
     EXPECT_EQ(backlog.back(), 2);
 }
+
+TEST(BacklogTest, complex)
+{
+    struct AllocObject
+    {
+        AllocObject() {}
+        AllocObject(const AllocObject&) = delete;
+        int mo = 99;
+    } mainAllocator;
+
+    struct Complicated
+    {
+        AllocObject& allocator;
+        int* p;
+    };
+
+    memory::RandomAccessBacklog<Complicated, 64> backlog;
+
+    EXPECT_TRUE(backlog.empty());
+    int test1 = 88;
+
+    AllocObject& mainRef(mainAllocator);
+    for (int i = 0; i < 64; ++i)
+    {
+        backlog.push_front({mainRef, &test1});
+        EXPECT_EQ(backlog.size(), i + 1);
+    }
+    EXPECT_TRUE(backlog.full());
+
+    Complicated c = backlog.back();
+    backlog.pop_back();
+    EXPECT_EQ(*c.p, 88);
+
+    while (!backlog.empty())
+    {
+        backlog.pop_back();
+    }
+    EXPECT_EQ(backlog.size(), 0);
+}

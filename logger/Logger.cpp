@@ -62,7 +62,7 @@ void logStack(const void* stack, int frames, const char* logGroup)
         std::memcpy(item.message, stack, byteCount);
         std::memset(item.message + byteCount, 0, sizeof(void*));
         std::strcpy(item.message + byteCount + sizeof(void*), logGroup);
-        _logThread->post(std::move(item));
+        _logThread->immediate(std::move(item));
     }
 }
 

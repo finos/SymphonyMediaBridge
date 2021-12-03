@@ -60,12 +60,13 @@ void VideoForwarderRewriteAndSendJob::run()
         _outboundContext._needsKeyframe = true;
     }
 
+    const bool isKeyFrame = codec::Vp8Header::isKeyFrame(rtpHeader->getPayload(),
+        codec::Vp8Header::getPayloadDescriptorSize(rtpHeader->getPayload(),
+            _packet->getLength() - rtpHeader->headerLength()));
+
     if (_outboundContext._needsKeyframe)
     {
-        const auto rewrittenPayload = rtpHeader->getPayload();
-        const auto vp8PayloadDescriptorSize = codec::Vp8Header::getPayloadDescriptorSize(rewrittenPayload,
-            _packet->getLength() - rtpHeader->headerLength());
-        if (!codec::Vp8Header::isKeyFrame(rewrittenPayload, vp8PayloadDescriptorSize))
+        if (!isKeyFrame)
         {
             _outboundContext._allocator.free(_packet);
             _packet = nullptr;
@@ -101,6 +102,10 @@ void VideoForwarderRewriteAndSendJob::run()
         return;
     }
     rtpHeader->sequenceNumber = nextSequenceNumber;
+    if (isKeyFrame)
+    {
+        _outboundContext._lastKeyFrameSequenceNumber = nextSequenceNumber;
+    }
 
     if (_outboundContext._packetCache.isSet() && _outboundContext._packetCache.get())
     {

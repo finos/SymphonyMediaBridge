@@ -17,6 +17,7 @@
 #include "bridge/engine/RequestPliJob.h"
 #include "bridge/engine/SendEngineMessageJob.h"
 #include "bridge/engine/SendRtcpJob.h"
+#include "bridge/engine/SetMaxMediaBitrateJob.h"
 #include "bridge/engine/SsrcWhitelist.h"
 #include "bridge/engine/VideoForwarderReceiveJob.h"
 #include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
@@ -172,7 +173,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _lastUplinkEstimateUpdate(0),
       _config(config),
       _lastN(_config.defaultLastN),
-      _numMixedAudioStreams(0)
+      _numMixedAudioStreams(0),
+      _lastVideoBandwidthCheck(0)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -796,6 +798,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     if (_config.bwe.useUplinkEstimate)
     {
         updateDirectorUplinkEstimates(engineIterationStartTimestamp);
+        checkVideoBandwidth(engineIterationStartTimestamp);
     }
 
     // 4. Perform audio mixing
@@ -3187,6 +3190,65 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
                 transport,
                 _sendAllocator);
         }
+    }
+}
+
+void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
+{
+    if (!utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3))
+    {
+        return;
+    }
+
+    _lastVideoBandwidthCheck = timestamp;
+    uint32_t minUplinkEstimate = 10000000;
+    bridge::SimulcastLevel* presenterSimulcastLevel = nullptr;
+    bridge::EngineVideoStream* presenterStream = nullptr;
+    for (auto videoIt : _engineVideoStreams)
+    {
+        auto& videoStream = *videoIt.second;
+        if (videoStream._simulcastStream._contentType == SimulcastStream::VideoContentType::SLIDES)
+        {
+            presenterSimulcastLevel = &videoStream._simulcastStream._levels[0];
+            presenterStream = videoIt.second;
+        }
+        else if (videoStream._secondarySimulcastStream.isSet() &&
+            videoStream._secondarySimulcastStream.get()._contentType == SimulcastStream::VideoContentType::SLIDES)
+        {
+            presenterSimulcastLevel = &videoStream._secondarySimulcastStream.get()._levels[0];
+            presenterStream = videoIt.second;
+        }
+        else
+        {
+            minUplinkEstimate = std::min(minUplinkEstimate, videoIt.second->_transport.getUplinkEstimateKbps());
+        }
+    }
+
+    minUplinkEstimate = std::max(minUplinkEstimate, _config.slides.minBitrate.get());
+
+    if (presenterSimulcastLevel)
+    {
+        const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
+
+        logger::info("limiting bitrate for ssrc %u, at %u",
+            _loggableId.c_str(),
+            presenterSimulcastLevel->_ssrc,
+            slidesLimit);
+
+        presenterStream->_transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->_transport,
+            presenterStream->_localSsrc,
+            presenterSimulcastLevel->_ssrc,
+            slidesLimit,
+            _sendAllocator);
+    }
+}
+
+void EngineMixer::runTransportTicks(const uint64_t timestamp)
+{
+    for (auto videoIt : _engineVideoStreams)
+    {
+        auto& videoStream = *videoIt.second;
+        videoStream._transport.runTick(timestamp);
     }
 }
 

@@ -64,7 +64,8 @@ public:
     CFG_GROUP() // rate control
     CFG_PROP(bool, enable, false);
     CFG_PROP(uint32_t, floor, 300);
-    CFG_PROP(uint32_t, ceiling, 5000);
+    CFG_PROP(uint32_t, ceiling, 9000);
+    CFG_PROP(uint32_t, initialEstimate, 1200);
     CFG_GROUP_END(rctl)
 
     CFG_GROUP()
@@ -72,28 +73,33 @@ public:
     CFG_PROP(uint32_t, sharedPorts, 1);
     CFG_GROUP_END(recording)
 
-    struct RtcpConfig
-    {
-        uint32_t mtu = 1440;
-        struct SenderReports
-        {
-            uint64_t interval = utils::Time::ms * 600;
-            uint64_t resubmitInterval = utils::Time::sec * 7;
-        } senderReport;
-        struct ReceiveReports
-        {
-            uint64_t delayAfterSR = utils::Time::ms * 400;
-            uint64_t idleInterval = utils::Time::sec * 6;
-        } receiveReport;
-    } rtcp; // can be made configurable later
+    CFG_GROUP()
+    CFG_PROP(uint32_t, minBitrate, 900);
+    CFG_PROP(double, allocFactor, 1.0);
+    CFG_GROUP_END(slides)
 
-    struct RecordingRtcpConfig
-    {
-        uint32_t mtu = 1440;
-        uint64_t reportInterval = utils::Time::ms * 2500;
-    } recordingRtcp; // can be made configurable later
+    CFG_GROUP()
+    CFG_PROP(uint32_t, mtu, 1440);
 
-    uint32_t mtu = 1480;
+    CFG_GROUP()
+    CFG_PROP(uint64_t, interval, utils::Time::ms * 600);
+    CFG_PROP(uint64_t, resubmitInterval, utils::Time::sec * 7);
+    CFG_GROUP_END(senderReport)
+
+    CFG_GROUP()
+    CFG_PROP(uint64_t, delayAfterSR, utils::Time::ms * 400);
+    CFG_PROP(uint64_t, idleInterval, utils::Time::sec * 6);
+    CFG_GROUP_END(receiveReport)
+
+    CFG_GROUP_END(rtcp) // can be made configurable later
+
+    CFG_GROUP()
+    CFG_PROP(uint32_t, mtu, 1440);
+    CFG_PROP(uint64_t, reportInterval, utils::Time::ms * 2500);
+    CFG_GROUP_END(recordingRtcp)
+
+    CFG_PROP(uint32_t, mtu, 1480);
+    CFG_PROP(uint32_t, ipOverhead, 20 + 14);
 };
 
 } // namespace config

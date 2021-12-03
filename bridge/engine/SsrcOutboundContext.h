@@ -35,6 +35,7 @@ public:
           _timestampOffset(0),
           _lastRewrittenSsrc(ssrc),
           _needsKeyframe(false),
+          _lastKeyFrameSequenceNumber(0),
           _highestSeenExtendedSequenceNumber(0xFFFFFFFF),
           _lastRespondedNackPid(0),
           _lastRespondedNackBlp(0),
@@ -72,6 +73,7 @@ public:
     int64_t _timestampOffset;
     uint32_t _lastRewrittenSsrc;
     bool _needsKeyframe;
+    uint32_t _lastKeyFrameSequenceNumber;
 
     // Used to keep track of offset between inbound and outbound sequence numbers
     uint32_t _highestSeenExtendedSequenceNumber;

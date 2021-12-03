@@ -196,6 +196,18 @@ void VideoForwarderReceiveJob::run()
         }
     }
 
+    if (rtpHeader->marker && isKeyframe)
+    {
+        logger::debug("end of key frame ssrc %u, seqno %u, pid %u, tid %d, picid %d, tl0picidx %d",
+            "VideoForwarderReceiveJob",
+            _ssrcContext._ssrc,
+            rtpHeader->sequenceNumber.get(),
+            codec::Vp8Header::getPartitionId(payload),
+            codec::Vp8Header::getTid(payload),
+            codec::Vp8Header::getPicId(payload),
+            codec::Vp8Header::getTl0PicIdx(payload));
+    }
+
     if (videoDumpFile != nullptr)
     {
         dumpPacket(videoDumpFile, *_packet, std::min(size_t(36), _packet->getLength()));

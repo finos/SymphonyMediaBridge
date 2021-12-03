@@ -58,6 +58,8 @@ public:
 
     size_t size() const { return _count; }
     bool empty() const { return _count == 0; }
+    bool full() const { return _count >= N; }
+    size_t capacity() const { return N; }
 
     const_iterator cbegin() const { return const_iterator(*this, 0); }
     iterator begin() { return iterator(*this, 0); }
@@ -104,6 +106,15 @@ public:
             reinterpret_cast<T*>(&_data[(_head + i) % N])->~T();
         }
         _count = 0;
+    }
+
+    void pop_back()
+    {
+        if (_count > 0)
+        {
+            reinterpret_cast<T*>(&_data[(_head + _count - 1) % N])->~T();
+            --_count;
+        }
     }
 
 private:

@@ -21,6 +21,7 @@ RtpSenderState::RtpSenderState(uint32_t rtpFrequency, const config::Config& conf
       _rtpSendTime(0),
       _senderReportSendTime(0),
       _senderReportNtp(0),
+      _lossSinceSenderReport(0),
       _config(config),
       _scheduledSenderReport(0),
       _rtpFrequency(rtpFrequency)
@@ -66,6 +67,7 @@ void RtpSenderState::onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* heade
         _senderReportSendTime = timestamp;
         _senderReportNtp = sr->ntpSeconds << 16 | sr->ntpFractions >> 16;
         _scheduledSenderReport = timestamp + _config.rtcp.senderReport.resubmitInterval;
+        _lossSinceSenderReport = 0;
     }
 }
 
@@ -125,6 +127,7 @@ void RtpSenderState::onReceiverBlockReceived(uint64_t timestamp,
     counters.packets = newReport.extendedSeqNoReceived - _remoteReport.extendedSeqNoReceived;
     counters.period = timestamp - _remoteReport.timestamp;
     _counters.write(counters);
+    _lossSinceSenderReport += counters.lostPackets;
 
     ReportSummary s;
     s.extendedSeqNoReceived = newReport.extendedSeqNoReceived;
@@ -170,12 +173,21 @@ uint32_t RtpSenderState::getRttNtp() const
     return s.rttNtp;
 }
 
-// return ns until next sender report should be sent for this ssrc
+/**
+ * return ns until next sender report should be sent for this ssrc
+ * If we have loss reported for this SR, we need another SR soon to know if we still have loss on the link
+ * as multiple report blocks may be referring to this SR.
+ */
 int64_t RtpSenderState::timeToSenderReport(const uint64_t timestamp) const
 {
     if (_scheduledSenderReport == 0)
     {
         return _sendCounters.packets > 4 ? 0 : _config.rtcp.senderReport.resubmitInterval;
+    }
+
+    if (_lossSinceSenderReport > 0 && utils::Time::diffGE(_senderReportSendTime, timestamp, utils::Time::ms * 500))
+    {
+        return 0;
     }
 
     return std::max(int64_t(0), static_cast<int64_t>(_scheduledSenderReport - timestamp));

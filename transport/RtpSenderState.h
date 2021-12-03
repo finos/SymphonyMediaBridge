@@ -89,6 +89,7 @@ private:
     uint64_t _rtpSendTime;
     uint64_t _senderReportSendTime;
     uint32_t _senderReportNtp;
+    uint32_t _lossSinceSenderReport;
 
     const config::Config& _config;
     uint64_t _scheduledSenderReport;

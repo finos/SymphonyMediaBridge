@@ -1,23 +1,56 @@
 #include "bwe/RateController.h"
 #include "logger/Logger.h"
+#include "math/helpers.h"
 #include "rtp/RtcpHeader.h"
 #include "rtp/RtpHeader.h"
 #include "utils/CheckedCast.h"
+#include "utils/StdExtensions.h"
 #include "utils/Time.h"
 #include <algorithm>
 #include <cmath>
 
-#define RCTL_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
+#define RCTL_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
 
-namespace bwe
+namespace
 {
 const uint32_t ntp32Second = 0x10000u;
+uint32_t calculateTargetQueue(double bandwidthKbps, uint32_t minRttNtp, const bwe::RateControllerConfig& config)
+{
+    // 230ms queue at 300kbps then decay to 50ms. Add for min RTT/8 ms to allow for queue on long haul
+    const uint32_t targetQueue =
+        bandwidthKbps * (50 + 54000 / std::max(200.0, bandwidthKbps) + minRttNtp * 125 / ntp32Second) / 8;
+    return math::clamp(targetQueue, 4 * config.mtu, config.maxTargetQueue);
+}
+
+} // namespace
+namespace bwe
+{
+
+double RateController::BacklogAnalysis::getBitrateKbps() const
+{
+    if (delaySinceSR == 0)
+    {
+        return 0;
+    }
+
+    return static_cast<double>(receivedAfterSR) * ntp32Second / (125.0 * delaySinceSR);
+}
+
+double RateController::BacklogAnalysis::getSendRateKbps() const
+{
+    if (transmitPeriod == 0)
+    {
+        return 0;
+    }
+    return static_cast<double>(receivedAfterSR) * utils::Time::ms * 8 / transmitPeriod;
+}
 
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
     : _logId("RateCtrl", instanceId),
       _minRttNtp(~0u),
       _config(config)
 {
+    _model.bandwidthKbps = config.initialEstimateKbps;
 }
 
 void RateController::onRtpSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size)
@@ -49,18 +82,16 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     metaPacket.reportNtp = reportNtp;
     metaPacket.queueSize = _model.queue;
     _backlog.push_front(metaPacket);
-    RCTL_LOG("SR sent ssrc %u, size %u, ntp %x", _logId.c_str(), ssrc, size, reportNtp);
 
-    const bool canSendProbe = _model.queue < _model.targetQueue &&
-        (_probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval));
+    const auto budget = getPacingBudget(timestamp);
+
+    const bool canSendProbe =
+        budget > 0 && (_probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval));
 
     if ((_probe.count < 5 && _probe.duration == 0) || canSendProbe)
     {
         _probe.start = timestamp;
-        _probe.duration = 700 * utils::Time::ms; // could take previous SR to RR delay into account
-        _probe.initialNetworkQueue = _model.networkQueue;
-        _model.queue = size;
-        _backlog.front().queueSize = size;
+        _probe.duration = 700 * utils::Time::ms;
         ++_probe.count;
         RCTL_LOG("starting probe %" PRIu64 "ms target Q %uB",
             _logId.c_str(),
@@ -69,10 +100,20 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     }
 }
 
+/**
+ * Marks received packets in the backlog accoring to this ssrc and sequence number
+ *
+ * Improvement could be to mark the packets lost according to loss count. Sort the packets in heap and mark those with
+ * largest size between the received seqno and the last received seqno. This can be used to more accurately decide how
+ * many bytes were actually received after SR. At the moment we pick the largest packet and multiply with the loss count
+ * although it may be other packet sequences that are lost. Also we should take into account sequence number gaps in
+ * transmission due to dropping packets in pacing queue.
+ */
 void RateController::onReportBlockReceived(uint32_t ssrc,
     uint32_t receivedSequenceNumber,
     uint32_t cumulativeLossCount,
-    uint32_t reportNtp)
+    uint32_t reportNtp,
+    uint32_t delaySinceSR)
 {
     if (!_config.enabled)
     {
@@ -94,18 +135,42 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
         sample = &_receiveBlocks.front();
     }
 
-    const uint32_t lossCount = cumulativeLossCount - std::min(cumulativeLossCount, sample->lossCount);
+    uint32_t lossCount = cumulativeLossCount - std::min(cumulativeLossCount, sample->lossCount);
     sample->lossCount = cumulativeLossCount;
 
+    uint32_t receivedPackets = 0;
     for (auto& item : _backlog)
     {
-        if (item.ssrc == ssrc && (item.type == PacketMetaData::RTP || item.type == PacketMetaData::RTP_PADDING) &&
-            item.sequenceNumber == receivedSequenceNumber)
+        if (item.ssrc == ssrc && item.type == PacketMetaData::RTP)
         {
-            item.received = true;
-            item.lossCount = lossCount;
-            return;
+            if (item.sequenceNumber == receivedSequenceNumber)
+            {
+                item.received = true;
+                item.lossCount = lossCount;
+                item.reportNtp = reportNtp;
+                item.delaySinceSR = delaySinceSR;
+                ++receivedPackets;
+                if (lossCount > 0)
+                {
+                    RCTL_LOG("marking %u, %u with loss %u", _logId.c_str(), ssrc, item.sequenceNumber, lossCount);
+                }
+            }
+            else if (item.received)
+            {
+                break; // part of previous report on this ssrc
+                // at this point we could walk forward and mark packets to sacrifice as loss according to lossCount.
+                // That would give us ability to assess bandwidth also when some loss is present
+            }
+            else if (receivedPackets > 0)
+            {
+                item.received = true;
+                ++receivedPackets;
+            }
         }
+    }
+    if (lossCount > 0)
+    {
+        // dumpBacklog(receivedSequenceNumber, ssrc);
     }
 }
 
@@ -120,7 +185,7 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
     }
 
     const auto& sr = backlog[srIndex];
-    uint32_t queueSize = sr.size;
+    uint32_t queueSize = sr.size + sr.queueSize;
     uint64_t lastTransmission = sr.transmissionTime;
 
     for (uint32_t i = srIndex - 1;; --i)
@@ -137,67 +202,111 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
         queueSize += item.size;
         lastTransmission = item.transmissionTime;
 
-        if (i == 0)
+        if (i == trainEnd)
         {
-            break;
+            return queueSize > 100;
         }
     }
 
-    return queueSize > 100;
+    return false;
 }
+
 } // namespace
 
-// Walk through the backlog from tail up to SR. Extract how many bytes has not been received and how many bytes has been
-// received after the SR. This will hint us on receive rate and how much is still queued in the network.
-RateController::PacketMetaData* RateController::analyzeBacklog(uint32_t ssrc,
-    uint32_t reportNtp,
-    uint32_t receivedSequenceNumber,
-    double modelBandwidthKbps,
-    uint64_t& transmissionPeriod,
-    uint32_t& receivedAfterSR,
-    uint32_t& lossSinceSR,
-    uint32_t& networkQueue,
-    bool& probing)
+bool RateController::isGood(const RateController::BacklogAnalysis& probe) const
 {
-    transmissionPeriod = 0;
-    receivedAfterSR = 0;
-    networkQueue = 0;
-    lossSinceSR = 0;
-    probing = false;
+    return probe.probing && static_cast<double>(probe.receivedAfterSR) / probe.sentAfterSR > 0.9 &&
+        probe.delaySinceSR > ntp32Second / 10 && probe.senderReportItem;
+}
 
-    uint32_t trainEnd = 0;
+RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t probeEndIndex,
+    const double modelBandwidthKbps) const
+{
+    BacklogAnalysis report;
+
+    const PacketMetaData& probeEndItem = _backlog[probeEndIndex];
+    report.receivedAfterSR = probeEndItem.size;
+    report.delaySinceSR = probeEndItem.delaySinceSR;
+    report.packetsSent = 1;
+    report.packetsReceived = 1;
+
+    auto lossSinceSR = probeEndItem.lossCount;
+    const auto transmissionEnd = probeEndItem.transmissionTime;
+    auto largestPacketReceived = probeEndItem.size;
+
+    for (uint32_t i = probeEndIndex + 1; i < _backlog.size(); ++i)
+    {
+        auto& item = _backlog[i];
+        if (item.type == PacketMetaData::SR && item.reportNtp == probeEndItem.reportNtp)
+        {
+            report.transmitPeriod = transmissionEnd - item.transmissionTime;
+
+            if (report.receivedAfterSR > 0)
+            {
+                report.probing = isProbe(_backlog, modelBandwidthKbps, probeEndIndex, i);
+                report.receivedAfterSR =
+                    report.receivedAfterSR - std::min(report.receivedAfterSR, lossSinceSR * largestPacketReceived);
+            }
+            report.senderReportItem = &item;
+            report.lossCount = lossSinceSR;
+            report.lossRatio = static_cast<double>(lossSinceSR) / std::max(1u, report.packetsSent);
+            return report;
+        }
+        else
+        {
+            if (item.type == PacketMetaData::RTCP_PADDING)
+            {
+                report.rtpProbe = false;
+            }
+            if (item.received || item.type == PacketMetaData::RTCP_PADDING)
+            {
+                report.receivedAfterSR += item.size;
+                ++report.packetsReceived;
+            }
+
+            lossSinceSR += item.lossCount;
+            largestPacketReceived = std::max(item.size, largestPacketReceived);
+            if (item.type == PacketMetaData::RTP || item.type == PacketMetaData::RTCP_PADDING)
+            {
+                // could include sctp and other SR
+                ++report.packetsSent;
+                report.sentAfterSR += item.size;
+            }
+        }
+    }
+
+    return report;
+}
+
+/**
+ *  Walk the backlog and find complete probe sequences where no packets are lost and receive time is at least 50ms.
+ * Multiple receiver reports may be needed to complete such probes.
+ * The RR may indicate that we have loss due to sequence number gaps, but in reality we have received all packets in the
+ * sequence because all of those that were sent were also received.
+ */
+RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNtpLimit, double modelBandwidthKbps) const
+{
+    BacklogAnalysis report;
+
     bool hasReceived = false;
-    uint64_t transmissionEnd = 0;
+    uint32_t networkQueue = 0;
     for (uint32_t i = 0; i < _backlog.size(); ++i)
     {
         auto& item = _backlog[i];
-        if (item.type == PacketMetaData::SR && item.reportNtp == reportNtp)
-        {
-            transmissionPeriod = transmissionEnd - item.transmissionTime;
 
-            if (receivedAfterSR > 0)
-            {
-                probing = isProbe(_backlog, modelBandwidthKbps, trainEnd, i);
-            }
-            return &item;
-        }
-        else if ((item.type == PacketMetaData::RTP || item.type == PacketMetaData::RTP_PADDING) && item.ssrc == ssrc &&
-            item.sequenceNumber == receivedSequenceNumber)
+        if (item.type == PacketMetaData::RTP && item.reportNtp != 0 && item.received &&
+            item.delaySinceSR > ntp32Second / 20)
         {
-            if (receivedAfterSR == 0)
+            auto reportCandidate = analyzeProbe(i, modelBandwidthKbps);
+            if (isGood(reportCandidate) || report.lossCount > 0)
             {
-                trainEnd = i;
+                report = reportCandidate;
+                report.networkQueue = networkQueue;
+                return report;
             }
-            item.received = true;
-            lossSinceSR += item.lossCount;
-            transmissionEnd = item.transmissionTime;
-            receivedAfterSR += item.size;
         }
-        else if (receivedAfterSR > 0)
-        {
-            receivedAfterSR += item.size;
-        }
-        else if (item.received)
+
+        if (item.received && !hasReceived)
         {
             hasReceived = true;
         }
@@ -205,9 +314,65 @@ RateController::PacketMetaData* RateController::analyzeBacklog(uint32_t ssrc,
         {
             networkQueue += item.size;
         }
+
+        if (item.type == PacketMetaData::SR && static_cast<int32_t>(item.reportNtp - reportNtpLimit) < 0)
+        {
+            break;
+        }
     }
 
-    return nullptr;
+    report.networkQueue = networkQueue;
+    return report;
+}
+
+void RateController::dumpBacklog(const uint32_t seqno, const uint32_t ssrc)
+{
+    uint32_t queueSize = 0;
+
+    for (auto& p : _backlog)
+    {
+        if (p.sequenceNumber == seqno && ssrc == p.ssrc)
+        {
+            queueSize = p.size;
+        }
+        else if (queueSize > 0)
+        {
+            queueSize += p.size;
+        }
+
+        if (p.type == PacketMetaData::SR)
+        {
+            logger::debug("SR ssrc %u:%u, %x, sz %u, origQ %u, %" PRIu64 " Q %u",
+                _logId.c_str(),
+                p.ssrc,
+                ssrc,
+                p.reportNtp,
+                p.size,
+                p.queueSize,
+                p.transmissionTime,
+                queueSize);
+        }
+        else
+        {
+            logger::debug("pkt type %u ssrc %u, seq %u, sz %u, loss %u, %" PRIu64 " Q %u, rx %u, ntp %x",
+                _logId.c_str(),
+                p.type,
+                p.ssrc,
+                p.sequenceNumber,
+                p.size,
+                p.lossCount,
+                p.transmissionTime,
+                queueSize,
+                p.received,
+                p.reportNtp);
+        }
+
+        if (static_cast<int32_t>(seqno - p.sequenceNumber) > 1 && ssrc == p.ssrc && p.reportNtp != 0 &&
+            p.type == PacketMetaData::RTP)
+        {
+            break;
+        }
+    }
 }
 
 void RateController::onReportReceived(uint64_t timestamp,
@@ -220,124 +385,132 @@ void RateController::onReportReceived(uint64_t timestamp,
         return;
     }
 
-    const uint32_t minTargetQueue = 4 * _config.mtu;
-    _minRttNtp = std::min(_minRttNtp, rttNtp);
-
-    uint32_t networkQueue = ~0u;
-    double maxRateKbps = 0;
-    uint32_t lossCount = 0;
-    bool isProbing = false;
     for (uint32_t i = 0; i < count; ++i)
     {
-        uint64_t transmissionPeriod = 0;
-        uint32_t receivedAfterSR = 0;
-        uint32_t lossSinceSR = 0;
-        uint32_t estimatedQueue = 0;
-        bool isaProbe = false;
-
-        const auto& block = blocks[i];
-        auto* item = analyzeBacklog(block.ssrc,
-            block.lastSR,
-            block.extendedSeqNoReceived,
-            _model.bandwidthKbps,
-            transmissionPeriod,
-            receivedAfterSR,
-            lossSinceSR,
-            estimatedQueue,
-            isaProbe);
-
-        RCTL_LOG("%u delaySinceSR %.1fms, seqno %u, loss %u, lastSR %x %uB, rxRate %.2fkbps, found SR %s, probe %u",
+        const auto& rb = blocks[i];
+        RCTL_LOG("RB received %u, seq %u, ntp %x, %ums, loss %u, Q %u, tQ %u",
             _logId.c_str(),
-            block.ssrc.get(),
-            static_cast<double>(block.delaySinceLastSR.get() * 1000 / ntp32Second),
-            block.extendedSeqNoReceived.get(),
-            lossSinceSR,
-            block.lastSR.get(),
-            receivedAfterSR,
-            block.delaySinceLastSR.get() > 0
-                ? static_cast<double>(receivedAfterSR) * ntp32Second / (125 * block.delaySinceLastSR)
-                : 0.0,
-            item ? "t" : "f",
-            isaProbe);
+            rb.ssrc.get(),
+            rb.extendedSeqNoReceived.get(),
+            rb.lastSR.get(),
+            rb.delaySinceLastSR * 1000 / ntp32Second,
+            rb.loss.getCumulativeLoss(),
+            _model.queue,
+            _model.targetQueue);
+    }
 
-        networkQueue = std::min(estimatedQueue, networkQueue);
-        if (item && receivedAfterSR > 0)
+    _minRttNtp = std::min(_minRttNtp, rttNtp);
+
+    uint32_t limitNtp = blocks[0].lastSR;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        const auto& block = blocks[i];
+        if (block.lastSR != 0 && static_cast<int32_t>(limitNtp - block.lastSR) > 0)
         {
-            if (block.delaySinceLastSR > ntp32Second / 20 && lossSinceSR == 0 && isaProbe)
-            {
-                maxRateKbps = std::max(maxRateKbps,
-                    static_cast<double>(receivedAfterSR) * ntp32Second / (125 * block.delaySinceLastSR));
-                isProbing = true;
-            }
-            lossCount = std::max(lossSinceSR, lossCount);
+            limitNtp = block.lastSR;
         }
     }
-    if (networkQueue == ~0u)
+    if (limitNtp == 0)
     {
         return;
     }
 
-    if (lossCount == 0)
+    auto backlogReport = analyzeBacklog(limitNtp - ntp32Second * 10, _model.bandwidthKbps);
+    if (backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem)
     {
-        _model.networkQueue = networkQueue;
-
-        if (isProbing && _model.queue > _model.targetQueue / 5 && maxRateKbps != 0)
-        {
-            _model.bandwidthKbps +=
-                (maxRateKbps > _model.bandwidthKbps ? 1.0 : 0.1) * (maxRateKbps - _model.bandwidthKbps);
-        }
-        else if (isProbing && networkQueue + _config.mtu < _model.queue &&
-            utils::Time::diffGT(_probe.start, timestamp, 0))
-        {
-            // More rare case. We did not get useful info about receive rate but we see that the network queue is
-            // shorter than anticipated
-            const auto extraBw = (_model.queue - std::min(_model.queue, networkQueue + _probe.initialNetworkQueue)) *
-                8 * utils::Time::ms / (timestamp - _probe.start);
-            _model.bandwidthKbps += extraBw;
-        }
-        else if (isProbing && maxRateKbps != 0)
-        {
-            _model.bandwidthKbps +=
-                (maxRateKbps > _model.bandwidthKbps ? 0.5 : 0.05) * (maxRateKbps - _model.bandwidthKbps);
-        }
-
-        if (_minRttNtp != ~0u && _minRttNtp != 0)
-        {
-            // aim at 100ms queue build up. Some network buffers are 75K so it is wise to not exceed
-            _model.targetQueue =
-                std::max(_model.bandwidthKbps, maxRateKbps) * (80 + _minRttNtp * 500 / ntp32Second) / 8;
-            _model.targetQueue = std::max(_model.targetQueue, minTargetQueue);
-            _model.targetQueue = std::min(_model.targetQueue, 60000u);
-        }
-        else
-        {
-            _model.targetQueue += _config.mtu;
-        }
-    }
-    else if (lossCount > 2 && (rttNtp - _minRttNtp) > (100 * ntp32Second) / 1000)
-    {
-        _model.targetQueue = _model.targetQueue / 2;
-        _model.bandwidthKbps = std::max(static_cast<double>(_config.bandwidthFloorKbps), _model.bandwidthKbps * 0.85);
+        return;
     }
 
-    _model.bandwidthKbps = std::min(_model.bandwidthKbps, static_cast<double>(_config.bandwidthCeilingKbps));
-    _model.bandwidthKbps = std::max(_model.bandwidthKbps, static_cast<double>(_config.bandwidthFloorKbps));
-    _model.targetQueue = std::max(minTargetQueue, _model.targetQueue);
+    bool sameProbe = false;
+    if (backlogReport.senderReportItem->reportNtp == _lastProbe.ntp &&
+        backlogReport.delaySinceSR == _lastProbe.delaySinceSR)
+    {
+        sameProbe = true;
+    }
+    else
+    {
+        _lastProbe.ntp = backlogReport.senderReportItem->reportNtp;
+        _lastProbe.delaySinceSR = backlogReport.delaySinceSR;
+        RCTL_LOG(
+            "delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %.2fkbps, txRate %.1fkbps found SR %s, "
+            "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
+            _logId.c_str(),
+            static_cast<double>(backlogReport.delaySinceSR * 1000 / ntp32Second),
+            backlogReport.senderReportItem->reportNtp,
+            backlogReport.lossCount,
+            backlogReport.lossRatio,
+            backlogReport.receivedAfterSR,
+            backlogReport.getBitrateKbps(),
+            backlogReport.getSendRateKbps(),
+            backlogReport.senderReportItem ? "t" : "f",
+            backlogReport.probing,
+            backlogReport.rtpProbe,
+            backlogReport.networkQueue,
+            backlogReport.packetsSent,
+            backlogReport.packetsReceived);
+    }
 
-    RCTL_LOG("model %.1fkbps mQ %uB tQ %uB, nwQueue %u, rxRate %.fkbps txRate %.fkbps rtt %.1fms loss %u, probing %s",
+    const double receiveRateKbps = backlogReport.rtpProbe
+        ? std::min(_config.bandwidthCeilingKbps, backlogReport.getBitrateKbps())
+        : std::min(_config.rtcpProbeCeiling, backlogReport.getBitrateKbps());
+
+    if (!sameProbe && isGood(backlogReport) && backlogReport.lossCount < 3 && backlogReport.lossRatio <= 0.02)
+    {
+        if (receiveRateKbps > _model.bandwidthKbps)
+        {
+            _model.bandwidthKbps = std::min(_model.bandwidthKbps + 1000, backlogReport.getBitrateKbps());
+        }
+        else if (backlogReport.networkQueue + _config.mtu < _model.queue)
+        {
+            // More rare case. We did not get useful info about receive rate but we see that the network
+            // queue is shorter than anticipated
+            _model.bandwidthKbps = std::min(_model.bandwidthKbps, _config.bandwidthCeilingKbps);
+            RCTL_LOG("increased rc estimate due to short network queue 200kbps, to %.1fkbps",
+                _logId.c_str(),
+                _model.bandwidthKbps * 0.02);
+
+            _model.bandwidthKbps *= 1.02;
+        }
+        else if (backlogReport.packetsSent > 4)
+        {
+            _model.bandwidthKbps -= 0.1 * (_model.bandwidthKbps - receiveRateKbps);
+        }
+    }
+    else if (!sameProbe && backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
+        backlogReport.networkQueue > _model.targetQueue / 2 &&
+        (_lastLossBackoff == 0 || utils::Time::diffGE(_lastLossBackoff, timestamp, utils::Time::sec * 5)))
+    {
+        _model.bandwidthKbps = std::max(_config.bandwidthFloorKbps, _model.bandwidthKbps * 0.95);
+        _lastLossBackoff = timestamp;
+        RCTL_LOG("decrease due to loss %.3f %.1fkbps, targetQ %u",
+            _logId.c_str(),
+            backlogReport.lossRatio,
+            _model.bandwidthKbps,
+            _model.targetQueue);
+    }
+
+    _model.targetQueue = calculateTargetQueue(_model.bandwidthKbps, _minRttNtp, _config);
+    _model.bandwidthKbps = math::clamp(_model.bandwidthKbps, _config.bandwidthFloorKbps, _config.bandwidthCeilingKbps);
+    if (_model.queue > backlogReport.networkQueue)
+    {
+        _model.queue = backlogReport.networkQueue;
+    }
+
+    RCTL_LOG("model %.1fkbps mQ %uB tQ %uB, nwQueue %u, rxRate %.fkbps rtt %.1fms loss "
+             "%u, probing %s",
         _logId.c_str(),
         _model.bandwidthKbps,
         _model.queue,
         _model.targetQueue,
-        networkQueue,
-        maxRateKbps,
-        calculateSendRate(timestamp),
+        backlogReport.networkQueue,
+        receiveRateKbps,
         double(rttNtp) * 1000 / ntp32Second,
-        lossCount,
-        isProbing ? "t" : "f");
-    _model.queue = std::min(_model.queue, networkQueue);
+        backlogReport.lossCount,
+        backlogReport.probing ? "t" : "f");
+    _model.queue = std::min(_model.queue, backlogReport.networkQueue);
 
-    if (_probe.duration != 0 && (lossCount > 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.duration)))
+    if (_probe.duration != 0 &&
+        (backlogReport.lossCount > 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.duration)))
     {
         // there may be later RB after SR and need good measurements of bw
         RCTL_LOG("stopping probe", _logId.c_str());
@@ -353,7 +526,6 @@ void RateController::onRtcpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint16
     }
 
     _model.onPacketSent(timestamp, size + _config.ipOverhead);
-    _canRtxPad = false;
 
     if (!_backlog.empty())
     {
@@ -368,17 +540,15 @@ void RateController::onRtcpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint16
     _backlog.emplace_front(timestamp, ssrc, 0, size + _config.ipOverhead, PacketMetaData::RTCP_PADDING);
 }
 
-void RateController::onRtpPaddingSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size)
+void RateController::onSctpSent(uint64_t timestamp, uint16_t size)
 {
     if (size == 0 || !_config.enabled)
     {
         return;
     }
 
-    _canRtxPad = true;
-    _rtxSendTime = timestamp;
     _model.onPacketSent(timestamp, size + _config.ipOverhead);
-    _backlog.emplace_front(timestamp, ssrc, sequenceNumber, size + _config.ipOverhead, PacketMetaData::RTP_PADDING);
+    _backlog.emplace_front(timestamp, 0, 0, size + _config.ipOverhead, PacketMetaData::SCTP);
 }
 
 uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t size, uint16_t& paddingSize) const
@@ -388,8 +558,9 @@ uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t siz
         return 0;
     }
 
-    if (_model.queue > _model.targetQueue || _probe.start == 0 ||
-        utils::Time::diffGE(_probe.start, timestamp, _probe.duration))
+    const auto budget = getPacingBudget(timestamp);
+
+    if (budget == 0 || _probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.duration))
     {
         if (_canRtxPad &&
             (_rtxSendTime == 0 || utils::Time::diffGE(_rtxSendTime, timestamp, _config.minPadPinInterval)))
@@ -400,10 +571,10 @@ uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t siz
         return 0;
     }
 
-    if (_model.queue + size < _model.targetQueue)
+    if (budget >= size)
     {
-        auto batchSize = std::min(_model.targetQueue - _model.queue, _config.mtu * 5) - size;
-        auto count = 1 + batchSize / _config.maxPaddingSize;
+        const auto batchSize = budget - size;
+        const auto count = 1 + batchSize / _config.maxPaddingSize;
         paddingSize = batchSize / count;
         if (paddingSize < _config.minPadSize)
         {
@@ -425,10 +596,22 @@ double RateController::calculateSendRate(const uint64_t timestamp) const
         auto period = timestamp - item.transmissionTime;
         if (period > utils::Time::ms * 600)
         {
+
             return byteCount * 8 * utils::Time::ms / period;
         }
     }
 
     return 0;
 }
+
+size_t RateController::getPacingBudget(uint64_t timestamp) const
+{
+    const auto currentQueue = _model.queue -
+        std::min(_model.queue,
+            static_cast<uint32_t>(
+                _model.bandwidthKbps * (timestamp - _model.lastTransmission) / (8 * utils::Time::ms)));
+
+    return _model.targetQueue - std::min(_model.targetQueue, currentQueue);
+}
+
 } // namespace bwe

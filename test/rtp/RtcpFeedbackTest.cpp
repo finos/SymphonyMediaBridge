@@ -54,9 +54,22 @@ TEST(RtcpFeedbackTest, Remb)
     EXPECT_EQ(remb.ssrcFeedback[0], 45);
     EXPECT_EQ(remb.ssrcCount, 1);
     const uint64_t bps = uint64_t(955) * 8 * 1000000;
-    EXPECT_EQ(remb.getBitRate(), 0);
-    remb.setBitRate(bps);
-    EXPECT_NEAR(remb.getBitRate(), bps, 10000);
+    EXPECT_EQ(remb.getBitrate(), 0);
+    remb.setBitrate(bps);
+    EXPECT_NEAR(remb.getBitrate(), bps, 10000);
     EXPECT_EQ(remb.header.length.get(), 4 + 1); // only one ssrc added
     EXPECT_EQ(remb.header.size(), sizeof(remb) + 4);
+}
+
+TEST(RtcpFeedbackTest, Tmmbr)
+{
+    uint8_t data[512];
+
+    auto& tmmbr = rtp::RtcpTemporaryMaxMediaBitrate::create(data, 111);
+    tmmbr.addEntry(211, 600000, 34);
+    auto& entry = tmmbr.getEntry(0);
+    EXPECT_EQ(tmmbr.reporterSsrc, 111);
+    EXPECT_EQ(entry.ssrc, 211);
+    EXPECT_EQ(entry.getBitrate(), 600000);
+    EXPECT_EQ(entry.getPacketOverhead(), 34);
 }

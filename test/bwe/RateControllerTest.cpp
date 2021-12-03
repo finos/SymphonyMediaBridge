@@ -31,6 +31,7 @@ TEST_P(RateControllerTestLongRtt, longRtt)
 {
     uint32_t capacityKbps = GetParam();
     bwe::RateControllerConfig rcConfig;
+    rcConfig.initialEstimateKbps = 300;
     bwe::RateController rateControl(1, rcConfig);
     auto* uplink = new fakenet::NetworkLink(capacityKbps, 75000, 1480);
     uplink->setStaticDelay(90);
@@ -47,7 +48,7 @@ TEST_P(RateControllerTestLongRtt, longRtt)
         video->setBandwidth(100);
     }
 
-    call.run(utils::Time::sec * 9, capacityKbps * 1.05);
+    call.run(utils::Time::sec * 16, capacityKbps * 1.05);
 
     EXPECT_GE(rateControl.getTargetRate(), std::min(1000.0, capacityKbps * 0.60));
     if (video)
@@ -79,6 +80,7 @@ TEST_P(RateControllerTestShortRtt, shortRtt)
 {
     uint32_t capacityKbps = GetParam();
     bwe::RateControllerConfig rcConfig;
+    rcConfig.initialEstimateKbps = 300;
     bwe::RateController rateControl(1, rcConfig);
     auto* uplink = new fakenet::NetworkLink(capacityKbps, 75000, 1480);
     uplink->setStaticDelay(0);

@@ -126,6 +126,10 @@ void Bridge::initialize()
     }
 
     _rateControllerConfig.enabled = _config.rctl.enable;
+    _rateControllerConfig.ipOverhead = _config.ipOverhead;
+    _rateControllerConfig.bandwidthCeilingKbps = _config.rctl.ceiling;
+    _rateControllerConfig.bandwidthFloorKbps = _config.rctl.floor;
+    _rateControllerConfig.initialEstimateKbps = _config.rctl.initialEstimate;
 
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPacketAllocator);
     _bweConfig.sanitize();
