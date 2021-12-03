@@ -11,17 +11,21 @@
 
 #define RCTL_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
 
-namespace bwe
+namespace
 {
 const uint32_t ntp32Second = 0x10000u;
-
-uint32_t calculateTargetQueue(double bandwidthKbps, uint32_t minRttNtp, const RateControllerConfig& config)
+uint32_t calculateTargetQueue(double bandwidthKbps, uint32_t minRttNtp, const bwe::RateControllerConfig& config)
 {
     // 230ms queue at 300kbps then decay to 50ms. Add for min RTT/8 ms to allow for queue on long haul
     const uint32_t targetQueue =
         bandwidthKbps * (50 + 54000 / std::max(200.0, bandwidthKbps) + minRttNtp * 125 / ntp32Second) / 8;
     return math::clamp(targetQueue, 4 * config.mtu, config.maxTargetQueue);
 }
+
+} // namespace
+namespace bwe
+{
+// const uint32_t ntp32Second = 0x10000u;
 
 double RateController::BacklogAnalysis::getBitrateKbps() const
 {

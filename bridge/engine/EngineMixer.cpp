@@ -17,6 +17,7 @@
 #include "bridge/engine/RequestPliJob.h"
 #include "bridge/engine/SendEngineMessageJob.h"
 #include "bridge/engine/SendRtcpJob.h"
+#include "bridge/engine/SetMaxMediaBitrateJob.h"
 #include "bridge/engine/SsrcWhitelist.h"
 #include "bridge/engine/VideoForwarderReceiveJob.h"
 #include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
@@ -3192,90 +3193,53 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
     }
 }
 
-class SetMaxMediaBitrateJob : public jobmanager::CountedJob
-{
-public:
-    SetMaxMediaBitrateJob(transport::RtcTransport& transport,
-        uint32_t reporterSsrc,
-        uint32_t ssrc,
-        uint32_t bitrateKbps,
-        memory::PacketPoolAllocator& allocator)
-        : CountedJob(transport.getJobCounter()),
-          _transport(transport),
-          _ssrc(ssrc),
-          _reporterSsrc(reporterSsrc),
-          _bitrate(bitrateKbps),
-          _allocator(allocator)
-    {
-    }
-
-    void run() override
-    {
-        auto* packet = memory::makePacket(_allocator);
-        if (!packet)
-        {
-            return;
-        }
-
-        auto& tmmbr = rtp::RtcpTemporaryMaxMediaBitrate::create(packet->get(), _reporterSsrc);
-        tmmbr.addEntry(_ssrc, _bitrate * 1000, 34);
-        packet->setLength(tmmbr.size());
-        _transport.protectAndSend(packet, _allocator);
-    }
-
-private:
-    transport::RtcTransport& _transport;
-    const uint32_t _ssrc;
-    const uint32_t _reporterSsrc;
-    const uint32_t _bitrate;
-    memory::PacketPoolAllocator& _allocator;
-};
-
 void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 {
-    if (utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3))
+    if (!utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3))
     {
-        _lastVideoBandwidthCheck = timestamp;
-        uint32_t minUplinkEstimate = 10000000;
-        bridge::SimulcastLevel* presenterSimulcastLevel = nullptr;
-        bridge::EngineVideoStream* presenterStream = nullptr;
-        for (auto videoIt : _engineVideoStreams)
+        return;
+    }
+
+    _lastVideoBandwidthCheck = timestamp;
+    uint32_t minUplinkEstimate = 10000000;
+    bridge::SimulcastLevel* presenterSimulcastLevel = nullptr;
+    bridge::EngineVideoStream* presenterStream = nullptr;
+    for (auto videoIt : _engineVideoStreams)
+    {
+        auto& videoStream = *videoIt.second;
+        if (videoStream._simulcastStream._contentType == SimulcastStream::VideoContentType::SLIDES)
         {
-            auto& videoStream = *videoIt.second;
-            if (videoStream._simulcastStream._contentType == SimulcastStream::VideoContentType::SLIDES)
-            {
-                presenterSimulcastLevel = &videoStream._simulcastStream._levels[0];
-                presenterStream = videoIt.second;
-            }
-            else if (videoStream._secondarySimulcastStream.isSet() &&
-                videoStream._secondarySimulcastStream.get()._contentType == SimulcastStream::VideoContentType::SLIDES)
-            {
-                presenterSimulcastLevel = &videoStream._secondarySimulcastStream.get()._levels[0];
-                presenterStream = videoIt.second;
-            }
-            else
-            {
-                minUplinkEstimate = std::min(minUplinkEstimate, videoIt.second->_transport.getUplinkEstimateKbps());
-            }
+            presenterSimulcastLevel = &videoStream._simulcastStream._levels[0];
+            presenterStream = videoIt.second;
         }
-
-        minUplinkEstimate = std::max(minUplinkEstimate, _config.slides.minBitrate.get());
-
-        if (presenterSimulcastLevel)
+        else if (videoStream._secondarySimulcastStream.isSet() &&
+            videoStream._secondarySimulcastStream.get()._contentType == SimulcastStream::VideoContentType::SLIDES)
         {
-            const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
-
-            logger::debug("limiting bitrate for ssrc %u, at %u",
-                _loggableId.c_str(),
-                presenterSimulcastLevel->_ssrc,
-                slidesLimit);
-
-            presenterStream->_transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->_transport,
-                presenterStream->_localSsrc,
-                presenterSimulcastLevel->_ssrc,
-                slidesLimit,
-                _sendAllocator);
+            presenterSimulcastLevel = &videoStream._secondarySimulcastStream.get()._levels[0];
+            presenterStream = videoIt.second;
         }
+        else
+        {
+            minUplinkEstimate = std::min(minUplinkEstimate, videoIt.second->_transport.getUplinkEstimateKbps());
+        }
+    }
+
+    minUplinkEstimate = std::max(minUplinkEstimate, _config.slides.minBitrate.get());
+
+    if (presenterSimulcastLevel)
+    {
+        const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
+
+        logger::info("limiting bitrate for ssrc %u, at %u",
+            _loggableId.c_str(),
+            presenterSimulcastLevel->_ssrc,
+            slidesLimit);
+
+        presenterStream->_transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->_transport,
+            presenterStream->_localSsrc,
+            presenterSimulcastLevel->_ssrc,
+            slidesLimit,
+            _sendAllocator);
     }
 }
 
