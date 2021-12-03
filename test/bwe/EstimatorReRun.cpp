@@ -149,7 +149,7 @@ uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
 }
 } // namespace
 
-TEST(BweReRun, fromTrace)
+TEST(BweReRun, DISABLED_fromTrace)
 {
     bwe::Config config;
     config.congestion.cap.ratio = 0.5;
@@ -274,7 +274,7 @@ class BweRerunLimit : public testing::TestWithParam<uint32_t>
 {
 };
 
-TEST_P(BweRerunLimit, limitedLink)
+TEST_P(BweRerunLimit, DISABLED_limitedLink)
 {
     bwe::Config config;
     /*
@@ -335,7 +335,7 @@ TEST_P(BweRerunLimit, limitedLink)
             "Transport-277",
             "Transport-317"};*/
 
-    std::array<std::string, 56> trace = {"Transport-5"};
+    std::array<std::string, 56> trace = {"Transport-5", "Transport-20", "Transport-17"};
     memory::PacketPoolAllocator allocator(8092, "rerun");
     fakenet::NetworkLink link(GetParam(), 1950 * 1024, 3000);
     link.setLossRate(0);
