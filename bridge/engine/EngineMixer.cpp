@@ -2145,6 +2145,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
                 if (packet &&
                     !videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                        *inboundSsrcContext,
                         packet,
                         videoStream->_transport,
                         packetInfo._extendedSequenceNumber))
@@ -2187,6 +2188,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 ssrcOutboundContext->onRtpSent(timestamp);
                 if (packet &&
                     !transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                        *inboundSsrcContext,
                         packet,
                         transportEntry.second,
                         packetInfo._extendedSequenceNumber))
