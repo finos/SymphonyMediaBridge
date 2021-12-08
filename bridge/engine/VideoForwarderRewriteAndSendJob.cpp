@@ -68,6 +68,11 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (!isKeyFrame)
         {
+            logger::debug("Dropping forwarded packet ssrc %u, seq %u, needs keyframe",
+                "VideoForwarderRewriteAndSendJob",
+                rtpHeader->ssrc.get(),
+                rtpHeader->sequenceNumber.get());
+
             _outboundContext._allocator.free(_packet);
             _packet = nullptr;
             return;

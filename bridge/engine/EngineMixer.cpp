@@ -872,16 +872,11 @@ void EngineMixer::updateDirectorUplinkEstimates(const uint64_t engineIterationSt
         }
 
         auto videoStream = videoStreamEntry.second;
-
-        const auto outboundContext = getOutboundSsrcContext(*videoStream, videoStream->_localSsrc);
-        const auto isSendingRtpPadding = outboundContext != nullptr && outboundContext->_isSendingRtpPadding;
-
         const auto uplinkEstimateKbps = videoStream->_transport.getUplinkEstimateKbps();
         if (uplinkEstimateKbps == 0 ||
             !_engineStreamDirector->setUplinkEstimateKbps(videoStream->_endpointIdHash,
                 uplinkEstimateKbps,
-                engineIterationStartTimestamp,
-                isSendingRtpPadding))
+                engineIterationStartTimestamp))
         {
             continue;
         }

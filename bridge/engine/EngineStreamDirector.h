@@ -6,9 +6,16 @@
 #include "logger/Logger.h"
 #include "utils/Optional.h"
 #include "utils/Time.h"
+#include <atomic>
 #include <cstdint>
 
 #define DEBUG_DIRECTOR 0
+
+#if DEBUG_DIRECTOR
+#define DIRECTOR_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define DIRECTOR_LOG(fmt, ...)
+#endif
 
 namespace bridge
 {
@@ -25,14 +32,19 @@ public:
         size_t _highestEstimatedPinnedLevel;
         size_t _desiredHighestEstimatedPinnedLevel;
         uint64_t _lowEstimateTimestamp;
+        /** Min of incoming estimate and EngineStreamDirector::_maxDefaultLevelBandwidthKbps */
+        uint32_t _defaultLevelBandwidthLimit;
     };
 
     EngineStreamDirector()
         : _participantStreams(maxParticipants),
           _pinMap(maxParticipants),
           _reversePinMap(maxParticipants),
-          _usedDefaultSsrcs(maxParticipants),
-          _bandwidthFloor(0)
+          _lowQualitySsrcs(maxParticipants),
+          _midQualitySsrcs(maxParticipants),
+          _bandwidthFloor(0),
+          _requiredMidLevelBandwidth(0),
+          _maxDefaultLevelBandwidthKbps(3000)
     {
     }
 
@@ -73,13 +85,23 @@ public:
             primary._levels[1]._ssrc,
             primary._levels[2]._ssrc);
 
-        _usedDefaultSsrcs.emplace(primary._levels[defaultQuality]._ssrc, endpointIdHash);
+        _lowQualitySsrcs.emplace(primary._levels[lowQuality]._ssrc, endpointIdHash);
+        if (primary._numLevels > 1)
+        {
+            _midQualitySsrcs.emplace(primary._levels[midQuality]._ssrc, endpointIdHash);
+        }
+        _requiredMidLevelBandwidth += bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
 
         if (secondary)
         {
             _participantStreams.emplace(endpointIdHash,
                 makeParticipantStreams(primary, utils::Optional<SimulcastStream>(*secondary)));
-            _usedDefaultSsrcs.emplace(secondary->_levels[defaultQuality]._ssrc, endpointIdHash);
+            _lowQualitySsrcs.emplace(secondary->_levels[lowQuality]._ssrc, endpointIdHash);
+            if (secondary->_numLevels > 1)
+            {
+                _midQualitySsrcs.emplace(secondary->_levels[midQuality]._ssrc, endpointIdHash);
+            }
+            _requiredMidLevelBandwidth += bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
 
             logger::info("addParticipant secondary, endpointIdHash %lu, %u %u %u",
                 "EngineStreamDirector",
@@ -104,10 +126,19 @@ public:
         }
         auto& participantStream = participantStreamsItr->second;
 
-        _usedDefaultSsrcs.erase(participantStream._primary._levels[defaultQuality]._ssrc);
-        if (participantStream._secondary.isSet())
+        if (participantStream._primary._numLevels > 0)
         {
-            _usedDefaultSsrcs.erase(participantStream._secondary.get()._levels[defaultQuality]._ssrc);
+            _lowQualitySsrcs.erase(participantStream._primary._levels[lowQuality]._ssrc);
+            _midQualitySsrcs.erase(participantStream._primary._levels[midQuality]._ssrc);
+            assert(_requiredMidLevelBandwidth > 0);
+            _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
+        }
+        if (participantStream._secondary.isSet() && participantStream._secondary.get()._numLevels > 0)
+        {
+            _lowQualitySsrcs.erase(participantStream._secondary.get()._levels[lowQuality]._ssrc);
+            _midQualitySsrcs.erase(participantStream._secondary.get()._levels[midQuality]._ssrc);
+            assert(_requiredMidLevelBandwidth > 0);
+            _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
         }
         _participantStreams.erase(endpointIdHash);
 
@@ -194,7 +225,7 @@ public:
 
     void updateBandwidthFloor(const uint32_t lastN, const uint32_t audioStreams, const uint32_t videoStreams)
     {
-        _bandwidthFloor = bwe::BandwidthUtils::calcBandwidthFloor(defaultQuality, lastN, audioStreams, videoStreams);
+        _bandwidthFloor = bwe::BandwidthUtils::calcBandwidthFloor(lowQuality, lastN, audioStreams, videoStreams);
         logger::debug("updateBandwidthFloor lastN %u, audioStreams %u, videoStreams %u -> %u",
             "EngineStreamDirector",
             lastN,
@@ -207,10 +238,7 @@ public:
      * @return true if the highest estimated level changed. (User could get a higher or lower simulcast level on
      * the pinned stream.
      */
-    bool setUplinkEstimateKbps(const size_t endpointIdHash,
-        const uint32_t uplinkEstimateKbps,
-        const uint64_t timestamp,
-        const bool isPadding)
+    bool setUplinkEstimateKbps(const size_t endpointIdHash, const uint32_t uplinkEstimateKbps, const uint64_t timestamp)
     {
         auto participantStreamsItr = _participantStreams.find(endpointIdHash);
         if (participantStreamsItr == _participantStreams.end())
@@ -219,20 +247,9 @@ public:
         }
         auto& participantStream = participantStreamsItr->second;
 
-        if (isPadding)
-        {
-            participantStream._desiredHighestEstimatedPinnedLevel = 0;
-            participantStream._highestEstimatedPinnedLevel = 0;
-
-            logger::info("setUplinkEstimateKbps %u, endpointIdHash %lu, ignoring estimates sending padding",
-                "EngineStreamDirector",
-                uplinkEstimateKbps,
-                endpointIdHash);
-            return false;
-        }
-
+        participantStream._defaultLevelBandwidthLimit = std::min(uplinkEstimateKbps, _maxDefaultLevelBandwidthKbps);
         participantStream._desiredHighestEstimatedPinnedLevel =
-            bwe::BandwidthUtils::calcPinnedHighestSimulcastLevel(defaultQuality, _bandwidthFloor, uplinkEstimateKbps);
+            bwe::BandwidthUtils::calcPinnedHighestSimulcastLevel(lowQuality, _bandwidthFloor, uplinkEstimateKbps);
 
         if (participantStream._desiredHighestEstimatedPinnedLevel == participantStream._highestEstimatedPinnedLevel)
         {
@@ -279,23 +296,19 @@ public:
         return false;
     }
 
-    inline uint32_t getTargetBitrateKbps(const uint32_t lastN)
-    {
-        return bwe::BandwidthUtils::calcBandwidthFloor(defaultQuality, lastN, lastN, lastN) +
-            bwe::BandwidthUtils::getSimulcastLevelKbps(SimulcastStream::maxLevels - 1);
-    }
-
+    /**
+     * This function is the filter used for incoming video packets.
+     * @return true if a participant is likely to be interested in the ssrc (do not drop packet) or false if
+     * no participant is interested in the ssrc (packet should be dropped).
+     */
     inline bool isSsrcUsed(const uint32_t ssrc,
         const size_t senderEndpointIdHash,
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
-        if (_usedDefaultSsrcs.find(ssrc) != _usedDefaultSsrcs.end() && isSenderInLastNList &&
-            !isPinnedByAll(senderEndpointIdHash))
+        if (isUnpinnedQualityUsed(ssrc, senderEndpointIdHash, isSenderInLastNList))
         {
-#if DEBUG_DIRECTOR
-            logger::debug("isSsrcUsed, %u default", "EngineStreamDirector", ssrc);
-#endif
+            DIRECTOR_LOG("isSsrcUsed, %u default", "EngineStreamDirector", ssrc);
             return true;
         }
 
@@ -309,9 +322,7 @@ public:
         {
             if (isParticipantHighestActiveQuality(pinMapEntry.second, pinMapEntry.first, ssrc))
             {
-#if DEBUG_DIRECTOR
-                logger::debug("isSsrcUsed, %u pinned high", "EngineStreamDirector", ssrc);
-#endif
+                DIRECTOR_LOG("isSsrcUsed, %u pinned high", "EngineStreamDirector", ssrc);
                 return true;
             }
         }
@@ -319,15 +330,11 @@ public:
         if (numRecordingStreams != 0)
         {
             const auto result = isContentSlides(ssrc, senderEndpointIdHash);
-#if DEBUG_DIRECTOR
-            logger::debug("isSsrcUsed isContentSlides %u: result %c", "EngineStreamDirector", ssrc, result ? 't' : 'f');
-#endif
+            DIRECTOR_LOG("isSsrcUsed isContentSlides %u: result %c", "EngineStreamDirector", ssrc, result ? 't' : 'f');
             return result;
         }
 
-#if DEBUG_DIRECTOR
-        logger::debug("isSsrcUsed, %u false", "EngineStreamDirector", ssrc);
-#endif
+        DIRECTOR_LOG("isSsrcUsed, %u false", "EngineStreamDirector", ssrc);
         return false;
     }
 
@@ -339,28 +346,77 @@ public:
             if (isSsrcFromParticipant(pinMapItr->second, ssrc))
             {
                 const auto result = isParticipantHighestActiveQuality(pinMapItr->second, toEndpointIdHash, ssrc);
-#if DEBUG_DIRECTOR
-                logger::debug("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: %c, dominant high quality",
+                DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: %c, pin target high quality",
                     "EngineStreamDirector",
                     toEndpointIdHash,
                     ssrc,
                     result ? 't' : 'f');
-#endif
                 return result;
+            }
+
+            const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
+            const auto result =
+                lowQualitySsrcsItr != _lowQualitySsrcs.end() && lowQualitySsrcsItr->second != toEndpointIdHash;
+
+            DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: %c, non pin target low quality",
+                "EngineStreamDirector",
+                toEndpointIdHash,
+                ssrc,
+                result ? 't' : 'f');
+
+            return result;
+        }
+
+        const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
+        const auto midQualitySsrcsItr = _midQualitySsrcs.find(ssrc);
+        if (lowQualitySsrcsItr == _lowQualitySsrcs.end() && midQualitySsrcsItr == _midQualitySsrcs.end())
+        {
+            DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result f, in low f, in mid f, unpinned",
+                "EngineStreamDirector",
+                toEndpointIdHash,
+                ssrc);
+            return false;
+        }
+
+        bool result = false;
+
+        const auto viewedByParticipantStreamItr = _participantStreams.find(toEndpointIdHash);
+        if (viewedByParticipantStreamItr == _participantStreams.end())
+        {
+            result = false;
+        }
+        const auto wantedDefaultLevelQuality = getWantedDefaultLevelQuality(viewedByParticipantStreamItr->second);
+
+        if (wantedDefaultLevelQuality == lowQuality)
+        {
+            result = lowQualitySsrcsItr != _lowQualitySsrcs.end() && lowQualitySsrcsItr->second != toEndpointIdHash;
+        }
+        else if (wantedDefaultLevelQuality == midQuality)
+        {
+            if (lowQualitySsrcsItr != _lowQualitySsrcs.end())
+            {
+                const auto highestActiveQuality = getParticipantHighestActiveQuality(lowQualitySsrcsItr->second, ssrc);
+                result = highestActiveQuality == lowQuality && lowQualitySsrcsItr->second != toEndpointIdHash;
+            }
+            else if (midQualitySsrcsItr != _midQualitySsrcs.end())
+            {
+                result = midQualitySsrcsItr->second != toEndpointIdHash;
             }
         }
 
-        const auto defaultSsrcItr = _usedDefaultSsrcs.find(ssrc);
-        const auto result = defaultSsrcItr != _usedDefaultSsrcs.end() && defaultSsrcItr->second != toEndpointIdHash;
-#if DEBUG_DIRECTOR
-        logger::debug(
-            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, in default %c, toEndpointIdHash default",
+        DIRECTOR_LOG(
+            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, in low %c, in mid %c, "
+            "wantedDefaultLevelQuality %lu, requiredMidLevelBandwidth %u, _defaultLevelBandwidthLimit %u, unpinned",
             "EngineStreamDirector",
             toEndpointIdHash,
             ssrc,
             result ? 't' : 'f',
-            defaultSsrcItr != _usedDefaultSsrcs.end() ? 't' : 'f');
-#endif
+            lowQualitySsrcsItr != _lowQualitySsrcs.end() ? 't' : 'f',
+            midQualitySsrcsItr != _midQualitySsrcs.end() ? 't' : 'f',
+            wantedDefaultLevelQuality,
+            _requiredMidLevelBandwidth,
+            viewedByParticipantStreamItr->second._defaultLevelBandwidthLimit);
+
         return result;
     }
 
@@ -412,8 +468,8 @@ public:
 
     inline size_t getParticipantForDefaultLevelSsrc(const uint32_t ssrc)
     {
-        const auto usedDefaultSsrcsItr = _usedDefaultSsrcs.find(ssrc);
-        if (usedDefaultSsrcsItr == _usedDefaultSsrcs.end())
+        const auto usedDefaultSsrcsItr = _lowQualitySsrcs.find(ssrc);
+        if (usedDefaultSsrcsItr == _lowQualitySsrcs.end())
         {
             return 0;
         }
@@ -423,8 +479,8 @@ public:
 
     inline bool getFeedbackSsrc(const uint32_t defaultLevelSsrc, uint32_t& outDefaultLevelFeedbackSsrc)
     {
-        auto usedDefaultSsrcItr = _usedDefaultSsrcs.find(defaultLevelSsrc);
-        if (usedDefaultSsrcItr == _usedDefaultSsrcs.end())
+        auto usedDefaultSsrcItr = _lowQualitySsrcs.find(defaultLevelSsrc);
+        if (usedDefaultSsrcItr == _lowQualitySsrcs.end())
         {
             return false;
         }
@@ -440,11 +496,11 @@ public:
         auto& secondary = participantStreams._secondary;
 
         SimulcastStream* simulcastStream;
-        if (defaultLevelSsrc == primary._levels[defaultQuality]._ssrc)
+        if (defaultLevelSsrc == primary._levels[lowQuality]._ssrc)
         {
             simulcastStream = &primary;
         }
-        else if (secondary.isSet() && defaultLevelSsrc == secondary.get()._levels[defaultQuality]._ssrc)
+        else if (secondary.isSet() && defaultLevelSsrc == secondary.get()._levels[lowQuality]._ssrc)
         {
             simulcastStream = &secondary.get();
         }
@@ -454,7 +510,7 @@ public:
             return false;
         }
 
-        outDefaultLevelFeedbackSsrc = simulcastStream->_levels[defaultQuality]._feedbackSsrc;
+        outDefaultLevelFeedbackSsrc = simulcastStream->_levels[lowQuality]._feedbackSsrc;
         return true;
     }
 
@@ -494,7 +550,8 @@ public:
     }
 
 private:
-    static const size_t defaultQuality = 0;
+    static constexpr size_t lowQuality = 0;
+    static constexpr size_t midQuality = 1;
 
     /** Important: This has to be a lot bigger than the actual maximum participants per conference since we have
      * to avoid map entry reuse. Currently multiplied by 2 for that reason. */
@@ -504,8 +561,15 @@ private:
     concurrency::MpmcHashmap32<size_t, ParticipantStreams> _participantStreams;
     concurrency::MpmcHashmap32<size_t, size_t> _pinMap;
     concurrency::MpmcHashmap32<size_t, size_t> _reversePinMap;
-    concurrency::MpmcHashmap32<uint32_t, size_t> _usedDefaultSsrcs;
+    concurrency::MpmcHashmap32<uint32_t, size_t> _lowQualitySsrcs;
+    concurrency::MpmcHashmap32<uint32_t, size_t> _midQualitySsrcs;
     uint32_t _bandwidthFloor;
+
+    /** Bandwidth required to send the mid level as default level for participants without pin targets */
+    uint32_t _requiredMidLevelBandwidth;
+
+    /** Bandwidth cap for sending default levels to participants without pin targets */
+    uint32_t _maxDefaultLevelBandwidthKbps;
 
     inline bool isParticipantHighestActiveQuality(const size_t endpointIdHash,
         const size_t viewedByEndpointIdHash,
@@ -542,6 +606,37 @@ private:
         }
 
         return false;
+    }
+
+    inline size_t getParticipantHighestActiveQuality(const size_t endpointIdHash, const uint32_t ssrc)
+    {
+        const auto participantStreamsItr = _participantStreams.find(endpointIdHash);
+        if (participantStreamsItr == _participantStreams.end())
+        {
+            return 0;
+        }
+
+        auto& participantStreams = participantStreamsItr->second;
+        const auto& primary = participantStreams._primary;
+        const auto& secondaryOptional = participantStreams._secondary;
+
+        if (ssrc == primary._levels[0]._ssrc || ssrc == primary._levels[1]._ssrc || ssrc == primary._levels[2]._ssrc)
+        {
+            return primary._highestActiveLevel;
+        }
+
+        if (secondaryOptional.isSet())
+        {
+            const auto& secondary = secondaryOptional.get();
+            if (ssrc == secondary._levels[0]._ssrc || ssrc == secondary._levels[1]._ssrc ||
+                ssrc == secondary._levels[2]._ssrc)
+            {
+                return secondary._highestActiveLevel;
+            }
+        }
+
+        assert(false);
+        return 0;
     }
 
     inline bool isSsrcFromParticipant(const size_t endpointIdHash, const uint32_t ssrc)
@@ -656,7 +751,8 @@ private:
             secondary,
             SimulcastStream::maxLevels - 1,
             SimulcastStream::maxLevels - 1,
-            0};
+            0,
+            _maxDefaultLevelBandwidthKbps};
     }
 
     inline bool isContentSlides(const uint32_t ssrc, const size_t senderEndpointIdHash)
@@ -689,6 +785,37 @@ private:
 
         return false;
     }
+
+    inline bool anyParticipantsWithoutPinTarget() const { return _participantStreams.size() != _pinMap.size(); }
+
+    /**
+     * Checks for ssrcs belonging to a default level, either low quality when there are no participants
+     * without pin targets, or low and mid quality if there are participants without pin targets.
+     */
+    inline bool isUnpinnedQualityUsed(const uint32_t ssrc,
+        const size_t senderEndpointIdHash,
+        const bool isSenderInLastNList)
+    {
+        if (!isSenderInLastNList)
+        {
+            return false;
+        }
+
+        if (anyParticipantsWithoutPinTarget())
+        {
+            return _lowQualitySsrcs.contains(ssrc) || _midQualitySsrcs.contains(ssrc);
+        }
+        else
+        {
+            return _lowQualitySsrcs.contains(ssrc) && !isPinnedByAll(senderEndpointIdHash);
+        }
+    }
+
+    inline size_t getWantedDefaultLevelQuality(const ParticipantStreams& participantStreams) const
+    {
+        return _requiredMidLevelBandwidth > participantStreams._defaultLevelBandwidthLimit ? lowQuality : midQuality;
+    }
 };
 
 } // namespace bridge
+
