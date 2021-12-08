@@ -5,14 +5,14 @@ namespace transport
 {
 SocketAddress::SocketAddress()
 {
-    memset(&_address, 0, sizeof(_address));
+    std::memset(&_address, 0, sizeof(_address));
     _nicName[0] = '\0';
     _address.gen.sa_family = AF_UNSPEC;
 }
 
 SocketAddress::SocketAddress(const sockaddr* original, const char* nicName)
 {
-    memset(&_address, 0, sizeof(_address));
+    std::memset(&_address, 0, sizeof(_address));
     if (original->sa_family == AF_INET)
     {
         std::memcpy(&_address, original, sizeof(sockaddr_in));
@@ -29,14 +29,14 @@ SocketAddress::SocketAddress(const sockaddr* original, const char* nicName)
     _nicName[0] = '\0';
     if (nicName)
     {
-        strncpy(_nicName, nicName, NIC_NAME_MAX_SIZE);
+        std::strncpy(_nicName, nicName, NIC_NAME_MAX_SIZE);
         _nicName[NIC_NAME_MAX_SIZE - 1] = '\0';
     }
 }
 
 SocketAddress::SocketAddress(uint32_t ipv4, uint16_t port, const char* nicName)
 {
-    memset(&_address, 0, sizeof(_address));
+    std::memset(&_address, 0, sizeof(_address));
     _address.gen.sa_family = AF_INET;
     _address.v4.sin_addr.s_addr = htonl(ipv4);
     _address.v4.sin_port = htons(port);
@@ -44,22 +44,22 @@ SocketAddress::SocketAddress(uint32_t ipv4, uint16_t port, const char* nicName)
     _nicName[0] = '\0';
     if (nicName)
     {
-        strncpy(_nicName, nicName, NIC_NAME_MAX_SIZE);
+        std::strncpy(_nicName, nicName, NIC_NAME_MAX_SIZE);
         _nicName[NIC_NAME_MAX_SIZE - 1] = '\0';
     }
 }
 
 SocketAddress::SocketAddress(const uint8_t* ipv6_networkOrder, uint16_t port, const char* nicName)
 {
-    memset(&_address, 0, sizeof(_address));
+    std::memset(&_address, 0, sizeof(_address));
     _address.gen.sa_family = AF_INET6;
     _address.v6.sin6_port = htons(port);
-    memcpy(&_address.v6.sin6_addr, ipv6_networkOrder, 16);
+    std::memcpy(&_address.v6.sin6_addr, ipv6_networkOrder, 16);
 
     _nicName[0] = '\0';
     if (nicName)
     {
-        strncpy(_nicName, nicName, NIC_NAME_MAX_SIZE);
+        std::strncpy(_nicName, nicName, NIC_NAME_MAX_SIZE);
         _nicName[NIC_NAME_MAX_SIZE - 1] = '\0';
     }
 }
@@ -149,16 +149,35 @@ bool SocketAddress::equalsIp(const SocketAddress& b) const
 
     if (getFamily() == AF_INET)
     {
-        return 0 == memcmp(&b.getIpv4()->sin_addr, &getIpv4()->sin_addr, sizeof(in_addr));
+        return 0 == std::memcmp(&b.getIpv4()->sin_addr, &getIpv4()->sin_addr, sizeof(in_addr));
     }
     else if (getFamily() == AF_INET6)
     {
-        return 0 == memcmp(&b.getIpv6()->sin6_addr, &getIpv6()->sin6_addr, sizeof(in6_addr));
+        return 0 == std::memcmp(&b.getIpv6()->sin6_addr, &getIpv6()->sin6_addr, sizeof(in6_addr));
     }
     return false;
 }
 
-std::vector<SocketAddress> SocketAddress::activeInterfaces(bool includeLoopback)
+bool SocketAddress::isLinkLocal() const
+{
+    if (getFamily() == AF_INET)
+    {
+        const auto address = getIpv4();
+        return address && (ntohl(address->sin_addr.s_addr) & 0xFFFF0000u) == 0xa9fe0000u;
+    }
+    else if (getFamily() == AF_INET6)
+    {
+        const auto address = getIpv6();
+        return address && ntohs(address->sin6_addr.__in6_u.__u6_addr16[0]) == 0xfe80;
+    }
+
+    return false;
+}
+
+/**
+ * Link local addresses are fe80::/64 and 169.254.0.0/16 used for communication with routers only.
+ */
+std::vector<SocketAddress> SocketAddress::activeInterfaces(bool includeLoopback, bool includeLinkLocal)
 {
     std::vector<SocketAddress> list;
     struct ifaddrs* nics;
@@ -169,7 +188,11 @@ std::vector<SocketAddress> SocketAddress::activeInterfaces(bool includeLoopback)
             if (SocketAddress::isSupported(nicIp->ifa_addr) && (nicIp->ifa_flags & IFF_UP) == IFF_UP &&
                 ((nicIp->ifa_flags & IFF_LOOPBACK) == 0 || includeLoopback))
             {
-                list.emplace_back(nicIp->ifa_addr, nicIp->ifa_name);
+                SocketAddress a(nicIp->ifa_addr, nullptr);
+                if (includeLinkLocal || !a.isLinkLocal())
+                {
+                    list.emplace_back(nicIp->ifa_addr, nicIp->ifa_name);
+                }
             }
         }
         freeifaddrs(nics);
