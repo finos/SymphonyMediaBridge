@@ -4,8 +4,7 @@
 !.vscode/tasks.json
 !.vscode/settings.json
 !.vscode/build-tools.sh
-cmake-build-debug
-cmake-build-release
+cmake-build-*
 *.o
 bulkstore*
 googletest-*
