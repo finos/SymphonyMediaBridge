@@ -3,6 +3,7 @@
 #include "bridge/engine/SimulcastStream.h"
 #include "bwe/BandwidthUtils.h"
 #include "concurrency/MpmcHashmap.h"
+#include "config/Config.h"
 #include "logger/Logger.h"
 #include "utils/Optional.h"
 #include "utils/Time.h"
@@ -35,7 +36,7 @@ public:
         uint32_t _defaultLevelBandwidthLimit;
     };
 
-    EngineStreamDirector()
+    EngineStreamDirector(const config::Config& config)
         : _participantStreams(maxParticipants),
           _pinMap(maxParticipants),
           _reversePinMap(maxParticipants),
@@ -43,7 +44,7 @@ public:
           _midQualitySsrcs(maxParticipants),
           _bandwidthFloor(0),
           _requiredMidLevelBandwidth(0),
-          _maxDefaultLevelBandwidthKbps(3000)
+          _maxDefaultLevelBandwidthKbps(config.maxDefaultLevelBandwidthKbps)
     {
     }
 
@@ -817,4 +818,3 @@ private:
 };
 
 } // namespace bridge
-

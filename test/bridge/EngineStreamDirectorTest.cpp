@@ -47,7 +47,11 @@ bridge::SimulcastStream makeSimulcastStream(const uint32_t ssrc0,
 
 class EngineStreamDirectorTest : public ::testing::Test
 {
-    void SetUp() override { _engineStreamDirector = std::make_unique<bridge::EngineStreamDirector>(); }
+    void SetUp() override
+    {
+        const config::Config config;
+        _engineStreamDirector = std::make_unique<bridge::EngineStreamDirector>(config);
+    }
     void TearDown() override { _engineStreamDirector.reset(); }
 
 protected:
