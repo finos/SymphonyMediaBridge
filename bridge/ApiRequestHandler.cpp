@@ -577,7 +577,8 @@ httpd::Response ApiRequestHandler::allocateConference(RequestLogger& requestLogg
 
     const auto allocateConference = api::Parser::parseAllocateConference(requestBodyJson);
 
-    auto mixer = _mixerManager.create();
+    auto mixer = allocateConference._lastN.isSet() ? _mixerManager.create(allocateConference._lastN.get())
+                                                   : _mixerManager.create();
     if (!mixer)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);

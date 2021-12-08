@@ -73,7 +73,8 @@ public:
         const config::Config& config,
         memory::PacketPoolAllocator& sendAllocator,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastLevel>& videoSsrcs);
+        const std::vector<SimulcastLevel>& videoSsrcs,
+        const uint32_t lastN);
     ~EngineMixer() override;
 
     const std::string& getId() const { return _id; }

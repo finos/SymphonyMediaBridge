@@ -146,7 +146,8 @@ EngineMixer::EngineMixer(const std::string& id,
     const config::Config& config,
     memory::PacketPoolAllocator& sendAllocator,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastLevel>& videoSsrcs)
+    const std::vector<SimulcastLevel>& videoSsrcs,
+    const uint32_t lastN)
     : _id(id),
       _loggableId("EngineMixer"),
       _jobManager(jobManager),
@@ -169,10 +170,10 @@ EngineMixer::EngineMixer(const std::string& id,
       _noTicks(0),
       _ticksPerSSRCCheck(ticksPerSSRCCheck),
       _engineStreamDirector(std::make_unique<EngineStreamDirector>(config)),
-      _activeMediaList(std::make_unique<ActiveMediaList>(audioSsrcs, videoSsrcs, config.defaultLastN)),
+      _activeMediaList(std::make_unique<ActiveMediaList>(audioSsrcs, videoSsrcs, lastN)),
       _lastUplinkEstimateUpdate(0),
       _config(config),
-      _lastN(_config.defaultLastN),
+      _lastN(lastN),
       _numMixedAudioStreams(0),
       _lastVideoBandwidthCheck(0)
 {
