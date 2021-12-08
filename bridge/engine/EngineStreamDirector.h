@@ -6,7 +6,6 @@
 #include "logger/Logger.h"
 #include "utils/Optional.h"
 #include "utils/Time.h"
-#include <atomic>
 #include <cstdint>
 
 #define DEBUG_DIRECTOR 0
@@ -550,8 +549,8 @@ public:
     }
 
 private:
-    static constexpr size_t lowQuality = 0;
-    static constexpr size_t midQuality = 1;
+    static const size_t lowQuality = 0;
+    static const size_t midQuality = 1;
 
     /** Important: This has to be a lot bigger than the actual maximum participants per conference since we have
      * to avoid map entry reuse. Currently multiplied by 2 for that reason. */
