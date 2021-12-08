@@ -266,6 +266,21 @@ TEST(IceTest, ipformat)
     EXPECT_EQ(c.toString(), "fe80::1:3ba9:6b1f:f7f2");
 }
 
+TEST(IceTest, linkLocal)
+{
+    using namespace transport;
+    auto b = SocketAddress::parse("167.254.1.1", 4700);
+    EXPECT_FALSE(b.isLinkLocal());
+    auto a = SocketAddress::parse("169.254.6.7", 4700);
+    EXPECT_TRUE(a.isLinkLocal());
+
+    auto c = SocketAddress::parse("fe80::1:3456:1111", 4700);
+    EXPECT_TRUE(c.isLinkLocal());
+
+    auto d = SocketAddress::parse("fe21::1:3456:1111", 4700);
+    EXPECT_FALSE(d.isLinkLocal());
+}
+
 TEST(IceTest, ipv6Response)
 {
     alignas(memory::Packet) const unsigned char rsp[] = "\x01\x01\x00\x48" //     Response type and message length
@@ -448,7 +463,7 @@ public:
 
 TEST(IceTest, gather)
 {
-    auto interfaces = transport::SocketAddress::activeInterfaces(false);
+    auto interfaces = transport::SocketAddress::activeInterfaces(false, false);
     ice::IceConfig config;
     IceTestInfra infra(config);
     for (auto interface : interfaces)
@@ -1071,8 +1086,8 @@ TEST(IceTest, icev6)
     fakenet::Firewall firewall1(transport::SocketAddress::parse("a000:1092:10cc:f56e::3c00", 0), internet);
     fakenet::Firewall firewall2(transport::SocketAddress::parse("a000:1092:10cc:f56e::3c01", 0), internet);
 
-    FakeEndpoint endpoint1(transport::SocketAddress::parse("fe80:7ed8:0fce:3d87::1000", 2000), firewall1);
-    FakeEndpoint endpoint2(transport::SocketAddress::parse("fe80:7ed8:0fce:3d87::1001", 3000), firewall2);
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("2001:7ed8:0fce:3d87::1000", 2000), firewall1);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("2001:7ed8:0fce:3d87::1001", 3000), firewall2);
 
     ice::IceConfig config;
     IceSessions sessions;
@@ -1108,8 +1123,8 @@ TEST(IceTest, icev6sameFw)
     FakeStunServer stunServer(transport::SocketAddress::parse("a000:1092:10cc:f56e::3cb4", 19302), internet);
     fakenet::Firewall firewall1(transport::SocketAddress::parse("a000:1092:10cc:f56e::3c00", 0), internet);
 
-    FakeEndpoint endpoint1(transport::SocketAddress::parse("fe80:7ed8:0fce:3d87::1000", 2000), firewall1);
-    FakeEndpoint endpoint2(transport::SocketAddress::parse("fe80:7ed8:0fce:3d87::1001", 3000), firewall1);
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("2001:7ed8:0fce:3d87::1000", 2000), firewall1);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("2001:7ed8:0fce:3d87::1001", 3000), firewall1);
 
     ice::IceConfig config;
     IceSessions sessions;
@@ -1148,8 +1163,8 @@ TEST(IceTest, icev6v4Mix)
     fakenet::Firewall firewall2(transport::SocketAddress::parse("a000:1092:10cc:f56e::3c01", 0), internet);
     fakenet::Firewall firewall3(transport::SocketAddress::parse("217.0.10.10", 0), internet);
 
-    FakeEndpoint endpoint1(transport::SocketAddress::parse("fe80:7ed8:0fce:3d87::1000", 2000), firewall1);
-    FakeEndpoint endpoint2(transport::SocketAddress::parse("fe80:7ed8:0fce:3d87::1001", 3000), firewall2);
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("2001:7ed8:0fce:3d87::1000", 2000), firewall1);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("2001:7ed8:0fce:3d87::1001", 3000), firewall2);
     FakeEndpoint endpoint3(transport::SocketAddress::parse("192.168.0.11", 3000), firewall3);
     FakeEndpoint endpoint4(transport::SocketAddress::parse("10.10.11.14", 3000), firewall3);
 
