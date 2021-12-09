@@ -1,16 +1,16 @@
 @Library('SFE-RTC-pipeline') _
 
-void prRunner(String cmakeBuildType) {
+void prRunner(String cmakeBuildType, String platform) {
     stage("Checkout") {
         checkout scm
     }
 
     stage("Build and test") {
-        docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:latest').inside {
+        docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:latest").inside {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
             env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-            sh "docker/el7/buildscript.sh $cmakeBuildType"
-            sh "docker/el7/runtests.sh"
+            sh "docker/$platform/buildscript.sh $cmakeBuildType"
+            sh "docker/$platform/runtests.sh"
         }
     }
 }
@@ -19,20 +19,20 @@ abortPreviousRunningBuilds()
 
 parallel "Release": {
     node('be-integration') {
-        prRunner("Release")
+        prRunner("Release", "el7")
     }
 }, "LCheck": {
     node('be-integration') {
-        prRunner("LCheck")
+        prRunner("LCheck", "el7")
     }
 }, "TCheck": {
     node('be-integration') {
-        prRunner("TCheck")
+        prRunner("TCheck", "el7")
     }
 }, "DCheck": {
     node('be-integration') {
         try {
-            prRunner("DCheck")
+            prRunner("DCheck", "el7")
         } finally {
             stage("Post Actions") {
                 dir ("el7/smb") {
@@ -48,5 +48,9 @@ parallel "Release": {
                 }
             }
         }
+    }
+}, "Release Ubuntu public": {
+    node('be-integration') {
+        prRunner("Release", "ubuntu-focal-deb")
     }
 }
