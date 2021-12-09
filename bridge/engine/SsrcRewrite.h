@@ -8,7 +8,7 @@ namespace bridge
 namespace SsrcRewrite
 {
 
-const size_t ssrcArraySize = 16;
+const size_t ssrcArraySize = 32;
 
 }
 

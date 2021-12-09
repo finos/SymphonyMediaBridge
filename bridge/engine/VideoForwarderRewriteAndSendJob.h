@@ -18,11 +18,13 @@ namespace bridge
 {
 
 class SsrcOutboundContext;
+class SsrcInboundContext;
 
 class VideoForwarderRewriteAndSendJob : public jobmanager::CountedJob
 {
 public:
     VideoForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
+        SsrcInboundContext& senderInboundContext,
         memory::Packet* packet,
         transport::Transport& transport,
         const uint32_t extendedSequenceNumber);
@@ -32,6 +34,7 @@ public:
 
 private:
     SsrcOutboundContext& _outboundContext;
+    SsrcInboundContext& _senderInboundContext;
     memory::Packet* _packet;
     transport::Transport& _transport;
     uint32_t _extendedSequenceNumber;

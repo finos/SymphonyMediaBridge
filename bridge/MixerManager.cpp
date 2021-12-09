@@ -18,6 +18,7 @@ namespace
 {
 
 const auto intervalNs = 10000000UL;
+const uint32_t maxLastN = 16;
 
 }
 
@@ -56,6 +57,14 @@ MixerManager::~MixerManager()
 
 Mixer* MixerManager::create()
 {
+    return create(_config.defaultLastN);
+}
+
+Mixer* MixerManager::create(uint32_t lastN)
+{
+    lastN = std::min(lastN, maxLastN);
+    logger::info("Create mixer, last-n %u", "MixerManager", lastN);
+
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto id = std::to_string(_idGenerator.next());
     const auto localVideoSsrc = _ssrcGenerator.next();
@@ -65,13 +74,13 @@ Mixer* MixerManager::create()
     std::vector<SimulcastLevel> videoPinSsrcs;
 
     // Last-n + extra
-    for (uint32_t i = 0; i < _config.defaultLastN + 2; ++i)
+    for (uint32_t i = 0; i < lastN + 2; ++i)
     {
         audioSsrcs.push_back(_ssrcGenerator.next());
     }
 
     // Last-n + screen share, extra
-    for (uint32_t i = 0; i < _config.defaultLastN + 3; ++i)
+    for (uint32_t i = 0; i < lastN + 3; ++i)
     {
         videoSsrcs.push_back({_ssrcGenerator.next(), _ssrcGenerator.next()});
     }
@@ -90,7 +99,8 @@ Mixer* MixerManager::create()
             _config,
             _sendAllocator,
             audioSsrcs,
-            videoSsrcs));
+            videoSsrcs,
+            lastN));
     if (!engineMixerEmplaceResult.second)
     {
         logger::error("Failed to create engineMixer", "MixerManager");

@@ -42,8 +42,7 @@ public:
           _lastRespondedNackTimestamp(0),
           _lastSendTime(utils::Time::getAbsoluteTime()),
           _markedForDeletion(false),
-          _idle(false),
-          _isSendingRtpPadding(false)
+          _idle(false)
     {
     }
 
@@ -87,8 +86,6 @@ public:
     uint64_t _lastSendTime;
     bool _markedForDeletion;
     bool _idle;
-
-    bool _isSendingRtpPadding;
 };
 
 } // namespace bridge

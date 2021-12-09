@@ -19,9 +19,9 @@ public:
     CFG_PROP(int, numWorkerTreads, 0);
     CFG_PROP(std::string, logFile, "/tmp/smb.log");
 
-    CFG_PROP(uint32_t, maxLastN, 16);
     CFG_PROP(uint32_t, defaultLastN, 5);
     CFG_PROP(uint32_t, dropInboundAfterInactive, 3);
+    CFG_PROP(uint32_t, maxDefaultLevelBandwidthKbps, 3000);
 
     CFG_GROUP()
     // Value between 0 and 127, where 127 is the lowest audio level and 0 the highest.

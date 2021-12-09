@@ -273,7 +273,11 @@ httpd::Response LegacyApiRequestHandler::createConference(const httpd::Request& 
             return response;
         }
 
-        auto mixer = _mixerManager.create();
+        const auto lastNItr = requestBodyJson.find("last-n");
+        auto mixer = lastNItr != requestBodyJson.end() && lastNItr->is_number() && lastNItr->get<int32_t>() > 0
+            ? _mixerManager.create(lastNItr->get<uint32_t>())
+            : _mixerManager.create();
+
         if (!mixer)
         {
             httpd::Response response(httpd::StatusCode::INTERNAL_SERVER_ERROR);

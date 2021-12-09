@@ -146,7 +146,8 @@ EngineMixer::EngineMixer(const std::string& id,
     const config::Config& config,
     memory::PacketPoolAllocator& sendAllocator,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastLevel>& videoSsrcs)
+    const std::vector<SimulcastLevel>& videoSsrcs,
+    const uint32_t lastN)
     : _id(id),
       _loggableId("EngineMixer"),
       _jobManager(jobManager),
@@ -168,11 +169,11 @@ EngineMixer::EngineMixer(const std::string& id,
       _maxNoIncomingPacketsIntervalMs(inactivityTimeoutMs),
       _noTicks(0),
       _ticksPerSSRCCheck(ticksPerSSRCCheck),
-      _engineStreamDirector(std::make_unique<EngineStreamDirector>()),
-      _activeMediaList(std::make_unique<ActiveMediaList>(audioSsrcs, videoSsrcs, config.defaultLastN)),
+      _engineStreamDirector(std::make_unique<EngineStreamDirector>(config)),
+      _activeMediaList(std::make_unique<ActiveMediaList>(audioSsrcs, videoSsrcs, lastN)),
       _lastUplinkEstimateUpdate(0),
       _config(config),
-      _lastN(_config.defaultLastN),
+      _lastN(lastN),
       _numMixedAudioStreams(0),
       _lastVideoBandwidthCheck(0)
 {
@@ -872,16 +873,11 @@ void EngineMixer::updateDirectorUplinkEstimates(const uint64_t engineIterationSt
         }
 
         auto videoStream = videoStreamEntry.second;
-
-        const auto outboundContext = getOutboundSsrcContext(*videoStream, videoStream->_localSsrc);
-        const auto isSendingRtpPadding = outboundContext != nullptr && outboundContext->_isSendingRtpPadding;
-
         const auto uplinkEstimateKbps = videoStream->_transport.getUplinkEstimateKbps();
         if (uplinkEstimateKbps == 0 ||
             !_engineStreamDirector->setUplinkEstimateKbps(videoStream->_endpointIdHash,
                 uplinkEstimateKbps,
-                engineIterationStartTimestamp,
-                isSendingRtpPadding))
+                engineIterationStartTimestamp))
         {
             continue;
         }
@@ -2150,6 +2146,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
                 if (packet &&
                     !videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                        *inboundSsrcContext,
                         packet,
                         videoStream->_transport,
                         packetInfo._extendedSequenceNumber))
@@ -2192,6 +2189,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 ssrcOutboundContext->onRtpSent(timestamp);
                 if (packet &&
                     !transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                        *inboundSsrcContext,
                         packet,
                         transportEntry.second,
                         packetInfo._extendedSequenceNumber))

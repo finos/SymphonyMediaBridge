@@ -1,5 +1,6 @@
 #include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
 #include "bridge/engine/PacketCache.h"
+#include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "bridge/engine/Vp8Rewriter.h"
 #include "transport/Transport.h"
@@ -9,11 +10,13 @@ namespace bridge
 {
 
 VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
+    SsrcInboundContext& senderInboundContext,
     memory::Packet* packet,
     transport::Transport& transport,
     const uint32_t extendedSequenceNumber)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
+      _senderInboundContext(senderInboundContext),
       _packet(packet),
       _transport(transport),
       _extendedSequenceNumber(extendedSequenceNumber)
@@ -48,6 +51,10 @@ void VideoForwarderRewriteAndSendJob::run()
         isRetransmittedPacket = true;
     }
 
+    const bool isKeyFrame = codec::Vp8Header::isKeyFrame(rtpHeader->getPayload(),
+        codec::Vp8Header::getPayloadDescriptorSize(rtpHeader->getPayload(),
+            _packet->getLength() - rtpHeader->headerLength()));
+
     const auto ssrc = rtpHeader->ssrc.get();
     if (ssrc != _outboundContext._lastRewrittenSsrc)
     {
@@ -57,12 +64,12 @@ void VideoForwarderRewriteAndSendJob::run()
             _packet = nullptr;
             return;
         }
-        _outboundContext._needsKeyframe = true;
+        if (!isKeyFrame)
+        {
+            _outboundContext._needsKeyframe = true;
+            _senderInboundContext._pliScheduler.triggerPli();
+        }
     }
-
-    const bool isKeyFrame = codec::Vp8Header::isKeyFrame(rtpHeader->getPayload(),
-        codec::Vp8Header::getPayloadDescriptorSize(rtpHeader->getPayload(),
-            _packet->getLength() - rtpHeader->headerLength()));
 
     if (_outboundContext._needsKeyframe)
     {
