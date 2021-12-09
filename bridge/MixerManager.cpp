@@ -18,6 +18,7 @@ namespace
 {
 
 const auto intervalNs = 10000000UL;
+const uint32_t maxLastN = 16;
 
 }
 
@@ -61,7 +62,7 @@ Mixer* MixerManager::create()
 
 Mixer* MixerManager::create(uint32_t lastN)
 {
-    lastN = std::min(lastN, _config.maxLastN.get());
+    lastN = std::min(lastN, maxLastN);
     logger::info("Create mixer, last-n %u", "MixerManager", lastN);
 
     std::lock_guard<std::mutex> locker(_configurationLock);

@@ -19,7 +19,6 @@ public:
     CFG_PROP(int, numWorkerTreads, 0);
     CFG_PROP(std::string, logFile, "/tmp/smb.log");
 
-    CFG_PROP(uint32_t, maxLastN, 16);
     CFG_PROP(uint32_t, defaultLastN, 5);
     CFG_PROP(uint32_t, dropInboundAfterInactive, 3);
     CFG_PROP(uint32_t, maxDefaultLevelBandwidthKbps, 3000);
