@@ -1,4 +1,4 @@
-#include "SocketAddress.h"
+#include "utils/SocketAddress.h"
 #include <string>
 
 namespace transport
@@ -168,7 +168,11 @@ bool SocketAddress::isLinkLocal() const
     else if (getFamily() == AF_INET6)
     {
         const auto address = getIpv6();
+#ifdef __APPLE__
+        return address && ntohs(address->sin6_addr.__u6_addr.__u6_addr16[0]) == 0xfe80;
+#else
         return address && ntohs(address->sin6_addr.__in6_u.__u6_addr16[0]) == 0xfe80;
+#endif
     }
 
     return false;
