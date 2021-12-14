@@ -9,7 +9,11 @@
 #include <algorithm>
 #include <cmath>
 
-#define RCTL_LOG(fmt, ...) // logger::debug(fmt, ##__VA_ARGS__)
+#define RCTL_LOG(fmt, ...)                                                                                             \
+    if (_config.debugLog)                                                                                              \
+    {                                                                                                                  \
+        logger::debug(fmt, ##__VA_ARGS__);                                                                             \
+    }
 
 namespace
 {

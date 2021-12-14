@@ -25,6 +25,7 @@ struct RateControllerConfig
     double rtcpProbeCeiling = 600;
     uint32_t maxTargetQueue = 128000;
     uint32_t initialEstimateKbps = 1200;
+    bool debugLog = false;
 };
 
 /*
