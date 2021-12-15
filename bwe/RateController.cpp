@@ -49,6 +49,15 @@ double RateController::BacklogAnalysis::getSendRateKbps() const
     return static_cast<double>(receivedAfterSR) * utils::Time::ms * 8 / transmitPeriod;
 }
 
+inline void RateController::Model::onPacketSent(uint64_t timestamp, uint16_t size)
+{
+    queue -= std::min(queue,
+        static_cast<uint32_t>(utils::Time::diff(lastTransmission, timestamp) * bandwidthKbps / (8 * utils::Time::ms)));
+
+    queue += size;
+    lastTransmission = timestamp;
+}
+
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
     : _logId("RateCtrl", instanceId),
       _minRttNtp(~0u),
@@ -88,12 +97,20 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     metaPacket.queueSize = _model.queue;
     _backlog.push_front(metaPacket);
 
+    const auto timeToProbe = _probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval);
     const auto budget = getPacingBudget(timestamp);
+    if (timeToProbe && budget < _model.targetQueue / 4)
+    {
+        // drain until we have space for probe
+        _drainMargin = 0.2;
+        return;
+    }
+    else
+    {
+        _drainMargin = 0;
+    }
 
-    const bool canSendProbe =
-        budget > 0 && (_probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval));
-
-    if ((_probe.count < 5 && _probe.duration == 0) || canSendProbe)
+    if ((_probe.count < 5 && _probe.duration == 0) || timeToProbe)
     {
         _probe.start = timestamp;
         _probe.duration = 700 * utils::Time::ms;
@@ -617,6 +634,16 @@ size_t RateController::getPacingBudget(uint64_t timestamp) const
                 _model.bandwidthKbps * (timestamp - _model.lastTransmission) / (8 * utils::Time::ms)));
 
     return _model.targetQueue - std::min(_model.targetQueue, currentQueue);
+}
+
+double RateController::getTargetRate() const
+{
+    if (!_config.enabled)
+    {
+        return 0;
+    }
+
+    return _model.bandwidthKbps * (1.0 - _drainMargin);
 }
 
 } // namespace bwe

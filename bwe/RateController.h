@@ -121,7 +121,7 @@ public:
     void onSctpSent(uint64_t timestamp, uint16_t size);
 
     uint32_t getPadding(uint64_t timestamp, uint16_t size, uint16_t& paddingSize) const;
-    double getTargetRate() const { return (_config.enabled ? _model.bandwidthKbps : 0); }
+    double getTargetRate() const;
     size_t getPacingBudget(uint64_t timestamp) const;
     void enableRtpProbing() { _canRtxPad = true; }
 
@@ -166,15 +166,10 @@ private:
         uint32_t targetQueue = 3000;
         uint64_t lastTransmission = 0;
 
-        void onPacketSent(uint64_t timestamp, uint16_t size)
-        {
-            queue -= std::min(queue,
-                static_cast<uint32_t>(
-                    utils::Time::diff(lastTransmission, timestamp) * bandwidthKbps / (8 * utils::Time::ms)));
-            queue += size;
-            lastTransmission = timestamp;
-        }
+        void onPacketSent(uint64_t timestamp, uint16_t size);
     } _model;
+
+    double _drainMargin = 0;
 
     struct Probe
     {
