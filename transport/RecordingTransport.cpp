@@ -170,8 +170,6 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
 
         const auto timestamp = utils::Time::getAbsoluteTime();
 
-        endpoint->sendTo(target, packet, allocator);
-
         auto* senderState = getOutboundSsrc(rtpHeader->ssrc);
 
         // Sometimes we can have a race and end up with a RTP packet before the add stream event or
@@ -184,6 +182,8 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
         {
             senderState->onRtpSent(timestamp, *packet);
         }
+
+        endpoint->sendTo(target, packet, allocator);
 
         if (isFirstPacket || _rtcp.lastSendTime == 0 ||
             utils::Time::diffGT(_rtcp.lastSendTime, timestamp, _rtcp.reportInterval))
