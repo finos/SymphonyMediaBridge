@@ -55,6 +55,7 @@ RateController::RateController(size_t instanceId, const RateControllerConfig& co
       _config(config)
 {
     _model.bandwidthKbps = config.initialEstimateKbps;
+    _model.targetQueue = calculateTargetQueue(_model.bandwidthKbps, 1, config);
 }
 
 void RateController::onRtpSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size)
@@ -147,7 +148,7 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
     {
         if (item.ssrc == ssrc && item.type == PacketMetaData::RTP)
         {
-            if (item.sequenceNumber == receivedSequenceNumber)
+            if (item.sequenceNumber == receivedSequenceNumber && !item.received)
             {
                 item.received = true;
                 item.lossCount = lossCount;
