@@ -217,7 +217,7 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
 
         if (i == trainEnd)
         {
-            return queueSize > 100;
+            return queueSize >= queueLimit;
         }
     }
 
