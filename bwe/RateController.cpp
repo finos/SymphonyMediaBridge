@@ -20,9 +20,9 @@ namespace
 const uint32_t ntp32Second = 0x10000u;
 uint32_t calculateTargetQueue(double bandwidthKbps, uint32_t minRttNtp, const bwe::RateControllerConfig& config)
 {
-    // 230ms queue at 300kbps then decay to 50ms. Add for min RTT/8 ms to allow for queue on long haul
+    // 170ms queue at 300kbps then decay to 50ms. Add for min RTT/8 ms to allow for queue on long haul
     const uint32_t targetQueue =
-        bandwidthKbps * (50 + 54000 / std::max(200.0, bandwidthKbps) + minRttNtp * 125 / ntp32Second) / 8;
+        bandwidthKbps * (40 + 51000 / std::max(200.0, bandwidthKbps) + minRttNtp * 125 / ntp32Second) / 8;
     return math::clamp(targetQueue, 4 * config.mtu, config.maxTargetQueue);
 }
 
@@ -98,27 +98,18 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     _backlog.push_front(metaPacket);
 
     const auto timeToProbe = _probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval);
-    const auto budget = getPacingBudget(timestamp);
-    if (timeToProbe && budget < _model.targetQueue / 4)
-    {
-        // drain until we have space for probe
-        _drainMargin = 0.2;
-        return;
-    }
-    else
-    {
-        _drainMargin = 0;
-    }
 
-    if ((_probe.count < 5 && _probe.duration == 0) || timeToProbe)
+    if (_model.queue < _model.targetQueue && ((_probe.count < 5 && _probe.duration == 0) || timeToProbe))
     {
         _probe.start = timestamp;
-        _probe.duration = 700 * utils::Time::ms;
+        _probe.duration = _config.probeDuration;
         ++_probe.count;
-        RCTL_LOG("starting probe %" PRIu64 "ms target Q %uB",
+        RCTL_LOG("starting probe %" PRIu64 "ms target Q %uB, mQ %uB, ntp %x",
             _logId.c_str(),
             _probe.duration / utils::Time::ms,
-            _model.targetQueue);
+            _model.targetQueue * 2,
+            _model.queue,
+            reportNtp);
     }
 }
 
@@ -199,7 +190,7 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
 namespace
 {
 template <typename T>
-bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t srIndex)
+bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t srIndex, uint32_t queueLimit)
 {
     if (srIndex < 1)
     {
@@ -216,7 +207,7 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
         queueSize -= std::min(queueSize,
             static_cast<uint32_t>(
                 utils::Time::diff(lastTransmission, item.transmissionTime) * bandwidthKbps / (8 * utils::Time::ms)));
-        if (queueSize < std::min(sr.size, 100u))
+        if (queueSize < queueLimit)
         {
             return false;
         }
@@ -234,6 +225,22 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
 }
 
 } // namespace
+
+RateController::BacklogAnalysis RateController::bestReport(const RateController::BacklogAnalysis& probe1,
+    const RateController::BacklogAnalysis& probe2) const
+{
+    if (isGood(probe2))
+    {
+        if (isGood(probe1) &&
+            probe2.delaySinceSR * probe1.receivedAfterSR > probe1.delaySinceSR * probe2.receivedAfterSR)
+        {
+            return probe1;
+        }
+        return probe2;
+    }
+
+    return probe1;
+}
 
 bool RateController::isGood(const RateController::BacklogAnalysis& probe) const
 {
@@ -265,7 +272,7 @@ RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t prob
 
             if (report.receivedAfterSR > 0)
             {
-                report.probing = isProbe(_backlog, modelBandwidthKbps, probeEndIndex, i);
+                report.probing = isProbe(_backlog, modelBandwidthKbps, probeEndIndex, i, _model.targetQueue);
                 report.receivedAfterSR =
                     report.receivedAfterSR - std::min(report.receivedAfterSR, lossSinceSR * largestPacketReceived);
             }
@@ -320,12 +327,24 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
             item.delaySinceSR > ntp32Second / 20)
         {
             auto reportCandidate = analyzeProbe(i, modelBandwidthKbps);
-            if (isGood(reportCandidate) || report.lossCount > 0)
+            if (reportCandidate.lossCount > 0 && report.empty())
             {
                 report = reportCandidate;
                 report.networkQueue = networkQueue;
                 return report;
             }
+
+            if (isGood(reportCandidate))
+            {
+                RCTL_LOG("Candidate found delay %.3f, %uB, %.3f, rxtx %u-%u",
+                    _logId.c_str(),
+                    reportCandidate.delaySinceSR * 1000.0 / 0x10000u,
+                    reportCandidate.receivedAfterSR,
+                    reportCandidate.getBitrateKbps(),
+                    reportCandidate.packetsReceived,
+                    reportCandidate.packetsSent);
+            }
+            report = bestReport(reportCandidate, report);
         }
 
         if (item.received && !hasReceived)
@@ -419,6 +438,8 @@ void RateController::onReportReceived(uint64_t timestamp,
             rb.loss.getCumulativeLoss(),
             _model.queue,
             _model.targetQueue);
+
+        //  dumpBacklog(rb.extendedSeqNoReceived, rb.ssrc);
     }
 
     _minRttNtp = std::min(_minRttNtp, rttNtp);
@@ -445,7 +466,8 @@ void RateController::onReportReceived(uint64_t timestamp,
 
     bool sameProbe = false;
     if (backlogReport.senderReportItem->reportNtp == _lastProbe.ntp &&
-        backlogReport.delaySinceSR == _lastProbe.delaySinceSR)
+        backlogReport.delaySinceSR == _lastProbe.delaySinceSR &&
+        backlogReport.packetsReceived == _lastProbe.packetsReceived)
     {
         sameProbe = true;
     }
@@ -453,6 +475,7 @@ void RateController::onReportReceived(uint64_t timestamp,
     {
         _lastProbe.ntp = backlogReport.senderReportItem->reportNtp;
         _lastProbe.delaySinceSR = backlogReport.delaySinceSR;
+        _lastProbe.packetsReceived = backlogReport.packetsReceived;
         RCTL_LOG(
             "delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %.2fkbps, txRate %.1fkbps found SR %s, "
             "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
@@ -633,7 +656,14 @@ size_t RateController::getPacingBudget(uint64_t timestamp) const
             static_cast<uint32_t>(
                 _model.bandwidthKbps * (timestamp - _model.lastTransmission) / (8 * utils::Time::ms)));
 
-    return _model.targetQueue - std::min(_model.targetQueue, currentQueue);
+    auto currentTargetQ = _model.targetQueue;
+    if (_probe.isProbing(timestamp))
+    {
+        currentTargetQ += _config.mtu;
+        currentTargetQ += static_cast<uint32_t>(_model.targetQueue * (timestamp - _probe.start) / _config.probeRampup);
+    }
+
+    return currentTargetQ - std::min(currentTargetQ, currentQueue);
 }
 
 double RateController::getTargetRate() const

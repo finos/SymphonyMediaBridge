@@ -26,6 +26,8 @@ struct RateControllerConfig
     uint32_t maxTargetQueue = 128000;
     uint32_t initialEstimateKbps = 1200;
     bool debugLog = false;
+    uint64_t probeDuration = 700 * utils::Time::ms;
+    uint64_t probeRampup = 500 * utils::Time::ms;
 };
 
 /*
@@ -143,8 +145,10 @@ private:
 
         double getBitrateKbps() const;
         double getSendRateKbps() const;
-    };
 
+        bool empty() const { return !senderReportItem; }
+    };
+    BacklogAnalysis bestReport(const BacklogAnalysis& probe1, const BacklogAnalysis& probe2) const;
     bool isGood(const BacklogAnalysis& probe) const;
 
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
@@ -177,6 +181,11 @@ private:
         uint64_t interval = utils::Time::sec;
         uint64_t duration = 0;
         uint32_t count = 0;
+
+        bool isProbing(uint64_t timestamp) const
+        {
+            return duration != 0 && utils::Time::diffLE(start, timestamp, duration);
+        }
     } _probe;
 
     bool _canRtxPad = true;
@@ -189,6 +198,7 @@ private:
     {
         uint32_t ntp = 0;
         uint32_t delaySinceSR = 0;
+        uint32_t packetsReceived = 0;
     } _lastProbe;
 };
 } // namespace bwe
