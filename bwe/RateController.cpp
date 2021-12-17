@@ -37,7 +37,12 @@ uint32_t RateController::BacklogAnalysis::getBitrateKbps() const
         return 0;
     }
 
-    return utils::checkedCast<uint32_t>(static_cast<double>(receivedAfterSR) * ntp32Second / (125.0 * delaySinceSR));
+    const auto bitrate = static_cast<uint64_t>(receivedAfterSR) * ntp32Second / (125 * delaySinceSR);
+    if (bitrate >= std::numeric_limits<int32_t>::max())
+    {
+        return std::numeric_limits<int32_t>::max();
+    }
+    return bitrate;
 }
 
 uint32_t RateController::BacklogAnalysis::getSendRateKbps() const
@@ -46,7 +51,12 @@ uint32_t RateController::BacklogAnalysis::getSendRateKbps() const
     {
         return 0;
     }
-    return utils::checkedCast<uint32_t>(static_cast<double>(receivedAfterSR) * utils::Time::ms * 8 / transmitPeriod);
+    const auto bitrate = static_cast<uint64_t>(receivedAfterSR) * utils::Time::ms * 8 / transmitPeriod;
+    if (bitrate >= std::numeric_limits<int32_t>::max())
+    {
+        return std::numeric_limits<int32_t>::max();
+    }
+    return bitrate;
 }
 
 RateController::RateController(size_t instanceId, const RateControllerConfig& config)
@@ -180,8 +190,12 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
 
 namespace
 {
+
+/** Verify that network queue is above initial queue length through out the probe.
+ * This means we have applied pressure during the probe.
+ */
 template <typename T>
-bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t srIndex, uint32_t queueLimit)
+bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t srIndex)
 {
     if (srIndex < 1)
     {
@@ -190,20 +204,20 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
 
     const auto& sr = backlog[srIndex];
     NetworkQueue queue;
-    queue.onPacketSent(sr.transmissionTime, sr.size + sr.queueSize);
+    queue.onPacketSent(sr.transmissionTime, sr.size);
 
     for (uint32_t i = srIndex - 1;; --i)
     {
         const auto& item = backlog[i];
         queue.onPacketSent(item.transmissionTime, item.size);
-        if (queue.size() < queueLimit + item.size)
+        if (queue.size() <= item.size)
         {
             return false;
         }
 
         if (i == trainEnd)
         {
-            return queue.size() >= queueLimit;
+            return true;
         }
     }
 
@@ -213,11 +227,12 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
 } // namespace
 
 RateController::BacklogAnalysis RateController::bestReport(const RateController::BacklogAnalysis& probe1,
-    const RateController::BacklogAnalysis& probe2) const
+    const RateController::BacklogAnalysis& probe2,
+    const uint32_t modelBandwidth) const
 {
-    if (isGood(probe2))
+    if (isGood(probe2, modelBandwidth))
     {
-        if (isGood(probe1) &&
+        if (isGood(probe1, modelBandwidth) &&
             probe2.delaySinceSR * probe1.receivedAfterSR > probe1.delaySinceSR * probe2.receivedAfterSR)
         {
             return probe1;
@@ -228,10 +243,13 @@ RateController::BacklogAnalysis RateController::bestReport(const RateController:
     return probe1;
 }
 
-bool RateController::isGood(const RateController::BacklogAnalysis& probe) const
+bool RateController::isGood(const RateController::BacklogAnalysis& probe, const uint32_t modelBandwidthKbps) const
 {
-    return probe.probing && static_cast<double>(probe.receivedAfterSR) / probe.sentAfterSR > 0.9 &&
+    const bool validMeasurement = (probe.delaySinceSR > ntp32Second / 5 && probe.getBitrateKbps() > modelBandwidthKbps);
+    const bool validProbe = probe.probing && static_cast<double>(probe.receivedAfterSR) / probe.sentAfterSR > 0.9 &&
         probe.delaySinceSR > ntp32Second / 10 && probe.senderReportItem;
+
+    return probe.senderReportItem != nullptr && (validMeasurement || validProbe);
 }
 
 RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t probeEndIndex,
@@ -258,7 +276,7 @@ RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t prob
 
             if (report.receivedAfterSR > 0)
             {
-                report.probing = isProbe(_backlog, modelBandwidthKbps, probeEndIndex, i, _model.targetQueue);
+                report.probing = isProbe(_backlog, modelBandwidthKbps, probeEndIndex, i);
                 report.receivedAfterSR =
                     report.receivedAfterSR - std::min(report.receivedAfterSR, lossSinceSR * largestPacketReceived);
             }
@@ -320,17 +338,18 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
                 return report;
             }
 
-            if (isGood(reportCandidate))
+            if (isGood(reportCandidate, modelBandwidthKbps))
             {
-                RCTL_LOG("Candidate found delay %.3f, %uB, %u, txrx %u-%u",
+                RCTL_LOG("Candidate found delay %.3f, %uB, %ukbps, ntp %x txrx %u-%u",
                     _logId.c_str(),
                     reportCandidate.delaySinceSR * 1000.0 / 0x10000u,
                     reportCandidate.receivedAfterSR,
                     reportCandidate.getBitrateKbps(),
+                    (reportCandidate.senderReportItem ? reportCandidate.senderReportItem->reportNtp : 0),
                     reportCandidate.packetsSent,
                     reportCandidate.packetsReceived);
             }
-            report = bestReport(reportCandidate, report);
+            report = bestReport(reportCandidate, report, modelBandwidthKbps);
         }
 
         if (item.received && !hasReceived)
@@ -486,9 +505,9 @@ void RateController::onReportReceived(uint64_t timestamp,
 
     const auto currentEstimate = _model.queue.getBandwidth();
 
-    if (!sameProbe && isGood(backlogReport) && backlogReport.lossCount < 3 && backlogReport.lossRatio <= 0.02)
+    if (!sameProbe && isGood(backlogReport, currentEstimate) && backlogReport.lossCount < 3 &&
+        backlogReport.lossRatio <= 0.02)
     {
-
         if (receiveRateKbps > _model.queue.getBandwidth())
         {
             _model.queue.setBandwidth(std::min(currentEstimate + 1000, backlogReport.getBitrateKbps()));
@@ -648,7 +667,7 @@ size_t RateController::getPacingBudget(uint64_t timestamp) const
     {
         currentTargetQ += _config.mtu;
         currentTargetQ +=
-            static_cast<uint32_t>(_model.targetQueue * 3 * (timestamp - _probe.start) / _config.probeDuration);
+            static_cast<uint32_t>(_model.targetQueue * 2 * (timestamp - _probe.start) / _config.probeDuration);
     }
 
     return currentTargetQ - std::min(currentTargetQ, currentQueue);

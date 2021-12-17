@@ -148,8 +148,10 @@ private:
 
         bool empty() const { return !senderReportItem; }
     };
-    BacklogAnalysis bestReport(const BacklogAnalysis& probe1, const BacklogAnalysis& probe2) const;
-    bool isGood(const BacklogAnalysis& probe) const;
+    BacklogAnalysis bestReport(const BacklogAnalysis& probe1,
+        const BacklogAnalysis& probe2,
+        const uint32_t modelBandwidth) const;
+    bool isGood(const BacklogAnalysis& probe, const uint32_t modelBandwidthKbps) const;
 
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
     uint64_t calculateModelQueueTransmitPeriod();
