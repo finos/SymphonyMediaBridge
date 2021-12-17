@@ -5,6 +5,9 @@
 
 namespace bwe
 {
+
+/** Models a network FIFO queue that drains at a specific bit rate.
+ */
 class NetworkQueue
 {
 public:
@@ -12,6 +15,7 @@ public:
 
     void setBandwidth(uint32_t kbps) { _bandwidthKbps = kbps; }
     uint32_t getBandwidth() const { return _bandwidthKbps; }
+
     void onPacketSent(uint64_t timestamp, uint16_t size)
     {
         _queue -= std::min(_queue,
@@ -22,9 +26,11 @@ public:
         _lastTransmission = timestamp;
     }
 
-    uint32_t size() const { return _queue; }
     void drain(uint64_t timestamp) { onPacketSent(timestamp, 0); }
     void clear() { _queue = 0; }
+    void setSize(uint32_t bytes) { _queue = bytes; }
+
+    uint32_t size() const { return _queue; }
     uint32_t predictQueueAt(uint64_t timestamp) const
     {
         return _queue -
@@ -32,8 +38,6 @@ public:
                 static_cast<uint32_t>(
                     utils::Time::diff(_lastTransmission, timestamp) * _bandwidthKbps / (8 * utils::Time::ms)));
     }
-
-    void setSize(uint32_t bytes) { _queue = bytes; }
 
 private:
     uint32_t _queue;
