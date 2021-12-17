@@ -12,6 +12,7 @@ class NetworkQueue
 {
 public:
     NetworkQueue() : _queue(0), _lastTransmission(0), _bandwidthKbps(200) {}
+    explicit NetworkQueue(uint32_t kbps) : _queue(0), _lastTransmission(0), _bandwidthKbps(kbps) {}
 
     void setBandwidth(uint32_t kbps) { _bandwidthKbps = kbps; }
     uint32_t getBandwidth() const { return _bandwidthKbps; }

@@ -179,6 +179,7 @@ private:
         uint64_t interval = utils::Time::sec;
         uint64_t duration = 0;
         uint32_t count = 0;
+        uint32_t augmentedQueue = 0;
 
         bool isProbing(uint64_t timestamp) const
         {

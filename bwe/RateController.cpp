@@ -104,13 +104,23 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
     {
         _probe.start = timestamp;
         _probe.duration = _config.probeDuration;
+        _probe.augmentedQueue = _model.targetQueue / 2;
         ++_probe.count;
         RCTL_LOG("starting probe %" PRIu64 "ms target Q %uB, mQ %uB, ntp %x",
             _logId.c_str(),
             _probe.duration / utils::Time::ms,
-            _model.targetQueue * 2,
+            _model.targetQueue,
             _model.queue.size(),
             reportNtp);
+        if (_probe.count == 10 || _probe.count == 30)
+        {
+            _probe.interval *= 2;
+        }
+    }
+    else if (_probe.isProbing(timestamp))
+    {
+        _probe.augmentedQueue += _model.targetQueue / 2;
+        _probe.augmentedQueue = std::min(_model.targetQueue * 2, _probe.augmentedQueue);
     }
 }
 
@@ -203,7 +213,7 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
     }
 
     const auto& sr = backlog[srIndex];
-    NetworkQueue queue;
+    NetworkQueue queue(bandwidthKbps);
     queue.onPacketSent(sr.transmissionTime, sr.size);
 
     for (uint32_t i = srIndex - 1;; --i)
@@ -569,6 +579,7 @@ void RateController::onReportReceived(uint64_t timestamp,
         // there may be later RB after SR and need good measurements of bw
         RCTL_LOG("stopping probe", _logId.c_str());
         _probe.duration = 0;
+        _probe.augmentedQueue = 0;
     }
 }
 
@@ -665,9 +676,7 @@ size_t RateController::getPacingBudget(uint64_t timestamp) const
     auto currentTargetQ = _model.targetQueue;
     if (_probe.isProbing(timestamp))
     {
-        currentTargetQ += _config.mtu;
-        currentTargetQ +=
-            static_cast<uint32_t>(_model.targetQueue * 2 * (timestamp - _probe.start) / _config.probeDuration);
+        currentTargetQ += _probe.augmentedQueue;
     }
 
     return currentTargetQ - std::min(currentTargetQ, currentQueue);
