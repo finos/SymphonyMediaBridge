@@ -1,4 +1,5 @@
 #pragma once
+#include "bwe/NetworkQueue.h"
 #include "logger/Logger.h"
 #include "memory/RandomAccessBacklog.h"
 #include "utils/Optional.h"
@@ -18,15 +19,15 @@ struct RateControllerConfig
     uint32_t ipOverhead = 20 + 14;
     uint32_t mtu = 1480;
     uint32_t maxPaddingSize = 1200;
-    double bandwidthFloorKbps = 300;
-    double bandwidthCeilingKbps = 9000;
+    uint32_t bandwidthFloorKbps = 300;
+    uint32_t bandwidthCeilingKbps = 9000;
     uint64_t minPadPinInterval = 80 * utils::Time::ms;
     uint32_t minPadSize = 50;
-    double rtcpProbeCeiling = 600;
+    uint32_t rtcpProbeCeiling = 600;
     uint32_t maxTargetQueue = 128000;
     uint32_t initialEstimateKbps = 1200;
     bool debugLog = false;
-    uint64_t probeDuration = 700 * utils::Time::ms;
+    uint64_t probeDuration = 500 * utils::Time::ms;
     uint64_t probeRampup = 300 * utils::Time::ms;
 };
 
@@ -143,8 +144,8 @@ private:
         bool rtpProbe = true;
         const PacketMetaData* senderReportItem = nullptr;
 
-        double getBitrateKbps() const;
-        double getSendRateKbps() const;
+        uint32_t getBitrateKbps() const;
+        uint32_t getSendRateKbps() const;
 
         bool empty() const { return !senderReportItem; }
     };
@@ -165,12 +166,8 @@ private:
 
     struct Model
     {
-        double bandwidthKbps = 200.0;
-        uint32_t queue = 0;
+        NetworkQueue queue;
         uint32_t targetQueue = 3000;
-        uint64_t lastTransmission = 0;
-
-        void onPacketSent(uint64_t timestamp, uint16_t size);
     } _model;
 
     double _drainMargin = 0;
