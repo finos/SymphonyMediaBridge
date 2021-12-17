@@ -648,7 +648,7 @@ size_t RateController::getPacingBudget(uint64_t timestamp) const
     {
         currentTargetQ += _config.mtu;
         currentTargetQ +=
-            static_cast<uint32_t>(_model.targetQueue * 2 * (timestamp - _probe.start) / _config.probeDuration);
+            static_cast<uint32_t>(_model.targetQueue * 3 * (timestamp - _probe.start) / _config.probeDuration);
     }
 
     return currentTargetQ - std::min(currentTargetQ, currentQueue);

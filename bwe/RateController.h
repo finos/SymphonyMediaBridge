@@ -27,8 +27,7 @@ struct RateControllerConfig
     uint32_t maxTargetQueue = 128000;
     uint32_t initialEstimateKbps = 1200;
     bool debugLog = false;
-    uint64_t probeDuration = 500 * utils::Time::ms;
-    uint64_t probeRampup = 300 * utils::Time::ms;
+    uint64_t probeDuration = 700 * utils::Time::ms;
 };
 
 /*
