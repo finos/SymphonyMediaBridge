@@ -179,7 +179,7 @@ private:
         uint64_t interval = utils::Time::sec;
         uint64_t duration = 0;
         uint32_t count = 0;
-        uint32_t augmentedQueue = 0;
+        uint32_t targetQueue = 0;
 
         bool isProbing(uint64_t timestamp) const
         {
@@ -198,6 +198,8 @@ private:
         uint32_t ntp = 0;
         uint32_t delaySinceSR = 0;
         uint32_t packetsReceived = 0;
+
+        bool empty() const { return ntp == 0 && packetsReceived == 0; }
     } _lastProbe;
 };
 } // namespace bwe
