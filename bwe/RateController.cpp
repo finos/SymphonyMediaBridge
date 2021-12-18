@@ -701,7 +701,7 @@ double RateController::getTargetRate() const
         return 0;
     }
 
-    return _model.queue.getBandwidth() * (1.0 - _drainMargin);
+    return _model.queue.getBandwidth();
 }
 
 } // namespace bwe

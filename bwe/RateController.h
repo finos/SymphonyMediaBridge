@@ -171,8 +171,6 @@ private:
         uint32_t targetQueue = 3000;
     } _model;
 
-    double _drainMargin = 0;
-
     struct Probe
     {
         uint64_t start = 0;
