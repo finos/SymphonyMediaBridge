@@ -647,7 +647,7 @@ uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t siz
         if (_canRtxPad &&
             (_rtxSendTime == 0 || utils::Time::diffGE(_rtxSendTime, timestamp, _config.minPadPinInterval)))
         {
-            paddingSize = rtp::MIN_RTP_HEADER_SIZE + 4; // tiny packet to keep flow on padding ssrc
+            paddingSize = rtp::MIN_RTP_HEADER_SIZE + 8; // tiny packet to keep flow on padding ssrc
             return 1;
         }
         return 0;
