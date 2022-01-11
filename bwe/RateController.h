@@ -148,6 +148,9 @@ private:
 
         bool empty() const { return !senderReportItem; }
     };
+
+    bool hasBackedOffDueToLostRecently(uint64_t timestamp);
+
     BacklogAnalysis bestReport(const BacklogAnalysis& probe1,
         const BacklogAnalysis& probe2,
         const uint32_t modelBandwidth) const;

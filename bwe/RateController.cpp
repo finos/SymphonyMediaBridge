@@ -100,7 +100,7 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
 
     const auto timeToProbe = _probe.start == 0 || utils::Time::diffGE(_probe.start, timestamp, _probe.interval);
 
-    if (_model.queue.size() < _model.targetQueue && ((_probe.count < 5 && _probe.duration == 0) || timeToProbe))
+    if (_model.queue.size() < _model.targetQueue && ((_probe.count < 5 && _probe.duration == 0) || (timeToProbe && !hasBackedOffDueToLostRecently(timestamp))))
     {
         _probe.start = timestamp;
         _probe.duration = _config.probeDuration;
@@ -249,6 +249,11 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
 }
 
 } // namespace
+
+bool RateController::hasBackedOffDueToLostRecently(uint64_t timestamp)
+{
+    return _lastLossBackoff != 0 && utils::Time::diffLT(_lastLossBackoff, timestamp, utils::Time::sec * 5);
+}
 
 RateController::BacklogAnalysis RateController::bestReport(const RateController::BacklogAnalysis& probe1,
     const RateController::BacklogAnalysis& probe2,
@@ -564,7 +569,7 @@ void RateController::onReportReceived(uint64_t timestamp,
     }
     else if (!sameProbe && backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
         backlogReport.networkQueue > _model.targetQueue / 2 &&
-        (_lastLossBackoff == 0 || utils::Time::diffGE(_lastLossBackoff, timestamp, utils::Time::sec * 5)))
+        !hasBackedOffDueToLostRecently(timestamp))
     {
         _model.queue.setBandwidth(std::max(_config.bandwidthFloorKbps, static_cast<uint32_t>(currentEstimate * 0.95)));
         _lastLossBackoff = timestamp;
