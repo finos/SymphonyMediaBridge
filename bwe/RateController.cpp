@@ -224,22 +224,15 @@ bool isProbe(const T& backlog, double bandwidthKbps, uint32_t trainEnd, uint32_t
     for (uint32_t i = srIndex - 1;; --i)
     {
         const auto& item = backlog[i];
-
-        // It's important to drain and check before add packet. Otherwise we can't be sure we went
-        // lower than initial size because adding a new packet in the most of cases will increase the queue
-        // above initial
-        queue.drain(item.transmissionTime);
-        if (backlog[i+1].transmissionTime != item.transmissionTime // wait for all packets for packets bellonging to same timestamp to check the queue
-            && queue.size() < sr.size)
+        queue.onPacketSent(item.transmissionTime, item.size);
+        if (queue.size() <= item.size)
         {
             return false;
         }
 
-        queue.onPacketSent(item.transmissionTime, item.size);
-
         if (i == trainEnd)
         {
-            return queue.size() >= sr.size;
+            return true;
         }
     }
 
