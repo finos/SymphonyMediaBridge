@@ -194,7 +194,6 @@ private:
     uint32_t _minRttNtp;
     const RateControllerConfig& _config;
     uint64_t _lastLossBackoff = 0;
-    bool _mayHaveBetterProbeThanLast = false;
     struct
     {
         uint32_t ntp = 0;

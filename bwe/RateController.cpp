@@ -165,11 +165,6 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
     uint32_t receivedPackets = 0;
     for (auto& item : _backlog)
     {
-        if (!_lastProbe.empty() && item.reportNtp == _lastProbe.ntp && item.type == PacketMetaData::SR)
-        {
-            _mayHaveBetterProbeThanLast = true;
-        }
-
         if (item.ssrc == ssrc && item.type == PacketMetaData::RTP)
         {
             if (item.received)
@@ -358,15 +353,6 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
                 return reportCandidate;
             }
 
-            if (!_mayHaveBetterProbeThanLast &&
-                reportCandidate.senderReportItem && reportCandidate.senderReportItem->reportNtp == _lastProbe.ntp &&
-                reportCandidate.delaySinceSR == _lastProbe.delaySinceSR &&
-                reportCandidate.packetsReceived == _lastProbe.packetsReceived)
-            {
-                // No probes before this one can be better
-                return bestReport(report, reportCandidate, modelBandwidthKbps);
-            }
-
             if (isGood(reportCandidate, modelBandwidthKbps))
             {
                 RCTL_LOG("Candidate found delay %.3f, %uB, %ukbps, ntp %x txrx %u-%u, loss %u",
@@ -512,7 +498,7 @@ void RateController::onReportReceived(uint64_t timestamp,
         _lastProbe.ntp = backlogReport.senderReportItem->reportNtp;
         _lastProbe.delaySinceSR = backlogReport.delaySinceSR;
         _lastProbe.packetsReceived = backlogReport.packetsReceived;
-        _mayHaveBetterProbeThanLast = false;
+
         RCTL_LOG("delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %ukbps, txRate %ukbps found SR %s, "
                  "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
             _logId.c_str(),
