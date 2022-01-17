@@ -159,7 +159,7 @@ private:
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
     uint64_t calculateModelQueueTransmitPeriod();
     RateController::BacklogAnalysis analyzeProbe(const uint32_t probeEndIndex, const double modelBandwidthKbps) const;
-    BacklogAnalysis analyzeBacklog(uint32_t reportNtp, double modelBandwidthKbps) const;
+    BacklogAnalysis analyzeBacklog(uint32_t reportNtp, double modelBandwidthKbps);
 
     double calculateSendRate(uint64_t timestamp) const;
     void dumpBacklog(uint32_t seqno, uint32_t ssrc);
@@ -194,6 +194,37 @@ private:
     uint32_t _minRttNtp;
     const RateControllerConfig& _config;
     uint64_t _lastLossBackoff = 0;
+    struct
+    {
+        uint64_t _lastGoodReportTimestamp = 0;
+        uint32_t _logTimes = 0;
+        uint32_t _probeAnalysisCount = 0;
+        uint32_t _isNotProbingCount = 0;
+        uint32_t _insufficientDelayCount = 0;
+        uint32_t _insufficientConfirmationsCount = 0;
+        uint32_t _srNotFoundCount = 0;
+
+        void resetCounters()
+        {
+            _logTimes = 0;
+            _probeAnalysisCount = 0;
+            _isNotProbingCount = 0;
+            _insufficientDelayCount = 0;
+            _insufficientConfirmationsCount = 0;
+            _srNotFoundCount = 0;
+        }
+
+    } _probeLogInfo;
+
+    struct
+    {
+        uint64_t _lastLoggedTimestamp = 0;
+        uint32_t _lastLoggedBandwidth= 0;
+        uint32_t _lastLoggedQueueSize = 0;
+        uint32_t _lastLoggedTargetQueueSize = 0;
+
+    } _modelLogInfo;
+
     struct
     {
         uint32_t ntp = 0;
