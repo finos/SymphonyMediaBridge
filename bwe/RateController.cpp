@@ -616,7 +616,7 @@ void RateController::onReportReceived(uint64_t timestamp,
         if (shouldLog)
         {
             ++_probeLogInfo._logTimes;
-            logger::info("No valid probes for long time. time since last good: %llu, analyzed: %u, no sr: %u, not probing: %u, insufficient delay: %u, insufficient recv after sr: %u",
+            logger::info("No valid probes for long time. time since last good: %" PRIu64 ", analyzed: %u, no sr: %u, not probing: %u, insufficient delay: %u, insufficient recv after sr: %u",
                     _logId.c_str(),
                     (timeSinceLstGoodProbe / utils::Time::ms),
                     _probeLogInfo._probeAnalysisCount,
