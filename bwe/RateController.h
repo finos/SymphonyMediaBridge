@@ -165,7 +165,7 @@ private:
     void dumpBacklog(uint32_t seqno, uint32_t ssrc);
 
     logger::LoggableId _logId;
-    memory::RandomAccessBacklog<PacketMetaData, 512> _backlog;
+    memory::RandomAccessBacklog<PacketMetaData, 4096> _backlog;
     memory::RandomAccessBacklog<ReceiveBlockSample, 32> _receiveBlocks;
 
     struct Model
