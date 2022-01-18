@@ -176,10 +176,15 @@ private:
 
     struct Probe
     {
+        constexpr static uint64_t INITIAL_INTERVAL = utils::Time::sec;
+        constexpr static uint64_t MAX_INTERVAL = INITIAL_INTERVAL * 4;
+
         uint64_t start = 0;
-        uint64_t interval = utils::Time::sec;
+        uint16_t lastGoodProbe = 0;
+        uint64_t interval = Probe::INITIAL_INTERVAL;
         uint64_t duration = 0;
         uint32_t count = 0;
+        uint32_t countOnLastIntervalReduction = 0;
         uint32_t targetQueue = 0;
 
         bool isProbing(uint64_t timestamp) const
@@ -196,7 +201,6 @@ private:
     uint64_t _lastLossBackoff = 0;
     struct
     {
-        uint64_t _lastGoodReportTimestamp = 0;
         uint32_t _logTimes = 0;
         uint32_t _backlogAnalysisCount = 0;
         uint32_t _probeAnalysisCount = 0;

@@ -18,7 +18,7 @@
 namespace
 {
 const uint32_t ntp32Second = 0x10000u;
-const uint64_t logProbeIssuesInterval = utils::Time::sec * 30;
+const uint64_t longIntervalWithoutValidProbes = utils::Time::sec * 30;
 
 enum ProbeIssues {
     NO_ISSUES = 0x0,
@@ -167,9 +167,12 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
             _probe.targetQueue,
             _model.queue.size(),
             reportNtp);
-        if (_probe.count == 10 || _probe.count == 30)
+
+        const auto probesSinceLastReduction = _probe.count - _probe.countOnLastIntervalReduction;
+
+        if (_probe.interval < Probe::MAX_INTERVAL && (probesSinceLastReduction == 10 || probesSinceLastReduction == 30))
         {
-            _probe.interval *= 2;
+            _probe.interval = std::min(_probe.interval * 2, Probe::MAX_INTERVAL);
         }
     }
     else if (_probe.isProbing(timestamp))
@@ -567,8 +570,8 @@ void RateController::onReportReceived(uint64_t timestamp,
         return;
     }
 
-    if (_probeLogInfo._lastGoodReportTimestamp == 0) {
-        _probeLogInfo._lastGoodReportTimestamp = timestamp;
+    if (_probe.lastGoodProbe == 0) {
+        _probe.lastGoodProbe = timestamp;
     }
 
     auto backlogReport = analyzeBacklog(limitNtp - ntp32Second * 10, _model.queue.getBandwidth());
@@ -577,20 +580,23 @@ void RateController::onReportReceived(uint64_t timestamp,
     const auto isGoodReport = isValidReport && isGood(backlogReport, currentEstimate);
     if (isGoodReport)
     {
+        _probe.lastGoodProbe = timestamp;
         _probeLogInfo.resetCounters();
-        _probeLogInfo._lastGoodReportTimestamp = timestamp;
     }
-    else
+    else if (utils::Time::diffGE(_probe.lastGoodProbe, timestamp, longIntervalWithoutValidProbes))
     {
-        const auto timeSinceLstGoodProbe = timestamp - _probeLogInfo._lastGoodReportTimestamp;
-        const auto logTimes = timeSinceLstGoodProbe / logProbeIssuesInterval;
-        const auto shouldLog = logTimes > _probeLogInfo._logTimes;
+        _probe.duration = Probe::INITIAL_INTERVAL;
+        _probe.countOnLastIntervalReduction = _probe.count;
+
+        const auto timeSinceLastGoodProbe = timestamp - _probe.lastGoodProbe;
+        const auto timesOfLongInterval = timeSinceLastGoodProbe / longIntervalWithoutValidProbes;
+        const auto shouldLog = timesOfLongInterval > _probeLogInfo._logTimes;
         if (shouldLog)
         {
             ++_probeLogInfo._logTimes;
             logger::info("No valid probes for long time. time since last good: %" PRIu64 "ms, analyzedBacklogCount: %u, noCandidateProbesFoundCount: %u, analyzedProbesCount: %u, noSr: %u, notProbing: %u, insufficientDelay: %u, insufficientRecvData: %u. RbSeqnoNotFoundCount: %u",
                     _logId.c_str(),
-                    (timeSinceLstGoodProbe / utils::Time::ms),
+                    (timeSinceLastGoodProbe / utils::Time::ms),
                     _probeLogInfo._backlogAnalysisCount,
                     _probeLogInfo._noCandidatesFound,
                     _probeLogInfo._probeAnalysisCount,
