@@ -19,7 +19,6 @@ namespace
 {
 const uint32_t ntp32Second = 0x10000u;
 const uint64_t logProbeIssuesInterval = utils::Time::sec * 30;
-const uint64_t logEstimationModelInterval = utils::Time::sec * 30;
 
 enum ProbeIssues {
     NO_ISSUES = 0x0,
@@ -665,7 +664,7 @@ void RateController::onReportReceived(uint64_t timestamp,
             _model.queue.setBandwidth(currentEstimate - 0.1 * (currentEstimate - receiveRateKbps));
         }
     }
-    else if (!backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
+    else if (backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
         backlogReport.networkQueue > _model.targetQueue / 2 &&
         !hasRecentlyBackedOffDueToLoss(timestamp))
     {
