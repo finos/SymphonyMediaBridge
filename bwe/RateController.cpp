@@ -251,6 +251,7 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
 
     if (receivedPackets == 0)
     {
+        RCTL_LOG("Not found seqno %u reported by ssrc %u", _logId.c_str(), receivedSequenceNumber, ssrc);
         _probeLogInfo._srSeqnoNotFoundCount++;
     }
 
