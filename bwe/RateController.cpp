@@ -248,6 +248,12 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
             }
         }
     }
+
+    if (receivedPackets == 0)
+    {
+        _probeLogInfo._srSeqnoNotFoundCount++;
+    }
+
     if (lossCount > 0)
     {
         // dumpBacklog(receivedSequenceNumber, ssrc);
@@ -391,7 +397,10 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
     BacklogAnalysis report;
 
     bool hasReceived = false;
+    bool candidateFound = false;
     uint32_t networkQueue = 0;
+    ++_probeLogInfo._backlogAnalysisCount;
+
     for (uint32_t i = 0; i < _backlog.size(); ++i)
     {
         auto& item = _backlog[i];
@@ -399,6 +408,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
         if (item.type == PacketMetaData::RTP && item.reportNtp != 0 && item.received &&
             item.delaySinceSR > ntp32Second / 20)
         {
+            candidateFound = true;
             auto reportCandidate = analyzeProbe(i, modelBandwidthKbps);
             reportCandidate.networkQueue = networkQueue;
 
@@ -460,6 +470,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
         }
     }
 
+    _probeLogInfo._noCandidatesFound += candidateFound ? 0 : 1;
     report.networkQueue = networkQueue;
     return report;
 }
@@ -561,48 +572,9 @@ void RateController::onReportReceived(uint64_t timestamp,
     }
 
     auto backlogReport = analyzeBacklog(limitNtp - ntp32Second * 10, _model.queue.getBandwidth());
-    if (backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem)
-    {
-        return;
-    }
-
-    bool sameProbe = false;
-    if (backlogReport.senderReportItem->reportNtp == _lastProbe.ntp &&
-        backlogReport.delaySinceSR == _lastProbe.delaySinceSR &&
-        backlogReport.packetsReceived == _lastProbe.packetsReceived)
-    {
-        sameProbe = true;
-    }
-    else
-    {
-        _lastProbe.ntp = backlogReport.senderReportItem->reportNtp;
-        _lastProbe.delaySinceSR = backlogReport.delaySinceSR;
-        _lastProbe.packetsReceived = backlogReport.packetsReceived;
-
-        RCTL_LOG("delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %ukbps, txRate %ukbps found SR %s, "
-                 "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
-            _logId.c_str(),
-            static_cast<double>(backlogReport.delaySinceSR * 1000 / ntp32Second),
-            backlogReport.senderReportItem->reportNtp,
-            backlogReport.lossCount,
-            backlogReport.lossRatio,
-            backlogReport.receivedAfterSR,
-            backlogReport.getBitrateKbps(),
-            backlogReport.getSendRateKbps(),
-            backlogReport.senderReportItem ? "t" : "f",
-            backlogReport.probing,
-            backlogReport.rtpProbe,
-            backlogReport.networkQueue,
-            backlogReport.packetsSent,
-            backlogReport.packetsReceived);
-    }
-
-    const uint32_t receiveRateKbps = backlogReport.rtpProbe
-        ? std::min(_config.bandwidthCeilingKbps, backlogReport.getBitrateKbps())
-        : std::min(_config.rtcpProbeCeiling, backlogReport.getBitrateKbps());
-
+    const auto isValidReport = !(backlogReport.networkQueue == ~0u || backlogReport.receivedAfterSR == 0 || !backlogReport.senderReportItem);
     const auto currentEstimate = _model.queue.getBandwidth();
-    const auto isGoodReport = isGood(backlogReport, currentEstimate);
+    const auto isGoodReport = isValidReport && isGood(backlogReport, currentEstimate);
     if (isGoodReport)
     {
         _probeLogInfo.resetCounters();
@@ -616,18 +588,60 @@ void RateController::onReportReceived(uint64_t timestamp,
         if (shouldLog)
         {
             ++_probeLogInfo._logTimes;
-            logger::info("No valid probes for long time. time since last good: %" PRIu64 ", analyzed: %u, no sr: %u, not probing: %u, insufficient delay: %u, insufficient recv after sr: %u",
+            logger::info("No valid probes for long time. time since last good: %" PRIu64 "ms, analyzedBacklogCount: %u, noCandidateProbesFoundCount: %u, analyzedProbesCount: %u, noSr: %u, notProbing: %u, insufficientDelay: %u, insufficientRecvData: %u. RbSeqnoNotFoundCount: %u",
                     _logId.c_str(),
                     (timeSinceLstGoodProbe / utils::Time::ms),
+                    _probeLogInfo._backlogAnalysisCount,
+                    _probeLogInfo._noCandidatesFound,
                     _probeLogInfo._probeAnalysisCount,
                     _probeLogInfo._srNotFoundCount,
                     _probeLogInfo._isNotProbingCount,
                     _probeLogInfo._insufficientDelayCount,
-                    _probeLogInfo._insufficientConfirmationsCount);
+                    _probeLogInfo._insufficientConfirmationsCount,
+                    _probeLogInfo._srSeqnoNotFoundCount);
         }
     }
 
-    if (!sameProbe && isGoodReport && backlogReport.lossCount < 3 &&
+    const bool sameProbe = isValidReport && backlogReport.senderReportItem->reportNtp == _lastProbe.ntp &&
+            backlogReport.delaySinceSR == _lastProbe.delaySinceSR &&
+            backlogReport.packetsReceived == _lastProbe.packetsReceived;
+
+    if (!sameProbe)
+    {
+        RCTL_LOG("isValid %s, isGood: %s, delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %ukbps, txRate %ukbps found SR %s, "
+            "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
+        _logId.c_str(),
+        isValidReport ? "t" : "f",
+        isGoodReport ? "t" : "f",
+        static_cast<double>(backlogReport.delaySinceSR * 1000 / ntp32Second),
+        backlogReport.senderReportItem->reportNtp,
+        backlogReport.lossCount,
+        backlogReport.lossRatio,
+        backlogReport.receivedAfterSR,
+        backlogReport.getBitrateKbps(),
+        backlogReport.getSendRateKbps(),
+        backlogReport.senderReportItem ? "t" : "f",
+        backlogReport.probing,
+        backlogReport.rtpProbe,
+        backlogReport.networkQueue,
+        backlogReport.packetsSent,
+        backlogReport.packetsReceived);
+    }
+
+    // Nothing hasn't changed, don't need to continue
+    if (!isValidReport || sameProbe) {
+        return;
+    }
+
+    _lastProbe.ntp = backlogReport.senderReportItem->reportNtp;
+    _lastProbe.delaySinceSR = backlogReport.delaySinceSR;
+    _lastProbe.packetsReceived = backlogReport.packetsReceived;
+
+    const uint32_t receiveRateKbps = backlogReport.rtpProbe
+        ? std::min(_config.bandwidthCeilingKbps, backlogReport.getBitrateKbps())
+        : std::min(_config.rtcpProbeCeiling, backlogReport.getBitrateKbps());
+
+    if (isGoodReport && backlogReport.lossCount < 3 &&
         backlogReport.lossRatio <= 0.02)
     {
         if (receiveRateKbps > _model.queue.getBandwidth())
@@ -650,7 +664,7 @@ void RateController::onReportReceived(uint64_t timestamp,
             _model.queue.setBandwidth(currentEstimate - 0.1 * (currentEstimate - receiveRateKbps));
         }
     }
-    else if (!sameProbe && backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
+    else if (!backlogReport.lossCount > 2 && backlogReport.lossRatio > 0.02 &&
         backlogReport.networkQueue > _model.targetQueue / 2 &&
         !hasRecentlyBackedOffDueToLoss(timestamp))
     {
@@ -669,30 +683,6 @@ void RateController::onReportReceived(uint64_t timestamp,
     if (_model.queue.size() > backlogReport.networkQueue)
     {
         _model.queue.setSize(backlogReport.networkQueue);
-    }
-
-    const bool isTimeToLogModel = _modelLogInfo._lastLoggedTimestamp == 0 || utils::Time::diffGE(_modelLogInfo._lastLoggedTimestamp, timestamp, logEstimationModelInterval);
-    if (isTimeToLogModel)
-    {
-        bool shouldSupressLog = _modelLogInfo._lastLoggedBandwidth == _model.queue.getBandwidth() &&
-            _modelLogInfo._lastLoggedQueueSize == _model.queue.size() &&
-            _modelLogInfo._lastLoggedTargetQueueSize == _model.targetQueue;
-
-        if (!shouldSupressLog)
-        {
-            _modelLogInfo._lastLoggedTimestamp = timestamp;
-            _modelLogInfo._lastLoggedBandwidth = _model.queue.getBandwidth();
-            _modelLogInfo._lastLoggedQueueSize = _model.queue.size();
-            _modelLogInfo._lastLoggedTargetQueueSize = _model.targetQueue;
-
-            logger::info("model %ukbps mQ %uB tQ %uB",
-                _logId.c_str(),
-                _modelLogInfo._lastLoggedBandwidth,
-                _modelLogInfo._lastLoggedQueueSize,
-                _modelLogInfo._lastLoggedTargetQueueSize
-            );
-        }
-
     }
 
     RCTL_LOG("model %ukbps mQ %uB tQ %uB, nwQueue %u, rxRate %ukbps rtt %.1fms loss "

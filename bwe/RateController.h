@@ -198,32 +198,29 @@ private:
     {
         uint64_t _lastGoodReportTimestamp = 0;
         uint32_t _logTimes = 0;
+        uint32_t _backlogAnalysisCount = 0;
         uint32_t _probeAnalysisCount = 0;
         uint32_t _isNotProbingCount = 0;
         uint32_t _insufficientDelayCount = 0;
         uint32_t _insufficientConfirmationsCount = 0;
         uint32_t _srNotFoundCount = 0;
+        uint32_t _srSeqnoNotFoundCount = 0;
+        uint32_t _noCandidatesFound = 0;
 
         void resetCounters()
         {
             _logTimes = 0;
+            _backlogAnalysisCount = 0;
             _probeAnalysisCount = 0;
             _isNotProbingCount = 0;
             _insufficientDelayCount = 0;
             _insufficientConfirmationsCount = 0;
             _srNotFoundCount = 0;
+            _srSeqnoNotFoundCount = 0;
+            _noCandidatesFound = 0;
         }
 
     } _probeLogInfo;
-
-    struct
-    {
-        uint64_t _lastLoggedTimestamp = 0;
-        uint32_t _lastLoggedBandwidth= 0;
-        uint32_t _lastLoggedQueueSize = 0;
-        uint32_t _lastLoggedTargetQueueSize = 0;
-
-    } _modelLogInfo;
 
     struct
     {
