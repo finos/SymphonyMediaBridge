@@ -231,7 +231,7 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
         {
             if (item.received)
             {
-                RCTL_LOG("Found an already received item at prosition %u, ssrc %u", _logId.c_str(), itemCount, ssrc);
+                RCTL_LOG("Found an already received item at position %u, ssrc %u", _logId.c_str(), itemCount, ssrc);
                 break; // part of previous report on this ssrc
                 // at this point we could walk forward and mark packets to sacrifice as loss according to lossCount.
                 // That would give us ability to assess bandwidth also when some loss is present
