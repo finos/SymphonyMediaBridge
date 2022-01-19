@@ -1408,6 +1408,8 @@ void TransportImpl::sendPadding(uint64_t timestamp)
             padRtpHeader->payloadType = rtxPayloadType;
             padRtpHeader->timestamp = 1293887;
             padRtpHeader->sequenceNumber = (*_rtxProbeSequenceCounter)++ & 0xFFFF;
+            padRtpHeader->padding = 1;
+            padPacket->get()[padPacket->getLength() - 1] = 0x01;
             if (_absSendTimeExtensionId.isSet())
             {
                 padRtpHeader->extension = 1;

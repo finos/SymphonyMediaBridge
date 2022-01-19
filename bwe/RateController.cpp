@@ -123,7 +123,7 @@ RateController::RateController(size_t instanceId, const RateControllerConfig& co
     _model.targetQueue = calculateTargetQueue(_model.queue.getBandwidth(), 1, config);
 }
 
-void RateController::onRtpSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size)
+void RateController::onRtpSent(uint64_t timestamp, uint32_t ssrc, uint16_t sequenceNumber, uint16_t size)
 {
     if (size == 0 || !_config.enabled)
     {
@@ -172,7 +172,9 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
 
         if (_probe.interval < Probe::MAX_INTERVAL && (probesSinceLastReduction == 10 || probesSinceLastReduction == 30))
         {
-            _probe.interval = std::min(_probe.interval * 2, Probe::MAX_INTERVAL);
+            // New variable to shut up compiler warnings on mac
+            constexpr auto maxInterval = Probe::MAX_INTERVAL;
+            _probe.interval = std::min(_probe.interval * 2, maxInterval);
         }
     }
     else if (_probe.isProbing(timestamp))
@@ -220,18 +222,21 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
     uint32_t lossCount = cumulativeLossCount - std::min(cumulativeLossCount, sample->lossCount);
     sample->lossCount = cumulativeLossCount;
 
+    const uint16_t receivedSequenceNumber16 = static_cast<uint16_t>(receivedSequenceNumber);
     uint32_t receivedPackets = 0;
+    uint32_t itemCount = 0;
     for (auto& item : _backlog)
     {
         if (item.ssrc == ssrc && item.type == PacketMetaData::RTP)
         {
             if (item.received)
             {
+                RCTL_LOG("Found an already received item at prosition %u, ssrc %u", _logId.c_str(), itemCount, ssrc);
                 break; // part of previous report on this ssrc
                 // at this point we could walk forward and mark packets to sacrifice as loss according to lossCount.
                 // That would give us ability to assess bandwidth also when some loss is present
             }
-            else if (item.sequenceNumber == receivedSequenceNumber)
+            else if (item.sequenceNumber == receivedSequenceNumber16)
             {
                 item.received = true;
                 item.lossCount = lossCount;
@@ -249,12 +254,14 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
                 ++receivedPackets;
             }
         }
+
+        ++itemCount;
     }
 
     if (receivedPackets == 0)
     {
         RCTL_LOG("Not found seqno %u reported by ssrc %u", _logId.c_str(), receivedSequenceNumber, ssrc);
-        _probeLogInfo._srSeqnoNotFoundCount++;
+        _probeLogInfo.srSeqnoNotFoundCount++;
     }
 
     if (lossCount > 0)
@@ -323,8 +330,6 @@ RateController::BacklogAnalysis RateController::bestReport(const RateController:
     return probe1;
 }
 
-
-
 bool RateController::isGood(const RateController::BacklogAnalysis& probe, const uint32_t modelBandwidthKbps) const
 {
     return getProbeIssues(probe, modelBandwidthKbps) == ProbeIssues::NO_ISSUES;
@@ -361,6 +366,9 @@ RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t prob
             report.senderReportItem = &item;
             report.lossCount = lossSinceSR;
             report.lossRatio = static_cast<double>(lossSinceSR) / std::max(1u, report.packetsSent);
+            report.probeBacklogLength = i - probeEndIndex;
+            report.probeBacklogDepth = probeEndIndex;
+
             return report;
         }
         else
@@ -402,7 +410,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
     bool hasReceived = false;
     bool candidateFound = false;
     uint32_t networkQueue = 0;
-    ++_probeLogInfo._backlogAnalysisCount;
+    ++_probeLogInfo.backlogAnalysisCount;
 
     for (uint32_t i = 0; i < _backlog.size(); ++i)
     {
@@ -421,7 +429,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
             }
 
             const auto probeIssues = getProbeIssues(reportCandidate, modelBandwidthKbps);
-            _probeLogInfo._probeAnalysisCount++;
+            _probeLogInfo.probeAnalysisCount++;
 
             if (probeIssues == ProbeIssues::NO_ISSUES)
             {
@@ -441,19 +449,19 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
             {
                 if (probeIssues & ProbeIssues::NO_REPORT_FOUND)
                 {
-                    ++_probeLogInfo._srNotFoundCount;
+                    ++_probeLogInfo.srNotFoundCount;
                 }
                 else if (probeIssues & ProbeIssues::NOT_PROBING)
                 {
-                    ++_probeLogInfo._isNotProbingCount;
+                    ++_probeLogInfo.isNotProbingCount;
                 }
                 else if (probeIssues & ProbeIssues::INSUFFICIENT_DELAY)
                 {
-                    ++_probeLogInfo._insufficientDelayCount;
+                    ++_probeLogInfo.insufficientDelayCount;
                 }
                 else if (probeIssues & ProbeIssues::INSUFFICIENT_CONFIRMED_DATA)
                 {
-                    ++_probeLogInfo._insufficientConfirmationsCount;
+                    ++_probeLogInfo.insufficientConfirmationsCount;
                 }
             }
         }
@@ -473,7 +481,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
         }
     }
 
-    _probeLogInfo._noCandidatesFound += candidateFound ? 0 : 1;
+    _probeLogInfo.noCandidatesFound += candidateFound ? 0 : 1;
     report.networkQueue = networkQueue;
     return report;
 }
@@ -590,21 +598,21 @@ void RateController::onReportReceived(uint64_t timestamp,
 
         const auto timeSinceLastGoodProbe = timestamp - _probe.lastGoodProbe;
         const auto timesOfLongInterval = timeSinceLastGoodProbe / longIntervalWithoutValidProbes;
-        const auto shouldLog = timesOfLongInterval > _probeLogInfo._logTimes;
+        const auto shouldLog = timesOfLongInterval > _probeLogInfo.logTimes;
         if (shouldLog)
         {
-            ++_probeLogInfo._logTimes;
+            ++_probeLogInfo.logTimes;
             logger::info("No valid probes for long time. time since last good: %" PRIu64 "ms, analyzedBacklogCount: %u, noCandidateProbesFoundCount: %u, analyzedProbesCount: %u, noSr: %u, notProbing: %u, insufficientDelay: %u, insufficientRecvData: %u. RbSeqnoNotFoundCount: %u",
                     _logId.c_str(),
                     (timeSinceLastGoodProbe / utils::Time::ms),
-                    _probeLogInfo._backlogAnalysisCount,
-                    _probeLogInfo._noCandidatesFound,
-                    _probeLogInfo._probeAnalysisCount,
-                    _probeLogInfo._srNotFoundCount,
-                    _probeLogInfo._isNotProbingCount,
-                    _probeLogInfo._insufficientDelayCount,
-                    _probeLogInfo._insufficientConfirmationsCount,
-                    _probeLogInfo._srSeqnoNotFoundCount);
+                    _probeLogInfo.backlogAnalysisCount,
+                    _probeLogInfo.noCandidatesFound,
+                    _probeLogInfo.probeAnalysisCount,
+                    _probeLogInfo.srNotFoundCount,
+                    _probeLogInfo.isNotProbingCount,
+                    _probeLogInfo.insufficientDelayCount,
+                    _probeLogInfo.insufficientConfirmationsCount,
+                    _probeLogInfo.srSeqnoNotFoundCount);
         }
     }
 
@@ -615,7 +623,7 @@ void RateController::onReportReceived(uint64_t timestamp,
     if (!sameProbe)
     {
         RCTL_LOG("isValid %s, isGood: %s, delaySinceSR %.1fms, ntp %x loss %u, lossRatio %.3f, %uB, rxRate %ukbps, txRate %ukbps found SR %s, "
-            "probe %u, rtpProbe %u networkQ %u, txrx %u %u",
+            "probe %u, rtpProbe %u networkQ %u, txrx %u %u, backlog pos: %u->%u",
         _logId.c_str(),
         isValidReport ? "t" : "f",
         isGoodReport ? "t" : "f",
@@ -631,7 +639,9 @@ void RateController::onReportReceived(uint64_t timestamp,
         backlogReport.rtpProbe,
         backlogReport.networkQueue,
         backlogReport.packetsSent,
-        backlogReport.packetsReceived);
+        backlogReport.packetsReceived,
+        backlogReport.probeBacklogDepth,
+        backlogReport.probeBacklogDepth + backlogReport.probeBacklogLength)
     }
 
     // Nothing hasn't changed, don't need to continue
@@ -762,7 +772,7 @@ uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t siz
         if (_canRtxPad &&
             (_rtxSendTime == 0 || utils::Time::diffGE(_rtxSendTime, timestamp, _config.minPadPinInterval)))
         {
-            paddingSize = rtp::MIN_RTP_HEADER_SIZE + 8; // tiny packet to keep flow on padding ssrc
+            paddingSize = rtp::MIN_RTP_HEADER_SIZE + 10; // tiny packet to keep flow on padding ssrc
             return 1;
         }
         return 0;
