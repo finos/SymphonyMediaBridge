@@ -291,9 +291,9 @@ bool SrtpClient::unprotect(memory::Packet* packet)
             logger::warn("Srtp unprotect error: %d, ssrc %u, seq %u, ts %u",
                 _loggableId.c_str(),
                 static_cast<int32_t>(result),
-                header->ssrc.get(),
-                header->sequenceNumber.get(),
-                header->timestamp.get());
+                header != nullptr ? header->ssrc.get() : 0,
+                header != nullptr ? header->sequenceNumber.get() : 0,
+                header != nullptr ? header->timestamp.get() : 0);
             return false;
         }
     }

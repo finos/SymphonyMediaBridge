@@ -92,11 +92,11 @@ void VideoForwarderReceiveJob::run()
             "VideoForwarderReceiveJob",
             _sender->getLoggableId().c_str(),
             _ssrcContext._ssrc,
-            header->sequenceNumber.get(),
+            header != nullptr ? header->sequenceNumber.get() : 0,
             _extendedSequenceNumber,
             _ssrcContext._lastReceivedExtendedSequenceNumber,
             _ssrcContext._lastUnprotectedExtendedSequenceNumber,
-            header->timestamp.get(),
+            header != nullptr ? header->timestamp.get() : 0,
             _engineMixer.getLoggableId().c_str());
         _allocator.free(_packet);
         _packet = nullptr;

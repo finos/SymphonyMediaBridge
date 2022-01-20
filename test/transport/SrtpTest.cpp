@@ -171,3 +171,25 @@ TEST_F(SrtpTest, seqSkip)
         _allocator.free(packet);
     }
 }
+
+TEST_F(SrtpTest, seqDuplicate)
+{
+    connect();
+
+    auto packet = memory::makePacket(_allocator, _audioPacket, sizeof(_audioPacket));
+    packet->setLength(sizeof(_audioPacket));
+    auto header = rtp::RtpHeader::fromPtr(packet->get(), packet->getLength());
+    header->ssrc = 4321;
+    header->timestamp = 1234;
+    header->sequenceNumber = 5678;
+
+    EXPECT_TRUE(_srtp1->protect(packet));
+    
+    auto packetCopy = memory::makePacket(_allocator, *packet);
+
+    EXPECT_TRUE(_srtp2->unprotect(packet));
+    EXPECT_FALSE(_srtp2->unprotect(packetCopy));
+
+    _allocator.free(packetCopy);
+    _allocator.free(packet);
+}
