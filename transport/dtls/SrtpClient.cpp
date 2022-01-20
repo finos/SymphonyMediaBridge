@@ -287,7 +287,13 @@ bool SrtpClient::unprotect(memory::Packet* packet)
         const auto result = srtp_unprotect(_remoteSrtp, packet->get(), &bufferLength);
         if (result != srtp_err_status_ok)
         {
-            logger::warn("Srtp unprotect error: %d", _loggableId.c_str(), static_cast<int32_t>(result));
+            const auto header = rtp::RtpHeader::fromPacket(*packet);
+            logger::warn("Srtp unprotect error: %d, ssrc %u, seq %u, ts %u",
+                _loggableId.c_str(),
+                static_cast<int32_t>(result),
+                header != nullptr ? header->ssrc.get() : 0,
+                header != nullptr ? header->sequenceNumber.get() : 0,
+                header != nullptr ? header->timestamp.get() : 0);
             return false;
         }
     }

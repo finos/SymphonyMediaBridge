@@ -87,10 +87,16 @@ void VideoForwarderReceiveJob::run()
 
     if (!_sender->unprotect(_packet))
     {
-        logger::error("Failed to unprotect srtp %s, ssrc %u, mixer %s",
+        const auto header = rtp::RtpHeader::fromPacket(*_packet);
+        logger::error("Failed to unprotect srtp %s, ssrc %u, seq %u, eseq %u, lreseq %u, lueseq %u, ts %u, mixer %s",
             "VideoForwarderReceiveJob",
             _sender->getLoggableId().c_str(),
             _ssrcContext._ssrc,
+            header != nullptr ? header->sequenceNumber.get() : 0,
+            _extendedSequenceNumber,
+            _ssrcContext._lastReceivedExtendedSequenceNumber,
+            _ssrcContext._lastUnprotectedExtendedSequenceNumber,
+            header != nullptr ? header->timestamp.get() : 0,
             _engineMixer.getLoggableId().c_str());
         _allocator.free(_packet);
         _packet = nullptr;
