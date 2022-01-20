@@ -234,6 +234,7 @@ set(FILES
         memory/List.h
         memory/Packet.h
         memory/PacketPoolAllocator.h
+        memory/AudioPacketPoolAllocator.h
         memory/PoolAllocator.h
         memory/PriorityQueue.h
         memory/RefCountedPacket.h

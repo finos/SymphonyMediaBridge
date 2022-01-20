@@ -188,7 +188,7 @@ TEST_F(SctpTransferTestFixture, mtuDiscovery)
     SctpEndpoint B(5001, _config, _timestamp, 250);
 
     establishConnection(A, B);
-    const size_t MTUA = 2000 + A._sendQueue.IPOVERHEAD;
+    const size_t MTUA = 1250 + A._sendQueue.IPOVERHEAD;
     B._sendQueue.setMTU(MTUA);
     B._session->startMtuProbing(_timestamp);
     for (int i = 0; i < 100; ++i)
@@ -201,7 +201,7 @@ TEST_F(SctpTransferTestFixture, mtuDiscovery)
         B.process();
     }
 
-    EXPECT_EQ(B._session->getScptMTU(), 1792);
+    EXPECT_EQ(B._session->getScptMTU(), 1152);
 }
 
 // checks that full cwnd does not prevent data flow

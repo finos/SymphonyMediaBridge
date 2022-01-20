@@ -72,8 +72,16 @@ struct RtpHeader
 
     static RtpHeader* fromPtr(void* p, size_t len);
     inline static const RtpHeader* fromPtr(const void* p, size_t len) { return fromPtr(const_cast<void*>(p), len); }
-    inline static RtpHeader* fromPacket(memory::Packet& p) { return fromPtr(p.get(), p.getLength()); }
-    inline static const RtpHeader* fromPacket(const memory::Packet& p) { return fromPtr(p.get(), p.getLength()); }
+    template <typename PacketType>
+    inline static RtpHeader* fromPacket(PacketType& p)
+    {
+        return fromPtr(p.get(), p.getLength());
+    }
+    template <typename PacketType>
+    inline static const RtpHeader* fromPacket(const PacketType& p)
+    {
+        return fromPtr(p.get(), p.getLength());
+    }
     static RtpHeader* create(void* p, size_t len);
     size_t headerLength() const;
     uint8_t* getPayload() { return reinterpret_cast<uint8_t*>(this) + headerLength(); }

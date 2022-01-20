@@ -2,10 +2,10 @@
 
 namespace memory
 {
-class Packet;
+class AudioPacket;
 }
 
 namespace codec
 {
-void addAudioLevelRtpExtension(int extensionId, memory::Packet& packet);
+void addAudioLevelRtpExtension(int extensionId, memory::AudioPacket& packet);
 }

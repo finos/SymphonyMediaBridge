@@ -10,13 +10,15 @@
 namespace bridge
 {
 
-EncodeJob::EncodeJob(memory::Packet* packet,
+EncodeJob::EncodeJob(memory::AudioPacket* packet,
+    memory::AudioPacketPoolAllocator& allocator,
     SsrcOutboundContext& outboundContext,
     transport::Transport& transport,
     const uint64_t rtpTimestamp,
     const int32_t audioLevelExtensionId)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _packet(packet),
+      _audioPacketPoolAllocator(allocator),
       _outboundContext(outboundContext),
       _transport(transport),
       _rtpTimestamp(rtpTimestamp),
@@ -31,7 +33,7 @@ EncodeJob::~EncodeJob()
 {
     if (_packet)
     {
-        _outboundContext._allocator.free(_packet);
+        _audioPacketPoolAllocator.free(_packet);
         _packet = nullptr;
     }
 }
@@ -41,7 +43,7 @@ void EncodeJob::run()
     auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpPacket)
     {
-        _outboundContext._allocator.free(_packet);
+        _audioPacketPoolAllocator.free(_packet);
         _packet = nullptr;
         return;
     }
@@ -75,32 +77,31 @@ void EncodeJob::run()
         if (encodedBytes <= 0)
         {
             logger::error("Failed to encode opus, %d", "OpusEncodeJob", encodedBytes);
-            _outboundContext._allocator.free(_packet);
+            _audioPacketPoolAllocator.free(_packet);
             _packet = nullptr;
             return;
         }
 
-        std::memcpy(payloadStart, encodedData, encodedBytes);
-        _packet->setLength(headerLength + encodedBytes);
-        rtpPacket->ssrc = _outboundContext._ssrc;
-        rtpPacket->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
-        rtpPacket->sequenceNumber = _outboundContext._sequenceCounter++ & 0xFFFFu;
-        rtpPacket->payloadType = targetFormat._payloadType;
-        doSend(_packet);
+        {
+            auto opusPacket = memory::makePacket(_outboundContext._allocator, rtpPacket, rtpPacket->headerLength());
+            auto opusHeader = rtp::RtpHeader::fromPacket(*opusPacket);
+            std::memcpy(opusHeader->getPayload(), encodedData, encodedBytes);
+            opusPacket->setLength(rtpPacket->headerLength() + encodedBytes);
+            opusHeader->ssrc = _outboundContext._ssrc;
+            opusHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
+            opusHeader->sequenceNumber = _outboundContext._sequenceCounter++ & 0xFFFFu;
+            opusHeader->payloadType = targetFormat._payloadType;
+            _transport.protectAndSend(opusPacket, _outboundContext._allocator);
+        }
     }
     else
     {
-        _outboundContext._allocator.free(_packet);
+        _audioPacketPoolAllocator.free(_packet);
         _packet = nullptr;
         logger::warn("Unknown target format %u", "EncodeJob", static_cast<uint16_t>(targetFormat._format));
     }
 
     _packet = nullptr;
-}
-
-void EncodeJob::doSend(memory::Packet* packet)
-{
-    _transport.protectAndSend(packet, _outboundContext._allocator);
 }
 
 } // namespace bridge

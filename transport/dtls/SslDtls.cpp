@@ -140,9 +140,9 @@ int32_t writeBioFree(BIO* bio)
 int32_t writeBioWrite(BIO* bio, const char* buffer, int32_t length)
 {
     auto writeBioListener = reinterpret_cast<transport::SslWriteBioListener*>(BIO_get_data(bio));
-    if (writeBioListener)
+    if (writeBioListener && length > 0)
     {
-        return writeBioListener->sendDtls(buffer, length);
+        return writeBioListener->sendDtls(buffer, static_cast<uint32_t>(length));
     }
     return 0;
 }

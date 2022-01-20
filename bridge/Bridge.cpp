@@ -59,6 +59,7 @@ Bridge::Bridge(const config::Config& config)
       _network(transport::createRtcePoll()),
       _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(16 * 1024, "main")),
       _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(64 * 1024, "send")),
+      _audioPacketAllocator(std::make_unique<memory::AudioPacketPoolAllocator>(4 * 1024, "audio")),
       _engine(std::make_unique<bridge::Engine>())
 {
 }
@@ -156,7 +157,8 @@ void Bridge::initialize()
         *_engine,
         _config,
         *_mainPacketAllocator,
-        *_sendPacketAllocator);
+        *_sendPacketAllocator,
+        *_audioPacketAllocator);
 
     _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls);
 

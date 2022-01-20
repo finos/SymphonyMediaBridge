@@ -50,7 +50,8 @@ public:
         bridge::Engine& engine,
         const config::Config& config,
         memory::PacketPoolAllocator& mainAllocator,
-        memory::PacketPoolAllocator& sendAllocator);
+        memory::PacketPoolAllocator& sendAllocator,
+        memory::AudioPacketPoolAllocator& audioAllocator);
 
     ~MixerManager();
 
@@ -99,6 +100,7 @@ private:
     Stats::SystemStatsCollector _systemStatCollector;
     memory::PacketPoolAllocator& _mainAllocator;
     memory::PacketPoolAllocator& _sendAllocator;
+    memory::AudioPacketPoolAllocator& _audioAllocator;
 
     void engineMessageMixerRemoved(const EngineMessage::Message& message);
     void engineMessageAllocateAudioBuffer(const EngineMessage::Message& message);

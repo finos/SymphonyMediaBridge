@@ -1,5 +1,5 @@
 #include "AudioLevel.h"
-#include "memory/Packet.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
 #include <cmath>
 #include <inttypes.h>
@@ -23,7 +23,7 @@ int computeAudioLevel(const int16_t* payload, int count)
     return -std::max(-127, static_cast<int>(20 * std::log10(rms)));
 }
 
-void addAudioLevelRtpExtension(int extensionId, memory::Packet& packet)
+void addAudioLevelRtpExtension(int extensionId, memory::AudioPacket& packet)
 {
     const auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
     if (!rtpHeader)

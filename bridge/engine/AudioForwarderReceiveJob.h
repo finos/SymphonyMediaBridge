@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jobmanager/Job.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include <memory>
 
@@ -32,6 +33,7 @@ class AudioForwarderReceiveJob : public jobmanager::CountedJob
 public:
     AudioForwarderReceiveJob(memory::Packet* packet,
         memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioPacketAllocator,
         transport::RtcTransport* sender,
         EngineMixer& engineMixer,
         SsrcInboundContext& ssrcContext,
@@ -50,6 +52,7 @@ private:
 
     memory::Packet* _packet;
     memory::PacketPoolAllocator& _allocator;
+    memory::AudioPacketPoolAllocator& _audioPacketAllocator;
     EngineMixer& _engineMixer;
     transport::RtcTransport* _sender;
     SsrcInboundContext& _ssrcContext;

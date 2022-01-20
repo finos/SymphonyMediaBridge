@@ -115,6 +115,12 @@ bool SctpEndpoint::sendSctpPacket(const void* data, size_t length)
         return false;
     }
 
+    if (length > memory::Packet::size)
+    {
+        logger::error("sctp packet %zu exceeds MTU %zu", _loggableId.c_str(), length, memory::Packet::size);
+        return false;
+    }
+
     auto* packet = memory::makePacket(_allocator, data, length);
     if (packet && _sendQueue.push(packet, _timeSource))
     {

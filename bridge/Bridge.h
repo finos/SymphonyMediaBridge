@@ -2,6 +2,7 @@
 #include "bwe/BandwidthEstimator.h"
 #include "bwe/RateController.h"
 #include "config/Config.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/RtcePoll.h"
 #include "transport/dtls/SslDtls.h"
@@ -64,6 +65,7 @@ private:
     const std::unique_ptr<transport::RtcePoll> _network;
     const std::unique_ptr<memory::PacketPoolAllocator> _mainPacketAllocator;
     const std::unique_ptr<memory::PacketPoolAllocator> _sendPacketAllocator;
+    const std::unique_ptr<memory::AudioPacketPoolAllocator> _audioPacketAllocator;
     std::unique_ptr<transport::TransportFactory> _transportFactory;
     const std::unique_ptr<bridge::Engine> _engine;
     std::unique_ptr<bridge::MixerManager> _mixerManager;

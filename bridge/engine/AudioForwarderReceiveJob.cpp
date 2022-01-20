@@ -17,7 +17,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 {
     if (decodedFrames > 0)
     {
-        auto pcmPacket = memory::makePacket(_allocator, *_packet);
+        auto pcmPacket = memory::makePacket(_audioPacketAllocator, *_packet);
         if (!pcmPacket)
         {
             return;
@@ -27,7 +27,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
         memcpy(rtpHeader->getPayload(), decodedData, decodedPayloadLength);
         pcmPacket->setLength(rtpHeader->headerLength() + decodedPayloadLength);
 
-        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, pcmPacket, _allocator);
+        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, pcmPacket, _audioPacketAllocator);
         return;
     }
 
@@ -55,7 +55,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
         return;
     }
 
-    uint8_t decodedData[memory::Packet::size];
+    uint8_t decodedData[memory::AudioPacket::size];
     auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpPacket)
     {
@@ -107,7 +107,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
     }
 
     const auto framesInPacketBuffer =
-        memory::Packet::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
+        memory::AudioPacket::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
 
     const auto decodedFrames = decoder.decode(payloadStart, payloadLength, decodedData, framesInPacketBuffer, false);
     onPacketDecoded(decodedFrames, decodedData);
@@ -115,6 +115,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 
 AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
     memory::PacketPoolAllocator& allocator,
+    memory::AudioPacketPoolAllocator& audioPacketAllocator,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& ssrcContext,
@@ -125,6 +126,7 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
     : CountedJob(sender->getJobCounter()),
       _packet(packet),
       _allocator(allocator),
+      _audioPacketAllocator(audioPacketAllocator),
       _engineMixer(engineMixer),
       _sender(sender),
       _ssrcContext(ssrcContext),

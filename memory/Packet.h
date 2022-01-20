@@ -7,13 +7,14 @@
 namespace memory
 {
 
-class Packet
+template <size_t PacketSize>
+class FixedPacket
 {
 public:
-    Packet() : _length(0) { _data[0] = 0; }
+    FixedPacket() : _length(0) { _data[0] = 0; }
 
-    static const size_t size = 4096; // TODO, this is not enough for 48kHz 16bit 30ms packets, nor for 2-channel 48kHz.
-                                     // Allocator should have multiple packet sizes
+    static const size_t size = PacketSize;
+    static_assert(PacketSize % 8 == 0, "packet size must be 8B aligned");
 
     unsigned char* get() { return _data; }
     const unsigned char* get() const { return _data; }
@@ -26,7 +27,7 @@ public:
 
     size_t getLength() const { return _length; }
 
-    void copyTo(Packet& dst)
+    void copyTo(FixedPacket<PacketSize>& dst)
     {
         std::memcpy(dst.get(), get(), getLength());
         dst.setLength(getLength());
@@ -44,6 +45,10 @@ public:
 private:
     unsigned char _data[size];
     size_t _length;
+};
+
+class Packet : public FixedPacket<1504>
+{
 };
 
 } // namespace memory

@@ -177,7 +177,7 @@ public: // Transport
 
 public: // SslWriteBioListener
     // Called from Transport serial thread
-    int32_t sendDtls(const char* buffer, int32_t length) override;
+    int32_t sendDtls(const char* buffer, uint32_t length) override;
     void onDtlsStateChange(SrtpClient* srtpClient, SrtpClient::State state) override;
 
 public:
@@ -289,7 +289,7 @@ private:
         uint64_t timestamp,
         std::__1::chrono::system_clock::time_point wallClock);
 
-    void doSetRemoteIce(memory::Packet* packet, memory::PacketPoolAllocator& allocator);
+    void doSetRemoteIce(const memory::Packet* credentials, const memory::Packet* const* candidatePackets);
     void doSetRemoteDtls(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide);
