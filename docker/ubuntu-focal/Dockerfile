@@ -15,9 +15,9 @@ RUN cd /tmp/lcov && git checkout v1.15 && make install
 RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1l.tar.gz && tar xvfz openssl-1.1.1l.tar.gz
 RUN cd /tmp/openssl-1.1.1l && ./config && make && make install
 
-# Build libsrtp 2.4.1
+# Build libsrtp 2.4.2
 RUN cd /tmp && git clone https://github.com/cisco/libsrtp
-RUN cd /tmp/libsrtp && git checkout v2.4.1 && PKG_CONFIG_PATH=/usr/local/lib64/pkgconfig ./configure --enable-openssl && make && make install
+RUN cd /tmp/libsrtp && git checkout v2.4.2 && PKG_CONFIG_PATH=/usr/local/lib64/pkgconfig ./configure --enable-openssl && make && make install
 
 # Build libmicrohttpd 0.9.73
 RUN cd /tmp && wget https://ftp.gnu.org/gnu/libmicrohttpd/libmicrohttpd-0.9.73.tar.gz && tar xvfz libmicrohttpd-0.9.73.tar.gz
