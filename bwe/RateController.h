@@ -228,7 +228,7 @@ private:
             noCandidatesFound = 0;
         }
 
-    } _probeLogInfo;
+    } _probeMetrics;
 
     struct
     {

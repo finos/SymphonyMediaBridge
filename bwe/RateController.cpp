@@ -20,8 +20,8 @@ namespace
 const uint32_t ntp32Second = 0x10000u;
 const uint64_t longIntervalWithoutValidProbes = utils::Time::sec * 30;
 
-enum ProbeIssues {
-    NO_ISSUES = 0x0,
+enum ProbeEvaluation {
+    EXCELLENT = 0x0,
     NO_REPORT_FOUND = 0x01,
     NOT_PROBING = 0x02,
     INSUFFICIENT_DELAY = 0x04,
@@ -29,10 +29,10 @@ enum ProbeIssues {
 };
 
 
-inline ProbeIssues& operator|=(ProbeIssues& lhs, ProbeIssues rhs)
+inline ProbeEvaluation& operator|=(ProbeEvaluation& lhs, ProbeEvaluation rhs)
 {
-    using T = std::underlying_type_t<ProbeIssues>;
-    lhs = static_cast<ProbeIssues>(static_cast<T>(lhs) | static_cast<T>(rhs));
+    using T = std::underlying_type_t<ProbeEvaluation>;
+    lhs = static_cast<ProbeEvaluation>(static_cast<T>(lhs) | static_cast<T>(rhs));
     return lhs;
 }
 
@@ -59,27 +59,50 @@ bool probeHasEnoughConfirmedData(const TBacklogAnalysis& probe)
 }
 
 template<class TBacklogAnalysis>
-ProbeIssues getProbeIssues(const TBacklogAnalysis& probe, const uint32_t modelBandwidthKbps)
+ProbeEvaluation evaluateProbe(const TBacklogAnalysis& probe, const uint32_t modelBandwidthKbps)
 {
-    auto issues = ProbeIssues::NO_ISSUES;
-    issues |= !probe.senderReportItem ? ProbeIssues::NO_REPORT_FOUND : ProbeIssues::NO_ISSUES;
-    issues |= !probe.probing ? ProbeIssues::NOT_PROBING : ProbeIssues::NO_ISSUES;
-    issues |= !probeHasEnoughDelay(probe) ? ProbeIssues::INSUFFICIENT_DELAY : ProbeIssues::NO_ISSUES;
-    issues |= !probeHasEnoughConfirmedData(probe) ? ProbeIssues::INSUFFICIENT_CONFIRMED_DATA : ProbeIssues::NO_ISSUES;
+    auto issues = ProbeEvaluation::EXCELLENT;
+    issues |= !probe.senderReportItem ? ProbeEvaluation::NO_REPORT_FOUND : ProbeEvaluation::EXCELLENT;
+    issues |= !probe.probing ? ProbeEvaluation::NOT_PROBING : ProbeEvaluation::EXCELLENT;
+    issues |= !probeHasEnoughDelay(probe) ? ProbeEvaluation::INSUFFICIENT_DELAY : ProbeEvaluation::EXCELLENT;
+    issues |= !probeHasEnoughConfirmedData(probe) ? ProbeEvaluation::INSUFFICIENT_CONFIRMED_DATA : ProbeEvaluation::EXCELLENT;
 
     // If the only issue is not probing then we can try see if it is valid measurement
-    if (issues == ProbeIssues::NOT_PROBING)
+    if (issues == ProbeEvaluation::NOT_PROBING)
     {
         const bool validMeasurement = (probe.delaySinceSR > ntp32Second / 5 && probe.getBitrateKbps() > modelBandwidthKbps);
         if (validMeasurement)
         {
-            issues = ProbeIssues::NO_ISSUES;
+            issues = ProbeEvaluation::EXCELLENT;
         }
     }
 
     return issues;
 }
 
+
+template<class TProbeMetrics>
+void updateProbeMetrics(TProbeMetrics& probeMetrics, ProbeEvaluation probeEvaluation)
+{
+        probeMetrics.probeAnalysisCount++;
+
+        if (probeEvaluation & ProbeEvaluation::NO_REPORT_FOUND)
+        {
+            ++probeMetrics.srNotFoundCount;
+        }
+        else if (probeEvaluation & ProbeEvaluation::NOT_PROBING)
+        {
+            ++probeMetrics.isNotProbingCount;
+        }
+        else if (probeEvaluation & ProbeEvaluation::INSUFFICIENT_DELAY)
+        {
+            ++probeMetrics.insufficientDelayCount;
+        }
+        else if (probeEvaluation & ProbeEvaluation::INSUFFICIENT_CONFIRMED_DATA)
+        {
+            ++probeMetrics.insufficientConfirmationsCount;
+        }
+}
 
 } // namespace
 namespace bwe
@@ -172,8 +195,8 @@ void RateController::onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint3
 
         if (_probe.interval < Probe::MAX_INTERVAL && (probesSinceLastReduction == 10 || probesSinceLastReduction == 30))
         {
-            // New variable to shut up compiler warnings on mac
-            constexpr auto maxInterval = Probe::MAX_INTERVAL;
+            // New variable to shut up the linker on mac
+            constexpr uint64_t maxInterval = Probe::MAX_INTERVAL;
             _probe.interval = std::min(_probe.interval * 2, maxInterval);
         }
     }
@@ -231,7 +254,7 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
         {
             if (item.received)
             {
-                RCTL_LOG("Found an already received item at position %u, ssrc %u", _logId.c_str(), itemCount, ssrc);
+                RCTL_LOG("Confirmed packets from ssrc %u, seqno %u, position %u", _logId.c_str(), ssrc, item.sequenceNumber, itemCount);
                 break; // part of previous report on this ssrc
                 // at this point we could walk forward and mark packets to sacrifice as loss according to lossCount.
                 // That would give us ability to assess bandwidth also when some loss is present
@@ -260,8 +283,8 @@ void RateController::onReportBlockReceived(uint32_t ssrc,
 
     if (receivedPackets == 0 && itemCount == _backlog.size())
     {
-        RCTL_LOG("Not found seqno %u reported by ssrc %u", _logId.c_str(), receivedSequenceNumber, ssrc);
-        _probeLogInfo.srSeqnoNotFoundCount++;
+        RCTL_LOG("ssrc %u, seqno %u, not found", _logId.c_str(), ssrc, receivedSequenceNumber16);
+        _probeMetrics.srSeqnoNotFoundCount++;
     }
 
     if (lossCount > 0)
@@ -332,7 +355,7 @@ RateController::BacklogAnalysis RateController::bestReport(const RateController:
 
 bool RateController::isGood(const RateController::BacklogAnalysis& probe, const uint32_t modelBandwidthKbps) const
 {
-    return getProbeIssues(probe, modelBandwidthKbps) == ProbeIssues::NO_ISSUES;
+    return evaluateProbe(probe, modelBandwidthKbps) == ProbeEvaluation::EXCELLENT;
 }
 
 RateController::BacklogAnalysis RateController::analyzeProbe(const uint32_t probeEndIndex,
@@ -410,7 +433,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
     bool hasReceived = false;
     bool candidateFound = false;
     uint32_t networkQueue = 0;
-    ++_probeLogInfo.backlogAnalysisCount;
+    ++_probeMetrics.backlogAnalysisCount;
 
     for (uint32_t i = 0; i < _backlog.size(); ++i)
     {
@@ -428,10 +451,10 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
                 return reportCandidate;
             }
 
-            const auto probeIssues = getProbeIssues(reportCandidate, modelBandwidthKbps);
-            _probeLogInfo.probeAnalysisCount++;
+            const ProbeEvaluation probeEvaluation = evaluateProbe(reportCandidate, modelBandwidthKbps);
+            updateProbeMetrics(_probeMetrics, probeEvaluation);
 
-            if (probeIssues == ProbeIssues::NO_ISSUES)
+            if (probeEvaluation == ProbeEvaluation::EXCELLENT)
             {
                 RCTL_LOG("Candidate found delay %.3f, %uB, %ukbps, ntp %x txrx %u-%u, loss %u",
                     _logId.c_str(),
@@ -444,25 +467,6 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
                     reportCandidate.lossCount);
 
                 report = bestReport(reportCandidate, report, modelBandwidthKbps);
-            }
-            else
-            {
-                if (probeIssues & ProbeIssues::NO_REPORT_FOUND)
-                {
-                    ++_probeLogInfo.srNotFoundCount;
-                }
-                else if (probeIssues & ProbeIssues::NOT_PROBING)
-                {
-                    ++_probeLogInfo.isNotProbingCount;
-                }
-                else if (probeIssues & ProbeIssues::INSUFFICIENT_DELAY)
-                {
-                    ++_probeLogInfo.insufficientDelayCount;
-                }
-                else if (probeIssues & ProbeIssues::INSUFFICIENT_CONFIRMED_DATA)
-                {
-                    ++_probeLogInfo.insufficientConfirmationsCount;
-                }
             }
         }
 
@@ -481,7 +485,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
         }
     }
 
-    _probeLogInfo.noCandidatesFound += candidateFound ? 0 : 1;
+    _probeMetrics.noCandidatesFound += candidateFound ? 0 : 1;
     report.networkQueue = networkQueue;
     return report;
 }
@@ -589,7 +593,7 @@ void RateController::onReportReceived(uint64_t timestamp,
     if (isGoodReport)
     {
         _probe.lastGoodProbe = timestamp;
-        _probeLogInfo.resetCounters();
+        _probeMetrics.resetCounters();
     }
     else if (utils::Time::diffGE(_probe.lastGoodProbe, timestamp, longIntervalWithoutValidProbes))
     {
@@ -598,21 +602,21 @@ void RateController::onReportReceived(uint64_t timestamp,
 
         const auto timeSinceLastGoodProbe = timestamp - _probe.lastGoodProbe;
         const auto timesOfLongInterval = timeSinceLastGoodProbe / longIntervalWithoutValidProbes;
-        const auto shouldLog = timesOfLongInterval > _probeLogInfo.logTimes;
+        const auto shouldLog = timesOfLongInterval > _probeMetrics.logTimes;
         if (shouldLog)
         {
-            ++_probeLogInfo.logTimes;
+            ++_probeMetrics.logTimes;
             logger::info("No valid probes for long time. time since last good: %" PRIu64 "ms, analyzedBacklogCount: %u, noCandidateProbesFoundCount: %u, analyzedProbesCount: %u, noSr: %u, notProbing: %u, insufficientDelay: %u, insufficientRecvData: %u. RbSeqnoNotFoundCount: %u",
                     _logId.c_str(),
                     (timeSinceLastGoodProbe / utils::Time::ms),
-                    _probeLogInfo.backlogAnalysisCount,
-                    _probeLogInfo.noCandidatesFound,
-                    _probeLogInfo.probeAnalysisCount,
-                    _probeLogInfo.srNotFoundCount,
-                    _probeLogInfo.isNotProbingCount,
-                    _probeLogInfo.insufficientDelayCount,
-                    _probeLogInfo.insufficientConfirmationsCount,
-                    _probeLogInfo.srSeqnoNotFoundCount);
+                    _probeMetrics.backlogAnalysisCount,
+                    _probeMetrics.noCandidatesFound,
+                    _probeMetrics.probeAnalysisCount,
+                    _probeMetrics.srNotFoundCount,
+                    _probeMetrics.isNotProbingCount,
+                    _probeMetrics.insufficientDelayCount,
+                    _probeMetrics.insufficientConfirmationsCount,
+                    _probeMetrics.srSeqnoNotFoundCount);
         }
     }
 
@@ -644,7 +648,6 @@ void RateController::onReportReceived(uint64_t timestamp,
         backlogReport.probeBacklogDepth + backlogReport.probeBacklogLength)
     }
 
-    // Nothing hasn't changed, don't need to continue
     if (!isValidReport || sameProbe) {
         return;
     }
