@@ -1829,15 +1829,25 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
                 channel._aesKey,
                 channel._aesSalt);
 
-            EngineCommand::Command command{EngineCommand::Type::StartRecordingTransport};
-            command._command.startRecordingTransport._mixer = &_engineMixer;
-            command._command.startRecordingTransport._transport = transport.get();
+            if (transport)
+            {
+                EngineCommand::Command command{EngineCommand::Type::StartRecordingTransport};
+                command._command.startRecordingTransport._mixer = &_engineMixer;
+                command._command.startRecordingTransport._transport = transport.get();
 
-            recordingStream->_transports.emplace(endpointIdHash, std::move(transport));
-            recordingStream->_recEventUnackedPacketsTracker.emplace(endpointIdHash,
-                std::make_unique<UnackedPacketsTracker>("RecEventUnackedPacketsTracker", 50));
+                recordingStream->_transports.emplace(endpointIdHash, std::move(transport));
+                recordingStream->_recEventUnackedPacketsTracker.emplace(endpointIdHash,
+                    std::make_unique<UnackedPacketsTracker>("RecEventUnackedPacketsTracker", 50));
 
-            _engine.pushCommand(command);
+                _engine.pushCommand(command);
+            }
+            else
+            {
+                logger::error("Creation of recording transport has failed for channel %s:%u",
+                    _loggableId.c_str(),
+                    channel._host.c_str(),
+                    channel._port);
+            }
         }
     }
 }
