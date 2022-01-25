@@ -374,11 +374,11 @@ public:
         if (!_sharedRecordingEndpoints.empty())
         {
             const uint32_t initialIndex = _sharedRecordingEndpointListIndex.fetch_add(1) % _sharedRecordingEndpoints.size();
-            uint32_t listIdex = initialIndex;
+            uint32_t listIndex = initialIndex;
             do {
-                for (size_t endpointIndex = 0; endpointIndex < _sharedRecordingEndpoints[listIdex].size(); ++endpointIndex)
+                for (size_t endpointIndex = 0; endpointIndex < _sharedRecordingEndpoints[listIndex].size(); ++endpointIndex)
                 {
-                    auto* endpoint = _sharedRecordingEndpoints[listIdex][endpointIndex];
+                    auto* endpoint = _sharedRecordingEndpoints[listIndex][endpointIndex];
                     if (endpoint->getLocalPort().getFamily() == peer.getFamily())
                     {
                         return createRecordingTransport(_jobManager,
@@ -392,9 +392,9 @@ public:
                     }
                 }
 
-                listIdex = (initialIndex + 1) % _sharedRecordingEndpoints.size();
+                listIndex = (listIndex + 1) % _sharedRecordingEndpoints.size();
 
-            } while(listIdex != initialIndex);
+            } while(listIndex != initialIndex);
         }
 
         logger::error("No shared recording endpoints configured", "TransportFactory");
