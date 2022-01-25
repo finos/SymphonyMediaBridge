@@ -40,7 +40,6 @@ public:
           _mainAllocator(mainAllocator),
           _callbackRefCount(0),
           _sharedRecordingEndpointListIndex(0),
-          _nextRecordingEndpointIndex(0),
           _good(true)
     {
 #ifdef __APPLE__
@@ -374,25 +373,32 @@ public:
     {
         if (!_sharedRecordingEndpoints.empty())
         {
-            const uint32_t index = _sharedRecordingEndpointListIndex.fetch_add(1) % _sharedRecordingEndpoints.size();
-            if (_nextRecordingEndpointIndex >= _sharedEndpoints.size())
-            {
-                _nextRecordingEndpointIndex = 0;
-            }
-            return createRecordingTransport(_jobManager,
-                _config,
-                _sharedRecordingEndpoints[index][_nextRecordingEndpointIndex++],
-                endpointHashId,
-                streamHashId,
-                peer,
-                aesKey,
-                salt);
+            const uint32_t initialIndex = _sharedRecordingEndpointListIndex.fetch_add(1) % _sharedRecordingEndpoints.size();
+            uint32_t listIndex = initialIndex;
+            do {
+                for (size_t endpointIndex = 0; endpointIndex < _sharedRecordingEndpoints[listIndex].size(); ++endpointIndex)
+                {
+                    auto* endpoint = _sharedRecordingEndpoints[listIndex][endpointIndex];
+                    if (endpoint->getLocalPort().getFamily() == peer.getFamily())
+                    {
+                        return createRecordingTransport(_jobManager,
+                            _config,
+                            endpoint,
+                            endpointHashId,
+                            streamHashId,
+                            peer,
+                            aesKey,
+                            salt);
+                    }
+                }
+
+                listIndex = (listIndex + 1) % _sharedRecordingEndpoints.size();
+
+            } while(listIndex != initialIndex);
         }
-        else
-        {
-            logger::error("No shared recording endpoints configured", "TransportFactory");
-            return nullptr;
-        }
+
+        logger::error("No shared recording endpoints configured", "TransportFactory");
+        return nullptr;
     }
 
     bool isGood() const override { return _good; }
@@ -457,7 +463,6 @@ private:
 
     std::vector<std::vector<RecordingEndpoint*>> _sharedRecordingEndpoints;
     std::atomic_uint32_t _sharedRecordingEndpointListIndex;
-    std::atomic_uint32_t _nextRecordingEndpointIndex;
     bool _good;
 };
 

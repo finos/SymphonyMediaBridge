@@ -102,6 +102,7 @@ RecordingTransport::RecordingTransport(jobmanager::JobManager& jobManager,
     logger::info("Recording client: %s", _loggableId.c_str(), _peerPort.toString().c_str());
 
     assert(_recordingEndpoint->isGood());
+    assert(recordingEndpoint->getLocalPort().getFamily() == remotePeer.getFamily());
 
     _recordingEndpoint->registerRecordingListener(_peerPort, this);
     ++_jobCounter;
@@ -110,6 +111,14 @@ RecordingTransport::RecordingTransport(jobmanager::JobManager& jobManager,
     _ivGenerator = std::make_unique<crypto::AesGcmIvGenerator>(salt, 12);
 
     _isInitialized = true;
+
+    if (recordingEndpoint->getLocalPort().getFamily() != remotePeer.getFamily())
+    {
+        logger::error("ip family mismatch. local ip family: %d, remote ip family: %d",
+            _loggableId.c_str(),
+            recordingEndpoint->getLocalPort().getFamily(),
+            remotePeer.getFamily());
+    }
 }
 
 bool RecordingTransport::start()
