@@ -58,15 +58,6 @@ class RateController
 {
     struct PacketMetaData
     {
-        uint64_t transmissionTime = 0;
-        uint32_t ssrc = 0;
-        uint32_t size = 0;
-        uint32_t reportNtp = 0;
-        uint32_t queueSize = 0;
-        uint32_t sequenceNumber = 0;
-        uint32_t lossCount = 0;
-        uint32_t delaySinceSR = 0;
-        bool received = false;
         enum Type : uint16_t
         {
             SR = 0,
@@ -74,13 +65,24 @@ class RateController
             RTP,
             RTCP_PADDING,
             SCTP
-        } type = RTP;
+        };
+
+        uint64_t transmissionTime = 0;
+        uint32_t ssrc = 0;
+        uint32_t size = 0;
+        uint32_t reportNtp = 0;
+        uint32_t queueSize = 0;
+        uint32_t lossCount = 0;
+        uint32_t delaySinceSR = 0;
+        uint16_t sequenceNumber = 0;
+        Type type = RTP;
+        bool received = false;
 
         PacketMetaData() = default;
         ~PacketMetaData() = default;
         PacketMetaData(uint64_t timestamp,
             uint32_t streamSsrc,
-            uint32_t packetSequenceNumber,
+            uint16_t packetSequenceNumber,
             uint32_t packetSize,
             Type packetType)
             : transmissionTime(timestamp),
@@ -88,11 +90,11 @@ class RateController
               size(packetSize),
               reportNtp(0),
               queueSize(0),
-              sequenceNumber(packetSequenceNumber),
               lossCount(0),
               delaySinceSR(0),
-              received(false),
-              type(packetType)
+              sequenceNumber(packetSequenceNumber),
+              type(packetType),
+              received(false)
         {
         }
     };
@@ -110,7 +112,7 @@ class RateController
 public:
     explicit RateController(size_t instanceId, const RateControllerConfig& config);
 
-    void onRtpSent(uint64_t timestamp, uint32_t ssrc, uint32_t sequenceNumber, uint16_t size);
+    void onRtpSent(uint64_t timestamp, uint32_t ssrc, uint16_t sequenceNumber, uint16_t size);
     void onSenderReportSent(uint64_t timestamp, uint32_t ssrc, uint32_t reportNtp, uint16_t size);
     void onReportBlockReceived(uint32_t ssrc,
         uint32_t receivedSequenceNumber,
@@ -139,6 +141,8 @@ private:
         uint32_t packetsSent = 0;
         uint32_t packetsReceived = 0;
         uint32_t networkQueue = ~0u;
+        uint32_t probeBacklogDepth = 0;
+        uint32_t probeBacklogLength = 0;
         bool probing = false;
         bool rtpProbe = true;
         const PacketMetaData* senderReportItem = nullptr;
@@ -148,6 +152,9 @@ private:
 
         bool empty() const { return !senderReportItem; }
     };
+
+    bool hasRecentlyBackedOffDueToLoss(uint64_t timestamp);
+
     BacklogAnalysis bestReport(const BacklogAnalysis& probe1,
         const BacklogAnalysis& probe2,
         const uint32_t modelBandwidth) const;
@@ -156,13 +163,13 @@ private:
     void markReceivedPacket(uint32_t ssrc, uint32_t sequenceNumber);
     uint64_t calculateModelQueueTransmitPeriod();
     RateController::BacklogAnalysis analyzeProbe(const uint32_t probeEndIndex, const double modelBandwidthKbps) const;
-    BacklogAnalysis analyzeBacklog(uint32_t reportNtp, double modelBandwidthKbps) const;
+    BacklogAnalysis analyzeBacklog(uint32_t reportNtp, double modelBandwidthKbps);
 
     double calculateSendRate(uint64_t timestamp) const;
     void dumpBacklog(uint32_t seqno, uint32_t ssrc);
 
     logger::LoggableId _logId;
-    memory::RandomAccessBacklog<PacketMetaData, 512> _backlog;
+    memory::RandomAccessBacklog<PacketMetaData, 2048> _backlog;
     memory::RandomAccessBacklog<ReceiveBlockSample, 32> _receiveBlocks;
 
     struct Model
@@ -173,10 +180,15 @@ private:
 
     struct Probe
     {
+        constexpr static uint64_t INITIAL_INTERVAL = utils::Time::sec;
+        constexpr static uint64_t MAX_INTERVAL = utils::Time::sec * 4;
+
         uint64_t start = 0;
-        uint64_t interval = utils::Time::sec;
+        uint64_t lastGoodProbe = 0;
+        uint64_t interval = INITIAL_INTERVAL;
         uint64_t duration = 0;
         uint32_t count = 0;
+        uint32_t countOnLastIntervalReduction = 0;
         uint32_t targetQueue = 0;
 
         bool isProbing(uint64_t timestamp) const
@@ -193,6 +205,33 @@ private:
     uint64_t _lastLossBackoff = 0;
     struct
     {
+        uint32_t logTimes = 0;
+        uint32_t backlogAnalysisCount = 0;
+        uint32_t probeAnalysisCount = 0;
+        uint32_t isNotProbingCount = 0;
+        uint32_t insufficientDelayCount = 0;
+        uint32_t insufficientConfirmationsCount = 0;
+        uint32_t srNotFoundCount = 0;
+        uint32_t srSeqnoNotFoundCount = 0;
+        uint32_t noCandidatesFound = 0;
+
+        void resetCounters()
+        {
+            logTimes = 0;
+            backlogAnalysisCount = 0;
+            probeAnalysisCount = 0;
+            isNotProbingCount = 0;
+            insufficientDelayCount = 0;
+            insufficientConfirmationsCount = 0;
+            srNotFoundCount = 0;
+            srSeqnoNotFoundCount = 0;
+            noCandidatesFound = 0;
+        }
+
+    } _probeMetrics;
+
+    struct
+    {
         uint32_t ntp = 0;
         uint32_t delaySinceSR = 0;
         uint32_t packetsReceived = 0;
@@ -200,4 +239,5 @@ private:
         bool empty() const { return ntp == 0 && packetsReceived == 0; }
     } _lastProbe;
 };
+
 } // namespace bwe
