@@ -40,23 +40,15 @@ EncodeJob::~EncodeJob()
 
 void EncodeJob::run()
 {
-    auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
+    const auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpPacket)
     {
-        _audioPacketPoolAllocator.free(_packet);
-        _packet = nullptr;
         return;
     }
-    rtpPacket->ssrc = _outboundContext._ssrc;
 
     auto& targetFormat = _outboundContext._rtpMap;
     if (targetFormat._format == bridge::RtpMap::Format::OPUS)
     {
-        if (_audioLevelExtensionId > 0)
-        {
-            codec::addAudioLevelRtpExtension(_audioLevelExtensionId, *_packet);
-        }
-
         if (!_outboundContext._opusEncoder)
         {
             _outboundContext._opusEncoder.reset(new codec::OpusEncoder());
@@ -65,43 +57,45 @@ void EncodeJob::run()
         const uint32_t headerLength = rtpPacket->headerLength();
         const uint32_t payloadLength = _packet->getLength() - headerLength;
         const size_t frames = payloadLength / EngineMixer::bytesPerSample / EngineMixer::channelsPerFrame;
-        auto* payloadStart = reinterpret_cast<int16_t*>(rtpPacket->getPayload());
+        const auto* payloadStart = reinterpret_cast<int16_t*>(rtpPacket->getPayload());
 
         const size_t payloadMaxSize = memory::Packet::size - headerLength;
         const size_t payloadMaxFrames = payloadMaxSize / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
 
-        uint8_t encodedData[memory::Packet::size];
+        auto opusPacket = memory::makePacket(_outboundContext._allocator, rtpPacket, rtpPacket->headerLength());
+        if (!opusPacket)
+        {
+            logger::error("failed to make packet for opus encoded data", "OpusEncodeJob");
+            return;
+        }
+
+        auto opusHeader = rtp::RtpHeader::fromPacket(*opusPacket);
+        if (_audioLevelExtensionId > 0)
+        {
+            codec::addAudioLevelRtpExtension(_audioLevelExtensionId, codec::computeAudioLevel(*_packet), *opusPacket);
+        }
         const auto encodedBytes =
-            _outboundContext._opusEncoder->encode(payloadStart, frames, encodedData, payloadMaxFrames);
+            _outboundContext._opusEncoder->encode(payloadStart, frames, opusHeader->getPayload(), payloadMaxFrames);
 
         if (encodedBytes <= 0)
         {
             logger::error("Failed to encode opus, %d", "OpusEncodeJob", encodedBytes);
-            _audioPacketPoolAllocator.free(_packet);
-            _packet = nullptr;
+            _outboundContext._allocator.free(opusPacket);
             return;
         }
 
-        {
-            auto opusPacket = memory::makePacket(_outboundContext._allocator, rtpPacket, rtpPacket->headerLength());
-            auto opusHeader = rtp::RtpHeader::fromPacket(*opusPacket);
-            std::memcpy(opusHeader->getPayload(), encodedData, encodedBytes);
-            opusPacket->setLength(rtpPacket->headerLength() + encodedBytes);
-            opusHeader->ssrc = _outboundContext._ssrc;
-            opusHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
-            opusHeader->sequenceNumber = _outboundContext._sequenceCounter++ & 0xFFFFu;
-            opusHeader->payloadType = targetFormat._payloadType;
-            _transport.protectAndSend(opusPacket, _outboundContext._allocator);
-        }
+        opusPacket->setLength(rtpPacket->headerLength() + encodedBytes);
+        opusHeader->ssrc = _outboundContext._ssrc;
+        opusHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
+        opusHeader->sequenceNumber = _outboundContext._sequenceCounter++ & 0xFFFFu;
+        opusHeader->payloadType = targetFormat._payloadType;
+        _transport.protectAndSend(opusPacket, _outboundContext._allocator);
     }
     else
     {
-        _audioPacketPoolAllocator.free(_packet);
-        _packet = nullptr;
         logger::warn("Unknown target format %u", "EncodeJob", static_cast<uint16_t>(targetFormat._format));
+        return;
     }
-
-    _packet = nullptr;
 }
 
 } // namespace bridge
