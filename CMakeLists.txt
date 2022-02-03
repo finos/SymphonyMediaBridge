@@ -22,24 +22,20 @@ set(CMAKE_CXX_FLAGS_SYMRELEASE "-stdlib=libc++ -glldb -O2 -DNDEBUG ${ENABLE_LEGA
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
 find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(Srtp2 REQUIRED)
+find_package(Opus REQUIRED)
+find_package(LibMicrohttpd REQUIRED)
 
 include_directories(.)
 include_directories(external)
 
 if(APPLE)
     message("MACOS detected")
-    execute_process(COMMAND brew --prefix OUTPUT_VARIABLE BREW_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
-
-    include_directories(${BREW_PREFIX}/opt/srtp/include)
-    include_directories(${BREW_PREFIX}/opt/openssl@1.1/include)
-    include_directories(${BREW_PREFIX}/opt/libmicrohttpd/include)
-    include_directories(${BREW_PREFIX}/opt/opus/include)
-
-    link_directories(${BREW_PREFIX}/opt/srtp/lib)
-    link_directories(${BREW_PREFIX}/opt/openssl@1.1/lib)
-    link_directories(${BREW_PREFIX}/opt/libmicrohttpd/lib)
-    link_directories(${BREW_PREFIX}/opt/opus/lib)
 elseif(UNIX)
     message("UNIX detected")
     set(CMAKE_INSTALL_RPATH "./libs")
@@ -49,10 +45,14 @@ else()
     message(FATAL_ERROR "Building on this platform is not supported.")
 endif()
 
-link_libraries(srtp2)
-link_libraries(ssl crypto)
-link_libraries(microhttpd)
-link_libraries(opus)
+
+list(APPEND THIRD_PARTY_LIBS
+    OpenSSL::Crypto
+    OpenSSL::SSL
+    Opus::Opus
+    Srtp2::Srtp
+    LibMicrohttpd::Microhttpd
+)
 
 set(FILES
         api/AllocateConference.h
@@ -353,7 +353,8 @@ set(FILES
 add_executable(smb
         ${FILES}
         main.cpp)
-target_link_libraries(smb Threads::Threads)
+
+target_link_libraries(smb Threads::Threads ${THIRD_PARTY_LIBS})
 
 ##################
 # Test framework
@@ -479,7 +480,7 @@ add_executable(UnitTest
     ${FILES}
     ${TEST_FILES})
 
-target_link_libraries(UnitTest gtest gmock)
+target_link_libraries(UnitTest gtest gmock ${THIRD_PARTY_LIBS})
 
 add_test(AllUnitTests UnitTest)
 
