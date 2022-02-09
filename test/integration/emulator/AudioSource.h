@@ -35,7 +35,6 @@ private:
     uint16_t _sequenceCounter;
     uint16_t _amplitude;
     double _frequency;
-    uint32_t _sentSize;
 };
 
 } // namespace emulator

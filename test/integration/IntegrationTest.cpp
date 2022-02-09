@@ -804,6 +804,10 @@ void analyzeRecording(const std::vector<int16_t>& recording,
 
 TEST_F(IntegrationTest, plain)
 {
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
     _config.readFromString("{\"ip\":\"127.0.0.1\", "
                            "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
     initBridge(_config);

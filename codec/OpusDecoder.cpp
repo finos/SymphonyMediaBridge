@@ -14,7 +14,11 @@ struct OpusDecoder::OpaqueDecoderState
     ::OpusDecoder* _state;
 };
 
-OpusDecoder::OpusDecoder() : _initialized(false), _state(new OpaqueDecoderState{nullptr}), _sequenceNumber(0)
+OpusDecoder::OpusDecoder()
+    : _initialized(false),
+      _state(new OpaqueDecoderState{nullptr}),
+      _sequenceNumber(0),
+      _hasDecodedPacket(false)
 {
     int32_t opusError = 0;
     _state->_state = opus_decoder_create(Opus::sampleRate, Opus::channelsPerFrame, &opusError);
