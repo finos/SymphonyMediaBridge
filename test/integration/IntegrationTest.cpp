@@ -530,7 +530,7 @@ public:
                     ice::IceComponent::RTP,
                     c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
                     c["priority"].get<uint32_t>(),
-                    transport::SocketAddress::parse(c["ip"]),
+                    transport::SocketAddress::parse(c["ip"], c["port"]),
                     ice::IceCandidate::Type::HOST));
             }
 
