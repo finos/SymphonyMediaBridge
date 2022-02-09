@@ -14,7 +14,7 @@ struct GeneralExtension1Byteheader
 
     uint8_t data[20];
 
-    GeneralExtension1Byteheader() : len(0), id(0) { data[0] = 0; } // a padding byte
+    GeneralExtension1Byteheader() : len(0), id(0), data{0} { data[0] = 0; } // a padding byte
     void setDataLength(int length);
 
     size_t size() const;
@@ -49,6 +49,7 @@ struct RtpHeaderExtension
     size_t size() const { return minSize() + length * sizeof(uint32_t); }
     constexpr static size_t minSize() { return 2 * sizeof(uint16_t); }
     void addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension);
+    bool empty() const { return length.get() == 0; }
 
 private:
     uint8_t data[512];

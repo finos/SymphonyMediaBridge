@@ -18,8 +18,9 @@ namespace bridge
 
 std::vector<transport::SocketAddress> gatherInterfaces(const config::Config& config)
 {
-    auto interfaces = transport::SocketAddress::activeInterfaces(false, false);
     auto defaultIpName = config.ice.preferredIp.get();
+    const auto useLocal = defaultIpName == "localhost" || defaultIpName == "127.0.0.1";
+    auto interfaces = transport::SocketAddress::activeInterfaces(useLocal, false);
     auto defaultInterface = transport::SocketAddress::parse(defaultIpName);
 
     std::sort(interfaces.begin(),

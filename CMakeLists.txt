@@ -45,6 +45,7 @@ elseif(UNIX)
     set(CMAKE_INSTALL_RPATH "./libs")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt")
+    link_directories("/usr/local/lib")
 else()
     message(FATAL_ERROR "Building on this platform is not supported.")
 endif()
@@ -388,9 +389,9 @@ set(TEST_FILES
     test/memory/ListTest.cpp
     test/jobmanager/JobManagerTest.cpp
     test/concurrency/ProcessIntervalTest.cpp
-#    test/integration/SampleDataUtils.cpp
-#    test/integration/IntegrationTest.cpp
-#    test/integration/IntegrationTest.h
+    test/integration/SampleDataUtils.cpp
+    test/integration/IntegrationTest.cpp
+    test/integration/IntegrationTest.h
 #    test/integration/MixerTimeoutTest.cpp
 #    test/integration/StatsTest.cpp
     test/sctp/SctpEndpoint.h
@@ -418,6 +419,8 @@ set(TEST_FILES
     test/transport/Ipv6Test.cpp
     test/integration/RtpDump.h
     test/integration/RtpDump.cpp
+    test/integration/emulator/AudioSource.cpp
+    test/integration/emulator/AudioSource.h
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
     test/gtest_main.cpp

@@ -1760,7 +1760,6 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
         auto emplaceResult = _ssrcInboundContexts.emplace(ssrc,
             ssrc,
-            _jobManager,
             audioStream->_rtpMap,
             audioStream->_audioLevelExtensionId,
             sender,
@@ -1818,8 +1817,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult =
-            _ssrcInboundContexts.emplace(ssrc, ssrc, _jobManager, videoStream->_rtpMap, -1, sender, timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_rtpMap, -1, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getFeedbackSsrcFor(ssrc);
@@ -1865,7 +1863,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         }
 
         auto emplaceResult =
-            _ssrcInboundContexts.emplace(ssrc, ssrc, _jobManager, videoStream->_feedbackRtpMap, -1, sender, timestamp);
+            _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_feedbackRtpMap, -1, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getMainSsrcFor(ssrc);
@@ -2454,7 +2452,8 @@ inline void EngineMixer::processAudioStreams()
                 *ssrcContext,
                 audioStream->_transport,
                 _rtpTimestampSource,
-                audioStream->_audioLevelExtensionId))
+                audioStream->_audioLevelExtensionId,
+                audioStream->_absSendTimeExtensionId))
         {
             _audioAllocator.free(audioPacket);
         }

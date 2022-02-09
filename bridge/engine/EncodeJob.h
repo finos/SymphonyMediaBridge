@@ -30,8 +30,9 @@ public:
         memory::AudioPacketPoolAllocator& allocator,
         SsrcOutboundContext& outboundContext,
         transport::Transport& transport,
-        const uint64_t rtpTimestamp,
-        const int32_t audioLevelExtensionId);
+        uint64_t rtpTimestamp,
+        int32_t audioLevelExtensionId,
+        int32_t absSendTimeExtensionId);
 
     virtual ~EncodeJob();
 
@@ -44,6 +45,7 @@ private:
     transport::Transport& _transport;
     uint64_t _rtpTimestamp;
     int32_t _audioLevelExtensionId;
+    int32_t _absSendTimeExtensionId;
 };
 
 } // namespace bridge

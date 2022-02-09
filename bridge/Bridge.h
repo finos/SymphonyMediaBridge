@@ -48,6 +48,8 @@ public:
     void initialize();
     bool isInitialized() const { return _initialized; }
 
+    transport::SslDtls& getSslDtls() { return *_sslDtls; }
+
 private:
     bool _initialized;
     const config::Config _config;

@@ -15,14 +15,16 @@ EncodeJob::EncodeJob(memory::AudioPacket* packet,
     SsrcOutboundContext& outboundContext,
     transport::Transport& transport,
     const uint64_t rtpTimestamp,
-    const int32_t audioLevelExtensionId)
+    const int32_t audioLevelExtensionId,
+    int32_t absSendTimeExtensionId)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _packet(packet),
       _audioPacketPoolAllocator(allocator),
       _outboundContext(outboundContext),
       _transport(transport),
       _rtpTimestamp(rtpTimestamp),
-      _audioLevelExtensionId(audioLevelExtensionId)
+      _audioLevelExtensionId(audioLevelExtensionId),
+      _absSendTimeExtensionId(absSendTimeExtensionId)
 
 {
     assert(packet);
@@ -40,8 +42,8 @@ EncodeJob::~EncodeJob()
 
 void EncodeJob::run()
 {
-    const auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
-    if (!rtpPacket)
+    const auto pcm16Header = rtp::RtpHeader::fromPacket(*_packet);
+    if (!pcm16Header)
     {
         return;
     }
@@ -54,28 +56,46 @@ void EncodeJob::run()
             _outboundContext._opusEncoder.reset(new codec::OpusEncoder());
         }
 
-        const uint32_t headerLength = rtpPacket->headerLength();
-        const uint32_t payloadLength = _packet->getLength() - headerLength;
-        const size_t frames = payloadLength / EngineMixer::bytesPerSample / EngineMixer::channelsPerFrame;
-        const auto* payloadStart = reinterpret_cast<int16_t*>(rtpPacket->getPayload());
-
-        const size_t payloadMaxSize = memory::Packet::size - headerLength;
-        const size_t payloadMaxFrames = payloadMaxSize / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
-
-        auto opusPacket = memory::makePacket(_outboundContext._allocator, rtpPacket, rtpPacket->headerLength());
+        auto opusPacket = memory::makePacket(_outboundContext._allocator);
         if (!opusPacket)
         {
             logger::error("failed to make packet for opus encoded data", "OpusEncodeJob");
             return;
         }
 
-        auto opusHeader = rtp::RtpHeader::fromPacket(*opusPacket);
+        auto opusHeader = rtp::RtpHeader::create(opusPacket->get(), memory::Packet::size);
+
+        rtp::RtpHeaderExtension extensionHead(opusHeader->getExtensionHeader());
+        auto cursor = extensionHead.extensions().begin();
+        if (_absSendTimeExtensionId)
+        {
+            rtp::GeneralExtension1Byteheader absSendTime;
+            absSendTime.id = 3;
+            absSendTime.setDataLength(3);
+            extensionHead.addExtension(cursor, absSendTime);
+        }
         if (_audioLevelExtensionId > 0)
         {
-            codec::addAudioLevelRtpExtension(_audioLevelExtensionId, codec::computeAudioLevel(*_packet), *opusPacket);
+            rtp::GeneralExtension1Byteheader audioLevel;
+            audioLevel.setDataLength(1);
+            audioLevel.id = 1;
+            audioLevel.data[0] = codec::computeAudioLevel(*_packet);
+            extensionHead.addExtension(cursor, audioLevel);
         }
-        const auto encodedBytes =
-            _outboundContext._opusEncoder->encode(payloadStart, frames, opusHeader->getPayload(), payloadMaxFrames);
+        if (!extensionHead.empty())
+        {
+            opusHeader->setExtensions(extensionHead);
+            opusPacket->setLength(opusHeader->headerLength());
+        }
+
+        const uint32_t payloadLength = _packet->getLength() - pcm16Header->headerLength();
+        const size_t frames = payloadLength / EngineMixer::bytesPerSample / EngineMixer::channelsPerFrame;
+        const auto* pcm16Data = reinterpret_cast<int16_t*>(pcm16Header->getPayload());
+
+        const auto encodedBytes = _outboundContext._opusEncoder->encode(pcm16Data,
+            frames,
+            opusHeader->getPayload(),
+            opusPacket->size - opusHeader->headerLength());
 
         if (encodedBytes <= 0)
         {
@@ -84,7 +104,7 @@ void EncodeJob::run()
             return;
         }
 
-        opusPacket->setLength(rtpPacket->headerLength() + encodedBytes);
+        opusPacket->setLength(opusHeader->headerLength() + encodedBytes);
         opusHeader->ssrc = _outboundContext._ssrc;
         opusHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
         opusHeader->sequenceNumber = _outboundContext._sequenceCounter++ & 0xFFFFu;

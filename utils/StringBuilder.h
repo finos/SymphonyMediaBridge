@@ -13,11 +13,11 @@ class StringBuilder
 public:
     StringBuilder() : _offset(0) { std::memset(_data, 0, S); }
 
-    void append(const std::string& string)
+    StringBuilder& append(const std::string& string)
     {
         if (!checkLength(string.length()))
         {
-            return;
+            return *this;
         }
 
         auto data = &_data[_offset];
@@ -25,28 +25,30 @@ public:
 
         std::strncpy(data, string.c_str(), remainingBytes);
         _offset += string.length();
+        return *this;
     }
 
-    void append(const char* string)
+    StringBuilder& append(const char* string)
     {
         auto remainingBytes = S - _offset;
         const auto length = strnlen(string, S - _offset);
 
         if (!checkLength(length))
         {
-            return;
+            return *this;
         }
 
         auto data = &_data[_offset];
         std::strncpy(data, string, remainingBytes);
         _offset += strnlen(string, remainingBytes);
+        return *this;
     }
 
-    void append(const char* string, const size_t length)
+    StringBuilder& append(const char* string, const size_t length)
     {
         if (!checkLength(length))
         {
-            return;
+            return *this;
         }
 
         auto data = &_data[_offset];
@@ -55,9 +57,10 @@ public:
         std::strncpy(data, string, remainingBytes);
         data[length] = '\0';
         _offset += length;
+        return *this;
     }
 
-    void append(const uint32_t value)
+    StringBuilder& append(const uint32_t value)
     {
         char valueString[16];
         std::snprintf(valueString, 16, "%u", value);
@@ -67,12 +70,13 @@ public:
 
         if (!checkLength(length))
         {
-            return;
+            return *this;
         }
 
         auto data = &_data[_offset];
         std::strncpy(data, valueString, remainingBytes);
         _offset += strnlen(valueString, remainingBytes);
+        return *this;
     }
 
     std::string build() const { return std::string(_data); }

@@ -11,9 +11,23 @@ namespace Helpers
 
 inline bool bundlingEnabled(const legacyapi::Conference& conference)
 {
-    return !conference._channelBundles.empty() ||
-        (!conference._contents.empty() && !conference._contents[0]._channels.empty() &&
-            conference._contents[0]._channels[0]._channelBundleId.isSet());
+    if (!conference._channelBundles.empty())
+    {
+        return true;
+    }
+
+    for (auto& content : conference._contents)
+    {
+        for (auto& channel : content._channels)
+        {
+            if (channel._channelBundleId.isSet())
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
 }
 
 inline bool hasRecording(const nlohmann::json& jsonData)

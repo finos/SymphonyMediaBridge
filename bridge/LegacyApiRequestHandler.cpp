@@ -355,7 +355,7 @@ httpd::Response LegacyApiRequestHandler::patchConference(const httpd::Request& r
         {
             if (content._name.compare("audio") == 0 || content._name.compare("video") == 0)
             {
-                logger::debug("Audio or video content", "RequestHandler");
+                logger::debug("%s content", "RequestHandler", content._name.c_str());
                 if (content._channels.empty())
                 {
                     httpd::Response response(httpd::StatusCode::BAD_REQUEST);
