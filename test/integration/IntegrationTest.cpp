@@ -871,7 +871,14 @@ TEST_F(IntegrationTest, plain)
     client1._transport->stop();
     client2._transport->stop();
     client3._transport->stop();
-    utils::Time::nanoSleep(1 * utils::Time::sec);
+
+    for (int i = 0; i < 10 &&
+         (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
+             client3._transport->hasPendingJobs());
+         ++i)
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+    }
     _bridge.reset();
 
     {
@@ -943,7 +950,6 @@ TEST_F(IntegrationTest, plain)
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
             analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-            EXPECT_NEAR(rec.size(), 7 * codec::Opus::sampleRate, 4500);
 
             std::sort(freqVector.begin(), freqVector.end());
             EXPECT_EQ(freqVector.size(), 2);
