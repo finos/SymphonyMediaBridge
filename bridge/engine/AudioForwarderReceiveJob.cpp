@@ -36,9 +36,6 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 
 void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 {
-    const auto rtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
-    const uint16_t sequenceNumber = rtpHeader->sequenceNumber;
-
     if (!_ssrcContext._opusDecoder)
     {
         logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
@@ -68,7 +65,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 
     if (decoder.hasDecoded() && _extendedSequenceNumber != decoder.getExpectedSequenceNumber())
     {
-        int32_t lossCount = static_cast<int32_t>(_extendedSequenceNumber - decoder.getExpectedSequenceNumber());
+        const int32_t lossCount = static_cast<int32_t>(_extendedSequenceNumber - decoder.getExpectedSequenceNumber());
         if (lossCount <= 0)
         {
             logger::debug("Old opus packet sequence %u expected %u, discarding",
@@ -77,22 +74,21 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
                 decoder.getExpectedSequenceNumber());
             return;
         }
-        else
+
+        logger::debug("Lost opus packet sequence %u expected %u, fec",
+            "OpusDecodeJob",
+            _extendedSequenceNumber,
+            decoder.getExpectedSequenceNumber());
+
+        const auto concealCount = std::min(5u, _extendedSequenceNumber - decoder.getExpectedSequenceNumber() - 1);
+        for (uint32_t i = 0; i < concealCount; ++i)
         {
-            logger::debug("Lost opus packet sequence %u expected %u, fec",
-                "OpusDecodeJob",
-                _extendedSequenceNumber,
-                decoder.getExpectedSequenceNumber());
-
-            for (uint32_t i = 0; i < _extendedSequenceNumber - decoder.getExpectedSequenceNumber() - 1 && i < 5; ++i)
-            {
-                const auto decodedFrames = decoder.conceal(decodedData);
-                onPacketDecoded(decodedFrames, decodedData);
-            }
-
-            const auto decodedFrames = decoder.conceal(payloadStart, payloadLength, decodedData);
+            const auto decodedFrames = decoder.conceal(decodedData);
             onPacketDecoded(decodedFrames, decodedData);
         }
+
+        const auto decodedFrames = decoder.conceal(payloadStart, payloadLength, decodedData);
+        onPacketDecoded(decodedFrames, decodedData);
     }
 
     const auto framesInPacketBuffer =

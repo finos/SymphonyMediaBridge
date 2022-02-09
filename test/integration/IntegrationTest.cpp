@@ -943,19 +943,19 @@ TEST_F(IntegrationTest, plain)
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
             analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-            EXPECT_NEAR(rec.size(), 7 * codec::Opus::sampleRate, 2400);
+            EXPECT_NEAR(rec.size(), 7 * codec::Opus::sampleRate, 4500);
 
             std::sort(freqVector.begin(), freqVector.end());
             EXPECT_EQ(freqVector.size(), 2);
             EXPECT_NEAR(freqVector[0], 600.0, 25.0);
             EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
 
-            EXPECT_EQ(amplitudeProfile.size(), 7);
+            EXPECT_GE(amplitudeProfile.size(), 6);
             for (auto& item : amplitudeProfile)
             {
                 logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
             }
-            if (amplitudeProfile.size() == 7)
+            if (amplitudeProfile.size() >= 6)
             {
                 EXPECT_EQ(amplitudeProfile[0].second, 0);
 
@@ -965,7 +965,7 @@ TEST_F(IntegrationTest, plain)
                 EXPECT_NEAR(amplitudeProfile[4].second, 1730, 250);
                 EXPECT_NEAR(amplitudeProfile[4].first, 6.45 * 48000, 2400);
 
-                EXPECT_EQ(amplitudeProfile[6].second, 0);
+                EXPECT_EQ(amplitudeProfile.back().second, 0);
             }
 
             // item.second->dumpPcmData();
