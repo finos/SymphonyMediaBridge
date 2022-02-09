@@ -496,6 +496,14 @@ public:
     {
     }
 
+    ~SfuClient()
+    {
+        for (auto& item : _receivedData)
+        {
+            delete item.second;
+        }
+    }
+
     void initiateCall(const char* baseUrl,
         std::string conferenceId,
         bool initiator,
@@ -817,6 +825,12 @@ TEST_F(IntegrationTest, plain)
 
     EXPECT_TRUE(client1._channel.isSuccess());
     EXPECT_TRUE(client2._channel.isSuccess());
+    EXPECT_TRUE(client3._channel.isSuccess());
+
+    if (!client1._channel.isSuccess() && client2._channel.isSuccess() && client3._channel.isSuccess())
+    {
+        return;
+    }
 
     client1.processOffer();
     client2.processOffer();
