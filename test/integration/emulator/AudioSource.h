@@ -24,10 +24,6 @@ public:
     void setVolume(double normalized) { _amplitude = 15000 * normalized; }
     void setFrequency(double frequency) { _frequency = frequency; }
 
-    const int16_t* getSentData() const { return _sentData; }
-    size_t getSentSize() const { return _sentSize; }
-    void discardBacklog(size_t s);
-
 private:
     static const uint32_t maxSentBufferSize = 12 * 1024;
     uint32_t _ssrc;
@@ -39,7 +35,6 @@ private:
     uint16_t _sequenceCounter;
     uint16_t _amplitude;
     double _frequency;
-    int16_t _sentData[maxSentBufferSize];
     uint32_t _sentSize;
 };
 

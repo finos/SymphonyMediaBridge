@@ -16,8 +16,7 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc)
       _rtpTimestamp(101203),
       _sequenceCounter(100),
       _amplitude(0),
-      _frequency(340.0),
-      _sentSize(0)
+      _frequency(340.0)
 {
 }
 
@@ -52,11 +51,6 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     }
     _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
 
-    for (uint32_t i = 0; i < maxSentBufferSize - _sentSize && i < samplesPerPacket; ++i)
-    {
-        _sentData[_sentSize++] = audio[i * 2];
-    }
-
     rtp::RtpHeaderExtension extensionHead;
     auto cursor = extensionHead.extensions().begin();
 
@@ -73,7 +67,7 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     rtpHeader->setExtensions(extensionHead);
 
     assert(rtpHeader->headerLength() == 24);
-    auto bytesEncoded = _encoder.encode(audio,
+    const auto bytesEncoded = _encoder.encode(audio,
         samplesPerPacket,
         static_cast<unsigned char*>(rtpHeader->getPayload()),
         memory::Packet::size - rtpHeader->headerLength());
@@ -96,22 +90,13 @@ int64_t AudioSource::timeToRelease(uint64_t timestamp) const
         return 0;
     }
 
-    auto remainingTime = utils::Time::diff(timestamp, _nextRelease);
+    const auto remainingTime = utils::Time::diff(timestamp, _nextRelease);
     if (remainingTime > 0)
     {
         return remainingTime;
     }
 
     return 0;
-}
-
-void AudioSource::discardBacklog(size_t s)
-{
-    for (uint32_t i = 0; i < _sentSize - s; ++i)
-    {
-        _sentData[i] = _sentData[i + s];
-    }
-    _sentSize -= s;
 }
 
 } // namespace emulator

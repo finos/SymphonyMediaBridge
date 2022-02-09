@@ -14,7 +14,7 @@ struct GeneralExtension1Byteheader
 
     uint8_t data[20];
 
-    GeneralExtension1Byteheader() : len(0), id(0), data{0} { data[0] = 0; } // a padding byte
+    GeneralExtension1Byteheader() : len(0), id(0), data{0} { data[0] = 0; }
     void setDataLength(int length);
 
     size_t size() const;

@@ -1639,9 +1639,6 @@ void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
 {
     assert(packet);
 
-    // Make sure the EngineMixer does not time out if there are incoming rtcp packets
-    _noIncomingPacketsIntervalMs = 0;
-
     IncomingPacketInfo packetInfo(packet, &receiveAllocator, sender, 0);
     packetInfo.lockOwner();
 
@@ -2233,6 +2230,8 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
         }
 
         packetInfo.release();
+
+        _noIncomingPacketsIntervalMs = 0;
     }
 }
 
