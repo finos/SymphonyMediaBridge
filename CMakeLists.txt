@@ -234,6 +234,7 @@ set(FILES
         memory/List.h
         memory/Packet.h
         memory/PacketPoolAllocator.h
+        memory/AudioPacketPoolAllocator.h
         memory/PoolAllocator.h
         memory/PriorityQueue.h
         memory/RefCountedPacket.h
@@ -387,9 +388,9 @@ set(TEST_FILES
     test/memory/ListTest.cpp
     test/jobmanager/JobManagerTest.cpp
     test/concurrency/ProcessIntervalTest.cpp
-#    test/integration/SampleDataUtils.cpp
-#    test/integration/IntegrationTest.cpp
-#    test/integration/IntegrationTest.h
+    test/integration/SampleDataUtils.cpp
+    test/integration/IntegrationTest.cpp
+    test/integration/IntegrationTest.h
 #    test/integration/MixerTimeoutTest.cpp
 #    test/integration/StatsTest.cpp
     test/sctp/SctpEndpoint.h
@@ -417,6 +418,8 @@ set(TEST_FILES
     test/transport/Ipv6Test.cpp
     test/integration/RtpDump.h
     test/integration/RtpDump.cpp
+    test/integration/emulator/AudioSource.cpp
+    test/integration/emulator/AudioSource.h
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
     test/gtest_main.cpp

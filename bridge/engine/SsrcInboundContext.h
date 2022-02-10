@@ -32,7 +32,6 @@ class SsrcInboundContext
 {
 public:
     SsrcInboundContext(const uint32_t ssrc,
-        jobmanager::JobManager& jobManager,
         const bridge::RtpMap& rtpMap,
         const int32_t audioLevelExtensionId,
         transport::RtcTransport* sender,

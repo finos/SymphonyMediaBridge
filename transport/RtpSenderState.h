@@ -86,7 +86,7 @@ private:
         uint64_t local = 0;
     } _rtpTimestampCorrelation;
 
-    uint64_t _rtpSendTime;
+    std::atomic_uint64_t _rtpSendTime;
     uint64_t _senderReportSendTime;
     uint32_t _senderReportNtp;
     uint32_t _lossSinceSenderReport;

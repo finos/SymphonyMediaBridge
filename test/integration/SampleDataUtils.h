@@ -3,7 +3,9 @@
 #include "bridge/RtpMap.h"
 #include "memory/Packet.h"
 #include "utils/Optional.h"
+#include <complex>
 #include <string>
+#include <valarray>
 #include <vector>
 
 class SampleDataUtils
@@ -35,10 +37,20 @@ public:
 
     static bool verifyAudioLevel(const std::vector<memory::Packet>& packets, const AudioData& audio);
 
-    static void
-    assertSilence(const char* name, const AudioData& audioData, DurationIterations begin, DurationIterations end);
-    static void
-    assertBuzz(const char* name, const AudioData& audioData, DurationIterations begin, DurationIterations end);
+    static void assertSilence(const char* name,
+        const AudioData& audioData,
+        DurationIterations begin,
+        DurationIterations end);
+    static void assertBuzz(const char* name,
+        const AudioData& audioData,
+        DurationIterations begin,
+        DurationIterations end);
+
+    using CmplxArray = std::valarray<std::complex<double>>;
+    static void fft(CmplxArray& data);
+    static void ifft(CmplxArray& data);
+
+    static void listFrequencies(CmplxArray& frequencyTransform, uint32_t sampleRate, std::vector<double>& frequencies);
 
 private:
     static const std::vector<const memory::Packet> _opusRtpSamplePackets;

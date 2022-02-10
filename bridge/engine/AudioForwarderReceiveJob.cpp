@@ -17,7 +17,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 {
     if (decodedFrames > 0)
     {
-        auto pcmPacket = memory::makePacket(_allocator, *_packet);
+        auto pcmPacket = memory::makePacket(_audioPacketAllocator, *_packet);
         if (!pcmPacket)
         {
             return;
@@ -27,7 +27,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
         memcpy(rtpHeader->getPayload(), decodedData, decodedPayloadLength);
         pcmPacket->setLength(rtpHeader->headerLength() + decodedPayloadLength);
 
-        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, pcmPacket, _allocator);
+        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, pcmPacket, _audioPacketAllocator);
         return;
     }
 
@@ -36,9 +36,6 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 
 void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 {
-    const auto rtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
-    const uint16_t sequenceNumber = rtpHeader->sequenceNumber;
-
     if (!_ssrcContext._opusDecoder)
     {
         logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
@@ -55,7 +52,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
         return;
     }
 
-    uint8_t decodedData[memory::Packet::size];
+    uint8_t decodedData[memory::AudioPacket::size];
     auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpPacket)
     {
@@ -66,55 +63,45 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
     const uint32_t payloadLength = _packet->getLength() - headerLength;
     auto payloadStart = rtpPacket->getPayload();
 
-    if (decoder.getSequenceNumber() != 0)
+    if (decoder.hasDecoded() && _extendedSequenceNumber != decoder.getExpectedSequenceNumber())
     {
-        const auto expectedSequenceNumber = decoder.getSequenceNumber() + 1;
-
-        if (static_cast<int32_t>(decoder.getSequenceNumber() - sequenceNumber) >= 0)
+        const int32_t lossCount = static_cast<int32_t>(_extendedSequenceNumber - decoder.getExpectedSequenceNumber());
+        if (lossCount <= 0)
         {
             logger::debug("Old opus packet sequence %u expected %u, discarding",
                 "OpusDecodeJob",
-                sequenceNumber,
-                expectedSequenceNumber);
+                _extendedSequenceNumber,
+                decoder.getExpectedSequenceNumber());
             return;
         }
 
-        if (sequenceNumber > expectedSequenceNumber)
+        logger::debug("Lost opus packet sequence %u expected %u, fec",
+            "OpusDecodeJob",
+            _extendedSequenceNumber,
+            decoder.getExpectedSequenceNumber());
+
+        const auto concealCount = std::min(5u, _extendedSequenceNumber - decoder.getExpectedSequenceNumber() - 1);
+        for (uint32_t i = 0; i < concealCount; ++i)
         {
-            logger::debug("Lost opus packet sequence %u expected %u, fec",
-                "OpusDecodeJob",
-                sequenceNumber,
-                expectedSequenceNumber);
-            const auto lastPacketDuration = decoder.getLastPacketDuration();
-
-            for (auto i = expectedSequenceNumber; i < sequenceNumber - 2; ++i)
-            {
-                const auto decodedFrames = decoder.decode(nullptr,
-                    payloadLength,
-                    decodedData,
-                    utils::checkedCast<size_t>(lastPacketDuration),
-                    true);
-                onPacketDecoded(decodedFrames, decodedData);
-            }
-
-            const auto decodedFrames = decoder.decode(payloadStart,
-                payloadLength,
-                decodedData,
-                utils::checkedCast<size_t>(lastPacketDuration),
-                true);
+            const auto decodedFrames = decoder.conceal(decodedData);
             onPacketDecoded(decodedFrames, decodedData);
         }
+
+        const auto decodedFrames = decoder.conceal(payloadStart, payloadLength, decodedData);
+        onPacketDecoded(decodedFrames, decodedData);
     }
 
     const auto framesInPacketBuffer =
-        memory::Packet::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
+        memory::AudioPacket::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
 
-    const auto decodedFrames = decoder.decode(payloadStart, payloadLength, decodedData, framesInPacketBuffer, false);
+    const auto decodedFrames =
+        decoder.decode(_extendedSequenceNumber, payloadStart, payloadLength, decodedData, framesInPacketBuffer);
     onPacketDecoded(decodedFrames, decodedData);
 }
 
 AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
     memory::PacketPoolAllocator& allocator,
+    memory::AudioPacketPoolAllocator& audioPacketAllocator,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& ssrcContext,
@@ -125,6 +112,7 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
     : CountedJob(sender->getJobCounter()),
       _packet(packet),
       _allocator(allocator),
+      _audioPacketAllocator(audioPacketAllocator),
       _engineMixer(engineMixer),
       _sender(sender),
       _ssrcContext(ssrcContext),

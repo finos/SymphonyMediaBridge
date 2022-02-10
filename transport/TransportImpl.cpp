@@ -99,20 +99,25 @@ private:
     Endpoint& _endpoint;
 };
 
-struct IceSettings
+struct IceCredentials
 {
-    static const size_t maxCandidateCount = 28;
-
-    // max is actually 256 but usually less
     char ufrag[64];
     char password[128];
+};
+static_assert(sizeof(IceCredentials) < memory::Packet::size, "IceCredentials does not fit into a Packet");
+
+struct IceCandidates
+{
+    static const size_t maxCandidateCount = 10;
     size_t candidateCount = 0;
     ice::IceCandidate candidates[maxCandidateCount];
 };
-static_assert(sizeof(IceSettings) < sizeof(memory::Packet) - sizeof(size_t), "IceSettings does not fit into a Packet");
+static_assert(sizeof(IceCandidates) < memory::Packet::size, "IceCandidates does not fit into a Packet");
 
 class IceSetRemoteJob : public jobmanager::CountedJob
 {
+    static const size_t maxCandidatePackets = 4;
+
 public:
     IceSetRemoteJob(TransportImpl& transport,
         const std::pair<std::string, std::string>& credentials,
@@ -120,31 +125,73 @@ public:
         memory::PacketPoolAllocator& allocator)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
-          _allocator(allocator)
+          _allocator(allocator),
+          _iceCredentials(nullptr),
+          _iceCandidates{0}
     {
-        _iceSettings = memory::makePacket(allocator);
-        if (!_iceSettings)
+        _iceCredentials = memory::makePacket(allocator);
+        if (!_iceCredentials)
         {
             logger::error("failed to allocate packet", "setRemoteIce");
             return;
         }
-        auto& iceSettings = *reinterpret_cast<IceSettings*>(_iceSettings->get());
+        auto& iceSettings = *reinterpret_cast<IceCredentials*>(_iceCredentials->get());
         utils::strncpy(iceSettings.ufrag, credentials.first.c_str(), sizeof(iceSettings.ufrag));
         utils::strncpy(iceSettings.password, credentials.second.c_str(), sizeof(iceSettings.password));
 
-        for (size_t i = 0; i < IceSettings::maxCandidateCount && i < candidates.size(); ++i)
+        memory::Packet* icePacket = nullptr;
+        for (size_t i = 0; i < candidates.size() && i < maxCandidatePackets * IceCandidates::maxCandidateCount; ++i)
         {
-            iceSettings.candidates[i] = candidates[i];
-            iceSettings.candidateCount = i + 1;
+            if (i % IceCandidates::maxCandidateCount == 0)
+            {
+                icePacket = memory::makePacket(allocator);
+                if (!icePacket)
+                {
+                    logger::error("failed to allocate packet", "setRemoteIce");
+                    return;
+                }
+                _iceCandidates[i / maxCandidatePackets] = icePacket;
+                auto& iceCandidates = *reinterpret_cast<IceCandidates*>(icePacket->get());
+                iceCandidates.candidateCount = 0;
+            }
+            auto& iceCandidates = *reinterpret_cast<IceCandidates*>(icePacket->get());
+            iceCandidates.candidates[i % IceCandidates::maxCandidateCount] = candidates[i];
+            iceCandidates.candidateCount++;
         }
     }
 
-    void run() override { _transport.doSetRemoteIce(_iceSettings, _allocator); }
+    void run() override
+    {
+        if (!_iceCredentials)
+        {
+            return;
+        }
+
+        _transport.doSetRemoteIce(_iceCredentials, _iceCandidates);
+    }
+
+    ~IceSetRemoteJob()
+    {
+        if (_iceCredentials)
+        {
+            _allocator.free(_iceCredentials);
+        }
+
+        for (size_t i = 0; i < maxCandidatePackets; ++i)
+        {
+            if (!_iceCandidates[i])
+            {
+                break;
+            }
+            _allocator.free(_iceCandidates[i]);
+        }
+    }
 
 private:
     TransportImpl& _transport;
     memory::PacketPoolAllocator& _allocator;
-    memory::Packet* _iceSettings;
+    memory::Packet* _iceCredentials;
+    memory::Packet* _iceCandidates[maxCandidatePackets + 1];
 };
 
 struct DtlsCredentials
@@ -1934,17 +1981,24 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
     }
 }
 
-void TransportImpl::doSetRemoteIce(memory::Packet* packet, memory::PacketPoolAllocator& allocator)
+void TransportImpl::doSetRemoteIce(const memory::Packet* credentialPacket,
+    const memory::Packet* const* candidatePackets)
 {
-    if (_rtpIceSession && packet)
+    if (!_rtpIceSession)
     {
-        const auto& iceSettings = *reinterpret_cast<IceSettings*>(packet->get());
-        _rtpIceSession->setRemoteCredentials(
-            std::pair<std::string, std::string>(iceSettings.ufrag, iceSettings.password));
+        return;
+    }
 
-        for (size_t i = 0; i < iceSettings.candidateCount && i < _config.ice.maxCandidateCount; ++i)
+    auto& credentials = *reinterpret_cast<const IceCredentials*>(credentialPacket->get());
+    _rtpIceSession->setRemoteCredentials(std::pair<std::string, std::string>(credentials.ufrag, credentials.password));
+
+    uint32_t candidateCount = 0;
+    for (const memory::Packet* const* packetCursor = candidatePackets; *packetCursor; packetCursor++)
+    {
+        auto& iceCandidates = *reinterpret_cast<const IceCandidates*>((*packetCursor)->get());
+        for (size_t i = 0; i < iceCandidates.candidateCount && candidateCount++ < _config.ice.maxCandidateCount; ++i)
         {
-            const ice::IceCandidate& candidate = iceSettings.candidates[i];
+            const ice::IceCandidate& candidate = iceCandidates.candidates[i];
             if (candidate.component == ice::IceComponent::RTP && !candidate.empty())
             {
                 if (candidate.transportType == ice::TransportType::UDP)
@@ -1967,7 +2021,6 @@ void TransportImpl::doSetRemoteIce(memory::Packet* packet, memory::PacketPoolAll
             }
         }
     }
-    allocator.free(packet);
 }
 
 void TransportImpl::setRemoteDtlsFingerprint(const std::string& fingerprintType,
@@ -2151,7 +2204,7 @@ void TransportImpl::onDtlsStateChange(SrtpClient*, const SrtpClient::State state
     }
 }
 
-int32_t TransportImpl::sendDtls(const char* buffer, const int32_t length)
+int32_t TransportImpl::sendDtls(const char* buffer, const uint32_t length)
 {
     assert(length >= 0);
     if (!buffer || length <= 0)
@@ -2167,6 +2220,12 @@ int32_t TransportImpl::sendDtls(const char* buffer, const int32_t length)
     if (buffer[0] != DTLSContentType::applicationData)
     {
         logger::debug("sending DTLS protocol message, %d", _loggableId.c_str(), length);
+    }
+
+    if (length > memory::Packet::size || length > _config.mtu)
+    {
+        logger::error("DTLS message %d exceeds MTU %u", _loggableId.c_str(), length, _config.mtu.get());
+        return 0;
     }
 
     auto packet = memory::makePacket(_mainAllocator, buffer, length);

@@ -986,6 +986,7 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     audioStream->_transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
     if (absSendTimeExtensionId.isSet())
     {
+        audioStream->_absSendTimeExtensionId = absSendTimeExtensionId.get();
         audioStream->_transport->setAbsSendTimeExtensionId(absSendTimeExtensionId.get());
     }
     return true;
@@ -1407,6 +1408,7 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
             audioStream->_remoteSsrc,
             *(audioStream->_transport.get()),
             audioStream->_audioLevelExtensionId,
+            audioStream->_absSendTimeExtensionId,
             audioStream->_audioMixed,
             audioStream->_rtpMap,
             audioStream->_ssrcRewrite));

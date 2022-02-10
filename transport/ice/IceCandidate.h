@@ -21,6 +21,7 @@ enum class TcpType
     PASSIVE,
     SO
 };
+
 class IceCandidate
 {
 public:

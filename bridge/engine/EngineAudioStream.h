@@ -20,6 +20,7 @@ struct EngineAudioStream
         const utils::Optional<uint32_t>& remoteSsrc,
         transport::RtcTransport& transport,
         const int32_t audioLevelExtensionId,
+        const int32_t absSendTimeExtensionId,
         const bool audioMixed,
         const bridge::RtpMap& rtpMap,
         bool ssrcRewrite)
@@ -30,6 +31,7 @@ struct EngineAudioStream
           _ssrcOutboundContexts(256),
           _transport(transport),
           _audioLevelExtensionId(audioLevelExtensionId),
+          _absSendTimeExtensionId(absSendTimeExtensionId),
           _audioMixed(audioMixed),
           _rtpMap(rtpMap),
           _ssrcRewrite(ssrcRewrite)
@@ -44,6 +46,7 @@ struct EngineAudioStream
 
     transport::RtcTransport& _transport;
     int32_t _audioLevelExtensionId;
+    int32_t _absSendTimeExtensionId;
     bool _audioMixed;
 
     bridge::RtpMap _rtpMap;

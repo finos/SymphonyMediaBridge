@@ -2,6 +2,7 @@
 
 #include "concurrency/MpmcHashmap.h"
 #include "jobmanager/Job.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include <atomic>
 #include <cstdint>
@@ -25,24 +26,26 @@ class SsrcOutboundContext;
 class EncodeJob : public jobmanager::CountedJob
 {
 public:
-    EncodeJob(memory::Packet* packet,
+    EncodeJob(memory::AudioPacket* packet,
+        memory::AudioPacketPoolAllocator& allocator,
         SsrcOutboundContext& outboundContext,
         transport::Transport& transport,
-        const uint64_t rtpTimestamp,
-        const int32_t audioLevelExtensionId);
+        uint64_t rtpTimestamp,
+        int32_t audioLevelExtensionId,
+        int32_t absSendTimeExtensionId);
 
     virtual ~EncodeJob();
 
     void run() override;
 
 private:
-    void doSend(memory::Packet* packet);
-
-    memory::Packet* _packet;
+    memory::AudioPacket* _packet;
+    memory::AudioPacketPoolAllocator& _audioPacketPoolAllocator;
     SsrcOutboundContext& _outboundContext;
     transport::Transport& _transport;
     uint64_t _rtpTimestamp;
     int32_t _audioLevelExtensionId;
+    int32_t _absSendTimeExtensionId;
 };
 
 } // namespace bridge

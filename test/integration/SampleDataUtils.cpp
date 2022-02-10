@@ -123,7 +123,7 @@ const std::vector<const memory::Packet> SampleDataUtils::_opusRtpSamplePackets =
 
 void buzzFunction(int16_t* iterationBuff, size_t iterationBuffSize)
 {
-    for (int i = 0; i < iterationBuffSize; ++i)
+    for (size_t i = 0; i < iterationBuffSize; ++i)
     {
         iterationBuff[i] = static_cast<int16_t>(sin( // extract to func
                                                     (M_PI * 20.0) * double(i) / double(iterationBuffSize - 1)) *
@@ -133,7 +133,7 @@ void buzzFunction(int16_t* iterationBuff, size_t iterationBuffSize)
 
 void silenceFunction(int16_t* iterationBuff, size_t iterationBuffSize)
 {
-    for (int i = 0; i < iterationBuffSize; ++i)
+    for (size_t i = 0; i < iterationBuffSize; ++i)
     {
         iterationBuff[i] = 0;
     }
@@ -253,15 +253,15 @@ SampleDataUtils::AudioData SampleDataUtils::decodeOpusRtpStream(const std::vecto
         const uint32_t payloadLength = packet.getLength() - headerLength;
         auto payloadStart = rtpHeader->getPayload();
 
-        if (decoder.getSequenceNumber() != 0)
+        if (decoder.getExpectedSequenceNumber() != 0)
         {
-            assert(sequenceNumber == decoder.getSequenceNumber() + 1);
+            assert(sequenceNumber == decoder.getExpectedSequenceNumber());
         }
 
         const auto framesInPacketBuffer =
             memory::Packet::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
         const auto decodedFrames =
-            decoder.decode(payloadStart, payloadLength, decodedData, framesInPacketBuffer, false);
+            decoder.decode(sequenceNumber, payloadStart, payloadLength, decodedData, framesInPacketBuffer);
         assert(decodedFrames > 0);
         const auto decodedSamplesCount = decodedFrames * codec::Opus::channelsPerFrame;
 
@@ -319,9 +319,8 @@ int computeAudioLevel(const int16_t* payload, int count)
 int audioLevelFromPacket(const memory::Packet& packet)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-    auto extensions = rtpHeader->getExtensions();
-    assert(extensions);
-    for (auto extension : *extensions)
+    auto extensions = rtpHeader->getExtensionHeader()->extensions();
+    for (auto extension : extensions)
     {
         if (extension.id == 1)
         {
@@ -332,6 +331,55 @@ int audioLevelFromPacket(const memory::Packet& packet)
 }
 
 } // namespace
+
+void SampleDataUtils::fft(CmplxArray& x)
+{
+    const size_t N = x.size();
+    if (N <= 1)
+        return;
+
+    std::valarray<std::complex<double>> even = x[std::slice(0, N / 2, 2)];
+    std::valarray<std::complex<double>> odd = x[std::slice(1, N / 2, 2)];
+
+    fft(even);
+    fft(odd);
+
+    for (size_t k = 0; k < N / 2; ++k)
+    {
+        std::complex<double> t = std::polar(1.0, -2 * M_PI * k / N) * odd[k];
+        x[k] = even[k] + t;
+        x[k + N / 2] = even[k] - t;
+    }
+}
+
+void SampleDataUtils::ifft(SampleDataUtils::CmplxArray& x)
+{
+    x = x.apply(std::conj);
+    fft(x);
+    x = x.apply(std::conj);
+
+    // scale the numbers
+    x /= x.size();
+}
+
+void SampleDataUtils::listFrequencies(CmplxArray& frequencyTransform,
+    uint32_t sampleRate,
+    std::vector<double>& frequencies)
+{
+    const double freqDelta = static_cast<double>(sampleRate) / frequencyTransform.size();
+    double delta = 0;
+    const double threshold = frequencyTransform.size() * 0.01;
+    for (size_t i = 1; i < frequencyTransform.size() / 2; ++i)
+    {
+        auto prevDelta = delta;
+        delta = std::abs(frequencyTransform[i]) - std::abs(frequencyTransform[i - 1]);
+        if (prevDelta > 0 && delta < 0 && std::abs(frequencyTransform[i - 1]) > threshold && prevDelta > threshold / 2)
+        {
+            frequencies.push_back(freqDelta * (i - 1));
+        }
+    }
+}
+
 bool SampleDataUtils::verifyAudioLevel(const std::vector<memory::Packet>& packets, const AudioData& audio)
 {
     int cursor = 0;

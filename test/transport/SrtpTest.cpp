@@ -31,7 +31,7 @@ struct FakeSrtpEndpoint : public transport::SslWriteBioListener
         }
     }
 
-    int32_t sendDtls(const char* buffer, int32_t length) override
+    int32_t sendDtls(const char* buffer, uint32_t length) override
     {
         if (transport::isDtlsPacket(buffer))
         {

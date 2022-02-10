@@ -14,7 +14,7 @@ struct GeneralExtension1Byteheader
 
     uint8_t data[20];
 
-    GeneralExtension1Byteheader() : len(0), id(0) { data[0] = 0; } // a padding byte
+    GeneralExtension1Byteheader() : len(0), id(0), data{0} { data[0] = 0; }
     void setDataLength(int length);
 
     size_t size() const;
@@ -49,6 +49,7 @@ struct RtpHeaderExtension
     size_t size() const { return minSize() + length * sizeof(uint32_t); }
     constexpr static size_t minSize() { return 2 * sizeof(uint16_t); }
     void addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension);
+    bool empty() const { return length.get() == 0; }
 
 private:
     uint8_t data[512];
@@ -72,8 +73,16 @@ struct RtpHeader
 
     static RtpHeader* fromPtr(void* p, size_t len);
     inline static const RtpHeader* fromPtr(const void* p, size_t len) { return fromPtr(const_cast<void*>(p), len); }
-    inline static RtpHeader* fromPacket(memory::Packet& p) { return fromPtr(p.get(), p.getLength()); }
-    inline static const RtpHeader* fromPacket(const memory::Packet& p) { return fromPtr(p.get(), p.getLength()); }
+    template <typename PacketType>
+    inline static RtpHeader* fromPacket(PacketType& p)
+    {
+        return fromPtr(p.get(), p.getLength());
+    }
+    template <typename PacketType>
+    inline static const RtpHeader* fromPacket(const PacketType& p)
+    {
+        return fromPtr(p.get(), p.getLength());
+    }
     static RtpHeader* create(void* p, size_t len);
     size_t headerLength() const;
     uint8_t* getPayload() { return reinterpret_cast<uint8_t*>(this) + headerLength(); }

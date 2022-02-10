@@ -1,44 +1,38 @@
 #pragma once
 
-#include "TransportFactoryStub.h"
-#include "bridge/LegacyApiRequestHandler.h"
-#include "bridge/Mixer.h"
-#include "bridge/MixerManager.h"
-#include "bridge/engine/Engine.h"
-#include "bridge/engine/EngineMixer.h"
+#include "bridge/Bridge.h"
 #include "config/Config.h"
-#include "httpd/Httpd.h"
-#include "jobmanager/JobManager.h"
-#include "jobmanager/WorkerThread.h"
-#include "memory/PacketPoolAllocator.h"
-#include "transport/RtcePoll.h"
-#include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
-#include "utils/SsrcGenerator.h"
+#include "utils/Pacer.h"
 #include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <memory>
-#include <unistd.h>
 
 struct IntegrationTest : public ::testing::Test
 {
-    std::unique_ptr<utils::IdGenerator> idGenerator;
-    std::unique_ptr<utils::SsrcGenerator> ssrcGenerator;
-    std::unique_ptr<jobmanager::JobManager> jobManager;
-    std::unique_ptr<transport::SslDtls> sslDtls;
-    std::unique_ptr<TransportFactoryStub> transportFactory;
-    std::unique_ptr<config::Config> config;
-    std::unique_ptr<bridge::Engine> engine;
-    std::unique_ptr<bridge::MixerManager> mixerManager;
-    std::unique_ptr<transport::RtcePoll> network;
-    std::unique_ptr<bridge::RequestHandler> requestHandler;
-    std::unique_ptr<httpd::Httpd> httpd;
-    std::unique_ptr<memory::PacketPoolAllocator> poolAllocator;
+    IntegrationTest();
+    std::unique_ptr<bridge::Bridge> _bridge;
+    config::Config _config;
+
+    memory::PacketPoolAllocator _sendAllocator;
+    std::unique_ptr<jobmanager::JobManager> _jobManager;
+    std::unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
+    transport::SslDtls* _sslDtls;
+    std::unique_ptr<transport::SrtpClientFactory> _srtpClientFactory;
+    std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;
+    std::unique_ptr<transport::RtcePoll> _network;
+    ice::IceConfig _iceConfig;
+    sctp::SctpConfig _sctpConfig;
+    bwe::Config _bweConfig;
+    bwe::RateControllerConfig _rateControlConfig;
+    utils::Pacer _pacer;
+
+    std::unique_ptr<transport::TransportFactory> _transportFactory;
+
+    uint32_t _instanceCounter;
 
     void SetUp() override;
     void TearDown() override;
 
-    void startDefaultMixerManager();
-    void startHttpDaemon(int port);
+    void initBridge(config::Config& config);
 };

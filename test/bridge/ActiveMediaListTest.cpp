@@ -146,6 +146,7 @@ protected:
             id,
             utils::Optional<uint32_t>(id),
             *_transport,
+            1,
             3,
             false,
             bridge::RtpMap(),

@@ -18,8 +18,9 @@ namespace bridge
 
 std::vector<transport::SocketAddress> gatherInterfaces(const config::Config& config)
 {
-    auto interfaces = transport::SocketAddress::activeInterfaces(false, false);
     auto defaultIpName = config.ice.preferredIp.get();
+    const auto useLocal = defaultIpName == "localhost" || defaultIpName == "127.0.0.1";
+    auto interfaces = transport::SocketAddress::activeInterfaces(useLocal, false);
     auto defaultInterface = transport::SocketAddress::parse(defaultIpName);
 
     std::sort(interfaces.begin(),
@@ -59,6 +60,7 @@ Bridge::Bridge(const config::Config& config)
       _network(transport::createRtcePoll()),
       _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(16 * 1024, "main")),
       _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(64 * 1024, "send")),
+      _audioPacketAllocator(std::make_unique<memory::AudioPacketPoolAllocator>(4 * 1024, "audio")),
       _engine(std::make_unique<bridge::Engine>())
 {
 }
@@ -157,7 +159,8 @@ void Bridge::initialize()
         *_engine,
         _config,
         *_mainPacketAllocator,
-        *_sendPacketAllocator);
+        *_sendPacketAllocator,
+        *_audioPacketAllocator);
 
     _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls);
 

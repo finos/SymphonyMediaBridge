@@ -2,6 +2,7 @@
 #include "bwe/BandwidthEstimator.h"
 #include "bwe/RateController.h"
 #include "config/Config.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/RtcePoll.h"
 #include "transport/dtls/SslDtls.h"
@@ -47,6 +48,8 @@ public:
     void initialize();
     bool isInitialized() const { return _initialized; }
 
+    transport::SslDtls& getSslDtls() { return *_sslDtls; }
+
 private:
     bool _initialized;
     const config::Config _config;
@@ -64,6 +67,7 @@ private:
     const std::unique_ptr<transport::RtcePoll> _network;
     const std::unique_ptr<memory::PacketPoolAllocator> _mainPacketAllocator;
     const std::unique_ptr<memory::PacketPoolAllocator> _sendPacketAllocator;
+    const std::unique_ptr<memory::AudioPacketPoolAllocator> _audioPacketAllocator;
     std::unique_ptr<transport::TransportFactory> _transportFactory;
     const std::unique_ptr<bridge::Engine> _engine;
     std::unique_ptr<bridge::MixerManager> _mixerManager;

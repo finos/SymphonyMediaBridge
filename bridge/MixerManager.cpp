@@ -20,7 +20,7 @@ namespace
 const auto intervalNs = 10000000UL;
 const uint32_t maxLastN = 16;
 
-}
+} // namespace
 
 namespace bridge
 {
@@ -32,7 +32,8 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     Engine& engine,
     const config::Config& config,
     memory::PacketPoolAllocator& mainAllocator,
-    memory::PacketPoolAllocator& sendAllocator)
+    memory::PacketPoolAllocator& sendAllocator,
+    memory::AudioPacketPoolAllocator& audioAllocator)
     : _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
       _jobManager(jobManager),
@@ -42,7 +43,8 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _threadRunning(true),
       _engineMessages(16384),
       _mainAllocator(mainAllocator),
-      _sendAllocator(sendAllocator)
+      _sendAllocator(sendAllocator),
+      _audioAllocator(audioAllocator)
 {
     _engine.setMessageListener(this);
 
@@ -98,6 +100,7 @@ Mixer* MixerManager::create(uint32_t lastN)
             localVideoSsrc,
             _config,
             _sendAllocator,
+            _audioAllocator,
             audioSsrcs,
             videoSsrcs,
             lastN));

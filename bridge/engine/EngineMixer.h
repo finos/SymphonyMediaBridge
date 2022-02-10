@@ -10,6 +10,7 @@
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
 #include "jobmanager/JobQueue.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "memory/RingBuffer.h"
 #include "transport/RecordingTransport.h"
@@ -72,6 +73,7 @@ public:
         const uint32_t localVideoSsrc,
         const config::Config& config,
         memory::PacketPoolAllocator& sendAllocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<SimulcastLevel>& videoSsrcs,
         const uint32_t lastN);
@@ -158,8 +160,8 @@ public:
         const uint32_t extendedSequenceNumber);
 
     void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator);
+        memory::AudioPacket* packet,
+        memory::AudioPacketPoolAllocator& receiveAllocator);
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
         memory::Packet* packet,
@@ -178,13 +180,18 @@ private:
     static const size_t maxStreamsPerModality = 4096;
     static const size_t maxRecordingStreams = 8;
 
-    struct IncomingPacketInfo
+    template <typename PacketT, typename AllocatorT>
+    struct IncomingPacketAggregate
     {
-        IncomingPacketInfo() : _packet(nullptr), _allocator(nullptr), _transport(nullptr), _extendedSequenceNumber(0) {}
+        IncomingPacketAggregate()
+            : _packet(nullptr),
+              _allocator(nullptr),
+              _transport(nullptr),
+              _extendedSequenceNumber(0)
+        {
+        }
 
-        IncomingPacketInfo(memory::Packet* packet,
-            memory::PacketPoolAllocator* allocator,
-            transport::RtcTransport* transport)
+        IncomingPacketAggregate(PacketT* packet, AllocatorT* allocator, transport::RtcTransport* transport)
             : _packet(packet),
               _allocator(allocator),
               _transport(transport),
@@ -192,8 +199,8 @@ private:
         {
         }
 
-        IncomingPacketInfo(memory::Packet* packet,
-            memory::PacketPoolAllocator* allocator,
+        IncomingPacketAggregate(PacketT* packet,
+            AllocatorT* allocator,
             transport::RtcTransport* transport,
             const uint32_t extendedSequenceNumber)
             : _packet(packet),
@@ -203,8 +210,8 @@ private:
         {
         }
 
-        memory::Packet* _packet;
-        memory::PacketPoolAllocator* _allocator;
+        PacketT* _packet;
+        AllocatorT* _allocator;
         transport::RtcTransport* _transport;
         uint32_t _extendedSequenceNumber;
 
@@ -231,6 +238,9 @@ private:
         }
     };
 
+    using IncomingPacketInfo = IncomingPacketAggregate<memory::Packet, memory::PacketPoolAllocator>;
+    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::AudioPacket, memory::AudioPacketPoolAllocator>;
+
     std::string _id;
     logger::LoggableId _loggableId;
 
@@ -240,7 +250,7 @@ private:
     concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
 
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderAudioRtp;
-    concurrency::MpmcQueue<IncomingPacketInfo> _incomingMixerAudioRtp;
+    concurrency::MpmcQueue<IncomingAudioPacketInfo> _incomingMixerAudioRtp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingRtcp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderVideoRtp;
 
@@ -257,6 +267,7 @@ private:
     uint64_t _rtpTimestampSource; // 1kHz. it works with wrapping since it is truncated to uint32.
 
     memory::PacketPoolAllocator& _sendAllocator;
+    memory::AudioPacketPoolAllocator& _audioAllocator;
 
     size_t _noIncomingPacketsIntervalMs;
     const size_t _maxNoIncomingPacketsIntervalMs;

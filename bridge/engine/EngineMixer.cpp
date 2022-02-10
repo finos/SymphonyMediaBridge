@@ -145,6 +145,7 @@ EngineMixer::EngineMixer(const std::string& id,
     const uint32_t localVideoSsrc,
     const config::Config& config,
     memory::PacketPoolAllocator& sendAllocator,
+    memory::AudioPacketPoolAllocator& audioAllocator,
     const std::vector<uint32_t>& audioSsrcs,
     const std::vector<SimulcastLevel>& videoSsrcs,
     const uint32_t lastN)
@@ -165,6 +166,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _localVideoSsrc(localVideoSsrc),
       _rtpTimestampSource(1000),
       _sendAllocator(sendAllocator),
+      _audioAllocator(audioAllocator),
       _noIncomingPacketsIntervalMs(0),
       _maxNoIncomingPacketsIntervalMs(inactivityTimeoutMs),
       _noTicks(0),
@@ -758,12 +760,13 @@ void EngineMixer::clear()
 
 void EngineMixer::flush()
 {
-    IncomingPacketInfo packetInfo;
-    while (_incomingMixerAudioRtp.pop(packetInfo))
+    IncomingAudioPacketInfo audioPacketInfo;
+    while (_incomingMixerAudioRtp.pop(audioPacketInfo))
     {
-        packetInfo.release();
+        audioPacketInfo.release();
     }
 
+    IncomingPacketInfo packetInfo;
     while (_incomingForwarderAudioRtp.pop(packetInfo))
     {
         packetInfo.release();
@@ -1543,6 +1546,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         if (_engineAudioStreams.size() == 0 ||
             !sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(packet,
                 receiveAllocator,
+                _audioAllocator,
                 sender,
                 *this,
                 *ssrcContext,
@@ -1600,13 +1604,17 @@ void EngineMixer::onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* se
 }
 
 void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator)
+    memory::AudioPacket* packet,
+    memory::AudioPacketPoolAllocator& receiveAllocator)
 {
     assert(packet);
-    const IncomingPacketInfo packetInfo = {packet, &receiveAllocator, sender};
-    if (!enqueuePacket(packetInfo, _incomingMixerAudioRtp))
+    const IncomingAudioPacketInfo packetInfo = {packet, &receiveAllocator, sender};
+    packetInfo.lockOwner();
+    auto result = _incomingMixerAudioRtp.push(packetInfo);
+    assert(result);
+    if (!result)
     {
+        packetInfo.release();
         logger::error("Failed to push incoming mixer audio packet onto queue", getLoggableId().c_str());
     }
 }
@@ -1630,9 +1638,6 @@ void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
     const uint64_t timestamp)
 {
     assert(packet);
-
-    // Make sure the EngineMixer does not time out if there are incoming rtcp packets
-    _noIncomingPacketsIntervalMs = 0;
 
     IncomingPacketInfo packetInfo(packet, &receiveAllocator, sender, 0);
     packetInfo.lockOwner();
@@ -1752,7 +1757,6 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
         auto emplaceResult = _ssrcInboundContexts.emplace(ssrc,
             ssrc,
-            _jobManager,
             audioStream->_rtpMap,
             audioStream->_audioLevelExtensionId,
             sender,
@@ -1810,8 +1814,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult =
-            _ssrcInboundContexts.emplace(ssrc, ssrc, _jobManager, videoStream->_rtpMap, -1, sender, timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_rtpMap, -1, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getFeedbackSsrcFor(ssrc);
@@ -1857,7 +1860,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         }
 
         auto emplaceResult =
-            _ssrcInboundContexts.emplace(ssrc, ssrc, _jobManager, videoStream->_feedbackRtpMap, -1, sender, timestamp);
+            _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_feedbackRtpMap, -1, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getMainSsrcFor(ssrc);
@@ -1967,9 +1970,9 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     numRtpPackets += processIncomingVideoRtpPackets(timestamp);
     bool overrunLogSpamGuard = false;
 
-    for (IncomingPacketInfo packetInfo; _incomingMixerAudioRtp.pop(packetInfo);)
+    for (IncomingAudioPacketInfo packetInfo; _incomingMixerAudioRtp.pop(packetInfo);)
     {
-        utils::ReleaseGuard<IncomingPacketInfo> autoRelease(packetInfo);
+        utils::ReleaseGuard<IncomingAudioPacketInfo> autoRelease(packetInfo);
         ++numRtpPackets;
 
         const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo._packet);
@@ -2227,6 +2230,8 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
         }
 
         packetInfo.release();
+
+        _noIncomingPacketsIntervalMs = 0;
     }
 }
 
@@ -2417,18 +2422,18 @@ inline void EngineMixer::processAudioStreams()
             continue;
         }
 
-        auto rtpPacket = memory::makePacket(_sendAllocator);
-        if (!rtpPacket)
+        auto audioPacket = memory::makePacket(_audioAllocator);
+        if (!audioPacket)
         {
             return;
         }
 
-        auto rtpHeader = rtp::RtpHeader::create(rtpPacket->get(), memory::Packet::size);
+        auto rtpHeader = rtp::RtpHeader::create(audioPacket->get(), memory::Packet::size);
         rtpHeader->ssrc = audioStream->_localSsrc;
 
         auto payloadStart = rtpHeader->getPayload();
         const auto headerLength = rtpHeader->headerLength();
-        rtpPacket->setLength(headerLength + samplesPerIteration * bytesPerSample);
+        audioPacket->setLength(headerLength + samplesPerIteration * bytesPerSample);
         memcpy(payloadStart, _mixedData, samplesPerIteration * bytesPerSample);
 
         if (isContributingToMix && audioBuffer)
@@ -2441,13 +2446,15 @@ inline void EngineMixer::processAudioStreams()
 
         auto* ssrcContext = obtainOutboundSsrcContext(*audioStream, audioStream->_localSsrc);
         if (!ssrcContext ||
-            !audioStream->_transport.getJobQueue().addJob<EncodeJob>(rtpPacket,
+            !audioStream->_transport.getJobQueue().addJob<EncodeJob>(audioPacket,
+                _audioAllocator,
                 *ssrcContext,
                 audioStream->_transport,
                 _rtpTimestampSource,
-                audioStream->_audioLevelExtensionId))
+                audioStream->_audioLevelExtensionId,
+                audioStream->_absSendTimeExtensionId))
         {
-            _sendAllocator.free(rtpPacket);
+            _audioAllocator.free(audioPacket);
         }
     }
 }
