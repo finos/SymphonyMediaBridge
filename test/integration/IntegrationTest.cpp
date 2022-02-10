@@ -182,6 +182,12 @@ public:
     }
 };
 
+class HttpGetRequest : public HttpPostRequest
+{
+public:
+    HttpGetRequest(const char* url) { _request = http_get(url, nullptr); }
+};
+
 class Conference
 {
 public:
@@ -869,12 +875,14 @@ TEST_F(IntegrationTest, plain)
         pacer.tick(utils::Time::getAbsoluteTime());
         utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
     }
-
-    utils::Time::nanoSleep(1 * utils::Time::sec);
+    client3._transport->stop();
+    HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
+    statsRequest.awaitResponse(1500 * utils::Time::ms);
+    HttpGetRequest confRequest((std::string(baseUrl) + "/colibri/conferences").c_str());
+    confRequest.awaitResponse(500 * utils::Time::ms);
 
     client1._transport->stop();
     client2._transport->stop();
-    client3._transport->stop();
 
     for (int i = 0; i < 10 &&
          (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
@@ -883,7 +891,6 @@ TEST_F(IntegrationTest, plain)
     {
         utils::Time::nanoSleep(1 * utils::Time::sec);
     }
-    _bridge.reset();
 
     {
         auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
@@ -960,22 +967,20 @@ TEST_F(IntegrationTest, plain)
             EXPECT_NEAR(freqVector[0], 600.0, 25.0);
             EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
 
-            EXPECT_GE(amplitudeProfile.size(), 6);
+            EXPECT_GE(amplitudeProfile.size(), 4);
             for (auto& item : amplitudeProfile)
             {
                 logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
             }
-            if (amplitudeProfile.size() >= 6)
+            if (amplitudeProfile.size() >= 4)
             {
                 EXPECT_EQ(amplitudeProfile[0].second, 0);
 
                 EXPECT_NEAR(amplitudeProfile[3].second, 1826, 250);
                 EXPECT_NEAR(amplitudeProfile[3].first, 48000 * 1.67, 2400);
 
-                EXPECT_NEAR(amplitudeProfile[4].second, 1730, 250);
-                EXPECT_NEAR(amplitudeProfile[4].first, 6.45 * 48000, 2400);
-
-                EXPECT_EQ(amplitudeProfile.back().second, 0);
+                EXPECT_NEAR(amplitudeProfile.back().second, 1730, 250);
+                EXPECT_LE(amplitudeProfile.back().first, 2 * 48000);
             }
 
             // item.second->dumpPcmData();
