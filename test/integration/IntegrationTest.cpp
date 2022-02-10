@@ -878,8 +878,10 @@ TEST_F(IntegrationTest, plain)
     client3._transport->stop();
     HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
     statsRequest.awaitResponse(1500 * utils::Time::ms);
+    EXPECT_TRUE(statsRequest.isSuccess());
     HttpGetRequest confRequest((std::string(baseUrl) + "/colibri/conferences").c_str());
     confRequest.awaitResponse(500 * utils::Time::ms);
+    EXPECT_TRUE(confRequest.isSuccess());
 
     client1._transport->stop();
     client2._transport->stop();
