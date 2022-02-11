@@ -697,9 +697,9 @@ TransportImpl::~TransportImpl()
     }
     while (!_rtxPacingQueue.empty())
     {
-        auto& info = _pacingQueue.back();
+        auto& info = _rtxPacingQueue.back();
         info.allocator.free(info.packet);
-        _pacingQueue.pop_back();
+        _rtxPacingQueue.pop_back();
     }
 }
 
