@@ -360,7 +360,7 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
     }
 
     mixer.reset();
-    logger::info("EngineMixer removed", "MixerManager", mixer->getLoggableId().c_str());
+    logger::info("EngineMixer removed", "MixerManager");
 }
 
 void MixerManager::engineMessageAllocateAudioBuffer(const EngineMessage::Message& message)
