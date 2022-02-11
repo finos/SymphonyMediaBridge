@@ -320,38 +320,47 @@ void MixerManager::onMessage(const EngineMessage::Message& message)
 
 void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& message)
 {
-    std::lock_guard<std::mutex> locker(_configurationLock);
+    // Aims to delete the mixer out of the locker at it can take some time
+    // and we want to reduce the lock contention
+    std::__1::unique_ptr<bridge::Mixer> mixer;
 
-    auto& command = message._command.mixerRemoved;
-
-    std::string mixerId(command._mixer->getId()); // copy id string to have it after EngineMixer is deleted
-    auto findResult = _mixers.find(mixerId);
-    if (findResult != _mixers.end())
     {
-        auto& mixer = findResult->second;
-        mixer->stopTransports(); // this will stop new packets from coming in
-        if (!mixer->waitForAllPendingJobs(1000))
+        std::lock_guard<std::mutex> locker(_configurationLock);
+
+        auto& command = message._command.mixerRemoved;
+
+        std::string mixerId(command._mixer->getId()); // copy id string to have it after EngineMixer is deleted
+        auto findResult = _mixers.find(mixerId);
+        if (findResult != _mixers.end())
         {
-            logger::error("still pending jobs or packets after 1s.", mixer->getLoggableId().c_str());
+            mixer = std::move(findResult->second);
+            mixer->stopTransports(); // this will stop new packets from coming in
+            if (!mixer->waitForAllPendingJobs(1000))
+            {
+                logger::error("still pending jobs or packets after 1s.", mixer->getLoggableId().c_str());
+            }
+
+            _mixers.erase(findResult);
+        }
+        else
+        {
+            logger::debug("did not find mixer to stop %s", "MixerManager", mixerId.c_str());
+        }
+
+        logger::info("Removing EngineMixer %s", "MixerManager", command._mixer->getLoggableId().c_str());
+        // This will sweep the PacketPoolAllocator. Any pending jobs may crash or corrupt memory.
+        _engineMixers.erase(mixerId);
+
+        auto mixerAudioBuffers = _audioBuffers.find(mixerId);
+        if (mixerAudioBuffers != _audioBuffers.cend())
+        {
+            mixerAudioBuffers->second.clear();
+            _audioBuffers.erase(mixerAudioBuffers);
         }
     }
-    else
-    {
-        logger::debug("did not find mixer to stop %s", "MixerManager", mixerId.c_str());
-    }
 
-    logger::info("Removing EngineMixer %s", "MixerManager", command._mixer->getLoggableId().c_str());
-    // This will sweep the PacketPoolAllocator. Any pending jobs may crash or corrupt memory.
-    _engineMixers.erase(mixerId);
-
-    auto mixerAudioBuffers = _audioBuffers.find(mixerId);
-    if (mixerAudioBuffers != _audioBuffers.cend())
-    {
-        mixerAudioBuffers->second.clear();
-        _audioBuffers.erase(mixerAudioBuffers);
-    }
-
-    _mixers.erase(findResult);
+    mixer.reset();
+    logger::info("EngineMixer removed", "MixerManager", mixer->getLoggableId().c_str());
 }
 
 void MixerManager::engineMessageAllocateAudioBuffer(const EngineMessage::Message& message)
