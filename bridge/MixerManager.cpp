@@ -322,7 +322,7 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
 {
     // Aims to delete the mixer out of the locker at it can take some time
     // and we want to reduce the lock contention
-    std::__1::unique_ptr<bridge::Mixer> mixer;
+    std::unique_ptr<bridge::Mixer> mixer;
 
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
