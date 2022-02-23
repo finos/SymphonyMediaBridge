@@ -1652,7 +1652,16 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             continue;
         }
 
-        rtcpPacket = (!rtcpPacket ? memory::makePacket(_mainAllocator) : rtcpPacket);
+        if (!rtcpPacket)
+        {
+            rtcpPacket = memory::makePacket(_mainAllocator);
+            if (!rtcpPacket)
+            {
+                logger::warn("No space available to send SR", _loggableId.c_str());
+                break;
+            }
+        }
+
         auto* senderReport = rtp::RtcpSenderReport::create(rtcpPacket->get() + rtcpPacket->getLength());
         senderReport->ssrc = it->first;
         it->second.fillInReport(*senderReport, timestamp, wallClock + i * ntp32Tick);
@@ -1691,12 +1700,21 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
     while (receiverReportCount > 0 || (rembReady && !rembAdded))
     {
-        rtcpPacket = (!rtcpPacket ? memory::makePacket(_mainAllocator) : rtcpPacket);
-        if (rtcpPacket->getLength() + MINIMUM_RR + std::min(4u, receiverReportCount) * sizeof(rtp::ReportBlock) >
+        if (rtcpPacket && rtcpPacket->getLength() + MINIMUM_RR + std::min(4u, receiverReportCount) * sizeof(rtp::ReportBlock) >
             _config.mtu)
         {
             sendRtcp(rtcpPacket, _mainAllocator, timestamp);
+            rtcpPacket = nullptr;
+        }
+
+        if (!rtcpPacket)
+        {
             rtcpPacket = memory::makePacket(_mainAllocator);
+            if (!rtcpPacket)
+            {
+                logger::warn("No space available to send RR", _loggableId.c_str());
+                break;
+            }
         }
 
         auto* receiverReport = rtp::RtcpReceiverReport::create(rtcpPacket->get() + rtcpPacket->getLength());
@@ -1726,7 +1744,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
                 _config.mtu)
         {
             sendRtcp(rtcpPacket, _mainAllocator, timestamp);
-            rtcpPacket = memory::makePacket(_mainAllocator);
+            rtcpPacket = nullptr;
         }
     }
 

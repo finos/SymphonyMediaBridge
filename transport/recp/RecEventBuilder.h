@@ -71,13 +71,14 @@ RecEventBuilder< TDerived, TEvent, PacketMinSize >::allocateIfNeed()
     if (!_packet)
     {
         _packet = memory::makePacket(_allocator);
-        assert(_packet);
-
-        _packet->setLength(PacketMinSize);
-        header()->empty = 0;
-        header()->event = TEvent;
-        //Clean all bytes after the header
-        std::memset(_packet->get() + REC_HEADER_SIZE, 0, PacketMinSize - REC_HEADER_SIZE);
+        if (_packet)
+        {
+            _packet->setLength(PacketMinSize);
+            header()->empty = 0;
+            header()->event = TEvent;
+            //Clean all bytes after the header
+            std::memset(_packet->get() + REC_HEADER_SIZE, 0, PacketMinSize - REC_HEADER_SIZE);
+        }
     }
 }
 
@@ -102,7 +103,11 @@ template< class TDerived, RecEventType TEvent, ushort PacketMinSize >
 TDerived&
 RecEventBuilder< TDerived, TEvent, PacketMinSize >::setTimestamp(uint32_t utc)
 {
-    getHeader()->timestamp = utc;
+    auto* header = getHeader();
+    if (header)
+    {
+        header->timestamp = utc;
+    }
     return static_cast<TDerived&>(*this);
 }
 
@@ -110,7 +115,12 @@ template< class TDerived, RecEventType TEvent, ushort PacketMinSize >
 TDerived&
 RecEventBuilder< TDerived, TEvent, PacketMinSize >::setSequenceNumber(uint16_t sequenceNumber)
 {
-    getHeader()->sequenceNumber = sequenceNumber;
+    auto* header = getHeader();
+    if (header)
+    {
+        header->sequenceNumber = sequenceNumber;
+    }
+
     return static_cast<TDerived&>(*this);
 }
 

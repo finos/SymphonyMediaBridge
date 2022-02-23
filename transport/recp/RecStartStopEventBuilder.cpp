@@ -52,44 +52,61 @@ uint8_t* getUserIdBuffRef(memory::Packet* packet)
 
 RecStartStopEventBuilder& RecStartStopEventBuilder::setAudioEnabled(bool isAudioEnabled)
 {
-    setFlag(modalityFlags(getPacket()), audioFlag, isAudioEnabled);
+    auto* packet = getPacket();
+    if (packet)
+    {
+        setFlag(modalityFlags(packet), audioFlag, isAudioEnabled);
+    }
+
     return *this;
 }
 
 RecStartStopEventBuilder& RecStartStopEventBuilder::setVideoEnabled(bool isVideoEnabled)
 {
-    setFlag(modalityFlags(getPacket()), videoFlag, isVideoEnabled);
+    auto* packet = getPacket();
+    if (packet)
+    {
+        setFlag(modalityFlags(packet), videoFlag, isVideoEnabled);
+    }
+
     return *this;
 }
 
 RecStartStopEventBuilder& RecStartStopEventBuilder::setRecordingId(const std::string& recordingId)
 {
     auto packet = getPacket();
-    getRecordingIdSizeRef(packet) = recordingId.size();
-    auto userIdSize = getUserIdSizeRef(packet);
-    size_t packetLength = MIN_START_STOP_SIZE + recordingId.size();
-    if (userIdSize > 0)
+    if (packet)
     {
-        packetLength += userIdSize;
-        packet->setLength(packetLength);
-        // getRecordingIdBuffRef will actually contain the userIdBuff
-        std::memmove(getUserIdBuffRef(packet), getRecordingIdBuffRef(packet), userIdSize);
-    }
-    else
-    {
-        packet->setLength(packetLength);
+        getRecordingIdSizeRef(packet) = recordingId.size();
+        auto userIdSize = getUserIdSizeRef(packet);
+        size_t packetLength = MIN_START_STOP_SIZE + recordingId.size();
+        if (userIdSize > 0)
+        {
+            packetLength += userIdSize;
+            packet->setLength(packetLength);
+            // getRecordingIdBuffRef will actually contain the userIdBuff
+            std::memmove(getUserIdBuffRef(packet), getRecordingIdBuffRef(packet), userIdSize);
+        }
+        else
+        {
+            packet->setLength(packetLength);
+        }
+
+        std::memcpy(getRecordingIdBuffRef(packet), recordingId.c_str(), recordingId.size());
     }
 
-    std::memcpy(getRecordingIdBuffRef(packet), recordingId.c_str(), recordingId.size());
     return *this;
 }
 
 RecStartStopEventBuilder& RecStartStopEventBuilder::setUserId(const std::string& userId)
 {
     auto packet = getPacket();
-    getUserIdSizeRef(packet) = userId.size();
+    if (packet)
+    {
+        getUserIdSizeRef(packet) = userId.size();
+        packet->setLength(MIN_START_STOP_SIZE + getRecordingIdSizeRef(packet) + userId.size());
+        std::memcpy(getUserIdBuffRef(packet), userId.c_str(), userId.size());
+    }
 
-    packet->setLength(MIN_START_STOP_SIZE + getRecordingIdSizeRef(packet) + userId.size());
-    std::memcpy(getUserIdBuffRef(packet), userId.c_str(), userId.size());
     return *this;
 }

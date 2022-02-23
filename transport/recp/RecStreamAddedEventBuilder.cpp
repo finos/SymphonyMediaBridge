@@ -47,22 +47,26 @@ RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setBridgeCodecNumber(uin
 RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setEndpoint(const std::string& endpoint)
 {
     assert(std::numeric_limits<uint16_t>::max() >= endpoint.size());
-    auto packet = getPacket();
-    const uint16_t oldSize = castPacket(packet)->endpointLen.get();
-    const uint16_t oldEndPos = RecStreamAddedEventBuilder::MinSize + oldSize;
-    const uint16_t newEndPos = RecStreamAddedEventBuilder::MinSize + static_cast<uint16_t>(endpoint.size());
-    const size_t oldEndPosPlusPadding = (oldEndPos + 3u) & ~3u;
-    const size_t newEndPosPlusPadding = (newEndPos + 3u) & ~3u;
-    const size_t bytesAfterEndpoint = packet->getLength() - std::min(oldEndPosPlusPadding, packet->getLength());
+    auto* packet = getPacket();
+    if (packet)
+    {
+        const uint16_t oldSize = castPacket(packet)->endpointLen.get();
+        const uint16_t oldEndPos = RecStreamAddedEventBuilder::MinSize + oldSize;
+        const uint16_t newEndPos = RecStreamAddedEventBuilder::MinSize + static_cast<uint16_t>(endpoint.size());
+        const size_t oldEndPosPlusPadding = (oldEndPos + 3u) & ~3u;
+        const size_t newEndPosPlusPadding = (newEndPos + 3u) & ~3u;
+        const size_t bytesAfterEndpoint = packet->getLength() - std::min(oldEndPosPlusPadding, packet->getLength());
 
-    // Move the fields after the endpoint size to the right position
-    std::memmove(packet->get() + newEndPosPlusPadding, packet->get() + oldEndPosPlusPadding, bytesAfterEndpoint);
-    // clean new padding (We will add always a padding to 32 to 32bits even if we don't have bytes after endpoint)
-    std::memset(packet->get() + newEndPos, 0, newEndPosPlusPadding - newEndPos);
-    packet->setLength(newEndPosPlusPadding + bytesAfterEndpoint);
+        // Move the fields after the endpoint size to the right position
+        std::memmove(packet->get() + newEndPosPlusPadding, packet->get() + oldEndPosPlusPadding, bytesAfterEndpoint);
+        // clean new padding (We will add always a padding to 32 to 32bits even if we don't have bytes after endpoint)
+        std::memset(packet->get() + newEndPos, 0, newEndPosPlusPadding - newEndPos);
+        packet->setLength(newEndPosPlusPadding + bytesAfterEndpoint);
 
-    castPacket(packet)->endpointLen = static_cast<uint16_t>(endpoint.size());
-    std::memcpy(getEndpointBuffRef(packet), endpoint.c_str(), endpoint.size());
+        castPacket(packet)->endpointLen = static_cast<uint16_t>(endpoint.size());
+        std::memcpy(getEndpointBuffRef(packet), endpoint.c_str(), endpoint.size());
+    }
+
     return *this;
 }
 
@@ -72,13 +76,17 @@ RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setWallClock(std::chrono
     // not used in the 1st protocol version. To ensure retro compatibility it was added after endpoint string,
     // which has a dynamic size, and the use of this property should be considered optional
 
-    const uint32_t endpointEndPos = RecStreamAddedEventBuilder::MinSize + castPacket(getPacket())->endpointLen;
-    // Wall clock position must be 32 bits aligned (we don't need to clean the padding, padding should be inserted and
-    // cleaned by setEndpoint() method)
-    const uint32_t wallClockPosition = endpointEndPos + 3u & ~3u;
-    const nwuint64_t ntpTimestamp(utils::Time::toNtp(wallClock));
-    auto packet = getPacket();
-    packet->setLength(wallClockPosition + sizeof(nwuint64_t));
-    std::memcpy(packet->get() + wallClockPosition, &ntpTimestamp, sizeof(ntpTimestamp));
+    auto* packet = getPacket();
+    if (packet)
+    {
+        const uint32_t endpointEndPos = RecStreamAddedEventBuilder::MinSize + castPacket(packet)->endpointLen;
+        // Wall clock position must be 32 bits aligned (we don't need to clean the padding, padding should be inserted and
+        // cleaned by setEndpoint() method)
+        const uint32_t wallClockPosition = endpointEndPos + 3u & ~3u;
+        const nwuint64_t ntpTimestamp(utils::Time::toNtp(wallClock));
+        packet->setLength(wallClockPosition + sizeof(nwuint64_t));
+        std::memcpy(packet->get() + wallClockPosition, &ntpTimestamp, sizeof(ntpTimestamp));
+    }
+
     return *this;
 }

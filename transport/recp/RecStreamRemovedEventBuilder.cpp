@@ -15,6 +15,11 @@ nwuint32_t& getSsrcRef(memory::Packet* packet)
 
 RecStreamRemovedEventBuilder& RecStreamRemovedEventBuilder::setSsrc(uint32_t ssrc)
 {
-    getSsrcRef(getPacket()) = ssrc;
+    auto packet = getPacket();
+    if (packet)
+    {
+        getSsrcRef(getPacket()) = ssrc;
+    }
+
     return *this;
 }
