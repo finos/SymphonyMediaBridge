@@ -16,8 +16,6 @@ struct EngineRecordingStream
         bool isAudioEnabled,
         bool isVideoEnabled,
         bool isScreenSharingEnabled,
-        jobmanager::JobManager& jobManager,
-        std::atomic_uint32_t& jobsCounter,
         PacketCache& recordingEventPacketCache)
         : _id(id),
           _endpointIdHash(endpointIdHash),
@@ -28,8 +26,6 @@ struct EngineRecordingStream
           _isReady(false),
           _ssrcOutboundContexts(1024),
           _recordingEventsOutboundContext(recordingEventPacketCache),
-          _jobQueue(jobManager),
-          _jobsCounter(jobsCounter),
           _recEventUnackedPacketsTracker(2)
     {
     }
@@ -44,9 +40,6 @@ struct EngineRecordingStream
 
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> _ssrcOutboundContexts;
     RecordingOutboundContext _recordingEventsOutboundContext;
-
-    jobmanager::JobQueue _jobQueue;
-    std::atomic_uint32_t& _jobsCounter;
 
     // missing packet trackers per transport peer
     concurrency::MpmcHashmap32<size_t, UnackedPacketsTracker&> _recEventUnackedPacketsTracker;

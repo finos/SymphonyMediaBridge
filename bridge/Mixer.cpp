@@ -1705,7 +1705,7 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
             streamEntry =
                 _recordingStreams
                     .emplace(conferenceId,
-                        std::make_unique<RecordingStream>(conferenceId, std::make_unique<std::atomic_uint32_t>(0)))
+                        std::make_unique<RecordingStream>(conferenceId))
                     .first;
         }
 
@@ -1736,8 +1736,6 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
                     isAudioEnabled,
                     isVideoEnabled,
                     isScreenSharingEnabled,
-                    _engineMixer.getJobManager(),
-                    *stream->_jobsCounter,
                     *recEventPacketCache));
             _recordingEventPacketCache.emplace(stream->_endpointIdHash, std::move(recEventPacketCache));
 
@@ -1999,7 +1997,7 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
                           "deletion anyway.",
                 _loggableId.c_str(),
                 stream->_id.c_str(),
-                stream->_jobsCounter->load());
+                transportEntry.second->getJobCounter().load());
         }
     }
 

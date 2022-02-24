@@ -648,8 +648,7 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
                           .setUserId(desc->_ownerId)
                           .build();
 
-        stream->_jobQueue.addJob<RecordingSendEventJob>(stream->_jobsCounter,
-            packet,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
             transportEntry.second,
             stream->_recordingEventsOutboundContext._packetCache,
@@ -682,8 +681,7 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
                           .setUserId(desc->_ownerId)
                           .build();
 
-        stream->_jobQueue.addJob<RecordingSendEventJob>(stream->_jobsCounter,
-            packet,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
             transportEntry.second,
             stream->_recordingEventsOutboundContext._packetCache,
@@ -1499,7 +1497,7 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
             return;
         }
 
-        stream->_jobQueue.addJob<RecordingEventAckReceiveJob>(packet,
+        sender->getJobQueue().addJob<RecordingEventAckReceiveJob>(packet,
             receiveAllocator,
             sender,
             unackedPacketsTrackerItr->second);
@@ -1514,7 +1512,7 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
             return;
         }
 
-        stream->_jobQueue.addJob<RecordingRtpNackReceiveJob>(packet, receiveAllocator, sender, *ssrcContext);
+        sender->getJobQueue().addJob<RecordingRtpNackReceiveJob>(packet, receiveAllocator, sender, *ssrcContext);
     }
 }
 
@@ -1956,7 +1954,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
 
                 ssrcOutboundContext->onRtpSent(timestamp);
-                if (!recordingStream->_jobQueue.addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
+                if (!transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
                         packet,
                         transportEntry.second,
                         packetInfo._extendedSequenceNumber))
@@ -2771,8 +2769,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
                           .setDominantSpeakerEndpoint(dominantSpeakerEndpoint)
                           .build();
 
-        recordingStream._jobQueue.addJob<RecordingSendEventJob>(recordingStream._jobsCounter,
-            packet,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
             transportEntry.second,
             recordingStream._recordingEventsOutboundContext._packetCache,
@@ -2953,8 +2950,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             }
         }
 
-        targetStream._jobQueue.addJob<RecordingSendEventJob>(targetStream._jobsCounter,
-            packet,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
             transportEntry.second,
             targetStream._recordingEventsOutboundContext._packetCache,
@@ -3081,8 +3077,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             }
         }
 
-        targetStream._jobQueue.addJob<RecordingSendEventJob>(targetStream._jobsCounter,
-            packet,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
             transportEntry.second,
             targetStream._recordingEventsOutboundContext._packetCache,

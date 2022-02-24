@@ -21,8 +21,7 @@ class SsrcInboundContext;
 class RecordingSendEventJob : public jobmanager::CountedJob
 {
 public:
-    RecordingSendEventJob(std::atomic_uint32_t& ownerJobsCounter,
-        memory::Packet* packet,
+    RecordingSendEventJob(memory::Packet* packet,
         memory::PacketPoolAllocator& allocator,
         transport::RecordingTransport& transport,
         PacketCache& recEventPacketCache,

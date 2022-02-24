@@ -11,40 +11,6 @@
 namespace transport
 {
 
-class RecSendJob : public jobmanager::CountedJob
-{
-public:
-    RecSendJob(RecordingTransport& transport,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& sendAllocator,
-        std::atomic_uint32_t& ownerCount)
-        : CountedJob(ownerCount),
-          _transport(transport),
-          _packet(packet),
-          _sendAllocator(sendAllocator)
-    {
-    }
-
-    ~RecSendJob() override
-    {
-        if (_packet)
-        {
-            _sendAllocator.free(_packet);
-        }
-    }
-
-    void run() override
-    {
-        _transport.doProtectAndSend(_packet, _sendAllocator);
-        _packet = nullptr;
-    }
-
-private:
-    RecordingTransport& _transport;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _sendAllocator;
-};
-
 // Placed last in queue during shutdown to reduce ref count when all jobs are complete.
 // This means other jobs in the transport job queue do not have to have counters
 class ShutdownJob : public jobmanager::CountedJob
@@ -142,7 +108,13 @@ void RecordingTransport::stop()
 
 void RecordingTransport::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
 {
-    _jobQueue.addJob<RecSendJob>(*this, packet, sendAllocator, _jobCounter);
+    if (!isConnected())
+    {
+        sendAllocator.free(packet);
+        return;
+    }
+
+    protectAndSend(packet, _peerPort, _recordingEndpoint, sendAllocator);
 }
 
 void RecordingTransport::protectAndSend(memory::Packet* packet,
@@ -247,17 +219,6 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
     }
 }
 
-// call from ssrc context to ensure concurrent execution with other streams but serialized for this stream
-void RecordingTransport::doProtectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
-{
-    if (!isConnected())
-    {
-        sendAllocator.free(packet);
-        return;
-    }
-    protectAndSend(packet, _peerPort, _recordingEndpoint, sendAllocator);
-}
-
 bool RecordingTransport::unprotect(memory::Packet* packet)
 {
     // TODO implement payload decryption
@@ -331,7 +292,7 @@ void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendA
         const size_t remaining = _config.recordingRtcp.mtu - rtcpPacket->getLength();
         if (remaining < MINIMUM_SR + sizeof(rtp::ReportBlock))
         {
-            doProtectAndSend(rtcpPacket, sendAllocator);
+            protectAndSend(rtcpPacket, sendAllocator);
             _rtcp.lastSendTime = timestamp;
             rtcpPacket = memory::makePacket(sendAllocator);
             if (!rtcpPacket)
@@ -355,7 +316,7 @@ void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendA
 
     if (rtcpPacket->getLength() > 0)
     {
-        doProtectAndSend(rtcpPacket, sendAllocator);
+        protectAndSend(rtcpPacket, sendAllocator);
         _rtcp.lastSendTime = timestamp;
     }
     else

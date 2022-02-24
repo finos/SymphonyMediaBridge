@@ -5,13 +5,12 @@
 namespace bridge
 {
 
-RecordingSendEventJob::RecordingSendEventJob(std::atomic_uint32_t& ownerJobsCounter,
-    memory::Packet* packet,
+RecordingSendEventJob::RecordingSendEventJob(memory::Packet* packet,
     memory::PacketPoolAllocator& allocator,
     transport::RecordingTransport& transport,
     PacketCache& recEventPacketCache,
     UnackedPacketsTracker& unackedPacketsTracker)
-    : CountedJob(ownerJobsCounter),
+    : CountedJob(transport.getJobCounter()),
       _packet(packet),
       _allocator(allocator),
       _transport(transport),
