@@ -21,12 +21,13 @@ RecDominantSpeakerEventBuilder& RecDominantSpeakerEventBuilder::setDominantSpeak
 {
     assert(std::numeric_limits<uint16_t>::max() >= endpoint.size());
     auto* packet = getPacket();
-    if (packet)
+    if (!packet)
     {
-        packet->setLength(MIN_DOMINANT_SPEAKER_SIZE + endpoint.size());
-        getEndpointLenRef(packet) = static_cast<uint16_t>(endpoint.size());
-        std::memcpy(getEndpointBuffRef(packet), endpoint.c_str(), endpoint.size());
+        return *this;
     }
 
+    packet->setLength(MIN_DOMINANT_SPEAKER_SIZE + endpoint.size());
+    getEndpointLenRef(packet) = static_cast<uint16_t>(endpoint.size());
+    std::memcpy(getEndpointBuffRef(packet), endpoint.c_str(), endpoint.size());
     return *this;
 }
