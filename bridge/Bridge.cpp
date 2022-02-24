@@ -58,8 +58,8 @@ Bridge::Bridge(const config::Config& config)
       _jobManager(std::make_unique<jobmanager::JobManager>()),
       _sslDtls(std::make_unique<transport::SslDtls>()),
       _network(transport::createRtcePoll()),
-      _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(16 * 1024, "main")),
-      _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(64 * 1024, "send")),
+      _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(32 * 1024, "main")),
+      _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(128 * 1024, "send")),
       _audioPacketAllocator(std::make_unique<memory::AudioPacketPoolAllocator>(4 * 1024, "audio")),
       _engine(std::make_unique<bridge::Engine>())
 {
