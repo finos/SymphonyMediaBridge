@@ -122,8 +122,9 @@ PacketCounters RtpReceiveState::getCounters() const
 {
     PacketCounters counters;
     _counters.read(counters);
-    counters.bitrateKbps = counters.octets * 8 * counters.period / utils::Time::ms;
-    counters.packetsPerSecond = counters.getPacketsReceived() * counters.period / utils::Time::sec;
+    counters.bitrateKbps = counters.octets * 8 * utils::Time::ms / std::max(utils::Time::ms * 10, counters.period);
+    counters.packetsPerSecond =
+        counters.getPacketsReceived() * utils::Time::sec / std::max(utils::Time::ms * 10, counters.period);
     return counters;
 }
 

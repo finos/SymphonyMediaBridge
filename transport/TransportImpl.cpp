@@ -1700,8 +1700,9 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
     while (receiverReportCount > 0 || (rembReady && !rembAdded))
     {
-        if (rtcpPacket && rtcpPacket->getLength() + MINIMUM_RR + std::min(4u, receiverReportCount) * sizeof(rtp::ReportBlock) >
-            _config.mtu)
+        if (rtcpPacket &&
+            rtcpPacket->getLength() + MINIMUM_RR + std::min(4u, receiverReportCount) * sizeof(rtp::ReportBlock) >
+                _config.mtu)
         {
             sendRtcp(rtcpPacket, _mainAllocator, timestamp);
             rtcpPacket = nullptr;
@@ -1860,7 +1861,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
             auto rtpStateIt = _outboundSsrcCounters.find(ssrc);
             if (rtpStateIt != _outboundSsrcCounters.end())
             {
-                rtpStateIt->second.onRtcpSent(timestamp, &header);
+                rtpStateIt->second.onRtcpSent(timestamp, &header, rtcpPacket.getLength());
             }
             const auto* senderReport = rtp::RtcpSenderReport::fromPtr(&header, remainingBytes);
             if (senderReport && _config.rctl.enable)
