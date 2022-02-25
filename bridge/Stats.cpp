@@ -118,6 +118,12 @@ std::string MixerManagerStats::describe()
     result["loss_upload"] = _engineStats.activeMixers.outbound.total().getSendLossRatio();
     result["loss_download"] = _engineStats.activeMixers.inbound.total().getReceiveLossRatio();
 
+    result["pacing_queue"] = _engineStats.activeMixers.pacingQueue;
+    result["rtx_pacing_queue"] = _engineStats.activeMixers.rtxPacingQueue;
+
+    result["shared_udp_rx_queue"] = _udpSharedEndpointsRxQueue;
+    result["shared_udp_tx_queue"] = _udpSharedEndpointsTxQueue;
+
     result["send_pool"] = _sendPoolSize;
     result["receive_pool"] = _receivePoolSize;
 

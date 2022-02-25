@@ -1402,6 +1402,16 @@ uint32_t TransportImpl::getDownlinkEstimateKbps() const
     return _inboundMetrics.estimatedKbps;
 }
 
+uint32_t TransportImpl::getPacingQueueCount() const
+{
+    return _pacingQueue.size();
+}
+
+uint32_t TransportImpl::getRtxPacingQueueCount() const
+{
+    return _rtxPacingQueue.size();
+}
+
 void TransportImpl::doProtectAndSend(uint64_t timestamp,
     memory::Packet* packet,
     const SocketAddress& target,

@@ -688,9 +688,13 @@ Stats::MixerManagerStats MixerManager::getStats()
         result._systemStats = systemStats;
     }
 
+    EndpointMetrics udpMetrics = _transportFactory.getSharedUdpEndpointsMetrics();
+
     result._jobQueueLength = _jobManager.getCount();
     result._receivePoolSize = _mainAllocator.size();
     result._sendPoolSize = _sendAllocator.size();
+    result._udpSharedEndpointsRxQueue = udpMetrics.rxQueue;
+    result._udpSharedEndpointsTxQueue = udpMetrics.txQueue;
 
     return result;
 }

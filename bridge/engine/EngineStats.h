@@ -30,6 +30,9 @@ struct MixerStats
     MediaStats inbound;
     MediaStats outbound;
 
+    uint32_t pacingQueue = 0;
+    uint32_t rtxPacingQueue = 0;
+
     MixerStats& operator+=(const MixerStats& b)
     {
         audioInQueueSamples += b.audioInQueueSamples;
@@ -43,6 +46,10 @@ struct MixerStats
 
         inbound.transport += b.inbound.transport;
         outbound.transport += b.outbound.transport;
+
+        pacingQueue += b.pacingQueue;
+        rtxPacingQueue += b.rtxPacingQueue;
+
         return *this;
     }
 

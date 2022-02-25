@@ -51,6 +51,8 @@ public:
     void connect() override {}
     void runTick(uint64_t timestamp) override {}
     jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
+    uint32_t getPacingQueueCount() const override { return 0; }
+    uint32_t getRtxPacingQueueCount() const override { return 0; }
     uint32_t getSenderLossCount() const override { return 0; }
     uint32_t getUplinkEstimateKbps() const override { return 0; }
     uint32_t getDownlinkEstimateKbps() const override { return 0; }
@@ -75,6 +77,7 @@ public:
     {
         return transport::PacketCounters();
     }
+
     void getReportSummary(std::unordered_map<uint32_t, transport::ReportSummary>& outReportSummary) const override {}
 
     bool sendSctp(uint16_t streamId, uint32_t protocolId, const void* data, uint16_t length) override { return true; }

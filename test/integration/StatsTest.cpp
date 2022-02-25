@@ -44,6 +44,8 @@ TEST_F(StatsTest, initialStatsTest)
     EXPECT_EQ(value.outgoingBitRate, 0);
     EXPECT_EQ(value.outgoingPacketsRate, 0);
     EXPECT_EQ(value.engine.timeSlipCount, 0);
+    EXPECT_EQ(value.engine.activeMixers.pacingQueue, 0);
+    EXPECT_EQ(value.engine.activeMixers.rtxPacingQueue, 0);
 }
 
 TEST_F(StatsTest, statsWithRunningMixers)

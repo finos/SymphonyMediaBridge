@@ -1,6 +1,7 @@
 #pragma once
 #include "ice/IceSession.h"
 #include "memory/PacketPoolAllocator.h"
+#include "transport/EndpointMetrics.h"
 #include <functional>
 
 namespace transport
@@ -72,6 +73,8 @@ public:
 
     virtual const char* getName() const = 0;
     virtual State getState() const = 0;
+
+    virtual EndpointMetrics getMetrics() const = 0;
 };
 
 class ServerEndpoint

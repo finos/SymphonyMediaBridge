@@ -1156,6 +1156,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
         {
             const auto videoRecvCounters = videoStreamEntry.second->_transport.getVideoReceiveCounters(idleTimestamp);
             const auto videoSendCounters = videoStreamEntry.second->_transport.getVideoSendCounters(idleTimestamp);
+            const auto pacingQueueCount = videoStreamEntry.second->_transport.getPacingQueueCount();
+            const auto rtxPacingQueueCount = videoStreamEntry.second->_transport.getRtxPacingQueueCount();
 
             stats.inbound.video += videoRecvCounters;
             stats.outbound.video += videoSendCounters;
@@ -1163,6 +1165,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
             stats.inbound.transport.addRttGroup(videoStreamEntry.second->_transport.getRtt() / utils::Time::ms);
             stats.inbound.transport.addLossGroup(videoRecvCounters.getReceiveLossRatio());
             stats.outbound.transport.addLossGroup(videoSendCounters.getSendLossRatio());
+            stats.pacingQueue += pacingQueueCount;
+            stats.rtxPacingQueue += rtxPacingQueueCount;
         }
     }
 

@@ -52,6 +52,8 @@ struct MixerManagerStats
 
     uint32_t _receivePoolSize = 0;
     uint32_t _sendPoolSize = 0;
+    uint32_t _udpSharedEndpointsRxQueue;
+    uint32_t _udpSharedEndpointsTxQueue;
 
     MixerManagerStats() {}
 
