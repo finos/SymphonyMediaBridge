@@ -454,7 +454,7 @@ TEST(TransportStats, packetLoss)
     EXPECT_EQ(snapshot.lostPackets, 5);
     EXPECT_EQ(snapshot.getReceiveLossRatio(), 0.1);
     EXPECT_EQ(snapshot.packetsPerSecond, 45);
-    EXPECT_EQ(snapshot.bitrateKbps, 67);
+    EXPECT_EQ(snapshot.bitrateKbps, 72);
 }
 
 TEST(TransportStats, outboundLoss)
