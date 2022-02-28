@@ -67,7 +67,6 @@ private:
         uint64_t reportInterval;
     };
 
-    void doProtectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator);
     uint32_t getRolloverCounter(uint32_t ssrc, uint16_t sequenceNumber);
 
     void sendRtcpSenderReport(memory::PacketPoolAllocator& sendAllocator, uint64_t timestamp);

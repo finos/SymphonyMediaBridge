@@ -13,10 +13,9 @@ namespace bridge
 
 struct RecordingStream
 {
-    RecordingStream(const std::string& id, std::unique_ptr<std::atomic_uint32_t> jobsCounter)
+    RecordingStream(const std::string& id)
         : _id(id),
           _endpointIdHash(std::hash<std::string>{}(id)),
-          _jobsCounter(std::move(jobsCounter)),
           _audioActiveRecCount(0),
           _videoActiveRecCount(0),
           _screenSharingActiveRecCount(0),
@@ -28,7 +27,6 @@ struct RecordingStream
     size_t _endpointIdHash;
     std::unordered_map<size_t, std::unique_ptr<transport::RecordingTransport>> _transports;
     std::unordered_map<size_t, std::unique_ptr<bridge::UnackedPacketsTracker>> _recEventUnackedPacketsTracker;
-    std::unique_ptr<std::atomic_uint32_t> _jobsCounter;
 
     uint16_t _audioActiveRecCount;
     uint16_t _videoActiveRecCount;
