@@ -130,6 +130,19 @@ node('be-integration') {
             }
         }
 
+        if (env.GIT_BRANCH.equals("master")) {
+            withGitCredentials('jenkins-github-rtc') {
+                dir ("rtc-media-bridge") {
+                    git url: "https://github.com/SymphonyOSF/rtc-media-bridge/", credentialsId: "jenkins-github-rtc", branch: "master"
+                    def versionFilePath = "tools/scripts/get-smb-deps.sh"
+                    sh "sed -i 's/^SMB_VERSION=.*\$/SMB_VERSION=${version}/g' ${versionFilePath}"
+                    sh "git add ${versionFilePath}"
+                    sh "git commit -m \"Automatic update of smb to '${version}'\""
+                    sh "git push origin HEAD:master"
+                }
+            }
+        }
+
     } finally {
         stage('Cleanup') {
             cleanWs()

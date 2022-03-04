@@ -34,17 +34,10 @@ set(THREADS_PREFER_PTHREAD_FLAG TRUE)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
-find_package(Threads REQUIRED)
-find_package(OpenSSL REQUIRED)
-find_package(Srtp2 REQUIRED)
-find_package(Opus REQUIRED)
-find_package(LibMicrohttpd REQUIRED)
-
-include_directories(.)
-include_directories(external)
-
 if(APPLE)
     message("MACOS detected")
+    execute_process(COMMAND brew --prefix OUTPUT_VARIABLE BREW_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set(OPENSSL_ROOT_DIR "${BREW_PREFIX}/opt/openssl@1.1") 
 elseif(UNIX)
     message("UNIX detected")
     set(CMAKE_INSTALL_RPATH "./libs")
@@ -54,6 +47,14 @@ else()
     message(FATAL_ERROR "Building on this platform is not supported.")
 endif()
 
+find_package(Threads REQUIRED)
+find_package(OpenSSL REQUIRED)
+find_package(Srtp2 REQUIRED)
+find_package(Opus REQUIRED)
+find_package(LibMicrohttpd REQUIRED)
+
+include_directories(.)
+include_directories(external)
 
 list(APPEND THIRD_PARTY_LIBS
     OpenSSL::Crypto
