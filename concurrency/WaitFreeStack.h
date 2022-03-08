@@ -4,7 +4,6 @@
 
 namespace concurrency
 {
-class WaitFreeStack;
 // Non copyable base class for items in the stack
 // Due to the nature of wait-free the StackItems put in the list
 // must remain in memory also after being popped from the list.

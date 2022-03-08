@@ -1,10 +1,6 @@
 #include "concurrency/MpmcHashmap.h"
-#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
-#include "transport/Endpoint.h"
-#include "transport/RtcSocket.h"
-#include "transport/RtcePoll.h"
-#include "transport/UdpEndpoint.h"
+#include "transport/BaseUdpEndpoint.h"
 
 namespace transport
 {

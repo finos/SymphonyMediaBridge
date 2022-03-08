@@ -1,35 +1,25 @@
 #pragma once
 
-#include "bwe/BandwidthEstimator.h"
 #include "bwe/RateController.h"
 #include "concurrency/MpmcHashmap.h"
-#include "config/Config.h"
 #include "dtls/SrtpClient.h"
-#include "dtls/SrtpClientFactory.h"
-#include "dtls/SslDtls.h"
 #include "dtls/SslWriteBioListener.h"
 #include "ice/IceSession.h"
 #include "logger/Logger.h"
-#include "rtp/RtpHeader.h"
 #include "rtp/SendTimeDial.h"
 #include "sctp/SctpAssociation.h"
-#include "sctp/SctpConfig.h"
 #include "sctp/SctpServerPort.h"
-#include "transport/RtcSocket.h"
+#include "transport/Endpoint.h"
 #include "transport/RtcTransport.h"
-#include "transport/RtcePoll.h"
 #include "transport/RtpReceiveState.h"
 #include "transport/RtpSenderState.h"
-#include "transport/UdpEndpoint.h"
-#include "utils/ScopedIncrement.h"
+#include "utils/Optional.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
 #include <cstdint>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <thread>
-#include <unordered_set>
 #include <utility>
 
 namespace logger
@@ -45,7 +35,6 @@ struct Config;
 
 namespace sctp
 {
-class SctpServerPort;
 struct SctpConfig;
 } // namespace sctp
 

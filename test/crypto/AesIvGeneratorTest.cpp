@@ -1,5 +1,6 @@
 #include "crypto/AesGcmIvGenerator.h"
 #include "crypto/SslHelper.h"
+#include "transport/recp/RecHeader.h"
 #include "utils/Base64.h"
 #include <gtest/gtest.h>
 

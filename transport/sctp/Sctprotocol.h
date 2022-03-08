@@ -3,10 +3,6 @@
 #include "utils/ByteOrder.h"
 #include "utils/TlvIterator.h"
 
-namespace crypto
-{
-class HMAC;
-};
 namespace sctp
 {
 
@@ -367,7 +363,6 @@ struct AckRange
     uint32_t end;
 };
 
-class SackBuilder;
 // When building sack you have to
 // set cumulativeAck
 // add acks

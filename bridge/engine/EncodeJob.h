@@ -1,21 +1,11 @@
 #pragma once
 
-#include "concurrency/MpmcHashmap.h"
 #include "jobmanager/Job.h"
 #include "memory/AudioPacketPoolAllocator.h"
-#include "memory/PacketPoolAllocator.h"
-#include <atomic>
-#include <cstdint>
-#include <memory>
 
 namespace transport
 {
 class Transport;
-}
-
-namespace memory
-{
-class Packet;
 }
 
 namespace bridge

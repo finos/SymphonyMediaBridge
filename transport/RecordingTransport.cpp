@@ -3,6 +3,8 @@
 #include "codec/Vp8.h"
 #include "config/Config.h"
 #include "rtp/RtcpHeader.h"
+#include "rtp/RtpHeader.h"
+#include "transport/DataReceiver.h"
 #include "transport/RtpSenderState.h"
 #include "transport/recp/RecControlHeader.h"
 #include "transport/recp/RecStreamAddedEvent.h"

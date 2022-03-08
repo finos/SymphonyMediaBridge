@@ -1,8 +1,6 @@
 #pragma once
 
 #include "jobmanager/Job.h"
-#include "memory/PacketPoolAllocator.h"
-#include <memory>
 
 namespace memory
 {
@@ -11,7 +9,6 @@ class Packet;
 
 namespace transport
 {
-class SrtpClient;
 class Transport;
 
 } // namespace transport

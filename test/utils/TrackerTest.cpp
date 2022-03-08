@@ -1,4 +1,3 @@
-#include "logger/Logger.h"
 #include "utils/Trackers.h"
 #include <gtest/gtest.h>
 TEST(Trackers, RateTrackerTest)

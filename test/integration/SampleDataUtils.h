@@ -1,12 +1,13 @@
 #pragma once
 
-#include "bridge/RtpMap.h"
-#include "memory/Packet.h"
-#include "utils/Optional.h"
 #include <complex>
-#include <string>
 #include <valarray>
 #include <vector>
+
+namespace memory
+{
+class Packet;
+} // namespace memory
 
 class SampleDataUtils
 {

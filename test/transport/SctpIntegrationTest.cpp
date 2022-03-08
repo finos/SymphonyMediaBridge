@@ -1,11 +1,9 @@
 
 #include "jobmanager/WorkerThread.h"
-#include "test/macros.h"
 #include "test/transport/TransportIntegrationTest.h"
-#include "transport/RtcSocket.h"
-#include "transport/RtcePoll.h"
+#include "transport/RtcTransport.h"
 #include "transport/TransportFactory.h"
-#include "transport/dtls/SrtpClientFactory.h"
+#include "webrtc/DataChannel.h"
 #include "webrtc/WebRtcDataStream.h"
 #include "gmock/gmock-matchers.h"
 #include <cstdint>

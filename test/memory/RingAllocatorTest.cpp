@@ -1,5 +1,4 @@
 #include "memory/RingAllocator.h"
-#include "logger/Logger.h"
 #include <gtest/gtest.h>
 #include <list>
 

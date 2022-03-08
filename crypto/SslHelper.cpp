@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <cstring>
-#include <openssl/aes.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 

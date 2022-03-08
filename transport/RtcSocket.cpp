@@ -1,7 +1,5 @@
 #include "RtcSocket.h"
 
-#include "logger/Logger.h"
-#include "utils/StdExtensions.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <ifaddrs.h>

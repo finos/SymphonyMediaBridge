@@ -8,7 +8,6 @@
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RtcTransport.h"
-#include "utils/CheckedCast.h"
 
 namespace bridge
 {

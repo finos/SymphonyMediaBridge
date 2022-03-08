@@ -1,15 +1,9 @@
 #pragma once
 #include "jobmanager/Job.h"
-#include "utils/SocketAddress.h"
 namespace jobmanager
 {
-class JobManager;
 class JobQueue;
 } // namespace jobmanager
-namespace memory
-{
-class Packet;
-}
 
 namespace ice
 {

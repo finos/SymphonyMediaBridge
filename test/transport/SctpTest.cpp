@@ -4,7 +4,6 @@
 #include "jobmanager/WorkerThread.h"
 #include "logger/Logger.h"
 #include "memory/Packet.h"
-#include "test/macros.h"
 #include "test/transport/SendJob.h"
 #include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
@@ -17,7 +16,6 @@
 #include "webrtc/DataChannel.h"
 #include <cstdint>
 #include <gtest/gtest.h>
-#include <iterator>
 #include <memory>
 #include <thread>
 #include <unistd.h>

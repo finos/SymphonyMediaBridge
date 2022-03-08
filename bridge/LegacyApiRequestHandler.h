@@ -1,11 +1,13 @@
 #pragma once
 
-#include "api/Recording.h"
 #include "httpd/HttpRequestHandler.h"
 #include <atomic>
 #include <cstdint>
-#include <memory>
-#include <string>
+
+namespace api
+{
+struct Recording;
+} // namespace api
 
 namespace legacyapi
 {
@@ -20,20 +22,11 @@ namespace transport
 class SslDtls;
 }
 
-namespace utils
-{
-namespace StringTokenizer
-{
-struct Token;
-}
-} // namespace utils
-
 namespace bridge
 {
 
 class Mixer;
 class MixerManager;
-struct StreamDescription;
 class RequestLogger;
 
 class LegacyApiRequestHandler : public httpd::HttpRequestHandler

@@ -1,5 +1,12 @@
 #pragma once
+
+#include "concurrency/MpmcHashmap.h"
 #include "transport/TcpEndpoint.h"
+
+namespace config
+{
+class Config;
+} // namespace config
 
 namespace transport
 {

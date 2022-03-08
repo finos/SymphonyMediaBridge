@@ -8,7 +8,6 @@
 #include <iostream>
 #include <memory>
 #include <signal.h>
-#include <vector>
 
 namespace
 {

@@ -1,6 +1,5 @@
 #include "codec/OpusDecoder.h"
 #include "codec/Opus.h"
-#include "concurrency/ScopedSpinLocker.h"
 #include "utils/CheckedCast.h"
 #include <cassert>
 #include <opus/opus.h>

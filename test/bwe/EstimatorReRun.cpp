@@ -3,14 +3,9 @@
 #include "logger/PacketLogger.h"
 #include "math/Matrix.h"
 #include "memory/PacketPoolAllocator.h"
-#include "rtp/RtpHeader.h"
 #include "rtp/SendTimeDial.h"
 #include "test/CsvWriter.h"
 #include "test/bwe/BwBurstTracker.h"
-#include "test/bwe/FakeAudioSource.h"
-#include "test/bwe/FakeCall.h"
-#include "test/bwe/FakeCrossTraffic.h"
-#include "test/bwe/FakeVideoSource.h"
 #include "test/transport/NetworkLink.h"
 #include <cmath>
 #include <cstring>

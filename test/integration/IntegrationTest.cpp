@@ -10,8 +10,13 @@
 #include "nlohmann/json.hpp"
 #include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/AudioSource.h"
+#include "transport/DataReceiver.h"
+#include "transport/RtcTransport.h"
+#include "transport/RtcePoll.h"
+#include "transport/Transport.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SrtpClientFactory.h"
+#include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
 #include "utils/StringBuilder.h"
 #include <complex>

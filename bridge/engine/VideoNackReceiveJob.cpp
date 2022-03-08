@@ -2,8 +2,6 @@
 #include "bridge/RtpMap.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
-#include "codec/Vp8Header.h"
-#include "logger/Logger.h"
 #include "memory/RefCountedPacket.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RtcTransport.h"

@@ -1,9 +1,7 @@
 #pragma once
 
 #include "IceComponent.h"
-#include "utils/Optional.h"
 #include "utils/SocketAddress.h"
-#include <string>
 
 namespace ice
 {

@@ -1,5 +1,6 @@
 #include "RingAllocator.h"
 
+#include <cassert>
 #include <cstddef>
 #include <sys/mman.h>
 #include <unistd.h>

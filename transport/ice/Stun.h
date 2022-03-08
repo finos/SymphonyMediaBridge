@@ -9,7 +9,6 @@
 
 namespace ice
 {
-struct StunAttribute;
 const size_t MTU = 1280; // rfc states 576B for ipv4 and 1280 for ipv6
 struct StunTransactionId
 {

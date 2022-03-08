@@ -1,6 +1,5 @@
 #include "bridge/engine/PacketCache.h"
 #include "memory/RefCountedPacket.h"
-#include "test/macros.h"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <memory>

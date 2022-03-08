@@ -4,7 +4,6 @@
 
 namespace concurrency
 {
-class LockFreeList;
 // Non copyable base class for items in the list
 // Due to the nature of wait-free the ListItems put in the list
 // must remain in memory also after being popped from the list.

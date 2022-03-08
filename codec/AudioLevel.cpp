@@ -2,7 +2,6 @@
 #include "memory/AudioPacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
 #include <cmath>
-#include <inttypes.h>
 
 namespace codec
 {

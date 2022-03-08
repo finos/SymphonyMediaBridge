@@ -1,7 +1,7 @@
 #pragma once
 
-#include <atomic>
 #include <cstdint>
+#include <stddef.h>
 
 namespace codec
 {

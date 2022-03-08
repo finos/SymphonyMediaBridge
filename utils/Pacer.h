@@ -2,8 +2,6 @@
 
 #include <cassert>
 #include <cstdint>
-#include <cstdio>
-#include <limits>
 
 namespace utils
 {

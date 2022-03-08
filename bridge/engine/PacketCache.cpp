@@ -1,6 +1,5 @@
 #include "bridge/engine/PacketCache.h"
 #include "memory/RefCountedPacket.h"
-#include "utils/ScopedReentrancyBlocker.h"
 
 namespace
 {

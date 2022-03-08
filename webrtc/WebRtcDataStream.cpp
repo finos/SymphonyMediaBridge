@@ -1,6 +1,7 @@
 #include "WebRtcDataStream.h"
 #include "logger/Logger.h"
-#include "transport/Transport.h"
+#include "webrtc/DataChannel.h"
+#include "webrtc/DataStreamTransport.h"
 
 namespace webrtc
 {
@@ -83,7 +84,6 @@ void WebRtcDataStream::onSctpMessage(webrtc::DataStreamTransport* sender,
         }
     }
 }
-
 
 memory::Packet* makePacket(uint16_t streamId,
     uint32_t payloadProtocol,

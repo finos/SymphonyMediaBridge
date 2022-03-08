@@ -2,9 +2,7 @@
 #include "bwe/NetworkQueue.h"
 #include "logger/Logger.h"
 #include "memory/RandomAccessBacklog.h"
-#include "utils/Optional.h"
 #include "utils/Time.h"
-#include <array>
 #include <cstdint>
 
 namespace rtp

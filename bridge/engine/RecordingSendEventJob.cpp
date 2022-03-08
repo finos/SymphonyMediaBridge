@@ -1,4 +1,6 @@
 #include "bridge/engine/RecordingSendEventJob.h"
+#include "bridge/engine/PacketCache.h"
+#include "bridge/engine/UnackedPacketsTracker.h"
 #include "transport/RecordingTransport.h"
 #include "transport/recp/RecHeader.h"
 

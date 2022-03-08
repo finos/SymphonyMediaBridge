@@ -1,16 +1,10 @@
 
 #pragma once
-#include "test/bwe/FakeMedia.h"
 #include "utils/Time.h"
 #include "utils/Trackers.h"
-#include <cassert>
-#include <cstdint>
 #include <gtest/gtest.h>
 #include <inttypes.h>
-#include <memory>
 #include <queue>
-#include <random>
-#include <thread>
 #include <unistd.h>
 
 namespace memory

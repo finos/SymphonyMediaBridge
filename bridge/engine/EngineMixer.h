@@ -1,26 +1,16 @@
 #pragma once
 
-#include "bridge/RecordingDescription.h"
-#include "bridge/engine/EngineAudioStream.h"
-#include "bridge/engine/EngineDataStream.h"
-#include "bridge/engine/EngineMessageListener.h"
-#include "bridge/engine/EngineRecordingStream.h"
 #include "bridge/engine/EngineStats.h"
-#include "bridge/engine/EngineVideoStream.h"
+#include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
-#include "jobmanager/JobQueue.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "memory/RingBuffer.h"
-#include "transport/RecordingTransport.h"
-#include "transport/Transport.h"
-#include "utils/StringBuilder.h"
-#include "webrtc/WebRtcDataStream.h"
+#include "transport/RtcTransport.h"
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <string>
 #include <vector>
 
 namespace config
@@ -40,12 +30,19 @@ class JobManager;
 
 namespace bridge
 {
-class Engine;
 class EngineStreamDirector;
 class ActiveMediaList;
 class PacketCache;
 struct SsrcWhitelist;
 struct RecordingDescription;
+class EngineMessageListener;
+class SsrcOutboundContext;
+class UnackedPacketsTracker;
+struct EngineAudioStream;
+struct EngineDataStream;
+struct EngineRecordingStream;
+struct EngineVideoStream;
+struct SimulcastLevel;
 
 class EngineMixer : public transport::DataReceiver
 {

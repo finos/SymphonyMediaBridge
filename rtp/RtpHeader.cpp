@@ -2,7 +2,6 @@
 #include "logger/Logger.h"
 #include "utils/StringBuilder.h"
 #include "utils/Time.h"
-#include <algorithm>
 
 namespace
 {

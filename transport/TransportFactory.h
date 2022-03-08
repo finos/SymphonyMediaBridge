@@ -1,18 +1,23 @@
 #pragma once
 
 #include "memory/PacketPoolAllocator.h"
-#include "transport/RecordingTransport.h"
-#include "transport/RtcTransport.h"
+#include "transport/ice/IceSession.h"
 #include <memory>
+
+namespace bwe
+{
+struct Config;
+struct RateControllerConfig;
+} // namespace bwe
+
+namespace config
+{
+class Config;
+}
 
 namespace jobmanager
 {
 class JobManager;
-}
-
-namespace ice
-{
-struct IceConfig;
 }
 
 namespace sctp
@@ -24,7 +29,9 @@ namespace transport
 {
 
 class SrtpClientFactory;
+class RecordingTransport;
 class RtcePoll;
+class RtcTransport;
 class SocketAddress;
 
 class TransportFactory

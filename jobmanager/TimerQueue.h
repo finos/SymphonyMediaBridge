@@ -1,7 +1,5 @@
 #pragma once
 #include "concurrency/MpmcQueue.h"
-#include "concurrency/Semaphore.h"
-#include <algorithm>
 #include <thread>
 #include <vector>
 namespace jobmanager

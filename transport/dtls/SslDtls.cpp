@@ -10,7 +10,6 @@
 #include <openssl/ssl.h>
 #include <random>
 #include <srtp2/srtp.h>
-#include <vector>
 
 namespace
 {

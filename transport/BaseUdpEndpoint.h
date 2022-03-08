@@ -1,6 +1,6 @@
 #pragma once
 
-#include "concurrency/MpmcHashmap.h"
+#include "concurrency/MpmcQueue.h"
 #include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/Endpoint.h"

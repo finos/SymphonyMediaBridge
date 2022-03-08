@@ -2,7 +2,6 @@
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/AudioLevel.h"
-#include "codec/Opus.h"
 #include "codec/OpusEncoder.h"
 #include "memory/Packet.h"
 #include "rtp/RtpHeader.h"

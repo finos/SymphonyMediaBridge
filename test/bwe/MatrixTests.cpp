@@ -1,7 +1,5 @@
-#include "logger/Logger.h"
 #include "math/Matrix.h"
 #include <cmath>
-#include <cstring>
 #include <gtest/gtest.h>
 using namespace math;
 TEST(MatrixTest, mul)
