@@ -3,6 +3,8 @@
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
 #include "logger/Logger.h"
+#include "utils/ScopedInvariantChecker.h"
+#include "utils/ScopedReentrancyBlocker.h"
 
 namespace bridge
 {
