@@ -41,4 +41,8 @@ constexpr bool isRecPacket(const void* buffer, const uint32_t length)
     return length >= REC_HEADER_SIZE && reinterpret_cast<const uint8_t*>(buffer)[0] == 0x00;
 }
 
+inline bool isRecPacket(const memory::Packet& packet) {
+    return isRecPacket(packet.get(), packet.getLength());
+}
+
 } // namespace recp
