@@ -44,6 +44,8 @@ struct MixerManagerStats
 {
     SystemStats _systemStats;
     uint32_t _conferences = 0;
+    uint32_t _deletingConferences = 0;
+    uint32_t _engineMessagesQueue = 0;
     uint32_t _videoStreams = 0;
     uint32_t _audioStreams = 0;
     uint32_t _dataStreams = 0;
@@ -52,8 +54,9 @@ struct MixerManagerStats
 
     uint32_t _receivePoolSize = 0;
     uint32_t _sendPoolSize = 0;
-    uint32_t _udpSharedEndpointsRxQueue;
-    uint32_t _udpSharedEndpointsTxQueue;
+    uint32_t _udpSharedEndpointsSendQueue = 0;
+    double _udpSharedEndpointsReceiveBitrate = 0.0;
+    double _udpSharedEndpointsSendBitrate = 0.0;
 
     MixerManagerStats() {}
 

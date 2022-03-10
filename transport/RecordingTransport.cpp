@@ -110,6 +110,12 @@ void RecordingTransport::protectAndSend(memory::Packet* packet, memory::PacketPo
 {
     if (!isConnected())
     {
+        // Recording events are very important to convertor and must not be lost!
+        if (recp::isRecPacket(*packet))
+        {
+            logger::error("A recording event wasn not not sent because transport is not connected", _loggableId.c_str());
+        }
+
         sendAllocator.free(packet);
         return;
     }
@@ -172,7 +178,7 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
             sendRtcpSenderReport(allocator, timestamp);
         }
     }
-    else if (recp::isRecPacket(reinterpret_cast<const unsigned char*>(packet->get()), packet->getLength()))
+    else if (recp::isRecPacket(*packet))
     {
         auto recHeader = recp::RecHeader::fromPacket(*packet);
         auto payload = recHeader->getPayload();

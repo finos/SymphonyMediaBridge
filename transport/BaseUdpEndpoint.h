@@ -6,6 +6,7 @@
 #include "transport/Endpoint.h"
 #include "transport/RtcSocket.h"
 #include "transport/RtcePoll.h"
+#include "utils/Trackers.h"
 
 namespace transport
 {
@@ -46,7 +47,7 @@ public:
 
     ice::TransportType getTransportType() const override { return ice::TransportType::UDP; }
 
-    EndpointMetrics getMetrics() const final { return EndpointMetrics(_receiveJobs.getCount(), _sendJobs.getCount()); }
+    EndpointMetrics getMetrics() const final;
 
 public: // internal job interface
     // called on receiveJobs threads
@@ -88,5 +89,7 @@ protected:
     std::atomic_flag _isFull = ATOMIC_FLAG_INIT;
 
     std::atomic<IEvents*> _defaultListener;
+    utils::RateTracker<10> _receiveTracker;
+    utils::RateTracker<10> _sendTracker;
 };
 } // namespace transport

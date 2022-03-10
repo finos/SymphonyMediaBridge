@@ -95,6 +95,8 @@ std::string MixerManagerStats::describe()
     nlohmann::json result;
     result["current_timestamp"] = utils::Time::getAbsoluteTime() / 1000000ULL;
     result["conferences"] = _conferences;
+    result["deleting_conferences"] = _deletingConferences;
+    result["engine_messages_queue"] = _engineMessagesQueue;
     result["participants"] = std::max({_videoStreams, _audioStreams, _dataStreams});
     result["audiochannels"] = _audioStreams;
     result["videochannels"] = _videoStreams;
@@ -121,8 +123,9 @@ std::string MixerManagerStats::describe()
     result["pacing_queue"] = _engineStats.activeMixers.pacingQueue;
     result["rtx_pacing_queue"] = _engineStats.activeMixers.rtxPacingQueue;
 
-    result["shared_udp_rx_queue"] = _udpSharedEndpointsRxQueue;
-    result["shared_udp_tx_queue"] = _udpSharedEndpointsTxQueue;
+    result["shared_udp_send_queue"] = _udpSharedEndpointsSendQueue;
+    result["shared_udp_receive_bitrate"] = _udpSharedEndpointsReceiveBitrate;
+    result["shared_udp_send_bitrate"] = _udpSharedEndpointsSendBitrate;
 
     result["send_pool"] = _sendPoolSize;
     result["receive_pool"] = _receivePoolSize;

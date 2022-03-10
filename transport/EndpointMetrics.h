@@ -4,22 +4,25 @@
 
 struct EndpointMetrics
 {
-    EndpointMetrics(uint32_t rQueueCount, uint32_t sQueueCount)
-        : rxQueue(rQueueCount)
-        , txQueue(sQueueCount)
+    EndpointMetrics(uint32_t sQueue, double rBitrate, double sBitrate)
+        : sendQueue(sQueue)
+        , receiveBitrate(rBitrate)
+        , sendBitrate(sBitrate)
     { }
 
-    EndpointMetrics() : EndpointMetrics(0, 0) { }
+    EndpointMetrics() : EndpointMetrics(0, 0.0, 0.0) { }
 
     EndpointMetrics& operator+=(const EndpointMetrics& rhs)
     {
-        rxQueue += rhs.rxQueue;
-        txQueue += rhs.txQueue;
+        sendQueue += rhs.sendQueue;
+        receiveBitrate += rhs.receiveBitrate;
+        sendBitrate += rhs.sendBitrate;
         return *this;
     }
 
-    uint32_t rxQueue;
-    uint32_t txQueue;
+    uint32_t sendQueue;
+    double receiveBitrate;
+    double sendBitrate;
 };
 
 inline EndpointMetrics operator+(const EndpointMetrics& lhs, const EndpointMetrics& rhs)
