@@ -113,7 +113,7 @@ void RecordingTransport::protectAndSend(memory::Packet* packet, memory::PacketPo
         // Recording events are very important to convertor and must not be lost!
         if (recp::isRecPacket(*packet))
         {
-            logger::error("A recording event wasn not not sent because transport is not connected", _loggableId.c_str());
+            logger::error("A recording event was not sent because transport is not connected", _loggableId.c_str());
         }
 
         sendAllocator.free(packet);
