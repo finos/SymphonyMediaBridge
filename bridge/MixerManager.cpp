@@ -1,9 +1,17 @@
 #include "bridge/MixerManager.h"
 #include "api/DataChannelMessageParser.h"
+#include "bridge/AudioStream.h"
+#include "bridge/DataStream.h"
 #include "bridge/Mixer.h"
+#include "bridge/VideoStream.h"
 #include "bridge/engine/Engine.h"
+#include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineDataStream.h"
 #include "bridge/engine/EngineMixer.h"
+#include "bridge/engine/EngineRecordingStream.h"
+#include "bridge/engine/EngineVideoStream.h"
+#include "bridge/engine/PacketCache.h"
+#include "concurrency/ThreadUtils.h"
 #include "config/Config.h"
 #include "jobmanager/JobManager.h"
 #include "logger/Logger.h"
@@ -12,6 +20,7 @@
 #include "utils/Pacer.h"
 #include "utils/SsrcGenerator.h"
 #include "utils/Time.h"
+#include "webrtc/DataChannel.h"
 #include <vector>
 
 namespace

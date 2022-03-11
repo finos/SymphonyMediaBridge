@@ -3,7 +3,6 @@
 #include <atomic>
 #include <cstdarg>
 #include <cstdio>
-#include <cstring>
 #include <execinfo.h>
 #include <inttypes.h> // for logging int64 with PRId64
 namespace logger

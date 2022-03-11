@@ -1,7 +1,6 @@
 #include "Logger.h"
 #include "LoggerThread.h"
 #include <chrono>
-#include <thread>
 
 namespace logger
 {

@@ -1,6 +1,5 @@
 #include "LockFreeList.h"
 #include <atomic>
-#include <cassert>
 namespace concurrency
 {
 

@@ -1,6 +1,5 @@
 #pragma once
 #include <cinttypes>
-#include <cstddef>
 #include <string>
 
 struct hmac_ctx_st;

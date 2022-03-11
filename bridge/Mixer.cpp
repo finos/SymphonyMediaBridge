@@ -1,9 +1,15 @@
 #include "bridge/Mixer.h"
+#include "api/RecordingChannel.h"
+#include "bridge/AudioStream.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/engine/Engine.h"
+#include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineDataStream.h"
+#include "bridge/engine/EngineRecordingStream.h"
+#include "bridge/engine/EngineVideoStream.h"
+#include "bridge/engine/PacketCache.h"
 #include "config/Config.h"
 #include "jobmanager/JobManager.h"
 #include "logger/Logger.h"
@@ -1703,10 +1709,7 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
         if (streamEntry == _recordingStreams.end())
         {
             streamEntry =
-                _recordingStreams
-                    .emplace(conferenceId,
-                        std::make_unique<RecordingStream>(conferenceId))
-                    .first;
+                _recordingStreams.emplace(conferenceId, std::make_unique<RecordingStream>(conferenceId)).first;
         }
 
         stream = streamEntry->second.get();

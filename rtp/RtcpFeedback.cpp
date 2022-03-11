@@ -1,7 +1,6 @@
 #include "rtp/RtcpFeedback.h"
 #include "math/helpers.h"
 #include <cassert>
-#include <cmath>
 namespace
 {
 

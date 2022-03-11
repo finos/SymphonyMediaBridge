@@ -4,19 +4,14 @@
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
-#include "concurrency/ThreadUtils.h"
 #include "memory/List.h"
-#include "memory/PoolAllocator.h"
-#include "utils/Time.h"
 #include "utils/Trackers.h"
-#include <memory>
 #include <sys/types.h>
 #include <thread>
 
 namespace bridge
 {
 
-class Mixer;
 class EngineMixer;
 class EngineMessageListener;
 

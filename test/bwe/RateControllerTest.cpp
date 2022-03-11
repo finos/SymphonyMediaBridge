@@ -1,18 +1,10 @@
 #include "bwe/RateController.h"
 #include "config/Config.h"
 #include "memory/PacketPoolAllocator.h"
-#include "rtp/RtcpHeader.h"
-#include "rtp/RtpHeader.h"
-#include "test/bwe/FakeAudioSource.h"
 #include "test/bwe/FakeVideoSource.h"
 #include "test/bwe/RcCall.h"
-#include "test/transport/FakeNetwork.h"
-#include "transport/RtpReceiveState.h"
-#include "transport/RtpSenderState.h"
-#include "transport/ice/IceSession.h"
-#include "transport/sctp/SctpConfig.h"
+#include "test/transport/NetworkLink.h"
 #include <gtest/gtest.h>
-#include <vector>
 
 class RateControllerTestBase : public ::testing::TestWithParam<uint32_t>
 {

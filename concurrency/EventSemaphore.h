@@ -1,7 +1,5 @@
 #pragma once
-#include <chrono>
 #include <mutex>
-using namespace std::chrono_literals;
 
 namespace concurrency
 {

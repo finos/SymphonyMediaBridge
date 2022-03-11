@@ -3,9 +3,6 @@
 #include "Stun.h"
 #include "concurrency/ScopedMutexGuard.h"
 #include "utils/SocketAddress.h"
-#include <array>
-#include <set>
-#include <unordered_map>
 #include <vector>
 namespace ice
 {

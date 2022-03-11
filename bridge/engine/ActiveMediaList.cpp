@@ -1,6 +1,5 @@
 #include "bridge/engine/ActiveMediaList.h"
 #include "api/DataChannelMessage.h"
-#include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
 #include "logger/Logger.h"
@@ -154,8 +153,7 @@ bool ActiveMediaList::addVideoParticipant(const size_t endpointIdHash,
     else if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
-            VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc,
-                _videoScreenShareSsrc._ssrc});
+            VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc, _videoScreenShareSsrc._ssrc});
     }
 
     if (_activeVideoListLookupMap.size() == _maxActiveListSize)
@@ -212,7 +210,7 @@ bool ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
 
     _activeVideoList.remove(endpointIdHash);
     _activeVideoListLookupMap.erase(endpointIdHash);
-    
+
     return true;
 }
 

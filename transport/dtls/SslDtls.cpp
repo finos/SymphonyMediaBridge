@@ -1,6 +1,7 @@
 #include "SslDtls.h"
 #include "SslWriteBioListener.h"
 #include "logger/Logger.h"
+#include <cassert>
 #include <cstdint>
 #include <openssl/asn1.h>
 #include <openssl/bn.h>
@@ -10,7 +11,6 @@
 #include <openssl/ssl.h>
 #include <random>
 #include <srtp2/srtp.h>
-#include <vector>
 
 namespace
 {

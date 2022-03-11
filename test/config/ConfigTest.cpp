@@ -1,9 +1,7 @@
 #include "config/ConfigReader.h"
-#include <cassert>
 #include <cstdio>
 #include <fstream>
 #include <gtest/gtest.h>
-#include <stdlib.h>
 
 namespace
 {
@@ -55,7 +53,7 @@ void verifySampleConfig(const TestConfig& cfg)
     ASSERT_STREQ(cfg.g2.g_str.get().c_str(), "g2_str_def");
     ASSERT_EQ(cfg.g2.g3.g_bool, true);
 }
-}
+} // namespace
 
 struct ConfigTest : public ::testing::Test
 {

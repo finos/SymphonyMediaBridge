@@ -1,7 +1,6 @@
 #include "memory/List.h"
 #include <algorithm>
 #include <gtest/gtest.h>
-#include <memory>
 #include <random>
 #include <vector>
 

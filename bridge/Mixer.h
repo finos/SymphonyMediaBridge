@@ -1,19 +1,9 @@
 #pragma once
 
-#include "api/RecordingChannel.h"
-#include "bridge/AudioStream.h"
-#include "bridge/DataStream.h"
 #include "bridge/RecordingStream.h"
-#include "bridge/RtpMap.h"
-#include "bridge/VideoStream.h"
-#include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SimulcastLevel.h"
-#include "bridge/engine/SimulcastStream.h"
-#include "bridge/engine/SsrcWhitelist.h"
-#include "transport/RecordingTransport.h"
-#include "transport/Transport.h"
-#include "transport/ice/IceCandidate.h"
-#include "utils/Optional.h"
+#include "logger/Logger.h"
+#include "transport/ice/IceSession.h"
 #include <cstdint>
 #include <memory>
 #include <mutex>
@@ -21,22 +11,23 @@
 #include <unordered_map>
 #include <vector>
 
-namespace jobmanager
+namespace api
 {
-class JobManager;
-}
+struct RecordingChannel;
+} // namespace api
 
 namespace transport
 {
 class TransportFactory;
 class RtcTransport;
-class RecordingTransport;
 } // namespace transport
 
 namespace utils
 {
 class IdGenerator;
 class SsrcGenerator;
+template <typename T>
+class Optional;
 } // namespace utils
 
 namespace config
@@ -55,6 +46,14 @@ struct DataStreamDescription;
 struct TransportDescription;
 struct EngineDataStream;
 struct EngineRecordingStream;
+class PacketCache;
+struct AudioStream;
+struct DataStream;
+struct RecordingDescription;
+struct RtpMap;
+struct SimulcastStream;
+struct SsrcWhitelist;
+struct VideoStream;
 
 class Mixer
 {

@@ -1,4 +1,5 @@
 #include "legacyapi/Generator.h"
+#include "legacyapi/Conference.h"
 #include "nlohmann/json.hpp"
 #include <gtest/gtest.h>
 

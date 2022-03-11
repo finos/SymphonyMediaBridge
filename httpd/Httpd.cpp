@@ -3,7 +3,6 @@
 #include "httpd/Request.h"
 #include "logger/Logger.h"
 #include <cstring>
-#include <memory>
 #include <microhttpd.h>
 
 namespace

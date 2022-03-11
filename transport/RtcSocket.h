@@ -1,7 +1,6 @@
 #pragma once
 #include "utils/SocketAddress.h"
 #include <sys/socket.h>
-#include <unistd.h>
 
 namespace transport
 {

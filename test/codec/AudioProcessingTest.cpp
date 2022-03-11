@@ -1,5 +1,3 @@
-#include "codec/AudioLevel.h"
-#include "logger/Logger.h"
 #include <cmath>
 #include <gtest/gtest.h>
 

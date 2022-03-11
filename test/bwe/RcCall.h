@@ -1,18 +1,20 @@
 #pragma once
 
-#include "bwe/RateController.h"
-#import "config/Config.h"
 #include "memory/PacketPoolAllocator.h"
 #include "test/bwe/FakeMedia.h"
 #include "transport/RtpReceiveState.h"
 #include "transport/RtpSenderState.h"
+#include "utils/Optional.h"
 #include <unordered_map>
-#include <vector>
+
+namespace bwe
+{
+class RateController;
+}
 
 namespace fakenet
 {
 class NetworkLink;
-class MediaSource;
 
 class RcCall
 {

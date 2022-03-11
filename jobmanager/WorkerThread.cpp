@@ -1,5 +1,6 @@
 #include "jobmanager/WorkerThread.h"
 #include "concurrency/ThreadUtils.h"
+#include "jobmanager/JobManager.h"
 
 namespace jobmanager
 {

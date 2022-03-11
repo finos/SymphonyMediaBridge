@@ -1,18 +1,16 @@
 #pragma once
 
-#include "bridge/RtpMap.h"
-#include "bridge/engine/SimulcastStream.h"
-#include <cstdint>
 #include <vector>
 
 namespace legacyapi
 {
 struct Channel;
-struct SsrcGroup;
 } // namespace legacyapi
 
 namespace bridge
 {
+struct RtpMap;
+struct SimulcastStream;
 
 namespace LegacyApiRequestHandlerHelpers
 {

@@ -6,17 +6,15 @@
 #include "memory/StackArray.h"
 #include "utils/MersienneRandom.h"
 #include "utils/Time.h"
-#include <set>
 
 #define SCTP_LOG_ENABLE 0
 
 #if SCTP_LOG_ENABLE
-    #define SCTP_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#define SCTP_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
 #else
-    // silence compiler warnings
-    #define SCTP_LOG(fmt, logId, ...) (void)logId;
+// silence compiler warnings
+#define SCTP_LOG(fmt, logId, ...) (void)logId;
 #endif
-
 
 namespace
 {

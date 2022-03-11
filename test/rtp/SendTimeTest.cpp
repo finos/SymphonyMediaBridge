@@ -1,7 +1,6 @@
 
 #include "rtp/SendTimeDial.h"
 #include "utils/Time.h"
-#include <array>
 #include <cstdint>
 #include <gtest/gtest.h>
 

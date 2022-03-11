@@ -1,37 +1,15 @@
 #pragma once
 
-#include "bridge/engine/SsrcInboundContext.h"
-#include "bridge/engine/SsrcOutboundContext.h"
-#include "concurrency/MpmcHashmap.h"
 #include "jobmanager/Job.h"
 #include "memory/PacketPoolAllocator.h"
-#include <memory>
 
-namespace bridge
-{
-class SsrcOutboundContext;
-class EngineMixer;
-
-} // namespace bridge
 namespace memory
 {
 class Packet;
 }
 
-namespace jobmanager
-{
-class JobManager;
-}
-
-namespace rtp
-{
-struct RtpHeader;
-}
-
 namespace transport
 {
-
-class SrtpClient;
 
 class Transport;
 

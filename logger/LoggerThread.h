@@ -1,6 +1,5 @@
 #pragma once
 #include "concurrency/MpmcQueue.h"
-#include "concurrency/Semaphore.h"
 #include <atomic>
 #include <chrono>
 #include <thread>

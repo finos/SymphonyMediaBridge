@@ -3,10 +3,6 @@
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
 #include <inttypes.h>
-#include <memory>
-#include <string>
-#include <sys/types.h>
-#include <vector>
 
 namespace bridge
 {

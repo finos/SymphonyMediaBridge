@@ -3,7 +3,6 @@
 #include "utils/ScopedFileHandle.h"
 #include <iostream>
 #include <nlohmann/json.hpp>
-#include <sstream>
 
 namespace config
 {
@@ -27,7 +26,10 @@ bool ConfigReader::readFromFile(const std::string& fileName)
     return parse(&fileBuffer[0]);
 }
 
-bool ConfigReader::readFromString(const std::string& json) { return parse(json.c_str()); }
+bool ConfigReader::readFromString(const std::string& json)
+{
+    return parse(json.c_str());
+}
 
 bool ConfigReader::parse(const char* buffer)
 {
@@ -44,7 +46,8 @@ bool ConfigReader::parse(const char* buffer)
                 result = false;
             }
         }
-    } catch (const std::exception& e)
+    }
+    catch (const std::exception& e)
     {
         logger::info("Failed reading config: %s", "ConfigReader", e.what());
         return false;
@@ -53,4 +56,4 @@ bool ConfigReader::parse(const char* buffer)
     return result;
 }
 
-}
+} // namespace config

@@ -1,17 +1,18 @@
 #pragma once
 
-#include "config/Config.h"
 #include "crypto/AesGcmIvGenerator.h"
 #include "crypto/SslHelper.h"
-#include "jobmanager/JobManager.h"
-#include "transport/DataReceiver.h"
 #include "transport/RecordingEndpoint.h"
+#include "transport/RtpSenderState.h"
 #include "transport/Transport.h"
+
+namespace config
+{
+class Config;
+}
 
 namespace transport
 {
-
-class RtpSenderState;
 
 class RecordingTransport final : public Transport, public RecordingEndpoint::IRecordingEvents
 {

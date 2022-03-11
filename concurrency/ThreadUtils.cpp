@@ -8,7 +8,6 @@
 #include <sys/types.h>
 #endif
 #include "logger/Logger.h"
-#include <unistd.h>
 namespace concurrency
 {
 bool setPriority(std::thread& thread, Priority priority)
@@ -39,8 +38,10 @@ bool setPriority(std::thread& thread, Priority priority)
     // Set to relatively high priority.
     thread_precedence_policy_data_t precedence;
     precedence.importance = 63;
-    result = thread_policy_set(
-        threadPort, THREAD_PRECEDENCE_POLICY, (thread_policy_t)&precedence, THREAD_PRECEDENCE_POLICY_COUNT);
+    result = thread_policy_set(threadPort,
+        THREAD_PRECEDENCE_POLICY,
+        (thread_policy_t)&precedence,
+        THREAD_PRECEDENCE_POLICY_COUNT);
 
     if (result != KERN_SUCCESS)
     {
@@ -55,9 +56,9 @@ bool setPriority(std::thread& thread, Priority priority)
     timeConstraintPolicy.preemptible = FALSE;
 
     if (thread_policy_set(threadPort,
-                          THREAD_TIME_CONSTRAINT_POLICY,
-                          reinterpret_cast<thread_policy_t>(&timeConstraintPolicy),
-                          THREAD_TIME_CONSTRAINT_POLICY_COUNT) != KERN_SUCCESS)
+            THREAD_TIME_CONSTRAINT_POLICY,
+            reinterpret_cast<thread_policy_t>(&timeConstraintPolicy),
+            THREAD_TIME_CONSTRAINT_POLICY_COUNT) != KERN_SUCCESS)
     {
         logger::error("Unable to set thread priority", "");
         return false;
@@ -99,4 +100,4 @@ void setThreadName(const char* name)
     pthread_setname_np(pthread_self(), name);
 #endif
 }
-}
+} // namespace concurrency

@@ -2,7 +2,6 @@
 
 #include "jobmanager/Job.h"
 #include "memory/PacketPoolAllocator.h"
-#include <memory>
 
 namespace memory
 {
@@ -12,7 +11,6 @@ class Packet;
 namespace transport
 {
 class RtcTransport;
-class DataReceiver;
 } // namespace transport
 
 namespace bridge

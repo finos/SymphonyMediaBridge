@@ -3,13 +3,10 @@
 #include "math/Matrix.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
-#include "test/bwe/FakeAudioSource.h"
 #include "test/bwe/FakeCall.h"
 #include "test/bwe/FakeCrossTraffic.h"
 #include "test/bwe/FakeVideoSource.h"
 #include "test/transport/NetworkLink.h"
-#include <cmath>
-#include <cstring>
 #include <gtest/gtest.h>
 
 using namespace math;

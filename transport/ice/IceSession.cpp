@@ -1,9 +1,7 @@
 #include "IceSession.h"
 #include "Stun.h"
-#include "crypto/SslHelper.h"
 #include "logger/Logger.h"
 #include "utils/ContainerAlgorithms.h"
-#include "utils/ScopedReentrancyBlocker.h"
 #include "utils/Time.h"
 namespace ice
 {
@@ -1136,8 +1134,8 @@ void IceSession::CandidatePair::send(const uint64_t now)
     transaction.id = stunMessage.header.transactionId;
     stunMessage.add(
         StunGenericAttribute(StunAttribute::USERNAME, _credentials.remote.first + ":" + _credentials.local.first));
-    stunMessage.add(StunAttribute64(
-        _credentials.role == IceRole::CONTROLLING ? StunAttribute::ICE_CONTROLLING : StunAttribute::ICE_CONTROLLED,
+    stunMessage.add(StunAttribute64(_credentials.role == IceRole::CONTROLLING ? StunAttribute::ICE_CONTROLLING
+                                                                              : StunAttribute::ICE_CONTROLLED,
         _credentials.tieBreaker));
 
     if (!gatheringProbe)

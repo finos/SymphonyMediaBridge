@@ -11,11 +11,8 @@ class HMAC;
 namespace sctp
 {
 struct SctpConfig;
-class DataGramTransport;
 class SctpPacket;
 class SctpPacketW;
-class InitChunk;
-class ChunkField;
 
 class DatagramTransport
 {

@@ -1,7 +1,6 @@
 #pragma once
 
-#include "rtp/RtpHeader.h"
-#include "transport/recp/RecHeader.h"
+#include <stdint.h>
 
 namespace crypto
 {

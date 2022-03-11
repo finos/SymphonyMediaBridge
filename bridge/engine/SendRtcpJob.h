@@ -1,9 +1,7 @@
 #pragma once
 
-#include "concurrency/MpmcHashmap.h"
 #include "jobmanager/Job.h"
 #include "memory/PacketPoolAllocator.h"
-#include <memory>
 
 namespace transport
 {

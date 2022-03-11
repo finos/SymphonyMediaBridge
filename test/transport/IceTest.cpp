@@ -8,7 +8,6 @@
 #include "transport/ice/IceSession.h"
 #include "transport/ice/Stun.h"
 #include <atomic>
-#include <external/nlohmann/json.hpp>
 #include <gtest/gtest.h>
 
 namespace

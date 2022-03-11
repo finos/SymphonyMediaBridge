@@ -1,8 +1,6 @@
 #include "memory/RingBuffer.h"
 #include <array>
 #include <gtest/gtest.h>
-#include <memory>
-#include <thread>
 
 namespace
 {

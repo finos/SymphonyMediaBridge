@@ -1,6 +1,5 @@
 #pragma once
 
-#include "api/Recording.h"
 #include "httpd/HttpRequestHandler.h"
 #include <atomic>
 #include <cstdint>
@@ -15,6 +14,7 @@ namespace api
 {
 struct AllocateEndpoint;
 struct EndpointDescription;
+struct Recording;
 } // namespace api
 
 namespace transport

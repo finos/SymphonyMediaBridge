@@ -5,19 +5,14 @@
 #include "logger/Logger.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/dtls/DtlsMessageListener.h"
-#include "transport/dtls/SslDtls.h"
-#include "transport/dtls/SslWriteBioListener.h"
-#include <atomic>
-#include <memory>
-#include <openssl/srtp.h>
 #include <openssl/ssl.h>
 #include <srtp2/srtp.h>
-#include <string>
 
 namespace transport
 {
 
 class SslDtls;
+class SslWriteBioListener;
 
 // It seems sslDtls object is not thread safe when making progress in state machine during connection setup.
 // Timers, incoming packets, handshake init have to be synchronized

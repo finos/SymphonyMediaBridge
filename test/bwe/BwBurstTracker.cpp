@@ -1,5 +1,7 @@
 #include "BwBurstTracker.h"
 
+#include "utils/Time.h"
+
 namespace bwe
 {
 

@@ -2,6 +2,7 @@
 #include "concurrency/MpmcPublish.h"
 #include "config/Config.h"
 #include "logger/Logger.h"
+#include "rtp/RtcpHeader.h"
 #include "rtp/RtpHeader.h"
 #include "utils/Time.h"
 

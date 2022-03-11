@@ -1,8 +1,12 @@
 #pragma once
 
 #include "jobmanager/Job.h"
-#include "memory/PacketPoolAllocator.h"
 #include <cstdint>
+
+namespace memory
+{
+class Packet;
+} // namespace memory
 
 namespace transport
 {

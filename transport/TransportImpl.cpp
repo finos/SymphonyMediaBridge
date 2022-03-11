@@ -1,6 +1,5 @@
 #include "TransportImpl.h"
 #include "bwe/BandwidthEstimator.h"
-#include "codec/Vp8Header.h"
 #include "config/Config.h"
 #include "dtls/SrtpClient.h"
 #include "dtls/SrtpClientFactory.h"
@@ -11,19 +10,15 @@
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "sctp/SctpAssociation.h"
-#include "sctp/Sctprotocol.h"
 #include "transport/DtlsJob.h"
 #include "transport/IceJob.h"
 #include "transport/SctpJob.h"
-#include "transport/TcpEndpoint.h"
-#include "utils/ScopedIncrement.h"
 #include "utils/SocketAddress.h"
 #include "utils/StdExtensions.h"
 #include <arpa/inet.h>
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <utility>
 
 namespace transport

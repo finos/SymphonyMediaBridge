@@ -1,7 +1,6 @@
 #include "SctpJob.h"
 #include "Transport.h"
 #include "jobmanager/JobQueue.h"
-#include "memory/PacketPoolAllocator.h"
 #include "sctp/SctpAssociation.h"
 namespace transport
 {

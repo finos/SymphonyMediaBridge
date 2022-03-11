@@ -1,5 +1,4 @@
 #include "utils/Pacer.h"
-#include <algorithm>
 
 namespace utils
 {
