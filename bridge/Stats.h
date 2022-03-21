@@ -44,7 +44,6 @@ struct MixerManagerStats
 {
     SystemStats _systemStats;
     uint32_t _conferences = 0;
-    uint32_t _deletingConferences = 0;
     uint32_t _engineMessagesQueue = 0;
     uint32_t _videoStreams = 0;
     uint32_t _audioStreams = 0;

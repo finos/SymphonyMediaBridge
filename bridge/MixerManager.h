@@ -69,10 +69,9 @@ public:
 private:
     struct MixerStats
     {
-        MixerStats() : _conferences(0), _deletingConferences(0), _audioStreams(0), _videoStreams(0), _dataStreams(0), _ticksSinceLastUpdate(0) {}
+        MixerStats() : _conferences(0), _audioStreams(0), _videoStreams(0), _dataStreams(0), _ticksSinceLastUpdate(0) {}
 
         uint32_t _conferences;
-        uint32_t _deletingConferences;
         uint32_t _audioStreams;
         uint32_t _videoStreams;
         uint32_t _dataStreams;
@@ -93,7 +92,6 @@ private:
         _audioBuffers;
 
     std::atomic<bool> _threadRunning;
-    std::atomic<uint32_t> _deletingMixerCount;
     std::unique_ptr<std::thread> _managerThread;
     concurrency::MpmcQueue<EngineMessage::Message> _engineMessages;
     std::mutex _configurationLock;

@@ -41,7 +41,6 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _engine(engine),
       _config(config),
       _threadRunning(true),
-      _deletingMixerCount(0),
       _engineMessages(16384),
       _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
@@ -326,7 +325,6 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
 {
     // Aims to delete the mixer out of the locker at it can take some time
     // and we want to reduce the lock contention
-    _deletingMixerCount++;
     std::unique_ptr<bridge::Mixer> mixer;
 
     {
@@ -365,7 +363,6 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
     }
 
     mixer.reset();
-    _deletingMixerCount--;
     logger::info("EngineMixer removed", "MixerManager");
 }
 
@@ -693,7 +690,6 @@ Stats::MixerManagerStats MixerManager::getStats()
 
     EndpointMetrics udpMetrics = _transportFactory.getSharedUdpEndpointsMetrics();
 
-    result._deletingConferences = _deletingMixerCount;
     result._engineMessagesQueue = _engineMessages.size();
     result._jobQueueLength = _jobManager.getCount();
     result._receivePoolSize = _mainAllocator.size();

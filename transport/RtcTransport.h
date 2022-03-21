@@ -88,6 +88,9 @@ public:
     virtual void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) = 0;
 
     virtual void runTick(uint64_t timestamp) = 0;
+
+    virtual bool isUsingRtpTcpCandidate() = 0;
+    virtual bool isUsingRtcpTcpCandidate() = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,

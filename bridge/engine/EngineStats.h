@@ -32,6 +32,10 @@ struct MixerStats
 
     uint32_t pacingQueue = 0;
     uint32_t rtxPacingQueue = 0;
+    uint32_t rtpUdp = 0;
+    uint32_t rtpTcp = 0;
+    uint32_t rtcpUdp = 0;
+    uint32_t rtcpTcp = 0;
 
     MixerStats& operator+=(const MixerStats& b)
     {
@@ -49,6 +53,11 @@ struct MixerStats
 
         pacingQueue += b.pacingQueue;
         rtxPacingQueue += b.rtxPacingQueue;
+
+        rtpUdp += b.rtpUdp;
+        rtpTcp += b.rtpTcp;
+        rtcpUdp += b.rtcpUdp;
+        rtcpTcp += b.rtcpTcp;
 
         return *this;
     }

@@ -177,6 +177,9 @@ public: // Transport
     void connectSctp() override;
     void runTick(uint64_t timestamp) override;
 
+    bool isUsingRtpTcpCandidate() override { return _selectedRtp && _selectedRtp->getTransportType() != ice::TransportType::UDP; }
+    bool isUsingRtcpTcpCandidate() override { return _selectedRtcp && _selectedRtcp->getTransportType() != ice::TransportType::UDP; }
+
 public: // SslWriteBioListener
     // Called from Transport serial thread
     int32_t sendDtls(const char* buffer, uint32_t length) override;

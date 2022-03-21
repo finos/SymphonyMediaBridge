@@ -86,6 +86,9 @@ public:
 
     void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) override {}
 
+    bool isUsingRtpTcpCandidate() override { return 0; }
+    bool isUsingRtcpTcpCandidate() override { return 0; }
+
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
     jobmanager::JobQueue& _jobQueue;

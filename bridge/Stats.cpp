@@ -95,7 +95,6 @@ std::string MixerManagerStats::describe()
     nlohmann::json result;
     result["current_timestamp"] = utils::Time::getAbsoluteTime() / 1000000ULL;
     result["conferences"] = _conferences;
-    result["deleting_conferences"] = _deletingConferences;
     result["engine_messages_queue"] = _engineMessagesQueue;
     result["participants"] = std::max({_videoStreams, _audioStreams, _dataStreams});
     result["audiochannels"] = _audioStreams;
@@ -137,6 +136,12 @@ std::string MixerManagerStats::describe()
 
     result["engine_idle"] = _engineStats.avgIdle;
     result["engine_slips"] = _engineStats.timeSlipCount;
+
+    result["rtp_udp"] = _engineStats.activeMixers.rtpUdp;
+    result["rtp_tcp"] = _engineStats.activeMixers.rtpTcp;
+
+    result["rtcp_udp"] = _engineStats.activeMixers.rtcpUdp;
+    result["rtcp_tcp"] = _engineStats.activeMixers.rtcpTcp;
 
     return result.dump(4);
 }
