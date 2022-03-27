@@ -318,6 +318,11 @@ public:
 
     void run() override
     {
+        if (!_packet)
+        {
+            return;
+        }
+
         auto timestamp = utils::Time::getAbsoluteTime();
         auto current = _sctpAssociation.nextTimeout(timestamp);
         auto& header = *reinterpret_cast<SctpDataChunk*>(_packet->get());
@@ -1351,7 +1356,6 @@ PacketCounters TransportImpl::getAudioReceiveCounters(uint64_t idleTimestamp) co
             if (utils::Time::diffGE(idleTimestamp, it.second.getLastActive(), 0))
             {
                 total += it.second.getCounters();
-                ;
                 ++total.activeStreamCount;
             }
         }

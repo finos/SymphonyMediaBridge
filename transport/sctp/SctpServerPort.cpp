@@ -12,6 +12,7 @@ namespace
 {
 utils::MersienneRandom<uint32_t> g_randomGenerator;
 }
+
 SctpCookie::SctpCookie()
     : outboundStreams(0),
       inboundStreams(0),
@@ -40,6 +41,7 @@ void SctpCookie::sign(const uint8_t* key, size_t keyLength, uint16_t remotePort)
     addSignedItems(signer, remotePort);
     signer.compute(hmac);
 }
+
 bool SctpCookie::verifySignature(const uint8_t* key, size_t keyLength, uint16_t remotePort) const
 {
     crypto::HMAC signer(key, keyLength);
