@@ -83,6 +83,18 @@ node('be-integration') {
             }
         }
 
+        docker.image('gcr.io/sym-dev-rtc/buildsmb-aws-linux:latest').inside {
+            stage('Build AWS linux2 deb release') {
+                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
+                sh "docker/aws-linux/buildscript.sh Release $version"
+            }
+
+            stage('Run tests AWS linux2 release') {
+                sh "docker/aws-linux/runtests.sh"
+            }
+        }
+
         docker.image('gcr.io/sym-dev-rtc/buildsmb7:latest').inside {
             stage('Create archive') {
                 sh "zip -r ${baseName}-${version}.zip el7/smb/smb el7/smb/versioninfo.txt el7/smb/libs/ el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-focal/smb/smb ubuntu-focal/smb/versioninfo.txt ubuntu-focal/smb/libs/ ubuntu-focal-deb/smb/*.tar.gz ubuntu-focal-deb/smb/*.deb"
