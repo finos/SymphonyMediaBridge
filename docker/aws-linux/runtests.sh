@@ -20,13 +20,12 @@ export MSAN_SYMBOLIZER_PATH=llvm-symbolizer
 export LSAN_OPTIONS=log_threads=1
 
 pr "Running tests"
-export LD_LIBRARY_PATH=../../el8/smb/libs
-../../el8/smb/UnitTest --gtest_filter="*.*" --gtest_output=xml:../../el8/smb/test-results.xml
+export LD_LIBRARY_PATH=../../aws-linux/smb/libs
+../../aws-linux/smb/UnitTest --gtest_filter="*.*" --gtest_output=xml:../../aws-linux/smb/test-results.xml
 if [ $? != 0 ]; then
     pr "Testing failed"; exit 1
 fi
 popd || exit 1
 
-pushd el8/smb || exit 1
-
+pushd aws-linux/smb || exit 1
 popd

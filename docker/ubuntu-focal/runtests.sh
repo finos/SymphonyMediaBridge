@@ -57,5 +57,5 @@ fi
 popd || exit 1
 
 pushd ubuntu-focal/smb || exit 1
-generate_coverage_report
+
 popd

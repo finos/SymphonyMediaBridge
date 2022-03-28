@@ -17,25 +17,25 @@ void prRunner(String cmakeBuildType, String platform) {
 
 abortPreviousRunningBuilds()
 
-parallel "Release": {
+parallel "Release el7": {
     node('be-integration') {
         prRunner("Release", "el7")
     }
 }, "LCheck": {
     node('be-integration') {
-        prRunner("LCheck", "el7")
+        prRunner("LCheck", "ubuntu-focal-deb")
     }
 }, "TCheck": {
     node('be-integration') {
-        prRunner("TCheck", "el7")
+        prRunner("TCheck", "ubuntu-focal-deb")
     }
 }, "DCheck": {
     node('be-integration') {
         try {
-            prRunner("DCheck", "el7")
+            prRunner("DCheck", "ubuntu-focal-deb")
         } finally {
             stage("Post Actions") {
-                dir ("el7/smb") {
+                dir ("ubuntu-focal-deb/smb") {
                     junit testResults: "test-results.xml"
                     publishHTML(target: [
                             allowMissing         : false,
