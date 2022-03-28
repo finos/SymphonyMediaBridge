@@ -17,9 +17,9 @@ void prRunner(String cmakeBuildType, String platform) {
 
 abortPreviousRunningBuilds()
 
-parallel "Release": {
+parallel "Release el7": {
     node('be-integration') {
-        prRunner("Release", "ubuntu-focal-deb")
+        prRunner("Release", "el7")
     }
 }, "LCheck": {
     node('be-integration') {
