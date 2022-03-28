@@ -17,17 +17,12 @@ RUN cd /tmp \
 RUN cd /tmp && wget https://cmake.org/files/v3.18/cmake-3.18.0.tar.gz && tar -xvzf cmake-3.18.0.tar.gz \
     && cd cmake-3.18.0 && ./bootstrap && make && make install
 
-RUN cd /tmp/ \
-    && git clone https://github.com/llvm/llvm-project.git --branch release/9.x --single-branch --depth 1 \
-    && cd /tmp/llvm-project/ \
-    && cmake \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DLLVM_ENABLE_PROJECTS='clang;compiler-rt;lld;parallel-libs;polly;pstl;libcxx;libcxxabi' \
-        -DCMAKE_INSTALL_PREFIX=/usr/local \
-        -S 'llvm' \
-        -B 'build' \
-    && cd build && make -j8 install \
-    && cd /tmp/ && rm -rf llvm-project \
+RUN cd /tmp \
+    && wget -O clang+llvm-12.0.1-x86_64-linux.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz \
+    && tar xvf clang+llvm-12.0.1-x86_64-linux.tar.xz \
+    && cd clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
+    && cp -rn * /usr/local \
+    && cd /tmp && rm -rf clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
     && ln -s /usr/local/bin/lld /usr/local/bin/ld
 
 # Build libsrtp 2.4.2
