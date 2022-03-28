@@ -84,7 +84,7 @@ node('be-integration') {
         }
 
         docker.image('gcr.io/sym-dev-rtc/buildsmb-aws-linux:latest').inside {
-            stage('Build AWS linux2 deb release') {
+            stage('Build AWS linux2 release') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
                 env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
                 sh "docker/aws-linux/buildscript.sh Release $version"
