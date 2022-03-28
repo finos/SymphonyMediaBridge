@@ -235,8 +235,7 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
             auto* goodByePacket = createGoodBye(context->_ssrc, context->_allocator);
             if (goodByePacket)
             {
-                engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(
-                    goodByePacket,
+                engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(goodByePacket,
                     engineAudioStream->_transport,
                     context->_allocator);
             }
@@ -325,9 +324,9 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
                 engineVideoStream->_localSsrc,
                 nullptr);
             auto* goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
-            if (goodByePacket) {
-                engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(
-                    goodByePacket,
+            if (goodByePacket)
+            {
+                engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(goodByePacket,
                     engineVideoStream->_transport,
                     outboundContext->_allocator);
             }
@@ -1983,10 +1982,11 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 {
                     logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
                 }
-                else if (!transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
-                        packet,
-                        transportEntry.second,
-                        packetInfo._extendedSequenceNumber))
+                else if (!transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(
+                             *ssrcOutboundContext,
+                             packet,
+                             transportEntry.second,
+                             packetInfo._extendedSequenceNumber))
                 {
                     _sendAllocator.free(packet);
                 }
