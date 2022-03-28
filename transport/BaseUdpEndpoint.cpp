@@ -265,9 +265,8 @@ void BaseUdpEndpoint::onSocketReadable(int fd)
     }
 }
 
-EndpointMetrics BaseUdpEndpoint::getMetrics() const
+EndpointMetrics BaseUdpEndpoint::getMetrics(uint64_t timestamp) const
 {
-    const auto timestamp = utils::Time::getAbsoluteTime();
     return EndpointMetrics(
         _sendQueue.size(),
         _receiveTracker.get(timestamp, utils::Time::sec) * 8 * utils::Time::ms,

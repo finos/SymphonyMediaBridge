@@ -47,7 +47,7 @@ public:
 
     ice::TransportType getTransportType() const override { return ice::TransportType::UDP; }
 
-    EndpointMetrics getMetrics() const final;
+    EndpointMetrics getMetrics(uint64_t timestamp) const final;
 
 public: // internal job interface
     // called on receiveJobs threads

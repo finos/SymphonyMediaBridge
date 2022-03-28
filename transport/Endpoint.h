@@ -74,7 +74,7 @@ public:
     virtual const char* getName() const = 0;
     virtual State getState() const = 0;
 
-    virtual EndpointMetrics getMetrics() const = 0;
+    virtual EndpointMetrics getMetrics(uint64_t timestamp) const = 0;
 };
 
 class ServerEndpoint

@@ -403,12 +403,13 @@ public:
 
     EndpointMetrics getSharedUdpEndpointsMetrics() const override
     {
+        const auto timestamp = utils::Time::getAbsoluteTime();
         EndpointMetrics metrics;
         for (auto& endpoints : _sharedEndpoints)
         {
             for (auto* endpoint : endpoints)
             {
-                metrics += endpoint->getMetrics();
+                metrics += endpoint->getMetrics(timestamp);
             }
         }
 
