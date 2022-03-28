@@ -23,19 +23,19 @@ parallel "Release el7": {
     }
 }, "LCheck": {
     node('be-integration') {
-        prRunner("LCheck", "ubuntu-focal-deb")
+        prRunner("LCheck", "el8")
     }
 }, "TCheck": {
     node('be-integration') {
-        prRunner("TCheck", "ubuntu-focal-deb")
+        prRunner("TCheck", "el8")
     }
 }, "DCheck": {
     node('be-integration') {
         try {
-            prRunner("DCheck", "ubuntu-focal-deb")
+            prRunner("DCheck", "el8")
         } finally {
             stage("Post Actions") {
-                dir ("ubuntu-focal-deb/smb") {
+                dir ("el8/smb") {
                     junit testResults: "test-results.xml"
                     publishHTML(target: [
                             allowMissing         : false,
