@@ -63,7 +63,9 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
       _sendQueue(maxSessionCount * 256),
       _epoll(epoll),
       _isShared(isShared),
-      _defaultListener(nullptr)
+      _defaultListener(nullptr),
+      _receiveTracker(utils::Time::ms * 100),
+      _sendTracker(utils::Time::ms * 100)
 {
     _pendingRead.clear();
     _pendingSend.clear();
@@ -143,12 +145,14 @@ void BaseUdpEndpoint::internalSend()
     for (; _state == Endpoint::CONNECTED;)
     {
         size_t count = 0;
+        size_t byteCount = 0;
         for (; count < batchSize && _sendQueue.pop(packetInfo[count]); ++count)
         {
             messages[count].fragmentCount = 0;
             auto* packet = packetInfo[count].packet;
             messages[count].target = &packetInfo[count].target;
             messages[count].add(packet->get(), packet->getLength());
+            byteCount += packet->getLength();
         }
         packetCounter += count;
         if (count == 0)
@@ -157,6 +161,7 @@ void BaseUdpEndpoint::internalSend()
             break;
         }
 
+        const auto sendTimestamp = utils::Time::getAbsoluteTime();
         auto errorCount = _socket.sendMultiple(messages, count);
         for (size_t i = 0; errorCount > 0 && i < count; ++i)
         {
@@ -172,6 +177,8 @@ void BaseUdpEndpoint::internalSend()
                         messages[i].target->toString().c_str(),
                         packetSize);
                 }
+
+                byteCount -= packetSize;
             }
             else if (messages[i].errorCode != 0)
             {
@@ -180,9 +187,12 @@ void BaseUdpEndpoint::internalSend()
                     rc,
                     messages[i].target->toString().c_str(),
                     transport::RtcSocket::explain(rc));
+
+                byteCount -= messages[i].getLength();
             }
         }
 
+        _sendTracker.update(byteCount, sendTimestamp);
         for (size_t i = 0; i < count; ++i)
         {
             packetInfo[i].allocator->free(packetInfo[i].packet);
@@ -255,6 +265,15 @@ void BaseUdpEndpoint::onSocketReadable(int fd)
     }
 }
 
+EndpointMetrics BaseUdpEndpoint::getMetrics() const
+{
+    const auto timestamp = utils::Time::getAbsoluteTime();
+    return EndpointMetrics(
+        _sendQueue.size(),
+        _receiveTracker.get(timestamp, utils::Time::sec) * 8 * utils::Time::ms,
+        _sendTracker.get(timestamp, utils::Time::sec) * 8 * utils::Time::ms);
+}
+
 namespace
 {
 #ifdef __APPLE__
@@ -325,6 +344,7 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
         if (packetCount == 1)
         {
             ssize_t byteCount = ::recvmsg(fd, &messageHeader[0].msg_hdr, flags);
+            _receiveTracker.update(byteCount, utils::Time::getAbsoluteTime());
             if (byteCount <= 0)
             {
                 break;
@@ -352,8 +372,10 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
             {
                 break;
             }
+            const auto receiveTime = utils::Time::getAbsoluteTime();
             for (int i = 0; i < count; ++i)
             {
+                _receiveTracker.update(messageHeader[i].msg_len, receiveTime);
                 if (messageHeader[i].msg_len < memory::Packet::size)
                 {
                     receiveMessage[i].packet->setLength(messageHeader[i].msg_len);

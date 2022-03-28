@@ -111,7 +111,7 @@ public:
     const char* getName() const override { return _name.c_str(); }
     Endpoint::State getState() const override { return _state; }
 
-    EndpointMetrics getMetrics() const override { return EndpointMetrics(_receiveJobs.getCount(), _sendJobs.getCount()); }
+    EndpointMetrics getMetrics() const override { return EndpointMetrics(_receiveJobs.getCount(), 0.0, 0.0); }
 
 public:
     // internal job interface

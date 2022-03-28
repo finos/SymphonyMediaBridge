@@ -121,8 +121,9 @@ std::string MixerManagerStats::describe()
     result["pacing_queue"] = _engineStats.activeMixers.pacingQueue;
     result["rtx_pacing_queue"] = _engineStats.activeMixers.rtxPacingQueue;
 
-    result["shared_udp_rx_queue"] = _udpSharedEndpointsRxQueue;
-    result["shared_udp_tx_queue"] = _udpSharedEndpointsTxQueue;
+    result["shared_udp_send_queue"] = _udpSharedEndpointsSendQueue;
+    result["shared_udp_receive_rate"] = _udpSharedEndpointsReceiveKbps;
+    result["shared_udp_send_rate"] = _udpSharedEndpointsSendKbps;
 
     result["send_pool"] = _sendPoolSize;
     result["receive_pool"] = _receivePoolSize;
