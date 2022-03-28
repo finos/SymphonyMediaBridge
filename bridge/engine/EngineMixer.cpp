@@ -1136,6 +1136,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
         const auto audioSendCounters = audioStreamEntry.second->_transport.getAudioSendCounters(idleTimestamp);
         const auto videoRecvCounters = audioStreamEntry.second->_transport.getVideoReceiveCounters(idleTimestamp);
         const auto videoSendCounters = audioStreamEntry.second->_transport.getVideoSendCounters(idleTimestamp);
+        const auto pacingQueueCount = audioStreamEntry.second->_transport.getPacingQueueCount();
+        const auto rtxPacingQueueCount = audioStreamEntry.second->_transport.getRtxPacingQueueCount();
 
         stats.inbound.audio += audioRecvCounters;
         stats.outbound.audio += audioSendCounters;
@@ -1145,6 +1147,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
         stats.inbound.transport.addRttGroup(audioStreamEntry.second->_transport.getRtt() / utils::Time::ms);
         stats.inbound.transport.addLossGroup((audioRecvCounters + videoRecvCounters).getReceiveLossRatio());
         stats.outbound.transport.addLossGroup((audioSendCounters + videoSendCounters).getSendLossRatio());
+        stats.pacingQueue += pacingQueueCount;
+        stats.rtxPacingQueue += rtxPacingQueueCount;
     }
 
     for (auto& videoStreamEntry : _engineVideoStreams)
