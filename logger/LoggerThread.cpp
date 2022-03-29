@@ -161,8 +161,7 @@ void LoggerThread::flush()
     }
     if (_logFile)
     {
-        fclose(_logFile);
-        _logFile = nullptr;
+        fflush(_logFile);
     }
 }
 

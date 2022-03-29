@@ -154,7 +154,6 @@ int main(int argc, char** argv)
         }
     }
 
-    logger::flushLog();
     logger::stop();
     return 0;
 }

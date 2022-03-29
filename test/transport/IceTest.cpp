@@ -887,7 +887,7 @@ TEST(IceTest, timerNoCandidates)
 
     sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLED, timeSource);
     sessions[0]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource);
-    logger::flushLog();
+
     EXPECT_LE(sessions[1]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
     EXPECT_EQ(sessions[0]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
 
@@ -1317,7 +1317,6 @@ TEST(IceRobustness, earlyProbes)
             timeSource += timeout + 2;
         }
     }
-    logger::flushLog();
 
     ASSERT_EQ(sessions[0]->getRemoteCandidates().size(), 1);
     EXPECT_EQ(sessions[0]->getState(), ice::IceSession::State::READY);
@@ -1353,7 +1352,7 @@ TEST(IceRobustness, earlyProbes)
             timeSource += timeout + 2;
         }
     }
-    logger::flushLog();
+
     EXPECT_EQ(sessions[0]->getRemoteCandidates().size(), 2);
     EXPECT_GE(sessions[0]->getState(), ice::IceSession::State::CONNECTING);
     EXPECT_LE(sessions[0]->getState(), ice::IceSession::State::CONNECTED);
@@ -1369,7 +1368,7 @@ TEST(IceRobustness, earlyProbes)
         log(selectedPair1.first, "local");
         log(selectedPair1.second, "remote");
     }
-    logger::flushLog();
+
     const auto duration = timeSource - startTimeNoCredentials;
     EXPECT_LT(duration, utils::Time::sec * 6);
     auto candidates1 = sessions[0]->getLocalCandidates();
