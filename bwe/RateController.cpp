@@ -15,7 +15,6 @@
 namespace
 {
 const uint32_t ntp32Second = 0x10000u;
-const uint64_t longIntervalWithoutValidProbes = utils::Time::sec * 30;
 
 enum ProbeEvaluation
 {
@@ -598,13 +597,13 @@ void RateController::onReportReceived(uint64_t timestamp,
         _probe.lastGoodProbe = timestamp;
         _probeMetrics.resetCounters();
     }
-    else if (utils::Time::diffGE(_probe.lastGoodProbe, timestamp, longIntervalWithoutValidProbes))
+    else if (_canRtxPad // Probing on RTCP ssrc with low frequency of RR (most likely audio only calls). Maybe there is no point to reduce the probe interval in such cases
+            && _probe.hasValidProbeTimedout(timestamp))
     {
-        _probe.duration = Probe::INITIAL_INTERVAL;
-        _probe.countOnLastIntervalReduction = _probe.count;
+        _probe.resetProbeInterval();
 
         const auto timeSinceLastGoodProbe = timestamp - _probe.lastGoodProbe;
-        const auto timesOfLongInterval = timeSinceLastGoodProbe / longIntervalWithoutValidProbes;
+        const auto timesOfLongInterval = timeSinceLastGoodProbe / Probe::VALID_PROBE_TIMEOUT;
         const auto shouldLog = timesOfLongInterval > _probeMetrics.logTimes;
         if (shouldLog)
         {
@@ -800,6 +799,25 @@ uint32_t RateController::getPadding(const uint64_t timestamp, const uint16_t siz
         return count;
     }
     return 0;
+}
+
+void RateController::setRtpProbingEnabled(bool enabled)
+{
+    if (_canRtxPad != enabled)
+    {
+        _canRtxPad = enabled;
+        if (_canRtxPad)
+        {
+            // Set lastGoodProbe to zero to avoid logs about long time without valid probes
+            // which can be expected
+            _probe.lastGoodProbe = 0;
+
+            if (_probe.hasValidProbeTimedout(utils::Time::getAbsoluteTime()))
+            {
+                _probe.resetProbeInterval();
+            }
+        }
+    }
 }
 
 double RateController::calculateSendRate(const uint64_t timestamp) const

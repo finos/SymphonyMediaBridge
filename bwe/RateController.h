@@ -125,7 +125,8 @@ public:
     uint32_t getPadding(uint64_t timestamp, uint16_t size, uint16_t& paddingSize) const;
     double getTargetRate() const;
     size_t getPacingBudget(uint64_t timestamp) const;
-    void enableRtpProbing() { _canRtxPad = true; }
+    void setRtpProbingEnabled(bool enabled);
+    bool isRtpProbingEnabled() const { return _canRtxPad; }
 
 private:
     struct BacklogAnalysis
@@ -180,6 +181,7 @@ private:
     {
         constexpr static uint64_t INITIAL_INTERVAL = utils::Time::sec;
         constexpr static uint64_t MAX_INTERVAL = utils::Time::sec * 4;
+        constexpr static uint64_t VALID_PROBE_TIMEOUT = utils::Time::sec * 30;
 
         uint64_t start = 0;
         uint64_t lastGoodProbe = 0;
@@ -193,6 +195,18 @@ private:
         {
             return duration != 0 && utils::Time::diffLE(start, timestamp, duration);
         }
+
+        bool hasValidProbeTimedout(uint64_t timestamp) const
+        {
+            return utils::Time::diffGE(lastGoodProbe, timestamp, VALID_PROBE_TIMEOUT);
+        }
+
+        void resetProbeInterval()
+        {
+            duration = Probe::INITIAL_INTERVAL;
+            countOnLastIntervalReduction = count;
+        }
+
     } _probe;
 
     bool _canRtxPad = true;
