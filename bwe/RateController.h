@@ -181,7 +181,6 @@ private:
     {
         constexpr static uint64_t INITIAL_INTERVAL = utils::Time::sec;
         constexpr static uint64_t MAX_INTERVAL = utils::Time::sec * 4;
-        constexpr static uint64_t VALID_PROBE_TIMEOUT = utils::Time::sec * 30;
 
         uint64_t start = 0;
         uint64_t lastGoodProbe = 0;
@@ -194,11 +193,6 @@ private:
         bool isProbing(uint64_t timestamp) const
         {
             return duration != 0 && utils::Time::diffLE(start, timestamp, duration);
-        }
-
-        bool hasValidProbeTimedout(uint64_t timestamp) const
-        {
-            return utils::Time::diffGE(lastGoodProbe, timestamp, VALID_PROBE_TIMEOUT);
         }
 
         void resetProbeInterval()

@@ -15,6 +15,7 @@
 namespace
 {
 const uint32_t ntp32Second = 0x10000u;
+const uint64_t longIntervalWithoutValidProbes = utils::Time::sec * 30;
 
 enum ProbeEvaluation
 {
@@ -598,12 +599,12 @@ void RateController::onReportReceived(uint64_t timestamp,
         _probeMetrics.resetCounters();
     }
     else if (_canRtxPad // Probing on RTCP ssrc with low frequency of RR (most likely audio only calls). Maybe there is no point to reduce the probe interval in such cases
-            && _probe.hasValidProbeTimedout(timestamp))
+            && utils::Time::diffGE(_probe.lastGoodProbe, timestamp, longIntervalWithoutValidProbes))
     {
         _probe.resetProbeInterval();
 
         const auto timeSinceLastGoodProbe = timestamp - _probe.lastGoodProbe;
-        const auto timesOfLongInterval = timeSinceLastGoodProbe / Probe::VALID_PROBE_TIMEOUT;
+        const auto timesOfLongInterval = timeSinceLastGoodProbe / longIntervalWithoutValidProbes;
         const auto shouldLog = timesOfLongInterval > _probeMetrics.logTimes;
         if (shouldLog)
         {
@@ -811,11 +812,7 @@ void RateController::setRtpProbingEnabled(bool enabled)
             // Set lastGoodProbe to zero to avoid logs about long time without valid probes
             // which can be expected
             _probe.lastGoodProbe = 0;
-
-            if (_probe.hasValidProbeTimedout(utils::Time::getAbsoluteTime()))
-            {
-                _probe.resetProbeInterval();
-            }
+            _probe.resetProbeInterval();
         }
     }
 }
