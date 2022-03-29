@@ -887,7 +887,7 @@ TEST(IceTest, timerNoCandidates)
 
     sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLED, timeSource);
     sessions[0]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource);
-    logger::flushLog();
+
     EXPECT_LE(sessions[1]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
     EXPECT_EQ(sessions[0]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
 
