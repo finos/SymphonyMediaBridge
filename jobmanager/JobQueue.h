@@ -17,7 +17,7 @@ class JobQueue
 public:
     explicit JobQueue(JobManager& jobManager, size_t poolSize = 4096)
         : _jobManager(jobManager),
-          _running(false),
+          _running(true),
           _jobQueue(poolSize),
           _jobPool(poolSize - 1, "SerialJobPool")
     {
@@ -38,7 +38,8 @@ public:
         auto job = new (jobArea) JOB_TYPE(std::forward<U>(args)...);
         if (!_jobQueue.push(reinterpret_cast<Job*>(job)))
         {
-            freeJob(job);
+            job->~Job();
+            _jobPool.free(job);
             ensurePosted();
             return false;
         }
@@ -50,12 +51,8 @@ public:
     ~JobQueue()
     {
         concurrency::Semaphore sema;
-        addJob<StopJob>(sema);
+        addJob<StopJob>(sema, _running);
         sema.wait();
-        while (_running.load())
-        {
-            usleep(10000);
-        }
     }
 
     JobManager& getJobManager() { return _jobManager; }
@@ -73,41 +70,44 @@ private:
 
     struct StopJob : public jobmanager::Job
     {
-        explicit StopJob(concurrency::Semaphore& sema) : _sema(sema) {}
+        explicit StopJob(concurrency::Semaphore& sema, bool& runFlag) : _sema(sema), _running(runFlag) {}
+        ~StopJob() { _sema.post(); }
 
-        void run() override { _sema.post(); }
+        void run() override { _running = false; }
 
         concurrency::Semaphore& _sema;
+        bool& _running;
     };
 
     void run(RunJob& runJob)
     {
-        _running.store(true);
         Job* job;
 
-        int i = 0;
-        while (i < 10 && _jobQueue.pop(job))
+        for (int jobCount = 0; jobCount < 10 && _jobQueue.pop(job); ++jobCount)
         {
             job->run();
-            freeJob(job);
-            ++i;
+            if (_running)
+            {
+                job->~Job();
+                _jobPool.free(job);
+            }
+            else
+            {
+                assert(_jobQueue.empty());
+                _jobPool.free(job);
+                job->~Job(); // semaphore is set and we cannot touch JobQueue anymore
+                return;
+            }
         }
+
         _runJobPosted.clear();
         if (!_jobQueue.empty())
         {
             ensurePosted();
         }
-
-        _running.store(false);
     }
 
 private:
-    void freeJob(Job* job)
-    {
-        job->~Job();
-        _jobPool.free(job);
-    }
-
     void ensurePosted()
     {
         if (!_runJobPosted.test_and_set())
@@ -115,7 +115,8 @@ private:
             if (!_jobManager.addJob<RunJob>(this))
             {
                 _runJobPosted.clear();
-                // failed hope for next job to post a run job.
+                // no RunJob posted!
+                // hope for next job to post a RunJob.
             }
         }
     }
@@ -125,7 +126,7 @@ private:
     JobManager& _jobManager;
 
     std::atomic_flag _runJobPosted;
-    std::atomic_bool _running;
+    bool _running;
 
     concurrency::MpmcQueue<Job*> _jobQueue;
     memory::PoolAllocator<maxJobSize> _jobPool;
