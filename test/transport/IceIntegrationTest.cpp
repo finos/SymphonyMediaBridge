@@ -297,6 +297,10 @@ TEST_F(IceIntegrationTest, dtlsRace)
     for (auto* clientPair : clients)
     {
         clientPair->stop();
+    }
+
+    for (auto* clientPair : clients)
+    {
         delete clientPair;
     }
 }
