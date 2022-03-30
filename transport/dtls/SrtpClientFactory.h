@@ -1,10 +1,10 @@
 #pragma once
 
 #include "SrtpClient.h"
-#include "SslDtls.h"
 
 namespace transport
 {
+class SslDtls;
 
 class SrtpClientFactory
 {

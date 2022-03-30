@@ -3,9 +3,9 @@
 #include "test/macros.h"
 #include "test/transport/TransportIntegrationTest.h"
 #include "transport/RtcSocket.h"
+#include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
-#include "transport/dtls/SrtpClientFactory.h"
 #include "gmock/gmock-matchers.h"
 #include <cstdint>
 #include <gtest/gtest.h>
@@ -297,6 +297,10 @@ TEST_F(IceIntegrationTest, dtlsRace)
     for (auto* clientPair : clients)
     {
         clientPair->stop();
+    }
+
+    for (auto* clientPair : clients)
+    {
         delete clientPair;
     }
 }

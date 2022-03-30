@@ -1,15 +1,15 @@
 #include "SctpAssociation.h"
-#include "SctpServerPort.h"
 #include "SctpTimer.h"
 #include "Sctprotocol.h"
+#include "logger/Logger.h"
 #include "memory/RingAllocator.h"
 #include <list>
 #include <map>
-#include <string>
 #include <unordered_map>
-#include <vector>
 namespace sctp
 {
+class SctpServerPort;
+
 // Session state for a connection between client and peer
 //
 // Unsupported features:

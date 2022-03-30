@@ -1,7 +1,6 @@
 #include "Bridge.h"
 #include "aws/AwsHarvester.h"
 #include "bridge/ApiRequestHandler.h"
-#include "bridge/LegacyApiRequestHandler.h"
 #include "bridge/MixerManager.h"
 #include "bridge/engine/Engine.h"
 #include "httpd/Httpd.h"
@@ -10,6 +9,7 @@
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SrtpClientFactory.h"
+#include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
 #include "utils/SsrcGenerator.h"
 

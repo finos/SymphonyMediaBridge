@@ -1,10 +1,10 @@
 #pragma once
 
-#include "legacyapi/Conference.h"
 #include "nlohmann/json.hpp"
 
 namespace legacyapi
 {
+struct Conference;
 
 namespace Generator
 {

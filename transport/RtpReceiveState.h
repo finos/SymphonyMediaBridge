@@ -1,10 +1,19 @@
 #pragma once
 
 #include "concurrency/MpmcPublish.h"
-#include "rtp/RtcpHeader.h"
 #include "transport/PacketCounters.h"
 #include <algorithm>
-#include <chrono>
+
+namespace memory
+{
+class Packet;
+} // namespace memory
+
+namespace rtp
+{
+class ReportBlock;
+struct RtcpHeader;
+} // namespace rtp
 
 namespace config
 {

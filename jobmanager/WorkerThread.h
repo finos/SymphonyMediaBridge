@@ -1,11 +1,10 @@
 #pragma once
 
-#include "jobmanager/JobManager.h"
-#include <memory>
 #include <thread>
 
 namespace jobmanager
 {
+class JobManager;
 
 class WorkerThread
 {

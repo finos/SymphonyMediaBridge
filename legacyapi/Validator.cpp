@@ -1,4 +1,6 @@
 #include "legacyapi/Validator.h"
+#include "legacyapi/Conference.h"
+#include "legacyapi/Content.h"
 #include "legacyapi/PatchConferenceType.h"
 
 namespace

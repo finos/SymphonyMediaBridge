@@ -1,16 +1,21 @@
 #pragma once
 
 #include "bridge/Stats.h"
-#include "bridge/engine/Engine.h"
 #include "bridge/engine/EngineMessageListener.h"
+#include "bridge/engine/EngineMixer.h"
+#include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include <memory>
 #include <mutex>
-#include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+namespace bridge
+{
+class Engine;
+}
 
 namespace utils
 {
@@ -26,7 +31,6 @@ class TransportFactory;
 namespace jobmanager
 {
 class JobManager;
-class WorkerThread;
 } // namespace jobmanager
 
 namespace config
@@ -38,7 +42,6 @@ namespace bridge
 {
 
 class Mixer;
-class EngineMixer;
 
 class MixerManager : public EngineMessageListener
 {

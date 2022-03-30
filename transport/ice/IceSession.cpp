@@ -1,9 +1,7 @@
 #include "IceSession.h"
 #include "Stun.h"
-#include "crypto/SslHelper.h"
 #include "logger/Logger.h"
 #include "utils/ContainerAlgorithms.h"
-#include "utils/ScopedReentrancyBlocker.h"
 #include "utils/Time.h"
 namespace ice
 {

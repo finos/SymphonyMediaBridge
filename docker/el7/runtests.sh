@@ -8,6 +8,7 @@ function pr() {
   echo -e ${GREEN}$1${NC}
 }
 
+
 function generate_coverage_report() {
   if ! find . -iname "*.gcda" | grep -q "."; then
     echo No coverage data found in "$PWD"
@@ -22,7 +23,7 @@ function generate_coverage_report() {
   # Convert coverage data from LLVM to lcov format, see http://logan.tw/posts/2015/04/28/check-code-coverage-with-clang-and-lcov/
   # (With a more recent LLVM, the same can be achieved with `llvm-cov export lcov`)
   echo '#!/bin/bash' > llvm-gcov.sh
-  echo '/opt/rh/llvm-toolset-7/root/usr/bin/llvm-cov gcov "$@"' >> llvm-gcov.sh
+  echo 'llvm-cov gcov "$@"' >> llvm-gcov.sh
   chmod +x llvm-gcov.sh
 
   lcov --capture \

@@ -8,16 +8,14 @@
 
 #endif
 #include "utils/Time.h"
-#include <thread>
 #include <time.h>
-#include <unistd.h>
 
 namespace
 {
 #ifdef __APPLE__
 struct mach_timebase_info machTimeBase;
 #endif
-}
+} // namespace
 
 namespace utils
 {
@@ -62,7 +60,10 @@ void nanoSleep(int64_t ns)
     ::nanosleep(&sleepTime, nullptr);
 }
 
-void usleep(long uSec) { nanoSleep(static_cast<uint64_t>(uSec) * 1000); }
+void usleep(long uSec)
+{
+    nanoSleep(static_cast<uint64_t>(uSec) * 1000);
+}
 
 uint64_t toNtp(const std::chrono::system_clock::time_point timestamp)
 {
@@ -79,6 +80,6 @@ uint64_t toNtp(const std::chrono::system_clock::time_point timestamp)
     return ntp;
 }
 
-}
+} // namespace Time
 
-}
+} // namespace utils

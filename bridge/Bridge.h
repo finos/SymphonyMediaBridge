@@ -4,8 +4,6 @@
 #include "config/Config.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
-#include "transport/RtcePoll.h"
-#include "transport/dtls/SslDtls.h"
 #include "transport/ice/IceSession.h"
 #include "transport/sctp/SctpConfig.h"
 
@@ -23,7 +21,9 @@ class WorkerThread;
 
 namespace transport
 {
+class RtcePoll;
 class SrtpClientFactory;
+class SslDtls;
 class TransportFactory;
 } // namespace transport
 
@@ -36,7 +36,6 @@ namespace bridge
 {
 class Engine;
 class MixerManager;
-class LegacyApiRequestHandler;
 class ApiRequestHandler;
 
 class Bridge

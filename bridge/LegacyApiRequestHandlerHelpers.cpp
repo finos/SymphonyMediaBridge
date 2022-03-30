@@ -1,5 +1,8 @@
 #include "bridge/LegacyApiRequestHandlerHelpers.h"
-#include "legacyapi/Conference.h"
+#include "bridge/RtpMap.h"
+#include "bridge/engine/SimulcastStream.h"
+#include "legacyapi/Channel.h"
+#include "legacyapi/SsrcGroup.h"
 #include "logger/Logger.h"
 #include <algorithm>
 

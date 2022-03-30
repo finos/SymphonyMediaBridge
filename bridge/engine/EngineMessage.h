@@ -1,5 +1,6 @@
 #pragma once
 
+#include "memory/PacketPoolAllocator.h"
 #include <cstddef>
 #include <cstdint>
 

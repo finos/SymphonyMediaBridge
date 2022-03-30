@@ -9,6 +9,7 @@
 #include "transport/Transport.h"
 #include "transport/ice/IceSession.h"
 #include "webrtc/DataStreamTransport.h"
+#include <unordered_map>
 #include <vector>
 
 namespace config

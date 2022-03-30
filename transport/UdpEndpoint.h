@@ -1,14 +1,7 @@
 #pragma once
 #include "concurrency/MpmcHashmap.h"
-#include "concurrency/MpmcQueue.h"
-#include "ice/IceSession.h"
-#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/BaseUdpEndpoint.h"
-#include "transport/Endpoint.h"
-#include "transport/RtcSocket.h"
-#include "transport/RtcePoll.h"
-#include <functional>
 
 namespace transport
 {
@@ -33,6 +26,7 @@ public:
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override;
 
     void unregisterListener(IEvents* listener) override;
+
 public: // internal job interface
     void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::Packet* packet) override;
 

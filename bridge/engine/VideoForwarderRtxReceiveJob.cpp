@@ -4,7 +4,6 @@
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "rtp/RtpHeader.h"
-#include "utils/Time.h"
 
 namespace bridge
 {

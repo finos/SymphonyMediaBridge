@@ -5,7 +5,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get -y update && apt-get -y upgrade
 
 # Install build dependenices
-RUN apt-get -y install llvm git wget cmake libc++-dev libc++abi-dev clang libtool
+RUN apt-get -y install git wget cmake libc++-dev libc++abi-dev libtool
+
+RUN cd /tmp \
+    && wget -O clang+llvm-12.0.1-x86_64-linux.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz \
+    && tar xvf clang+llvm-12.0.1-x86_64-linux.tar.xz \
+    && cd clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
+    && cp -rn * /usr/local \
+    && cd /tmp && rm -rf clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
+    && ln -s /usr/local/bin/lld /usr/local/bin/ld
 
 # Build lcov 1.15
 RUN cd /tmp && git clone https://github.com/linux-test-project/lcov.git

@@ -1,8 +1,12 @@
 #include "bwe/BandwidthEstimator.h"
 #include "bwe/RateController.h"
 #include "config/Config.h"
+#include "jobmanager/WorkerThread.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/DataReceiver.h"
+#include "transport/RtcePoll.h"
+#include "transport/TransportFactory.h"
+#include "transport/dtls/SrtpClientFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "transport/ice/IceSession.h"
 #include "transport/sctp/SctpConfig.h"
@@ -10,16 +14,10 @@
 #include <cstdint>
 #include <gtest/gtest.h>
 
-namespace jobmanager
-{
-class JobManager;
-class WorkerThread;
-} // namespace jobmanager
 namespace transport
 {
-class SrtpClientFactory;
-class TransportFactory;
-class RtcePoll;
+class RecordingTransport;
+class RtcTransport;
 } // namespace transport
 
 using namespace testing;

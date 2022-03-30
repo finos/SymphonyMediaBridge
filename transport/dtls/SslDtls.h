@@ -1,16 +1,8 @@
 #pragma once
 
-#include "memory/Packet.h"
-#include "transport/dtls/SslWriteBioListener.h"
-#include "transport/ice/IceComponent.h"
-#include "utils/ByteOrder.h"
 #include "utils/StringBuilder.h"
-#include <cassert>
 #include <openssl/ssl.h>
-#include <string.h>
 #include <string>
-#include <utility>
-#include <vector>
 
 namespace transport
 {

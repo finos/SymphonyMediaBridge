@@ -1,9 +1,8 @@
 #pragma once
 
-#include "legacyapi/Conference.h"
-
 namespace legacyapi
 {
+struct Conference;
 
 namespace Validator
 {

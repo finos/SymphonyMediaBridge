@@ -3,12 +3,9 @@
 #include "logger/Logger.h"
 #include <cstdint>
 #include <gtest/gtest.h>
-#include <memory>
 #include <queue>
 #include <thread>
-#include <unistd.h>
 #include <utils/Time.h>
-#include <vector>
 
 using namespace concurrency;
 
@@ -138,7 +135,16 @@ public:
     std::queue<ListItem*> _queue;
 };
 
-TEST(LFList, consistencyPlenty) { consistencyTest<LockFreeList>(8, 7 * BATCH_SIZE); }
-TEST(LFList, consistencyFew) { consistencyTest<LockFreeList>(8, 128); }
+TEST(LFList, consistencyPlenty)
+{
+    consistencyTest<LockFreeList>(8, 7 * BATCH_SIZE);
+}
+TEST(LFList, consistencyFew)
+{
+    consistencyTest<LockFreeList>(8, 128);
+}
 
-TEST(LFList, plainConsistencyPlenty) { consistencyTest<QueueWrapper>(8, 7 * BATCH_SIZE); }
+TEST(LFList, plainConsistencyPlenty)
+{
+    consistencyTest<QueueWrapper>(8, 7 * BATCH_SIZE);
+}

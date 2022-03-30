@@ -3,17 +3,8 @@
 #include "concurrency/MpmcHashmap.h"
 #include "concurrency/MpmcQueue.h"
 #include "logger/Logger.h"
-#include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
-#include <cstdint>
-#include <memory>
-#include <queue>
-#include <unordered_map>
-
-namespace memory
-{
-struct RefCountedPacket;
-}
+#include "memory/RefCountedPacket.h"
 
 namespace bridge
 {

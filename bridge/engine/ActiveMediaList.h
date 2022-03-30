@@ -6,12 +6,16 @@
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
 #include "memory/PriorityQueue.h"
-#include "utils/StringBuilder.h"
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+
+namespace utils
+{
+template <size_t S>
+class StringBuilder;
+} // namespace utils
 
 namespace bridge
 {

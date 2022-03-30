@@ -1,9 +1,15 @@
 #include "bridge/Mixer.h"
+#include "api/RecordingChannel.h"
+#include "bridge/AudioStream.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/engine/Engine.h"
+#include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineDataStream.h"
+#include "bridge/engine/EngineRecordingStream.h"
+#include "bridge/engine/EngineVideoStream.h"
+#include "bridge/engine/PacketCache.h"
 #include "config/Config.h"
 #include "jobmanager/JobManager.h"
 #include "logger/Logger.h"
@@ -101,9 +107,9 @@ bool waitForPendingJobs(const uint32_t timeoutMs, const uint32_t pollIntervalMs,
     while (totalSleepTimeMs < timeoutMs && transport.hasPendingJobs())
     {
         totalSleepTimeMs += pollIntervalMs;
-        transport.stop();
         usleep(pollIntervalMs * 1000);
     }
+
     return totalSleepTimeMs < timeoutMs;
 }
 
@@ -161,8 +167,7 @@ void Mixer::stopTransports()
         assert(bundleTransportEntry.second._transport.get());
 
         bundleTransportEntry.second._transport->stop();
-        waitForPendingJobs(200, 5, *bundleTransportEntry.second._transport);
-        if (!waitForPendingJobs(500, 5, *bundleTransportEntry.second._transport))
+        if (!waitForPendingJobs(700, 5, *bundleTransportEntry.second._transport))
         {
             logger::error("Transport for endpointId %s did not finish pending jobs in time. count=%u. Continuing "
                           "deletion anyway.",
@@ -179,9 +184,9 @@ void Mixer::stopTransports()
         {
             continue;
         }
+
         audioStreamEntry.second->_transport->stop();
-        waitForPendingJobs(200, 5, *audioStreamEntry.second->_transport);
-        if (!waitForPendingJobs(500, 5, *audioStreamEntry.second->_transport))
+        if (!waitForPendingJobs(700, 5, *audioStreamEntry.second->_transport))
         {
             logger::error("Transport for endpointId %s did not finish pending jobs in time. Continuing "
                           "deletion anyway.",
@@ -198,8 +203,7 @@ void Mixer::stopTransports()
             continue;
         }
         videoStreamEntry.second->_transport->stop();
-        waitForPendingJobs(200, 5, *videoStreamEntry.second->_transport);
-        if (!waitForPendingJobs(500, 5, *videoStreamEntry.second->_transport))
+        if (!waitForPendingJobs(700, 5, *videoStreamEntry.second->_transport))
         {
             logger::error("Transport for endpointId %s did not finish pending jobs in time. Continuing "
                           "deletion anyway.",
@@ -1643,9 +1647,7 @@ void Mixer::stopTransportIfNeeded(transport::Transport* streamTransport, const s
 
     // Allow pending transmissions to complete
     transport->stop();
-    waitForPendingJobs(200, 5, *transport);
-
-    if (!waitForPendingJobs(500, 5, *transport))
+    if (!waitForPendingJobs(700, 5, *transport))
     {
         logger::error("Transport for endpointId %s did not finish pending jobs in time. count=%u. Continuing "
                       "deletion anyway.",
@@ -1703,10 +1705,7 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
         if (streamEntry == _recordingStreams.end())
         {
             streamEntry =
-                _recordingStreams
-                    .emplace(conferenceId,
-                        std::make_unique<RecordingStream>(conferenceId))
-                    .first;
+                _recordingStreams.emplace(conferenceId, std::make_unique<RecordingStream>(conferenceId)).first;
         }
 
         stream = streamEntry->second.get();
@@ -1986,7 +1985,9 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
             stream->_id.c_str(),
             transportEntry.second->getRemotePeer().toString().c_str());
 
-        // Allow pending transmissions to complete
+        // Try first wait for pending jobs without stop the transport
+        // as we may have some recording events to be sent and we don't
+        // want to lose them
         waitForPendingJobs(200, 5, *transportEntry.second);
         transportEntry.second->stop();
         _engineMixer.getJobManager().abortTimedJobs(transportEntry.second->getId());
@@ -2066,11 +2067,12 @@ void Mixer::removeRecordingTransport(const std::string& streamId, const size_t e
         return;
     }
 
+    // Try first wait for pending jobs without stop the transport
+    // as we may have some recording events to be sent and we don't
+    // want to lose them
+    waitForPendingJobs(200, 5, *transportItr->second);
     transportItr->second->stop();
     _engineMixer.getJobManager().abortTimedJobs(transportItr->second->getId());
-
-    // Allow pending transmissions to complete
-    waitForPendingJobs(200, 5, *transportItr->second);
     if (!waitForPendingJobs(500, 5, *transportItr->second))
     {
         logger::error("RecordingTransport for streamId %s did not finish pending jobs in time. count=%u. Continuing "

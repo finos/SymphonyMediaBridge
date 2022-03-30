@@ -1,4 +1,5 @@
 #include "legacyapi/Generator.h"
+#include "legacyapi/Conference.h"
 
 namespace
 {

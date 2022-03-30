@@ -3,18 +3,10 @@
 #include "jobmanager/Job.h"
 #include "memory/PacketPoolAllocator.h"
 #include <cstdint>
-#include <memory>
-
-namespace jobmanager
-{
-class JobManager;
-}
 
 namespace transport
 {
-class SrtpClient;
 class Transport;
-class DataReceiver;
 } // namespace transport
 
 namespace rtp
@@ -24,8 +16,6 @@ enum RtcpPacketType : uint8_t;
 
 namespace bridge
 {
-class SsrcOutboundContext;
-
 class SendPliJob : public jobmanager::CountedJob
 {
 public:

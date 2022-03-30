@@ -6,7 +6,7 @@
 #include "nlohmann/json.hpp"
 #include "test/bridge/ActiveMediaListTestLevels.h"
 #include "test/bridge/DummyRtcTransport.h"
-#include "transport/RtcTransport.h"
+#include "utils/StringBuilder.h"
 #include <gtest/gtest.h>
 #include <memory>
 

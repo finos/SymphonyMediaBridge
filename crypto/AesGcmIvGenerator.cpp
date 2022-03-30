@@ -1,5 +1,6 @@
 #include "crypto/AesGcmIvGenerator.h"
 #include <cassert>
+#include <cstring>
 
 namespace
 {

@@ -1,11 +1,7 @@
 #pragma once
 
-#include "bridge/engine/PacketCache.h"
-#include "bridge/engine/RecordingOutboundContext.h"
-#include "bridge/engine/UnackedPacketsTracker.h"
 #include "jobmanager/Job.h"
 #include "memory/PacketPoolAllocator.h"
-#include <memory>
 
 namespace transport
 {
@@ -15,8 +11,8 @@ class RecordingTransport;
 namespace bridge
 {
 
-struct RtpMap;
-class SsrcInboundContext;
+class PacketCache;
+class UnackedPacketsTracker;
 
 class RecordingSendEventJob : public jobmanager::CountedJob
 {

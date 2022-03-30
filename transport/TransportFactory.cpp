@@ -1,8 +1,7 @@
 #include "transport/TransportFactory.h"
 #include "config/Config.h"
-#include "dtls/SrtpClientFactory.h"
-#include "jobmanager/Job.h"
-#include "jobmanager/JobManager.h"
+#include "transport/RecordingTransport.h"
+#include "transport/RtcTransport.h"
 #include "transport/TcpEndpoint.h"
 #include "transport/TcpServerEndpoint.h"
 #include "transport/UdpEndpoint.h"
@@ -373,10 +372,13 @@ public:
     {
         if (!_sharedRecordingEndpoints.empty())
         {
-            const uint32_t initialIndex = _sharedRecordingEndpointListIndex.fetch_add(1) % _sharedRecordingEndpoints.size();
+            const uint32_t initialIndex =
+                _sharedRecordingEndpointListIndex.fetch_add(1) % _sharedRecordingEndpoints.size();
             uint32_t listIndex = initialIndex;
-            do {
-                for (size_t endpointIndex = 0; endpointIndex < _sharedRecordingEndpoints[listIndex].size(); ++endpointIndex)
+            do
+            {
+                for (size_t endpointIndex = 0; endpointIndex < _sharedRecordingEndpoints[listIndex].size();
+                     ++endpointIndex)
                 {
                     auto* endpoint = _sharedRecordingEndpoints[listIndex][endpointIndex];
                     if (endpoint->getLocalPort().getFamily() == peer.getFamily())
@@ -394,7 +396,7 @@ public:
 
                 listIndex = (listIndex + 1) % _sharedRecordingEndpoints.size();
 
-            } while(listIndex != initialIndex);
+            } while (listIndex != initialIndex);
         }
 
         logger::error("No shared recording endpoints configured", "TransportFactory");

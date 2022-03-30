@@ -1,9 +1,7 @@
 #pragma once
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <type_traits>
-#include <utility>
 
 namespace memory
 {

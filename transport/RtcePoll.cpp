@@ -3,7 +3,6 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <unistd.h>
 #ifdef __APPLE__
 #include <sys/event.h>
@@ -14,11 +13,8 @@
 #include "concurrency/ThreadUtils.h"
 #include "logger/Logger.h"
 #include <ifaddrs.h>
-#include <mutex>
 #include <net/if.h>
-#include <queue>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <thread>
 #include <unordered_map>
 

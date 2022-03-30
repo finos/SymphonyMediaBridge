@@ -1,18 +1,12 @@
 #include "logger/Logger.h"
-#include <cassert>
 #include <cstdint>
 #include <gtest/gtest.h>
-#include <memory>
-#include <random>
-#include <thread>
-#include <unistd.h>
 #ifdef __APPLE__
 #include <mach/mach_time.h>
 #include <mach/thread_act.h>
 #else
 #include <pthread.h>
 #endif
-#include "utils/Time.h"
 #ifdef __APPLE__
 #include <mach/mach_time.h>
 #else

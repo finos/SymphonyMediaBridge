@@ -1,13 +1,17 @@
 #pragma once
-#include "DataChannel.h"
-#include "DataStreamTransport.h"
+
 #include "memory/PacketPoolAllocator.h"
-#include "transport/Transport.h"
 #include <cstdint>
 #include <string>
 
+namespace transport
+{
+class Transport;
+} // namespace transport
+
 namespace webrtc
 {
+class DataStreamTransport;
 
 class WebRtcDataStream
 {

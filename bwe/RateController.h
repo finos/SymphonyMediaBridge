@@ -2,9 +2,7 @@
 #include "bwe/NetworkQueue.h"
 #include "logger/Logger.h"
 #include "memory/RandomAccessBacklog.h"
-#include "utils/Optional.h"
 #include "utils/Time.h"
-#include <array>
 #include <cstdint>
 
 namespace rtp
@@ -127,7 +125,8 @@ public:
     uint32_t getPadding(uint64_t timestamp, uint16_t size, uint16_t& paddingSize) const;
     double getTargetRate() const;
     size_t getPacingBudget(uint64_t timestamp) const;
-    void enableRtpProbing() { _canRtxPad = true; }
+    void setRtpProbingEnabled(bool enabled);
+    bool isRtpProbingEnabled() const { return _canRtxPad; }
 
 private:
     struct BacklogAnalysis
@@ -195,6 +194,13 @@ private:
         {
             return duration != 0 && utils::Time::diffLE(start, timestamp, duration);
         }
+
+        void resetProbeInterval()
+        {
+            duration = Probe::INITIAL_INTERVAL;
+            countOnLastIntervalReduction = count;
+        }
+
     } _probe;
 
     bool _canRtxPad = true;

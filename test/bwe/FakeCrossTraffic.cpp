@@ -1,5 +1,4 @@
 #include "FakeCrossTraffic.h"
-#include "FakeMedia.h"
 #include "utils/Time.h"
 namespace fakenet
 {

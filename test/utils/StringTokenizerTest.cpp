@@ -1,5 +1,4 @@
 #include "utils/StringTokenizer.h"
-#include <cassert>
 #include <gtest/gtest.h>
 
 class StringTokenizerTest : public ::testing::Test

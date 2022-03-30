@@ -1,12 +1,10 @@
 #include "bridge/engine/Vp8Rewriter.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Vp8Header.h"
-#include "jobmanager/JobManager.h"
 #include "memory/PacketPoolAllocator.h"
 #include <array>
 #include <gtest/gtest.h>
 #include <memory>
-#include <thread>
 
 namespace
 {

@@ -12,11 +12,6 @@ namespace jobmanager
 class JobQueue;
 }
 
-namespace memory
-{
-class Packet;
-}
-
 namespace transport
 {
 class DtlsTimerJob : public jobmanager::CountedJob

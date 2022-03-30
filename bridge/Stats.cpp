@@ -4,7 +4,6 @@
 #include "utils/Time.h"
 #include <algorithm>
 #include <cstdio>
-#include <cstdlib>
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <unistd.h>

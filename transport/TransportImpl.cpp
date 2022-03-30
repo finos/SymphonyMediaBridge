@@ -1,6 +1,5 @@
 #include "TransportImpl.h"
 #include "bwe/BandwidthEstimator.h"
-#include "codec/Vp8Header.h"
 #include "config/Config.h"
 #include "dtls/SrtpClient.h"
 #include "dtls/SrtpClientFactory.h"
@@ -11,19 +10,15 @@
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "sctp/SctpAssociation.h"
-#include "sctp/Sctprotocol.h"
 #include "transport/DtlsJob.h"
 #include "transport/IceJob.h"
 #include "transport/SctpJob.h"
-#include "transport/TcpEndpoint.h"
-#include "utils/ScopedIncrement.h"
 #include "utils/SocketAddress.h"
 #include "utils/StdExtensions.h"
 #include <arpa/inet.h>
 #include <cstdint>
 #include <memory>
 #include <string>
-#include <unordered_set>
 #include <utility>
 
 namespace transport
@@ -323,6 +318,11 @@ public:
 
     void run() override
     {
+        if (!_packet)
+        {
+            return;
+        }
+
         auto timestamp = utils::Time::getAbsoluteTime();
         auto current = _sctpAssociation.nextTimeout(timestamp);
         auto& header = *reinterpret_cast<SctpDataChunk*>(_packet->get());
@@ -1356,7 +1356,6 @@ PacketCounters TransportImpl::getAudioReceiveCounters(uint64_t idleTimestamp) co
             if (utils::Time::diffGE(idleTimestamp, it.second.getLastActive(), 0))
             {
                 total += it.second.getCounters();
-                ;
                 ++total.activeStreamCount;
             }
         }
@@ -1787,16 +1786,17 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
         const auto oldMax = _inboundMetrics.estimatedKbpsMax.load();
 
         logger::info("Estimates 5s, Downlink %u - %ukbps, rate %.1fkbps, Uplink rctl %.0fkbps, rate %.1fkbps, remb "
-                     "%ukbps, rtt %.1fms, pacingQ %zu",
+                     "%ukbps, rtt %.1fms, pacingQ %zu , rtpProbingEnabled %s",
             _loggableId.c_str(),
             oldMin,
             oldMax,
             _bwe->getReceiveRate(timestamp),
             _rateController.getTargetRate(),
-            _sendRateTracker.get(utils::Time::ms * 600) * 8 * utils::Time::ms,
+            _sendRateTracker.get(timestamp, utils::Time::ms * 600) * 8 * utils::Time::ms,
             _outboundRembEstimateKbps,
             _rttNtp * 1000.0 / 0x10000,
-            _pacingQueue.size() + _rtxPacingQueue.size());
+            _pacingQueue.size() + _rtxPacingQueue.size(),
+            _rateController.isRtpProbingEnabled() ? "t" : "0");
 
         _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
         _inboundMetrics.estimatedKbpsMax = 0;
@@ -2450,10 +2450,7 @@ void TransportImpl::setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter)
 {
     _rtxProbeSsrc = ssrc;
     _rtxProbeSequenceCounter = sequenceCounter;
-    if (sequenceCounter)
-    {
-        _rateController.enableRtpProbing();
-    }
+    _rateController.setRtpProbingEnabled(!!sequenceCounter);
 }
 
 void TransportImpl::runTick(uint64_t timestamp)
