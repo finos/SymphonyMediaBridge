@@ -703,8 +703,8 @@ Stats::MixerManagerStats MixerManager::getStats()
     result._receivePoolSize = _mainAllocator.size();
     result._sendPoolSize = _sendAllocator.size();
     result._udpSharedEndpointsSendQueue = udpMetrics.sendQueue;
-    result._udpSharedEndpointsReceiveKbps = udpMetrics.receiveKbps;
-    result._udpSharedEndpointsSendKbps = udpMetrics.sendKbps;
+    result._udpSharedEndpointsReceiveKbps = static_cast<uint32_t>(udpMetrics.receiveKbps);
+    result._udpSharedEndpointsSendKbps = static_cast<uint32_t>(udpMetrics.sendKbps);
 
     return result;
 }
