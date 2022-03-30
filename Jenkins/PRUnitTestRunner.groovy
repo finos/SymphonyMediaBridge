@@ -21,6 +21,14 @@ parallel "Release el7": {
     node('be-integration') {
         prRunner("Release", "el7")
     }
+}, "Release AWS-linux": {
+    node('be-integration') {
+        prRunner("Release", "aws-linux")
+    }
+}, "Release el8": {
+    node('be-integration') {
+        prRunner("Release", "el8")
+    }
 }, "LCheck": {
     node('be-integration') {
         prRunner("LCheck", "el8")
