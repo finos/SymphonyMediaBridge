@@ -5,7 +5,7 @@ void prRunner(String cmakeBuildType, String platform) {
         checkout scm
     }
 
-    stage("Build and test") {
+    stage("Build and test\n[$cmakeBuildType $platform]") {
         docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:latest").inside {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
             env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
