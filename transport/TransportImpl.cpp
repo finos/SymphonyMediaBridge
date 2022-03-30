@@ -1796,7 +1796,7 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
             _outboundRembEstimateKbps,
             _rttNtp * 1000.0 / 0x10000,
             _pacingQueue.size() + _rtxPacingQueue.size(),
-            _rateController.isRtpProbingEnabled() ? "t" : "0");
+            _rateController.isRtpProbingEnabled() ? "t" : "f");
 
         _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
         _inboundMetrics.estimatedKbpsMax = 0;
