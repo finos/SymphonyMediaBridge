@@ -23,19 +23,19 @@ parallel "Release el7": {
     }
 }, "LCheck": {
     node('be-integration') {
-        prRunner("LCheck", "el7")
+        prRunner("LCheck", "el8")
     }
 }, "TCheck": {
     node('be-integration') {
-        prRunner("TCheck", "el7")
+        prRunner("TCheck", "el8")
     }
 }, "DCheck": {
     node('be-integration') {
         try {
-            prRunner("DCheck", "el7")
+            prRunner("DCheck", "el8")
         } finally {
             stage("Post Actions") {
-                dir ("el7/smb") {
+                dir ("el8/smb") {
                     junit testResults: "test-results.xml"
                     publishHTML(target: [
                             allowMissing         : false,
