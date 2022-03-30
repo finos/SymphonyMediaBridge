@@ -3,7 +3,7 @@ FROM redhat/ubi8:latest
 RUN yum -y update && yum -y upgrade
 
 # Install build dependenices
-RUN yum -y install git llvm-toolset cmake libtool wget lsof python3 make perl-Pod-Html xz
+RUN yum -y install git llvm-toolset cmake libtool wget lsof python3 perl-IO-Compress perl-JSON-PP make perl-Pod-Html xz
 
 # Build lcov 1.15
 RUN cd /tmp && git clone https://github.com/linux-test-project/lcov.git
