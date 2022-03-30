@@ -35,7 +35,6 @@ node('be-integration') {
             env.VERSION=version
         }
 
-    parallel "el7 build & test": {
         docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:latest').inside {
             stage('Build Centos 7') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
@@ -47,7 +46,7 @@ node('be-integration') {
                 sh "docker/el7/runtests.sh"
             }
         }
-    }, "el8 build & test": {
+
         docker.image('gcr.io/sym-dev-rtc/buildsmb-el8:latest').inside {
             stage('Build RHEL 8') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
@@ -59,7 +58,7 @@ node('be-integration') {
                 sh "docker/el8/runtests.sh"
             }
         }
-    }, "ubuntu-focal build & test": {
+
         docker.image('gcr.io/sym-dev-rtc/buildsmb-ubuntu-focal:latest').inside {
             stage('Build Ubuntu Focal') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
@@ -71,7 +70,7 @@ node('be-integration') {
                 sh "docker/ubuntu-focal/runtests.sh"
             }
         }
-    }, "ubuntu-focal-deb build & test": {
+
         docker.image('gcr.io/sym-dev-rtc/buildsmb-ubuntu-focal-deb:latest').inside {
             stage('Build Ubuntu Focal deb release') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
@@ -83,7 +82,7 @@ node('be-integration') {
                 sh "docker/ubuntu-focal-deb/runtests.sh"
             }
         }
-    }, "aws-linux build & test": {
+
         docker.image('gcr.io/sym-dev-rtc/buildsmb-aws-linux:latest').inside {
             stage('Build AWS linux2 release') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
@@ -95,7 +94,6 @@ node('be-integration') {
                 sh "docker/aws-linux/runtests.sh"
             }
         }
-    }
 
         docker.image('gcr.io/sym-dev-rtc/buildsmb7:latest').inside {
             stage('Create archive') {
