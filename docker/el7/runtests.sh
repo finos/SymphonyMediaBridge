@@ -26,16 +26,27 @@ function generate_coverage_report() {
   echo 'llvm-cov gcov "$@"' >> llvm-gcov.sh
   chmod +x llvm-gcov.sh
 
-  lcov --capture \
+  if ! lcov --capture \
     --directory . \
     --gcov-tool "$(pwd)/llvm-gcov.sh" \
     --output-file coverage.info
+  then
+    echo "ERROR: lcov --capture returned non-zero exit code"
+    return 1
+  fi
   rm llvm-gcov.sh
 
   # Exclude external and test source from coverage
-  lcov --remove coverage.info \*/googletest-src/\* \*/external/\* \*/test/\* /usr/\* -o coverage.info
+  if ! lcov --remove coverage.info \*/googletest-src/\* \*/external/\* \*/test/\* /usr/\* -o coverage.info
+  then
+    echo "ERROR: lcov --remove returned non-zero exit code"
+    return 1
+  fi
 
-  genhtml -o coverage coverage.info
+  if ! genhtml -o coverage coverage.info
+  then
+    echo "ERROR: genhtml returned non-zero exit code"
+  fi
 }
 
 pushd tools/testfiles
@@ -61,5 +72,5 @@ fi
 popd || exit 1
 
 pushd el7/smb || exit 1
-generate_coverage_report
+generate_coverage_report || exit 1
 popd
