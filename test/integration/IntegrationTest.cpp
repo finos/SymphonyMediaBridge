@@ -815,6 +815,10 @@ void analyzeRecording(const std::vector<int16_t>& recording,
 
 TEST_F(IntegrationTest, plain)
 {
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
 #if !ENABLE_LEGACY_API
     return;
 #endif
