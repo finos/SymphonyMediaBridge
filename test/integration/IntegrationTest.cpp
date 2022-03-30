@@ -916,7 +916,7 @@ TEST_F(IntegrationTest, plain)
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
             analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 2 * audioPacketSampleCount);
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
             EXPECT_EQ(freqVector.size(), 1);
             allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
 
@@ -945,7 +945,7 @@ TEST_F(IntegrationTest, plain)
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
             analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 2 * audioPacketSampleCount);
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
             EXPECT_EQ(freqVector.size(), 1);
             allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
 
