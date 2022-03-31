@@ -101,45 +101,86 @@ void RtpHeader::setExtensions(const RtpHeaderExtension& extensions)
 
 void RtpHeaderExtension::addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension)
 {
-    std::memcpy(&(*cursor), &extension, extension.size());
-    ++cursor;
-    const int newLength = reinterpret_cast<uint8_t*>(&(*cursor)) - reinterpret_cast<uint8_t*>(&(*extensions().begin()));
+    const auto target = reinterpret_cast<uint8_t*>(&(*cursor));
+    const int newLength = target + extension.size() - data;
     const int diff = newLength % sizeof(uint32_t);
-    if (diff == 0)
+    const int padding = (diff ? sizeof(uint32_t) - diff : 0);
+
+    std::memcpy(target, &extension, extension.size() + padding);
+    length = (newLength + padding) / sizeof(uint32_t);
+
+    ++cursor;
+}
+
+namespace
+{
+const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
+{
+    for (const uint8_t* cursor = data; cursor < dataEnd;)
     {
-        length = newLength / sizeof(uint32_t);
-    }
-    else
-    {
-        const int padding = sizeof(uint32_t) - diff;
-        for (int i = 0; i < padding; ++i)
+        const auto& item = *reinterpret_cast<const GeneralExtension1Byteheader*>(cursor);
+        if (item.getId() == 15)
         {
-            *cursor = GeneralExtension1Byteheader();
-            ++cursor;
+            return cursor;
         }
-        length = (newLength + padding) / sizeof(uint32_t);
+        else if (cursor + item.size() > dataEnd)
+        {
+            // corrupt
+            return cursor;
+        }
+        else
+        {
+            cursor += item.size();
+        }
     }
+    return dataEnd;
+}
+} // namespace
+
+utils::TlvCollectionConst<GeneralExtension1Byteheader> RtpHeaderExtension::extensions() const
+{
+    return utils::TlvCollectionConst<GeneralExtension1Byteheader>(data,
+        findExtensionsEnd(data, data + length * sizeof(uint32_t)));
+}
+
+utils::TlvCollection<GeneralExtension1Byteheader> RtpHeaderExtension::extensions()
+{
+    return utils::TlvCollection<GeneralExtension1Byteheader>(data,
+        const_cast<uint8_t*>(findExtensionsEnd(data, data + length * sizeof(uint32_t))));
+}
+
+bool RtpHeaderExtension::isValid() const
+{
+    auto extEnd = findExtensionsEnd(data, data + length * sizeof(uint32_t));
+    if (extEnd == data + length * sizeof(uint32_t))
+    {
+        return true;
+    }
+    else if ((*extEnd & 0xF0) == 0xF0)
+    {
+        return true;
+    }
+
+    return false;
 }
 
 size_t GeneralExtension1Byteheader::size() const
 {
-    if (id == 0 && len == 0)
+    if (_id == 0)
     {
         return 1; // 0 padding
     }
-    return 2 + len;
+    return 2 + _length;
 }
 
-void GeneralExtension1Byteheader::setDataLength(int length)
+void GeneralExtension1Byteheader::setDataLength(uint8_t length)
 {
-    if (length < 2)
-    {
-        len = 0;
-    }
-    else
-    {
-        len = length - 1;
-    }
+    _length = std::max(uint8_t(1), length) - 1;
+}
+
+uint8_t GeneralExtension1Byteheader::getDataLength() const
+{
+    return _length + 1;
 }
 
 // convert to 24 bit seconds fixed point format 6.18
@@ -169,19 +210,18 @@ void setTransmissionTimestamp(memory::Packet* packet, uint8_t extensionId, uint6
     {
         for (auto& extension : extensionHeader->extensions())
         {
-            if (extension.id == extensionId)
+            if (extension.getId() == extensionId && extension.getDataLength() == 3)
             {
                 auto ntpTimestamp = nsToSecondsFp6_18(timestamp);
                 extension.data[0] = ntpTimestamp >> 16;
                 extension.data[1] = (ntpTimestamp >> 8) & 0xFFu;
                 extension.data[2] = ntpTimestamp & 0xFFu;
+                return;
             }
-
-            return;
         }
     }
 
-    assert(false);
+    assert(false); // this will stop in debug for mobiles where not abs send time is set
     // we could insert header but rely on timestamp always being negotiated
     // and set in the forwarded packet.
 }
@@ -201,7 +241,7 @@ bool getTransmissionTimestamp(const memory::Packet& packet, uint8_t extensionId,
     {
         for (auto& extension : extensionHeader->extensions())
         {
-            if (extension.id == extensionId)
+            if (extension.getId() == extensionId)
             {
                 sendTime = extension.data[0];
                 sendTime <<= 8;

@@ -24,7 +24,7 @@ struct AudioStream
           _localSsrc(localSsrc),
           _transport(transport),
           _audioLevelExtensionId(-1),
-          _absSendTimeExtensionId(-1),
+          _absSendTimeExtensionId(0),
           _audioMixed(audioMixed),
           _rtpMap(),
           _markedForDeletion(false),
@@ -41,7 +41,7 @@ struct AudioStream
 
     std::shared_ptr<transport::RtcTransport> _transport;
     int32_t _audioLevelExtensionId;
-    int32_t _absSendTimeExtensionId;
+    uint8_t _absSendTimeExtensionId;
     bool _audioMixed;
 
     bridge::RtpMap _rtpMap;

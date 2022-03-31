@@ -312,8 +312,11 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
         {
             for (const auto& rtpHdrExtJson : audioJson["rtp-hdrexts"])
             {
-                audioChannel._rtpHeaderExtensions.emplace_back(rtpHdrExtJson["id"].get<uint32_t>(),
-                    rtpHdrExtJson["uri"].get<std::string>());
+                const auto id = rtpHdrExtJson["id"].get<uint32_t>();
+                if (id > 0 && id < 15)
+                {
+                    audioChannel._rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
+                }
             }
         }
 
@@ -343,8 +346,11 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
 
         for (const auto& rtpHdrExtJson : videoJson["rtp-hdrexts"])
         {
-            videoChannel._rtpHeaderExtensions.emplace_back(rtpHdrExtJson["id"].get<uint32_t>(),
-                rtpHdrExtJson["uri"].get<std::string>());
+            const auto id = rtpHdrExtJson["id"].get<uint32_t>();
+            if (id > 0 && id < 15)
+            {
+                videoChannel._rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
+            }
         }
 
         for (const auto& ssrcGroupJson : videoJson["ssrc-groups"])

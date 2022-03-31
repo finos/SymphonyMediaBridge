@@ -322,7 +322,7 @@ int audioLevelFromPacket(const memory::Packet& packet)
     auto extensions = rtpHeader->getExtensionHeader()->extensions();
     for (auto extension : extensions)
     {
-        if (extension.id == 1)
+        if (extension.getId() == 1)
         {
             return extension.data[0];
         }

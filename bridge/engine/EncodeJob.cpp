@@ -13,9 +13,9 @@ EncodeJob::EncodeJob(memory::AudioPacket* packet,
     memory::AudioPacketPoolAllocator& allocator,
     SsrcOutboundContext& outboundContext,
     transport::Transport& transport,
-    const uint64_t rtpTimestamp,
-    const int32_t audioLevelExtensionId,
-    int32_t absSendTimeExtensionId)
+    uint64_t rtpTimestamp,
+    uint8_t audioLevelExtensionId,
+    uint8_t absSendTimeExtensionId)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _packet(packet),
       _audioPacketPoolAllocator(allocator),
@@ -24,7 +24,6 @@ EncodeJob::EncodeJob(memory::AudioPacket* packet,
       _rtpTimestamp(rtpTimestamp),
       _audioLevelExtensionId(audioLevelExtensionId),
       _absSendTimeExtensionId(absSendTimeExtensionId)
-
 {
     assert(packet);
     assert(packet->getLength() > 0);
@@ -68,16 +67,12 @@ void EncodeJob::run()
         auto cursor = extensionHead.extensions().begin();
         if (_absSendTimeExtensionId)
         {
-            rtp::GeneralExtension1Byteheader absSendTime;
-            absSendTime.id = 3;
-            absSendTime.setDataLength(3);
+            rtp::GeneralExtension1Byteheader absSendTime(_absSendTimeExtensionId, 3);
             extensionHead.addExtension(cursor, absSendTime);
         }
-        if (_audioLevelExtensionId > 0)
+        if (_audioLevelExtensionId)
         {
-            rtp::GeneralExtension1Byteheader audioLevel;
-            audioLevel.setDataLength(1);
-            audioLevel.id = 1;
+            rtp::GeneralExtension1Byteheader audioLevel(_audioLevelExtensionId, 1);
             audioLevel.data[0] = codec::computeAudioLevel(*_packet);
             extensionHead.addExtension(cursor, audioLevel);
         }

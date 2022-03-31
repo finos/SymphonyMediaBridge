@@ -21,8 +21,8 @@ public:
         SsrcOutboundContext& outboundContext,
         transport::Transport& transport,
         uint64_t rtpTimestamp,
-        int32_t audioLevelExtensionId,
-        int32_t absSendTimeExtensionId);
+        uint8_t audioLevelExtensionId,
+        uint8_t absSendTimeExtensionId);
 
     virtual ~EncodeJob();
 
@@ -34,8 +34,8 @@ private:
     SsrcOutboundContext& _outboundContext;
     transport::Transport& _transport;
     uint64_t _rtpTimestamp;
-    int32_t _audioLevelExtensionId;
-    int32_t _absSendTimeExtensionId;
+    uint8_t _audioLevelExtensionId;
+    uint8_t _absSendTimeExtensionId;
 };
 
 } // namespace bridge

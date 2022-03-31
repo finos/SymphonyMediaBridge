@@ -54,14 +54,10 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     rtp::RtpHeaderExtension extensionHead;
     auto cursor = extensionHead.extensions().begin();
 
-    rtp::GeneralExtension1Byteheader absSendTime;
-    absSendTime.id = 3;
-    absSendTime.setDataLength(3);
+    rtp::GeneralExtension1Byteheader absSendTime(3, 3);
     extensionHead.addExtension(cursor, absSendTime);
 
-    rtp::GeneralExtension1Byteheader audioLevel;
-    audioLevel.setDataLength(1);
-    audioLevel.id = 1;
+    rtp::GeneralExtension1Byteheader audioLevel(1, 1);
     audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
     extensionHead.addExtension(cursor, audioLevel);
     rtpHeader->setExtensions(extensionHead);

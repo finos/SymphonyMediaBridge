@@ -7,15 +7,28 @@
 namespace rtp
 {
 
-struct GeneralExtension1Byteheader
+/**
+ * Id of 15 means end of list and and iteration can be aborted
+ */
+class GeneralExtension1Byteheader
 {
-    uint8_t len : 4;
-    uint8_t id : 4;
+    uint8_t _length : 4;
+    uint8_t _id : 4;
 
+public:
     uint8_t data[20];
 
-    GeneralExtension1Byteheader() : len(0), id(0), data{0} { data[0] = 0; }
-    void setDataLength(int length);
+    GeneralExtension1Byteheader(uint8_t extensionId, uint8_t dataLength)
+        : _length(std::max(uint8_t(1), dataLength) - 1),
+          _id(extensionId),
+          data{0}
+    {
+        data[0] = 0;
+    }
+
+    uint8_t getId() const { return _id; }
+    void setDataLength(uint8_t length);
+    uint8_t getDataLength() const;
 
     size_t size() const;
 };
@@ -36,20 +49,15 @@ struct RtpHeaderExtension
     RtpHeaderExtension() : profile(GENERAL1), length(0) { data[0] = 0; }
     explicit RtpHeaderExtension(const RtpHeaderExtension* extensions);
 
-    utils::TlvCollectionConst<GeneralExtension1Byteheader> extensions() const
-    {
-        return utils::TlvCollectionConst<GeneralExtension1Byteheader>(data, data + length * sizeof(uint32_t));
-    }
-
-    utils::TlvCollection<GeneralExtension1Byteheader> extensions()
-    {
-        return utils::TlvCollection<GeneralExtension1Byteheader>(data, data + length * sizeof(uint32_t));
-    }
+    utils::TlvCollectionConst<GeneralExtension1Byteheader> extensions() const;
+    utils::TlvCollection<GeneralExtension1Byteheader> extensions();
 
     size_t size() const { return minSize() + length * sizeof(uint32_t); }
     constexpr static size_t minSize() { return 2 * sizeof(uint16_t); }
     void addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension);
     bool empty() const { return length.get() == 0; }
+
+    bool isValid() const;
 
 private:
     uint8_t data[512];
