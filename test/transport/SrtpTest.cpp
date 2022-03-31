@@ -78,9 +78,9 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
         _srtp1->setRemoteDtlsFingerprint("sha-256", _dtls->getLocalFingerprint(), true);
         _srtp2->setRemoteDtlsFingerprint("sha-256", _dtls->getLocalFingerprint(), false);
 
-        auto header = rtp::RtpHeader::create(_audioPacket, sizeof(_audioPacket));
+        auto header = rtp::RtpHeader::create(_audioPacket);
         auto payload = header->getPayload();
-        for (size_t i = 0; i < sizeof(_audioPacket) - header->headerLength(); ++i)
+        for (size_t i = 0; i < _audioPacket.getLength() - header->headerLength(); ++i)
         {
             payload[i] = i;
         }
@@ -104,9 +104,9 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
 
     bool isDataValid(uint8_t* data) const
     {
-        auto header = rtp::RtpHeader::fromPtr(_audioPacket, sizeof(_audioPacket));
+        auto header = rtp::RtpHeader::fromPacket(_audioPacket);
         auto payload = header->getPayload();
-        for (size_t i = 0; i < sizeof(_audioPacket) - header->headerLength(); ++i)
+        for (size_t i = 0; i < _audioPacket.getLength() - header->headerLength(); ++i)
         {
             if (payload[i] != data[i])
             {
@@ -123,7 +123,7 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
     std::unique_ptr<transport::SrtpClient> _srtp2; //    auto srtp2 = _factory->create(this);
     std::unique_ptr<FakeSrtpEndpoint> _ep1;
     std::unique_ptr<FakeSrtpEndpoint> _ep2;
-    uint8_t _audioPacket[250];
+    memory::Packet _audioPacket;
 };
 
 TEST_F(SrtpTest, seqSkip)
@@ -133,9 +133,8 @@ TEST_F(SrtpTest, seqSkip)
     uint16_t seqStart = 65530;
     for (int i = 0; i < 65535 * 4; ++i)
     {
-        auto packet = memory::makePacket(_allocator, _audioPacket, sizeof(_audioPacket));
-        packet->setLength(sizeof(_audioPacket));
-        auto header = rtp::RtpHeader::fromPtr(packet->get(), packet->getLength());
+        auto packet = memory::makePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
         header->ssrc = 1;
         header->timestamp = i * 160;
 
@@ -176,9 +175,8 @@ TEST_F(SrtpTest, seqDuplicate)
 {
     connect();
 
-    auto packet = memory::makePacket(_allocator, _audioPacket, sizeof(_audioPacket));
-    packet->setLength(sizeof(_audioPacket));
-    auto header = rtp::RtpHeader::fromPtr(packet->get(), packet->getLength());
+    auto packet = memory::makePacket(_allocator, _audioPacket);
+    auto header = rtp::RtpHeader::fromPacket(*packet);
     header->ssrc = 4321;
     header->timestamp = 1234;
     header->sequenceNumber = 5678;

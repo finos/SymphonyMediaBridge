@@ -166,8 +166,7 @@ struct OpusBuilder : SampleDataUtils::RtpStreamBuilder
             memory::Packet& packet = batch[0];
             memset(packet.get(), 0, memory::Packet::size);
 
-            auto rtpHeader = rtp::RtpHeader::create(packet.get(), packet.size);
-            rtpHeader->version = 2;
+            auto rtpHeader = rtp::RtpHeader::create(packet);
             rtpHeader->payloadType = codec::Opus::payloadType;
             rtpHeader->sequenceNumber = _sequenceNumber;
             rtpHeader->ssrc = _ssrc;

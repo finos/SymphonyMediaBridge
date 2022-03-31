@@ -76,8 +76,7 @@ TEST(RtpSendTimeTest, multipleExtensions)
     const uint8_t audioLevelId = 1;
 
     memory::Packet packet;
-    auto rtpHeader = rtp::RtpHeader::create(packet.get(), 100);
-    rtpHeader->extension = 1;
+    auto rtpHeader = rtp::RtpHeader::create(packet);
     std::memset(rtpHeader->getPayload(), 0xCD, 200);
 
     rtp::RtpHeaderExtension header;

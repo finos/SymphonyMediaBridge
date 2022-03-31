@@ -50,15 +50,6 @@ RtpHeader* RtpHeader::fromPtr(void* p, const size_t len)
     return header;
 }
 
-RtpHeader* RtpHeader::create(void* p, const size_t len)
-{
-    assert(len >= MIN_RTP_HEADER_SIZE);
-    auto header = reinterpret_cast<RtpHeader*>(p);
-    std::memset(header, 0, MIN_RTP_HEADER_SIZE);
-    header->version = 2;
-    return header;
-}
-
 size_t RtpHeader::headerLength() const
 {
     const size_t baseHeaderLength = MIN_RTP_HEADER_SIZE + csrcCount * sizeof(u_int32_t);

@@ -2429,7 +2429,7 @@ inline void EngineMixer::processAudioStreams()
             return;
         }
 
-        auto rtpHeader = rtp::RtpHeader::create(audioPacket->get(), memory::Packet::size);
+        auto rtpHeader = rtp::RtpHeader::create(*audioPacket);
         rtpHeader->ssrc = audioStream->_localSsrc;
 
         auto payloadStart = rtpHeader->getPayload();

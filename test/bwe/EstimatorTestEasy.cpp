@@ -35,7 +35,7 @@ TEST(BweTest, absTimestamp)
 TEST(BweTest, absTimestampExt)
 {
     memory::Packet packet;
-    auto header = rtp::RtpHeader::create(packet.get(), packet.size);
+    auto header = rtp::RtpHeader::create(packet);
     rtp::RtpHeaderExtension ext;
     rtp::GeneralExtension1Byteheader timeExt(4, 3);
     auto cursor = ext.extensions().begin();

@@ -61,7 +61,7 @@ void EncodeJob::run()
             return;
         }
 
-        auto opusHeader = rtp::RtpHeader::create(opusPacket->get(), memory::Packet::size);
+        auto opusHeader = rtp::RtpHeader::create(*opusPacket);
 
         rtp::RtpHeaderExtension extensionHead(opusHeader->getExtensionHeader());
         auto cursor = extensionHead.extensions().begin();

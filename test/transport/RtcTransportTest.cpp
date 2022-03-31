@@ -432,7 +432,7 @@ TEST(TransportStats, packetLoss)
     {
         memory::Packet packet;
         packet.setLength(200);
-        auto header = rtp::RtpHeader::create(packet.get(), packet.getLength());
+        auto header = rtp::RtpHeader::create(packet);
 
         header->ssrc = 101;
         header->sequenceNumber = i;
@@ -472,7 +472,7 @@ TEST(TransportStats, outboundLoss)
     for (int i = 0; i < 100; ++i)
     {
         memory::Packet rtpPacket;
-        auto header = rtp::RtpHeader::create(rtpPacket.get(), memory::Packet::size);
+        auto header = rtp::RtpHeader::create(rtpPacket);
         header->ssrc = 6000;
         header->sequenceNumber = i;
         header->payloadType = 8;

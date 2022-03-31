@@ -68,7 +68,7 @@ TEST_F(RtcpTest, NTP)
 
     const auto start = utils::Time::getAbsoluteTime();
     memory::Packet p;
-    auto* header = rtp::RtpHeader::create(p.get(), 4000);
+    auto* header = rtp::RtpHeader::create(p);
     header->timestamp = 45000;
     header->sequenceNumber = 1001;
     header->ssrc = 110;
@@ -89,7 +89,7 @@ TEST_F(RtcpTest, SenderReport)
     const auto start = utils::Time::getAbsoluteTime();
     const auto timepoint = std::chrono::system_clock::now();
     memory::Packet p;
-    auto* header = rtp::RtpHeader::create(p.get(), 4000);
+    auto* header = rtp::RtpHeader::create(p);
     header->timestamp = 45000;
     header->sequenceNumber = 1001;
     header->ssrc = 110;
@@ -134,7 +134,7 @@ TEST_F(RtcpTest, padding)
     const auto timepoint = std::chrono::system_clock::now();
     const auto start = utils::Time::getAbsoluteTime();
     memory::Packet p;
-    auto* header = rtp::RtpHeader::create(p.get(), 4000);
+    auto* header = rtp::RtpHeader::create(p);
     header->timestamp = 45000;
     header->sequenceNumber = 1001;
     header->ssrc = 110;

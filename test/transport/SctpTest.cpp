@@ -149,13 +149,9 @@ struct ClientPair : public transport::DataReceiver
             memory::Packet* packet = memory::makePacket(_sendAllocator);
             packet->setLength(160 + rtp::MIN_RTP_HEADER_SIZE);
 
-            auto rtpHeader = reinterpret_cast<rtp::RtpHeader*>(packet->get());
+            auto rtpHeader = rtp::RtpHeader::create(*packet);
             rtpHeader->payloadType = 8;
-            rtpHeader->version = 2;
-            rtpHeader->extension = 0;
             rtpHeader->ssrc = _ssrc;
-            rtpHeader->padding = 0;
-            rtpHeader->marker = 0;
             rtpHeader->sequenceNumber = _sequenceNumber++;
 
             _transport1->getJobQueue().addJob<transport::SendJob>(*_transport1, packet, _sendAllocator);

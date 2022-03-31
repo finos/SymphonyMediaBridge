@@ -34,7 +34,7 @@ memory::Packet* FakeAudioSource::getPacket(uint64_t timestamp)
         auto* packet = memory::makePacket(_allocator);
         if (packet)
         {
-            auto rtpHeader = rtp::RtpHeader::create(packet->get(), 100);
+            auto rtpHeader = rtp::RtpHeader::create(*packet);
             rtpHeader->payloadType = _payloadType;
             rtpHeader->sequenceNumber = _sequenceCounter++;
             rtpHeader->ssrc = _ssrc;

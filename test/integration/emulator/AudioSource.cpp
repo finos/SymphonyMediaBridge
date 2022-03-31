@@ -34,7 +34,7 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     _nextRelease += utils::Time::ms * 20;
 
     auto* packet = memory::makePacket(_allocator);
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), 100);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     rtpHeader->payloadType = 111;
     rtpHeader->sequenceNumber = _sequenceCounter++;
     rtpHeader->ssrc = _ssrc;

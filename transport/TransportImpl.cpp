@@ -1451,7 +1451,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
         {
             std::memset(padPacket->get(), 0, memory::Packet::size);
             padPacket->setLength(padding);
-            auto padRtpHeader = rtp::RtpHeader::create(padPacket->get(), padPacket->getLength());
+            auto padRtpHeader = rtp::RtpHeader::create(*padPacket);
             padRtpHeader->ssrc = _rtxProbeSsrc;
             padRtpHeader->payloadType = rtxPayloadType;
             padRtpHeader->timestamp = 1293887;
