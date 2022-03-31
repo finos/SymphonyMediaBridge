@@ -1449,7 +1449,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
         auto padPacket = memory::makePacket(_mainAllocator);
         if (padPacket)
         {
-            std::memset(padPacket->get(), 0, memory::Packet::size);
+            padPacket->clear();
             padPacket->setLength(padding);
             auto padRtpHeader = rtp::RtpHeader::create(*padPacket);
             padRtpHeader->ssrc = _rtxProbeSsrc;
@@ -1461,7 +1461,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
             if (_absSendTimeExtensionId)
             {
                 padRtpHeader->extension = 1;
-                rtp::RtpHeaderExtension extensionHead(padRtpHeader->getExtensionHeader());
+                rtp::RtpHeaderExtension extensionHead;
                 rtp::GeneralExtension1Byteheader absSendTime(_absSendTimeExtensionId, 3);
                 auto cursor = extensionHead.extensions().begin();
                 extensionHead.addExtension(cursor, absSendTime);

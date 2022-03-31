@@ -76,9 +76,9 @@ void RcCall::sendRtpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize)
         auto padPacket = memory::makePacket(_allocator);
         if (padPacket)
         {
-            std::memset(padPacket->get(), 0, memory::Packet::size);
-            padPacket->setLength(paddingSize);
+            padPacket->clear();
             auto padRtpHeader = rtp::RtpHeader::create(*padPacket);
+            padPacket->setLength(paddingSize);
             padRtpHeader->ssrc = ssrc;
             padRtpHeader->payloadType = 96;
             padRtpHeader->sequenceNumber = (_mixVideoSendState.getSentSequenceNumber() + 1) & 0xFFFF;

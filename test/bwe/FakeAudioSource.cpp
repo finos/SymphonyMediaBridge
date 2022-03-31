@@ -41,7 +41,7 @@ memory::Packet* FakeAudioSource::getPacket(uint64_t timestamp)
             rtpHeader->timestamp = _rtpTimestamp;
             _rtpTimestamp += 960;
 
-            rtp::RtpHeaderExtension extensionHead(rtpHeader->getExtensionHeader());
+            rtp::RtpHeaderExtension extensionHead;
             rtp::GeneralExtension1Byteheader absSendTime(3, 3);
             auto cursor = extensionHead.extensions().begin();
             extensionHead.addExtension(cursor, absSendTime);

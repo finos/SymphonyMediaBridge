@@ -56,7 +56,7 @@ memory::Packet* FakeVideoSource::getPacket(uint64_t timestamp)
             rtpHeader->sequenceNumber = _sequenceCounter++;
             rtpHeader->timestamp = _rtpTimestamp;
 
-            rtp::RtpHeaderExtension extensionHead(rtpHeader->getExtensionHeader());
+            rtp::RtpHeaderExtension extensionHead;
             rtp::GeneralExtension1Byteheader absSendTime(3, 3);
             auto cursor = extensionHead.extensions().begin();
             extensionHead.addExtension(cursor, absSendTime);
