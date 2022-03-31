@@ -139,12 +139,22 @@ const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
 
 utils::TlvCollectionConst<GeneralExtension1Byteheader> RtpHeaderExtension::extensions() const
 {
+    if (profile.get() != GENERAL1)
+    {
+        return utils::TlvCollectionConst<GeneralExtension1Byteheader>(data, data);
+    }
+
     return utils::TlvCollectionConst<GeneralExtension1Byteheader>(data,
         findExtensionsEnd(data, data + length * sizeof(uint32_t)));
 }
 
 utils::TlvCollection<GeneralExtension1Byteheader> RtpHeaderExtension::extensions()
 {
+    if (profile.get() != GENERAL1)
+    {
+        return utils::TlvCollection<GeneralExtension1Byteheader>(data, data);
+    }
+
     return utils::TlvCollection<GeneralExtension1Byteheader>(data,
         const_cast<uint8_t*>(findExtensionsEnd(data, data + length * sizeof(uint32_t))));
 }
