@@ -71,8 +71,7 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
         if (names)
         {
             auto localUser = names->getNames().second;
-            auto it = _iceListeners.find(localUser);
-            if (it != _iceListeners.cend())
+            if (_iceListeners.contains(localUser))
             {
                 assert(it->second);
                 auto pair = _iceResponseListeners.emplace(transactionId, it->second);

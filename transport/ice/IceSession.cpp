@@ -1007,7 +1007,7 @@ void IceSession::generateCredentialString(char* targetBuffer, int length)
                                   "abcdefghijklmnopqrstuvwxyz"
                                   "0123456789"
                                   "+/";
-    const int COUNT = strlen(approvedLetters);
+    const int COUNT = std::strlen(approvedLetters);
     __uint64_t id = 0;
     for (int i = 0; i < length; i++)
     {
@@ -1153,7 +1153,7 @@ void IceSession::CandidatePair::send(const uint64_t now)
         state = InProgress;
     }
     _transactions.push_back(transaction);
-    if (_transactions.size() > 25)
+    if (_transactions.size() > 10)
     {
         if (localEndpoint.endpoint)
         {
