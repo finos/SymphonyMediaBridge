@@ -36,22 +36,4 @@ int computeAudioLevel(const memory::AudioPacket& packet)
     return dBO;
 }
 
-void addAudioLevelRtpExtension(int extensionId, int audioLeveldBO, memory::Packet& packet)
-{
-    const auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-    if (!rtpHeader)
-    {
-        return;
-    }
-
-    rtp::RtpHeaderExtension extensionHead(rtpHeader->getExtensionHeader());
-    rtp::GeneralExtension1Byteheader extAudioLevel;
-    extAudioLevel.id = extensionId;
-    extAudioLevel.len = 0;
-    extAudioLevel.data[0] = audioLeveldBO;
-    auto cursor = extensionHead.extensions().begin();
-    extensionHead.addExtension(cursor, extAudioLevel);
-    rtpHeader->setExtensions(extensionHead);
-}
-
 } // namespace codec

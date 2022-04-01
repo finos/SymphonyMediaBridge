@@ -819,6 +819,10 @@ void analyzeRecording(const std::vector<int16_t>& recording,
 
 TEST_F(IntegrationTest, plain)
 {
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
 #if !ENABLE_LEGACY_API
     return;
 #endif
@@ -908,18 +912,20 @@ TEST_F(IntegrationTest, plain)
         utils::Time::nanoSleep(1 * utils::Time::sec);
     }
 
+    const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
     {
         auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
         const auto& rData1 = client1.getReceiveStats();
         std::vector<double> allFreq;
+
         for (const auto& item : rData1)
         {
             std::vector<double> freqVector;
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
             analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, codec::Opus::sampleRate / 25);
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
             EXPECT_EQ(freqVector.size(), 1);
             allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
 
@@ -948,7 +954,7 @@ TEST_F(IntegrationTest, plain)
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
             analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, codec::Opus::sampleRate / 25);
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
             EXPECT_EQ(freqVector.size(), 1);
             allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
 

@@ -75,7 +75,7 @@ public:
     uint32_t _packetsProcessed;
     uint32_t _lastUnprotectedExtendedSequenceNumber;
     bool _activeMedia;
-    uint64_t _lastReceiveTime;
+    std::atomic_uint64_t _lastReceiveTime;
     bool _markedForDeletion;
     bool _idle;
 

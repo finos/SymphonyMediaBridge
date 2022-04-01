@@ -974,7 +974,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         const auto endpointIdHash = inboundContext._sender->getEndpointIdHash();
         auto receiveCounters = inboundContext._sender->getCumulativeReceiveCounters(ssrc);
 
-        if (utils::Time::diffGT(inboundContext._lastReceiveTime, timestamp, utils::Time::sec * 1) &&
+        if (utils::Time::diffGT(inboundContext._lastReceiveTime.load(), timestamp, utils::Time::sec * 1) &&
             receiveCounters.packets > 5 && inboundContext._activeMedia &&
             inboundContext._rtpMap._format != RtpMap::Format::VP8RTX)
         {
@@ -1005,7 +1005,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
             inboundContext._activeMedia = false;
         }
 
-        if (utils::Time::diffGT(inboundContext._lastReceiveTime, timestamp, utils::Time::minute * 5) &&
+        if (utils::Time::diffGT(inboundContext._lastReceiveTime.load(), timestamp, utils::Time::minute * 5) &&
             inboundContext._rtpMap._format != RtpMap::Format::VP8RTX)
         {
             if (!inboundContext._markedForDeletion && !inboundContext._idle)

@@ -5,7 +5,7 @@ void prRunner(String cmakeBuildType, String platform) {
         checkout scm
     }
 
-    stage("Build and test") {
+    stage("Build and test\n[$cmakeBuildType $platform]") {
         docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:latest").inside {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
             env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
@@ -21,21 +21,29 @@ parallel "Release el7": {
     node('be-integration') {
         prRunner("Release", "el7")
     }
+}, "Release AWS-linux": {
+    node('be-integration') {
+        prRunner("Release", "aws-linux")
+    }
+}, "Release el8": {
+    node('be-integration') {
+        prRunner("Release", "el8")
+    }
 }, "LCheck": {
     node('be-integration') {
-        prRunner("LCheck", "el7")
+        prRunner("LCheck", "el8")
     }
 }, "TCheck": {
     node('be-integration') {
-        prRunner("TCheck", "el7")
+        prRunner("TCheck", "el8")
     }
 }, "DCheck": {
     node('be-integration') {
         try {
-            prRunner("DCheck", "el7")
+            prRunner("DCheck", "el8")
         } finally {
             stage("Post Actions") {
-                dir ("el7/smb") {
+                dir ("el8/smb") {
                     junit testResults: "test-results.xml"
                     publishHTML(target: [
                             allowMissing         : false,
