@@ -20,7 +20,12 @@ uint8_t* getEndpointBuffRef(memory::Packet* packet)
 RecDominantSpeakerEventBuilder& RecDominantSpeakerEventBuilder::setDominantSpeakerEndpoint(const std::string& endpoint)
 {
     assert(std::numeric_limits<uint16_t>::max() >= endpoint.size());
-    auto packet = getPacket();
+    auto* packet = getPacket();
+    if (!packet)
+    {
+        return *this;
+    }
+
     packet->setLength(MIN_DOMINANT_SPEAKER_SIZE + endpoint.size());
     getEndpointLenRef(packet) = static_cast<uint16_t>(endpoint.size());
     std::memcpy(getEndpointBuffRef(packet), endpoint.c_str(), endpoint.size());

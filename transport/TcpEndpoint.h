@@ -109,6 +109,8 @@ public:
     const char* getName() const override { return _name.c_str(); }
     Endpoint::State getState() const override { return _state; }
 
+    EndpointMetrics getMetrics(uint64_t timestamp) const override { return EndpointMetrics(_receiveJobs.getCount(), 0.0, 0.0); }
+
 public:
     // internal job interface
     // called on receiveJobs threads

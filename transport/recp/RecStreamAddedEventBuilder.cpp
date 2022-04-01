@@ -47,7 +47,12 @@ RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setBridgeCodecNumber(uin
 RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setEndpoint(const std::string& endpoint)
 {
     assert(std::numeric_limits<uint16_t>::max() >= endpoint.size());
-    auto packet = getPacket();
+    auto* packet = getPacket();
+    if (!packet)
+    {
+        return *this;
+    }
+
     const uint16_t oldSize = castPacket(packet)->endpointLen.get();
     const uint16_t oldEndPos = RecStreamAddedEventBuilder::MinSize + oldSize;
     const uint16_t newEndPos = RecStreamAddedEventBuilder::MinSize + static_cast<uint16_t>(endpoint.size());
@@ -63,6 +68,7 @@ RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setEndpoint(const std::s
 
     castPacket(packet)->endpointLen = static_cast<uint16_t>(endpoint.size());
     std::memcpy(getEndpointBuffRef(packet), endpoint.c_str(), endpoint.size());
+
     return *this;
 }
 
@@ -72,13 +78,19 @@ RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setWallClock(std::chrono
     // not used in the 1st protocol version. To ensure retro compatibility it was added after endpoint string,
     // which has a dynamic size, and the use of this property should be considered optional
 
-    const uint32_t endpointEndPos = RecStreamAddedEventBuilder::MinSize + castPacket(getPacket())->endpointLen;
+    auto* packet = getPacket();
+    if (!packet)
+    {
+        return *this;
+    }
+
+    const uint32_t endpointEndPos = RecStreamAddedEventBuilder::MinSize + castPacket(packet)->endpointLen;
     // Wall clock position must be 32 bits aligned (we don't need to clean the padding, padding should be inserted and
     // cleaned by setEndpoint() method)
     const uint32_t wallClockPosition = endpointEndPos + 3u & ~3u;
     const nwuint64_t ntpTimestamp(utils::Time::toNtp(wallClock));
-    auto packet = getPacket();
     packet->setLength(wallClockPosition + sizeof(nwuint64_t));
     std::memcpy(packet->get() + wallClockPosition, &ntpTimestamp, sizeof(ntpTimestamp));
+
     return *this;
 }

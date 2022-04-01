@@ -448,6 +448,8 @@ TEST(TransportStats, packetLoss)
     transport::PacketCounters snapshot = state.getCounters();
     EXPECT_EQ(snapshot.lostPackets, 5);
     EXPECT_EQ(snapshot.getReceiveLossRatio(), 0.1);
+    EXPECT_EQ(snapshot.packetsPerSecond, 45);
+    EXPECT_EQ(snapshot.bitrateKbps, 72);
 }
 
 TEST(TransportStats, outboundLoss)
@@ -478,15 +480,17 @@ TEST(TransportStats, outboundLoss)
         header->payloadType = 8;
         rtpPacket.setLength(130);
         state.onRtpSent(timestamp, rtpPacket);
-        timestamp += 1000;
+        timestamp += utils::Time::ms * 20;
     }
     timestamp += utils::Time::ms * 50;
-    wallClock += std::chrono::milliseconds(50);
+    wallClock += std::chrono::milliseconds(50 + 20 * 100);
     state.onReceiverBlockReceived(timestamp, utils::Time::toNtp32(wallClock), report->reportBlocks[0]);
 
     transport::PacketCounters snapshot = state.getCounters();
     EXPECT_EQ(snapshot.lostPackets, 20);
     EXPECT_EQ(snapshot.getSendLossRatio(), 0.50);
+    EXPECT_EQ(snapshot.packetsPerSecond, 51);
+    EXPECT_EQ(snapshot.bitrateKbps, 53);
 }
 
 TEST(TransportStats, MpmcPublish)

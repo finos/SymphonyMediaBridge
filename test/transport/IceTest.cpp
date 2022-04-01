@@ -510,7 +510,10 @@ class FakeEndpoint : public ice::IceEndpoint, fakenet::NetworkNode
 {
 public:
     explicit FakeEndpoint(const transport::SocketAddress& port);
-    FakeEndpoint(const transport::SocketAddress& port, fakenet::Gateway& gateway);
+    FakeEndpoint(const transport::SocketAddress& port,
+        fakenet::Gateway& gateway,
+        ice::TransportType transporType = ice::TransportType::UDP);
+
     void sendTo(const transport::SocketAddress& source,
         const transport::SocketAddress& sender,
         const void* data,
@@ -527,10 +530,13 @@ public:
     void attach(std::unique_ptr<ice::IceSession>& session)
     {
         _session = session.get();
-        session->attachLocalEndpoint(this);
+        if (_transportType == ice::TransportType::UDP)
+        {
+            session->attachLocalEndpoint(this);
+        }
     }
 
-    ice::TransportType getTransportType() const override { return ice::TransportType::UDP; }
+    ice::TransportType getTransportType() const override { return _transportType; }
     transport::SocketAddress _address;
     ice::IceSession* _session;
 
@@ -538,16 +544,25 @@ public:
 
 private:
     fakenet::Gateway* _gateway;
+    ice::TransportType _transportType;
 };
 
-FakeEndpoint::FakeEndpoint(const transport::SocketAddress& port) : _address(port), _session(nullptr), _gateway(nullptr)
+FakeEndpoint::FakeEndpoint(const transport::SocketAddress& port)
+    : _address(port),
+      _session(nullptr),
+      _gateway(nullptr),
+      _transportType(ice::TransportType::UDP)
 {
     assert(!port.empty());
 }
 
-FakeEndpoint::FakeEndpoint(const transport::SocketAddress& port, fakenet::Gateway& gateway)
+FakeEndpoint::FakeEndpoint(const transport::SocketAddress& port,
+    fakenet::Gateway& gateway,
+    ice::TransportType transportType)
     : _address(port),
-      _gateway(&gateway)
+      _session(nullptr),
+      _gateway(&gateway),
+      _transportType(transportType)
 {
     assert(!port.empty());
     gateway.addLocal(this);
@@ -572,7 +587,11 @@ void FakeEndpoint::sendTo(const transport::SocketAddress& source,
     }
     else if (_gateway)
     {
-        logger::debug("sent %s -> %s", "FakeEndpoint", source.toString().c_str(), target.toString().c_str());
+        logger::debug("sent %s -> %s, %s",
+            "FakeEndpoint",
+            source.toString().c_str(),
+            target.toString().c_str(),
+            _transportType == ice::TransportType::UDP ? "udp" : "tcp");
         _gateway->sendTo(source, target, data, length, timestamp);
     }
 }
@@ -1435,4 +1454,58 @@ TEST(IceRobustness, roleConflict)
     {
         EXPECT_EQ(sessions[1]->getRole(), ice::IceRole::CONTROLLING);
     }
+}
+
+TEST(IceTest, udpTcpTimeout)
+{
+    fakenet::Internet internet;
+
+    FakeStunServer stunServer(transport::SocketAddress::parse("64.233.165.127", 19302), internet);
+    fakenet::Firewall firewall1(transport::SocketAddress::parse("216.93.246.10", 0), internet);
+    // fakenet::Firewall firewall2(transport::SocketAddress::parse("216.93.24.11", 0), internet);
+
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("172.16.0.10", 2000), firewall1);
+    FakeEndpoint endpoint1b(transport::SocketAddress::parse("172.16.0.10", 2001), firewall1, ice::TransportType::TCP);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("216.93.24.11", 3000), internet);
+    FakeEndpoint endpoint2b(transport::SocketAddress::parse("216.93.24.11", 4443), internet, ice::TransportType::TCP);
+
+    ice::IceConfig config;
+    IceSessions sessions;
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLED, nullptr));
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(2, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr));
+
+    endpoint1.attach(sessions[0]);
+    endpoint1b.attach(sessions[0]);
+    endpoint2.attach(sessions[1]);
+    endpoint2b.attach(sessions[1]);
+
+    uint64_t timeSource = utils::Time::getAbsoluteTime();
+
+    exchangeInfo(*sessions[0], *sessions[1]);
+    sessions[0]->addRemoteCandidate(ice::IceCandidate("werwe",
+                                        ice::IceComponent::RTP,
+                                        ice::TransportType::TCP,
+                                        12312,
+                                        endpoint2b._address,
+                                        ice::IceCandidate::Type::HOST,
+                                        ice::TcpType::PASSIVE),
+        &endpoint1b);
+    sessions[1]->addLocalTcpCandidate(ice::IceCandidate::Type::HOST,
+        0,
+        endpoint2b._address,
+        endpoint2b._address,
+        ice::TcpType::PASSIVE);
+
+    startProbes(sessions, timeSource);
+    establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
+
+    ASSERT_EQ(sessions[0]->getState(), ice::IceSession::State::CONNECTED);
+    ASSERT_EQ(sessions[1]->getState(), ice::IceSession::State::CONNECTED);
+    auto selectedPairServer = sessions[1]->getSelectedPair();
+    EXPECT_EQ(selectedPairServer.first.address.getPort(), 3000);
+    auto selectedPairClient = sessions[0]->getSelectedPair();
+    EXPECT_EQ(selectedPairClient.first.baseAddress.getPort(), 2000);
+    EXPECT_EQ(selectedPairClient.second.address.getPort(), 3000);
 }

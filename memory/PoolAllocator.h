@@ -11,6 +11,14 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#if !defined(ENABLE_ALLOCATOR_METRICS)
+    #ifdef DEBUG
+        #define ENABLE_ALLOCATOR_METRICS 1
+    #else
+        #define ENABLE_ALLOCATOR_METRICS 0
+    #endif
+#endif
+
 namespace memory
 {
 
@@ -97,7 +105,7 @@ public:
 #endif
             return nullptr;
         }
-#ifdef DEBUG
+#if ENABLE_ALLOCATOR_METRICS
         _count.fetch_sub(1, std::memory_order_relaxed);
 #endif
         auto entry = reinterpret_cast<Entry*>(item);
@@ -129,7 +137,7 @@ public:
 #endif
         const auto index = _pushIndex.fetch_add(1) % QCOUNT;
         _freeQueue[index].push(entry);
-#ifdef DEBUG
+#if ENABLE_ALLOCATOR_METRICS
         _count.fetch_add(1, std::memory_order_relaxed);
 #endif
     }

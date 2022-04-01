@@ -515,6 +515,10 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         {
             if (candidatePair->remoteCandidate.address == sender && candidatePair->localEndpoint.endpoint == endpoint)
             {
+                logger::debug("remote nominated %s-%s",
+                    _logId.c_str(),
+                    candidatePair->localCandidate.address.toString().c_str(),
+                    candidatePair->remoteCandidate.address.toString().c_str());
                 candidatePair->nominate(now);
                 processTimeout(now);
                 break;
@@ -857,6 +861,11 @@ void IceSession::nominate(const uint64_t now)
     {
         nominee->nominated = true;
         nominee->original.add(StunAttribute(StunAttribute::USE_CANDIDATE));
+        logger::debug("nominated %s-%s from %zu pending candidates",
+            _logId.c_str(),
+            nominee->localCandidate.baseAddress.toString().c_str(),
+            nominee->remoteCandidate.address.toString().c_str(),
+            _checklist.size());
         nominee->restartProbe(now);
         return;
     }

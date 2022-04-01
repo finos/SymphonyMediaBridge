@@ -235,10 +235,13 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
         auto* context = obtainOutboundSsrcContext(*engineAudioStream, engineAudioStream->_localSsrc);
         if (context)
         {
-            engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(
-                createGoodBye(context->_ssrc, context->_allocator),
-                engineAudioStream->_transport,
-                context->_allocator);
+            auto* goodByePacket = createGoodBye(context->_ssrc, context->_allocator);
+            if (goodByePacket)
+            {
+                engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(goodByePacket,
+                    engineAudioStream->_transport,
+                    context->_allocator);
+            }
         }
     }
 
@@ -323,10 +326,13 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
             engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
                 engineVideoStream->_localSsrc,
                 nullptr);
-            engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(
-                createGoodBye(outboundContext->_ssrc, outboundContext->_allocator),
-                engineVideoStream->_transport,
-                outboundContext->_allocator);
+            auto* goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
+            if (goodByePacket)
+            {
+                engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(goodByePacket,
+                    engineVideoStream->_transport,
+                    outboundContext->_allocator);
+            }
         }
     }
 
@@ -650,6 +656,13 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
                           .setRecordingId(desc->_recordingId)
                           .setUserId(desc->_ownerId)
                           .build();
+        if (!packet)
+        {
+            // This need to be improved. If we can't allocate this event, the recording
+            // must fail. We have to find away to report this failier
+            logger::error("No space available to allocate rec start event", _loggableId.c_str());
+            continue;
+        }
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
@@ -683,6 +696,14 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
                           .setRecordingId(desc->_recordingId)
                           .setUserId(desc->_ownerId)
                           .build();
+
+        if (!packet)
+        {
+            // This need to be improved. If we can't allocate this event, the recording
+            // must fail as we will not know when it finish. We have to find away to report this failier
+            logger::error("No space available to allocate rec stop event", _loggableId.c_str());
+            continue;
+        }
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
@@ -1118,6 +1139,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
         const auto audioSendCounters = audioStreamEntry.second->_transport.getAudioSendCounters(idleTimestamp);
         const auto videoRecvCounters = audioStreamEntry.second->_transport.getVideoReceiveCounters(idleTimestamp);
         const auto videoSendCounters = audioStreamEntry.second->_transport.getVideoSendCounters(idleTimestamp);
+        const auto pacingQueueCount = audioStreamEntry.second->_transport.getPacingQueueCount();
+        const auto rtxPacingQueueCount = audioStreamEntry.second->_transport.getRtxPacingQueueCount();
 
         stats.inbound.audio += audioRecvCounters;
         stats.outbound.audio += audioSendCounters;
@@ -1127,6 +1150,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
         stats.inbound.transport.addRttGroup(audioStreamEntry.second->_transport.getRtt() / utils::Time::ms);
         stats.inbound.transport.addLossGroup((audioRecvCounters + videoRecvCounters).getReceiveLossRatio());
         stats.outbound.transport.addLossGroup((audioSendCounters + videoSendCounters).getSendLossRatio());
+        stats.pacingQueue += pacingQueueCount;
+        stats.rtxPacingQueue += rtxPacingQueueCount;
     }
 
     for (auto& videoStreamEntry : _engineVideoStreams)
@@ -1135,6 +1160,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
         {
             const auto videoRecvCounters = videoStreamEntry.second->_transport.getVideoReceiveCounters(idleTimestamp);
             const auto videoSendCounters = videoStreamEntry.second->_transport.getVideoSendCounters(idleTimestamp);
+            const auto pacingQueueCount = videoStreamEntry.second->_transport.getPacingQueueCount();
+            const auto rtxPacingQueueCount = videoStreamEntry.second->_transport.getRtxPacingQueueCount();
 
             stats.inbound.video += videoRecvCounters;
             stats.outbound.video += videoSendCounters;
@@ -1142,6 +1169,8 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
             stats.inbound.transport.addRttGroup(videoStreamEntry.second->_transport.getRtt() / utils::Time::ms);
             stats.inbound.transport.addLossGroup(videoRecvCounters.getReceiveLossRatio());
             stats.outbound.transport.addLossGroup(videoSendCounters.getSendLossRatio());
+            stats.pacingQueue += pacingQueueCount;
+            stats.rtxPacingQueue += rtxPacingQueueCount;
         }
     }
 
@@ -1954,13 +1983,17 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
             for (const auto& transportEntry : recordingStream->_transports)
             {
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
-
                 ssrcOutboundContext->onRtpSent(timestamp);
-                if (!transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
-                        packet,
-                        transportEntry.second,
-                        packetInfo._extendedSequenceNumber))
+                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                if (!packet)
+                {
+                    logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
+                }
+                else if (!transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(
+                             *ssrcOutboundContext,
+                             packet,
+                             transportEntry.second,
+                             packetInfo._extendedSequenceNumber))
                 {
                     _sendAllocator.free(packet);
                 }
@@ -2772,6 +2805,12 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
                           .setDominantSpeakerEndpoint(dominantSpeakerEndpoint)
                           .build();
 
+        if (!packet)
+        {
+            logger::warn("No space available to allocate rec dominant speaker event", _loggableId.c_str());
+            continue;
+        }
+
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
             transportEntry.second,
@@ -2953,6 +2992,16 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             }
         }
 
+        if (!packet)
+        {
+            // This need to be improved. If we can't allocate this event, the recording
+            // must fail as the we will not info about this stream
+            logger::error("No space to allocate rec Stream%s event",
+                _loggableId.c_str(),
+                isAdded ? "Added" : "Removed");
+            continue;
+        }
+
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
             _sendAllocator,
             transportEntry.second,
@@ -3078,6 +3127,16 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             {
                 outboundContextItr->second._markedForDeletion = true;
             }
+        }
+
+        if (!packet)
+        {
+            // This need to be improved. If we can't allocate this event, the recording
+            // must fail as the we will not info about this stream
+            logger::error("No space to allocate rec Stream%s event",
+                _loggableId.c_str(),
+                isAdded ? "Added" : "Removed");
+            continue;
         }
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,

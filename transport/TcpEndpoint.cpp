@@ -250,7 +250,11 @@ void TcpEndpoint::sendStunTo(const transport::SocketAddress& target,
         connect(target);
     }
 
-    sendTo(target, memory::makePacket(_allocator, data, len), _allocator);
+    auto* packet = memory::makePacket(_allocator, data, len);
+    if (packet)
+    {
+        sendTo(target, packet, _allocator);
+    }
 }
 
 void TcpEndpoint::sendTo(const transport::SocketAddress& target,

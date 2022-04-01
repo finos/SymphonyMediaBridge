@@ -342,6 +342,11 @@ void TcpServerEndpoint::internalReceive(int fd)
                         _epoll.add(fd, endpoint);
                         --_pendingEpollRegistrations; // it is not ours anymore
 
+                        logger::debug("ICE request for %s from %s",
+                            _name.c_str(),
+                            users->getNames().first.c_str(),
+                            endpoint->getLocalPort().toString().c_str());
+
                         listenIt->second->onIceReceived(*endpoint,
                             pendingTcp.peerPort,
                             endpoint->getLocalPort(),

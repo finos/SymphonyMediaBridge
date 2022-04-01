@@ -64,7 +64,8 @@ public:
             return static_cast<double>(lostPackets) / std::max(1u, lostPackets + packets);
         }
 
-        uint32_t octets;
+        uint64_t octets;
+        uint64_t headerOctets;
         uint32_t extendedSequenceNumber;
         uint32_t packets;
         uint32_t lostPackets;

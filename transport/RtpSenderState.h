@@ -42,7 +42,7 @@ public:
     // Transport interface
     void onRtpSent(uint64_t timestamp, memory::Packet& packet);
     void onReceiverBlockReceived(uint64_t timestamp, uint32_t wallClockNtp32, const rtp::ReportBlock& report);
-    void onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* report);
+    void onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* report, uint32_t packetSize);
     int64_t timeToSenderReport(uint64_t timestamp) const;
 
     uint64_t getLastSendTime() const { return _rtpSendTime; }
@@ -61,8 +61,10 @@ public:
     {
         uint32_t packets = 0;
         uint32_t sequenceNumber = 0;
-        uint64_t octets = 0;
+        uint64_t payloadOctets = 0;
         uint64_t timestamp = 0;
+        uint64_t rtcpOctets = 0;
+        uint64_t rtpHeaderOctets = 0;
     };
 
 private:

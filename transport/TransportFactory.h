@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory/PacketPoolAllocator.h"
+#include "transport/EndpointMetrics.h"
 #include "transport/ice/IceSession.h"
 #include <memory>
 
@@ -53,6 +54,7 @@ public:
         const SocketAddress& peer,
         const uint8_t aesKey[32],
         const uint8_t salt[12]) = 0;
+    virtual EndpointMetrics getSharedUdpEndpointsMetrics() const = 0;
     virtual bool isGood() const = 0;
 };
 

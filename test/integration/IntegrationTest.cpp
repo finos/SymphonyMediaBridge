@@ -503,7 +503,8 @@ public:
           _transportFactory(transportFactory),
           _sslDtls(sslDtls),
           _receivedData(256),
-          _loggableId("client", id)
+          _loggableId("client", id),
+          _recordingActive(true)
     {
     }
 
@@ -695,7 +696,7 @@ public:
 
         if (it != _receivedData.end())
         {
-            if (rtpHeader->payloadType == 111)
+            if (rtpHeader->payloadType == 111 && _recordingActive.load())
             {
                 it->second->onRtpPacketReceived(sender, packet, extendedSequenceNumber, timestamp);
             }
@@ -745,6 +746,8 @@ public:
     {
     }
 
+    void stopRecording() { _recordingActive = false; }
+
     std::shared_ptr<transport::RtcTransport> _transport;
 
     std::unique_ptr<emulator::AudioSource> _audioSource;
@@ -760,6 +763,7 @@ private:
     transport::SslDtls& _sslDtls;
     concurrency::MpmcHashmap32<uint32_t, RtpReceiver*> _receivedData;
     logger::LoggableId _loggableId;
+    std::atomic_bool _recordingActive;
 };
 
 namespace
@@ -885,6 +889,11 @@ TEST_F(IntegrationTest, plain)
         utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
     }
     client3._transport->stop();
+
+    client3.stopRecording();
+    client2.stopRecording();
+    client1.stopRecording();
+
     HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
     statsRequest.awaitResponse(1500 * utils::Time::ms);
     EXPECT_TRUE(statsRequest.isSuccess());

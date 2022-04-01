@@ -1401,6 +1401,16 @@ uint32_t TransportImpl::getDownlinkEstimateKbps() const
     return _inboundMetrics.estimatedKbps;
 }
 
+uint32_t TransportImpl::getPacingQueueCount() const
+{
+    return _pacingQueue.size();
+}
+
+uint32_t TransportImpl::getRtxPacingQueueCount() const
+{
+    return _rtxPacingQueue.size();
+}
+
 void TransportImpl::doProtectAndSend(uint64_t timestamp,
     memory::Packet* packet,
     const SocketAddress& target,
@@ -1651,7 +1661,16 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             continue;
         }
 
-        rtcpPacket = (!rtcpPacket ? memory::makePacket(_mainAllocator) : rtcpPacket);
+        if (!rtcpPacket)
+        {
+            rtcpPacket = memory::makePacket(_mainAllocator);
+            if (!rtcpPacket)
+            {
+                logger::warn("No space available to send SR", _loggableId.c_str());
+                break;
+            }
+        }
+
         auto* senderReport = rtp::RtcpSenderReport::create(rtcpPacket->get() + rtcpPacket->getLength());
         senderReport->ssrc = it->first;
         it->second.fillInReport(*senderReport, timestamp, wallClock + i * ntp32Tick);
@@ -1690,12 +1709,22 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
     while (receiverReportCount > 0 || (rembReady && !rembAdded))
     {
-        rtcpPacket = (!rtcpPacket ? memory::makePacket(_mainAllocator) : rtcpPacket);
-        if (rtcpPacket->getLength() + MINIMUM_RR + std::min(4u, receiverReportCount) * sizeof(rtp::ReportBlock) >
-            _config.mtu)
+        if (rtcpPacket &&
+            rtcpPacket->getLength() + MINIMUM_RR + std::min(4u, receiverReportCount) * sizeof(rtp::ReportBlock) >
+                _config.mtu)
         {
             sendRtcp(rtcpPacket, _mainAllocator, timestamp);
+            rtcpPacket = nullptr;
+        }
+
+        if (!rtcpPacket)
+        {
             rtcpPacket = memory::makePacket(_mainAllocator);
+            if (!rtcpPacket)
+            {
+                logger::warn("No space available to send RR", _loggableId.c_str());
+                break;
+            }
         }
 
         auto* receiverReport = rtp::RtcpReceiverReport::create(rtcpPacket->get() + rtcpPacket->getLength());
@@ -1725,7 +1754,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
                 _config.mtu)
         {
             sendRtcp(rtcpPacket, _mainAllocator, timestamp);
-            rtcpPacket = memory::makePacket(_mainAllocator);
+            rtcpPacket = nullptr;
         }
     }
 
@@ -1767,7 +1796,7 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
             _outboundRembEstimateKbps,
             _rttNtp * 1000.0 / 0x10000,
             _pacingQueue.size() + _rtxPacingQueue.size(),
-            _rateController.isRtpProbingEnabled() ? "t" : "0");
+            _rateController.isRtpProbingEnabled() ? "t" : "f");
 
         _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
         _inboundMetrics.estimatedKbpsMax = 0;
@@ -1842,7 +1871,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
             auto rtpStateIt = _outboundSsrcCounters.find(ssrc);
             if (rtpStateIt != _outboundSsrcCounters.end())
             {
-                rtpStateIt->second.onRtcpSent(timestamp, &header);
+                rtpStateIt->second.onRtcpSent(timestamp, &header, rtcpPacket.getLength());
             }
             const auto* senderReport = rtp::RtcpSenderReport::fromPtr(&header, remainingBytes);
             if (senderReport && _config.rctl.enable)

@@ -10,6 +10,7 @@ RtpReceiveState::ReceiveCounters operator-(RtpReceiveState::ReceiveCounters a,
     const RtpReceiveState::ReceiveCounters& b)
 {
     a.octets -= b.octets;
+    a.headerOctets -= b.headerOctets;
     a.extendedSequenceNumber -= b.extendedSequenceNumber;
     a.packets -= b.packets;
     a.lostPackets -= b.lostPackets;
@@ -55,6 +56,7 @@ void RtpReceiveState::onRtpReceived(const memory::Packet& packet, uint64_t times
     _activeAt = timestamp;
     ++_receiveCounters.packets;
     _receiveCounters.octets += packet.getLength() - rtpHeader->headerLength();
+    _receiveCounters.headerOctets += rtpHeader->headerLength();
     _receiveCounters.timestamp = timestamp;
 
     if (_receiveCounters.packets < 10)
@@ -67,7 +69,7 @@ void RtpReceiveState::onRtpReceived(const memory::Packet& packet, uint64_t times
     {
         const auto delta = _receiveCounters - _previousCount;
         PacketCounters counters;
-        counters.octets = delta.octets;
+        counters.octets = delta.octets + delta.headerOctets;
         counters.packets = delta.lostPackets + delta.packets;
         counters.lostPackets = delta.lostPackets;
         counters.period = delta.timestamp;
@@ -123,8 +125,9 @@ PacketCounters RtpReceiveState::getCounters() const
 {
     PacketCounters counters;
     _counters.read(counters);
-    counters.bitrateKbps = counters.octets * 8 * counters.period / utils::Time::ms;
-    counters.packetsPerSecond = counters.getPacketsReceived() * counters.period / utils::Time::sec;
+    counters.bitrateKbps = counters.octets * 8 * utils::Time::ms / std::max(utils::Time::ms * 10, counters.period);
+    counters.packetsPerSecond =
+        counters.getPacketsReceived() * utils::Time::sec / std::max(utils::Time::ms * 10, counters.period);
     return counters;
 }
 

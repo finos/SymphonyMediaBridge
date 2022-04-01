@@ -122,7 +122,7 @@ void RcCall::sendSR(uint32_t ssrc, transport::RtpSenderState& sendState, uint64_
             ssrc,
             (report->ntpSeconds.get() << 16) | (report->ntpFractions.get() >> 16),
             rtcpPacket->getLength());
-        sendState.onRtcpSent(_timeCursor, &report->header);
+        sendState.onRtcpSent(_timeCursor, &report->header, rtcpPacket->getLength());
         push(_upLink, rtcpPacket);
 
         uint16_t paddingSize = 0;

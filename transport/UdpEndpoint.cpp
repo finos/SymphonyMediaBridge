@@ -135,6 +135,10 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
                 auto userName = users->getNames().first;
                 listener = findListener(_iceListeners, userName);
             }
+            logger::debug("ICE request to %s src %s",
+                _name.c_str(),
+                users->getNames().first.c_str(),
+                srcAddress.toString().c_str());
         }
         else if (msg->header.isResponse())
         {
@@ -193,7 +197,7 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
     }
     else
     {
-        logger::info("Unexpected packet from %s", "Rafael", srcAddress.toString().c_str());
+        logger::info("Unexpected packet from %s", _name.c_str(), srcAddress.toString().c_str());
     }
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
     _allocator.free(packet);

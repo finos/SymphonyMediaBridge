@@ -10,7 +10,7 @@
 namespace transport
 {
 
-class TransportFactoryImpl : public TransportFactory,
+class TransportFactoryImpl final : public TransportFactory,
                              public ServerEndpoint::IEvents,
                              public TcpEndpointFactory,
                              public Endpoint::IEvents
@@ -401,6 +401,21 @@ public:
 
         logger::error("No shared recording endpoints configured", "TransportFactory");
         return nullptr;
+    }
+
+    EndpointMetrics getSharedUdpEndpointsMetrics() const override
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        EndpointMetrics metrics;
+        for (auto& endpoints : _sharedEndpoints)
+        {
+            for (auto* endpoint : endpoints)
+            {
+                metrics += endpoint->getMetrics(timestamp);
+            }
+        }
+
+        return metrics;
     }
 
     bool isGood() const override { return _good; }

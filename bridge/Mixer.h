@@ -63,6 +63,9 @@ public:
         uint32_t _videoStreams = 0;
         uint32_t _audioStreams = 0;
         uint32_t _dataStreams = 0;
+        uint32_t pacingQueue = 0;
+        uint32_t rtxPacingQueue = 0;
+
     };
 
     Mixer(std::string id,

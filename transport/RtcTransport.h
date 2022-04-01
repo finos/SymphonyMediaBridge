@@ -76,6 +76,8 @@ public:
     virtual uint32_t getSenderLossCount() const = 0;
     virtual uint32_t getUplinkEstimateKbps() const = 0;
     virtual uint32_t getDownlinkEstimateKbps() const = 0;
+    virtual uint32_t getPacingQueueCount() const = 0;
+    virtual uint32_t getRtxPacingQueueCount() const = 0;
     virtual uint64_t getRtt() const = 0;
     virtual PacketCounters getCumulativeReceiveCounters(uint32_t ssrc) const = 0;
     virtual PacketCounters getAudioReceiveCounters(uint64_t idleTimestamp) const = 0;

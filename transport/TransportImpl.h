@@ -148,6 +148,8 @@ public: // Transport
     uint32_t getSenderLossCount() const override;
     uint32_t getUplinkEstimateKbps() const override;
     uint32_t getDownlinkEstimateKbps() const override;
+    uint32_t getPacingQueueCount() const override;
+    uint32_t getRtxPacingQueueCount() const override;
     uint64_t getRtt() const override;
     PacketCounters getCumulativeReceiveCounters(uint32_t ssrc) const override;
     PacketCounters getAudioReceiveCounters(uint64_t idleTimestamp) const override;

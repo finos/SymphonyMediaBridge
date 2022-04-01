@@ -10,7 +10,9 @@ namespace transport
 {
 RtpSenderState::SendCounters operator-(RtpSenderState::SendCounters a, const RtpSenderState::SendCounters& b)
 {
-    a.octets -= b.octets;
+    a.payloadOctets -= b.payloadOctets;
+    a.rtpHeaderOctets -= b.rtpHeaderOctets;
+    a.rtcpOctets -= b.rtcpOctets;
     a.packets -= b.packets;
     a.sequenceNumber -= b.sequenceNumber;
     a.timestamp -= b.timestamp;
@@ -36,14 +38,16 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
     _rtpTimestampCorrelation.local = timestamp;
     _rtpTimestampCorrelation.rtp = header->timestamp;
 
-    if (_sendCounters.octets == 0)
+    if (_sendCounters.payloadOctets == 0)
     {
         _sendCounters.sequenceNumber = header->sequenceNumber.get() - 1;
+        _sendCounterSnapshot.timestamp = timestamp;
         _remoteReport.extendedSeqNoReceived = _sendCounters.sequenceNumber;
         _remoteReport.timestamp = timestamp;
         payloadType = header->payloadType;
     }
-    _sendCounters.octets += packet.getLength() - header->headerLength();
+    _sendCounters.payloadOctets += packet.getLength() - header->headerLength();
+    _sendCounters.rtpHeaderOctets += header->headerLength();
     ++_sendCounters.packets;
     const int16_t sequenceDiff = header->sequenceNumber.get() - (_sendCounters.sequenceNumber & 0xFFFFu);
 
@@ -52,15 +56,16 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
         _sendCounters.sequenceNumber += sequenceDiff;
     }
 
-    if (_sendCounterSnapshot.timestamp == 0 ||
-        utils::Time::diffGE(_sendCounterSnapshot.timestamp, timestamp, utils::Time::sec))
+    if (utils::Time::diffGE(_sendCounterSnapshot.timestamp, timestamp, utils::Time::sec))
     {
+        _sendCounters.timestamp = timestamp;
         auto report = _sendCounters - _sendCounterSnapshot;
         _sendReport.write(report);
+        _sendCounterSnapshot = _sendCounters;
     }
 }
 
-void RtpSenderState::onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* header)
+void RtpSenderState::onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* header, uint32_t packetSize)
 {
     if (header->packetType == rtp::RtcpPacketType::SENDER_REPORT)
     {
@@ -69,6 +74,7 @@ void RtpSenderState::onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* heade
         _senderReportNtp = sr->ntpSeconds << 16 | sr->ntpFractions >> 16;
         _scheduledSenderReport = timestamp + _config.rtcp.senderReport.resubmitInterval;
         _lossSinceSenderReport = 0;
+        _sendCounters.rtcpOctets += packetSize;
     }
 }
 
@@ -80,7 +86,7 @@ uint32_t RtpSenderState::getRtpTimestamp(uint64_t timestamp) const
 
 void RtpSenderState::fillInReport(rtp::RtcpSenderReport& report, uint64_t timestamp, uint64_t wallClockNtp) const
 {
-    report.octetCount = _sendCounters.octets;
+    report.octetCount = _sendCounters.payloadOctets;
     report.packetCount = _sendCounters.packets;
     report.rtpTimestamp = getRtpTimestamp(timestamp);
     report.ntpSeconds = (wallClockNtp >> 32);
@@ -149,6 +155,10 @@ ReportSummary RtpSenderState::getSummary() const
     return s;
 }
 
+/**
+ * The packet count is how many packets reported as received so it fits with packet loss count.
+ * PacketsPerSecond, bitrateKbps, octets are actual sent.
+ */
 PacketCounters RtpSenderState::getCounters() const
 {
     PacketCounters s;
@@ -157,9 +167,9 @@ PacketCounters RtpSenderState::getCounters() const
     SendCounters sendReport;
     _sendReport.read(sendReport);
 
-    s.octets = sendReport.octets;
-    s.bitrateKbps = sendReport.octets * 8 * sendReport.timestamp / utils::Time::ms;
-    s.packetsPerSecond = sendReport.packets * sendReport.timestamp / utils::Time::sec;
+    s.octets = sendReport.payloadOctets + sendReport.rtcpOctets + sendReport.rtpHeaderOctets;
+    s.bitrateKbps = s.octets * 8 * utils::Time::ms / std::max(utils::Time::ms * 10, sendReport.timestamp);
+    s.packetsPerSecond = sendReport.packets * utils::Time::sec / std::max(utils::Time::ms * 10, sendReport.timestamp);
 
     return s;
 }
