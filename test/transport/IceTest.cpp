@@ -360,6 +360,9 @@ public:
     {
         _socket.sendTo(static_cast<const char*>(data), len, target);
     }
+
+    void cancelStunTransaction(__uint128_t transactionId) override {}
+
     transport::SocketAddress getLocalPort() const override { return _ip; }
     ice::TransportType getTransportType() const override { return ice::TransportType::UDP; }
     transport::RtcSocket _socket;
@@ -524,6 +527,8 @@ public:
         const void* data,
         size_t len,
         uint64_t timestamp) override;
+    void cancelStunTransaction(__uint128_t transactionId) override {}
+
     transport::SocketAddress getLocalPort() const override { return _address; }
     bool hasIp(const transport::SocketAddress& target) override { return target == _address; }
 

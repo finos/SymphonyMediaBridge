@@ -22,6 +22,8 @@ public:
         size_t len,
         uint64_t timestamp) override;
 
+    void cancelStunTransaction(__uint128_t transactionId) override;
+
     void registerListener(const std::string& stunUserName, IEvents* listener) override;
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override;
 
@@ -31,6 +33,7 @@ public: // internal job interface
     void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::Packet* packet) override;
 
     void internalUnregisterListener(IEvents* listener);
+    void internalUnregisterStunListener(__uint128_t transactionId);
 
 private:
     concurrency::MpmcHashmap32<std::string, IEvents*> _iceListeners;
