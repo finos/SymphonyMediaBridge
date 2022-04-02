@@ -46,7 +46,12 @@ struct StunHeader
     };
 
     StunHeader();
-    static StunHeader* fromPtr(void* p);
+
+    static const StunHeader* fromPtr(const void* p);
+    static StunHeader* fromPtr(void* p)
+    {
+        return const_cast<StunHeader*>(StunHeader::fromPtr(static_cast<const void*>(p)));
+    }
 
     StunClass getClass() const;
     Method getMethod() const;
@@ -245,7 +250,7 @@ public:
     };
     StunError(int code, std::string phrase) : StunAttribute(ERROR_CODE)
     {
-        memset(_phrase, 0, sizeof(_phrase));
+        std::memset(_phrase, 0, sizeof(_phrase));
         assert(phrase.size() < sizeof(_phrase) - 1);
         _code = ((code / 100) << 8) + (code % 100);
         std::strncpy(_phrase, phrase.c_str(), sizeof(_phrase));
@@ -326,5 +331,7 @@ public:
 
 bool isStunMessage(const void* data, size_t length);
 __uint128_t getStunTransactionId(const void* data, size_t length);
+bool isRequest(const void* p);
+bool isResponse(const void* p);
 
 } // namespace ice

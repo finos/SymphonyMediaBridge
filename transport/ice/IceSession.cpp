@@ -1172,7 +1172,7 @@ void IceSession::CandidatePair::send(const uint64_t now)
                 localEndpoint.endpoint->cancelStunTransaction(frontTransaction.id.get());
             }
         }
-        _transactions.erase(_transactions.begin());
+        _transactions.pop_front();
     }
 
     for (uint32_t i = 0; i < (state != Succeeded ? _config.probeReplicates : 1); ++i)

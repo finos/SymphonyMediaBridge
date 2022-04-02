@@ -1047,6 +1047,12 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
 {
     if (_rtpIceSession)
     {
+        if (ice::isResponse(packet->get()) && !_rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
+        {
+            allocator.free(packet);
+            return;
+        }
+
         if (_rtpIceSession->isRequestAuthentic(packet->get(), packet->getLength()) ||
             _rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
         {

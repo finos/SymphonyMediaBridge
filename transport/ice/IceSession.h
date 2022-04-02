@@ -3,7 +3,7 @@
 #include "Stun.h"
 #include "concurrency/ScopedMutexGuard.h"
 #include "utils/SocketAddress.h"
-#include <vector>
+#include <deque>
 namespace ice
 {
 
@@ -249,7 +249,7 @@ private:
         void cancelPendingTransactions();
 
         const std::string& _name;
-        std::vector<StunTransaction> _transactions; // TODO replace with inplace circular container
+        std::deque<StunTransaction> _transactions; // TODO replace with inplace circular container
         StunTransactionIdGenerator& _idGenerator;
         const IceConfig& _config;
         const SessionCredentials& _credentials;
