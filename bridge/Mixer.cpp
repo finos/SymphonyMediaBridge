@@ -952,7 +952,7 @@ Mixer::Stats Mixer::getStats()
 bool Mixer::configureAudioStream(const std::string& endpointId,
     const RtpMap& rtpMap,
     const utils::Optional<uint32_t>& remoteSsrc,
-    const utils::Optional<int32_t>& audioLevelExtensionId,
+    const utils::Optional<uint8_t>& audioLevelExtensionId,
     const utils::Optional<uint8_t>& absSendTimeExtensionId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -1092,9 +1092,10 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     {
         videoStream->_secondarySimulcastStream = secondarySimulcastStream;
     }
-    videoStream->_absSendTimeExtensionId = absSendTimeExtensionId;
+
     if (absSendTimeExtensionId.isSet())
     {
+        videoStream->_absSendTimeExtensionId = absSendTimeExtensionId.get();
         videoStream->_transport->setAbsSendTimeExtensionId(absSendTimeExtensionId.get());
     }
 

@@ -1092,12 +1092,12 @@ void ApiRequestHandler::configureAudioEndpoint(const api::EndpointDescription& e
         remoteSsrc.set(audio._ssrcs.front());
     }
 
-    utils::Optional<int32_t> audioLevelExtensionId;
+    utils::Optional<uint8_t> audioLevelExtensionId;
     for (const auto& rtpHeaderExtension : audio._rtpHeaderExtensions)
     {
         if (rtpHeaderExtension.second.compare("urn:ietf:params:rtp-hdrext:ssrc-audio-level") == 0)
         {
-            audioLevelExtensionId.set(utils::checkedCast<int32_t>(rtpHeaderExtension.first));
+            audioLevelExtensionId.set(utils::checkedCast<uint8_t>(rtpHeaderExtension.first));
         }
     }
 

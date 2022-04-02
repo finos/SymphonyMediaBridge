@@ -369,7 +369,7 @@ private:
         uint8_t payloadType;
         uint32_t rtpFrequency;
     } _audio;
-    utils::Optional<uint8_t> _absSendTimeExtensionId;
+    uint8_t _absSendTimeExtensionId;
 
     const sctp::SctpConfig& _sctpConfig;
     utils::Optional<uint16_t> _remoteSctpPort;

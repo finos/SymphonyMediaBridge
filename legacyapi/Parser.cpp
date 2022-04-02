@@ -275,7 +275,10 @@ Conference parse(const nlohmann::json& data)
                             Channel::RtpHdrExt rtpHdrExt;
                             rtpHdrExt._id = rtpHdrExtJson["id"].get<uint32_t>();
                             rtpHdrExt._uri = rtpHdrExtJson["uri"].get<std::string>();
-                            channel._rtpHeaderHdrExts.emplace_back(std::move(rtpHdrExt));
+                            if (rtpHdrExt._id > 0 && rtpHdrExt._id < 15)
+                            {
+                                channel._rtpHeaderHdrExts.emplace_back(std::move(rtpHdrExt));
+                            }
                         }
                     }
 

@@ -130,7 +130,7 @@ protected:
             *_transport,
             bridge::RtpMap(),
             bridge::RtpMap(),
-            utils::Optional<uint8_t>(),
+            0,
             bridge::SsrcWhitelist({false, 0, {0, 0}}),
             true,
             _videoPinSsrcs);

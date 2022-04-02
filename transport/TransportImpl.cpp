@@ -485,6 +485,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _outboundSsrcCounters(256),
       _inboundSsrcCounters(16),
       _isRunning(true),
+      _absSendTimeExtensionId(0),
       _sctpConfig(sctpConfig),
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
@@ -570,6 +571,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _outboundSsrcCounters(256),
       _inboundSsrcCounters(16),
       _isRunning(true),
+      _absSendTimeExtensionId(0),
       _sctpConfig(sctpConfig),
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
@@ -882,7 +884,7 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     }
 
     bool rembReady = false;
-    if (_absSendTimeExtensionId.isSet())
+    if (_absSendTimeExtensionId)
     {
         if (_packetLogger)
         {
@@ -890,7 +892,7 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
         }
         uint32_t absSendTime = 0;
 
-        if (rtp::getTransmissionTimestamp(*packet, _absSendTimeExtensionId.get(), absSendTime))
+        if (rtp::getTransmissionTimestamp(*packet, _absSendTimeExtensionId, absSendTime))
         {
             rembReady = doBandwidthEstimation(timestamp, utils::Optional<uint32_t>(absSendTime), packet->getLength());
         }
@@ -1457,22 +1459,20 @@ void TransportImpl::sendPadding(uint64_t timestamp)
         auto padPacket = memory::makePacket(_mainAllocator);
         if (padPacket)
         {
-            std::memset(padPacket->get(), 0, memory::Packet::size);
+            padPacket->clear();
             padPacket->setLength(padding);
-            auto padRtpHeader = rtp::RtpHeader::create(padPacket->get(), padPacket->getLength());
+            auto padRtpHeader = rtp::RtpHeader::create(*padPacket);
             padRtpHeader->ssrc = _rtxProbeSsrc;
             padRtpHeader->payloadType = rtxPayloadType;
             padRtpHeader->timestamp = 1293887;
             padRtpHeader->sequenceNumber = (*_rtxProbeSequenceCounter)++ & 0xFFFF;
             padRtpHeader->padding = 1;
             padPacket->get()[padPacket->getLength() - 1] = 0x01;
-            if (_absSendTimeExtensionId.isSet())
+            if (_absSendTimeExtensionId)
             {
                 padRtpHeader->extension = 1;
-                rtp::RtpHeaderExtension extensionHead(padRtpHeader->getExtensionHeader());
-                rtp::GeneralExtension1Byteheader absSendTime;
-                absSendTime.id = _absSendTimeExtensionId.get();
-                absSendTime.setDataLength(3);
+                rtp::RtpHeaderExtension extensionHead;
+                rtp::GeneralExtension1Byteheader absSendTime(_absSendTimeExtensionId, 3);
                 auto cursor = extensionHead.extensions().begin();
                 extensionHead.addExtension(cursor, absSendTime);
                 padRtpHeader->setExtensions(extensionHead);
@@ -1584,9 +1584,9 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp,
     const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
     const uint32_t rtpFrequency = isAudio ? _audio.rtpFrequency : 90000;
 
-    if (_absSendTimeExtensionId.isSet())
+    if (_absSendTimeExtensionId)
     {
-        rtp::setTransmissionTimestamp(packet, _absSendTimeExtensionId.get(), timestamp);
+        rtp::setTransmissionTimestamp(packet, _absSendTimeExtensionId, timestamp);
     }
 
     auto& ssrcState = getOutboundSsrc(rtpHeader->ssrc, rtpFrequency);
@@ -2276,9 +2276,12 @@ void TransportImpl::setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequen
     _audio.rtpFrequency = rtpFrequency;
 }
 
+/**
+ * extension id = 0 means off
+ */
 void TransportImpl::setAbsSendTimeExtensionId(uint8_t extensionId)
 {
-    _absSendTimeExtensionId.set(extensionId);
+    _absSendTimeExtensionId = extensionId;
 }
 
 uint16_t TransportImpl::allocateOutboundSctpStream()

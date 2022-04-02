@@ -1126,7 +1126,7 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                 remoteSsrc.set(channel._sources.front());
             }
 
-            utils::Optional<int32_t> audioLevelExtensionId;
+            utils::Optional<uint8_t> audioLevelExtensionId;
             for (const auto& rtpHeaderExtension : channel._rtpHeaderHdrExts)
             {
                 if (rtpHeaderExtension._uri.compare("urn:ietf:params:rtp-hdrext:ssrc-audio-level") == 0)

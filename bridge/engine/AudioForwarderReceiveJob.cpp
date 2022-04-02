@@ -151,7 +151,7 @@ void AudioForwarderReceiveJob::run()
 
         for (const auto& rtpHeaderExtension : rtpHeaderExtensions->extensions())
         {
-            if (rtpHeaderExtension.id != _ssrcContext._audioLevelExtensionId)
+            if (rtpHeaderExtension.getId() != _ssrcContext._audioLevelExtensionId)
             {
                 continue;
             }

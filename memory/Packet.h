@@ -42,6 +42,8 @@ public:
         }
     }
 
+    void clear() { std::memset(_data, 0, size); }
+
 private:
     unsigned char _data[size];
     size_t _length;

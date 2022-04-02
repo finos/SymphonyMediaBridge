@@ -86,7 +86,7 @@ private:
         auto* packet = memory::makePacket(allocator);
         if (packet)
         {
-            auto rtpHeader = rtp::RtpHeader::create(packet->get(), 100);
+            auto rtpHeader = rtp::RtpHeader::create(*packet);
             rtpHeader->payloadType = rtpPayload;
             rtpHeader->sequenceNumber = counter++;
             rtpHeader->ssrc = rtpSsrc;
@@ -94,9 +94,7 @@ private:
             rtpTimestamp += 16000;
 
             rtp::RtpHeaderExtension extensionHead(rtpHeader->getExtensionHeader());
-            rtp::GeneralExtension1Byteheader absSendTime;
-            absSendTime.id = 3;
-            absSendTime.setDataLength(3);
+            rtp::GeneralExtension1Byteheader absSendTime(3, 3);
             auto cursor = extensionHead.extensions().begin();
             extensionHead.addExtension(cursor, absSendTime);
             rtpHeader->setExtensions(extensionHead);

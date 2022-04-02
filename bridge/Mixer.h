@@ -120,7 +120,7 @@ public:
     bool configureAudioStream(const std::string& endpointId,
         const RtpMap& rtpMap,
         const utils::Optional<uint32_t>& remoteSsrc,
-        const utils::Optional<int32_t>& audioLevelExtensionId,
+        const utils::Optional<uint8_t>& audioLevelExtensionId,
         const utils::Optional<uint8_t>& absSendTimeExtensionId);
 
     bool reconfigureAudioStream(const std::string& endpointId, const utils::Optional<uint32_t>& remoteSsrc);

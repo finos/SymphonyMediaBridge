@@ -166,8 +166,7 @@ struct OpusBuilder : SampleDataUtils::RtpStreamBuilder
             memory::Packet& packet = batch[0];
             memset(packet.get(), 0, memory::Packet::size);
 
-            auto rtpHeader = rtp::RtpHeader::create(packet.get(), packet.size);
-            rtpHeader->version = 2;
+            auto rtpHeader = rtp::RtpHeader::create(packet);
             rtpHeader->payloadType = codec::Opus::payloadType;
             rtpHeader->sequenceNumber = _sequenceNumber;
             rtpHeader->ssrc = _ssrc;
@@ -236,8 +235,7 @@ SampleDataUtils::AudioData SampleDataUtils::decodeOpusRtpStream(const std::vecto
     for (const auto& packet : packets)
     {
         const bool isRtp = rtp::isRtpPacket(packet);
-        const bool isRtcp = rtp::isRtcpPacket(packet);
-        assert(isRtp || isRtcp);
+        assert(isRtp || rtp::isRtcpPacket(packet));
         if (!isRtp)
         {
             continue;
@@ -322,7 +320,7 @@ int audioLevelFromPacket(const memory::Packet& packet)
     auto extensions = rtpHeader->getExtensionHeader()->extensions();
     for (auto extension : extensions)
     {
-        if (extension.id == 1)
+        if (extension.getId() == 1)
         {
             return extension.data[0];
         }

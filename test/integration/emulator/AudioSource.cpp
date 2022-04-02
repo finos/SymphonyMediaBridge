@@ -34,7 +34,13 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     _nextRelease += utils::Time::ms * 20;
 
     auto* packet = memory::makePacket(_allocator);
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), 100);
+    assert(packet);
+    if (!packet)
+    {
+        return nullptr;
+    }
+
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     rtpHeader->payloadType = 111;
     rtpHeader->sequenceNumber = _sequenceCounter++;
     rtpHeader->ssrc = _ssrc;
@@ -54,14 +60,10 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     rtp::RtpHeaderExtension extensionHead;
     auto cursor = extensionHead.extensions().begin();
 
-    rtp::GeneralExtension1Byteheader absSendTime;
-    absSendTime.id = 3;
-    absSendTime.setDataLength(3);
+    rtp::GeneralExtension1Byteheader absSendTime(3, 3);
     extensionHead.addExtension(cursor, absSendTime);
 
-    rtp::GeneralExtension1Byteheader audioLevel;
-    audioLevel.setDataLength(1);
-    audioLevel.id = 1;
+    rtp::GeneralExtension1Byteheader audioLevel(1, 1);
     audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
     extensionHead.addExtension(cursor, audioLevel);
     rtpHeader->setExtensions(extensionHead);

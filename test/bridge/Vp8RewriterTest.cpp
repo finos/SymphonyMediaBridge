@@ -45,7 +45,7 @@ TEST_F(Vp8RewriterTest, rewrite)
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     rtpHeader->ssrc = 1;
     rtpHeader->sequenceNumber = 1;
     rtpHeader->timestamp = 1;
@@ -96,7 +96,7 @@ TEST_F(Vp8RewriterTest, rewriteRtx)
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size - sizeof(uint16_t));
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->getLength());
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     rtpHeader->ssrc = 1;
     rtpHeader->sequenceNumber = 1;
     rtpHeader->timestamp = 1;
@@ -139,7 +139,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchanged)
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
@@ -210,7 +210,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged)
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
@@ -282,7 +282,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChangedSequenceNumberLow
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
@@ -354,7 +354,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReordere
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
@@ -422,7 +422,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchangedAndSequenceRoll
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
@@ -497,7 +497,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReordere
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
@@ -579,7 +579,7 @@ TEST_F(Vp8RewriterTest, longGapInSequenceNumbersSameSsrc)
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
@@ -627,7 +627,7 @@ TEST_F(Vp8RewriterTest, longGapInSequenceNumbersNewSsrc)
     auto packet = memory::makePacket(*_allocator);
     packet->setLength(packet->size);
 
-    auto rtpHeader = rtp::RtpHeader::create(packet->get(), packet->size);
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
     auto payload = rtpHeader->getPayload();
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
