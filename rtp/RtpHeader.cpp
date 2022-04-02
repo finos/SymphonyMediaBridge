@@ -153,11 +153,7 @@ utils::TlvCollection<GeneralExtension1Byteheader> RtpHeaderExtension::extensions
 bool RtpHeaderExtension::isValid() const
 {
     auto extEnd = findExtensionsEnd(data, data + length * sizeof(uint32_t));
-    if (extEnd == data + length * sizeof(uint32_t))
-    {
-        return true;
-    }
-    else if ((*extEnd & 0xF0) == 0xF0)
+    if (extEnd == data + length * sizeof(uint32_t) || (*extEnd & 0xF0) == 0xF0)
     {
         return true;
     }

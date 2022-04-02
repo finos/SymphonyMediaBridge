@@ -235,8 +235,7 @@ SampleDataUtils::AudioData SampleDataUtils::decodeOpusRtpStream(const std::vecto
     for (const auto& packet : packets)
     {
         const bool isRtp = rtp::isRtpPacket(packet);
-        const bool isRtcp = rtp::isRtcpPacket(packet);
-        assert(isRtp || isRtcp);
+        assert(isRtp || rtp::isRtcpPacket(packet));
         if (!isRtp)
         {
             continue;
