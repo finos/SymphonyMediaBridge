@@ -2,6 +2,7 @@
 
 #include "concurrency/MpmcPublish.h"
 #include "transport/PacketCounters.h"
+#include "utils/SocketAddress.h"
 #include <algorithm>
 
 namespace memory
@@ -46,6 +47,7 @@ public:
     int64_t timeToReceiveReport(uint64_t timestamp) const;
 
     std::atomic_uint8_t payloadType;
+    SocketAddress currentRtpSource;
 
     struct ReceiveCounters
     {

@@ -53,7 +53,7 @@ UdpEndpoint::UdpEndpoint(jobmanager::JobManager& jobManager,
     bool isShared)
     : BaseUdpEndpoint("UdpEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
       _iceListeners(maxSessionCount),
-      _dtlsListeners(maxSessionCount),
+      _dtlsListeners(maxSessionCount * 8),
       _iceResponseListeners(maxSessionCount * 4)
 {
 }
@@ -71,7 +71,8 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
         if (names)
         {
             auto localUser = names->getNames().second;
-            if (_iceListeners.contains(localUser))
+            auto it = _iceListeners.find(localUser);
+            if (it != _iceListeners.cend())
             {
                 assert(it->second);
                 auto pair = _iceResponseListeners.emplace(transactionId, it->second);

@@ -659,7 +659,7 @@ void IceSession::onPacketReceived(IceEndpoint* socketEndpoint,
     {
         if (!msg->isValid())
         {
-            logger::debug("corrupt STUN response from %s", _logId.c_str(), sender.toString().c_str());
+            logger::debug("corrupt ICE response from %s", _logId.c_str(), sender.toString().c_str());
             return;
         }
         onResponseReceived(socketEndpoint, sender, *msg, timestamp);
