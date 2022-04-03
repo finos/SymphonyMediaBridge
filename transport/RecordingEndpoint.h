@@ -35,6 +35,8 @@ public:
         assert(false);
     };
 
+    void cancelStunTransaction(__uint128_t transactionId) override { assert(false); }
+
     void registerListener(const std::string& stunUserName, IEvents* listener) override { assert(false); };
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override { assert(false); };
 

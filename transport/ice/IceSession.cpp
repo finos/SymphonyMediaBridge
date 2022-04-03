@@ -457,6 +457,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         }
     }
 
+    logger::debug("probe from %s", _logId.c_str(), sender.toString().c_str());
     sendResponse(endpoint, sender, 0, msg, now);
     if (_eventSink)
     {
@@ -607,6 +608,11 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
         return;
     }
 
+    logger::debug("response from %s, rtt %" PRIu64 "ms",
+        _logId.c_str(),
+        sender.toString().c_str(),
+        candidatePair->minRtt / utils::Time::ms);
+
     if (candidatePair->localCandidate.address != mappedAddress)
     {
         if (candidatePair->gatheringProbe)
@@ -660,7 +666,7 @@ void IceSession::onPacketReceived(IceEndpoint* socketEndpoint,
     {
         if (!msg->isValid())
         {
-            logger::debug("corrupt STUN response from %s", _logId.c_str(), sender.toString().c_str());
+            logger::debug("corrupt ICE response from %s", _logId.c_str(), sender.toString().c_str());
             return;
         }
         onResponseReceived(socketEndpoint, sender, *msg, timestamp);
@@ -1013,7 +1019,7 @@ void IceSession::generateCredentialString(char* targetBuffer, int length)
                                   "abcdefghijklmnopqrstuvwxyz"
                                   "0123456789"
                                   "+/";
-    const int COUNT = strlen(approvedLetters);
+    const int COUNT = std::strlen(approvedLetters);
     __uint64_t id = 0;
     for (int i = 0; i < length; i++)
     {
@@ -1049,6 +1055,7 @@ IceSession::CandidatePair::CandidatePair(const IceConfig& config,
       replies(0),
       nominated(false),
       errorCode(IceError::Success),
+      minRtt(utils::Time::minute),
       state(Waiting),
       _name(name),
       _idGenerator(idGenerator),
@@ -1159,9 +1166,17 @@ void IceSession::CandidatePair::send(const uint64_t now)
         state = InProgress;
     }
     _transactions.push_back(transaction);
-    if (_transactions.size() > 50)
+    if (_transactions.size() > 10)
     {
-        _transactions.erase(_transactions.begin());
+        if (localEndpoint.endpoint)
+        {
+            auto& frontTransaction = _transactions.front();
+            if (!frontTransaction.acknowledged())
+            {
+                localEndpoint.endpoint->cancelStunTransaction(frontTransaction.id.get());
+            }
+        }
+        _transactions.pop_front();
     }
 
     for (uint32_t i = 0; i < (state != Succeeded ? _config.probeReplicates : 1); ++i)
@@ -1196,6 +1211,7 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
     }
 
     transaction->rtt = now - transaction->time;
+    minRtt = std::min(transaction->rtt, minRtt);
 
     auto errorAttribute = response.getAttribute<StunError>(StunAttribute::ERROR_CODE);
     if (errorAttribute)
@@ -1209,6 +1225,7 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
         }
         else
         {
+            failCandidate();
             state = CandidatePair::Failed;
             errorCode = static_cast<IceError>(errorAttribute->getCode());
             ++replies;
@@ -1224,7 +1241,7 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
 
 void IceSession::CandidatePair::onDisconnect()
 {
-    state = CandidatePair::Failed;
+    failCandidate();
     errorCode = IceError::ConnectionTimeoutOrFailure;
     return;
 }
@@ -1239,6 +1256,29 @@ void IceSession::CandidatePair::nominate(uint64_t now)
 void IceSession::CandidatePair::freeze()
 {
     state = State::Frozen;
+    cancelPendingTransactions();
+}
+
+void IceSession::CandidatePair::failCandidate()
+{
+    state = State::Failed;
+    cancelPendingTransactions();
+}
+
+void IceSession::CandidatePair::cancelPendingTransactions()
+{
+    if (localEndpoint.endpoint)
+    {
+        return;
+    }
+    for (auto& transaction : _transactions)
+    {
+        if (!transaction.acknowledged())
+        {
+            localEndpoint.endpoint->cancelStunTransaction(transaction.id.get());
+        }
+    }
+    _transactions.clear();
 }
 
 bool IceSession::CandidatePair::isRecent(uint64_t now) const
@@ -1259,7 +1299,7 @@ void IceSession::CandidatePair::processTimeout(const uint64_t now)
     }
     if (gatheringProbe && state == InProgress && now - startTime > _config.gather.probeTimeout * utils::Time::ms)
     {
-        state = Failed;
+        failCandidate();
         errorCode = IceError::RequestTimeout;
         return;
     }
@@ -1278,11 +1318,11 @@ void IceSession::CandidatePair::processTimeout(const uint64_t now)
         if (remoteCandidate.type == IceCandidate::Type::HOST &&
             now - startTime > _config.hostProbeTimeout * utils::Time::ms)
         {
-            state = Failed;
+            failCandidate();
         }
         else if (now - startTime > _config.reflexiveProbeTimeout * utils::Time::ms)
         {
-            state = Failed;
+            failCandidate();
         }
     }
 }

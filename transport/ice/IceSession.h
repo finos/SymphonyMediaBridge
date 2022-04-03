@@ -3,7 +3,7 @@
 #include "Stun.h"
 #include "concurrency/ScopedMutexGuard.h"
 #include "utils/SocketAddress.h"
-#include <vector>
+#include <deque>
 namespace ice
 {
 
@@ -43,6 +43,7 @@ public:
 
     virtual ice::TransportType getTransportType() const = 0;
     virtual transport::SocketAddress getLocalPort() const = 0;
+    virtual void cancelStunTransaction(__uint128_t transactionId) = 0;
 };
 
 enum class IceRole
@@ -183,6 +184,8 @@ private:
         StunTransactionId id;
         uint64_t time = 0;
         uint64_t rtt = 0;
+
+        bool acknowledged() const { return rtt != 0; }
     };
 
     class CandidatePair
@@ -215,6 +218,8 @@ private:
         void onDisconnect();
         void nominate(uint64_t now);
         void freeze();
+        void failCandidate();
+
         uint64_t getRtt() const;
         std::string getLoggableId() const;
 
@@ -228,6 +233,7 @@ private:
         int replies;
         bool nominated;
         IceError errorCode;
+        uint64_t minRtt;
 
         enum State
         {
@@ -241,8 +247,10 @@ private:
         StunMessage original;
 
     private:
+        void cancelPendingTransactions();
+
         const std::string& _name;
-        std::vector<StunTransaction> _transactions; // TODO replace with inplace circular container
+        std::deque<StunTransaction> _transactions; // TODO replace with inplace circular container
         StunTransactionIdGenerator& _idGenerator;
         const IceConfig& _config;
         const SessionCredentials& _credentials;

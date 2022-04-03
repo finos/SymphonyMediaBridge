@@ -911,6 +911,12 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     auto& ssrcState = getInboundSsrc(ssrc); // will do nothing if already exists
     ssrcState.onRtpReceived(*packet, timestamp);
 
+    if (ssrcState.currentRtpSource != source)
+    {
+        logger::debug("RTP ssrc %u from %s", _loggableId.c_str(), ssrc, source.toString().c_str());
+        ssrcState.currentRtpSource = source;
+    }
+
     const uint32_t extendedSequenceNumber = ssrcState.getExtendedSequenceNumber() -
         static_cast<int16_t>(
             static_cast<uint16_t>(ssrcState.getExtendedSequenceNumber() & 0xFFFFu) - rtpHeader->sequenceNumber.get());
@@ -931,7 +937,7 @@ void TransportImpl::onDtlsReceived(Endpoint& endpoint,
             allocator,
             &TransportImpl::internalDtlsReceived))
     {
-        logger::error("job queue full DTLS", _loggableId.c_str());
+        logger::warn("job queue full DTLS", _loggableId.c_str());
         allocator.free(packet);
     }
 }
@@ -955,7 +961,10 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     }
     else
     {
-        logger::debug("received DTLS protocol message, %zu", _loggableId.c_str(), packet->getLength());
+        logger::debug("received DTLS protocol message from %s, %zu",
+            _loggableId.c_str(),
+            source.toString().c_str(),
+            packet->getLength());
         _srtpClient->onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
     }
 
@@ -975,7 +984,7 @@ void TransportImpl::onRtcpReceived(Endpoint& endpoint,
             allocator,
             &TransportImpl::internalRtcpReceived))
     {
-        logger::error("job queue full RTCP", _loggableId.c_str());
+        logger::warn("job queue full RTCP", _loggableId.c_str());
         allocator.free(packet);
     }
 }
@@ -1038,6 +1047,12 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
 {
     if (_rtpIceSession)
     {
+        if (ice::isResponse(packet->get()) && !_rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
+        {
+            allocator.free(packet);
+            return;
+        }
+
         if (_rtpIceSession->isRequestAuthentic(packet->get(), packet->getLength()) ||
             _rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
         {
@@ -1219,7 +1234,7 @@ RtpReceiveState& TransportImpl::getInboundSsrc(const uint32_t ssrc)
                 nominee = it;
             }
         }
-        logger::info("unexpected number of inbound streams. Discarding %u", _loggableId.c_str(), nominee->first);
+        logger::warn("unexpected number of inbound streams. Discarding %u", _loggableId.c_str(), nominee->first);
         _inboundSsrcCounters.erase(nominee->first);
 
         auto pairIt = _inboundSsrcCounters.emplace(ssrc, _config);

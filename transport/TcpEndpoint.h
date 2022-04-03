@@ -100,6 +100,7 @@ public:
     void closePort() override;
 
     SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
+    void cancelStunTransaction(__uint128_t transactionId) override{};
 
     bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
 

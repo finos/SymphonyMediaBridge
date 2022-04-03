@@ -25,6 +25,22 @@ private:
     UdpEndpoint& _endpoint;
     Endpoint::IEvents* _listener;
 };
+
+class UnRegisterStunListenerJob : public jobmanager::Job
+{
+public:
+    UnRegisterStunListenerJob(UdpEndpoint& endpoint, __uint128_t transactionId)
+        : _endpoint(endpoint),
+          _transactionId(transactionId)
+    {
+    }
+
+    void run() override { _endpoint.internalUnregisterStunListener(_transactionId); }
+
+private:
+    UdpEndpoint& _endpoint;
+    __uint128_t _transactionId;
+};
 } // namespace
 
 // When this endpoint is shared the number of registration jobs and packets in queue will be plenty
@@ -37,7 +53,7 @@ UdpEndpoint::UdpEndpoint(jobmanager::JobManager& jobManager,
     bool isShared)
     : BaseUdpEndpoint("UdpEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
       _iceListeners(maxSessionCount),
-      _dtlsListeners(maxSessionCount),
+      _dtlsListeners(maxSessionCount * 8),
       _iceResponseListeners(maxSessionCount * 4)
 {
 }
@@ -49,7 +65,7 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
     uint64_t timestamp)
 {
     auto* msg = ice::StunMessage::fromPtr(data);
-    if (msg->header.isRequest() && _iceResponseListeners.find(transactionId) == _iceResponseListeners.cend())
+    if (msg->header.isRequest() && !_iceResponseListeners.contains(transactionId) && !_dtlsListeners.contains(target))
     {
         auto names = msg->getAttribute<ice::StunUserName>(ice::StunAttribute::USERNAME);
         if (names)
@@ -59,7 +75,11 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
             if (it != _iceListeners.cend())
             {
                 assert(it->second);
-                _iceResponseListeners.emplace(transactionId, it->second);
+                auto pair = _iceResponseListeners.emplace(transactionId, it->second);
+                if (!pair.second)
+                {
+                    logger::warn("Pending ICE request lookup table is full", _name.c_str());
+                }
             }
         }
     }
@@ -71,6 +91,14 @@ void UdpEndpoint::unregisterListener(IEvents* listener)
     if (!_receiveJobs.addJob<UnRegisterListenerJob>(*this, listener))
     {
         logger::error("failed to post unregister job", _name.c_str());
+    }
+}
+
+void UdpEndpoint::cancelStunTransaction(__uint128_t transactionId)
+{
+    if (!_receiveJobs.addJob<UnRegisterStunListenerJob>(*this, transactionId))
+    {
+        logger::error("failed to post unregister stun job", _name.c_str());
     }
 }
 
@@ -103,6 +131,12 @@ void UdpEndpoint::internalUnregisterListener(IEvents* listener)
     }
 
     listener->onUnregistered(*this);
+}
+
+void UdpEndpoint::internalUnregisterStunListener(__uint128_t transactionId)
+{
+    // Hashmap allows erasing elements while iterating.
+    _iceResponseListeners.erase(transactionId);
 }
 
 namespace
@@ -146,9 +180,11 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
             listener = findListener(_iceResponseListeners, transactionId);
             if (listener)
             {
-                // TODO there is still risk of depletion as not all transactions are responded to.
-                // Only when channel is brought down will it clear its transaction listeners
                 _iceResponseListeners.erase(transactionId);
+            }
+            else
+            {
+                listener = findListener(_dtlsListeners, srcAddress);
             }
         }
         if (listener)
@@ -208,7 +244,7 @@ void UdpEndpoint::registerListener(const std::string& stunUserName, IEvents* lis
     _iceListeners.emplace(stunUserName, listener);
 }
 
-// If using ICE, must be called from receive job queue to sync unregister
+/** If using ICE, must be called from receive job queue to sync unregister */
 void UdpEndpoint::registerListener(const SocketAddress& srcAddress, IEvents* listener)
 {
     auto dtlsIt = _dtlsListeners.find(srcAddress);

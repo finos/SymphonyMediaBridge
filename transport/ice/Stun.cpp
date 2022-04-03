@@ -88,6 +88,11 @@ void StunHeader::setMethod(Method method)
     this->method = method & 0x3FFFu;
 }
 
+const StunHeader* StunHeader::fromPtr(const void* p)
+{
+    return reinterpret_cast<const StunHeader*>(p);
+}
+
 // Secure validation that this message has valid CRC and attributes can be traversed
 // It does not validate content of attributes.
 bool isStunMessage(const void* pkt, size_t length)
@@ -120,6 +125,18 @@ bool isStunMessage(const void* pkt, size_t length)
         }
     }
     return true;
+}
+
+bool isRequest(const void* p)
+{
+    auto* msg = StunHeader::fromPtr(p);
+    return msg->isRequest();
+}
+
+bool isResponse(const void* p)
+{
+    auto* msg = StunHeader::fromPtr(p);
+    return msg->isResponse();
 }
 
 __uint128_t getStunTransactionId(const void* data, size_t length)
@@ -490,7 +507,7 @@ void StunMessageIntegrity::getHmac(uint8_t data[20])
 
 bool StunMessageIntegrity::isMatch(uint8_t data[20]) const
 {
-    return 0 == memcmp(data, value, 20);
+    return 0 == std::memcmp(data, value, 20);
 }
 
 void StunMessageIntegrity::setHmac(const uint8_t* data)
