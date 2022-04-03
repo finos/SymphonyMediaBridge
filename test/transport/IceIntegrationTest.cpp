@@ -340,7 +340,7 @@ TEST_F(IceIntegrationTest, portReuse)
         utils::Time::nanoSleep(10 * utils::Time::ms);
     }
 
-    if (!__has_feature(thread_sanitizer))
+    if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
     {
         EXPECT_TRUE(clients2->isConnected());
         EXPECT_FALSE(clients1->isConnected());
