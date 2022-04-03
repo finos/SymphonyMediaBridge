@@ -124,6 +124,7 @@ private:
     LinuxCpuSample collectLinuxCpuSample() const;
     ConnectionsStats collectLinuxNetStat();
     ConnectionsStats collectNetStats();
+    std::vector<int> getThreadIds() const;
 };
 
 } // namespace Stats

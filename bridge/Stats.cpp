@@ -4,6 +4,7 @@
 #include "utils/Time.h"
 #include <algorithm>
 #include <cstdio>
+#include <dirent.h>
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <unistd.h>
@@ -321,6 +322,18 @@ SystemStatsCollector::LinuxCpuSample SystemStatsCollector::collectLinuxCpuSample
     {
     }
     return sample;
+}
+
+std::vector<int> SystemStatsCollector::getThreadIds() const
+{
+    std::vector<int> result;
+    auto folderHandle = opendir("/proc/self/task");
+    for (auto entry = readdir(folderHandle); entry != nullptr; entry = readdir(folderHandle))
+    {
+        result.push_back(std::stoi(entry->d_name));
+    }
+    closedir(folderHandle);
+    return result;
 }
 #endif
 ConnectionsStats SystemStatsCollector::collectNetStats()
