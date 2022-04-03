@@ -913,7 +913,7 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
 
     if (ssrcState.currentRtpSource != source)
     {
-        logger::debug("RTP from %s", _loggableId.c_str(), source.toString().c_str());
+        logger::debug("RTP ssrc %u from %s", _loggableId.c_str(), ssrc, source.toString().c_str());
         ssrcState.currentRtpSource = source;
     }
 

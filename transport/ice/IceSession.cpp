@@ -608,7 +608,10 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
         return;
     }
 
-    logger::debug("response from %s", _logId.c_str(), sender.toString().c_str());
+    logger::debug("response from %s, rtt %" PRIu64 "ms",
+        _logId.c_str(),
+        sender.toString().c_str(),
+        candidatePair->minRtt / utils::Time::ms);
 
     if (candidatePair->localCandidate.address != mappedAddress)
     {
@@ -1052,6 +1055,7 @@ IceSession::CandidatePair::CandidatePair(const IceConfig& config,
       replies(0),
       nominated(false),
       errorCode(IceError::Success),
+      minRtt(utils::Time::minute),
       state(Waiting),
       _name(name),
       _idGenerator(idGenerator),
@@ -1207,6 +1211,7 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
     }
 
     transaction->rtt = now - transaction->time;
+    minRtt = std::min(transaction->rtt, minRtt);
 
     auto errorAttribute = response.getAttribute<StunError>(StunAttribute::ERROR_CODE);
     if (errorAttribute)

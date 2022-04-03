@@ -233,6 +233,7 @@ private:
         int replies;
         bool nominated;
         IceError errorCode;
+        uint64_t minRtt;
 
         enum State
         {
