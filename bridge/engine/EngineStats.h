@@ -58,7 +58,6 @@ struct MixerStats
 
 struct EngineStats
 {
-    double avgIdle = 100.0;
     int32_t timeSlipCount = 0;
 
     uint32_t pollPeriodMs = 1;

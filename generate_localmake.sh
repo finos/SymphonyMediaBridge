@@ -6,4 +6,4 @@ if [ $# -eq 0 ]; then
 fi
 
 rm -rf CMakeCache.txt CMakeFiles googletest-* Makefile
-cmake -DCMAKE_BUILD_TYPE=$1 -G "Unix Makefiles" .
+cmake -DCMAKE_BUILD_TYPE=$1 -DENABLE_LEGACY_API=1 -G "Unix Makefiles" .

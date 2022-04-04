@@ -2,6 +2,7 @@
 
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
+#include <array>
 #include <inttypes.h>
 
 namespace bridge
@@ -32,6 +33,11 @@ struct SystemStats
     double systemCpu = 0;
     uint32_t totalNumberOfThreads = 0;
     uint64_t timestamp = 0;
+
+    double workerCpu = 0;
+    double rtceCpu = 0;
+    double engineCpu = 0;
+    double managerCpu = 0;
 
     struct ConnectionsStats connections;
 };
@@ -78,6 +84,9 @@ private:
         long priority = 0;
         long nice = 0;
         long threads = 0;
+        char name[30];
+
+        bool empty() const { return pid == 0 && threads == 0 && utime == 0; }
     };
     friend ProcStat operator-(ProcStat a, const ProcStat& b);
 
@@ -101,6 +110,8 @@ private:
     {
         ProcStat procSample;
         SystemCpu systemSample;
+
+        std::array<ProcStat, 64> threadSamples;
     };
 
     bool readProcStat(FILE* file, ProcStat& stat) const;
@@ -121,10 +132,10 @@ private:
     MacCpuSample collectMacCpuSample() const;
 #endif
 
-    LinuxCpuSample collectLinuxCpuSample() const;
+    LinuxCpuSample collectLinuxCpuSample(const std::vector<int>& taskIds) const;
     ConnectionsStats collectLinuxNetStat();
     ConnectionsStats collectNetStats();
-    std::vector<int> getThreadIds() const;
+    std::vector<int> getTaskIds() const;
 };
 
 } // namespace Stats
