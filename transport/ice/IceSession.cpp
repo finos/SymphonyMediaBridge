@@ -1166,7 +1166,7 @@ void IceSession::CandidatePair::send(const uint64_t now)
         state = InProgress;
     }
     _transactions.push_back(transaction);
-    if (_transactions.size() > 10)
+    if (_transactions.size() > 8)
     {
         if (localEndpoint.endpoint)
         {

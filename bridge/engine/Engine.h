@@ -41,8 +41,6 @@ private:
     concurrency::MpmcPublish<EngineStats::EngineStats, 4> _stats;
     uint32_t _tickCounter;
 
-    utils::AvgTracker _engineIdle;
-
     std::thread _thread; // must be last member
 
     void addMixer(EngineCommand::Command& nextCommand);

@@ -4,6 +4,7 @@
 #include "utils/Time.h"
 #include <algorithm>
 #include <cstdio>
+#include <dirent.h>
 #include <nlohmann/json.hpp>
 #include <thread>
 #include <unistd.h>
@@ -99,6 +100,11 @@ std::string MixerManagerStats::describe()
     result["videochannels"] = _videoStreams;
     result["threads"] = _systemStats.totalNumberOfThreads;
     result["cpu_usage"] = _systemStats.processCPU;
+    result["cpu_engine"] = _systemStats.engineCpu;
+    result["cpu_rtce"] = _systemStats.rtceCpu;
+    result["cpu_workers"] = _systemStats.workerCpu;
+    result["cpu_manager"] = _systemStats.managerCpu;
+
     result["total_memory"] = _systemStats.processMemory;
     result["used_memory"] = _systemStats.processMemory;
     result["packet_rate_download"] = _engineStats.activeMixers.inbound.total().packetsPerSecond;
@@ -132,7 +138,6 @@ std::string MixerManagerStats::describe()
     result["bwe_download_hist"] = nlohmann::to_json(_engineStats.activeMixers.inbound.transport.bandwidthEstimateGroup);
     result["rtt_download_hist"] = nlohmann::to_json(_engineStats.activeMixers.inbound.transport.rttGroup);
 
-    result["engine_idle"] = _engineStats.avgIdle;
     result["engine_slips"] = _engineStats.timeSlipCount;
 
     return result.dump(4);
@@ -168,30 +173,15 @@ bool SystemStatsCollector::readProcStat(FILE* file, ProcStat& stat) const
         return false;
     }
 
-    char procName[30];
-    unsigned long long dummyull;
-    unsigned long dummy;
-    char state = 'M';
     ProcStat sample;
 
-    auto procInfoRead = (24 ==
+    auto procInfoRead = (11 ==
         fscanf(file,
-            "%d %28s %c %lu %lu %lu %lu %lu"
-            " %lu %lu %lu %lu %lu %lu %lu %ld"
-            " %ld %ld %ld %ld %lu %llu %lu %ld",
+            "%d %28s %*c %*lu %*lu %*lu %*lu %*lu"
+            " %*lu %*lu %*lu %*lu %*lu %lu %lu %ld"
+            " %ld %ld %ld %ld %*lu %*llu %lu %ld",
             &sample.pid,
-            static_cast<char*>(procName),
-            &state,
-            &dummy,
-            &dummy,
-            &dummy,
-            &dummy,
-            &dummy,
-            &dummy,
-            &dummy,
-            &dummy,
-            &dummy,
-            &dummy,
+            static_cast<char*>(sample.name),
             &sample.utime,
             &sample.stime,
             &sample.cutime,
@@ -199,8 +189,6 @@ bool SystemStatsCollector::readProcStat(FILE* file, ProcStat& stat) const
             &sample.priority,
             &sample.nice,
             &sample.threads,
-            &dummy,
-            &dummyull,
             &sample.virtualmem,
             &sample.pagedmem));
 
@@ -270,17 +258,56 @@ SystemStats SystemStatsCollector::collect()
     stats.systemCpu = 0;
     stats.processMemory = sample1.pagedmem;
 #else
+    const auto cpuCount = std::thread::hardware_concurrency();
+    const auto taskIds = getTaskIds();
     auto start = utils::Time::getAbsoluteTime();
-    auto sample0 = collectLinuxCpuSample();
+    auto sample0 = collectLinuxCpuSample(taskIds);
     auto netStat = collectNetStats();
 
     auto toSleep = 1000000000UL - (utils::Time::getAbsoluteTime() - start);
     utils::Time::nanoSleep(toSleep);
 
-    auto sample1 = collectLinuxCpuSample();
+    auto sample1 = collectLinuxCpuSample(taskIds);
 
     auto diffProc = sample1.procSample - sample0.procSample;
     auto systemDiff = sample1.systemSample - sample0.systemSample;
+
+    size_t workerCount = 0;
+    double workerCpu = 0;
+    for (size_t i = 0; i < sample1.threadSamples.size(); ++i)
+    {
+        const auto taskSample = sample1.threadSamples[i] - sample0.threadSamples[i];
+        if (taskSample.empty())
+        {
+            break;
+        }
+
+        if (!std::strcmp(taskSample.name, "(Worker)"))
+        {
+            workerCpu += static_cast<double>(taskSample.utime + taskSample.stime);
+            ++workerCount;
+        }
+        else if (!std::strcmp(taskSample.name, "(Rtce)"))
+        {
+            stats.rtceCpu =
+                cpuCount * static_cast<double>(taskSample.utime + taskSample.stime) / (1 + systemDiff.totalJiffies());
+        }
+        else if (!std::strcmp(taskSample.name, "(Engine)"))
+        {
+            stats.engineCpu =
+                cpuCount * static_cast<double>(taskSample.utime + taskSample.stime) / (1 + systemDiff.totalJiffies());
+        }
+        else if (!std::strcmp(taskSample.name, "(MixerManager)"))
+        {
+            stats.managerCpu =
+                cpuCount * static_cast<double>(taskSample.utime + taskSample.stime) / (1 + systemDiff.totalJiffies());
+        }
+    }
+
+    if (workerCount > 0)
+    {
+        stats.workerCpu = workerCpu * cpuCount / (workerCount * (1 + systemDiff.totalJiffies()));
+    }
 
     stats.processCPU = static_cast<double>(diffProc.utime + diffProc.stime) / (1 + systemDiff.totalJiffies());
     stats.systemCpu = 1.0 - systemDiff.idleRatio();
@@ -309,7 +336,7 @@ SystemStatsCollector::MacCpuSample SystemStatsCollector::collectMacCpuSample() c
 }
 
 #else
-SystemStatsCollector::LinuxCpuSample SystemStatsCollector::collectLinuxCpuSample() const
+SystemStatsCollector::LinuxCpuSample SystemStatsCollector::collectLinuxCpuSample(const std::vector<int>& taskIds) const
 {
     LinuxCpuSample sample;
 
@@ -320,7 +347,35 @@ SystemStatsCollector::LinuxCpuSample SystemStatsCollector::collectLinuxCpuSample
         readSystemStat(hCpuStat.get(), sample.systemSample))
     {
     }
+
+    size_t threadCount = 0;
+    for (int taskId : taskIds)
+    {
+        char fileName[250];
+        std::sprintf(fileName, "/proc/self/task/%d/stat", taskId);
+        utils::ScopedFileHandle hTaskStat(fopen(fileName, "r"));
+        if (threadCount == sample.threadSamples.size() ||
+            !(hTaskStat.get() && readProcStat(hTaskStat.get(), sample.threadSamples[threadCount++])))
+        {
+            break;
+        }
+    }
     return sample;
+}
+
+std::vector<int> SystemStatsCollector::getTaskIds() const
+{
+    std::vector<int> result;
+    auto folderHandle = opendir("/proc/self/task");
+    for (auto entry = readdir(folderHandle); entry != nullptr; entry = readdir(folderHandle))
+    {
+        if (std::isdigit(entry->d_name[0]))
+        {
+            result.push_back(std::stoi(entry->d_name));
+        }
+    }
+    closedir(folderHandle);
+    return result;
 }
 #endif
 ConnectionsStats SystemStatsCollector::collectNetStats()

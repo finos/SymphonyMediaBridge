@@ -25,7 +25,6 @@ Engine::Engine()
       _running(true),
       _pendingCommands(1024),
       _tickCounter(0),
-      _engineIdle(0.05),
       _thread([this] { this->run(); })
 {
     if (concurrency::setPriority(_thread, concurrency::Priority::RealTime))
@@ -198,13 +197,11 @@ void Engine::run()
 
             currentStatSample.pollPeriodMs =
                 static_cast<uint32_t>(std::max(uint64_t(1), (pollTime - previousPollTime) / uint64_t(1000000)));
-            currentStatSample.avgIdle = _engineIdle.get();
             _stats.write(currentStatSample);
             previousPollTime = pollTime;
         }
 
         auto toSleep = pacer.timeToNextTick(utils::Time::getAbsoluteTime());
-        _engineIdle.update(std::max(int64_t(0), toSleep));
 
         if (toSleep > 0)
         {
@@ -616,7 +613,6 @@ EngineStats::EngineStats Engine::getStats()
 {
     EngineStats::EngineStats stats;
     _stats.read(stats);
-    stats.avgIdle /= intervalNs;
     return stats;
 }
 
