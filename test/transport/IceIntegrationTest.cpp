@@ -313,7 +313,7 @@ TEST_F(IceIntegrationTest, portReuse)
     // then the firewall reuses the port for another session that should be able to
     // replace the first unfinished session.
     ASSERT_TRUE(init("{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10030}",
-        "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10010}"));
+        "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10012}"));
 
     ClientPair* clients1 = new ClientPair(*_transportFactory1,
         *_transportFactory2,
@@ -322,6 +322,13 @@ TEST_F(IceIntegrationTest, portReuse)
         *_sslDtls,
         *_jobManager,
         false);
+
+    // start connection from 10012 to 10030 but do not give target side any credentials
+    // udp endpoint will route src 10012 to that Transport-6
+    clients1->connect(utils::Time::getAbsoluteTime());
+    utils::Time::nanoSleep(1 * utils::Time::sec);
+    clients1->_transport1->stop(); // stop 10012 from sending ICE probes
+
     ClientPair* clients2 = new ClientPair(*_transportFactory1,
         *_transportFactory2,
         11009u,
@@ -330,9 +337,8 @@ TEST_F(IceIntegrationTest, portReuse)
         *_jobManager,
         false);
 
-    clients1->connect(utils::Time::getAbsoluteTime());
-    utils::Time::nanoSleep(1 * utils::Time::sec);
-
+    // Connect from 10012 to 10030 with new session. Both sides have credentials
+    // UdpEndpoint must now replace the route from 10012 to the new transport
     clients2->connect(utils::Time::getAbsoluteTime());
     for (int i = 0; !clients2->isConnected() && i < 300; ++i)
     {
