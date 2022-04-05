@@ -729,7 +729,7 @@ void MixerManager::updateStats()
     _stats._engine = _engine.getStats();
     _stats._ticksSinceLastUpdate = 0;
 
-    if (_mainAllocator.size() < 5000)
+    if (_mainAllocator.size() < 512)
     {
         logger::warn("stats main pool %zu, mixers %zu", "MixerManager", _mainAllocator.size(), _mixers.size());
     }

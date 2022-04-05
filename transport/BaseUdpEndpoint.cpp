@@ -132,6 +132,10 @@ void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target,
             _sendJobs.addJob<SendJob>(*this);
         }
     }
+    else
+    {
+        allocator.free(packet);
+    }
 }
 
 void BaseUdpEndpoint::internalSend()
@@ -267,8 +271,7 @@ void BaseUdpEndpoint::onSocketReadable(int fd)
 
 EndpointMetrics BaseUdpEndpoint::getMetrics(uint64_t timestamp) const
 {
-    return EndpointMetrics(
-        _sendQueue.size(),
+    return EndpointMetrics(_sendQueue.size(),
         _receiveTracker.get(timestamp, utils::Time::sec) * 8 * utils::Time::ms,
         _sendTracker.get(timestamp, utils::Time::sec) * 8 * utils::Time::ms);
 }

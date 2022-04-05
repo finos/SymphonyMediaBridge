@@ -237,7 +237,14 @@ public:
                 credentials->fingerprintHash,
                 credentials->dtlsClientSide);
         }
-        _allocator.free(_packet);
+    }
+
+    ~DtlsSetRemoteJob()
+    {
+        if (_packet)
+        {
+            _allocator.free(_packet);
+        }
     }
 
 private:
@@ -358,9 +365,6 @@ public:
         {
             SctpTimerJob::start(_jobQueue, _transport, _sctpAssociation, nextTimeout);
         }
-
-        _allocator.free(_packet);
-        _packet = nullptr;
     }
 
 private:
