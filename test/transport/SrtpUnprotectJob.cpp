@@ -19,6 +19,14 @@ SrtpUnprotectJob::SrtpUnprotectJob(RtcTransport* sender,
     assert(packet->getLength() > 0);
 }
 
+SrtpUnprotectJob::~SrtpUnprotectJob()
+{
+    if (_packet)
+    {
+        _receiveAllocator.free(_packet);
+    }
+}
+
 void SrtpUnprotectJob::run()
 {
     if (rtp::isRtpPacket(*_packet))
@@ -30,6 +38,7 @@ void SrtpUnprotectJob::run()
         else
         {
             _receiver->onRtpPacketDecrypted(_sender, _packet, _receiveAllocator, getJobsCounter());
+            _packet = nullptr;
         }
     }
 }

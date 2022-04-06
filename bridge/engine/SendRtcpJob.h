@@ -15,6 +15,7 @@ class SendRtcpJob : public jobmanager::CountedJob
 {
 public:
     SendRtcpJob(memory::Packet* rtcpPacket, transport::Transport& transport, memory::PacketPoolAllocator& allocator);
+    ~SendRtcpJob();
 
     void run() override;
 

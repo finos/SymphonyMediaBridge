@@ -17,9 +17,18 @@ SrtpProtectJob::SrtpProtectJob(std::atomic_uint32_t& ownerJobsCounter,
     assert(packet->getLength() > 0);
 }
 
+SrtpProtectJob::~SrtpProtectJob()
+{
+    if (_packet)
+    {
+        _allocator.free(_packet);
+    }
+}
+
 void SrtpProtectJob::run()
 {
     _transport.protectAndSend(_packet, _allocator);
+    _packet = nullptr;
 }
 
 } // namespace transport

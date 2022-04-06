@@ -29,6 +29,9 @@ public:
         memory::Packet* packet,
         memory::PacketPoolAllocator& receiveAllocator,
         DecryptedPacketReceiver* receiver);
+
+    ~SrtpUnprotectJob();
+
     void run() override;
 
 private:

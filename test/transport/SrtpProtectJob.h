@@ -21,6 +21,8 @@ public:
         memory::PacketPoolAllocator& allocator,
         transport::Transport& transport);
 
+    ~SrtpProtectJob();
+
     void run() override;
 
 private:

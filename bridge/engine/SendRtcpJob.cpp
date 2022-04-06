@@ -14,9 +14,18 @@ SendRtcpJob::SendRtcpJob(memory::Packet* rtcpPacket,
 {
 }
 
+SendRtcpJob::~SendRtcpJob()
+{
+    if (_packet)
+    {
+        _allocator.free(_packet);
+    }
+}
+
 void SendRtcpJob::run()
 {
     _transport.protectAndSend(_packet, _allocator);
+    _packet = nullptr;
 }
 
 } // namespace bridge
