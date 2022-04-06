@@ -585,7 +585,7 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
         }
         else if (!packet)
         {
-            logger::warn("cannot process received srtp due to depleted pool allocator", _loggableId.c_str());
+            logger::warn("cannot process received DTLS due to depleted pool allocator", _loggableId.c_str());
         }
         return;
     }
