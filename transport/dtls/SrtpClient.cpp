@@ -261,7 +261,7 @@ int64_t SrtpClient::processTimeout()
         // may be used to determine if the retransmit failed due to a non-fatal error at the write BIO.
         // However, the operation may not be retried until the next timeout fires
         const auto err = SSL_get_error(_ssl, rc);
-        const bool isFatalError = err != SSL_ERROR_WANT_WRITE;
+        const bool isFatalError = (err != SSL_ERROR_WANT_WRITE);
 
         logger::error("DTLS timeout error %s ,isFatal: %s", _loggableId.c_str(), getErrorMessage(err), isFatalError ? "t" : "f");
         if (isFatalError)
