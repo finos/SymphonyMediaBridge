@@ -256,7 +256,25 @@ int64_t SrtpClient::processTimeout()
     auto rc = DTLSv1_handle_timeout(_ssl);
     if (rc == -1)
     {
-        logger::error("DTLS timeout error %s", _loggableId.c_str(), getErrorMessage(SSL_get_error(_ssl, rc)));
+        // If too many timeouts had expired without progress or an error occurs, it returns -1.
+        // If the function returns -1, checking if SSL_get_error returns SSL_ERROR_WANT_WRITE
+        // may be used to determine if the retransmit failed due to a non-fatal error at the write BIO.
+        // However, the operation may not be retried until the next timeout fires
+        const auto err = SSL_get_error(_ssl, rc);
+        const bool isFatalError = err != SSL_ERROR_WANT_WRITE;
+
+        logger::error("DTLS timeout error %s ,isFatal: %s", _loggableId.c_str(), getErrorMessage(err), isFatalError ? "t" : "f");
+        if (isFatalError)
+        {
+            _state = State::FAILED;
+            if (_eventSink)
+            {
+                _eventSink->onDtlsStateChange(this, _state);
+            }
+
+            return -1;
+        }
+
     }
     return nextTimeout();
 }
