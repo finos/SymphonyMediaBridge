@@ -45,8 +45,8 @@ public:
         const std::string& fingerprintHash,
         const bool isDtlsClient);
 
-    bool unprotect(memory::Packet* packet);
-    bool protect(memory::Packet* packet);
+    bool unprotect(memory::Packet& packet);
+    bool protect(memory::Packet& packet);
     void removeLocalSsrc(const uint32_t ssrc);
     bool setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
     bool setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
@@ -61,7 +61,7 @@ public:
 
     State getState() const { return _state; }
 
-    bool unprotectApplicationData(memory::Packet* packet);
+    bool unprotectApplicationData(memory::Packet& packet);
     void sendApplicationData(const void* data, size_t length);
 
 private:

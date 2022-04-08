@@ -150,14 +150,14 @@ TEST_F(SrtpTest, seqSkip)
 
         header->sequenceNumber = seqStart + i;
 
-        EXPECT_TRUE(_srtp1->protect(packet));
+        EXPECT_TRUE(_srtp1->protect(*packet));
         if (i >= 90000 + 35000 && i < 90000 + 35000 + 540)
         {
-            EXPECT_FALSE(_srtp2->unprotect(packet));
+            EXPECT_FALSE(_srtp2->unprotect(*packet));
         }
         else
         {
-            EXPECT_TRUE(_srtp2->unprotect(packet));
+            EXPECT_TRUE(_srtp2->unprotect(*packet));
 
             auto header = rtp::RtpHeader::fromPacket(*packet);
             EXPECT_TRUE(isDataValid(header->getPayload()));
@@ -181,12 +181,12 @@ TEST_F(SrtpTest, seqDuplicate)
     header->timestamp = 1234;
     header->sequenceNumber = 5678;
 
-    EXPECT_TRUE(_srtp1->protect(packet));
+    EXPECT_TRUE(_srtp1->protect(*packet));
 
     auto packetCopy = memory::makePacket(_allocator, *packet);
 
-    EXPECT_TRUE(_srtp2->unprotect(packet));
-    EXPECT_FALSE(_srtp2->unprotect(packetCopy));
+    EXPECT_TRUE(_srtp2->unprotect(*packet));
+    EXPECT_FALSE(_srtp2->unprotect(*packetCopy));
 
     _allocator.free(packetCopy);
     _allocator.free(packet);

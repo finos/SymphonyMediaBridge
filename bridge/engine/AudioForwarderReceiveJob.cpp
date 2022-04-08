@@ -188,7 +188,7 @@ void AudioForwarderReceiveJob::run()
         }
     }
 
-    if (!_sender->unprotect(_packet))
+    if (!_sender->unprotect(*_packet))
     {
         logger::error("Failed to unprotect srtp %u, mixer %s",
             "AudioForwarderReceiveJob",

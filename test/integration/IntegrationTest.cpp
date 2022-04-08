@@ -625,7 +625,7 @@ public:
             uint64_t timestamp)
         {
             _context.onRtpPacket(timestamp);
-            if (!sender->unprotect(packet))
+            if (!sender->unprotect(*packet))
             {
                 return;
             }

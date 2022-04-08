@@ -16,7 +16,7 @@ public:
     bool hasPendingJobs() const override { return true; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
     void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& allocator) override {}
-    bool unprotect(memory::Packet* packet) override { return true; }
+    bool unprotect(memory::Packet& packet) override { return true; }
     void removeSrtpLocalSsrc(const uint32_t ssrc) override {}
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override { return true; }
     bool isGatheringComplete() const override { return true; }

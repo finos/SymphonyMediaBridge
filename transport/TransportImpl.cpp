@@ -958,7 +958,7 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     {
         DataReceiver* const dataReceiver = _dataReceiver.load();
 
-        if (dataReceiver && _sctpServerPort && _srtpClient->unprotectApplicationData(packet))
+        if (dataReceiver && _sctpServerPort && _srtpClient->unprotectApplicationData(*packet))
         {
             _sctpServerPort->onPacketReceived(packet->get(), packet->getLength(), timestamp);
         }
@@ -1020,7 +1020,7 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     _bwe->onUnmarkedTraffic(packet->getLength(), timestamp);
 
     const auto now = std::chrono::system_clock::now();
-    if (unprotect(packet) && rtp::isValidRtcpPacket(*packet))
+    if (unprotect(*packet) && rtp::isValidRtcpPacket(*packet))
     {
         rtp::CompoundRtcpPacket compound(packet->get(), packet->getLength());
         for (auto& report : compound)
@@ -1442,7 +1442,7 @@ void TransportImpl::doProtectAndSend(uint64_t timestamp,
     ++_outboundMetrics.packetCount;
 
     assert(packet->getLength() + 24 <= _config.mtu);
-    if (endpoint && _srtpClient->protect(packet))
+    if (endpoint && _srtpClient->protect(*packet))
     {
         _sendRateTracker.update(packet->getLength(), timestamp);
         endpoint->sendTo(target, packet, allocator);
@@ -1909,7 +1909,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
     _rtcp.lastSendTime = timestamp;
 }
 
-bool TransportImpl::unprotect(memory::Packet* packet)
+bool TransportImpl::unprotect(memory::Packet& packet)
 {
     if (_srtpClient && _srtpClient->isInitialized())
     {

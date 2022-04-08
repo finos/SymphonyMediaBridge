@@ -85,7 +85,7 @@ void VideoForwarderReceiveJob::run()
         }
     }
 
-    if (!_sender->unprotect(_packet))
+    if (!_sender->unprotect(*_packet))
     {
         const auto header = rtp::RtpHeader::fromPacket(*_packet);
         logger::error("Failed to unprotect srtp %s, ssrc %u, seq %u, eseq %u, lreseq %u, lueseq %u, ts %u, mixer %s",

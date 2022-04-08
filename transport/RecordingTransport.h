@@ -39,7 +39,7 @@ public:
     bool hasPendingJobs() const override { return _jobCounter.load() > 0; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; };
     void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator) override;
-    bool unprotect(memory::Packet* packet) override;
+    bool unprotect(memory::Packet& packet) override;
     void setDataReceiver(DataReceiver* dataReceiver) override;
     bool isConnected() override;
     bool start() override;

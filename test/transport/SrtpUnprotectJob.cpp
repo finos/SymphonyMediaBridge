@@ -31,7 +31,7 @@ void SrtpUnprotectJob::run()
 {
     if (rtp::isRtpPacket(*_packet))
     {
-        if (!_sender->unprotect(_packet))
+        if (!_sender->unprotect(*_packet))
         {
             _receiveAllocator.free(_packet);
         }

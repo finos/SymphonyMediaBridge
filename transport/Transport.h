@@ -30,7 +30,7 @@ public:
     virtual bool isRunning() const = 0;
     virtual bool hasPendingJobs() const = 0;
     virtual std::atomic_uint32_t& getJobCounter() = 0;
-    virtual bool unprotect(memory::Packet* packet) = 0;
+    virtual bool unprotect(memory::Packet& packet) = 0;
     virtual void setDataReceiver(DataReceiver* dataReceiver) = 0;
     virtual bool isConnected() = 0;
     virtual bool start() = 0;

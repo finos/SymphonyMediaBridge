@@ -227,7 +227,7 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
     }
 }
 
-bool RecordingTransport::unprotect(memory::Packet* packet)
+bool RecordingTransport::unprotect(memory::Packet& packet)
 {
     // TODO implement payload decryption
     return false;
