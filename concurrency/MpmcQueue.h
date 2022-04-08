@@ -77,7 +77,6 @@ public:
                 // the write cannot reach here until the state is set empty.
                 auto& entry = _elements[pos % _maxElements];
                 target = std::move(entry.value);
-                entry.value.~T();
                 entry.state.store(CellState::emptySlot, std::memory_order_release);
                 return true;
             }
