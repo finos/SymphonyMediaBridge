@@ -152,8 +152,6 @@ public:
             return;
         }
         auto entry = reinterpret_cast<Entry*>(reinterpret_cast<char*>(pointer) - sizeof(typename Entry::Head));
-        assert(entry > _elements);
-        assert(entry < _elements + _originalElementCount);
 #ifdef DEBUG
         assert(reinterpret_cast<uintptr_t>(entry) >= reinterpret_cast<uintptr_t>(_elements) &&
             reinterpret_cast<uintptr_t>(entry) < reinterpret_cast<uintptr_t>(_elements) + _size);
