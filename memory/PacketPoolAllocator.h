@@ -50,4 +50,35 @@ inline Packet* makePacket(PacketPoolAllocator& allocator, const Packet& packet)
     return makePacket(allocator, packet.get(), packet.getLength());
 }
 
+// Be very careful with reset as the deleter is not changed if already set. You may try to deallocate
+// packet in the wrong pool.
+typedef std::unique_ptr<memory::Packet, PacketPoolAllocator::Deleter> PacketPtr;
+
+inline PacketPtr makePacketPtr(PacketPoolAllocator& allocator)
+{
+    auto packet = makePacket(allocator);
+    if (!packet)
+    {
+        return PacketPtr();
+    }
+
+    return PacketPtr(packet, allocator.getDeleter());
+}
+
+inline PacketPtr makePacketPtr(PacketPoolAllocator& allocator, const void* data, size_t length)
+{
+    auto packet = makePacket(allocator, data, length);
+    if (!packet)
+    {
+        return PacketPtr();
+    }
+
+    return PacketPtr(packet, allocator.getDeleter());
+}
+
+inline PacketPtr makePacketPtr(PacketPoolAllocator& allocator, const Packet& packet)
+{
+    return makePacketPtr(allocator, packet.get(), packet.getLength());
+}
+
 } // namespace memory

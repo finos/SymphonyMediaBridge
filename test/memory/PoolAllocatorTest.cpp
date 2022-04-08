@@ -1,6 +1,8 @@
 #include "memory/PoolAllocator.h"
+#include "concurrency/MpmcQueue.h"
 #include "logger/Logger.h"
 #include "memory/RefCountedPacket.h"
+#include "test/bridge/DummyRtcTransport.h"
 #include "test/macros.h"
 #include "utils/Time.h"
 #include <gtest/gtest.h>
@@ -180,4 +182,83 @@ TEST(PoolAllocatorBasic, refCountedPacket)
         }
         logger::info("ops %zu", "refCountedPacket", count);
     }
+}
+
+namespace
+{
+
+template <typename PacketPtrT>
+struct IncomingPacketAggregate
+{
+    IncomingPacketAggregate() : _transport(nullptr), _extendedSequenceNumber(0) {}
+
+    IncomingPacketAggregate(PacketPtrT packet, transport::RtcTransport* transport)
+        : _packet(std::move(packet)),
+          _transport(transport),
+          _extendedSequenceNumber(0)
+    {
+    }
+
+    IncomingPacketAggregate(PacketPtrT packet,
+        transport::RtcTransport* transport,
+        const uint32_t extendedSequenceNumber)
+        : _packet(std::move(packet)),
+          _transport(transport),
+          _extendedSequenceNumber(extendedSequenceNumber)
+    {
+    }
+
+    PacketPtrT _packet;
+    transport::RtcTransport* _transport;
+    uint32_t _extendedSequenceNumber;
+
+    inline void lockOwner() const
+    {
+        if (_transport)
+        {
+            ++_transport->getJobCounter();
+        }
+    }
+
+    inline void release() const
+    {
+        if (_transport)
+        {
+#if DEBUG
+            const auto decreased = --_transport->getJobCounter();
+            assert(decreased < 0xFFFFFFFF); // detecting going below zero
+#else
+            --_transport->getJobCounter();
+#endif
+        }
+        _packet.release();
+    }
+};
+} // namespace
+
+TEST(PoolAllocatorBasic, deleter)
+{
+    memory::PacketPoolAllocator allocator(1024, "mypackets");
+    memory::PacketPoolAllocator allocator2(512, "twopack");
+
+    auto packet = memory::makePacketPtr(allocator);
+    auto packet2 = memory::makePacketPtr(allocator2);
+
+    concurrency::MpmcQueue<memory::PacketPtr> queue(1024);
+
+    memory::PacketPtr clean;
+    clean = std::move(packet2);
+    queue.push(std::move(packet));
+    packet = std::move(clean);
+
+    auto otherPacket = std::move(packet);
+
+    auto jobManager = std::make_unique<jobmanager::JobManager>();
+    auto jobQueue = std::make_unique<jobmanager::JobQueue>(*jobManager);
+    auto packet3 = memory::makePacketPtr(allocator);
+    auto transport = new DummyRtcTransport(*jobQueue);
+    IncomingPacketAggregate<memory::PacketPtr> aggr(std::move(packet3), transport);
+    concurrency::MpmcQueue<IncomingPacketAggregate<memory::PacketPtr>> recvQueue(64);
+
+    recvQueue.push(std::move(aggr));
 }

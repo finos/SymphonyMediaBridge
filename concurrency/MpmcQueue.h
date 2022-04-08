@@ -76,7 +76,8 @@ public:
                 // we own the read position now. If thread pauses here,
                 // the write cannot reach here until the state is set empty.
                 auto& entry = _elements[pos % _maxElements];
-                target = entry.value;
+                target = std::move(entry.value);
+                entry.value.~T();
                 entry.state.store(CellState::emptySlot, std::memory_order_release);
                 return true;
             }
@@ -105,7 +106,7 @@ public:
                 // Assume we pause here.
                 // The emptyslot state will prevent read cursor and thereby write cursor to get here.
                 auto& entry = _elements[pos % _maxElements];
-                entry.value = obj;
+                entry.value = std::move(obj);
                 entry.state.store(CellState::committed, std::memory_order_release);
                 return true;
             }

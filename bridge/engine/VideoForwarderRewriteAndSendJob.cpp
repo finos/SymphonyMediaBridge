@@ -116,7 +116,7 @@ void VideoForwarderRewriteAndSendJob::run()
 
     if (_outboundContext._packetCache.isSet() && _outboundContext._packetCache.get())
     {
-        if (!_outboundContext._packetCache.get()->add(_packet, nextSequenceNumber))
+        if (!_outboundContext._packetCache.get()->add(*_packet, nextSequenceNumber))
         {
             _outboundContext._allocator.free(_packet);
             _packet = nullptr;

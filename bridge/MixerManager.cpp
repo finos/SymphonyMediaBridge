@@ -373,6 +373,13 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
 
     mixer.reset();
     logger::info("EngineMixer removed", "MixerManager");
+
+    if (_engineMixers.empty())
+    {
+        _mainAllocator.logAllocatedElements();
+        _sendAllocator.logAllocatedElements();
+        _audioAllocator.logAllocatedElements();
+    }
 }
 
 void MixerManager::engineMessageAllocateAudioBuffer(const EngineMessage::Message& message)

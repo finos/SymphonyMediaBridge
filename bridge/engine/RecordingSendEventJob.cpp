@@ -39,7 +39,7 @@ void RecordingSendEventJob::run()
     }
 
     const auto sequenceNumber = recHeader->sequenceNumber.get();
-    _recEventPacketCache.add(_packet, sequenceNumber);
+    _recEventPacketCache.add(*_packet, sequenceNumber);
     _transport.protectAndSend(_packet, _allocator);
     _unackedPacketsTracker.onPacketSent(sequenceNumber, utils::Time::getAbsoluteTime() / 1000000ULL);
     _packet = nullptr;

@@ -55,7 +55,7 @@ PacketCache::~PacketCache()
     }
 }
 
-bool PacketCache::add(memory::Packet* packet, const uint16_t sequenceNumber)
+bool PacketCache::add(const memory::Packet& packet, const uint16_t sequenceNumber)
 {
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
@@ -80,7 +80,7 @@ bool PacketCache::add(memory::Packet* packet, const uint16_t sequenceNumber)
         }
     }
 
-    auto cachedPacket = memory::makePacket(*_packetAllocator, *packet);
+    auto cachedPacket = memory::makePacket(*_packetAllocator, packet);
     if (!cachedPacket)
     {
         return false;

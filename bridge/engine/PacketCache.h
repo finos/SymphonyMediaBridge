@@ -16,7 +16,7 @@ public:
     explicit PacketCache(const char* loggableId, const uint32_t ssrc);
     ~PacketCache();
 
-    bool add(memory::Packet* packet, const uint16_t sequenceNumber);
+    bool add(const memory::Packet& packet, const uint16_t sequenceNumber);
     memory::RefCountedPacket* get(const uint16_t sequenceNumber);
 
 private:

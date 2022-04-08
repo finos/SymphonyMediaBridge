@@ -66,7 +66,7 @@ void RecordingAudioForwarderSendJob::run()
         auto packetCache = _outboundContext._packetCache.get();
         if (packetCache)
         {
-            if (!packetCache->add(_packet, nextSequenceNumber))
+            if (!packetCache->add(*_packet, nextSequenceNumber))
             {
                 logger::info("Dropping rec audio packet - cache issues...", "RecordingAudioForwarderSendJob");
                 _outboundContext._allocator.free(_packet);

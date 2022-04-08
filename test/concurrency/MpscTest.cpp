@@ -317,3 +317,34 @@ TEST(Mpmc, FullEmptyCondition)
 
     EXPECT_FALSE(queue->pop(item));
 }
+
+namespace
+{
+class Counter
+{
+public:
+    Counter(int& counter) : _counter(counter) { ++counter; }
+    ~Counter() { --_counter; }
+
+private:
+    int& _counter;
+};
+} // namespace
+
+TEST(Mpmc, uniqueptr)
+{
+    int counter = 0;
+    auto queue = new MpmcQueue<std::unique_ptr<Counter>>(262144);
+    for (int i = 0; i < 55000; ++i)
+    {
+        queue->push(std::make_unique<Counter>(counter));
+    }
+
+    EXPECT_EQ(counter, 55000);
+    {
+        std::unique_ptr<Counter> value;
+        while (queue->pop(value)) {}
+    }
+    EXPECT_EQ(counter, 0);
+    delete queue;
+}
