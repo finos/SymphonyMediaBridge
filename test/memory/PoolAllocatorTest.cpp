@@ -253,12 +253,11 @@ TEST(PoolAllocatorBasic, deleter)
 
     auto otherPacket = std::move(packet);
 
-    auto jobManager = std::make_unique<jobmanager::JobManager>();
-    auto jobQueue = std::make_unique<jobmanager::JobQueue>(*jobManager);
     auto packet3 = memory::makePacketPtr(allocator);
-    auto transport = new DummyRtcTransport(*jobQueue);
-    IncomingPacketAggregate<memory::PacketPtr> aggr(std::move(packet3), transport);
+    IncomingPacketAggregate<memory::PacketPtr> aggr(std::move(packet3), nullptr);
     concurrency::MpmcQueue<IncomingPacketAggregate<memory::PacketPtr>> recvQueue(64);
 
     recvQueue.push(std::move(aggr));
+    IncomingPacketAggregate<memory::PacketPtr> aggr2;
+    EXPECT_TRUE(recvQueue.pop(aggr2));
 }
