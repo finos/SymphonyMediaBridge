@@ -187,7 +187,6 @@ private:
               _transport(nullptr),
               _extendedSequenceNumber(0)
         {
-            lockOwner();
         }
 
         IncomingPacketAggregate(PacketT* packet, AllocatorT* allocator, transport::RtcTransport* transport)
@@ -222,6 +221,8 @@ private:
 
         IncomingPacketAggregate& operator=(IncomingPacketAggregate&& rhs)
         {
+            release();
+
             _packet = std::exchange(rhs._packet, nullptr);
             _allocator = std::exchange(rhs._allocator, nullptr);
             _transport = std::exchange(rhs._transport, nullptr);
