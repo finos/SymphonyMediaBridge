@@ -103,11 +103,9 @@ SrtpClient::~SrtpClient()
 {
     BIO_set_data(_writeBio, nullptr);
     SSL_free(_ssl);
-    memory::Packet* packet = nullptr;
-    while (_pendingPackets.pop(packet))
-    {
-        _allocator.free(packet);
-    }
+
+    _pendingPackets.clear();
+
     if (_localSrtp)
     {
         srtp_dealloc(_localSrtp);
@@ -159,12 +157,10 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
         _eventSink->onDtlsStateChange(this, _state);
     }
 
-    memory::Packet* packet = nullptr;
-    while (_state == State::CONNECTING && _pendingPackets.pop(packet))
+    for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
     {
         logger::debug("forwarding pending DTLS message", _loggableId.c_str());
         onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
-        _allocator.free(packet);
     }
 }
 
@@ -210,11 +206,9 @@ void SrtpClient::dtlsHandShake()
         _eventSink->onDtlsStateChange(this, _state);
     }
 
-    memory::Packet* packet = nullptr;
-    while (_state == State::CONNECTING && _pendingPackets.pop(packet))
+    for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
     {
         onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
-        _allocator.free(packet);
     }
 }
 
@@ -577,12 +571,12 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
     if (_state != State::CONNECTING && _state != State::CONNECTED)
     {
         logger::debug("DTLS received when not ready", _loggableId.c_str());
-        auto* packet = memory::makePacket(_allocator, buffer, length);
-        if (packet && !_pendingPackets.push(packet))
+        auto packet = memory::makeUniquePacket(_allocator, buffer, length);
+        if (packet)
         {
-            _allocator.free(packet);
+            _pendingPackets.push(std::move(packet));
         }
-        else if (!packet)
+        else
         {
             logger::warn("cannot process received DTLS due to depleted pool allocator", _loggableId.c_str());
         }

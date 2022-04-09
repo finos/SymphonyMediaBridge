@@ -88,7 +88,7 @@ private:
     DBGCHECK_SINGLETHREADED_MUTEX(_mutexGuard);
 
     memory::PacketPoolAllocator& _allocator;
-    concurrency::MpmcQueue<memory::Packet*> _pendingPackets;
+    concurrency::MpmcQueue<memory::UniquePacket> _pendingPackets;
 
     void sslRead();
     bool compareFingerprint();

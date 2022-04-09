@@ -106,10 +106,9 @@ public:
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
           _allocator(allocator),
-          _iceCredentials(nullptr),
+          _iceCredentials(memory::makeUniquePacket(allocator)),
           _iceCandidates{0}
     {
-        _iceCredentials = memory::makePacket(allocator);
         if (!_iceCredentials)
         {
             logger::error("failed to allocate packet", "setRemoteIce");
@@ -147,16 +146,11 @@ public:
             return;
         }
 
-        _transport.doSetRemoteIce(_iceCredentials, _iceCandidates);
+        _transport.doSetRemoteIce(*_iceCredentials, _iceCandidates);
     }
 
     ~IceSetRemoteJob()
     {
-        if (_iceCredentials)
-        {
-            _allocator.free(_iceCredentials);
-        }
-
         for (size_t i = 0; i < maxCandidatePackets; ++i)
         {
             if (!_iceCandidates[i])
@@ -170,7 +164,7 @@ public:
 private:
     TransportImpl& _transport;
     memory::PacketPoolAllocator& _allocator;
-    memory::Packet* _iceCredentials;
+    memory::UniquePacket _iceCredentials;
     memory::Packet* _iceCandidates[maxCandidatePackets + 1];
 };
 
@@ -265,8 +259,7 @@ public:
         : CountedJob(transport.getJobCounter()),
           _jobQueue(jobQueue),
           _sctpAssociation(association),
-          _packet(memory::makePacket(allocator)),
-          _allocator(allocator),
+          _packet(memory::makeUniquePacket(allocator)),
           _transport(transport)
     {
         if (_packet)
@@ -274,7 +267,6 @@ public:
             if (sizeof(SctpDataChunk) + length > memory::Packet::size)
             {
                 logger::error("sctp message too big %u", _transport.getLoggableId().c_str(), length);
-                allocator.free(_packet);
                 return;
             }
 
@@ -290,13 +282,7 @@ public:
         }
     }
 
-    ~SctpSendJob()
-    {
-        if (_packet)
-        {
-            _allocator.free(_packet);
-        }
-    }
+    ~SctpSendJob() {}
 
     void run() override
     {
@@ -345,8 +331,7 @@ public:
 private:
     jobmanager::JobQueue& _jobQueue;
     sctp::SctpAssociation& _sctpAssociation;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::UniquePacket _packet;
     TransportImpl& _transport;
 };
 
@@ -1955,7 +1940,7 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
     }
 }
 
-void TransportImpl::doSetRemoteIce(const memory::Packet* credentialPacket,
+void TransportImpl::doSetRemoteIce(const memory::Packet& credentialPacket,
     const memory::Packet* const* candidatePackets)
 {
     if (!_rtpIceSession)
@@ -1963,7 +1948,7 @@ void TransportImpl::doSetRemoteIce(const memory::Packet* credentialPacket,
         return;
     }
 
-    auto& credentials = *reinterpret_cast<const IceCredentials*>(credentialPacket->get());
+    auto& credentials = *reinterpret_cast<const IceCredentials*>(credentialPacket.get());
     _rtpIceSession->setRemoteCredentials(std::pair<std::string, std::string>(credentials.ufrag, credentials.password));
 
     uint32_t candidateCount = 0;

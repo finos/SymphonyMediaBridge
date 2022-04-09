@@ -26,30 +26,6 @@ inline Packet* makePacket(PacketPoolAllocator& allocator)
     return new (pointer) memory::Packet();
 }
 
-inline Packet* makePacket(PacketPoolAllocator& allocator, const void* data, size_t length)
-{
-    assert(length <= memory::Packet::size);
-    if (length > memory::Packet::size)
-    {
-        return nullptr;
-    }
-
-    auto packet = makePacket(allocator);
-    if (!packet)
-    {
-        return packet;
-    }
-
-    std::memcpy(packet->get(), data, length);
-    packet->setLength(length);
-    return packet;
-}
-
-inline Packet* makePacket(PacketPoolAllocator& allocator, const Packet& packet)
-{
-    return makePacket(allocator, packet.get(), packet.getLength());
-}
-
 // Be very careful with reset as the deleter is not changed if already set. You may try to deallocate
 // packet in the wrong pool.
 typedef std::unique_ptr<memory::Packet, PacketPoolAllocator::Deleter> UniquePacket;
@@ -67,13 +43,22 @@ inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator)
 
 inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator, const void* data, size_t length)
 {
-    auto packet = makePacket(allocator, data, length);
+    assert(length <= memory::Packet::size);
+    if (length > memory::Packet::size)
+    {
+        return UniquePacket();
+    }
+
+    auto packet = makeUniquePacket(allocator);
     if (!packet)
     {
         return UniquePacket();
     }
 
-    return UniquePacket(packet, allocator.getDeleter());
+    std::memcpy(packet->get(), data, length);
+    packet->setLength(length);
+
+    return packet;
 }
 
 inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator, const Packet& packet)

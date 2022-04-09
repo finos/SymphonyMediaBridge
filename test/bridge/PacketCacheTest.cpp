@@ -22,9 +22,9 @@ protected:
     std::unique_ptr<memory::PacketPoolAllocator> _packetAllocator;
     std::unique_ptr<bridge::PacketCache> _packetCache;
 
-    memory::Packet* makePacket(const uint16_t sequenceNumber)
+    memory::UniquePacket makeUniquePacket(const uint16_t sequenceNumber)
     {
-        auto packet = memory::makePacket(*_packetAllocator);
+        auto packet = memory::makeUniquePacket(*_packetAllocator);
         memset(packet->get(), 0, packet->size);
         reinterpret_cast<uint16_t*>(packet->get())[0] = sequenceNumber;
         packet->setLength(sizeof(uint16_t));
@@ -39,9 +39,8 @@ protected:
 
 TEST_F(PacketCacheTest, addPacket)
 {
-    auto packet = makePacket(1);
+    auto packet = makeUniquePacket(1);
     EXPECT_TRUE(_packetCache->add(*packet, 1));
-    _packetAllocator->free(packet);
 
     auto cachedPacket = _packetCache->get(1);
     EXPECT_TRUE(verifyPacket(cachedPacket, 1));
@@ -49,13 +48,11 @@ TEST_F(PacketCacheTest, addPacket)
 
 TEST_F(PacketCacheTest, packetAlreadyInCache)
 {
-    auto packet1 = makePacket(1);
+    auto packet1 = makeUniquePacket(1);
     EXPECT_TRUE(_packetCache->add(*packet1, 1));
-    _packetAllocator->free(packet1);
 
-    auto packet2 = makePacket(1);
+    auto packet2 = makeUniquePacket(1);
     EXPECT_FALSE(_packetCache->add(*packet2, 1));
-    _packetAllocator->free(packet2);
 
     auto cachedPacket = _packetCache->get(1);
     EXPECT_TRUE(verifyPacket(cachedPacket, 1));
@@ -65,14 +62,12 @@ TEST_F(PacketCacheTest, fillCache)
 {
     for (auto i = 0; i < 512; ++i)
     {
-        auto packet = makePacket(i);
+        auto packet = makeUniquePacket(i);
         _packetCache->add(*packet, i);
-        _packetAllocator->free(packet);
     }
 
-    auto packet = makePacket(256);
+    auto packet = makeUniquePacket(256);
     EXPECT_TRUE(_packetCache->add(*packet, 512));
-    _packetAllocator->free(packet);
 
     EXPECT_EQ(nullptr, _packetCache->get(0));
     EXPECT_NE(nullptr, _packetCache->get(512));

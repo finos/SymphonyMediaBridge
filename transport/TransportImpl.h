@@ -271,7 +271,7 @@ private:
         uint64_t timestamp,
         std::__1::chrono::system_clock::time_point wallClock);
 
-    void doSetRemoteIce(const memory::Packet* credentials, const memory::Packet* const* candidatePackets);
+    void doSetRemoteIce(const memory::Packet& credentials, const memory::Packet* const* candidatePackets);
     void doSetRemoteDtls(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide);

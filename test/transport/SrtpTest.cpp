@@ -23,19 +23,13 @@ struct FakeSrtpEndpoint : public transport::SslWriteBioListener
         client.setSslWriteBioListener(this);
     }
 
-    ~FakeSrtpEndpoint()
-    {
-        for (memory::Packet* packet; _dtlsPackets.pop(packet);)
-        {
-            _allocator.free(packet);
-        }
-    }
+    ~FakeSrtpEndpoint() { _dtlsPackets.clear(); }
 
     int32_t sendDtls(const char* buffer, uint32_t length) override
     {
         if (transport::isDtlsPacket(buffer))
         {
-            _dtlsPackets.push(memory::makePacket(_allocator, buffer, length));
+            _dtlsPackets.push(memory::makeUniquePacket(_allocator, buffer, length));
             return length;
         }
         else
@@ -48,14 +42,13 @@ struct FakeSrtpEndpoint : public transport::SslWriteBioListener
 
     void process()
     {
-        for (memory::Packet* packet; _dtlsPackets.pop(packet);)
+        for (memory::UniquePacket packet; _dtlsPackets.pop(packet);)
         {
             _peer.onMessageReceived(reinterpret_cast<char*>(packet->get()), packet->getLength());
-            _allocator.free(packet);
         }
     }
 
-    concurrency::MpmcQueue<memory::Packet*> _dtlsPackets;
+    concurrency::MpmcQueue<memory::UniquePacket> _dtlsPackets;
     transport::DtlsMessageListener& _peer;
     memory::PacketPoolAllocator& _allocator;
 };
@@ -133,7 +126,7 @@ TEST_F(SrtpTest, seqSkip)
     uint16_t seqStart = 65530;
     for (int i = 0; i < 65535 * 4; ++i)
     {
-        auto packet = memory::makePacket(_allocator, _audioPacket);
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
         auto header = rtp::RtpHeader::fromPacket(*packet);
         header->ssrc = 1;
         header->timestamp = i * 160;
@@ -166,8 +159,6 @@ TEST_F(SrtpTest, seqSkip)
                 logger::debug("encrypted %u packets", "SrtpTest", i + 1);
             }
         }
-
-        _allocator.free(packet);
     }
 }
 
@@ -175,7 +166,7 @@ TEST_F(SrtpTest, seqDuplicate)
 {
     connect();
 
-    auto packet = memory::makePacket(_allocator, _audioPacket);
+    auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
     auto header = rtp::RtpHeader::fromPacket(*packet);
     header->ssrc = 4321;
     header->timestamp = 1234;
@@ -183,11 +174,8 @@ TEST_F(SrtpTest, seqDuplicate)
 
     EXPECT_TRUE(_srtp1->protect(*packet));
 
-    auto packetCopy = memory::makePacket(_allocator, *packet);
+    auto packetCopy = memory::makeUniquePacket(_allocator, *packet);
 
     EXPECT_TRUE(_srtp2->unprotect(*packet));
     EXPECT_FALSE(_srtp2->unprotect(*packetCopy));
-
-    _allocator.free(packetCopy);
-    _allocator.free(packet);
 }
