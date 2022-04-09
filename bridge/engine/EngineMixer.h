@@ -12,6 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include <utility>
 
 namespace config
 {
@@ -186,6 +187,7 @@ private:
               _transport(nullptr),
               _extendedSequenceNumber(0)
         {
+            lockOwner();
         }
 
         IncomingPacketAggregate(PacketT* packet, AllocatorT* allocator, transport::RtcTransport* transport)
@@ -194,6 +196,7 @@ private:
               _transport(transport),
               _extendedSequenceNumber(0)
         {
+            lockOwner();
         }
 
         IncomingPacketAggregate(PacketT* packet,
@@ -205,22 +208,44 @@ private:
               _transport(transport),
               _extendedSequenceNumber(extendedSequenceNumber)
         {
+            lockOwner();
         }
 
-        PacketT* _packet;
-        AllocatorT* _allocator;
-        transport::RtcTransport* _transport;
-        uint32_t _extendedSequenceNumber;
-
-        inline void lockOwner() const
+        IncomingPacketAggregate(IncomingPacketAggregate&& rhs)
+            : _packet(std::exchange(rhs._packet, nullptr))
+            , _allocator(std::exchange(rhs._allocator, nullptr))
+            , _transport(std::exchange(rhs._transport, nullptr))
+            , _extendedSequenceNumber(rhs._extendedSequenceNumber)
         {
-            if (_transport)
-            {
-                ++_transport->getJobCounter();
-            }
+            lockOwner();
         }
 
-        inline void release() const
+        IncomingPacketAggregate& operator=(IncomingPacketAggregate&& rhs)
+        {
+            _packet = std::exchange(rhs._packet, nullptr);
+            _allocator = std::exchange(rhs._allocator, nullptr);
+            _transport = std::exchange(rhs._transport, nullptr);
+            _extendedSequenceNumber = rhs._extendedSequenceNumber;
+            return *this;
+        }
+
+
+        // Can't be copied
+        IncomingPacketAggregate(const IncomingPacketAggregate&) = delete;
+        IncomingPacketAggregate& operator=(const IncomingPacketAggregate&) = delete;
+
+        ~IncomingPacketAggregate()
+        {
+            release();
+        }
+
+        transport::RtcTransport* transport() const { return _transport; }
+        PacketT* packet() const { return _packet; }
+        AllocatorT* allocator() const { return _allocator; }
+        uint32_t extendedSequenceNumber() const { return _extendedSequenceNumber; }
+
+private:
+        void release()
         {
             if (_transport)
             {
@@ -229,10 +254,29 @@ private:
                 assert(decreased < 0xFFFFFFFF); // detecting going below zero
 #else
                 --_transport->getJobCounter();
+                _transport = nullptr;
 #endif
             }
-            _allocator->free(_packet);
+
+            if (_allocator)
+            {
+                _allocator->free(_packet);
+                _allocator = nullptr;
+            }
         }
+
+        void lockOwner() const
+        {
+            if (_transport)
+            {
+                ++_transport->getJobCounter();
+            }
+        }
+
+        PacketT* _packet;
+        AllocatorT* _allocator;
+        transport::RtcTransport* _transport;
+        uint32_t _extendedSequenceNumber;
     };
 
     using IncomingPacketInfo = IncomingPacketAggregate<memory::Packet, memory::PacketPoolAllocator>;
@@ -311,7 +355,7 @@ private:
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
 
-    bool enqueuePacket(const IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue);
+    bool enqueuePacket(IncomingPacketInfo&& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue);
 
     SsrcInboundContext* getInboundSsrcContext(const uint32_t ssrc);
     SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,

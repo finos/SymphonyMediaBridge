@@ -782,27 +782,10 @@ void EngineMixer::clear()
 
 void EngineMixer::flush()
 {
-    IncomingAudioPacketInfo audioPacketInfo;
-    while (_incomingMixerAudioRtp.pop(audioPacketInfo))
-    {
-        audioPacketInfo.release();
-    }
-
-    IncomingPacketInfo packetInfo;
-    while (_incomingForwarderAudioRtp.pop(packetInfo))
-    {
-        packetInfo.release();
-    }
-
-    while (_incomingForwarderVideoRtp.pop(packetInfo))
-    {
-        packetInfo.release();
-    }
-
-    while (_incomingRtcp.pop(packetInfo))
-    {
-        packetInfo.release();
-    }
+    _incomingMixerAudioRtp.clear();
+    _incomingForwarderAudioRtp.clear();
+    _incomingForwarderVideoRtp.clear();
+    _incomingRtcp.clear();
 }
 
 void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
@@ -1613,8 +1596,8 @@ void EngineMixer::onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* se
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
-    const IncomingPacketInfo packetInfo = {packet, &receiveAllocator, sender, extendedSequenceNumber};
-    if (!enqueuePacket(packetInfo, _incomingForwarderAudioRtp))
+    auto packetInfo = IncomingPacketInfo(packet, &receiveAllocator, sender, extendedSequenceNumber);
+    if (!enqueuePacket(std::move(packetInfo), _incomingForwarderAudioRtp))
     {
         logger::error("Failed to push incoming forwarder audio packet onto queue", getLoggableId().c_str());
     }
@@ -1626,8 +1609,8 @@ void EngineMixer::onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* se
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
-    const IncomingPacketInfo packetInfo = {packet, &receiveAllocator, sender, extendedSequenceNumber};
-    if (!enqueuePacket(packetInfo, _incomingForwarderVideoRtp))
+    auto packetInfo = IncomingPacketInfo(packet, &receiveAllocator, sender, extendedSequenceNumber);
+    if (!enqueuePacket(std::move(packetInfo), _incomingForwarderVideoRtp))
     {
         logger::error("Failed to push incoming forwarder video packet onto queue", getLoggableId().c_str());
     }
@@ -1638,25 +1621,20 @@ void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender,
     memory::AudioPacketPoolAllocator& receiveAllocator)
 {
     assert(packet);
-    const IncomingAudioPacketInfo packetInfo = {packet, &receiveAllocator, sender};
-    packetInfo.lockOwner();
-    auto result = _incomingMixerAudioRtp.push(packetInfo);
+    auto result = _incomingMixerAudioRtp.push(IncomingAudioPacketInfo(packet, &receiveAllocator, sender));
     assert(result);
     if (!result)
     {
-        packetInfo.release();
         logger::error("Failed to push incoming mixer audio packet onto queue", getLoggableId().c_str());
     }
 }
 
-bool EngineMixer::enqueuePacket(const IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue)
+bool EngineMixer::enqueuePacket(IncomingPacketInfo&& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue)
 {
-    packetInfo.lockOwner();
-    auto result = queue.push(packetInfo);
+    auto result = queue.push(std::move(packetInfo));
     assert(result);
     if (!result)
     {
-        packetInfo.release();
         return false;
     }
     return true;
@@ -1668,14 +1646,9 @@ void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
     const uint64_t timestamp)
 {
     assert(packet);
-
-    IncomingPacketInfo packetInfo(packet, &receiveAllocator, sender, 0);
-    packetInfo.lockOwner();
-
-    const auto pushResult = _incomingRtcp.push(packetInfo);
+    const auto pushResult = _incomingRtcp.push(IncomingPacketInfo(packet, &receiveAllocator, sender, 0));
     if (!pushResult)
     {
-        packetInfo.release();
         logger::warn("rtcp queue full", _loggableId.c_str());
     }
 }
@@ -1915,25 +1888,24 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
     for (IncomingPacketInfo packetInfo; _incomingForwarderAudioRtp.pop(packetInfo);)
     {
-        utils::ReleaseGuard<IncomingPacketInfo> autoRelease(packetInfo);
         ++numRtpPackets;
 
         for (auto& audioStreamEntry : _engineAudioStreams)
         {
             auto audioStream = audioStreamEntry.second;
-            if (!audioStream || &audioStream->_transport == packetInfo._transport || audioStream->_audioMixed)
+            if (!audioStream || &audioStream->_transport == packetInfo.transport() || audioStream->_audioMixed)
             {
                 continue;
             }
 
             if (audioStream->_transport.isConnected())
             {
-                const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo._packet);
+                const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
                 auto ssrc = rtpHeader->ssrc.get();
                 if (audioStream->_ssrcRewrite)
                 {
                     const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-                    const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo._transport->getEndpointIdHash());
+                    const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.transport()->getEndpointIdHash());
                     if (rewriteMapItr == audioSsrcRewriteMap.end())
                     {
                         continue;
@@ -1947,7 +1919,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                     continue;
                 }
 
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacket(_sendAllocator, *packetInfo.packet());
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdSend", _loggableId.c_str());
@@ -1955,7 +1927,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 if (packet &&
                     !audioStream->_transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                         packet,
-                        packetInfo._extendedSequenceNumber,
+                        packetInfo.extendedSequenceNumber(),
                         audioStream->_transport))
                 {
                     _sendAllocator.free(packet);
@@ -1971,7 +1943,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 continue;
             }
 
-            const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo._packet);
+            const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
             const auto ssrc = rtpHeader->ssrc.get();
             auto* ssrcOutboundContext = getOutboundSsrcContext(*recordingStream, ssrc);
             if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
@@ -1984,7 +1956,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             for (const auto& transportEntry : recordingStream->_transports)
             {
                 ssrcOutboundContext->onRtpSent(timestamp);
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacket(_sendAllocator, *packetInfo.packet());
                 if (!packet)
                 {
                     logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
@@ -1993,7 +1965,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                              *ssrcOutboundContext,
                              packet,
                              transportEntry.second,
-                             packetInfo._extendedSequenceNumber))
+                             packetInfo.extendedSequenceNumber()))
                 {
                     _sendAllocator.free(packet);
                 }
@@ -2006,10 +1978,9 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
     for (IncomingAudioPacketInfo packetInfo; _incomingMixerAudioRtp.pop(packetInfo);)
     {
-        utils::ReleaseGuard<IncomingAudioPacketInfo> autoRelease(packetInfo);
         ++numRtpPackets;
 
-        const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo._packet);
+        const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
         if (!rtpHeader)
         {
             continue;
@@ -2018,7 +1989,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         const auto ssrc = rtpHeader->ssrc;
         const auto sequenceNumber = rtpHeader->sequenceNumber;
         const auto payloadStart = rtpHeader->getPayload();
-        const uint32_t payloadLength = packetInfo._packet->getLength() - rtpHeader->headerLength();
+        const uint32_t payloadLength = packetInfo.packet()->getLength() - rtpHeader->headerLength();
 
         const auto mixerAudioBufferItr = _mixerSsrcAudioBuffers.find(ssrc.get());
         if (mixerAudioBufferItr == _mixerSsrcAudioBuffers.cend())
@@ -2081,9 +2052,8 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
     for (IncomingPacketInfo packetInfo; _incomingForwarderVideoRtp.pop(packetInfo);)
     {
-        utils::ReleaseGuard<IncomingPacketInfo> autoRelease(packetInfo);
         ++numRtpPackets;
-        auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo._packet);
+        auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
         if (!rtpHeader)
         {
             continue;
@@ -2093,7 +2063,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
         {
             continue;
         }
-        const auto senderEndpointIdHash = packetInfo._transport->getEndpointIdHash();
+        const auto senderEndpointIdHash = packetInfo.transport()->getEndpointIdHash();
 
         for (auto& videoStreamEntry : _engineVideoStreams)
         {
@@ -2175,7 +2145,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             if (videoStream->_transport.isConnected())
             {
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacket(_sendAllocator, *packetInfo.packet());
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
@@ -2186,7 +2156,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                         *inboundSsrcContext,
                         packet,
                         videoStream->_transport,
-                        packetInfo._extendedSequenceNumber))
+                        packetInfo.extendedSequenceNumber()))
                 {
                     _sendAllocator.free(packet);
                 }
@@ -2216,7 +2186,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             for (const auto& transportEntry : recordingStream->_transports)
             {
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacket(_sendAllocator, *packetInfo.packet());
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
@@ -2229,7 +2199,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                         *inboundSsrcContext,
                         packet,
                         transportEntry.second,
-                        packetInfo._extendedSequenceNumber))
+                        packetInfo.extendedSequenceNumber()))
                 {
                     _sendAllocator.free(packet);
                 }
@@ -2244,7 +2214,7 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
 {
     for (IncomingPacketInfo packetInfo; _incomingRtcp.pop(packetInfo);)
     {
-        rtp::CompoundRtcpPacket compoundPacket(packetInfo._packet->get(), packetInfo._packet->getLength());
+        rtp::CompoundRtcpPacket compoundPacket(packetInfo.packet()->get(), packetInfo.packet()->getLength());
         for (const auto& rtcpPacket : compoundPacket)
         {
             switch (rtcpPacket.packetType)
@@ -2253,17 +2223,15 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
             case rtp::RtcpPacketType::SENDER_REPORT:
                 break;
             case rtp::RtcpPacketType::PAYLOADSPECIFIC_FB:
-                processIncomingPayloadSpecificRtcpPacket(packetInfo._transport->getEndpointIdHash(), rtcpPacket);
+                processIncomingPayloadSpecificRtcpPacket(packetInfo.transport()->getEndpointIdHash(), rtcpPacket);
                 break;
             case rtp::RtcpPacketType::RTPTRANSPORT_FB:
-                processIncomingTransportFbRtcpPacket(packetInfo._transport, rtcpPacket, timestamp);
+                processIncomingTransportFbRtcpPacket(packetInfo.transport(), rtcpPacket, timestamp);
                 break;
             default:
                 break;
             }
         }
-
-        packetInfo.release();
 
         _noIncomingPacketsIntervalMs = 0;
     }

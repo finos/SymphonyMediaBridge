@@ -129,6 +129,11 @@ public:
 
     bool empty() const { return !isReadable(_readCursor.load(std::memory_order_consume)); }
 
+    void clear() {
+        T elem;
+        while(pop(elem));
+    }
+
 private:
     const uint32_t _maxElements;
     std::atomic_uint32_t _readCursor;
