@@ -91,7 +91,7 @@ public: // Transport
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
 
     /** Called from Transport thread threads*/
-    void protectAndSend(memory::PacketPtr packet) override;
+    void protectAndSend(memory::UniquePacket packet) override;
     bool unprotect(memory::Packet& packet) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override;
@@ -184,22 +184,22 @@ public: // end point callbacks
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override;
+        memory::UniquePacket packet) override;
 
     void onDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override;
+        memory::UniquePacket packet) override;
 
     void onRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override;
+        memory::UniquePacket packet) override;
 
     void onIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override;
+        memory::UniquePacket packet) override;
 
     void onPortClosed(Endpoint& endpoint) override;
 
@@ -235,19 +235,19 @@ public: // end point callbacks
 
     void internalDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint64_t timestamp);
     void internalIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint64_t timestamp);
     void internalRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint64_t timestamp);
     void internalRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint64_t timestamp);
 
     void onServerPortClosed(ServerEndpoint& endpoint) override {}
@@ -259,9 +259,9 @@ private:
     friend class ConnectSctpJob;
     friend class RunTickJob;
 
-    void protectAndSendRtp(uint64_t timestamp, memory::PacketPtr packet);
+    void protectAndSendRtp(uint64_t timestamp, memory::UniquePacket packet);
     void doProtectAndSend(uint64_t timestamp,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const SocketAddress& target,
         Endpoint* endpoint);
     void sendPadding(uint64_t timestamp);
@@ -288,7 +288,7 @@ private:
         int activeInboundCount);
 
     void sendReports(uint64_t timestamp, bool rembReady = false);
-    void sendRtcp(memory::PacketPtr rtcpPacket, const uint64_t timestamp);
+    void sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp);
 
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 
@@ -382,8 +382,8 @@ private:
     uint32_t _rtxProbeSsrc;
     uint32_t* _rtxProbeSequenceCounter;
 
-    memory::RandomAccessBacklog<memory::PacketPtr, 512> _pacingQueue;
-    memory::RandomAccessBacklog<memory::PacketPtr, 512> _rtxPacingQueue;
+    memory::RandomAccessBacklog<memory::UniquePacket, 512> _pacingQueue;
+    memory::RandomAccessBacklog<memory::UniquePacket, 512> _rtxPacingQueue;
     std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;

@@ -60,7 +60,7 @@ void ProcessMissingVideoPacketsJob::run()
         return;
     }
 
-    auto packet = memory::makePacketPtr(_allocator, rtcpNack, rtcpNackSize);
+    auto packet = memory::makeUniquePacket(_allocator, rtcpNack, rtcpNackSize);
     if (!packet)
     {
         return;

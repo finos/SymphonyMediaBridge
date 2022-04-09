@@ -356,7 +356,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
             if (i == 0)
             {
                 wallClock = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, utils::Time::minute);
-                auto packet = memory::makePacketPtr(allocator, &item, sizeof(item));
+                auto packet = memory::makeUniquePacket(allocator, &item, sizeof(item));
                 packet->setLength(item.size);
 
                 link.push(std::move(packet), wallClock);
@@ -398,7 +398,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
                 }
                 if (wallClock == sendTime)
                 {
-                    auto packet = memory::makePacketPtr(allocator, &item, sizeof(item));
+                    auto packet = memory::makeUniquePacket(allocator, &item, sizeof(item));
                     packet->setLength(item.size);
                     link.push(std::move(packet), wallClock);
 

@@ -9,7 +9,7 @@
 namespace bridge
 {
 
-EncodeJob::EncodeJob(memory::AudioPacketPtr packet,
+EncodeJob::EncodeJob(memory::UniqueAudioPacket packet,
     SsrcOutboundContext& outboundContext,
     transport::Transport& transport,
     uint64_t rtpTimestamp,
@@ -43,7 +43,7 @@ void EncodeJob::run()
             _outboundContext._opusEncoder.reset(new codec::OpusEncoder());
         }
 
-        auto opusPacket = memory::makePacketPtr(_outboundContext._allocator);
+        auto opusPacket = memory::makeUniquePacket(_outboundContext._allocator);
         if (!opusPacket)
         {
             logger::error("failed to make packet for opus encoded data", "OpusEncodeJob");

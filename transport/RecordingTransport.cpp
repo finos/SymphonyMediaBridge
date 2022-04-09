@@ -112,7 +112,7 @@ void RecordingTransport::stop()
     _isRunning = false;
 }
 
-void RecordingTransport::protectAndSend(memory::PacketPtr packet)
+void RecordingTransport::protectAndSend(memory::UniquePacket packet)
 {
     if (!isConnected())
     {
@@ -128,7 +128,7 @@ void RecordingTransport::protectAndSend(memory::PacketPtr packet)
     protectAndSend(std::move(packet), _peerPort, _recordingEndpoint);
 }
 
-void RecordingTransport::protectAndSend(memory::PacketPtr packet, const SocketAddress& target, Endpoint* endpoint)
+void RecordingTransport::protectAndSend(memory::UniquePacket packet, const SocketAddress& target, Endpoint* endpoint)
 {
     assert(packet->getLength() + 24 <= _config.mtu);
 
@@ -283,7 +283,7 @@ uint32_t RecordingTransport::getRolloverCounter(uint32_t ssrc, uint16_t sequence
 
 void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendAllocator, uint64_t timestamp)
 {
-    auto rtcpPacket = memory::makePacketPtr(sendAllocator);
+    auto rtcpPacket = memory::makeUniquePacket(sendAllocator);
     if (!rtcpPacket)
     {
         logger::warn("Not enough memory to send SR RTCP", _loggableId.c_str());
@@ -301,7 +301,7 @@ void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendA
         {
             protectAndSend(std::move(rtcpPacket));
             _rtcp.lastSendTime = timestamp;
-            rtcpPacket = memory::makePacketPtr(sendAllocator);
+            rtcpPacket = memory::makeUniquePacket(sendAllocator);
             if (!rtcpPacket)
             {
                 logger::warn("Not enough memory to send SR RTCP", _loggableId.c_str());
@@ -388,7 +388,7 @@ void RecordingTransport::onUnregistered(RecordingEndpoint& endpoint)
 void RecordingTransport::onRecControlReceived(RecordingEndpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::PacketPtr packet)
+    memory::UniquePacket packet)
 {
     DataReceiver* const dataReceiver = _dataReceiver.load();
     if (!dataReceiver)

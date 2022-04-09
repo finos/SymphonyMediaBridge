@@ -10,7 +10,7 @@
 
 namespace bridge
 {
-RecordingRtpNackReceiveJob::RecordingRtpNackReceiveJob(memory::PacketPtr packet,
+RecordingRtpNackReceiveJob::RecordingRtpNackReceiveJob(memory::UniquePacket packet,
     memory::PacketPoolAllocator& allocator,
     transport::RecordingTransport* sender,
     SsrcOutboundContext& ssrcOutboundContext)
@@ -52,7 +52,7 @@ void RecordingRtpNackReceiveJob::run()
         return;
     }
 
-    auto packet = memory::makePacketPtr(_allocator, *cachedPacket);
+    auto packet = memory::makeUniquePacket(_allocator, *cachedPacket);
     if (!packet)
     {
         return;

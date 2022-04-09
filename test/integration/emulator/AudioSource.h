@@ -14,7 +14,7 @@ class AudioSource
 public:
     AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc);
     ~AudioSource(){};
-    memory::PacketPtr getPacket(uint64_t timestamp);
+    memory::UniquePacket getPacket(uint64_t timestamp);
     int64_t timeToRelease(uint64_t timestamp) const;
 
     memory::PacketPoolAllocator& getAllocator() { return _allocator; }

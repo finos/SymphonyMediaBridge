@@ -40,7 +40,7 @@ struct ClientPair : public transport::DataReceiver
     class SendJob : public jobmanager::CountedJob
     {
     public:
-        SendJob(Transport& transport, memory::PacketPtr packet)
+        SendJob(Transport& transport, memory::UniquePacket packet)
             : CountedJob(transport.getJobCounter()),
               _transport(transport),
               _packet(std::move(packet))
@@ -51,7 +51,7 @@ struct ClientPair : public transport::DataReceiver
 
     private:
         Transport& _transport;
-        memory::PacketPtr _packet;
+        memory::UniquePacket _packet;
     };
 
     ClientPair(TransportFactory* transportFactory,
@@ -132,7 +132,7 @@ struct ClientPair : public transport::DataReceiver
 
         for (int j = 0; j < 1; ++j)
         {
-            auto packet = memory::makePacketPtr(_sendAllocator);
+            auto packet = memory::makeUniquePacket(_sendAllocator);
             packet->setLength(160 + rtp::MIN_RTP_HEADER_SIZE);
 
             auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -147,7 +147,7 @@ struct ClientPair : public transport::DataReceiver
     bool isConnected() { return _transport1->isConnected() && _transport2->isConnected(); }
 
     void onRtpPacketReceived(RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -168,7 +168,7 @@ struct ClientPair : public transport::DataReceiver
     }
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint64_t timestamp) override
     {
     }
@@ -203,7 +203,7 @@ struct ClientPair : public transport::DataReceiver
         }
     };
 
-    void onRecControlReceived(RecordingTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override{};
+    void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override{};
 
     uint32_t _ssrc;
     memory::PacketPoolAllocator& _sendAllocator;

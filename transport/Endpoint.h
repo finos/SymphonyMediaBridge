@@ -27,22 +27,22 @@ public:
         virtual void onRtpReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::PacketPtr packet) = 0;
+            memory::UniquePacket packet) = 0;
 
         virtual void onDtlsReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::PacketPtr packet) = 0;
+            memory::UniquePacket packet) = 0;
 
         virtual void onRtcpReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::PacketPtr packet) = 0;
+            memory::UniquePacket packet) = 0;
 
         virtual void onIceReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::PacketPtr packet) = 0;
+            memory::UniquePacket packet) = 0;
 
         virtual void onPortClosed(Endpoint& endpoint) = 0;
         virtual void onUnregistered(Endpoint& endpoint) = 0;
@@ -50,7 +50,7 @@ public:
 
     virtual ~Endpoint(){};
 
-    virtual void sendTo(const transport::SocketAddress& target, memory::PacketPtr packet) = 0;
+    virtual void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) = 0;
 
     virtual void registerListener(const std::string& stunUserName, IEvents* listener) = 0;
     virtual void registerListener(const SocketAddress& remotePort, IEvents* listener) = 0;

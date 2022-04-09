@@ -17,11 +17,11 @@ public:
     virtual ~DataReceiver() = default;
 
     virtual void onRtpPacketReceived(RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) = 0;
 
-    virtual void onRtcpPacketDecoded(RtcTransport* sender, memory::PacketPtr packet, uint64_t timestamp) = 0;
+    virtual void onRtcpPacketDecoded(RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) = 0;
 
     virtual void onConnected(RtcTransport* sender) = 0;
 
@@ -34,7 +34,7 @@ public:
         const void* data,
         size_t length) = 0;
 
-    virtual void onRecControlReceived(RecordingTransport* sender, memory::PacketPtr packet, uint64_t timestamp) = 0;
+    virtual void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) = 0;
 };
 
 } // namespace transport

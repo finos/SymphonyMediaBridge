@@ -22,7 +22,7 @@ SetMaxMediaBitrateJob::SetMaxMediaBitrateJob(transport::RtcTransport& transport,
 
 void SetMaxMediaBitrateJob::run()
 {
-    auto packet = memory::makePacketPtr(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     if (!packet)
     {
         return;

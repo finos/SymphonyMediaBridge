@@ -83,7 +83,7 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
             }
         }
     }
-    sendTo(target, memory::makePacketPtr(_allocator, data, len));
+    sendTo(target, memory::makeUniquePacket(_allocator, data, len));
 }
 
 void UdpEndpoint::unregisterListener(IEvents* listener)
@@ -153,7 +153,7 @@ UdpEndpoint::IEvents* findListener(concurrency::MpmcHashmap32<KeyType, UdpEndpoi
 }
 } // namespace
 
-void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::PacketPtr packet)
+void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet)
 {
     UdpEndpoint::IEvents* listener = _defaultListener;
 

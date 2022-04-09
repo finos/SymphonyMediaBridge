@@ -8,7 +8,7 @@ class FakeCrossTraffic : public MediaSource
 public:
     FakeCrossTraffic(memory::PacketPoolAllocator& allocator, uint32_t mtu, uint32_t bandwidthKbps);
 
-    memory::PacketPtr getPacket(uint64_t timestamp) override;
+    memory::UniquePacket getPacket(uint64_t timestamp) override;
     int64_t timeToRelease(uint64_t timestamp) const override;
     void setBandwidth(uint32_t kbps) override;
     uint32_t getBandwidth() const override { return _bandwidthKbps; }

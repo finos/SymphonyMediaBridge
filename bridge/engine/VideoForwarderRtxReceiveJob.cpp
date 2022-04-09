@@ -8,7 +8,7 @@
 namespace bridge
 {
 
-VideoForwarderRtxReceiveJob::VideoForwarderRtxReceiveJob(memory::PacketPtr packet,
+VideoForwarderRtxReceiveJob::VideoForwarderRtxReceiveJob(memory::UniquePacket packet,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& ssrcContext,

@@ -4,7 +4,7 @@
 namespace bridge
 {
 
-SendRtcpJob::SendRtcpJob(memory::PacketPtr rtcpPacket, transport::Transport& transport)
+SendRtcpJob::SendRtcpJob(memory::UniquePacket rtcpPacket, transport::Transport& transport)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _transport(transport),
       _packet(std::move(rtcpPacket))

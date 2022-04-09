@@ -24,7 +24,7 @@ class ActiveMediaList;
 class AudioForwarderReceiveJob : public jobmanager::CountedJob
 {
 public:
-    AudioForwarderReceiveJob(memory::PacketPtr packet,
+    AudioForwarderReceiveJob(memory::UniquePacket packet,
         memory::AudioPacketPoolAllocator& audioPacketAllocator,
         transport::RtcTransport* sender,
         EngineMixer& engineMixer,
@@ -40,7 +40,7 @@ private:
     void decodeOpus(const memory::Packet& opusPacket);
     void onPacketDecoded(const int32_t decodedFrames, const uint8_t* decodedData);
 
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
     memory::AudioPacketPoolAllocator& _audioPacketAllocator;
     EngineMixer& _engineMixer;
     transport::RtcTransport* _sender;

@@ -11,7 +11,7 @@ namespace bridge
 
 VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
     SsrcInboundContext& senderInboundContext,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     transport::Transport& transport,
     const uint32_t extendedSequenceNumber)
     : jobmanager::CountedJob(transport.getJobCounter()),

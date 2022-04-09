@@ -109,7 +109,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
         return;
     }
 
-    auto packet = memory::makePacketPtr(_ssrcOutboundContext._allocator);
+    auto packet = memory::makeUniquePacket(_ssrcOutboundContext._allocator);
     if (!packet)
     {
         return;

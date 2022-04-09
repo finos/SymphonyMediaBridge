@@ -65,7 +65,7 @@ RecordingEndpoint::IRecordingEvents* findListener(
 }
 } // namespace
 
-void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::PacketPtr packet)
+void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet)
 {
     if (recp::isRecControlPacket(packet->get(), packet->getLength()))
     {

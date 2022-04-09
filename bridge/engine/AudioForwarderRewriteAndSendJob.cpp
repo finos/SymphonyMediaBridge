@@ -9,7 +9,7 @@ namespace bridge
 {
 
 AudioForwarderRewriteAndSendJob::AudioForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
     transport::Transport& transport)
     : jobmanager::CountedJob(transport.getJobCounter()),

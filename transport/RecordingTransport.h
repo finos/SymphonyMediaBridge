@@ -40,7 +40,7 @@ public:
     bool isRunning() const override { return _isRunning && _isInitialized; }
     bool hasPendingJobs() const override { return _jobCounter.load() > 0; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; };
-    void protectAndSend(memory::PacketPtr packet) override;
+    void protectAndSend(memory::UniquePacket packet) override;
     bool unprotect(memory::Packet& packet) override;
     void setDataReceiver(DataReceiver* dataReceiver) override;
     bool isConnected() override;
@@ -51,7 +51,7 @@ public:
     void onRecControlReceived(RecordingEndpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override;
+        memory::UniquePacket packet) override;
 
     void onUnregistered(RecordingEndpoint& endpoint) override;
 
@@ -76,7 +76,7 @@ private:
     void onSendingStreamRemovedEvent(const memory::Packet& packet);
     RtpSenderState* getOutboundSsrc(const uint32_t ssrc);
 
-    void protectAndSend(memory::PacketPtr packet, const SocketAddress& target, Endpoint* endpoint);
+    void protectAndSend(memory::UniquePacket packet, const SocketAddress& target, Endpoint* endpoint);
 
     std::atomic_bool _isInitialized;
     logger::LoggableId _loggableId;

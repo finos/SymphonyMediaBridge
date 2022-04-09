@@ -19,7 +19,7 @@ SendPliJob::SendPliJob(const uint32_t fromSsrc,
 
 void SendPliJob::run()
 {
-    auto packet = memory::makePacketPtr(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     if (!packet)
     {
         return;

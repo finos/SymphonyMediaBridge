@@ -44,7 +44,7 @@ RcCall::~RcCall()
     }
 }
 
-void RcCall::push(std::unique_ptr<fakenet::NetworkLink>& link, memory::PacketPtr packet)
+void RcCall::push(std::unique_ptr<fakenet::NetworkLink>& link, memory::UniquePacket packet)
 {
     link->push(std::move(packet), _timeCursor);
 }
@@ -70,7 +70,7 @@ void RcCall::sendRtpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize)
 {
     for (; count > 0; count--)
     {
-        auto padPacket = memory::makePacketPtr(_allocator);
+        auto padPacket = memory::makeUniquePacket(_allocator);
         if (padPacket)
         {
             padPacket->clear();
@@ -95,7 +95,7 @@ void RcCall::sendRtcpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize
 {
     for (; count > 0; --count)
     {
-        auto padPacket = memory::makePacketPtr(_allocator);
+        auto padPacket = memory::makeUniquePacket(_allocator);
         auto* rtcpPadding = rtp::RtcpApplicationSpecific::create(padPacket->get(), ssrc, "BRPP", paddingSize);
         padPacket->setLength(rtcpPadding->header.size());
         _bwe.onRtcpPaddingSent(_timeCursor, ssrc, padPacket->getLength());
@@ -105,7 +105,7 @@ void RcCall::sendRtcpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize
 
 void RcCall::sendSR(uint32_t ssrc, transport::RtpSenderState& sendState, uint64_t wallClock)
 {
-    auto rtcpPacket = memory::makePacketPtr(_allocator);
+    auto rtcpPacket = memory::makeUniquePacket(_allocator);
     if (rtcpPacket)
     {
         auto* report = rtp::RtcpSenderReport::create(rtcpPacket->get());
@@ -223,7 +223,7 @@ void RcCall::processReceiverSide()
 
     if (remainingTimeToRR == 0)
     {
-        auto rtcpPacket = memory::makePacketPtr(_allocator);
+        auto rtcpPacket = memory::makeUniquePacket(_allocator);
         if (rtcpPacket)
         {
             auto* report = rtp::RtcpReceiverReport::create(rtcpPacket->get());

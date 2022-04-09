@@ -13,7 +13,7 @@ namespace transport
 class SendJob : public jobmanager::CountedJob
 {
 public:
-    SendJob(Transport& transport, memory::PacketPtr packet)
+    SendJob(Transport& transport, memory::UniquePacket packet)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
           _packet(std::move(packet))
@@ -24,7 +24,7 @@ public:
 
 private:
     Transport& _transport;
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
 };
 
 } // namespace transport

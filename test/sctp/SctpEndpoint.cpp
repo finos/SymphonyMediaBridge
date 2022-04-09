@@ -74,7 +74,7 @@ uint64_t SctpEndpoint::getTimeout() const
 bool SctpEndpoint::forwardPacket(SctpEndpoint& target)
 {
     using namespace sctp;
-    memory::PacketPtr packet(_sendQueue.pop(_timeSource));
+    memory::UniquePacket packet(_sendQueue.pop(_timeSource));
     if (!packet)
     {
         return false;
@@ -119,7 +119,7 @@ bool SctpEndpoint::sendSctpPacket(const void* data, size_t length)
         return false;
     }
 
-    auto packet = memory::makePacketPtr(_allocator, data, length);
+    auto packet = memory::makeUniquePacket(_allocator, data, length);
     if (packet && _sendQueue.push(std::move(packet), _timeSource))
     {
         return true;

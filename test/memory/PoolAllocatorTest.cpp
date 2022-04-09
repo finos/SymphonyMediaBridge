@@ -241,23 +241,23 @@ TEST(PoolAllocatorBasic, deleter)
     memory::PacketPoolAllocator allocator(1024, "mypackets");
     memory::PacketPoolAllocator allocator2(512, "twopack");
 
-    auto packet = memory::makePacketPtr(allocator);
-    auto packet2 = memory::makePacketPtr(allocator2);
+    auto packet = memory::makeUniquePacket(allocator);
+    auto packet2 = memory::makeUniquePacket(allocator2);
 
-    concurrency::MpmcQueue<memory::PacketPtr> queue(1024);
+    concurrency::MpmcQueue<memory::UniquePacket> queue(1024);
 
-    memory::PacketPtr clean;
+    memory::UniquePacket clean;
     clean = std::move(packet2);
     queue.push(std::move(packet));
     packet = std::move(clean);
 
     auto otherPacket = std::move(packet);
 
-    auto packet3 = memory::makePacketPtr(allocator);
-    IncomingPacketAggregate<memory::PacketPtr> aggr(std::move(packet3), nullptr);
-    concurrency::MpmcQueue<IncomingPacketAggregate<memory::PacketPtr>> recvQueue(64);
+    auto packet3 = memory::makeUniquePacket(allocator);
+    IncomingPacketAggregate<memory::UniquePacket> aggr(std::move(packet3), nullptr);
+    concurrency::MpmcQueue<IncomingPacketAggregate<memory::UniquePacket>> recvQueue(64);
 
     recvQueue.push(std::move(aggr));
-    IncomingPacketAggregate<memory::PacketPtr> aggr2;
+    IncomingPacketAggregate<memory::UniquePacket> aggr2;
     EXPECT_TRUE(recvQueue.pop(aggr2));
 }

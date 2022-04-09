@@ -64,7 +64,7 @@ public:
         {
             return;
         }
-        auto packet = memory::makePacketPtr(_receiveAllocator, packetData);
+        auto packet = memory::makeUniquePacket(_receiveAllocator, packetData);
         auto hdr = reinterpret_cast<rtp::RtpHeader*>(packet->get());
         hdr->ssrc = remoteSsrc;
 

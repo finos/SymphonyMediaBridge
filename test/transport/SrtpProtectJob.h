@@ -16,12 +16,12 @@ class Transport;
 class SrtpProtectJob : public jobmanager::CountedJob
 {
 public:
-    SrtpProtectJob(std::atomic_uint32_t& ownerJobsCounter, memory::PacketPtr packet, transport::Transport& transport);
+    SrtpProtectJob(std::atomic_uint32_t& ownerJobsCounter, memory::UniquePacket packet, transport::Transport& transport);
 
     void run() override;
 
 private:
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
     transport::Transport& _transport;
 };
 

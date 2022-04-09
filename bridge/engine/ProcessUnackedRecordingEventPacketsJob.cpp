@@ -63,7 +63,7 @@ void ProcessUnackedRecordingEventPacketsJob::sendIfCached(const uint16_t sequenc
         return;
     }
 
-    auto packet = memory::makePacketPtr(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     if (!packet)
     {
         return;

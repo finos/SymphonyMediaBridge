@@ -169,7 +169,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     bool isConnected() { return _transport1->isConnected() && _transport2->isConnected(); }
 
     void onRtpPacketReceived(RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -207,13 +207,13 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     }
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint64_t timestamp) override
     {
     }
 
     void onRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         std::atomic_uint32_t& ownerCount) override
     {
     }
@@ -228,7 +228,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         const void* data,
         size_t length) override{};
 
-    void onRecControlReceived(RecordingTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override{};
+    void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override{};
 
     logger::LoggableId _name;
     uint32_t _ssrc;

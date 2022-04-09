@@ -5,7 +5,7 @@
 namespace transport
 {
 
-SrtpUnprotectJob::SrtpUnprotectJob(RtcTransport* sender, memory::PacketPtr packet, DecryptedPacketReceiver* receiver)
+SrtpUnprotectJob::SrtpUnprotectJob(RtcTransport* sender, memory::UniquePacket packet, DecryptedPacketReceiver* receiver)
     : jobmanager::CountedJob(sender->getJobCounter()),
       _sender(sender),
       _packet(std::move(packet)),

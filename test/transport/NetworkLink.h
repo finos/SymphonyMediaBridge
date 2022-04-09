@@ -30,9 +30,9 @@ public:
     {
     }
 
-    bool push(memory::PacketPtr packet, uint64_t timestamp);
-    memory::PacketPtr pop(uint64_t timestamp);
-    memory::PacketPtr pop();
+    bool push(memory::UniquePacket packet, uint64_t timestamp);
+    memory::UniquePacket pop(uint64_t timestamp);
+    memory::UniquePacket pop();
     size_t count() const { return _queue.size() + _delayQueue.size(); }
     bool empty() const { return _queue.empty() && _delayQueue.empty(); }
     void setMTU(size_t mtu) { _mtu = mtu; }
@@ -58,19 +58,19 @@ public:
     static const int IPOVERHEAD = 20 + 14; // IP and DTLS header
 private:
     void addBurstDelay();
-    memory::PacketPtr popDelayQueue(uint64_t timestamp);
+    memory::UniquePacket popDelayQueue(uint64_t timestamp);
 
-    std::queue<memory::PacketPtr> _queue;
+    std::queue<memory::UniquePacket> _queue;
     uint64_t _releaseTime;
     uint32_t _bandwidthKbps;
 
     struct DelayEntry
     {
-        DelayEntry(memory::PacketPtr packetPtr, uint64_t relTime) : packet(std::move(packetPtr)), releaseTime(relTime)
+        DelayEntry(memory::UniquePacket packetPtr, uint64_t relTime) : packet(std::move(packetPtr)), releaseTime(relTime)
         {
         }
 
-        memory::PacketPtr packet;
+        memory::UniquePacket packet;
         uint64_t releaseTime = 0;
     };
     std::queue<DelayEntry> _delayQueue;

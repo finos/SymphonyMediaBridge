@@ -8,7 +8,7 @@
 namespace bridge
 {
 RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundContext& outboundContext,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     transport::RecordingTransport& transport,
     const uint32_t extendedSequenceNumber)
     : jobmanager::CountedJob(transport.getJobCounter()),

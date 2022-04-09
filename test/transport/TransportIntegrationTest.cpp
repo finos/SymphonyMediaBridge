@@ -202,7 +202,7 @@ bool TransportClientPair::isConnected()
 }
 
 void TransportClientPair::onRtpPacketReceived(transport::RtcTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
     uint64_t timestamp)
 {

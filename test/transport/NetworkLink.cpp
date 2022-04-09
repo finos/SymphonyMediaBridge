@@ -5,7 +5,7 @@
 
 namespace fakenet
 {
-bool NetworkLink::push(memory::PacketPtr packet, uint64_t timestamp)
+bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp)
 {
     if (_lossRate > 0 && rand() % 1000 < _lossRate * 1000)
     {
@@ -39,26 +39,26 @@ bool NetworkLink::push(memory::PacketPtr packet, uint64_t timestamp)
     return true;
 }
 
-memory::PacketPtr NetworkLink::pop()
+memory::UniquePacket NetworkLink::pop()
 {
     if (!_delayQueue.empty())
     {
-        memory::PacketPtr packet(std::move(_delayQueue.front().packet));
+        memory::UniquePacket packet(std::move(_delayQueue.front().packet));
         _delayQueue.pop();
         return packet;
     }
 
     if (!_queue.empty())
     {
-        memory::PacketPtr packet(std::move(_queue.front()));
+        memory::UniquePacket packet(std::move(_queue.front()));
         _queue.pop();
         _queuedBytes -= packet->getLength();
         return packet;
     }
-    return memory::PacketPtr();
+    return memory::UniquePacket();
 }
 
-memory::PacketPtr NetworkLink::pop(uint64_t timestamp)
+memory::UniquePacket NetworkLink::pop(uint64_t timestamp)
 {
     if (!_queue.empty() && static_cast<int64_t>(timestamp - _releaseTime) >= 0)
     {
@@ -69,7 +69,7 @@ memory::PacketPtr NetworkLink::pop(uint64_t timestamp)
             return popDelayQueue(timestamp);
         }
 
-        memory::PacketPtr packet(std::move(_queue.front()));
+        memory::UniquePacket packet(std::move(_queue.front()));
         _queue.pop();
         _queuedBytes -= packet->getLength();
         if (!_queue.empty())
@@ -83,11 +83,11 @@ memory::PacketPtr NetworkLink::pop(uint64_t timestamp)
     return popDelayQueue(timestamp);
 }
 
-memory::PacketPtr NetworkLink::popDelayQueue(uint64_t timestamp)
+memory::UniquePacket NetworkLink::popDelayQueue(uint64_t timestamp)
 {
     if (!_delayQueue.empty() && utils::Time::diffLE(timestamp, _delayQueue.front().releaseTime, 0))
     {
-        memory::PacketPtr packet(std::move(_delayQueue.front().packet));
+        memory::UniquePacket packet(std::move(_delayQueue.front().packet));
         _delayQueue.pop();
         return packet;
     }

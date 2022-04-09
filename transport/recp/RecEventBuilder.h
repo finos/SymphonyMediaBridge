@@ -27,7 +27,7 @@ public:
     TDerived& setTimestamp(uint32_t utc);
     TDerived& setSequenceNumber(uint16_t sequenceNumber);
 
-    memory::PacketPtr build();
+    memory::UniquePacket build();
 
 protected:
     RecHeader* getHeader();
@@ -39,7 +39,7 @@ private:
 
 protected:
     memory::PacketPoolAllocator& _allocator;
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
 };
 
 template <class TDerived, RecEventType TEvent, ushort PacketMinSize>
@@ -58,7 +58,7 @@ void RecEventBuilder<TDerived, TEvent, PacketMinSize>::allocateIfNeed()
 {
     if (!_packet)
     {
-        _packet = memory::makePacketPtr(_allocator);
+        _packet = memory::makeUniquePacket(_allocator);
         if (_packet)
         {
             _packet->setLength(PacketMinSize);
@@ -108,7 +108,7 @@ TDerived& RecEventBuilder<TDerived, TEvent, PacketMinSize>::setSequenceNumber(ui
 }
 
 template <class TDerived, RecEventType TEvent, ushort PacketMinSize>
-memory::PacketPtr RecEventBuilder<TDerived, TEvent, PacketMinSize>::build()
+memory::UniquePacket RecEventBuilder<TDerived, TEvent, PacketMinSize>::build()
 {
     allocateIfNeed();
     return std::move(_packet);

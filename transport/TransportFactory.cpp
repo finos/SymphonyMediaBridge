@@ -431,28 +431,28 @@ private:
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override
+        memory::UniquePacket packet) override
     {
     }
 
     void onDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override
+        memory::UniquePacket packet) override
     {
     }
 
     void onRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override
+        memory::UniquePacket packet) override
     {
     }
 
     void onIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::PacketPtr packet) override
+        memory::UniquePacket packet) override
     {
     }
 

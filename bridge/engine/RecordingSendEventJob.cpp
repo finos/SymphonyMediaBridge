@@ -7,7 +7,7 @@
 namespace bridge
 {
 
-RecordingSendEventJob::RecordingSendEventJob(memory::PacketPtr packet,
+RecordingSendEventJob::RecordingSendEventJob(memory::UniquePacket packet,
     transport::RecordingTransport& transport,
     PacketCache& recEventPacketCache,
     UnackedPacketsTracker& unackedPacketsTracker)

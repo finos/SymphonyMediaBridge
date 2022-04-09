@@ -17,7 +17,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 {
     if (decodedFrames > 0)
     {
-        auto pcmPacket = memory::makePacketPtr(_audioPacketAllocator, *_packet);
+        auto pcmPacket = memory::makeUniquePacket(_audioPacketAllocator, *_packet);
         if (!pcmPacket)
         {
             return;
@@ -99,7 +99,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
     onPacketDecoded(decodedFrames, decodedData);
 }
 
-AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::PacketPtr packet,
+AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
     memory::AudioPacketPoolAllocator& audioPacketAllocator,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,

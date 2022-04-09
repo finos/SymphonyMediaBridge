@@ -529,7 +529,7 @@ void Engine::processSctpControl(EngineCommand::Command& command)
 {
     auto& sctpCommand = command._command.sctpControl;
     sctpCommand._mixer->handleSctpControl(sctpCommand._endpointIdHash,
-        memory::PacketPtr(sctpCommand._message, sctpCommand._allocator->getDeleter()));
+        memory::UniquePacket(sctpCommand._message, sctpCommand._allocator->getDeleter()));
 }
 
 void Engine::pinEndpoint(EngineCommand::Command& command)

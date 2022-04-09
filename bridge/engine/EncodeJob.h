@@ -16,7 +16,7 @@ class SsrcOutboundContext;
 class EncodeJob : public jobmanager::CountedJob
 {
 public:
-    EncodeJob(memory::AudioPacketPtr packet,
+    EncodeJob(memory::UniqueAudioPacket packet,
         SsrcOutboundContext& outboundContext,
         transport::Transport& transport,
         uint64_t rtpTimestamp,
@@ -26,7 +26,7 @@ public:
     void run() override;
 
 private:
-    memory::AudioPacketPtr _packet;
+    memory::UniqueAudioPacket _packet;
     SsrcOutboundContext& _outboundContext;
     transport::Transport& _transport;
     uint64_t _rtpTimestamp;

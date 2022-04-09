@@ -48,6 +48,7 @@ public:
         template <typename T>
         void operator()(T* r)
         {
+            assert(_allocator);
             if (_allocator)
             {
                 _allocator->free(r);

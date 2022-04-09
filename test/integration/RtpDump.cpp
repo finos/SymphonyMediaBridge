@@ -49,11 +49,11 @@ VideoSource::~VideoSource()
     }
 }
 
-memory::PacketPtr VideoSource::getNext(uint64_t now)
+memory::UniquePacket VideoSource::getNext(uint64_t now)
 {
     if (_aborted)
     {
-        return memory::PacketPtr();
+        return memory::UniquePacket();
     }
     if (!_packet)
     {
@@ -77,7 +77,7 @@ memory::PacketPtr VideoSource::getNext(uint64_t now)
     auto* rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (static_cast<int64_t>(rtpTime - _cursor.timestamp) >= 0)
     {
-        memory::PacketPtr packet(std::move(_packet));
+        memory::UniquePacket packet(std::move(_packet));
 
         rtpHeader->sequenceNumber = _cursor.sequenceNumber++;
         rtpHeader->timestamp = _cursor.timestamp + _rtpTimestampOffset;
@@ -89,7 +89,7 @@ memory::PacketPtr VideoSource::getNext(uint64_t now)
             if (!_packet)
             {
                 _aborted = true;
-                return memory::PacketPtr();
+                return memory::UniquePacket();
             }
         }
         auto* nextRtpHeader = rtp::RtpHeader::fromPacket(*_packet);
@@ -97,24 +97,24 @@ memory::PacketPtr VideoSource::getNext(uint64_t now)
         return packet;
     }
 
-    return memory::PacketPtr();
+    return memory::UniquePacket();
 }
 
-memory::PacketPtr VideoSource::readPacket()
+memory::UniquePacket VideoSource::readPacket()
 {
-    auto packet = memory::makePacketPtr(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     uint16_t size;
     uint16_t originalSize;
     int bytesRead = fread(&size, 2, 1, _fHandle);
     bytesRead += fread(&originalSize, 2, 1, _fHandle);
     if (bytesRead != 2)
     {
-        return memory::PacketPtr();
+        return memory::UniquePacket();
     }
     bytesRead = fread(packet->get(), 1, size, _fHandle);
     if (bytesRead != size)
     {
-        return memory::PacketPtr();
+        return memory::UniquePacket();
     }
     packet->setLength(originalSize);
     if (!rtp::isRtpPacket(*packet))

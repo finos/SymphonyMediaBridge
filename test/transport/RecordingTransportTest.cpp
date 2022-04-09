@@ -76,14 +76,14 @@ struct PacketGenerator
     {
     }
 
-    memory::PacketPtr generate() { return createFakePacket(); }
+    memory::UniquePacket generate() { return createFakePacket(); }
 
-    memory::PacketPtr generateStreamAddEvent() { return createStreamAddEvent(); }
+    memory::UniquePacket generateStreamAddEvent() { return createStreamAddEvent(); }
 
 private:
-    memory::PacketPtr createFakePacket()
+    memory::UniquePacket createFakePacket()
     {
-        auto packet = memory::makePacketPtr(allocator);
+        auto packet = memory::makeUniquePacket(allocator);
         if (packet)
         {
             auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -102,10 +102,10 @@ private:
             packet->setLength(randomPacketSize());
             return packet;
         }
-        return memory::PacketPtr();
+        return memory::UniquePacket();
     }
 
-    memory::PacketPtr createStreamAddEvent()
+    memory::UniquePacket createStreamAddEvent()
     {
         return recp::RecStreamAddedEventBuilder(allocator)
             .setSequenceNumber(1)
@@ -146,7 +146,7 @@ TEST_F(RecordingTransportTest, protectAndSend)
 
     ON_CALL(listener, onRtpReceived)
         .WillByDefault(
-            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet) {
+            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet) {
             });
     EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
 
@@ -231,12 +231,12 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
 
     ON_CALL(listener, onRtpReceived)
         .WillByDefault(
-            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet) {
+            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet) {
             });
 
     ON_CALL(listener, onRtcpReceived)
         .WillByDefault(
-            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet) {
+            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet) {
             });
 
     EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);

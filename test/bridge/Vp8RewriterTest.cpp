@@ -42,7 +42,7 @@ TEST_F(Vp8RewriterTest, getOffset)
 
 TEST_F(Vp8RewriterTest, rewrite)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -91,7 +91,7 @@ TEST_F(Vp8RewriterTest, rewrite)
 TEST_F(Vp8RewriterTest, rewriteRtx)
 {
     // Make RTP packet
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size - sizeof(uint16_t));
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -105,7 +105,7 @@ TEST_F(Vp8RewriterTest, rewriteRtx)
 
     // Make RTX packet from above packet
     const auto headerLength = rtpHeader->headerLength();
-    auto rtxPacket = memory::makePacketPtr(*_allocator);
+    auto rtxPacket = memory::makeUniquePacket(*_allocator);
     memcpy(rtxPacket->get(), packet->get(), headerLength);
     auto copyHead = rtxPacket->get() + headerLength;
     reinterpret_cast<uint16_t*>(copyHead)[0] = hton<uint16_t>(rtpHeader->sequenceNumber.get());
@@ -131,7 +131,7 @@ TEST_F(Vp8RewriterTest, rewriteRtx)
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchanged)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -200,7 +200,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchanged)
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -270,7 +270,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged)
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChangedSequenceNumberLower)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -340,7 +340,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChangedSequenceNumberLow
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReordered)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -406,7 +406,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReordere
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchangedAndSequenceRollover)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -479,7 +479,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchangedAndSequenceRoll
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReorderedWithRollover)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -559,7 +559,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReordere
 
 TEST_F(Vp8RewriterTest, longGapInSequenceNumbersSameSsrc)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -605,7 +605,7 @@ TEST_F(Vp8RewriterTest, longGapInSequenceNumbersSameSsrc)
 
 TEST_F(Vp8RewriterTest, longGapInSequenceNumbersNewSsrc)
 {
-    auto packet = memory::makePacketPtr(*_allocator);
+    auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);

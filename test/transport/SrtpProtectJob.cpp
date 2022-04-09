@@ -5,7 +5,7 @@ namespace transport
 {
 
 SrtpProtectJob::SrtpProtectJob(std::atomic_uint32_t& ownerJobsCounter,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     transport::Transport& transport)
     : jobmanager::CountedJob(ownerJobsCounter),
       _packet(std::move(packet)),

@@ -15,7 +15,7 @@ namespace
 class SendJob : public jobmanager::Job
 {
 public:
-    SendJob(TcpEndpoint& endpoint, memory::PacketPtr packet, const transport::SocketAddress& target)
+    SendJob(TcpEndpoint& endpoint, memory::UniquePacket packet, const transport::SocketAddress& target)
         : _endpoint(endpoint),
           _packet(std::move(packet)),
           _target(target)
@@ -26,7 +26,7 @@ public:
 
 private:
     TcpEndpoint& _endpoint;
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
     transport::SocketAddress _target;
 };
 
@@ -64,7 +64,7 @@ RtpDepacketizer::RtpDepacketizer(int fd_, memory::PacketPoolAllocator& allocator
 {
 }
 
-memory::PacketPtr RtpDepacketizer::receive()
+memory::UniquePacket RtpDepacketizer::receive()
 {
     if (!isGood())
     {
@@ -89,13 +89,13 @@ memory::PacketPtr RtpDepacketizer::receive()
         {
             // attack with malicious length specifier
             // create invalid stunmessage will cause connection to close
-            return memory::makePacketPtr(_allocator);
+            return memory::makeUniquePacket(_allocator);
         }
     }
 
     if (!_incompletePacket)
     {
-        _incompletePacket = memory::makePacketPtr(_allocator);
+        _incompletePacket = memory::makeUniquePacket(_allocator);
     }
 
     if (_incompletePacket != nullptr)
@@ -116,7 +116,7 @@ memory::PacketPtr RtpDepacketizer::receive()
         }
     }
 
-    return memory::PacketPtr();
+    return memory::UniquePacket();
 }
 
 void RtpDepacketizer::close()
@@ -216,14 +216,14 @@ void TcpEndpoint::sendStunTo(const transport::SocketAddress& target,
         connect(target);
     }
 
-    auto packet = memory::makePacketPtr(_allocator, data, len);
+    auto packet = memory::makeUniquePacket(_allocator, data, len);
     if (packet)
     {
         sendTo(target, std::move(packet));
     }
 }
 
-void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::PacketPtr packet)
+void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
 {
     assert(!memory::PacketPoolAllocator::isCorrupt(packet.get()));
     if (_state == State::CONNECTING || _state == State::CONNECTED)
@@ -234,7 +234,7 @@ void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::PacketP
 
 // TODO if the socket blocks due to send buffer/window full. We will lose packet.
 // could queue packets and use writeable event to continue writing once the send window increases
-void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory::PacketPtr packet)
+void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
 {
     if (_state == State::CONNECTING)
     {

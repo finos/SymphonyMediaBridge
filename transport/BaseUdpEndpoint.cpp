@@ -105,7 +105,7 @@ void BaseUdpEndpoint::internalClosePort(int countDown)
     }
 }
 
-void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::PacketPtr packet)
+void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
 {
     if (!packet)
     {
@@ -276,9 +276,9 @@ struct ReceivedMessage
 {
     transport::RawSockAddress src_addr;
     iovec iobuffer;
-    memory::PacketPtr packet;
+    memory::UniquePacket packet;
 
-    bool link(mmsghdr& header, memory::PacketPtr packetPtr)
+    bool link(mmsghdr& header, memory::UniquePacket packetPtr)
     {
         if (!packetPtr)
         {
@@ -317,7 +317,7 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
     {
         for (uint32_t i = packetCount; i < limit; ++i)
         {
-            if (!receiveMessage[i].link(messageHeader[i], memory::makePacketPtr(_allocator)))
+            if (!receiveMessage[i].link(messageHeader[i], memory::makeUniquePacket(_allocator)))
             {
                 break;
             }

@@ -46,9 +46,9 @@ namespace
 
 const int16_t mixSampleScaleFactor = 4;
 
-memory::PacketPtr createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator)
+memory::UniquePacket createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator)
 {
-    auto packet = memory::makePacketPtr(allocator);
+    auto packet = memory::makeUniquePacket(allocator);
     if (packet)
     {
         auto* rtcp = rtp::RtcpGoodbye::create(packet->get(), ssrc);
@@ -1192,7 +1192,7 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
 
 void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     transport::RtcTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
@@ -1241,7 +1241,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
 
 void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     transport::RtcTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
@@ -1313,7 +1313,7 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
     }
 }
 
-void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::PacketPtr packet)
+void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet)
 {
     auto& header = webrtc::streamMessageHeader(*packet);
 
@@ -1485,7 +1485,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
 }
 
 void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     uint64_t timestamp)
 {
     auto recordingStreamItr = _engineRecordingStreams.find(sender->getStreamIdHash());
@@ -1525,7 +1525,7 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
 }
 
 void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
@@ -1578,7 +1578,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
 }
 
 void EngineMixer::onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
@@ -1590,7 +1590,7 @@ void EngineMixer::onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* se
 }
 
 void EngineMixer::onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
@@ -1601,7 +1601,7 @@ void EngineMixer::onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* se
     }
 }
 
-void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::AudioPacketPtr packet)
+void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::UniqueAudioPacket packet)
 {
     assert(packet);
     IncomingAudioPacketInfo packetInfo = {std::move(packet), sender};
@@ -1629,7 +1629,7 @@ bool EngineMixer::enqueuePacket(IncomingPacketInfo& packetInfo, concurrency::Mpm
 }
 
 void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint64_t timestamp)
 {
     assert(packet);
@@ -1912,7 +1912,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                     continue;
                 }
 
-                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdSend", _loggableId.c_str());
@@ -1948,7 +1948,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             for (const auto& transportEntry : recordingStream->_transports)
             {
                 ssrcOutboundContext->onRtpSent(timestamp);
-                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
@@ -2138,7 +2138,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             if (videoStream->_transport.isConnected())
             {
-                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
@@ -2178,7 +2178,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             for (const auto& transportEntry : recordingStream->_transports)
             {
-                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
@@ -2417,7 +2417,7 @@ inline void EngineMixer::processAudioStreams()
             continue;
         }
 
-        auto audioPacket = memory::makePacketPtr(_audioAllocator);
+        auto audioPacket = memory::makeUniquePacket(_audioAllocator);
         if (!audioPacket)
         {
             return;
@@ -2890,7 +2890,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             continue;
         }
 
-        memory::PacketPtr packet;
+        memory::UniquePacket packet;
         if (isAdded)
         {
             auto outboundContextIt = targetStream._ssrcOutboundContexts.find(ssrc);
@@ -3025,7 +3025,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             continue;
         }
 
-        memory::PacketPtr packet;
+        memory::UniquePacket packet;
         if (isAdded)
         {
             auto outboundContextIt = targetStream._ssrcOutboundContexts.find(ssrc);

@@ -13,7 +13,7 @@ public:
         virtual void onRecControlReceived(RecordingEndpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::PacketPtr packet) = 0;
+            memory::UniquePacket packet) = 0;
 
         virtual void onUnregistered(RecordingEndpoint& endpoint) = 0;
     };
@@ -46,7 +46,7 @@ public:
     void unregisterRecordingListener(IRecordingEvents* listener);
 
 public: // internal job interface
-    void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::PacketPtr packet) override;
+    void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet) override;
 
     void internalUnregisterListener(IRecordingEvents* listener);
 

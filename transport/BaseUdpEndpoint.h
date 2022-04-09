@@ -23,7 +23,7 @@ public:
 
     virtual ~BaseUdpEndpoint();
 
-    void sendTo(const transport::SocketAddress& target, memory::PacketPtr packet) override;
+    void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
 
     void registerDefaultListener(IEvents* defaultListener) override;
 
@@ -50,7 +50,7 @@ public:
 public: // internal job interface
     // called on receiveJobs threads
     virtual void internalReceive(int fd, uint32_t batchSize);
-    virtual void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::PacketPtr packet) = 0;
+    virtual void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet) = 0;
     // called on sendJobs threads
     virtual void internalSend();
 
@@ -71,7 +71,7 @@ protected:
     struct OutboundPacket
     {
         transport::SocketAddress target;
-        memory::PacketPtr packet;
+        memory::UniquePacket packet;
     };
 
     jobmanager::JobQueue _receiveJobs;

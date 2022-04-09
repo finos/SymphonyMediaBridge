@@ -14,7 +14,7 @@ class RtpDepacketizer
 public:
     RtpDepacketizer(int fd, memory::PacketPoolAllocator& allocator);
 
-    memory::PacketPtr receive();
+    memory::UniquePacket receive();
 
     bool isGood() const { return fd != -1; }
 
@@ -25,7 +25,7 @@ public:
 private:
     nwuint16_t _header;
     size_t _receivedBytes;
-    memory::PacketPtr _incompletePacket;
+    memory::UniquePacket _incompletePacket;
     memory::PacketPoolAllocator& _allocator;
 };
 
@@ -82,7 +82,7 @@ public:
         size_t len,
         uint64_t timestamp) override;
 
-    void sendTo(const transport::SocketAddress& target, memory::PacketPtr packet) override;
+    void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
 
     void registerListener(const std::string& stunUserName, IEvents* listener) override;
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override;
@@ -118,7 +118,7 @@ public:
     void internalReceive(int fd);
 
     // called on sendJobs threads
-    void internalSendTo(const transport::SocketAddress& target, memory::PacketPtr packet);
+    void internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet);
     void continueSend();
     void internalUnregisterListener(IEvents* listener);
     void internalClosePort(int countDown);
@@ -146,7 +146,7 @@ private:
     std::string _localUser;
 
     RtcePoll& _epoll;
-    memory::PacketPtr _pendingStunRequest;
+    memory::UniquePacket _pendingStunRequest;
 };
 
 } // namespace transport

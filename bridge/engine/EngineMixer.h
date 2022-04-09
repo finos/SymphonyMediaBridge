@@ -96,7 +96,7 @@ public:
         const SimulcastStream& simulcastStream,
         const SimulcastStream* secondarySimulcastStream = nullptr);
     void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
-    void handleSctpControl(const size_t endpointIdHash, memory::PacketPtr packet);
+    void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     void sendEndpointMessage(const size_t toEndpointIdHash, const size_t fromEndpointIdHash, const char* message);
     void recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc);
@@ -125,7 +125,7 @@ public:
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
 
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) override;
 
@@ -141,20 +141,20 @@ public:
         size_t length) override;
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint64_t timestamp) override;
 
     void onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
 
     void onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
 
-    void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::AudioPacketPtr packet);
+    void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::UniqueAudioPacket packet);
 
-    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override;
+    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
 
     jobmanager::JobManager& getJobManager() { return _jobManager; }
 
@@ -215,8 +215,8 @@ private:
         }
     };
 
-    using IncomingPacketInfo = IncomingPacketAggregate<memory::PacketPtr, memory::PacketPoolAllocator>;
-    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::AudioPacketPtr, memory::AudioPacketPoolAllocator>;
+    using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket, memory::PacketPoolAllocator>;
+    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::UniqueAudioPacket, memory::AudioPacketPoolAllocator>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -280,12 +280,12 @@ private:
     void checkPacketCounters(const uint64_t timestamp);
     void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
     void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
 

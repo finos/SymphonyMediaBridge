@@ -34,10 +34,10 @@ public:
     PacketReceiveJob(TransportImpl& transport,
         Endpoint& endpoint,
         const SocketAddress& source,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         void (TransportImpl::*receiveMethod)(Endpoint& endpoint,
             const SocketAddress& source,
-            memory::PacketPtr packet,
+            memory::UniquePacket packet,
             uint64_t timestamp))
         : _transport(transport),
           _endpoint(endpoint),
@@ -60,11 +60,11 @@ public:
 private:
     TransportImpl& _transport;
     Endpoint& _endpoint;
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
     const SocketAddress _source;
     uint64_t _timestamp;
 
-    void (TransportImpl::*_receiveMethod)(Endpoint&, const SocketAddress&, memory::PacketPtr packet, uint64_t);
+    void (TransportImpl::*_receiveMethod)(Endpoint&, const SocketAddress&, memory::UniquePacket packet, uint64_t);
 };
 
 class IceDisconnectJob : public jobmanager::Job
@@ -202,7 +202,7 @@ public:
         utils::strncpy(credentials.fingerprintType, fingerprintType, sizeof(credentials.fingerprintType));
         credentials.dtlsClientSide = clientSide;
 
-        _packet = memory::makePacketPtr(allocator, &credentials, sizeof(credentials));
+        _packet = memory::makeUniquePacket(allocator, &credentials, sizeof(credentials));
     }
 
     void run() override
@@ -226,7 +226,7 @@ public:
 private:
     TransportImpl& _transport;
     SrtpClient& _srtpClient;
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
 };
 
 // must be serialized after set Ice and set Dtls
@@ -817,7 +817,7 @@ void TransportImpl::onServerPortUnregistered(ServerEndpoint& endpoint)
 void TransportImpl::onRtpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::PacketPtr packet)
+    memory::UniquePacket packet)
 {
     if (!_jobQueue
              .addJob<PacketReceiveJob>(*this, endpoint, source, std::move(packet), &TransportImpl::internalRtpReceived))
@@ -828,7 +828,7 @@ void TransportImpl::onRtpReceived(Endpoint& endpoint,
 
 void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -896,7 +896,7 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
 void TransportImpl::onDtlsReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::PacketPtr packet)
+    memory::UniquePacket packet)
 {
     if (!_jobQueue.addJob<PacketReceiveJob>(*this,
             endpoint,
@@ -910,7 +910,7 @@ void TransportImpl::onDtlsReceived(Endpoint& endpoint,
 
 void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -937,7 +937,7 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
 void TransportImpl::onRtcpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::PacketPtr packet)
+    memory::UniquePacket packet)
 {
     if (!_jobQueue.addJob<PacketReceiveJob>(*this,
             endpoint,
@@ -951,7 +951,7 @@ void TransportImpl::onRtcpReceived(Endpoint& endpoint,
 
 void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -998,7 +998,7 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
 void TransportImpl::onIceReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::PacketPtr packet)
+    memory::UniquePacket packet)
 {
     if (_rtpIceSession)
     {
@@ -1023,7 +1023,7 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
 
 void TransportImpl::internalIceReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -1379,7 +1379,7 @@ uint32_t TransportImpl::getRtxPacingQueueCount() const
 }
 
 void TransportImpl::doProtectAndSend(uint64_t timestamp,
-    memory::PacketPtr packet,
+    memory::UniquePacket packet,
     const SocketAddress& target,
     Endpoint* endpoint)
 {
@@ -1417,7 +1417,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
     auto paddingCount = _rateController.getPadding(timestamp, 0, padding);
     for (uint32_t i = 0; padding > 100 && i < paddingCount && _selectedRtp; ++i)
     {
-        auto padPacket = memory::makePacketPtr(_mainAllocator);
+        auto padPacket = memory::makeUniquePacket(_mainAllocator);
         if (padPacket)
         {
             padPacket->clear();
@@ -1461,7 +1461,7 @@ void TransportImpl::sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t 
     const auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
     for (uint32_t i = 0; i < paddingCount && _selectedRtcp; ++i)
     {
-        auto padPacket = memory::makePacketPtr(_mainAllocator);
+        auto padPacket = memory::makeUniquePacket(_mainAllocator);
         if (padPacket)
         {
             auto* rtcpPadding = rtp::RtcpApplicationSpecific::create(padPacket->get(), ssrc, "BRPP", padding);
@@ -1486,7 +1486,7 @@ void clearPacingQueueIfFull(T& pacingQueue)
     }
 }
 } // namespace
-void TransportImpl::protectAndSend(memory::PacketPtr packet)
+void TransportImpl::protectAndSend(memory::UniquePacket packet)
 {
     DBGCHECK_SINGLETHREADED(_singleThreadMutex);
 
@@ -1529,7 +1529,7 @@ void TransportImpl::protectAndSend(memory::PacketPtr packet)
     }
 }
 
-void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::PacketPtr packet)
+void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket packet)
 {
     const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     const auto payloadType = rtpHeader->payloadType;
@@ -1601,7 +1601,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
     const uint64_t ntp32Tick = 0x10000u; // 1/65536 sec
 
     bool rembAdded = false;
-    memory::PacketPtr rtcpPacket;
+    memory::UniquePacket rtcpPacket;
     uint32_t senderSsrc = 0;
     for (uint32_t i = 0; i < senderReportCount; ++i)
     {
@@ -1615,7 +1615,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
         if (!rtcpPacket)
         {
-            rtcpPacket = memory::makePacketPtr(_mainAllocator);
+            rtcpPacket = memory::makeUniquePacket(_mainAllocator);
             if (!rtcpPacket)
             {
                 logger::warn("No space available to send SR", _loggableId.c_str());
@@ -1669,7 +1669,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
         if (!rtcpPacket)
         {
-            rtcpPacket = memory::makePacketPtr(_mainAllocator);
+            rtcpPacket = memory::makeUniquePacket(_mainAllocator);
             if (!rtcpPacket)
             {
                 logger::warn("No space available to send RR", _loggableId.c_str());
@@ -1763,7 +1763,7 @@ void TransportImpl::appendRemb(memory::Packet& rtcpPacket,
     assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
 }
 
-void TransportImpl::sendRtcp(memory::PacketPtr rtcpPacket, const uint64_t timestamp)
+void TransportImpl::sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp)
 {
     auto* report = rtp::RtcpReport::fromPacket(*rtcpPacket);
 
@@ -2202,7 +2202,7 @@ int32_t TransportImpl::sendDtls(const char* buffer, const uint32_t length)
         return 0;
     }
 
-    auto packet = memory::makePacketPtr(_mainAllocator, buffer, length);
+    auto packet = memory::makeUniquePacket(_mainAllocator, buffer, length);
     if (packet)
     {
         _selectedRtp->sendTo(_peerRtpPort, std::move(packet));
@@ -2438,7 +2438,7 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
 
         if (pacingQueue->back()->getLength() + _config.ipOverhead <= budget)
         {
-            memory::PacketPtr packet(pacingQueue->fetchBack());
+            memory::UniquePacket packet(pacingQueue->fetchBack());
             budget -= packet->getLength() + _config.ipOverhead;
             auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
             ssrc = rtpHeader->ssrc;

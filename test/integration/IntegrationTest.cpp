@@ -462,13 +462,9 @@ private:
 class AudioSendJob : public jobmanager::Job
 {
 public:
-    AudioSendJob(transport::Transport& transport,
-        memory::PacketPtr packet,
-        emulator::AudioSource& source,
-        uint64_t timestamp)
+    AudioSendJob(transport::Transport& transport, memory::UniquePacket packet, uint64_t timestamp)
         : _transport(transport),
-          _packet(std::move(packet)),
-          _source(source)
+          _packet(std::move(packet))
     {
     }
 
@@ -476,8 +472,7 @@ public:
 
 private:
     transport::Transport& _transport;
-    memory::PacketPtr _packet;
-    emulator::AudioSource& _source;
+    memory::UniquePacket _packet;
 };
 
 class SfuClient : public transport::DataReceiver
@@ -586,7 +581,7 @@ public:
                 _allocator.free(packet);
                 return;
             }*/
-            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, std::move(packet), *_audioSource, timestamp);
+            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, std::move(packet), timestamp);
         }
     }
 
@@ -663,7 +658,7 @@ public:
 
 public:
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        const memory::PacketPtr packet,
+        const memory::UniquePacket packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -700,7 +695,9 @@ public:
         }
     }
 
-    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override {}
+    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override
+    {
+    }
 
     void onConnected(transport::RtcTransport* sender) override
     {
@@ -720,7 +717,7 @@ public:
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         uint64_t timestamp) override
     {
     }

@@ -16,7 +16,7 @@ class AudioForwarderRewriteAndSendJob : public jobmanager::CountedJob
 {
 public:
     AudioForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         transport::Transport& transport);
 
@@ -24,7 +24,7 @@ public:
 
 private:
     SsrcOutboundContext& _outboundContext;
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
     uint32_t _extendedSequenceNumber;
     transport::Transport& _transport;
 };

@@ -8,7 +8,7 @@
 namespace bridge
 {
 
-RecordingEventAckReceiveJob::RecordingEventAckReceiveJob(memory::PacketPtr packet,
+RecordingEventAckReceiveJob::RecordingEventAckReceiveJob(memory::UniquePacket packet,
     transport::RecordingTransport* sender,
     UnackedPacketsTracker& recEventUnackedPacketsTracker)
     : CountedJob(sender->getJobCounter()),

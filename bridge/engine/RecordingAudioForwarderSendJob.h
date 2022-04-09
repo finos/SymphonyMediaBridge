@@ -24,7 +24,7 @@ class RecordingAudioForwarderSendJob : public jobmanager::CountedJob
 {
 public:
     RecordingAudioForwarderSendJob(SsrcOutboundContext& outboundContext,
-        memory::PacketPtr packet,
+        memory::UniquePacket packet,
         transport::RecordingTransport& transport,
         const uint32_t extendedSequenceNumber);
 
@@ -32,7 +32,7 @@ public:
 
 private:
     SsrcOutboundContext& _outboundContext;
-    memory::PacketPtr _packet;
+    memory::UniquePacket _packet;
     transport::RecordingTransport& _transport;
     uint32_t _extendedSequenceNumber;
 };

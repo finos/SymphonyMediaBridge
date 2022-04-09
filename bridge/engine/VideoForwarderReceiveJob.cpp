@@ -31,7 +31,7 @@ void dumpPacket(FILE* fh, const memory::Packet& packet, size_t cappedSize)
     fwrite(packet.get(), recordSize, 1, fh);
 }
 
-VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::PacketPtr packet,
+VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::UniquePacket packet,
     memory::PacketPoolAllocator& allocator,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,

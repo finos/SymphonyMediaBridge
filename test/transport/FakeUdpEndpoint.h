@@ -22,7 +22,7 @@ public:
     bool hasIp(const transport::SocketAddress& target) override;
     void process(uint64_t timestamp) override;
 
-    void sendTo(const transport::SocketAddress& target, memory::PacketPtr packet) override;
+    void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
 
     void registerListener(const std::string& stunUserName, IEvents* listener) override;
     void registerListener(const transport::SocketAddress& remotePort, IEvents* listener) override;

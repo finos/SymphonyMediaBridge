@@ -21,7 +21,7 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc)
 {
 }
 
-memory::PacketPtr AudioSource::getPacket(uint64_t timestamp)
+memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
 {
     if (timeToRelease(timestamp) > 0)
     {
@@ -34,7 +34,7 @@ memory::PacketPtr AudioSource::getPacket(uint64_t timestamp)
     }
     _nextRelease += utils::Time::ms * 20;
 
-    auto packet = memory::makePacketPtr(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     assert(packet);
     if (!packet)
     {
@@ -81,7 +81,7 @@ memory::PacketPtr AudioSource::getPacket(uint64_t timestamp)
     }
     else
     {
-        return memory::PacketPtr();
+        return memory::UniquePacket();
     }
 }
 
