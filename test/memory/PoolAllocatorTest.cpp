@@ -1,7 +1,6 @@
 #include "memory/PoolAllocator.h"
 #include "concurrency/MpmcQueue.h"
 #include "logger/Logger.h"
-#include "memory/RefCountedPacket.h"
 #include "test/bridge/DummyRtcTransport.h"
 #include "test/macros.h"
 #include "utils/Time.h"
@@ -163,24 +162,6 @@ TEST(PoolAllocatorBasic, leakReport)
 
         allocator.allocate();
         allocator.allocate();
-    }
-}
-
-TEST(PoolAllocatorBasic, refCountedPacket)
-{
-    {
-        memory::PacketPoolAllocator allocator(4096 * 40, "PoolAllocatorTest");
-
-        size_t count = 0;
-        auto start = utils::Time::getAbsoluteTime();
-        while (utils::Time::getAbsoluteTime() - start < utils::Time::sec * 4)
-        {
-            memory::RefCountedPacket rpacket(memory::makePacket(allocator), &allocator);
-            rpacket.get()->setLength(1);
-            count += rpacket.get()->getLength();
-            rpacket.release();
-        }
-        logger::info("ops %zu", "refCountedPacket", count);
     }
 }
 

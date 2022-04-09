@@ -1,7 +1,6 @@
 #include "bridge/engine/RecordingRtpNackReceiveJob.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
-#include "memory/RefCountedPacket.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RecordingTransport.h"
 #include "transport/recp/RecControlHeader.h"
@@ -35,13 +34,7 @@ void RecordingRtpNackReceiveJob::run()
         return;
     }
 
-    auto packetCache = _ssrcOutboundContext._packetCache.get();
-    auto scopedRef = memory::RefCountedPacket::ScopedRef(packetCache->get(recControlHeader->sequenceNumber));
-    if (!scopedRef._refCountedPacket)
-    {
-        return;
-    }
-    auto cachedPacket = scopedRef._refCountedPacket->get();
+    auto cachedPacket = _ssrcOutboundContext._packetCache.get()->get(recControlHeader->sequenceNumber);
     if (!cachedPacket)
     {
         return;

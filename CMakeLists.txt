@@ -252,7 +252,6 @@ set(FILES
         memory/AudioPacketPoolAllocator.h
         memory/PoolAllocator.h
         memory/PriorityQueue.h
-        memory/RefCountedPacket.h
         memory/RingAllocator.cpp
         memory/RingAllocator.h
         memory/RingBuffer.h

@@ -1,61 +1,8 @@
 #include "bridge/engine/PacketCache.h"
-#include "memory/RefCountedPacket.h"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <memory>
 #include <thread>
-
-namespace
-{
-
-const size_t iterations = 2048;
-
-void threadFunctionAdd(bridge::PacketCache* packetCache, memory::PacketPoolAllocator* allocator)
-{
-    for (size_t sequenceNumber = 0; sequenceNumber < iterations; ++sequenceNumber)
-    {
-        // Local packet that will be copied to the cache
-        auto packet = memory::makePacket(*allocator);
-        EXPECT_NE(nullptr, packet);
-
-        // Write sequence number at the start of the packet
-        auto intptr = reinterpret_cast<uint32_t*>(packet->get());
-        *intptr = sequenceNumber;
-        packet->setLength(sizeof(uint32_t));
-
-        packetCache->add(*packet, sequenceNumber);
-
-        // Done with our local packet since it's copied to the cache
-        allocator->free(packet);
-    }
-}
-
-void threadFunctionGet(bridge::PacketCache* packetCache)
-{
-    for (size_t sequenceNumber = 0; sequenceNumber < iterations; ++sequenceNumber)
-    {
-        auto packet = packetCache->get(sequenceNumber);
-        if (!packet)
-        {
-            usleep(10);
-            continue;
-        }
-
-        // Check packet contents, should match the sequence number written as payload
-        const auto payload = packet->get();
-        auto intptr = reinterpret_cast<uint32_t*>(payload->get());
-        EXPECT_EQ(sizeof(uint32_t), payload->getLength());
-        EXPECT_EQ(sequenceNumber, *intptr);
-
-        // Re-check packet contents so it's not overwritten while we have a reference to it
-        usleep(100);
-        EXPECT_EQ(sequenceNumber, *intptr);
-
-        packet->release();
-    }
-}
-
-} // namespace
 
 class PacketCacheTest : public ::testing::Test
 {
@@ -97,7 +44,7 @@ TEST_F(PacketCacheTest, addPacket)
     _packetAllocator->free(packet);
 
     auto cachedPacket = _packetCache->get(1);
-    EXPECT_TRUE(verifyPacket(cachedPacket->get(), 1));
+    EXPECT_TRUE(verifyPacket(cachedPacket, 1));
 }
 
 TEST_F(PacketCacheTest, packetAlreadyInCache)
@@ -111,7 +58,7 @@ TEST_F(PacketCacheTest, packetAlreadyInCache)
     _packetAllocator->free(packet2);
 
     auto cachedPacket = _packetCache->get(1);
-    EXPECT_TRUE(verifyPacket(cachedPacket->get(), 1));
+    EXPECT_TRUE(verifyPacket(cachedPacket, 1));
 }
 
 TEST_F(PacketCacheTest, fillCache)
@@ -129,13 +76,4 @@ TEST_F(PacketCacheTest, fillCache)
 
     EXPECT_EQ(nullptr, _packetCache->get(0));
     EXPECT_NE(nullptr, _packetCache->get(512));
-}
-
-TEST_F(PacketCacheTest, multiThread)
-{
-    auto addThread = std::make_unique<std::thread>(threadFunctionAdd, _packetCache.get(), _packetAllocator.get());
-    auto getThread = std::make_unique<std::thread>(threadFunctionGet, _packetCache.get());
-
-    addThread->join();
-    getThread->join();
 }

@@ -2,7 +2,6 @@
 #include "bridge/RtpMap.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
-#include "memory/RefCountedPacket.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RtcTransport.h"
 
@@ -92,12 +91,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
         return;
     }
 
-    auto scopedRef = memory::RefCountedPacket::ScopedRef(_videoPacketCache.get(sequenceNumber));
-    if (!scopedRef._refCountedPacket)
-    {
-        return;
-    }
-    auto cachedPacket = scopedRef._refCountedPacket->get();
+    const auto cachedPacket = _videoPacketCache.get(sequenceNumber);
     if (!cachedPacket)
     {
         return;

@@ -1,5 +1,4 @@
 #include "bridge/engine/PacketCache.h"
-#include "memory/RefCountedPacket.h"
 #include "utils/ScopedReentrancyBlocker.h"
 
 namespace
@@ -40,19 +39,8 @@ PacketCache::~PacketCache()
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
 #endif
-
-    uint16_t removedSequenceNumberEntry;
-    while (_arrivalQueue.pop(removedSequenceNumberEntry))
-    {
-        auto removedPacketItr = _cache.find(removedSequenceNumberEntry);
-        if (removedPacketItr == _cache.end())
-        {
-            continue;
-        }
-
-        _packetAllocator->free(removedPacketItr->second.get());
-        _cache.erase(removedSequenceNumberEntry);
-    }
+    // must clear out content in case PacketAllocator is removed first.
+    _cache.reInitialize();
 }
 
 bool PacketCache::add(const memory::Packet& packet, const uint16_t sequenceNumber)
@@ -68,41 +56,35 @@ bool PacketCache::add(const memory::Packet& packet, const uint16_t sequenceNumbe
 
     if (_arrivalQueue.size() >= maxPackets)
     {
-        uint16_t removedSequenceNumberEntry;
-        const auto popResult = _arrivalQueue.pop(removedSequenceNumberEntry);
+        uint16_t sequenceNumberToRemove;
+        const auto popResult = _arrivalQueue.pop(sequenceNumberToRemove);
         assert(popResult);
 
-        auto removedPacketItr = _cache.find(removedSequenceNumberEntry);
+        auto removedPacketItr = _cache.find(sequenceNumberToRemove);
         if (removedPacketItr != _cache.end())
         {
             removedPacketItr->second.release();
-            _cache.erase(removedSequenceNumberEntry);
+            _cache.erase(sequenceNumberToRemove);
         }
     }
 
-    auto cachedPacket = memory::makePacket(*_packetAllocator, packet);
+    auto cachedPacket = memory::makeUniquePacket(*_packetAllocator, packet);
     if (!cachedPacket)
     {
         return false;
     }
 
-    _cache.emplace(sequenceNumber, cachedPacket, _packetAllocator.get());
-
+    _cache.emplace(sequenceNumber, std::move(cachedPacket));
     _arrivalQueue.push(sequenceNumber);
     return true;
 }
 
-memory::RefCountedPacket* PacketCache::get(const uint16_t sequenceNumber)
+const memory::Packet* PacketCache::get(const uint16_t sequenceNumber)
 {
     auto cacheItr = _cache.find(sequenceNumber);
-    if (cacheItr == _cache.end())
+    if (cacheItr != _cache.end())
     {
-        return nullptr;
-    }
-
-    if (cacheItr->second.retain())
-    {
-        return &cacheItr->second;
+        return cacheItr->second.get();
     }
 
     return nullptr;
