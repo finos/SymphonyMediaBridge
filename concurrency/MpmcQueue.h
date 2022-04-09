@@ -130,8 +130,11 @@ public:
     bool empty() const { return !isReadable(_readCursor.load(std::memory_order_consume)); }
 
     void clear() {
-        T elem;
-        while(pop(elem));
+        if (!empty())
+        {
+            T elem;
+            while(pop(elem));   
+        }
     }
 
 private:
