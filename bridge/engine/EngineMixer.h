@@ -216,7 +216,6 @@ private:
             , _transport(std::exchange(rhs._transport, nullptr))
             , _extendedSequenceNumber(rhs._extendedSequenceNumber)
         {
-            lockOwner();
         }
 
         IncomingPacketAggregate& operator=(IncomingPacketAggregate&& rhs)
