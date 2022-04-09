@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace config
@@ -168,9 +169,10 @@ private:
     static const size_t maxStreamsPerModality = 4096;
     static const size_t maxRecordingStreams = 8;
 
-    template <typename PacketT, typename AllocatorT>
-    struct IncomingPacketAggregate
+    template <typename PacketT>
+    class IncomingPacketAggregate
     {
+    public:
         IncomingPacketAggregate() : _transport(nullptr), _extendedSequenceNumber(0) {}
 
         IncomingPacketAggregate(PacketT packet, transport::RtcTransport* transport)
@@ -178,6 +180,8 @@ private:
               _transport(transport),
               _extendedSequenceNumber(0)
         {
+            assert(_packet);
+            lockOwner();
         }
 
         IncomingPacketAggregate(PacketT packet,
@@ -187,21 +191,38 @@ private:
               _transport(transport),
               _extendedSequenceNumber(extendedSequenceNumber)
         {
+            assert(_packet);
+            lockOwner();
         }
 
-        PacketT _packet;
-        transport::RtcTransport* _transport;
-        uint32_t _extendedSequenceNumber;
-
-        inline void lockOwner() const
+        explicit IncomingPacketAggregate(IncomingPacketAggregate&& rhs)
+            : _packet(std::exchange(rhs._packet, nullptr)),
+              _transport(std::exchange(rhs._transport, nullptr)),
+              _extendedSequenceNumber(rhs._extendedSequenceNumber)
         {
-            if (_transport)
-            {
-                ++_transport->getJobCounter();
-            }
         }
 
-        inline void release() const
+        IncomingPacketAggregate& operator=(IncomingPacketAggregate&& rhs)
+        {
+            release();
+
+            _packet = std::exchange(rhs._packet, nullptr);
+            _transport = std::exchange(rhs._transport, nullptr);
+            _extendedSequenceNumber = rhs._extendedSequenceNumber;
+            return *this;
+        }
+
+        IncomingPacketAggregate(const IncomingPacketAggregate&) = delete;
+        IncomingPacketAggregate& operator=(const IncomingPacketAggregate&) = delete;
+
+        ~IncomingPacketAggregate() { release(); }
+
+        transport::RtcTransport* transport() { return _transport; }
+        PacketT& packet() { return _packet; }
+        uint32_t extendedSequenceNumber() const { return _extendedSequenceNumber; }
+
+    private:
+        void release()
         {
             if (_transport)
             {
@@ -211,12 +232,25 @@ private:
 #else
                 --_transport->getJobCounter();
 #endif
+                _transport = nullptr;
             }
         }
+
+        void lockOwner() const
+        {
+            if (_transport)
+            {
+                ++_transport->getJobCounter();
+            }
+        }
+
+        PacketT _packet;
+        transport::RtcTransport* _transport;
+        uint32_t _extendedSequenceNumber;
     };
 
-    using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket, memory::PacketPoolAllocator>;
-    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::UniqueAudioPacket, memory::AudioPacketPoolAllocator>;
+    using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket>;
+    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::UniqueAudioPacket>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -288,8 +322,6 @@ private:
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
-
-    bool enqueuePacket(IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue);
 
     SsrcInboundContext* getInboundSsrcContext(const uint32_t ssrc);
     SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,
