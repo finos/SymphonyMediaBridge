@@ -76,14 +76,14 @@ struct PacketGenerator
     {
     }
 
-    memory::Packet* generate() { return createFakePacket(); }
+    memory::PacketPtr generate() { return createFakePacket(); }
 
-    memory::Packet* generateStreamAddEvent() { return createStreamAddEvent(); }
+    memory::PacketPtr generateStreamAddEvent() { return createStreamAddEvent(); }
 
 private:
-    memory::Packet* createFakePacket()
+    memory::PacketPtr createFakePacket()
     {
-        auto* packet = memory::makePacket(allocator);
+        auto packet = memory::makePacketPtr(allocator);
         if (packet)
         {
             auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -102,10 +102,10 @@ private:
             packet->setLength(randomPacketSize());
             return packet;
         }
-        return nullptr;
+        return memory::PacketPtr();
     }
 
-    memory::Packet* createStreamAddEvent()
+    memory::PacketPtr createStreamAddEvent()
     {
         return recp::RecStreamAddedEventBuilder(allocator)
             .setSequenceNumber(1)
@@ -145,12 +145,10 @@ TEST_F(RecordingTransportTest, protectAndSend)
     StrictMock<fakenet::EndpointListenerMock> listener;
 
     ON_CALL(listener, onRtpReceived)
-        .WillByDefault([](Endpoint& endpoint,
-                           const SocketAddress& source,
-                           const SocketAddress& target,
-                           memory::Packet* packet,
-                           memory::PacketPoolAllocator& allocator) { allocator.free(packet); });
-    EXPECT_CALL(listener, onRtpReceived(_, _, _, _, _)).Times(100);
+        .WillByDefault(
+            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet) {
+            });
+    EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
 
     UdpEndpoint udpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
     udpEndpoint.registerListener(sourceAddress, &listener);
@@ -166,7 +164,8 @@ TEST_F(RecordingTransportTest, protectAndSend)
         hash<string>{}("sTest"),
         targetAddress,
         key,
-        salt);
+        salt,
+        *_mainPoolAllocator);
     transport->start();
 
     memory::PacketPoolAllocator senderAllocator(4096, string("TestSenderAllocator"));
@@ -176,8 +175,7 @@ TEST_F(RecordingTransportTest, protectAndSend)
         auto packet = packetGenerator.generate();
         if (packet)
         {
-            transport->getJobQueue().addJob<transport::SendJob>(*transport, packet, senderAllocator);
-            packet = nullptr;
+            transport->getJobQueue().addJob<transport::SendJob>(*transport, std::move(packet));
             this_thread::sleep_for(chrono::milliseconds(5));
         }
     }
@@ -232,21 +230,17 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     StrictMock<fakenet::EndpointListenerMock> listener;
 
     ON_CALL(listener, onRtpReceived)
-        .WillByDefault([](Endpoint& endpoint,
-                           const SocketAddress& source,
-                           const SocketAddress& target,
-                           memory::Packet* packet,
-                           memory::PacketPoolAllocator& allocator) { allocator.free(packet); });
+        .WillByDefault(
+            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet) {
+            });
 
     ON_CALL(listener, onRtcpReceived)
-        .WillByDefault([](Endpoint& endpoint,
-                           const SocketAddress& source,
-                           const SocketAddress& target,
-                           memory::Packet* packet,
-                           memory::PacketPoolAllocator& allocator) { allocator.free(packet); });
+        .WillByDefault(
+            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet) {
+            });
 
-    EXPECT_CALL(listener, onRtpReceived(_, _, _, _, _)).Times(100);
-    EXPECT_CALL(listener, onRtcpReceived(_, _, _, _, _)).Times(AtLeast(1));
+    EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
+    EXPECT_CALL(listener, onRtcpReceived(_, _, _, _)).Times(AtLeast(1));
 
     UdpEndpoint udpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
     udpEndpoint.registerListener(sourceAddress, &listener);
@@ -262,24 +256,22 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
         hash<string>{}("sTest"),
         targetAddress,
         key,
-        salt);
+        salt,
+        *_mainPoolAllocator);
     transport->start();
 
     memory::PacketPoolAllocator senderAllocator(4096, string("TestSenderAllocator"));
     PacketGenerator packetGenerator(senderAllocator);
 
     // To receive RTCP packets we have to first send StreamAdd event to make the transport aware of this ssrc
-    transport->getJobQueue().addJob<transport::SendJob>(*transport,
-        packetGenerator.generateStreamAddEvent(),
-        senderAllocator);
+    transport->getJobQueue().addJob<transport::SendJob>(*transport, packetGenerator.generateStreamAddEvent());
 
     for (auto i = 0; i < 100; ++i)
     {
         auto packet = packetGenerator.generate();
         if (packet)
         {
-            transport->getJobQueue().addJob<transport::SendJob>(*transport, packet, senderAllocator);
-            packet = nullptr;
+            transport->getJobQueue().addJob<transport::SendJob>(*transport, std::move(packet));
             this_thread::sleep_for(chrono::milliseconds(5));
         }
     }

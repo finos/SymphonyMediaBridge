@@ -97,7 +97,7 @@ memory::Packet* makePacket(uint16_t streamId,
         return nullptr;
     }
 
-    auto* packet = memory::makePacket(allocator);
+    auto packet = memory::makePacket(allocator);
     if (!packet)
     {
         return nullptr;

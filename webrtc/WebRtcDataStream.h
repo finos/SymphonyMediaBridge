@@ -66,9 +66,9 @@ struct SctpStreamMessageHeader
     const void* data() const { return &sequenceNumber + 1; }
 };
 
-inline const SctpStreamMessageHeader& streamMessageHeader(const memory::Packet* p)
+inline const SctpStreamMessageHeader& streamMessageHeader(const memory::Packet& p)
 {
-    return reinterpret_cast<const SctpStreamMessageHeader&>(*p->get());
+    return reinterpret_cast<const SctpStreamMessageHeader&>(*p.get());
 }
 
 memory::Packet* makePacket(uint16_t streamId,

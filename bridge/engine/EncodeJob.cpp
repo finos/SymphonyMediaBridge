@@ -9,33 +9,22 @@
 namespace bridge
 {
 
-EncodeJob::EncodeJob(memory::AudioPacket* packet,
-    memory::AudioPacketPoolAllocator& allocator,
+EncodeJob::EncodeJob(memory::AudioPacketPtr packet,
     SsrcOutboundContext& outboundContext,
     transport::Transport& transport,
     uint64_t rtpTimestamp,
     uint8_t audioLevelExtensionId,
     uint8_t absSendTimeExtensionId)
     : jobmanager::CountedJob(transport.getJobCounter()),
-      _packet(packet),
-      _audioPacketPoolAllocator(allocator),
+      _packet(std::move(packet)),
       _outboundContext(outboundContext),
       _transport(transport),
       _rtpTimestamp(rtpTimestamp),
       _audioLevelExtensionId(audioLevelExtensionId),
       _absSendTimeExtensionId(absSendTimeExtensionId)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-EncodeJob::~EncodeJob()
-{
-    if (_packet)
-    {
-        _audioPacketPoolAllocator.free(_packet);
-        _packet = nullptr;
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void EncodeJob::run()
@@ -54,7 +43,7 @@ void EncodeJob::run()
             _outboundContext._opusEncoder.reset(new codec::OpusEncoder());
         }
 
-        auto opusPacket = memory::makePacket(_outboundContext._allocator);
+        auto opusPacket = memory::makePacketPtr(_outboundContext._allocator);
         if (!opusPacket)
         {
             logger::error("failed to make packet for opus encoded data", "OpusEncodeJob");
@@ -94,7 +83,6 @@ void EncodeJob::run()
         if (encodedBytes <= 0)
         {
             logger::error("Failed to encode opus, %d", "OpusEncodeJob", encodedBytes);
-            _outboundContext._allocator.free(opusPacket);
             return;
         }
 
@@ -103,7 +91,7 @@ void EncodeJob::run()
         opusHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
         opusHeader->sequenceNumber = _outboundContext._sequenceCounter++ & 0xFFFFu;
         opusHeader->payloadType = targetFormat._payloadType;
-        _transport.protectAndSend(opusPacket, _outboundContext._allocator);
+        _transport.protectAndSend(std::move(opusPacket));
     }
     else
     {

@@ -40,32 +40,18 @@ struct ClientPair : public transport::DataReceiver
     class SendJob : public jobmanager::CountedJob
     {
     public:
-        SendJob(Transport& transport, memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
+        SendJob(Transport& transport, memory::PacketPtr packet)
             : CountedJob(transport.getJobCounter()),
               _transport(transport),
-              _packet(packet),
-              _sendAllocator(sendAllocator)
+              _packet(std::move(packet))
         {
         }
 
-        ~SendJob()
-        {
-            if (_packet)
-            {
-                _sendAllocator.free(_packet);
-            }
-        }
-
-        void run() override
-        {
-            _transport.protectAndSend(_packet, _sendAllocator);
-            _packet = nullptr;
-        }
+        void run() override { _transport.protectAndSend(std::move(_packet)); }
 
     private:
         Transport& _transport;
-        memory::Packet* _packet;
-        memory::PacketPoolAllocator& _sendAllocator;
+        memory::PacketPtr _packet;
     };
 
     ClientPair(TransportFactory* transportFactory,
@@ -146,7 +132,7 @@ struct ClientPair : public transport::DataReceiver
 
         for (int j = 0; j < 1; ++j)
         {
-            memory::Packet* packet = memory::makePacket(_sendAllocator);
+            auto packet = memory::makePacketPtr(_sendAllocator);
             packet->setLength(160 + rtp::MIN_RTP_HEADER_SIZE);
 
             auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -154,15 +140,14 @@ struct ClientPair : public transport::DataReceiver
             rtpHeader->ssrc = _ssrc;
             rtpHeader->sequenceNumber = _sequenceNumber++;
 
-            _transport1->getJobQueue().addJob<transport::SendJob>(*_transport1, packet, _sendAllocator);
+            _transport1->getJobQueue().addJob<transport::SendJob>(*_transport1, std::move(packet));
         }
     }
 
     bool isConnected() { return _transport1->isConnected() && _transport2->isConnected(); }
 
     void onRtpPacketReceived(RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -180,16 +165,12 @@ struct ClientPair : public transport::DataReceiver
                 _receivedByteCount.load(),
                 _receivedPacketCount.load());
         }
-
-        receiveAllocator.free(packet);
     }
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint64_t timestamp) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onConnected(RtcTransport* transport) override
@@ -221,10 +202,8 @@ struct ClientPair : public transport::DataReceiver
             _recv2.append(dataPtr, length);
         }
     };
-    void onRecControlReceived(RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
-        uint64_t timestamp) override{};
+
+    void onRecControlReceived(RecordingTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override{};
 
     uint32_t _ssrc;
     memory::PacketPoolAllocator& _sendAllocator;

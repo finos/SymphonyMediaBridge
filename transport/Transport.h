@@ -36,7 +36,7 @@ public:
     virtual bool start() = 0;
     virtual void connect() = 0;
     virtual jobmanager::JobQueue& getJobQueue() = 0;
-    virtual void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator) = 0;
+    virtual void protectAndSend(memory::PacketPtr packet) = 0;
 };
 
 } // namespace transport

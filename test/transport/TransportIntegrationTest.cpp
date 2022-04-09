@@ -202,8 +202,7 @@ bool TransportClientPair::isConnected()
 }
 
 void TransportClientPair::onRtpPacketReceived(transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     const uint32_t extendedSequenceNumber,
     uint64_t timestamp)
 {
@@ -221,6 +220,4 @@ void TransportClientPair::onRtpPacketReceived(transport::RtcTransport* sender,
             _receivedByteCount.load(),
             _receivedPacketCount.load());
     }
-
-    receiveAllocator.free(packet);
 }

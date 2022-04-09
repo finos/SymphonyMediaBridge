@@ -109,7 +109,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
         return;
     }
 
-    auto packet = memory::makePacket(_ssrcOutboundContext._allocator);
+    auto packet = memory::makePacketPtr(_ssrcOutboundContext._allocator);
     if (!packet)
     {
         return;
@@ -135,7 +135,6 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     if (!rtpHeader)
     {
-        _ssrcOutboundContext._allocator.free(packet);
         return;
     }
 
@@ -144,7 +143,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     rtpHeader->sequenceNumber = _ssrcOutboundContext._sequenceCounter & 0xFFFF;
     ++_ssrcOutboundContext._sequenceCounter;
 
-    _sender.protectAndSend(packet, _ssrcOutboundContext._allocator);
+    _sender.protectAndSend(std::move(packet));
 }
 
 } // namespace bridge

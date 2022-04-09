@@ -15,36 +15,19 @@ namespace
 class SendJob : public jobmanager::Job
 {
 public:
-    SendJob(TcpEndpoint& endpoint,
-        memory::Packet* packet,
-        const transport::SocketAddress& target,
-        memory::PacketPoolAllocator& allocator)
+    SendJob(TcpEndpoint& endpoint, memory::PacketPtr packet, const transport::SocketAddress& target)
         : _endpoint(endpoint),
-          _packet(packet),
-          _target(target),
-          _allocator(allocator)
+          _packet(std::move(packet)),
+          _target(target)
     {
     }
 
-    ~SendJob()
-    {
-        if (_packet)
-        {
-            _allocator.free(_packet);
-        }
-    }
-
-    void run() override
-    {
-        _endpoint.internalSendTo(_target, _packet, _allocator);
-        _packet = nullptr;
-    }
+    void run() override { _endpoint.internalSendTo(_target, std::move(_packet)); }
 
 private:
     TcpEndpoint& _endpoint;
-    memory::Packet* _packet;
+    memory::PacketPtr _packet;
     transport::SocketAddress _target;
-    memory::PacketPoolAllocator& _allocator;
 };
 
 class ContinueSendJob : public jobmanager::Job
@@ -77,20 +60,11 @@ private:
 RtpDepacketizer::RtpDepacketizer(int fd_, memory::PacketPoolAllocator& allocator)
     : fd(fd_),
       _receivedBytes(0),
-      _incompletePacket(nullptr),
       _allocator(allocator)
 {
 }
 
-RtpDepacketizer::~RtpDepacketizer()
-{
-    if (_incompletePacket)
-    {
-        _allocator.free(_incompletePacket);
-    }
-}
-
-memory::Packet* RtpDepacketizer::receive()
+memory::PacketPtr RtpDepacketizer::receive()
 {
     if (!isGood())
     {
@@ -115,13 +89,13 @@ memory::Packet* RtpDepacketizer::receive()
         {
             // attack with malicious length specifier
             // create invalid stunmessage will cause connection to close
-            return memory::makePacket(_allocator);
+            return memory::makePacketPtr(_allocator);
         }
     }
 
     if (!_incompletePacket)
     {
-        _incompletePacket = memory::makePacket(_allocator);
+        _incompletePacket = memory::makePacketPtr(_allocator);
     }
 
     if (_incompletePacket != nullptr)
@@ -136,15 +110,13 @@ memory::Packet* RtpDepacketizer::receive()
             _incompletePacket->setLength(_incompletePacket->getLength() + receivedBytes);
             if (_incompletePacket->getLength() == _header.get())
             {
-                auto* packet = _incompletePacket;
-                _incompletePacket = nullptr;
                 _receivedBytes = 0;
-                return packet;
+                return std::move(_incompletePacket);
             }
         }
     }
 
-    return nullptr;
+    return memory::PacketPtr();
 }
 
 void RtpDepacketizer::close()
@@ -168,8 +140,7 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager),
       _allocator(allocator),
       _defaultListener(nullptr),
-      _epoll(epoll),
-      _pendingStunRequest(nullptr)
+      _epoll(epoll)
 {
     logger::info("accepted %s-%s", _name.c_str(), localPort.toString().c_str(), peerPort.toString().c_str());
 }
@@ -186,8 +157,7 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager),
       _allocator(allocator),
       _defaultListener(nullptr),
-      _epoll(epoll),
-      _pendingStunRequest(nullptr)
+      _epoll(epoll)
 {
     int rc = _socket.open(localInterface, 0, SOCK_STREAM);
     if (rc)
@@ -206,10 +176,6 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
 
 TcpEndpoint::~TcpEndpoint()
 {
-    if (_pendingStunRequest)
-    {
-        _allocator.free(_pendingStunRequest);
-    }
     logger::debug("removed", _name.c_str());
 }
 
@@ -250,51 +216,41 @@ void TcpEndpoint::sendStunTo(const transport::SocketAddress& target,
         connect(target);
     }
 
-    auto* packet = memory::makePacket(_allocator, data, len);
+    auto packet = memory::makePacketPtr(_allocator, data, len);
     if (packet)
     {
-        sendTo(target, packet, _allocator);
+        sendTo(target, std::move(packet));
     }
 }
 
-void TcpEndpoint::sendTo(const transport::SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::PacketPtr packet)
 {
-    assert(!memory::PacketPoolAllocator::isCorrupt(packet));
+    assert(!memory::PacketPoolAllocator::isCorrupt(packet.get()));
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
-        _sendJobs.addJob<SendJob>(*this, packet, target, allocator);
-    }
-    else
-    {
-        allocator.free(packet);
+        _sendJobs.addJob<SendJob>(*this, std::move(packet), target);
     }
 }
 
 // TODO if the socket blocks due to send buffer/window full. We will lose packet.
 // could queue packets and use writeable event to continue writing once the send window increases
-void TcpEndpoint::internalSendTo(const transport::SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory::PacketPtr packet)
 {
     if (_state == State::CONNECTING)
     {
         if (!_pendingStunRequest)
         {
-            _pendingStunRequest = packet;
+            _pendingStunRequest = std::move(packet);
         }
         else
         {
             logger::warn("discarding pending packet on tcp endpoint", _name.c_str());
-            allocator.free(packet);
         }
         return;
     }
     else if (_state != State::CONNECTED)
     {
         logger::debug("discarding packet. Socket not open", _name.c_str());
-        allocator.free(packet);
         return;
     }
 
@@ -305,7 +261,6 @@ void TcpEndpoint::internalSendTo(const transport::SocketAddress& target,
 
     nwuint16_t packetLength(packet->getLength());
     int rc = _socket.sendAggregate(&packetLength, sizeof(uint16_t), packet->get(), packet->getLength());
-    allocator.free(packet);
     if (rc != 0)
     {
         logger::warn("failed send to %s, err (%d) %s",
@@ -328,8 +283,7 @@ void TcpEndpoint::continueSend()
             _pendingStunRequest->get(),
             _pendingStunRequest->getLength());
 
-        _allocator.free(_pendingStunRequest);
-        _pendingStunRequest = nullptr;
+        _pendingStunRequest.release();
         if (rc != 0)
         {
             logger::warn("failed send to %s, err (%d) %s",
@@ -455,7 +409,7 @@ void TcpEndpoint::internalReceive(int fd)
     _pendingRead.clear();
     while (true)
     {
-        auto* packet = _depacketizer.receive();
+        auto packet = _depacketizer.receive();
         if (!packet)
         {
             break;
@@ -464,17 +418,16 @@ void TcpEndpoint::internalReceive(int fd)
         TcpEndpoint::IEvents* listener = _defaultListener;
         if (!listener)
         {
-            _allocator.free(packet);
             continue;
         }
         if (ice::isStunMessage(packet->get(), packet->getLength()))
         {
-            listener->onIceReceived(*this, _peerPort, _socket.getBoundPort(), packet, _allocator);
+            listener->onIceReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
             continue;
         }
         else if (transport::isDtlsPacket(packet->get()))
         {
-            listener->onDtlsReceived(*this, _peerPort, _socket.getBoundPort(), packet, _allocator);
+            listener->onDtlsReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
             continue;
         }
         else if (rtp::isRtcpPacket(packet->get(), packet->getLength()))
@@ -482,7 +435,7 @@ void TcpEndpoint::internalReceive(int fd)
             auto rtcpReport = rtp::RtcpReport::fromPtr(packet->get(), packet->getLength());
             if (rtcpReport)
             {
-                listener->onRtcpReceived(*this, _peerPort, _socket.getBoundPort(), packet, _allocator);
+                listener->onRtcpReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
                 continue;
             }
         }
@@ -491,7 +444,7 @@ void TcpEndpoint::internalReceive(int fd)
             auto rtpPacket = rtp::RtpHeader::fromPacket(*packet);
             if (rtpPacket)
             {
-                listener->onRtpReceived(*this, _peerPort, _socket.getBoundPort(), packet, _allocator);
+                listener->onRtpReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
                 continue;
             }
         }
@@ -500,7 +453,6 @@ void TcpEndpoint::internalReceive(int fd)
             // we received from an ICE validated tcp end point. Ok to log.
             logger::warn("unexpected packet %zu", _name.c_str(), packet->getLength());
         }
-        _allocator.free(packet);
     }
 }
 

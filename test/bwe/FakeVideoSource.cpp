@@ -21,7 +21,7 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
 {
 }
 
-memory::Packet* FakeVideoSource::getPacket(uint64_t timestamp)
+memory::PacketPtr FakeVideoSource::getPacket(uint64_t timestamp)
 {
     if (_bandwidthKbps == 0)
     {
@@ -46,7 +46,7 @@ memory::Packet* FakeVideoSource::getPacket(uint64_t timestamp)
 
     if (packetSize > 0 && utils::Time::diff(timestamp, _releaseTime) <= 0)
     {
-        auto* packet = memory::makePacket(_allocator);
+        auto packet = memory::makePacketPtr(_allocator);
         if (packet)
         {
             packet->setLength(packetSize);

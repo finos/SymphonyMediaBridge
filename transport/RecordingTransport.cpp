@@ -30,7 +30,8 @@ std::unique_ptr<RecordingTransport> createRecordingTransport(jobmanager::JobMana
     const size_t streamIdHash,
     const SocketAddress& peer,
     const uint8_t aesKey[32],
-    const uint8_t salt[12])
+    const uint8_t salt[12],
+    memory::PacketPoolAllocator& allocator)
 {
     return std::make_unique<RecordingTransport>(jobManager,
         config,
@@ -39,7 +40,8 @@ std::unique_ptr<RecordingTransport> createRecordingTransport(jobmanager::JobMana
         streamIdHash,
         peer,
         aesKey,
-        salt);
+        salt,
+        allocator);
 }
 
 RecordingTransport::RecordingTransport(jobmanager::JobManager& jobManager,
@@ -49,7 +51,8 @@ RecordingTransport::RecordingTransport(jobmanager::JobManager& jobManager,
     const size_t streamIdHash,
     const SocketAddress& remotePeer,
     const uint8_t aesKey[32],
-    const uint8_t salt[12])
+    const uint8_t salt[12],
+    memory::PacketPoolAllocator& allocator)
     : _isInitialized(false),
       _loggableId("RecordingTransport"),
       _config(config),
@@ -65,7 +68,8 @@ RecordingTransport::RecordingTransport(jobmanager::JobManager& jobManager,
       _previousSequenceNumber(256), // TODO what is a reasonable number?
       _rolloverCounter(256), // TODO what is a reasonable number?
       _outboundSsrcCounters(256),
-      _rtcp(config.recordingRtcp.reportInterval)
+      _rtcp(config.recordingRtcp.reportInterval),
+      _allocator(allocator)
 {
     logger::info("Recording client: %s", _loggableId.c_str(), _peerPort.toString().c_str());
 
@@ -108,7 +112,7 @@ void RecordingTransport::stop()
     _isRunning = false;
 }
 
-void RecordingTransport::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
+void RecordingTransport::protectAndSend(memory::PacketPtr packet)
 {
     if (!isConnected())
     {
@@ -118,17 +122,13 @@ void RecordingTransport::protectAndSend(memory::Packet* packet, memory::PacketPo
             logger::error("A recording event was not sent because transport is not connected", _loggableId.c_str());
         }
 
-        sendAllocator.free(packet);
         return;
     }
 
-    protectAndSend(packet, _peerPort, _recordingEndpoint, sendAllocator);
+    protectAndSend(std::move(packet), _peerPort, _recordingEndpoint);
 }
 
-void RecordingTransport::protectAndSend(memory::Packet* packet,
-    const SocketAddress& target,
-    Endpoint* endpoint,
-    memory::PacketPoolAllocator& allocator)
+void RecordingTransport::protectAndSend(memory::PacketPtr packet, const SocketAddress& target, Endpoint* endpoint)
 {
     assert(packet->getLength() + 24 <= _config.mtu);
 
@@ -172,12 +172,12 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
             senderState->onRtpSent(timestamp, *packet);
         }
 
-        endpoint->sendTo(target, packet, allocator);
+        endpoint->sendTo(target, std::move(packet));
 
         if (isFirstPacket || _rtcp.lastSendTime == 0 ||
             utils::Time::diffGT(_rtcp.lastSendTime, timestamp, _rtcp.reportInterval))
         {
-            sendRtcpSenderReport(allocator, timestamp);
+            sendRtcpSenderReport(_allocator, timestamp);
         }
     }
     else if (recp::isRecPacket(*packet))
@@ -187,11 +187,11 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
 
         if (recHeader->event == recp::RecEventType::StreamAdded)
         {
-            onSendingStreamAddedEvent(packet);
+            onSendingStreamAddedEvent(*packet);
         }
         else if (recHeader->event == recp::RecEventType::StreamRemoved)
         {
-            onSendingStreamRemovedEvent(packet);
+            onSendingStreamRemovedEvent(*packet);
         }
 
         uint8_t iv[crypto::DEFAULT_AES_IV_SIZE];
@@ -214,15 +214,14 @@ void RecordingTransport::protectAndSend(memory::Packet* packet,
             recp::REC_HEADER_SIZE);
 
         packet->setLength(recp::REC_HEADER_SIZE + encryptedLength);
-        endpoint->sendTo(target, packet, allocator);
+        endpoint->sendTo(target, std::move(packet));
     }
     else if (rtp::isRtcpPacket(*packet))
     {
-        endpoint->sendTo(target, packet, allocator);
+        endpoint->sendTo(target, std::move(packet));
     }
     else
     {
-        allocator.free(packet);
         logger::debug("DIDN'T send packet to %s", getLoggableId().c_str(), target.toString().c_str());
     }
 }
@@ -284,7 +283,7 @@ uint32_t RecordingTransport::getRolloverCounter(uint32_t ssrc, uint16_t sequence
 
 void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendAllocator, uint64_t timestamp)
 {
-    auto* rtcpPacket = memory::makePacket(sendAllocator);
+    auto rtcpPacket = memory::makePacketPtr(sendAllocator);
     if (!rtcpPacket)
     {
         logger::warn("Not enough memory to send SR RTCP", _loggableId.c_str());
@@ -300,9 +299,9 @@ void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendA
         const size_t remaining = _config.recordingRtcp.mtu - rtcpPacket->getLength();
         if (remaining < MINIMUM_SR + sizeof(rtp::ReportBlock))
         {
-            protectAndSend(rtcpPacket, sendAllocator);
+            protectAndSend(std::move(rtcpPacket));
             _rtcp.lastSendTime = timestamp;
-            rtcpPacket = memory::makePacket(sendAllocator);
+            rtcpPacket = memory::makePacketPtr(sendAllocator);
             if (!rtcpPacket)
             {
                 logger::warn("Not enough memory to send SR RTCP", _loggableId.c_str());
@@ -314,7 +313,7 @@ void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendA
         senderReport->ssrc = it.first;
         it.second.fillInReport(*senderReport, timestamp, utils::Time::toNtp(wallClock));
         rtcpPacket->setLength(senderReport->header.size() + rtcpPacket->getLength());
-        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket));
+        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
     }
 
     if (!rtcpPacket)
@@ -324,19 +323,15 @@ void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendA
 
     if (rtcpPacket->getLength() > 0)
     {
-        protectAndSend(rtcpPacket, sendAllocator);
+        protectAndSend(std::move(rtcpPacket));
         _rtcp.lastSendTime = timestamp;
-    }
-    else
-    {
-        sendAllocator.free(rtcpPacket);
     }
 }
 
-void RecordingTransport::onSendingStreamAddedEvent(memory::Packet* packet)
+void RecordingTransport::onSendingStreamAddedEvent(const memory::Packet& packet)
 {
-    const auto* recordingEvent = recp::RecStreamAddedEvent::fromPacket(*packet);
-    assert(packet->getLength() >= recp::RecStreamAddedEvent::MIN_SIZE);
+    const auto* recordingEvent = recp::RecStreamAddedEvent::fromPacket(packet);
+    assert(packet.getLength() >= recp::RecStreamAddedEvent::MIN_SIZE);
     assert(recordingEvent->header.event == recp::RecEventType::StreamAdded);
 
     uint32_t frequency = 0;
@@ -360,10 +355,10 @@ void RecordingTransport::onSendingStreamAddedEvent(memory::Packet* packet)
     }
 }
 
-void RecordingTransport::onSendingStreamRemovedEvent(memory::Packet* packet)
+void RecordingTransport::onSendingStreamRemovedEvent(const memory::Packet& packet)
 {
-    const auto* recordingEvent = recp::RecStreamRemovedEvent::fromPacket(*packet);
-    assert(packet->getLength() >= recp::RecStreamRemovedEvent::MIN_SIZE);
+    const auto* recordingEvent = recp::RecStreamRemovedEvent::fromPacket(packet);
+    assert(packet.getLength() >= recp::RecStreamRemovedEvent::MIN_SIZE);
     assert(recordingEvent->header.event == recp::RecEventType::StreamRemoved);
 
     _outboundSsrcCounters.erase(recordingEvent->ssrc);
@@ -393,23 +388,20 @@ void RecordingTransport::onUnregistered(RecordingEndpoint& endpoint)
 void RecordingTransport::onRecControlReceived(RecordingEndpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+    memory::PacketPtr packet)
 {
     DataReceiver* const dataReceiver = _dataReceiver.load();
     if (!dataReceiver)
     {
-        allocator.free(packet);
         return;
     }
 
     if (!recp::isRecControlPacket(packet->get(), packet->getLength()))
     {
-        allocator.free(packet);
         return;
     }
 
     const auto receiveTime = utils::Time::getAbsoluteTime();
-    dataReceiver->onRecControlReceived(this, packet, allocator, receiveTime);
+    dataReceiver->onRecControlReceived(this, std::move(packet), receiveTime);
 }
 } // namespace transport

@@ -18,7 +18,7 @@ FakeAudioSource::FakeAudioSource(memory::PacketPoolAllocator& allocator, uint32_
 {
 }
 
-memory::Packet* FakeAudioSource::getPacket(uint64_t timestamp)
+memory::PacketPtr FakeAudioSource::getPacket(uint64_t timestamp)
 {
     if (_releaseTime == 0 && _counter == 0)
     {
@@ -31,7 +31,7 @@ memory::Packet* FakeAudioSource::getPacket(uint64_t timestamp)
             return nullptr;
         }
         _releaseTime += utils::Time::ms * 20;
-        auto* packet = memory::makePacket(_allocator);
+        auto packet = memory::makePacketPtr(_allocator);
         if (packet)
         {
             auto rtpHeader = rtp::RtpHeader::create(*packet);
@@ -56,7 +56,7 @@ memory::Packet* FakeAudioSource::getPacket(uint64_t timestamp)
             logger::warn("allocator depleted", "FakeAudioSource");
         }
     }
-    return nullptr;
+    return memory::PacketPtr();
 }
 
 size_t FakeAudioSource::randomPacketSize()

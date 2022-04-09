@@ -96,7 +96,7 @@ public:
         const SimulcastStream& simulcastStream,
         const SimulcastStream* secondarySimulcastStream = nullptr);
     void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
-    void handleSctpControl(const size_t endpointIdHash, memory::Packet* packet);
+    void handleSctpControl(const size_t endpointIdHash, memory::PacketPtr packet);
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     void sendEndpointMessage(const size_t toEndpointIdHash, const size_t fromEndpointIdHash, const char* message);
     void recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc);
@@ -125,8 +125,7 @@ public:
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
 
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) override;
 
@@ -142,28 +141,20 @@ public:
         size_t length) override;
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         uint64_t timestamp) override;
 
     void onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint32_t extendedSequenceNumber);
 
     void onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint32_t extendedSequenceNumber);
 
-    void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender,
-        memory::AudioPacket* packet,
-        memory::AudioPacketPoolAllocator& receiveAllocator);
+    void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::AudioPacketPtr packet);
 
-    void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
-        uint64_t timestamp) override;
+    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override;
 
     jobmanager::JobManager& getJobManager() { return _jobManager; }
 
@@ -180,35 +171,25 @@ private:
     template <typename PacketT, typename AllocatorT>
     struct IncomingPacketAggregate
     {
-        IncomingPacketAggregate()
-            : _packet(nullptr),
-              _allocator(nullptr),
-              _transport(nullptr),
-              _extendedSequenceNumber(0)
-        {
-        }
+        IncomingPacketAggregate() : _transport(nullptr), _extendedSequenceNumber(0) {}
 
-        IncomingPacketAggregate(PacketT* packet, AllocatorT* allocator, transport::RtcTransport* transport)
-            : _packet(packet),
-              _allocator(allocator),
+        IncomingPacketAggregate(PacketT packet, transport::RtcTransport* transport)
+            : _packet(std::move(packet)),
               _transport(transport),
               _extendedSequenceNumber(0)
         {
         }
 
-        IncomingPacketAggregate(PacketT* packet,
-            AllocatorT* allocator,
+        IncomingPacketAggregate(PacketT packet,
             transport::RtcTransport* transport,
             const uint32_t extendedSequenceNumber)
-            : _packet(packet),
-              _allocator(allocator),
+            : _packet(std::move(packet)),
               _transport(transport),
               _extendedSequenceNumber(extendedSequenceNumber)
         {
         }
 
-        PacketT* _packet;
-        AllocatorT* _allocator;
+        PacketT _packet;
         transport::RtcTransport* _transport;
         uint32_t _extendedSequenceNumber;
 
@@ -231,12 +212,11 @@ private:
                 --_transport->getJobCounter();
 #endif
             }
-            _allocator->free(_packet);
         }
     };
 
-    using IncomingPacketInfo = IncomingPacketAggregate<memory::Packet, memory::PacketPoolAllocator>;
-    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::AudioPacket, memory::AudioPacketPoolAllocator>;
+    using IncomingPacketInfo = IncomingPacketAggregate<memory::PacketPtr, memory::PacketPoolAllocator>;
+    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::AudioPacketPtr, memory::AudioPacketPoolAllocator>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -300,18 +280,16 @@ private:
     void checkPacketCounters(const uint64_t timestamp);
     void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
     void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
 
-    bool enqueuePacket(const IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue);
+    bool enqueuePacket(IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue);
 
     SsrcInboundContext* getInboundSsrcContext(const uint32_t ssrc);
     SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,

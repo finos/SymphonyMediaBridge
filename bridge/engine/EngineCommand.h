@@ -112,6 +112,7 @@ struct SctpControl
     EngineMixer* _mixer;
     size_t _endpointIdHash;
     memory::Packet* _message;
+    memory::PacketPoolAllocator* _allocator;
 };
 
 struct PinEndpoint

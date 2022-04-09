@@ -8,40 +8,25 @@
 namespace bridge
 {
 
-RecordingEventAckReceiveJob::RecordingEventAckReceiveJob(memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+RecordingEventAckReceiveJob::RecordingEventAckReceiveJob(memory::PacketPtr packet,
     transport::RecordingTransport* sender,
     UnackedPacketsTracker& recEventUnackedPacketsTracker)
     : CountedJob(sender->getJobCounter()),
-      _packet(packet),
-      _allocator(allocator),
+      _packet(std::move(packet)),
       _recEventUnackedPacketsTracker(recEventUnackedPacketsTracker)
 {
-}
-
-RecordingEventAckReceiveJob::~RecordingEventAckReceiveJob()
-{
-    if (_packet)
-    {
-        _allocator.free(_packet);
-        _packet = nullptr;
-    }
 }
 
 void RecordingEventAckReceiveJob::run()
 {
     if (!recp::isRecControlPacket(_packet->get(), _packet->getLength()))
     {
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
     auto recControlHeader = recp::RecControlHeader::fromPacket(*_packet);
     if (!recControlHeader->isEventAck())
     {
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -55,9 +40,6 @@ void RecordingEventAckReceiveJob::run()
         sequenceNumber.get(),
         extendedSequenceNumber);
 #endif
-
-    _allocator.free(_packet);
-    _packet = nullptr;
 }
 
 } // namespace bridge

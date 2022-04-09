@@ -64,11 +64,11 @@ public:
         {
             return;
         }
-        auto packet = memory::makePacket(_receiveAllocator, packetData);
+        auto packet = memory::makePacketPtr(_receiveAllocator, packetData);
         auto hdr = reinterpret_cast<rtp::RtpHeader*>(packet->get());
         hdr->ssrc = remoteSsrc;
 
-        dataReceiver->onRtpPacketReceived(this, packet, _receiveAllocator, 0, utils::Time::getAbsoluteTime());
+        dataReceiver->onRtpPacketReceived(this, std::move(packet), 0, utils::Time::getAbsoluteTime());
     }
 
     void emulateIncomingPackets(const std::vector<memory::Packet>& packetsData, uint32_t remoteSsrc)

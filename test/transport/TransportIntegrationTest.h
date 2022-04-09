@@ -66,17 +66,14 @@ struct TransportClientPair : public transport::DataReceiver
     void stop();
 
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint32_t extendedSequenceNumber,
         uint64_t timestamp) override;
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint64_t timestamp) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onConnected(transport::RtcTransport*) override {}
@@ -90,8 +87,7 @@ struct TransportClientPair : public transport::DataReceiver
         size_t length) override{};
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         uint64_t timestamp) override{};
 
     uint32_t _ssrc;

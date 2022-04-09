@@ -356,13 +356,10 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
             if (i == 0)
             {
                 wallClock = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, utils::Time::minute);
-                auto* packet = memory::makePacket(allocator, &item, sizeof(item));
+                auto packet = memory::makePacketPtr(allocator, &item, sizeof(item));
                 packet->setLength(item.size);
 
-                if (!link.push(packet, wallClock))
-                {
-                    allocator.free(packet);
-                }
+                link.push(std::move(packet), wallClock);
                 continue;
             }
 
@@ -373,7 +370,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
                 auto minAdvance = std::min(utils::Time::diff(wallClock, sendTime), link.timeToRelease(wallClock));
                 assert(minAdvance >= 0);
                 wallClock += minAdvance;
-                for (auto* packet = link.pop(wallClock); packet; packet = link.pop(wallClock))
+                for (auto packet = link.pop(wallClock); packet; packet = link.pop(wallClock))
                 {
                     if (packet->getLength() < 1500)
                     {
@@ -398,16 +395,12 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
                             double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
                             std::min(9000.0, estimator.getReceiveRate(wallClock)));
                     }
-                    allocator.free(packet);
                 }
                 if (wallClock == sendTime)
                 {
-                    auto* packet = memory::makePacket(allocator, &item, sizeof(item));
+                    auto packet = memory::makePacketPtr(allocator, &item, sizeof(item));
                     packet->setLength(item.size);
-                    if (!link.push(packet, wallClock))
-                    {
-                        allocator.free(packet);
-                    }
+                    link.push(std::move(packet), wallClock);
 
                     break;
                 }
@@ -417,7 +410,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
         double lastEstimate = estimator.getEstimate(wallClock);
         for (wallClock += link.timeToRelease(wallClock);; wallClock += link.timeToRelease(wallClock))
         {
-            auto* packet = link.pop(wallClock);
+            auto packet = link.pop(wallClock);
             if (!packet)
             {
                 break;
@@ -440,7 +433,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
                 packetItem->sequenceNumber,
                 double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
                 std::min(9000.0, estimator.getReceiveRate(wallClock)));
-            allocator.free(packet);
+
             lastEstimate = estimator.getEstimate(wallClock);
         }
         logger::info("finished at %.3fkbps", "", lastEstimate);

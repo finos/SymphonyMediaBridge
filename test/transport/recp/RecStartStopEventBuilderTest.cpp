@@ -18,8 +18,6 @@ TEST(RecStartStopEventBuilder, setRecordingAndBeforeUserId)
 
     EXPECT_STREQ(crypto::toHexString(packet->get(), packet->getLength()).c_str(),
         "0001000100000001030a0a004142434445464748494a4b4c4d4e4f5051525354");
-
-    allocator.free(packet);
 }
 TEST(RecStartStopEventBuilder, setUserIdBeforeRecordingId)
 {
@@ -35,6 +33,4 @@ TEST(RecStartStopEventBuilder, setUserIdBeforeRecordingId)
 
     EXPECT_STREQ(crypto::toHexString(packet->get(), packet->getLength()).c_str(),
         "0001000100000001030a0a004142434445464748494a4b4c4d4e4f5051525354");
-
-    allocator.free(packet);
 }

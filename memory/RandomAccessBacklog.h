@@ -86,6 +86,19 @@ public:
         ++_count;
     }
 
+    void push_front(T&& item)
+    {
+        --_head;
+        if (size() == N)
+        {
+            reinterpret_cast<T*>(&_data[_head % N])->~T();
+            --_count;
+        }
+
+        new (&_data[_head % N]) T(std::move(item));
+        ++_count;
+    }
+
     template <typename... Args>
     void emplace_front(Args&&... args)
     {
@@ -115,6 +128,13 @@ public:
             reinterpret_cast<T*>(&_data[(_head + _count - 1) % N])->~T();
             --_count;
         }
+    }
+
+    T fetchBack()
+    {
+        auto value = std::move(back());
+        pop_back();
+        return value;
     }
 
 private:

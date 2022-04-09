@@ -29,9 +29,9 @@ Call::~Call()
 {
     for (auto* link : _links)
     {
-        while (auto* packet = link->pop())
+        while (!link->empty())
         {
-            _allocator.free(packet);
+            link->pop();
         }
 
         delete link;
@@ -72,31 +72,25 @@ bool Call::run(uint64_t period)
         int64_t timeAdvance = utils::Time::diff(_timeCursor, nextLog);
         for (auto* src : _mediaSources)
         {
-            for (auto* packet = src->getPacket(t); packet; packet = src->getPacket(t))
+            for (auto packet = src->getPacket(t); packet; packet = src->getPacket(t))
             {
                 auto& header = getMetaData(*packet);
                 header.sendTime = t;
-                if (!_links.front()->push(packet, t))
-                {
-                    _allocator.free(packet);
-                }
+                _links.front()->push(std::move(packet), t);
             }
             timeAdvance = std::min(timeAdvance, src->timeToRelease(t));
         }
 
         for (size_t i = 0; i < _links.size() - 1; ++i)
         {
-            for (auto* packet = _links[i]->pop(t); packet; packet = _links[i]->pop(t))
+            for (auto packet = _links[i]->pop(t); packet; packet = _links[i]->pop(t))
             {
-                if (!_links[i + 1]->push(packet, t))
-                {
-                    _allocator.free(packet);
-                }
+                _links[i + 1]->push(std::move(packet), t);
             }
             timeAdvance = std::min(timeAdvance, _links[i]->timeToRelease(t));
         }
 
-        for (auto* packet = _links.back()->pop(t); packet; packet = _links.back()->pop(t))
+        for (auto packet = _links.back()->pop(t); packet; packet = _links.back()->pop(t))
         {
             packet->get();
             // logger::debug("received %llu sz %zu", "", t / 1000000, packet->getLength());
@@ -105,8 +99,6 @@ bool Call::run(uint64_t period)
                 auto& header = getMetaData(*packet);
                 _bwe.update(packet->getLength(), header.sendTime, t);
             }
-
-            _allocator.free(packet);
         }
 
         timeAdvance = std::min(timeAdvance, _links.back()->timeToRelease(t));

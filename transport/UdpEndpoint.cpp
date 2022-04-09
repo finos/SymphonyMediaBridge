@@ -83,7 +83,7 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
             }
         }
     }
-    sendTo(target, memory::makePacket(_allocator, data, len), _allocator);
+    sendTo(target, memory::makePacketPtr(_allocator, data, len));
 }
 
 void UdpEndpoint::unregisterListener(IEvents* listener)
@@ -153,7 +153,7 @@ UdpEndpoint::IEvents* findListener(concurrency::MpmcHashmap32<KeyType, UdpEndpoi
 }
 } // namespace
 
-void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::Packet* packet)
+void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::PacketPtr packet)
 {
     UdpEndpoint::IEvents* listener = _defaultListener;
 
@@ -189,7 +189,7 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
         }
         if (listener)
         {
-            listener->onIceReceived(*this, srcAddress, _socket.getBoundPort(), packet, _allocator);
+            listener->onIceReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
             return;
         }
     }
@@ -199,7 +199,7 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
         listener = listener ? listener : _defaultListener.load();
         if (listener)
         {
-            listener->onDtlsReceived(*this, srcAddress, _socket.getBoundPort(), packet, _allocator);
+            listener->onDtlsReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
             return;
         }
     }
@@ -212,7 +212,7 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
 
             if (listener)
             {
-                listener->onRtcpReceived(*this, srcAddress, _socket.getBoundPort(), packet, _allocator);
+                listener->onRtcpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
                 return;
             }
         }
@@ -226,7 +226,7 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
 
             if (listener)
             {
-                listener->onRtpReceived(*this, srcAddress, _socket.getBoundPort(), packet, _allocator);
+                listener->onRtpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
                 return;
             }
         }
@@ -236,7 +236,6 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
         logger::info("Unexpected packet from %s", _name.c_str(), srcAddress.toString().c_str());
     }
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
-    _allocator.free(packet);
 }
 
 void UdpEndpoint::registerListener(const std::string& stunUserName, IEvents* listener)

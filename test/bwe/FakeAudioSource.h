@@ -10,7 +10,7 @@ public:
     FakeAudioSource(memory::PacketPoolAllocator& allocator, uint32_t bandwidthKbsp, uint32_t ssrc);
     ~FakeAudioSource() {}
 
-    memory::Packet* getPacket(uint64_t timestamp) override;
+    memory::PacketPtr getPacket(uint64_t timestamp) override;
     int64_t timeToRelease(uint64_t timestamp) const override
     {
         if (_bandwidthKbps == 0 || _counter == 0)

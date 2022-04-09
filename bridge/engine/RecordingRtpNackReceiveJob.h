@@ -16,17 +16,15 @@ class SsrcOutboundContext;
 class RecordingRtpNackReceiveJob : public jobmanager::CountedJob
 {
 public:
-    RecordingRtpNackReceiveJob(memory::Packet* packet,
+    RecordingRtpNackReceiveJob(memory::PacketPtr packet,
         memory::PacketPoolAllocator& allocator,
         transport::RecordingTransport* sender,
         SsrcOutboundContext& ssrcOutboundContext);
 
-    ~RecordingRtpNackReceiveJob() override;
-
     void run() override;
 
 private:
-    memory::Packet* _packet;
+    memory::PacketPtr _packet;
     memory::PacketPoolAllocator& _allocator;
     transport::RecordingTransport* _sender;
     SsrcOutboundContext& _ssrcOutboundContext;

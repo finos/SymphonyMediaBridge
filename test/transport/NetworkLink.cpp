@@ -5,7 +5,7 @@
 
 namespace fakenet
 {
-bool NetworkLink::push(memory::Packet* packet, uint64_t timestamp)
+bool NetworkLink::push(memory::PacketPtr packet, uint64_t timestamp)
 {
     if (_lossRate > 0 && rand() % 1000 < _lossRate * 1000)
     {
@@ -35,30 +35,30 @@ bool NetworkLink::push(memory::Packet* packet, uint64_t timestamp)
         return false;
     }
     _queuedBytes += packet->getLength();
-    _queue.push(packet);
+    _queue.push(std::move(packet));
     return true;
 }
 
-memory::Packet* NetworkLink::pop()
+memory::PacketPtr NetworkLink::pop()
 {
     if (!_delayQueue.empty())
     {
-        auto* packet = _delayQueue.front().packet;
+        memory::PacketPtr packet(std::move(_delayQueue.front().packet));
         _delayQueue.pop();
         return packet;
     }
 
     if (!_queue.empty())
     {
-        auto* packet = _queue.front();
+        memory::PacketPtr packet(std::move(_queue.front()));
         _queue.pop();
         _queuedBytes -= packet->getLength();
         return packet;
     }
-    return nullptr;
+    return memory::PacketPtr();
 }
 
-memory::Packet* NetworkLink::pop(uint64_t timestamp)
+memory::PacketPtr NetworkLink::pop(uint64_t timestamp)
 {
     if (!_queue.empty() && static_cast<int64_t>(timestamp - _releaseTime) >= 0)
     {
@@ -69,7 +69,7 @@ memory::Packet* NetworkLink::pop(uint64_t timestamp)
             return popDelayQueue(timestamp);
         }
 
-        auto* packet = _queue.front();
+        memory::PacketPtr packet(std::move(_queue.front()));
         _queue.pop();
         _queuedBytes -= packet->getLength();
         if (!_queue.empty())
@@ -78,16 +78,16 @@ memory::Packet* NetworkLink::pop(uint64_t timestamp)
                 _releaseTime + (IPOVERHEAD + _queue.front()->getLength()) * 8 * utils::Time::ms / _bandwidthKbps;
         }
         _bitRate.update(packet->getLength() * 8, timestamp);
-        _delayQueue.push({packet, timestamp + _staticDelay});
+        _delayQueue.push({std::move(packet), timestamp + _staticDelay});
     }
     return popDelayQueue(timestamp);
 }
 
-memory::Packet* NetworkLink::popDelayQueue(uint64_t timestamp)
+memory::PacketPtr NetworkLink::popDelayQueue(uint64_t timestamp)
 {
     if (!_delayQueue.empty() && utils::Time::diffLE(timestamp, _delayQueue.front().releaseTime, 0))
     {
-        auto* packet = _delayQueue.front().packet;
+        memory::PacketPtr packet(std::move(_delayQueue.front().packet));
         _delayQueue.pop();
         return packet;
     }

@@ -60,12 +60,12 @@ void ProcessMissingVideoPacketsJob::run()
         return;
     }
 
-    auto packet = memory::makePacket(_allocator, rtcpNack, rtcpNackSize);
+    auto packet = memory::makePacketPtr(_allocator, rtcpNack, rtcpNackSize);
     if (!packet)
     {
         return;
     }
-    _transport.protectAndSend(packet, _allocator);
+    _transport.protectAndSend(std::move(packet));
 }
 
 } // namespace bridge

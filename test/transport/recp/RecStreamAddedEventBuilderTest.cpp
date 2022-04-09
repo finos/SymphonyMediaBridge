@@ -10,8 +10,6 @@ TEST(RecStreamAddedEventBuilderTest, buildEmptyPacket)
     auto packet = RecStreamAddedEventBuilder(allocator).build();
 
     EXPECT_STREQ(crypto::toHexString(packet->get(), packet->getLength()).c_str(), "00020000000000000000000000000000");
-
-    allocator.free(packet);
 }
 
 TEST(RecStreamAddedEventBuilderTest, setWallClockAfterEndpoint)
@@ -49,8 +47,6 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockAfterEndpoint)
         .append(expectedWallClockNtpValue); // padding
 
     EXPECT_STREQ(crypto::toHexString(packet->get(), packet->getLength()).c_str(), sb.c_str());
-
-    allocator.free(packet);
 }
 
 TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithPadding)
@@ -88,8 +84,6 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithPadding)
         .append(expectedWallClockNtpValue); // padding
 
     EXPECT_STREQ(crypto::toHexString(packet->get(), packet->getLength()).c_str(), sb.c_str());
-
-    allocator.free(packet);
 }
 
 TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithoutPadding)
@@ -125,6 +119,4 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithoutPadding)
         .append(expectedWallClockNtpValue); // padding
 
     EXPECT_STREQ(crypto::toHexString(packet->get(), packet->getLength()).c_str(), sb.c_str());
-
-    allocator.free(packet);
 }

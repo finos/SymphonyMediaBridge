@@ -46,9 +46,9 @@ namespace
 
 const int16_t mixSampleScaleFactor = 4;
 
-memory::Packet* createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator)
+memory::PacketPtr createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator)
 {
-    auto packet = memory::makePacket(allocator);
+    auto packet = memory::makePacketPtr(allocator);
     if (packet)
     {
         auto* rtcp = rtp::RtcpGoodbye::create(packet->get(), ssrc);
@@ -235,12 +235,11 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
         auto* context = obtainOutboundSsrcContext(*engineAudioStream, engineAudioStream->_localSsrc);
         if (context)
         {
-            auto* goodByePacket = createGoodBye(context->_ssrc, context->_allocator);
+            auto goodByePacket = createGoodBye(context->_ssrc, context->_allocator);
             if (goodByePacket)
             {
-                engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(goodByePacket,
-                    engineAudioStream->_transport,
-                    context->_allocator);
+                engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(std::move(goodByePacket),
+                    engineAudioStream->_transport);
             }
         }
     }
@@ -326,12 +325,11 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
             engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
                 engineVideoStream->_localSsrc,
                 nullptr);
-            auto* goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
+            auto goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
             if (goodByePacket)
             {
-                engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(goodByePacket,
-                    engineVideoStream->_transport,
-                    outboundContext->_allocator);
+                engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(std::move(goodByePacket),
+                    engineVideoStream->_transport);
             }
         }
     }
@@ -664,8 +662,7 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
             continue;
         }
 
-        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
-            _sendAllocator,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
             stream->_recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
@@ -705,8 +702,7 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
             continue;
         }
 
-        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
-            _sendAllocator,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
             stream->_recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
@@ -1196,8 +1192,7 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
 
 void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
@@ -1205,14 +1200,12 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
     if (videoStreamItr == _engineVideoStreams.end())
     {
-        receiveAllocator.free(packet);
         return;
     }
     auto videoStream = videoStreamItr->second;
 
     if (ssrcContext->_shouldDropPackets)
     {
-        receiveAllocator.free(packet);
         return;
     }
 
@@ -1233,27 +1226,22 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
             isSenderInLastNList,
             _engineRecordingStreams.size()))
     {
-        receiveAllocator.free(packet);
         return;
     }
 
-    if (!sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(packet,
-            receiveAllocator,
-            sender,
-            *this,
-            *ssrcContext,
-            _localVideoSsrc,
-            extendedSequenceNumber,
-            timestamp))
-    {
-        receiveAllocator.free(packet);
-    }
+    sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(std::move(packet),
+        _sendAllocator,
+        sender,
+        *this,
+        *ssrcContext,
+        _localVideoSsrc,
+        extendedSequenceNumber,
+        timestamp);
 }
 
 void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
@@ -1261,7 +1249,6 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
     if (videoStreamItr == _engineVideoStreams.end())
     {
-        receiveAllocator.free(packet);
         return;
     }
     auto videoStream = videoStreamItr->second;
@@ -1269,20 +1256,17 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     uint32_t mainSsrc;
     if (!_engineStreamDirector->getSsrc(videoStream->_endpointIdHash, ssrcContext->_ssrc, mainSsrc))
     {
-        receiveAllocator.free(packet);
         return;
     }
 
     auto mainSsrcContextItr = _ssrcInboundContexts.find(mainSsrc);
     if (mainSsrcContextItr == _ssrcInboundContexts.end())
     {
-        receiveAllocator.free(packet);
         return;
     }
     auto& mainSsrcContext = mainSsrcContextItr->second;
     if (mainSsrcContext._shouldDropPackets)
     {
-        receiveAllocator.free(packet);
         return;
     }
     mainSsrcContext._lastReceiveTime = timestamp;
@@ -1291,7 +1275,6 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     {
         if (!mainSsrcContext._videoMissingPacketsTracker.get())
         {
-            receiveAllocator.free(packet);
             return;
         }
         ssrcContext->_videoMissingPacketsTracker = mainSsrcContext._videoMissingPacketsTracker;
@@ -1303,20 +1286,15 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
             isSenderInLastNList,
             _engineRecordingStreams.size()))
     {
-        receiveAllocator.free(packet);
         return;
     }
 
-    if (!sender->getJobQueue().addJob<bridge::VideoForwarderRtxReceiveJob>(packet,
-            receiveAllocator,
-            sender,
-            *this,
-            *ssrcContext,
-            mainSsrc,
-            extendedSequenceNumber))
-    {
-        receiveAllocator.free(packet);
-    }
+    sender->getJobQueue().addJob<bridge::VideoForwarderRtxReceiveJob>(std::move(packet),
+        sender,
+        *this,
+        *ssrcContext,
+        mainSsrc,
+        extendedSequenceNumber);
 }
 
 void EngineMixer::onConnected(transport::RtcTransport* sender)
@@ -1335,9 +1313,9 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
     }
 }
 
-void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::Packet* packet)
+void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::PacketPtr packet)
 {
-    auto& header = webrtc::streamMessageHeader(packet);
+    auto& header = webrtc::streamMessageHeader(*packet);
 
     auto dataStreamItr = _engineDataStreams.find(endpointIdHash);
     if (dataStreamItr != _engineDataStreams.cend())
@@ -1351,7 +1329,6 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::Packet*
             header.data(),
             packet->getLength() - sizeof(header));
     }
-    _sendAllocator.free(packet);
 }
 
 void EngineMixer::pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash)
@@ -1496,6 +1473,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     sctpMessage._mixer = this;
     sctpMessage._endpointIdHash = sender->getEndpointIdHash();
     sctpMessage._message = webrtc::makePacket(streamId, payloadProtocol, data, length, _sendAllocator);
+    sctpMessage._allocator = &_sendAllocator;
     if (!sctpMessage._message)
     {
         logger::error("Unable to allocate sctp message, sender %p, length %lu", _loggableId.c_str(), sender, length);
@@ -1507,14 +1485,12 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
 }
 
 void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     uint64_t timestamp)
 {
     auto recordingStreamItr = _engineRecordingStreams.find(sender->getStreamIdHash());
     if (recordingStreamItr == _engineRecordingStreams.end())
     {
-        receiveAllocator.free(packet);
         return;
     }
 
@@ -1525,12 +1501,10 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
         auto unackedPacketsTrackerItr = stream->_recEventUnackedPacketsTracker.find(sender->getEndpointIdHash());
         if (unackedPacketsTrackerItr == stream->_recEventUnackedPacketsTracker.end())
         {
-            receiveAllocator.free(packet);
             return;
         }
 
-        sender->getJobQueue().addJob<RecordingEventAckReceiveJob>(packet,
-            receiveAllocator,
+        sender->getJobQueue().addJob<RecordingEventAckReceiveJob>(std::move(packet),
             sender,
             unackedPacketsTrackerItr->second);
     }
@@ -1540,24 +1514,24 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
         auto ssrcContext = getOutboundSsrcContext(*stream, ssrc);
         if (!ssrcContext)
         {
-            receiveAllocator.free(packet);
             return;
         }
 
-        sender->getJobQueue().addJob<RecordingRtpNackReceiveJob>(packet, receiveAllocator, sender, *ssrcContext);
+        sender->getJobQueue().addJob<RecordingRtpNackReceiveJob>(std::move(packet),
+            _sendAllocator,
+            sender,
+            *ssrcContext);
     }
 }
 
 void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     if (!rtpHeader)
     {
-        receiveAllocator.free(packet);
         return;
     }
     const uint32_t ssrc = rtpHeader->ssrc;
@@ -1565,7 +1539,6 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     auto ssrcContext = emplaceInboundSsrcContext(ssrc, sender, rtpHeader->payloadType, timestamp);
     if (!ssrcContext)
     {
-        receiveAllocator.free(packet);
         return;
     }
 
@@ -1573,9 +1546,9 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     {
     case bridge::RtpMap::Format::OPUS:
         ssrcContext->onRtpPacket(timestamp);
-        if (_engineAudioStreams.size() == 0 ||
-            !sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(packet,
-                receiveAllocator,
+        if (_engineAudioStreams.size() > 0)
+        {
+            sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(std::move(packet),
                 _audioAllocator,
                 sender,
                 *this,
@@ -1583,37 +1556,33 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
                 *_activeMediaList,
                 _config.audio.silenceThresholdLevel,
                 _numMixedAudioStreams != 0,
-                extendedSequenceNumber))
-        {
-            receiveAllocator.free(packet);
+                extendedSequenceNumber);
         }
         break;
 
     case bridge::RtpMap::Format::VP8:
-        onVideoRtpPacketReceived(ssrcContext, sender, packet, receiveAllocator, extendedSequenceNumber, timestamp);
+        onVideoRtpPacketReceived(ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
 
     case bridge::RtpMap::Format::VP8RTX:
         ssrcContext->onRtpPacket(timestamp);
-        onVideoRtpRtxPacketReceived(ssrcContext, sender, packet, receiveAllocator, extendedSequenceNumber, timestamp);
+        onVideoRtpRtxPacketReceived(ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
 
     default:
         logger::warn("Unexpected payload format %d onRtpPacketReceived",
             getLoggableId().c_str(),
             rtpHeader->payloadType);
-        receiveAllocator.free(packet);
         break;
     }
 }
 
 void EngineMixer::onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
-    const IncomingPacketInfo packetInfo = {packet, &receiveAllocator, sender, extendedSequenceNumber};
+    IncomingPacketInfo packetInfo = {std::move(packet), sender, extendedSequenceNumber};
     if (!enqueuePacket(packetInfo, _incomingForwarderAudioRtp))
     {
         logger::error("Failed to push incoming forwarder audio packet onto queue", getLoggableId().c_str());
@@ -1621,26 +1590,23 @@ void EngineMixer::onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* se
 }
 
 void EngineMixer::onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
-    const IncomingPacketInfo packetInfo = {packet, &receiveAllocator, sender, extendedSequenceNumber};
+    IncomingPacketInfo packetInfo = {std::move(packet), sender, extendedSequenceNumber};
     if (!enqueuePacket(packetInfo, _incomingForwarderVideoRtp))
     {
         logger::error("Failed to push incoming forwarder video packet onto queue", getLoggableId().c_str());
     }
 }
 
-void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender,
-    memory::AudioPacket* packet,
-    memory::AudioPacketPoolAllocator& receiveAllocator)
+void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::AudioPacketPtr packet)
 {
     assert(packet);
-    const IncomingAudioPacketInfo packetInfo = {packet, &receiveAllocator, sender};
+    IncomingAudioPacketInfo packetInfo = {std::move(packet), sender};
     packetInfo.lockOwner();
-    auto result = _incomingMixerAudioRtp.push(packetInfo);
+    auto result = _incomingMixerAudioRtp.push(std::move(packetInfo));
     assert(result);
     if (!result)
     {
@@ -1649,10 +1615,10 @@ void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender,
     }
 }
 
-bool EngineMixer::enqueuePacket(const IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue)
+bool EngineMixer::enqueuePacket(IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue)
 {
     packetInfo.lockOwner();
-    auto result = queue.push(packetInfo);
+    auto result = queue.push(std::move(packetInfo));
     assert(result);
     if (!result)
     {
@@ -1663,16 +1629,15 @@ bool EngineMixer::enqueuePacket(const IncomingPacketInfo& packetInfo, concurrenc
 }
 
 void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
+    memory::PacketPtr packet,
     const uint64_t timestamp)
 {
     assert(packet);
 
-    IncomingPacketInfo packetInfo(packet, &receiveAllocator, sender, 0);
+    IncomingPacketInfo packetInfo(std::move(packet), sender, 0);
     packetInfo.lockOwner();
 
-    const auto pushResult = _incomingRtcp.push(packetInfo);
+    const auto pushResult = _incomingRtcp.push(std::move(packetInfo));
     if (!pushResult)
     {
         packetInfo.release();
@@ -1947,18 +1912,17 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                     continue;
                 }
 
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdSend", _loggableId.c_str());
                 }
                 if (packet &&
                     !audioStream->_transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                        packet,
+                        std::move(packet),
                         packetInfo._extendedSequenceNumber,
                         audioStream->_transport))
                 {
-                    _sendAllocator.free(packet);
                 }
             }
         }
@@ -1984,18 +1948,17 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             for (const auto& transportEntry : recordingStream->_transports)
             {
                 ssrcOutboundContext->onRtpSent(timestamp);
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
                 }
                 else if (!transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(
                              *ssrcOutboundContext,
-                             packet,
+                             std::move(packet),
                              transportEntry.second,
                              packetInfo._extendedSequenceNumber))
                 {
-                    _sendAllocator.free(packet);
                 }
             }
         }
@@ -2175,20 +2138,19 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             if (videoStream->_transport.isConnected())
             {
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
                 }
                 ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
-                if (packet &&
-                    !videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                        *inboundSsrcContext,
-                        packet,
-                        videoStream->_transport,
-                        packetInfo._extendedSequenceNumber))
+                if (packet)
                 {
-                    _sendAllocator.free(packet);
+                    videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                        *inboundSsrcContext,
+                        std::move(packet),
+                        videoStream->_transport,
+                        packetInfo._extendedSequenceNumber);
                 }
             }
         }
@@ -2216,7 +2178,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             for (const auto& transportEntry : recordingStream->_transports)
             {
-                auto packet = memory::makePacket(_sendAllocator, *packetInfo._packet);
+                auto packet = memory::makePacketPtr(_sendAllocator, *packetInfo._packet);
                 if (!packet)
                 {
                     logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
@@ -2224,14 +2186,13 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
                 // marks that we have active jobs on this ssrc context
                 ssrcOutboundContext->onRtpSent(timestamp);
-                if (packet &&
-                    !transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                        *inboundSsrcContext,
-                        packet,
-                        transportEntry.second,
-                        packetInfo._extendedSequenceNumber))
+                if (packet)
                 {
-                    _sendAllocator.free(packet);
+                    transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                        *inboundSsrcContext,
+                        std::move(packet),
+                        transportEntry.second,
+                        packetInfo._extendedSequenceNumber);
                 }
             }
         }
@@ -2456,7 +2417,7 @@ inline void EngineMixer::processAudioStreams()
             continue;
         }
 
-        auto audioPacket = memory::makePacket(_audioAllocator);
+        auto audioPacket = memory::makePacketPtr(_audioAllocator);
         if (!audioPacket)
         {
             return;
@@ -2480,15 +2441,13 @@ inline void EngineMixer::processAudioStreams()
 
         auto* ssrcContext = obtainOutboundSsrcContext(*audioStream, audioStream->_localSsrc);
         if (!ssrcContext ||
-            !audioStream->_transport.getJobQueue().addJob<EncodeJob>(audioPacket,
-                _audioAllocator,
+            !audioStream->_transport.getJobQueue().addJob<EncodeJob>(std::move(audioPacket),
                 *ssrcContext,
                 audioStream->_transport,
                 _rtpTimestampSource,
                 audioStream->_audioLevelExtensionId,
                 audioStream->_absSendTimeExtensionId))
         {
-            _audioAllocator.free(audioPacket);
         }
     }
 }
@@ -2811,8 +2770,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
             continue;
         }
 
-        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
-            _sendAllocator,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
             recordingStream._recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
@@ -2932,7 +2890,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             continue;
         }
 
-        memory::Packet* packet = nullptr;
+        memory::PacketPtr packet;
         if (isAdded)
         {
             auto outboundContextIt = targetStream._ssrcOutboundContexts.find(ssrc);
@@ -3002,8 +2960,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             continue;
         }
 
-        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
-            _sendAllocator,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
             targetStream._recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
@@ -3068,7 +3025,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             continue;
         }
 
-        memory::Packet* packet;
+        memory::PacketPtr packet;
         if (isAdded)
         {
             auto outboundContextIt = targetStream._ssrcOutboundContexts.find(ssrc);
@@ -3139,8 +3096,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             continue;
         }
 
-        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(packet,
-            _sendAllocator,
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
             targetStream._recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);

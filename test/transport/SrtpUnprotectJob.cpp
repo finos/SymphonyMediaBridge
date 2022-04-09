@@ -5,41 +5,21 @@
 namespace transport
 {
 
-SrtpUnprotectJob::SrtpUnprotectJob(RtcTransport* sender,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& receiveAllocator,
-    DecryptedPacketReceiver* receiver)
+SrtpUnprotectJob::SrtpUnprotectJob(RtcTransport* sender, memory::PacketPtr packet, DecryptedPacketReceiver* receiver)
     : jobmanager::CountedJob(sender->getJobCounter()),
       _sender(sender),
-      _packet(packet),
-      _receiveAllocator(receiveAllocator),
+      _packet(std::move(packet)),
       _receiver(receiver)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-SrtpUnprotectJob::~SrtpUnprotectJob()
-{
-    if (_packet)
-    {
-        _receiveAllocator.free(_packet);
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void SrtpUnprotectJob::run()
 {
-    if (rtp::isRtpPacket(*_packet))
+    if (rtp::isRtpPacket(*_packet) && _sender->unprotect(*_packet))
     {
-        if (!_sender->unprotect(*_packet))
-        {
-            _receiveAllocator.free(_packet);
-        }
-        else
-        {
-            _receiver->onRtpPacketDecrypted(_sender, _packet, _receiveAllocator, getJobsCounter());
-            _packet = nullptr;
-        }
+        _receiver->onRtpPacketDecrypted(_sender, std::move(_packet), getJobsCounter());
     }
 }
 

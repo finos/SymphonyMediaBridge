@@ -463,32 +463,20 @@ class AudioSendJob : public jobmanager::Job
 {
 public:
     AudioSendJob(transport::Transport& transport,
-        memory::Packet* packet,
+        memory::PacketPtr packet,
         emulator::AudioSource& source,
         uint64_t timestamp)
         : _transport(transport),
-          _packet(packet),
+          _packet(std::move(packet)),
           _source(source)
     {
     }
 
-    ~AudioSendJob()
-    {
-        if (_packet)
-        {
-            _source.getAllocator().free(_packet);
-        }
-    }
-
-    void run() override
-    {
-        _transport.protectAndSend(_packet, _source.getAllocator());
-        _packet = nullptr;
-    }
+    void run() override { _transport.protectAndSend(std::move(_packet)); }
 
 private:
     transport::Transport& _transport;
-    memory::Packet* _packet;
+    memory::PacketPtr _packet;
     emulator::AudioSource& _source;
 };
 
@@ -587,7 +575,7 @@ public:
 
     void process(uint64_t timestamp)
     {
-        auto* packet = _audioSource->getPacket(timestamp);
+        auto packet = _audioSource->getPacket(timestamp);
         if (packet)
         {
             /*const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
@@ -598,7 +586,7 @@ public:
                 _allocator.free(packet);
                 return;
             }*/
-            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, packet, *_audioSource, timestamp);
+            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, std::move(packet), *_audioSource, timestamp);
         }
     }
 
@@ -620,23 +608,23 @@ public:
         }
 
         void onRtpPacketReceived(transport::RtcTransport* sender,
-            memory::Packet* packet,
+            memory::Packet& packet,
             uint32_t extendedSequenceNumber,
             uint64_t timestamp)
         {
             _context.onRtpPacket(timestamp);
-            if (!sender->unprotect(*packet))
+            if (!sender->unprotect(packet))
             {
                 return;
             }
 
-            auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+            auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
             addOpus(reinterpret_cast<unsigned char*>(rtpHeader->getPayload()),
-                packet->getLength() - rtpHeader->headerLength(),
+                packet.getLength() - rtpHeader->headerLength(),
                 extendedSequenceNumber);
         }
 
-        void addOpus(unsigned char* opusData, int32_t payloadLength, uint32_t extendedSequenceNumber)
+        void addOpus(const unsigned char* opusData, int32_t payloadLength, uint32_t extendedSequenceNumber)
         {
             int16_t decodedData[memory::AudioPacket::size];
 
@@ -675,8 +663,7 @@ public:
 
 public:
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        const memory::PacketPtr packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -698,7 +685,7 @@ public:
         {
             if (rtpHeader->payloadType == 111 && _recordingActive.load())
             {
-                it->second->onRtpPacketReceived(sender, packet, extendedSequenceNumber, timestamp);
+                it->second->onRtpPacketReceived(sender, *packet, extendedSequenceNumber, timestamp);
             }
         }
 
@@ -711,16 +698,9 @@ public:
                 extendedSequenceNumber,
                 _receivedData.size());
         }
-        receiveAllocator.free(packet);
     }
 
-    void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
-        uint64_t timestamp) override
-    {
-        receiveAllocator.free(packet);
-    }
+    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override {}
 
     void onConnected(transport::RtcTransport* sender) override
     {
@@ -740,8 +720,7 @@ public:
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         uint64_t timestamp) override
     {
     }

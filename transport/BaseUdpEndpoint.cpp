@@ -80,10 +80,7 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
 BaseUdpEndpoint::~BaseUdpEndpoint()
 {
     OutboundPacket outboundPacket;
-    while (_sendQueue.pop(outboundPacket))
-    {
-        outboundPacket.allocator->free(outboundPacket.packet);
-    }
+    while (_sendQueue.pop(outboundPacket)) {}
 }
 
 void BaseUdpEndpoint::internalClosePort(int countDown)
@@ -108,9 +105,7 @@ void BaseUdpEndpoint::internalClosePort(int countDown)
     }
 }
 
-void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::PacketPtr packet)
 {
     if (!packet)
     {
@@ -120,21 +115,16 @@ void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target,
     if (target.getFamily() != _localPort.getFamily())
     {
         logger::debug("incompatible target address", _name.c_str());
-        _allocator.free(packet);
         return;
     }
 
-    assert(!memory::PacketPoolAllocator::isCorrupt(packet));
-    if (_sendQueue.push({target, packet, &allocator}))
+    assert(!memory::PacketPoolAllocator::isCorrupt(packet.get()));
+    if (_sendQueue.push({target, std::move(packet)}))
     {
         if (!_pendingSend.test_and_set())
         {
             _sendJobs.addJob<SendJob>(*this);
         }
-    }
-    else
-    {
-        allocator.free(packet);
     }
 }
 
@@ -153,7 +143,7 @@ void BaseUdpEndpoint::internalSend()
         for (; count < batchSize && _sendQueue.pop(packetInfo[count]); ++count)
         {
             messages[count].fragmentCount = 0;
-            auto* packet = packetInfo[count].packet;
+            auto& packet = packetInfo[count].packet;
             messages[count].target = &packetInfo[count].target;
             messages[count].add(packet->get(), packet->getLength());
             byteCount += packet->getLength();
@@ -197,10 +187,6 @@ void BaseUdpEndpoint::internalSend()
         }
 
         _sendTracker.update(byteCount, sendTimestamp);
-        for (size_t i = 0; i < count; ++i)
-        {
-            packetInfo[i].allocator->free(packetInfo[i].packet);
-        }
     }
     if (packetCounter > 10200)
     {
@@ -290,15 +276,15 @@ struct ReceivedMessage
 {
     transport::RawSockAddress src_addr;
     iovec iobuffer;
-    memory::Packet* packet;
+    memory::PacketPtr packet;
 
-    bool link(mmsghdr& header, memory::Packet* packet_)
+    bool link(mmsghdr& header, memory::PacketPtr packetPtr)
     {
-        if (!packet_)
+        if (!packetPtr)
         {
             return false;
         }
-        packet = packet_;
+        packet = std::move(packetPtr);
         iobuffer.iov_base = packet->get();
         iobuffer.iov_len = memory::Packet::size;
 
@@ -331,7 +317,7 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
     {
         for (uint32_t i = packetCount; i < limit; ++i)
         {
-            if (!receiveMessage[i].link(messageHeader[i], memory::makePacket(_allocator)))
+            if (!receiveMessage[i].link(messageHeader[i], memory::makePacketPtr(_allocator)))
             {
                 break;
             }
@@ -357,7 +343,8 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
             }
 
             receiveMessage[0].packet->setLength(byteCount);
-            dispatchReceivedPacket(SocketAddress(&receiveMessage[0].src_addr.gen, nullptr), receiveMessage[0].packet);
+            dispatchReceivedPacket(SocketAddress(&receiveMessage[0].src_addr.gen, nullptr),
+                std::move(receiveMessage[0].packet));
             packetCount = 0;
 #ifndef __APPLE__
             limit = std::min(batchSize, 2u);
@@ -387,11 +374,11 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
                     receiveMessage[i].packet->setLength(0); // Attack with Jumbo frame. Discard.
                 }
                 dispatchReceivedPacket(SocketAddress(&receiveMessage[i].src_addr.gen, nullptr),
-                    receiveMessage[i].packet);
+                    std::move(receiveMessage[i].packet));
             }
             for (uint32_t i = 0; i < packetCount - count; ++i)
             {
-                receiveMessage[i].link(messageHeader[i], receiveMessage[i + count].packet);
+                receiveMessage[i].link(messageHeader[i], std::move(receiveMessage[i + count].packet));
             }
             if (count == static_cast<int>(packetCount))
             {
@@ -404,11 +391,6 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
 
             packetCount -= count;
         }
-    }
-
-    for (uint32_t i = 0; i < packetCount; ++i)
-    {
-        _allocator.free(receiveMessage[i].packet);
     }
 }
 

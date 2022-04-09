@@ -129,6 +129,6 @@ inline bool isRtpPacket(const memory::Packet& packet)
     return isRtpPacket(packet.get(), packet.getLength());
 }
 
-void setTransmissionTimestamp(memory::Packet* packet, uint8_t extensionId, uint64_t timestamp);
+void setTransmissionTimestamp(memory::Packet& packet, uint8_t extensionId, uint64_t timestamp);
 bool getTransmissionTimestamp(const memory::Packet& packet, uint8_t extensionId, uint32_t& sendTime);
 } // namespace rtp

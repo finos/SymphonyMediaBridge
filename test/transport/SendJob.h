@@ -13,32 +13,18 @@ namespace transport
 class SendJob : public jobmanager::CountedJob
 {
 public:
-    SendJob(Transport& transport, memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator)
+    SendJob(Transport& transport, memory::PacketPtr packet)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
-          _packet(packet),
-          _sendAllocator(sendAllocator)
+          _packet(std::move(packet))
     {
     }
 
-    ~SendJob()
-    {
-        if (_packet)
-        {
-            _sendAllocator.free(_packet);
-        }
-    }
-
-    void run() override
-    {
-        _transport.protectAndSend(_packet, _sendAllocator);
-        _packet = nullptr;
-    }
+    void run() override { _transport.protectAndSend(std::move(_packet)); }
 
 private:
     Transport& _transport;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _sendAllocator;
+    memory::PacketPtr _packet;
 };
 
 } // namespace transport

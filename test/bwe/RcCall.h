@@ -69,7 +69,7 @@ public:
     void setDownlink(NetworkLink* link);
 
 private:
-    void push(std::unique_ptr<NetworkLink>& link, memory::Packet* packet);
+    void push(std::unique_ptr<NetworkLink>& link, memory::PacketPtr packet);
     void sendRtpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize);
     void sendRtcpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize);
     void sendSR(uint32_t ssrc, transport::RtpSenderState& sendState, uint64_t wallClock);

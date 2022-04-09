@@ -54,10 +54,9 @@ SctpEndpoint::SctpEndpoint(uint16_t port,
 
 SctpEndpoint::~SctpEndpoint()
 {
-    for (auto* packet = _sendQueue.pop(_timeSource + 600 * timer::sec); packet;
+    for (auto packet = _sendQueue.pop(_timeSource + 600 * timer::sec); packet;
          packet = _sendQueue.pop(_timeSource + 600 * timer::sec))
     {
-        _allocator.free(packet);
     }
 }
 
@@ -75,7 +74,7 @@ uint64_t SctpEndpoint::getTimeout() const
 bool SctpEndpoint::forwardPacket(SctpEndpoint& target)
 {
     using namespace sctp;
-    memory::Packet* packet = _sendQueue.pop(_timeSource);
+    memory::PacketPtr packet(_sendQueue.pop(_timeSource));
     if (!packet)
     {
         return false;
@@ -83,7 +82,6 @@ bool SctpEndpoint::forwardPacket(SctpEndpoint& target)
     ++sentPacketCount;
 
     target._port->onPacketReceived(packet->get(), packet->getLength(), _timeSource);
-    _allocator.free(packet);
     return true;
 }
 
@@ -121,15 +119,14 @@ bool SctpEndpoint::sendSctpPacket(const void* data, size_t length)
         return false;
     }
 
-    auto* packet = memory::makePacket(_allocator, data, length);
-    if (packet && _sendQueue.push(packet, _timeSource))
+    auto packet = memory::makePacketPtr(_allocator, data, length);
+    if (packet && _sendQueue.push(std::move(packet), _timeSource))
     {
         return true;
     }
 
     ++_outboundLossCount;
     logger::debug("packet lost, total loss %u", _loggableId.c_str(), _outboundLossCount);
-    _allocator.free(packet); // mtu or buffer full
     return false;
 }
 

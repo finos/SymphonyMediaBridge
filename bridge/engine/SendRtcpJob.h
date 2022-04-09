@@ -14,15 +14,13 @@ namespace bridge
 class SendRtcpJob : public jobmanager::CountedJob
 {
 public:
-    SendRtcpJob(memory::Packet* rtcpPacket, transport::Transport& transport, memory::PacketPoolAllocator& allocator);
-    ~SendRtcpJob();
+    SendRtcpJob(memory::PacketPtr rtcpPacket, transport::Transport& transport);
 
     void run() override;
 
 private:
     transport::Transport& _transport;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::PacketPtr _packet;
 };
 
 } // namespace bridge

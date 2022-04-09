@@ -16,21 +16,17 @@ class SsrcOutboundContext;
 class EncodeJob : public jobmanager::CountedJob
 {
 public:
-    EncodeJob(memory::AudioPacket* packet,
-        memory::AudioPacketPoolAllocator& allocator,
+    EncodeJob(memory::AudioPacketPtr packet,
         SsrcOutboundContext& outboundContext,
         transport::Transport& transport,
         uint64_t rtpTimestamp,
         uint8_t audioLevelExtensionId,
         uint8_t absSendTimeExtensionId);
 
-    virtual ~EncodeJob();
-
     void run() override;
 
 private:
-    memory::AudioPacket* _packet;
-    memory::AudioPacketPoolAllocator& _audioPacketPoolAllocator;
+    memory::AudioPacketPtr _packet;
     SsrcOutboundContext& _outboundContext;
     transport::Transport& _transport;
     uint64_t _rtpTimestamp;

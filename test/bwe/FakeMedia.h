@@ -1,4 +1,5 @@
 #pragma once
+#include "memory/PacketPoolAllocator.h"
 #include <cstdint>
 
 namespace memory
@@ -21,7 +22,7 @@ class MediaSource
 {
 public:
     virtual ~MediaSource(){};
-    virtual memory::Packet* getPacket(uint64_t timestamp) = 0;
+    virtual memory::PacketPtr getPacket(uint64_t timestamp) = 0;
     virtual int64_t timeToRelease(uint64_t timestamp) const = 0;
     virtual void setBandwidth(uint32_t kbps) = 0;
     virtual uint32_t getBandwidth() const = 0;

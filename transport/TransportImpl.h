@@ -91,7 +91,7 @@ public: // Transport
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
 
     /** Called from Transport thread threads*/
-    void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator) override;
+    void protectAndSend(memory::PacketPtr packet) override;
     bool unprotect(memory::Packet& packet) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override;
@@ -184,26 +184,22 @@ public: // end point callbacks
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::PacketPtr packet) override;
 
     void onDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::PacketPtr packet) override;
 
     void onRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::PacketPtr packet) override;
 
     void onIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::PacketPtr packet) override;
 
     void onPortClosed(Endpoint& endpoint) override;
 
@@ -239,23 +235,19 @@ public: // end point callbacks
 
     void internalDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::PacketPtr packet,
         uint64_t timestamp);
     void internalIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::PacketPtr packet,
         uint64_t timestamp);
     void internalRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::PacketPtr packet,
         uint64_t timestamp);
     void internalRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::PacketPtr packet,
         uint64_t timestamp);
 
     void onServerPortClosed(ServerEndpoint& endpoint) override {}
@@ -267,12 +259,11 @@ private:
     friend class ConnectSctpJob;
     friend class RunTickJob;
 
-    void protectAndSendRtp(uint64_t timestamp, memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator);
+    void protectAndSendRtp(uint64_t timestamp, memory::PacketPtr packet);
     void doProtectAndSend(uint64_t timestamp,
-        memory::Packet* packet,
+        memory::PacketPtr packet,
         const SocketAddress& target,
-        Endpoint* endpoint,
-        memory::PacketPoolAllocator& allocator);
+        Endpoint* endpoint);
     void sendPadding(uint64_t timestamp);
     void sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t nextPacketSize);
 
@@ -290,14 +281,14 @@ private:
     void doConnectSctp();
     void doRunTick(uint64_t timestamp);
 
-    void appendRemb(memory::Packet* rtcpPacket,
+    void appendRemb(memory::Packet& rtcpPacket,
         const uint64_t timestamp,
         uint32_t senderSsrc,
         const uint32_t* activeInbound,
         int activeInboundCount);
 
     void sendReports(uint64_t timestamp, bool rembReady = false);
-    void sendRtcp(memory::Packet* rtcpPacket, memory::PacketPoolAllocator& allocator, const uint64_t timestamp);
+    void sendRtcp(memory::PacketPtr rtcpPacket, const uint64_t timestamp);
 
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 
@@ -391,13 +382,8 @@ private:
     uint32_t _rtxProbeSsrc;
     uint32_t* _rtxProbeSequenceCounter;
 
-    struct PacketInfo
-    {
-        memory::Packet* packet;
-        memory::PacketPoolAllocator& allocator;
-    };
-    memory::RandomAccessBacklog<PacketInfo, 512> _pacingQueue;
-    memory::RandomAccessBacklog<PacketInfo, 512> _rtxPacingQueue;
+    memory::RandomAccessBacklog<memory::PacketPtr, 512> _pacingQueue;
+    memory::RandomAccessBacklog<memory::PacketPtr, 512> _rtxPacingQueue;
     std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;

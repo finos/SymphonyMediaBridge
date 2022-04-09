@@ -22,7 +22,7 @@ class SsrcInboundContext;
 class VideoForwarderReceiveJob : public jobmanager::CountedJob
 {
 public:
-    VideoForwarderReceiveJob(memory::Packet* packet,
+    VideoForwarderReceiveJob(memory::PacketPtr packet,
         memory::PacketPoolAllocator& allocator,
         transport::RtcTransport* sender,
         bridge::EngineMixer& engineMixer,
@@ -31,11 +31,10 @@ public:
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
 
-    virtual ~VideoForwarderReceiveJob();
     void run() override;
 
 private:
-    memory::Packet* _packet;
+    memory::PacketPtr _packet;
     memory::PacketPoolAllocator& _allocator;
     bridge::EngineMixer& _engineMixer;
     transport::RtcTransport* _sender;

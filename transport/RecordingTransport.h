@@ -2,6 +2,7 @@
 
 #include "crypto/AesGcmIvGenerator.h"
 #include "crypto/SslHelper.h"
+#include "memory/PacketPoolAllocator.h"
 #include "transport/RecordingEndpoint.h"
 #include "transport/RtpSenderState.h"
 #include "transport/Transport.h"
@@ -24,7 +25,8 @@ public:
         const size_t streamIdHash,
         const SocketAddress& remotePeer,
         const uint8_t aesKey[32],
-        const uint8_t salt[12]);
+        const uint8_t salt[12],
+        memory::PacketPoolAllocator& _allocator);
 
     virtual ~RecordingTransport() = default;
 
@@ -38,7 +40,7 @@ public:
     bool isRunning() const override { return _isRunning && _isInitialized; }
     bool hasPendingJobs() const override { return _jobCounter.load() > 0; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; };
-    void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator) override;
+    void protectAndSend(memory::PacketPtr packet) override;
     bool unprotect(memory::Packet& packet) override;
     void setDataReceiver(DataReceiver* dataReceiver) override;
     bool isConnected() override;
@@ -49,8 +51,7 @@ public:
     void onRecControlReceived(RecordingEndpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::PacketPtr packet) override;
 
     void onUnregistered(RecordingEndpoint& endpoint) override;
 
@@ -71,14 +72,11 @@ private:
     uint32_t getRolloverCounter(uint32_t ssrc, uint16_t sequenceNumber);
 
     void sendRtcpSenderReport(memory::PacketPoolAllocator& sendAllocator, uint64_t timestamp);
-    void onSendingStreamAddedEvent(memory::Packet* packet);
-    void onSendingStreamRemovedEvent(memory::Packet* packet);
+    void onSendingStreamAddedEvent(const memory::Packet& packet);
+    void onSendingStreamRemovedEvent(const memory::Packet& packet);
     RtpSenderState* getOutboundSsrc(const uint32_t ssrc);
 
-    void protectAndSend(memory::Packet* packet,
-        const SocketAddress& target,
-        Endpoint* endpoint,
-        memory::PacketPoolAllocator& allocator);
+    void protectAndSend(memory::PacketPtr packet, const SocketAddress& target, Endpoint* endpoint);
 
     std::atomic_bool _isInitialized;
     logger::LoggableId _loggableId;
@@ -105,6 +103,8 @@ private:
     concurrency::MpmcHashmap32<uint32_t, RtpSenderState> _outboundSsrcCounters;
 
     RtcpMaintenance _rtcp;
+
+    memory::PacketPoolAllocator& _allocator;
 };
 
 std::unique_ptr<RecordingTransport> createRecordingTransport(jobmanager::JobManager& jobManager,
@@ -114,6 +114,7 @@ std::unique_ptr<RecordingTransport> createRecordingTransport(jobmanager::JobMana
     const size_t streamIdHash,
     const SocketAddress& peer,
     const uint8_t aesKey[32],
-    const uint8_t salt[12]);
+    const uint8_t salt[12],
+    memory::PacketPoolAllocator& allocator);
 
 } // namespace transport

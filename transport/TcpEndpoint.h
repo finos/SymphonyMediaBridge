@@ -13,9 +13,8 @@ class RtpDepacketizer
 {
 public:
     RtpDepacketizer(int fd, memory::PacketPoolAllocator& allocator);
-    ~RtpDepacketizer();
 
-    memory::Packet* receive();
+    memory::PacketPtr receive();
 
     bool isGood() const { return fd != -1; }
 
@@ -26,7 +25,7 @@ public:
 private:
     nwuint16_t _header;
     size_t _receivedBytes;
-    memory::Packet* _incompletePacket;
+    memory::PacketPtr _incompletePacket;
     memory::PacketPoolAllocator& _allocator;
 };
 
@@ -83,9 +82,7 @@ public:
         size_t len,
         uint64_t timestamp) override;
 
-    void sendTo(const transport::SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+    void sendTo(const transport::SocketAddress& target, memory::PacketPtr packet) override;
 
     void registerListener(const std::string& stunUserName, IEvents* listener) override;
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override;
@@ -110,7 +107,10 @@ public:
     const char* getName() const override { return _name.c_str(); }
     Endpoint::State getState() const override { return _state; }
 
-    EndpointMetrics getMetrics(uint64_t timestamp) const override { return EndpointMetrics(_receiveJobs.getCount(), 0.0, 0.0); }
+    EndpointMetrics getMetrics(uint64_t timestamp) const override
+    {
+        return EndpointMetrics(_receiveJobs.getCount(), 0.0, 0.0);
+    }
 
 public:
     // internal job interface
@@ -118,9 +118,7 @@ public:
     void internalReceive(int fd);
 
     // called on sendJobs threads
-    void internalSendTo(const transport::SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator);
+    void internalSendTo(const transport::SocketAddress& target, memory::PacketPtr packet);
     void continueSend();
     void internalUnregisterListener(IEvents* listener);
     void internalClosePort(int countDown);
@@ -148,7 +146,7 @@ private:
     std::string _localUser;
 
     RtcePoll& _epoll;
-    memory::Packet* _pendingStunRequest;
+    memory::PacketPtr _pendingStunRequest;
 };
 
 } // namespace transport

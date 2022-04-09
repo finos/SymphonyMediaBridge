@@ -162,15 +162,14 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     {
         for (auto packet = src.getPacket(timestamp); packet; packet = src.getPacket(timestamp))
         {
-            transport->getJobQueue().addJob<transport::SendJob>(*transport, packet, _sendAllocator);
+            transport->getJobQueue().addJob<transport::SendJob>(*transport, std::move(packet));
         }
     }
 
     bool isConnected() { return _transport1->isConnected() && _transport2->isConnected(); }
 
     void onRtpPacketReceived(RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -204,23 +203,19 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
             report.previousReport = timestamp;
         }
 
-        sender->getJobQueue().addJob<transport::SrtpUnprotectJob>(sender, packet, receiveAllocator, this);
+        sender->getJobQueue().addJob<transport::SrtpUnprotectJob>(sender, std::move(packet), this);
     }
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         const uint64_t timestamp) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::PacketPtr packet,
         std::atomic_uint32_t& ownerCount) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onConnected(RtcTransport*) override {}
@@ -233,10 +228,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         const void* data,
         size_t length) override{};
 
-    void onRecControlReceived(RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
-        uint64_t timestamp) override{};
+    void onRecControlReceived(RecordingTransport* sender, memory::PacketPtr packet, uint64_t timestamp) override{};
 
     logger::LoggableId _name;
     uint32_t _ssrc;

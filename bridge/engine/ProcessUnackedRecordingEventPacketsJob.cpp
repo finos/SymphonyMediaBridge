@@ -63,7 +63,7 @@ void ProcessUnackedRecordingEventPacketsJob::sendIfCached(const uint16_t sequenc
         return;
     }
 
-    auto packet = memory::makePacket(_allocator);
+    auto packet = memory::makePacketPtr(_allocator);
     if (!packet)
     {
         return;
@@ -76,6 +76,6 @@ void ProcessUnackedRecordingEventPacketsJob::sendIfCached(const uint16_t sequenc
     logger::debug("Sending cached rec event packet seq %u", "ProcessUnackedRecordingEventPacketsJob", sequenceNumber);
 #endif
 
-    _transport.protectAndSend(packet, _allocator);
+    _transport.protectAndSend(std::move(packet));
 }
 } // namespace bridge

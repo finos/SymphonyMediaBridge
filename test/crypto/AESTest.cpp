@@ -149,8 +149,6 @@ TEST(AES, EncryptRecPayload)
 
     auto hexEnc = crypto::toHexString(recPacket->get(), recPacket->getLength());
 
-    allocator.free(recPacket);
-
     EXPECT_STREQ(hexEnc.c_str(),
         "00011b26609948336dcd5dbbd33513c2374cd0b1bae531e3a0b48a7567b33ab3e17757ebb3be3869b78e64a1ae501f");
 }

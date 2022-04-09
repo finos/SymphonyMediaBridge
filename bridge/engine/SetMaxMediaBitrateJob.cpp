@@ -22,7 +22,7 @@ SetMaxMediaBitrateJob::SetMaxMediaBitrateJob(transport::RtcTransport& transport,
 
 void SetMaxMediaBitrateJob::run()
 {
-    auto* packet = memory::makePacket(_allocator);
+    auto packet = memory::makePacketPtr(_allocator);
     if (!packet)
     {
         return;
@@ -31,7 +31,7 @@ void SetMaxMediaBitrateJob::run()
     auto& tmmbr = rtp::RtcpTemporaryMaxMediaBitrate::create(packet->get(), _reporterSsrc);
     tmmbr.addEntry(_ssrc, _bitrate * 1000, 34);
     packet->setLength(tmmbr.size());
-    _transport.protectAndSend(packet, _allocator);
+    _transport.protectAndSend(std::move(packet));
 }
 
 } // namespace bridge

@@ -546,7 +546,7 @@ void MixerManager::engineMessageFreeVideoPacketCache(const EngineMessage::Messag
 void MixerManager::engineMessageSctp(const EngineMessage::Message& message)
 {
     const auto& sctpMessage = message._command.sctpMessage;
-    auto& sctpHeader = webrtc::streamMessageHeader(sctpMessage._message);
+    auto& sctpHeader = webrtc::streamMessageHeader(*sctpMessage._message);
 
     if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
     {
@@ -555,6 +555,7 @@ void MixerManager::engineMessageSctp(const EngineMessage::Message& message)
         EngineCommand::Command command{EngineCommand::Type::SctpControl};
         auto& sctpControl = command._command.sctpControl;
         sctpControl._message = sctpMessage._message;
+        sctpControl._allocator = sctpMessage._allocator;
         sctpControl._mixer = sctpMessage._mixer;
         sctpControl._endpointIdHash = sctpMessage._endpointIdHash;
         _engine.pushCommand(command);

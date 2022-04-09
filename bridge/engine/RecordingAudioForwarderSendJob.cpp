@@ -8,26 +8,17 @@
 namespace bridge
 {
 RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundContext& outboundContext,
-    memory::Packet* packet,
+    memory::PacketPtr packet,
     transport::RecordingTransport& transport,
     const uint32_t extendedSequenceNumber)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
-      _packet(packet),
+      _packet(std::move(packet)),
       _transport(transport),
       _extendedSequenceNumber(extendedSequenceNumber)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-RecordingAudioForwarderSendJob::~RecordingAudioForwarderSendJob()
-{
-    if (_packet)
-    {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void RecordingAudioForwarderSendJob::run()
@@ -43,8 +34,6 @@ void RecordingAudioForwarderSendJob::run()
                 uint16_t(rtpHeader->sequenceNumber));
         }
 
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -55,8 +44,6 @@ void RecordingAudioForwarderSendJob::run()
             nextSequenceNumber))
     {
         logger::debug("Dropping rec audio packet - sequence number...", "RecordingAudioForwarderSendJob");
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -69,14 +56,11 @@ void RecordingAudioForwarderSendJob::run()
             if (!packetCache->add(*_packet, nextSequenceNumber))
             {
                 logger::info("Dropping rec audio packet - cache issues...", "RecordingAudioForwarderSendJob");
-                _outboundContext._allocator.free(_packet);
-                _packet = nullptr;
                 return;
             }
         }
     }
 
-    _transport.protectAndSend(_packet, _outboundContext._allocator);
-    _packet = nullptr;
+    _transport.protectAndSend(std::move(_packet));
 }
 } // namespace bridge

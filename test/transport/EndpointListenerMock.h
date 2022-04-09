@@ -1,5 +1,6 @@
 #pragma once
 
+#include "memory/PacketPoolAllocator.h"
 #include "transport/Endpoint.h"
 #include <gmock/gmock.h>
 
@@ -12,38 +13,22 @@ struct EndpointListenerMock : public Endpoint::IEvents
 {
     MOCK_METHOD(void,
         onRtpReceived,
-        (Endpoint & endpoint,
-            const SocketAddress& source,
-            const SocketAddress& target,
-            memory::Packet* packet,
-            memory::PacketPoolAllocator& allocator),
+        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet),
         (override));
 
     MOCK_METHOD(void,
         onDtlsReceived,
-        (Endpoint & endpoint,
-            const SocketAddress& source,
-            const SocketAddress& target,
-            memory::Packet* packet,
-            memory::PacketPoolAllocator& allocator),
+        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet),
         (override));
 
     MOCK_METHOD(void,
         onRtcpReceived,
-        (Endpoint & endpoint,
-            const SocketAddress& source,
-            const SocketAddress& target,
-            memory::Packet* packet,
-            memory::PacketPoolAllocator& allocator),
+        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet),
         (override));
 
     MOCK_METHOD(void,
         onIceReceived,
-        (Endpoint & endpoint,
-            const SocketAddress& source,
-            const SocketAddress& target,
-            memory::Packet* packet,
-            memory::PacketPoolAllocator& allocator),
+        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::PacketPtr packet),
         (override));
 
     MOCK_METHOD(void, onPortClosed, (Endpoint & endpoint), (override));
