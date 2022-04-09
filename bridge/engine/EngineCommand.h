@@ -111,8 +111,6 @@ struct SctpControl
 {
     EngineMixer* _mixer;
     size_t _endpointIdHash;
-    memory::Packet* _message;
-    memory::PacketPoolAllocator* _allocator;
 };
 
 struct PinEndpoint
@@ -242,8 +240,18 @@ union CommandUnion
 
 struct Command
 {
+    Command& operator=(const Command&) = delete;
+    Command& operator=(Command&& rhs)
+    {
+        _type = rhs._type;
+        _command = rhs._command; // TODO would need move assignment in the substructs ?
+        _packet = std::exchange(rhs._packet, nullptr);
+        return *this;
+    }
+
     Type _type;
     CommandUnion _command;
+    memory::UniquePacket _packet;
 };
 
 } // namespace EngineCommand

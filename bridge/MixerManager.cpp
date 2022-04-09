@@ -50,7 +50,7 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _engine(engine),
       _config(config),
       _threadRunning(true),
-      _engineMessages(16384),
+      _engineMessages(16 * 1024),
       _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator)
@@ -140,7 +140,7 @@ Mixer* MixerManager::create(uint32_t lastN)
     {
         EngineCommand::Command addMixerCommand = {EngineCommand::Type::AddMixer};
         addMixerCommand._command.addMixer._mixer = engineMixerEmplaceResult.first->second.get();
-        _engine.pushCommand(addMixerCommand);
+        _engine.pushCommand(std::move(addMixerCommand));
     }
 
     return mixerEmplaceResult.first->second.get();
@@ -159,7 +159,7 @@ void MixerManager::remove(const std::string& id)
 
     EngineCommand::Command command = {EngineCommand::Type::RemoveMixer};
     command._command.removeMixer._mixer = _engineMixers[id].get();
-    _engine.pushCommand(command);
+    _engine.pushCommand(std::move(command));
 }
 
 std::vector<std::string> MixerManager::getMixerIds()
@@ -207,7 +207,7 @@ void MixerManager::stop()
                 it->second->markForDeletion();
                 EngineCommand::Command command = {EngineCommand::Type::RemoveMixer};
                 command._command.removeMixer._mixer = _engineMixers[it->first].get();
-                _engine.pushCommand(command);
+                _engine.pushCommand(std::move(command));
             }
         }
     }
@@ -237,8 +237,7 @@ void MixerManager::run()
         {
             pacer.tick(utils::Time::getAbsoluteTime());
 
-            EngineMessage::Message nextMessage;
-            for (auto result = _engineMessages.pop(nextMessage); result; result = _engineMessages.pop(nextMessage))
+            for (EngineMessage::Message nextMessage; _engineMessages.pop(nextMessage);)
             {
                 switch (nextMessage._type)
                 {
@@ -270,7 +269,7 @@ void MixerManager::run()
                     break;
 
                 case EngineMessage::Type::SctpMessage:
-                    engineMessageSctp(nextMessage);
+                    engineMessageSctp(std::move(nextMessage));
                     break;
 
                 case EngineMessage::Type::AllocateVideoPacketCache:
@@ -324,9 +323,9 @@ void MixerManager::run()
     }
 }
 
-void MixerManager::onMessage(const EngineMessage::Message& message)
+void MixerManager::onMessage(EngineMessage::Message&& message)
 {
-    auto rc = _engineMessages.push(message);
+    auto rc = _engineMessages.push(std::move(message));
     assert(rc);
 }
 
@@ -404,7 +403,7 @@ void MixerManager::engineMessageAllocateAudioBuffer(const EngineMessage::Message
         command._command.addAudioBuffer._mixer = message._command.allocateAudioBuffer._mixer;
         command._command.addAudioBuffer._ssrc = message._command.allocateAudioBuffer._ssrc;
         command._command.addAudioBuffer._audioBuffer = audioBuffer.get();
-        _engine.pushCommand(command);
+        _engine.pushCommand(std::move(command));
     }
     mixerAudioBuffers.emplace(message._command.allocateAudioBuffer._ssrc, std::move(audioBuffer));
 }
@@ -543,10 +542,10 @@ void MixerManager::engineMessageFreeVideoPacketCache(const EngineMessage::Messag
     mixerItr->second->freeVideoPacketCache(command._ssrc, command._endpointIdHash);
 }
 
-void MixerManager::engineMessageSctp(const EngineMessage::Message& message)
+void MixerManager::engineMessageSctp(EngineMessage::Message&& message)
 {
     const auto& sctpMessage = message._command.sctpMessage;
-    auto& sctpHeader = webrtc::streamMessageHeader(*sctpMessage._message);
+    auto& sctpHeader = webrtc::streamMessageHeader(*message._packet);
 
     if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
     {
@@ -554,17 +553,16 @@ void MixerManager::engineMessageSctp(const EngineMessage::Message& message)
         // transport
         EngineCommand::Command command{EngineCommand::Type::SctpControl};
         auto& sctpControl = command._command.sctpControl;
-        sctpControl._message = sctpMessage._message;
-        sctpControl._allocator = sctpMessage._allocator;
+        command._packet = std::move(message._packet);
         sctpControl._mixer = sctpMessage._mixer;
         sctpControl._endpointIdHash = sctpMessage._endpointIdHash;
-        _engine.pushCommand(command);
+        _engine.pushCommand(std::move(command));
         return; // do not free packet as we passed it on
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
     {
         std::string body(reinterpret_cast<const char*>(sctpHeader.data()),
-            sctpMessage._message->getLength() - sizeof(sctpHeader));
+            message._packet->getLength() - sizeof(sctpHeader));
 
         try
         {
@@ -590,7 +588,6 @@ void MixerManager::engineMessageSctp(const EngineMessage::Message& message)
                 auto mixerIt = _mixers.find(sctpMessage._mixer->getId());
                 if (mixerIt == _mixers.end())
                 {
-                    sctpMessage._allocator->free(sctpMessage._message);
                     return;
                 }
 
@@ -598,7 +595,6 @@ void MixerManager::engineMessageSctp(const EngineMessage::Message& message)
                 const auto payloadItr = api::DataChannelMessageParser::getEndpointMessagePayload(json);
                 if (toItr == json.end() || payloadItr == json.end())
                 {
-                    sctpMessage._allocator->free(sctpMessage._message);
                     return;
                 }
 
@@ -620,7 +616,6 @@ void MixerManager::engineMessageSctp(const EngineMessage::Message& message)
             logger::error("Unknown exception while parsing DataChannel message.", "MixerManager");
         }
     }
-    sctpMessage._allocator->free(sctpMessage._message);
 }
 
 void MixerManager::engineRecordingStopped(const EngineMessage::Message& message)

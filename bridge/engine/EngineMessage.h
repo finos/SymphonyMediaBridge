@@ -8,11 +8,7 @@ namespace codec
 {
 class OpusDecoder;
 } // namespace codec
-namespace memory
-{
-class Packet;
 
-} // namespace memory
 namespace bridge
 {
 
@@ -91,8 +87,6 @@ struct SctpMessage
 {
     EngineMixer* _mixer;
     size_t _endpointIdHash;
-    memory::Packet* _message;
-    memory::PacketPoolAllocator* _allocator;
 };
 
 struct RecordingStopperMessage
@@ -164,6 +158,7 @@ struct Message
 {
     Type _type;
     MessageUnion _command;
+    memory::UniquePacket _packet;
 };
 
 } // namespace EngineMessage

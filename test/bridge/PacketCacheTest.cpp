@@ -31,9 +31,9 @@ protected:
         return packet;
     }
 
-    bool verifyPacket(const memory::Packet* packet, const uint16_t sequenceNumber)
+    bool verifyPacket(const memory::Packet& packet, const uint16_t sequenceNumber)
     {
-        return reinterpret_cast<const uint16_t*>(packet->get())[0] == sequenceNumber;
+        return reinterpret_cast<const uint16_t*>(packet.get())[0] == sequenceNumber;
     }
 };
 
@@ -43,7 +43,7 @@ TEST_F(PacketCacheTest, addPacket)
     EXPECT_TRUE(_packetCache->add(*packet, 1));
 
     auto cachedPacket = _packetCache->get(1);
-    EXPECT_TRUE(verifyPacket(cachedPacket, 1));
+    EXPECT_TRUE(verifyPacket(*cachedPacket, 1));
 }
 
 TEST_F(PacketCacheTest, packetAlreadyInCache)
@@ -55,7 +55,7 @@ TEST_F(PacketCacheTest, packetAlreadyInCache)
     EXPECT_FALSE(_packetCache->add(*packet2, 1));
 
     auto cachedPacket = _packetCache->get(1);
-    EXPECT_TRUE(verifyPacket(cachedPacket, 1));
+    EXPECT_TRUE(verifyPacket(*cachedPacket, 1));
 }
 
 TEST_F(PacketCacheTest, fillCache)

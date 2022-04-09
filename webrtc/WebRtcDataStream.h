@@ -71,7 +71,7 @@ inline const SctpStreamMessageHeader& streamMessageHeader(const memory::Packet& 
     return reinterpret_cast<const SctpStreamMessageHeader&>(*p.get());
 }
 
-memory::Packet* makePacket(uint16_t streamId,
+memory::UniquePacket makeUniquePacket(uint16_t streamId,
     uint32_t payloadProtocol,
     const void* message,
     size_t messageSize,

@@ -66,7 +66,7 @@ public:
 
     void stop();
     void run();
-    void onMessage(const EngineMessage::Message& message) override;
+    void onMessage(EngineMessage::Message&& message) override;
     Stats::MixerManagerStats getStats();
 
 private:
@@ -115,7 +115,7 @@ private:
     void engineMessageInboundSsrcRemoved(const EngineMessage::Message& message);
     void engineMessageAllocateVideoPacketCache(const EngineMessage::Message& message);
     void engineMessageFreeVideoPacketCache(const EngineMessage::Message& message);
-    void engineMessageSctp(const EngineMessage::Message& message);
+    void engineMessageSctp(EngineMessage::Message&& message);
     void engineRecordingStopped(const EngineMessage::Message& message);
     void engineMessageAllocateRecordingRtpPacketCache(const EngineMessage::Message& message);
     void engineMessageFreeRecordingRtpPacketCache(const EngineMessage::Message& message);

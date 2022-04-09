@@ -24,7 +24,7 @@ public:
     void stop();
     void run();
 
-    void pushCommand(const EngineCommand::Command& command);
+    void pushCommand(EngineCommand::Command&& command);
 
     EngineStats::EngineStats getStats();
 

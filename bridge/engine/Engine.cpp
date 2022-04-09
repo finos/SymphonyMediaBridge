@@ -214,9 +214,9 @@ void Engine::run()
     }
 }
 
-void Engine::pushCommand(const EngineCommand::Command& command)
+void Engine::pushCommand(EngineCommand::Command&& command)
 {
-    auto result = _pendingCommands.push(command);
+    auto result = _pendingCommands.push(std::move(command));
     assert(result);
     if (!result)
     {
@@ -238,7 +238,7 @@ void Engine::addMixer(EngineCommand::Command& nextCommand)
 
         EngineMessage::Message message = {EngineMessage::Type::MixerRemoved};
         message._command.mixerRemoved._mixer = nextCommand._command.addMixer._mixer;
-        _messageListener->onMessage(message);
+        _messageListener->onMessage(std::move(message));
 
         return;
     }
@@ -259,7 +259,7 @@ void Engine::removeMixer(EngineCommand::Command& nextCommand)
 
     EngineMessage::Message message = {EngineMessage::Type::MixerRemoved};
     message._command.mixerRemoved._mixer = command._mixer;
-    _messageListener->onMessage(message);
+    _messageListener->onMessage(std::move(message));
 }
 
 void Engine::addAudioStream(EngineCommand::Command& nextCommand)
@@ -353,7 +353,7 @@ void Engine::removeRecordingStream(EngineCommand::Command& command)
     message._command.recordingStreamRemoved._mixer = command._command.removeRecordingStream._mixer;
     message._command.recordingStreamRemoved._engineStream = command._command.removeRecordingStream._recordingStream;
 
-    _messageListener->onMessage(message);
+    _messageListener->onMessage(std::move(message));
 }
 
 void Engine::updateRecordingStreamModalities(EngineCommand::Command& command)
@@ -406,7 +406,7 @@ void Engine::removeDataStream(EngineCommand::Command& nextCommand)
     message._command.dataStreamRemoved._mixer = nextCommand._command.removeDataStream._mixer;
     message._command.dataStreamRemoved._engineStream = nextCommand._command.removeDataStream._engineStream;
 
-    _messageListener->onMessage(message);
+    _messageListener->onMessage(std::move(message));
 }
 
 void Engine::startTransport(EngineCommand::Command& nextCommand)
@@ -528,8 +528,7 @@ void Engine::addVideoPacketCache(EngineCommand::Command& nextCommand)
 void Engine::processSctpControl(EngineCommand::Command& command)
 {
     auto& sctpCommand = command._command.sctpControl;
-    sctpCommand._mixer->handleSctpControl(sctpCommand._endpointIdHash,
-        memory::UniquePacket(sctpCommand._message, sctpCommand._allocator->getDeleter()));
+    sctpCommand._mixer->handleSctpControl(sctpCommand._endpointIdHash, *command._packet);
 }
 
 void Engine::pinEndpoint(EngineCommand::Command& command)
@@ -565,7 +564,7 @@ void Engine::stopRecording(EngineCommand::Command& nextCommand)
     message._command.recordingStopped._mixer = nextCommand._command.removeDataStream._mixer;
     message._command.recordingStopped._recordingDesc = nextCommand._command.stopRecording._recordingDesc;
 
-    _messageListener->onMessage(message);
+    _messageListener->onMessage(std::move(message));
 }
 
 void Engine::addRecordingRtpPacketCache(EngineCommand::Command& nextCommand)
