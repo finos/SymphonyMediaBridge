@@ -44,7 +44,7 @@ struct FakeSrtpEndpoint : public transport::SslWriteBioListener
     {
         for (memory::UniquePacket packet; _dtlsPackets.pop(packet);)
         {
-            _peer.onMessageReceived(reinterpret_cast<char*>(packet->get()), packet->getLength());
+            _peer.onMessageReceived(std::move(packet));
         }
     }
 
@@ -61,7 +61,7 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
     {
         _dtls = std::make_unique<transport::SslDtls>();
         assert(_dtls->isInitialized());
-        _factory = std::make_unique<transport::SrtpClientFactory>(*_dtls, _allocator);
+        _factory = std::make_unique<transport::SrtpClientFactory>(*_dtls);
 
         _srtp1 = _factory->create(this);
         _srtp2 = _factory->create(this);

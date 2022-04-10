@@ -51,7 +51,7 @@ void IntegrationTest::initBridge(config::Config& config)
     _bridge->initialize();
 
     _sslDtls = &_bridge->getSslDtls();
-    _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPoolAllocator);
+    _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
 
     std::string configJson =
         "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10050, \"recording.singlePort\":0}";

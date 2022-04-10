@@ -269,7 +269,7 @@ struct SctpTransportTest : public ::testing::Test
 
         _config = std::make_unique<config::Config>();
         _sslDtls = std::make_unique<transport::SslDtls>();
-        _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainAllocator);
+        _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
 
         std::string configJson = "{\"rtc.ip\": \"127.0.0.1\"}";
         _config->readFromString(configJson);

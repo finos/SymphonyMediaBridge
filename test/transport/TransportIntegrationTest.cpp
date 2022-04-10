@@ -13,7 +13,7 @@ TransportIntegrationTest::TransportIntegrationTest()
       _jobManager(std::make_unique<jobmanager::JobManager>()),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(std::make_unique<transport::SslDtls>()),
-      _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPoolAllocator)),
+      _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls)),
       _network(transport::createRtcePoll()),
       _pacer(10 * 1000000)
 {

@@ -264,8 +264,6 @@ public:
         }
     }
 
-    ~SctpSendJob() {}
-
     void run() override
     {
         if (!_packet)
@@ -683,15 +681,6 @@ TransportImpl::~TransportImpl()
             delete endpoint;
         }
     }
-
-    while (!_pacingQueue.empty())
-    {
-        _pacingQueue.pop_back();
-    }
-    while (!_rtxPacingQueue.empty())
-    {
-        _rtxPacingQueue.pop_back();
-    }
 }
 
 void TransportImpl::stop()
@@ -897,7 +886,7 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
             _loggableId.c_str(),
             source.toString().c_str(),
             packet->getLength());
-        _srtpClient->onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
+        _srtpClient->onMessageReceived(std::move(packet));
     }
 }
 

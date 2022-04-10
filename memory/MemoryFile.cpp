@@ -111,7 +111,7 @@ MemoryFile& operator<<(MemoryFile& f, const char* s)
     return f;
 }
 
-MemoryFile& operator>>(MemoryFile& f, char* s)
+MemoryFile& readString(MemoryFile& f, char* target, size_t maxLength)
 {
     uint16_t len = 0;
     auto currentPos = f.getPosition();
@@ -121,15 +121,15 @@ MemoryFile& operator>>(MemoryFile& f, char* s)
         return f;
     }
 
-    if (f.remaining() < len)
+    if (f.remaining() < len || len + 1 > maxLength)
     {
         f.setPosition(currentPos);
-        f.read(&len, len * 2); // casue !good
+        f.read(&len, f.remaining() * 2); // casue !good
         return f;
     }
 
-    f.read(s, len);
-    s[len] = '\0';
+    f.read(target, len);
+    target[len] = '\0';
     return f;
 }
 

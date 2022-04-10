@@ -49,7 +49,7 @@ memory::MemoryFile& operator<<(memory::MemoryFile& f, const ice::IceCandidate& c
 memory::MemoryFile& operator>>(memory::MemoryFile& f, ice::IceCandidate& candidate)
 {
     uint8_t tmp8 = 0;
-    char foundation[35];
+    char foundation[ice::IceCandidate::MAX_FOUNDATION + 1];
     f >> tmp8;
     candidate.component = static_cast<ice::IceComponent>(tmp8);
     f >> tmp8;
@@ -59,7 +59,7 @@ memory::MemoryFile& operator>>(memory::MemoryFile& f, ice::IceCandidate& candida
     f >> candidate.baseAddress;
     f >> tmp8;
     candidate.type = static_cast<ice::IceCandidate::Type>(tmp8);
-    f >> foundation;
+    readString(f, foundation, candidate.MAX_FOUNDATION);
     candidate.setFoundation(foundation);
     if (candidate.transportType != ice::TransportType::UDP)
     {

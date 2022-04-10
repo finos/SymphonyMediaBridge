@@ -34,7 +34,7 @@ public:
         virtual void onDtlsStateChange(SrtpClient* srtpClient, State state) = 0;
     };
 
-    SrtpClient(SslDtls& sslDtls, IEvents* eventListener, memory::PacketPoolAllocator& allocator);
+    SrtpClient(SslDtls& sslDtls, IEvents* eventListener);
     ~SrtpClient() override;
 
     void setSslWriteBioListener(SslWriteBioListener* sslWriteBioListener);
@@ -54,7 +54,7 @@ public:
     bool isDtlsConnected() const { return (_state == State::CONNECTED); }
     bool isDtlsClient() const { return _isDtlsClient; }
 
-    void onMessageReceived(const char* buffer, const size_t length) override;
+    void onMessageReceived(memory::UniquePacket packet) override;
 
     int64_t nextTimeout();
     int64_t processTimeout();
@@ -87,7 +87,6 @@ private:
 
     DBGCHECK_SINGLETHREADED_MUTEX(_mutexGuard);
 
-    memory::PacketPoolAllocator& _allocator;
     concurrency::MpmcQueue<memory::UniquePacket> _pendingPackets;
 
     void sslRead();

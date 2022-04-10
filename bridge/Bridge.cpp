@@ -134,7 +134,7 @@ void Bridge::initialize()
     _rateControllerConfig.initialEstimateKbps = _config.rctl.initialEstimate;
     _rateControllerConfig.debugLog = _config.rctl.debugLog;
 
-    _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPacketAllocator);
+    _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
     _bweConfig.sanitize();
     _transportFactory = transport::createTransportFactory(*_jobManager,
         *_srtpClientFactory,

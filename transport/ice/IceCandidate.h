@@ -23,6 +23,7 @@ enum class TcpType
 class IceCandidate
 {
 public:
+    static const int MAX_FOUNDATION = 32;
     enum class Type
     {
         HOST,
@@ -75,7 +76,6 @@ public:
     TcpType tcpType;
 
 private:
-    static const int MAX_FOUNDATION = 32;
     char _foundation[MAX_FOUNDATION + 1];
 };
 } // namespace ice

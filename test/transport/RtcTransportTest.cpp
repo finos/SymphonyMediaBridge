@@ -270,7 +270,7 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
           _jobManager(std::make_unique<jobmanager::JobManager>()),
           _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096 * 32, "testMain")),
           _sslDtls(std::make_unique<transport::SslDtls>()),
-          _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPoolAllocator)),
+          _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls)),
           _network(transport::createRtcePoll()),
           _pacer(5 * 1000000)
     {

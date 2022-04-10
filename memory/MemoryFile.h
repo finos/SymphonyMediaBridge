@@ -33,7 +33,7 @@ private:
 };
 
 MemoryFile& operator<<(MemoryFile&, const char* s);
-MemoryFile& operator>>(MemoryFile&, char* s);
+MemoryFile& readString(MemoryFile& f, char* target, size_t maxLength);
 
 template <typename T>
 MemoryFile& operator<<(MemoryFile& f, T s)

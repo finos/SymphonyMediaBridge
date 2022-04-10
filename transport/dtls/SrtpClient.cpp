@@ -57,7 +57,7 @@ const char* toString(const SrtpClient::State state)
     }
 }
 
-SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener, memory::PacketPoolAllocator& allocator)
+SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     : _isInitialized(false),
       _state(State::IDLE),
       _loggableId("SrtpClient"),
@@ -70,7 +70,6 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener, memory::PacketP
       _localSrtp(nullptr),
       _nullCipher(true),
       _eventSink(eventListener),
-      _allocator(allocator),
       _pendingPackets(32)
 {
     assert(_ssl);
@@ -103,8 +102,6 @@ SrtpClient::~SrtpClient()
 {
     BIO_set_data(_writeBio, nullptr);
     SSL_free(_ssl);
-
-    _pendingPackets.clear();
 
     if (_localSrtp)
     {
@@ -160,7 +157,7 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
     {
         logger::debug("forwarding pending DTLS message", _loggableId.c_str());
-        onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
+        onMessageReceived(std::move(packet));
     }
 }
 
@@ -208,7 +205,7 @@ void SrtpClient::dtlsHandShake()
 
     for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
     {
-        onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
+        onMessageReceived(std::move(packet));
     }
 }
 
@@ -563,7 +560,7 @@ bool SrtpClient::createSrtp()
     return true;
 }
 
-void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
+void SrtpClient::onMessageReceived(memory::UniquePacket packet)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     assert(_isInitialized);
@@ -571,15 +568,7 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
     if (_state != State::CONNECTING && _state != State::CONNECTED)
     {
         logger::debug("DTLS received when not ready", _loggableId.c_str());
-        auto packet = memory::makeUniquePacket(_allocator, buffer, length);
-        if (packet)
-        {
-            _pendingPackets.push(std::move(packet));
-        }
-        else
-        {
-            logger::warn("cannot process received DTLS due to depleted pool allocator", _loggableId.c_str());
-        }
+        _pendingPackets.push(std::move(packet));
         return;
     }
 
@@ -589,7 +578,7 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
         return;
     }
 
-    const int sslResult = BIO_write(_readBio, buffer, utils::checkedCast<int32_t>(length));
+    const int sslResult = BIO_write(_readBio, packet->get(), utils::checkedCast<int32_t>(packet->getLength()));
     if (sslResult <= 0)
     {
         logSslError("Failed to process message", SSL_get_error(_ssl, sslResult));
