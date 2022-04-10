@@ -1435,10 +1435,7 @@ void clearPacingQueueIfFull(T& pacingQueue)
 {
     if (pacingQueue.full())
     {
-        while (!pacingQueue.empty())
-        {
-            pacingQueue.pop_back();
-        }
+        pacingQueue.clear();
     }
 }
 } // namespace
