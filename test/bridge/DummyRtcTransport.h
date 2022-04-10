@@ -28,7 +28,7 @@ public:
     bool setRemotePeer(const transport::SocketAddress& target) override { return true; }
     void setRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
-        memory::PacketPoolAllocator&) override
+        memory::AudioPacketPoolAllocator&) override
     {
     }
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,

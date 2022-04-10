@@ -2,6 +2,7 @@
 #include "bwe/RateController.h"
 #include "config/Config.h"
 #include "jobmanager/WorkerThread.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcePoll.h"
@@ -25,6 +26,7 @@ using namespace testing;
 struct TransportIntegrationTest : public ::testing::Test
 {
     memory::PacketPoolAllocator _sendAllocator;
+    memory::AudioPacketPoolAllocator _audioAllocator;
     config::Config _config1;
     config::Config _config2;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
@@ -54,6 +56,7 @@ struct TransportClientPair : public transport::DataReceiver
         transport::TransportFactory& transportFactory2,
         uint32_t ssrc,
         memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
         transport::SslDtls& sslDtls,
         jobmanager::JobManager& jobManager,
         bool blockUdp);
@@ -92,6 +95,7 @@ struct TransportClientPair : public transport::DataReceiver
 
     uint32_t _ssrc;
     memory::PacketPoolAllocator& _sendAllocator;
+    memory::AudioPacketPoolAllocator& _audioAllocator;
     std::shared_ptr<transport::RtcTransport> _transport1;
     std::shared_ptr<transport::RtcTransport> _transport2;
     uint16_t _sequenceNumber;

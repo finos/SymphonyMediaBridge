@@ -29,10 +29,18 @@ struct ClientPair : public TransportClientPair
         TransportFactory& transportFactory2,
         uint32_t ssrc,
         memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
         transport::SslDtls& sslDtls,
         JobManager& jobManager,
         bool blockUdp)
-        : TransportClientPair(transportFactory1, transportFactory2, ssrc, allocator, sslDtls, jobManager, blockUdp){};
+        : TransportClientPair(transportFactory1,
+              transportFactory2,
+              ssrc,
+              allocator,
+              audioAllocator,
+              sslDtls,
+              jobManager,
+              blockUdp){};
 
     ~ClientPair() {}
 };
@@ -43,8 +51,14 @@ TEST_F(IceIntegrationTest, connectUdp)
     ASSERT_TRUE(_transportFactory1->isGood());
     ASSERT_TRUE(_transportFactory2->isGood());
 
-    ClientPair
-        clients(*_transportFactory1, *_transportFactory2, 11001u, *_mainPoolAllocator, *_sslDtls, *_jobManager, false);
+    ClientPair clients(*_transportFactory1,
+        *_transportFactory2,
+        11001u,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_sslDtls,
+        *_jobManager,
+        false);
 
     const auto startTime = utils::Time::getAbsoluteTime();
     clients.connect(startTime);
@@ -73,6 +87,7 @@ TEST_F(IceIntegrationTest, connectTcp)
             *_transportFactory2,
             11001u,
             *_mainPoolAllocator,
+            _audioAllocator,
             *_sslDtls,
             *_jobManager,
             true);
@@ -107,6 +122,7 @@ TEST_F(IceIntegrationTest, connectTcpAlias)
             *_transportFactory2,
             11001u,
             *_mainPoolAllocator,
+            _audioAllocator,
             *_sslDtls,
             *_jobManager,
             true);
@@ -149,8 +165,14 @@ TEST_F(IceIntegrationTest, dosAttackTcpConnect)
 
     ASSERT_TRUE(init(configJson1, configJson2));
 
-    ClientPair
-        clients(*_transportFactory1, *_transportFactory2, 11001u, *_mainPoolAllocator, *_sslDtls, *_jobManager, true);
+    ClientPair clients(*_transportFactory1,
+        *_transportFactory2,
+        11001u,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_sslDtls,
+        *_jobManager,
+        true);
 
     AttackListener attackListener;
     std::vector<transport::RtcSocket*> clientSockets;
@@ -255,6 +277,7 @@ TEST_F(IceIntegrationTest, dtlsRace)
             *_transportFactory2,
             11001u + i * 2,
             *_mainPoolAllocator,
+            _audioAllocator,
             *_sslDtls,
             *_jobManager,
             false));
@@ -319,6 +342,7 @@ TEST_F(IceIntegrationTest, portReuse)
         *_transportFactory2,
         11001u,
         *_mainPoolAllocator,
+        _audioAllocator,
         *_sslDtls,
         *_jobManager,
         false);
@@ -333,6 +357,7 @@ TEST_F(IceIntegrationTest, portReuse)
         *_transportFactory2,
         11009u,
         *_mainPoolAllocator,
+        _audioAllocator,
         *_sslDtls,
         *_jobManager,
         false);

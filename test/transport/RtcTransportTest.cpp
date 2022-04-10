@@ -66,6 +66,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         : _name("ClientPair"),
           _ssrc(ssrc),
           _sendAllocator(allocatorPacketCount, _name.c_str()),
+          _audioAllocator(16, _name.c_str()),
           _transport1(enableIce ? transportFactory->createOnSharedPort(ice::IceRole::CONTROLLED, 128, 1)
                                 : transportFactory->create(128, 1)),
           _transport2(enableIce ? transportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 128, 2)
@@ -92,10 +93,10 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         {
             _transport1->setRemoteIce(_transport2->getLocalCredentials(),
                 _transport2->getLocalCandidates(),
-                _sendAllocator);
+                _audioAllocator);
             _transport2->setRemoteIce(_transport1->getLocalCredentials(),
                 _transport1->getLocalCandidates(),
-                _sendAllocator);
+                _audioAllocator);
         }
         else
         {
@@ -233,6 +234,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     logger::LoggableId _name;
     uint32_t _ssrc;
     memory::PacketPoolAllocator _sendAllocator;
+    memory::AudioPacketPoolAllocator _audioAllocator;
     std::shared_ptr<RtcTransport> _transport1;
     std::shared_ptr<RtcTransport> _transport2;
     std::atomic_uint32_t _jobsCounter1;

@@ -115,6 +115,7 @@ public:
     void clear();
 
     memory::PacketPoolAllocator& getSendAllocator() { return _sendAllocator; }
+    memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
 
     /**
      * Discard incoming packets in queues when engine no longer serves this mixer to ensure decrement of ref counts.

@@ -6,6 +6,7 @@
 #include "dtls/SslWriteBioListener.h"
 #include "ice/IceSession.h"
 #include "logger/Logger.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "rtp/SendTimeDial.h"
 #include "sctp/SctpAssociation.h"
 #include "sctp/SctpServerPort.h"
@@ -109,7 +110,7 @@ public: // Transport
     const SocketAddress& getRemotePeer() const override { return _peerRtpPort; }
     void setRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::AudioPacketPoolAllocator& allocator) override;
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) override;
@@ -271,7 +272,8 @@ private:
         uint64_t timestamp,
         std::__1::chrono::system_clock::time_point wallClock);
 
-    void doSetRemoteIce(const memory::Packet& credentials, const memory::Packet* const* candidatePackets);
+    void doSetRemoteIce(const memory::AudioPacket& credentials, const memory::AudioPacket& candidates);
+
     void doSetRemoteDtls(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide);

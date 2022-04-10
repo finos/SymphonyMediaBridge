@@ -66,7 +66,9 @@ private:
 
     struct DelayEntry
     {
-        DelayEntry(memory::UniquePacket packetPtr, uint64_t relTime) : packet(std::move(packetPtr)), releaseTime(relTime)
+        DelayEntry(memory::UniquePacket packetPtr, uint64_t relTime)
+            : packet(std::move(packetPtr)),
+              releaseTime(relTime)
         {
         }
 

@@ -9,6 +9,7 @@ using namespace testing;
 
 TransportIntegrationTest::TransportIntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "TransportTest"),
+      _audioAllocator(memory::packetPoolSize, "TransportTestAudio"),
       _jobManager(std::make_unique<jobmanager::JobManager>()),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(std::make_unique<transport::SslDtls>()),
@@ -92,11 +93,13 @@ TransportClientPair::TransportClientPair(transport::TransportFactory& transportF
     transport::TransportFactory& transportFactory2,
     uint32_t ssrc,
     memory::PacketPoolAllocator& allocator,
+    memory::AudioPacketPoolAllocator& audioAllocator,
     transport::SslDtls& sslDtls,
     jobmanager::JobManager& jobManager,
     bool blockUdp)
     : _ssrc(ssrc),
       _sendAllocator(allocator),
+      _audioAllocator(audioAllocator),
       _transport1(transportFactory1.create(ice::IceRole::CONTROLLING, 4096, 1)),
       _transport2(transportFactory2.create(ice::IceRole::CONTROLLED, 4096, 2)),
       _sequenceNumber(0),
@@ -135,7 +138,7 @@ TransportClientPair::TransportClientPair(transport::TransportFactory& transportF
         }
     }
 
-    _transport1->setRemoteIce(_transport2->getLocalCredentials(), candidates2, _sendAllocator);
+    _transport1->setRemoteIce(_transport2->getLocalCredentials(), candidates2, _audioAllocator);
     _transport1->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), true);
 }
 
@@ -189,7 +192,7 @@ int64_t TransportClientPair::tryConnect(const uint64_t timestamp, const transpor
         return utils::Time::diff(_connectStart + _signalDelay, timestamp);
     }
 
-    _transport2->setRemoteIce(_transport1->getLocalCredentials(), _candidates1, _sendAllocator);
+    _transport2->setRemoteIce(_transport1->getLocalCredentials(), _candidates1, _audioAllocator);
     _transport2->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
     _transport2->connect();
     _connectStart = 0;

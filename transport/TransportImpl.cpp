@@ -4,15 +4,18 @@
 #include "dtls/SrtpClient.h"
 #include "dtls/SrtpClientFactory.h"
 #include "dtls/SslDtls.h"
+#include "ice/IceSerialize.h"
 #include "ice/IceSession.h"
 #include "logger/Logger.h"
 #include "logger/PacketLogger.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "sctp/SctpAssociation.h"
 #include "transport/DtlsJob.h"
 #include "transport/IceJob.h"
 #include "transport/SctpJob.h"
+#include "transport/ice/IceSerialize.h"
 #include "utils/SocketAddress.h"
 #include "utils/StdExtensions.h"
 #include <arpa/inet.h>
@@ -102,70 +105,49 @@ public:
     IceSetRemoteJob(TransportImpl& transport,
         const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
-        memory::PacketPoolAllocator& allocator)
+        memory::AudioPacketPoolAllocator& allocator)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
-          _allocator(allocator),
           _iceCredentials(memory::makeUniquePacket(allocator)),
-          _iceCandidates{0}
+          _iceCandidates(memory::makeUniquePacket(allocator))
     {
-        if (!_iceCredentials)
+        if (!_iceCredentials || !_iceCandidates)
         {
             logger::error("failed to allocate packet", "setRemoteIce");
+            _iceCredentials.release();
+            _iceCandidates.release();
             return;
         }
         auto& iceSettings = *reinterpret_cast<IceCredentials*>(_iceCredentials->get());
         utils::strncpy(iceSettings.ufrag, credentials.first.c_str(), sizeof(iceSettings.ufrag));
         utils::strncpy(iceSettings.password, credentials.second.c_str(), sizeof(iceSettings.password));
 
-        memory::Packet* icePacket = nullptr;
-        for (size_t i = 0; i < candidates.size() && i < maxCandidatePackets * IceCandidates::maxCandidateCount; ++i)
+        memory::MemoryFile stream(_iceCandidates->get(), _iceCandidates->size);
+        for (auto& candidate : candidates)
         {
-            if (i % IceCandidates::maxCandidateCount == 0)
+            stream << candidate;
+            if (!stream.isGood())
             {
-                icePacket = memory::makePacket(allocator);
-                if (!icePacket)
-                {
-                    logger::error("failed to allocate packet", "setRemoteIce");
-                    return;
-                }
-                _iceCandidates[i / maxCandidatePackets] = icePacket;
-                auto& iceCandidates = *reinterpret_cast<IceCandidates*>(icePacket->get());
-                iceCandidates.candidateCount = 0;
+                logger::warn("Not all candidates could be added. ICE will likely work anyway.",
+                    _transport.getLoggableId().c_str());
+                break;
             }
-            auto& iceCandidates = *reinterpret_cast<IceCandidates*>(icePacket->get());
-            iceCandidates.candidates[i % IceCandidates::maxCandidateCount] = candidates[i];
-            iceCandidates.candidateCount++;
         }
+        _iceCandidates->setLength(stream.getPosition());
     }
 
     void run() override
     {
-        if (!_iceCredentials)
+        if (_iceCredentials && _iceCandidates)
         {
-            return;
-        }
-
-        _transport.doSetRemoteIce(*_iceCredentials, _iceCandidates);
-    }
-
-    ~IceSetRemoteJob()
-    {
-        for (size_t i = 0; i < maxCandidatePackets; ++i)
-        {
-            if (!_iceCandidates[i])
-            {
-                break;
-            }
-            _allocator.free(_iceCandidates[i]);
+            _transport.doSetRemoteIce(*_iceCredentials, *_iceCandidates);
         }
     }
 
 private:
     TransportImpl& _transport;
-    memory::PacketPoolAllocator& _allocator;
-    memory::UniquePacket _iceCredentials;
-    memory::Packet* _iceCandidates[maxCandidatePackets + 1];
+    memory::UniqueAudioPacket _iceCredentials;
+    memory::UniqueAudioPacket _iceCandidates;
 };
 
 struct DtlsCredentials
@@ -1932,7 +1914,7 @@ bool TransportImpl::setRemotePeer(const SocketAddress& target)
 // Only support for RTP component, no rtcp component
 void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& credentials,
     const ice::IceCandidates& candidates,
-    memory::PacketPoolAllocator& allocator)
+    memory::AudioPacketPoolAllocator& allocator)
 {
     if (_rtpIceSession)
     {
@@ -1940,8 +1922,8 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
     }
 }
 
-void TransportImpl::doSetRemoteIce(const memory::Packet& credentialPacket,
-    const memory::Packet* const* candidatePackets)
+void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
+    const memory::AudioPacket& candidatesPacket)
 {
     if (!_rtpIceSession)
     {
@@ -1951,31 +1933,27 @@ void TransportImpl::doSetRemoteIce(const memory::Packet& credentialPacket,
     auto& credentials = *reinterpret_cast<const IceCredentials*>(credentialPacket.get());
     _rtpIceSession->setRemoteCredentials(std::pair<std::string, std::string>(credentials.ufrag, credentials.password));
 
-    uint32_t candidateCount = 0;
-    for (const memory::Packet* const* packetCursor = candidatePackets; *packetCursor; packetCursor++)
+    memory::MemoryFile stream(candidatesPacket.get(), candidatesPacket.getLength());
+    while (stream.isGood())
     {
-        auto& iceCandidates = *reinterpret_cast<const IceCandidates*>((*packetCursor)->get());
-        for (size_t i = 0; i < iceCandidates.candidateCount && candidateCount++ < _config.ice.maxCandidateCount; ++i)
+        ice::IceCandidate candidate;
+        stream >> candidate;
+        if (stream.isGood() && candidate.component == ice::IceComponent::RTP && !candidate.empty())
         {
-            const ice::IceCandidate& candidate = iceCandidates.candidates[i];
-            if (candidate.component == ice::IceComponent::RTP && !candidate.empty())
+            if (candidate.transportType == ice::TransportType::UDP)
             {
-                if (candidate.transportType == ice::TransportType::UDP)
+                _rtpIceSession->addRemoteCandidate(candidate);
+            }
+            else if (candidate.transportType == ice::TransportType::TCP && candidate.tcpType == ice::TcpType::PASSIVE)
+            {
+                auto endpoints = _tcpEndpointFactory->createTcpEndpoints(candidate.address.getFamily());
+                for (Endpoint* endpoint : endpoints)
                 {
-                    _rtpIceSession->addRemoteCandidate(candidate);
-                }
-                else if (candidate.transportType == ice::TransportType::TCP &&
-                    candidate.tcpType == ice::TcpType::PASSIVE)
-                {
-                    auto endpoints = _tcpEndpointFactory->createTcpEndpoints(candidate.address.getFamily());
-                    for (Endpoint* endpoint : endpoints)
-                    {
-                        endpoint->registerDefaultListener(this);
-                        ++_callbackRefCount;
-                        _rtpEndpoints.push_back(endpoint);
+                    endpoint->registerDefaultListener(this);
+                    ++_callbackRefCount;
+                    _rtpEndpoints.push_back(endpoint);
 
-                        _rtpIceSession->addRemoteCandidate(candidate, endpoint);
-                    }
+                    _rtpIceSession->addRemoteCandidate(candidate, endpoint);
                 }
             }
         }

@@ -4,7 +4,6 @@
 #include "memory/PacketPoolAllocator.h"
 #include <cstdint>
 
-
 namespace memory
 {
 class Packet;

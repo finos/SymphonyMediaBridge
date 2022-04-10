@@ -1209,7 +1209,7 @@ bool Mixer::configureAudioStreamTransportIce(const std::string& endpointId,
         return false;
     }
 
-    audioStreamItr->second->_transport->setRemoteIce(credentials, candidates, _engineMixer.getSendAllocator());
+    audioStreamItr->second->_transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
     return true;
 }
 
@@ -1223,7 +1223,7 @@ bool Mixer::configureVideoStreamTransportIce(const std::string& endpointId,
     {
         return false;
     }
-    videoStreamItr->second->_transport->setRemoteIce(credentials, candidates, _engineMixer.getSendAllocator());
+    videoStreamItr->second->_transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
     return true;
 }
 
@@ -1315,7 +1315,7 @@ bool Mixer::configureBundleTransportIce(const std::string& endpointId,
         return false;
     }
 
-    transportItr->second._transport->setRemoteIce(credentials, candidates, _engineMixer.getSendAllocator());
+    transportItr->second._transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
     return true;
 }
 

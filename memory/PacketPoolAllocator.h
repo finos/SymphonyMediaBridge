@@ -11,7 +11,11 @@ const size_t packetPoolSize = 2048 * 4;
 
 using PacketPoolAllocator = PoolAllocator<sizeof(Packet)>;
 
-inline Packet* makePacket(PacketPoolAllocator& allocator)
+// Be very careful with reset as the deleter is not changed if already set. You may try to deallocate
+// packet in the wrong pool.
+typedef std::unique_ptr<memory::Packet, PacketPoolAllocator::Deleter> UniquePacket;
+
+inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator)
 {
     auto pointer = allocator.allocate();
     assert(pointer);
@@ -20,25 +24,12 @@ inline Packet* makePacket(PacketPoolAllocator& allocator)
         logger::error("Unable to allocate packet, no space left in pool %s",
             "PacketPoolAllocator",
             allocator.getName().c_str());
-        return nullptr;
-    }
-
-    return new (pointer) memory::Packet();
-}
-
-// Be very careful with reset as the deleter is not changed if already set. You may try to deallocate
-// packet in the wrong pool.
-typedef std::unique_ptr<memory::Packet, PacketPoolAllocator::Deleter> UniquePacket;
-
-inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator)
-{
-    auto packet = makePacket(allocator);
-    if (!packet)
-    {
         return UniquePacket();
     }
 
-    return UniquePacket(packet, allocator.getDeleter());
+    new (pointer) memory::Packet();
+
+    return UniquePacket(reinterpret_cast<Packet*>(pointer), allocator.getDeleter());
 }
 
 inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator, const void* data, size_t length)

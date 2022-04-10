@@ -24,6 +24,7 @@
 
 IntegrationTest::IntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
+      _audioAllocator(memory::packetPoolSize, "IntegrationTestAudio"),
       _jobManager(std::make_unique<jobmanager::JobManager>()),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(nullptr),
@@ -480,9 +481,11 @@ class SfuClient : public transport::DataReceiver
 public:
     SfuClient(uint32_t id,
         memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
         transport::TransportFactory& transportFactory,
         transport::SslDtls& sslDtls)
         : _allocator(allocator),
+          _audioAllocator(audioAllocator),
           _transportFactory(transportFactory),
           _sslDtls(sslDtls),
           _receivedData(256),
@@ -533,7 +536,7 @@ public:
             credentials.first = bundle["transport"]["ufrag"];
             credentials.second = bundle["transport"]["pwd"];
 
-            _transport->setRemoteIce(credentials, candidates, _allocator);
+            _transport->setRemoteIce(credentials, candidates, _audioAllocator);
 
             std::string fingerPrint = bundle["transport"]["fingerprints"][0]["fingerprint"];
             _transport->setRemoteDtlsFingerprint(bundle["transport"]["fingerprints"][0]["hash"], fingerPrint, true);
@@ -735,6 +738,7 @@ public:
 private:
     utils::IdGenerator _idGenerator;
     memory::PacketPoolAllocator& _allocator;
+    memory::AudioPacketPoolAllocator& _audioAllocator;
     transport::TransportFactory& _transportFactory;
     transport::SslDtls& _sslDtls;
     concurrency::MpmcHashmap32<uint32_t, RtpReceiver*> _receivedData;
@@ -814,9 +818,9 @@ TEST_F(IntegrationTest, plain)
     EXPECT_TRUE(conf.isSuccess());
     utils::Time::nanoSleep(1 * utils::Time::sec);
 
-    SfuClient client1(++_instanceCounter, *_mainPoolAllocator, *_transportFactory, *_sslDtls);
-    SfuClient client2(++_instanceCounter, *_mainPoolAllocator, *_transportFactory, *_sslDtls);
-    SfuClient client3(++_instanceCounter, *_mainPoolAllocator, *_transportFactory, *_sslDtls);
+    SfuClient client1(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient client2(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient client3(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
 
     client1.initiateCall(baseUrl, conf.getId(), true, true, true, "ssrc-rewrite");
     client2.initiateCall(baseUrl, conf.getId(), false, true, true, "ssrc-rewrite");
