@@ -1542,7 +1542,6 @@ TEST(IceTest, serialize)
     EXPECT_EQ(c.transportType, m.transportType);
 
     ice::IceCandidate n;
-    auto y = sizeof(n);
     f >> n;
     EXPECT_EQ(c.address, n.address);
     EXPECT_EQ(c.baseAddress, n.baseAddress);

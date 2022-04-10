@@ -133,39 +133,4 @@ MemoryFile& operator>>(MemoryFile& f, char* s)
     return f;
 }
 
-MemoryFile& operator<<(MemoryFile& f, uint32_t s)
-{
-    f.write(&s, sizeof(s));
-    return f;
-}
-
-MemoryFile& operator>>(MemoryFile& f, uint32_t& s)
-{
-    f.read(&s, sizeof(s));
-    return f;
-}
-
-MemoryFile& operator<<(MemoryFile& f, uint16_t s)
-{
-    f.write(&s, sizeof(s));
-    return f;
-}
-
-MemoryFile& operator>>(MemoryFile& f, uint16_t& s)
-{
-    f.read(&s, sizeof(s));
-    return f;
-}
-
-MemoryFile& operator<<(MemoryFile& f, uint8_t s)
-{
-    f.write(&s, sizeof(s));
-    return f;
-}
-
-MemoryFile& operator>>(MemoryFile& f, uint8_t& s)
-{
-    f.read(&s, sizeof(s));
-    return f;
-}
 } // namespace memory

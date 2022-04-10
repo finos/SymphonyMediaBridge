@@ -29,16 +29,23 @@ private:
     uint8_t* _end;
     uint8_t* _cursor;
     bool _good;
-    bool _readOnly;
+    const bool _readOnly;
 };
 
 MemoryFile& operator<<(MemoryFile&, const char* s);
 MemoryFile& operator>>(MemoryFile&, char* s);
 
-MemoryFile& operator<<(MemoryFile& f, uint32_t s);
-MemoryFile& operator>>(MemoryFile& f, uint32_t& s);
-MemoryFile& operator<<(MemoryFile& f, uint16_t s);
-MemoryFile& operator>>(MemoryFile& f, uint16_t& s);
-MemoryFile& operator<<(MemoryFile& f, uint8_t s);
-MemoryFile& operator>>(MemoryFile& f, uint8_t& s);
+template <typename T>
+MemoryFile& operator<<(MemoryFile& f, T s)
+{
+    f.write(&s, sizeof(s));
+    return f;
+}
+
+template <typename T>
+MemoryFile& operator>>(MemoryFile& f, T& s)
+{
+    f.read(&s, sizeof(s));
+    return f;
+}
 } // namespace memory
