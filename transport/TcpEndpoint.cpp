@@ -283,7 +283,7 @@ void TcpEndpoint::continueSend()
             _pendingStunRequest->get(),
             _pendingStunRequest->getLength());
 
-        _pendingStunRequest.release();
+        _pendingStunRequest.reset();
         if (rc != 0)
         {
             logger::warn("failed send to %s, err (%d) %s",

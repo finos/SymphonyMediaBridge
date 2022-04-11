@@ -69,6 +69,9 @@ TEST_F(PacketCacheTest, fillCache)
     auto packet = makeUniquePacket(256);
     EXPECT_TRUE(_packetCache->add(*packet, 512));
 
+    auto packet2 = makeUniquePacket(513);
+    EXPECT_TRUE(_packetCache->add(*packet2, 513));
+
     EXPECT_EQ(nullptr, _packetCache->get(0));
     EXPECT_NE(nullptr, _packetCache->get(512));
 }

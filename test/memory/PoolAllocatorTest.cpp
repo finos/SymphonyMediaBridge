@@ -212,7 +212,7 @@ struct IncomingPacketAggregate
             --_transport->getJobCounter();
 #endif
         }
-        _packet.release();
+        _packet.reset();
     }
 };
 } // namespace

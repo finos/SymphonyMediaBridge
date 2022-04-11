@@ -114,8 +114,8 @@ public:
         if (!_iceCredentials || !_iceCandidates)
         {
             logger::error("failed to allocate packet", "setRemoteIce");
-            _iceCredentials.release();
-            _iceCandidates.release();
+            _iceCredentials.reset();
+            _iceCandidates.reset();
             return;
         }
         auto& iceSettings = *reinterpret_cast<IceCredentials*>(_iceCredentials->get());
