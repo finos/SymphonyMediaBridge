@@ -1006,13 +1006,17 @@ TEST_F(IntegrationTest, plain)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client3.getReceiveStats();
-        EXPECT_EQ(rData1.size(), 1);
+        // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
+        EXPECT_EQ(rData1.size(), 2);
+        size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
             if (client3.isRemoteVideoSsrc(item.first))
             {
                 continue;
             }
+            
+            ++audioSsrcCount;
 
             std::vector<double> freqVector;
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
@@ -1042,5 +1046,7 @@ TEST_F(IntegrationTest, plain)
 
             // item.second->dumpPcmData();
         }
+        
+        EXPECT_EQ(audioSsrcCount, 1);
     }
 }
