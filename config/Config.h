@@ -55,14 +55,14 @@ public:
     CFG_GROUP_END(ice);
 
     CFG_GROUP()
-    CFG_PROP(bool, useUplinkEstimate, false);
+    CFG_PROP(bool, useUplinkEstimate, true);
     CFG_PROP(bool, logDownlinkEstimates, true);
     CFG_PROP(std::string, packetLogLocation, "");
     CFG_PROP(double, packetOverhead, 0.1);
     CFG_GROUP_END(bwe);
 
     CFG_GROUP() // rate control
-    CFG_PROP(bool, enable, false);
+    CFG_PROP(bool, enable, true);
     CFG_PROP(uint32_t, floor, 300);
     CFG_PROP(uint32_t, ceiling, 9000);
     CFG_PROP(uint32_t, initialEstimate, 1200);

@@ -21,6 +21,7 @@
 #include "utils/StringBuilder.h"
 #include <complex>
 #include <sstream>
+#include <unordered_set>
 
 IntegrationTest::IntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
@@ -563,6 +564,14 @@ public:
                 _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next());
                 _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
             }
+            else if (content["name"] == "video")
+            {
+                auto channel = content["channels"][0];
+                for (uint32_t ssrc : channel["sources"])
+                {
+                    _remoteVideoSsrc.emplace(ssrc);
+                }
+            }
         }
     }
 
@@ -746,6 +755,11 @@ public:
     {
     }
 
+    bool isRemoteVideoSsrc(uint32_t ssrc) const
+    {
+        return _remoteVideoSsrc.find(ssrc) != _remoteVideoSsrc.end();
+    }
+
     void stopRecording() { _recordingActive = false; }
 
     std::shared_ptr<transport::RtcTransport> _transport;
@@ -764,6 +778,7 @@ private:
     concurrency::MpmcHashmap32<uint32_t, RtpReceiver*> _receivedData;
     logger::LoggableId _loggableId;
     std::atomic_bool _recordingActive;
+    std::unordered_set<uint32_t> _remoteVideoSsrc;
 };
 
 namespace
@@ -791,6 +806,11 @@ void analyzeRecording(const std::vector<int16_t>& recording,
                 amplitudeProfile.push_back(std::make_pair(t, amplitudeTracker.get(t, codec::Opus::sampleRate / 5)));
             }
         }
+    }
+
+    if (recording.size() < fftWindowSize)
+    {
+        return;
     }
 
     for (size_t cursor = 0; cursor < recording.size() - fftWindowSize; cursor += 256)
@@ -921,6 +941,11 @@ TEST_F(IntegrationTest, plain)
 
         for (const auto& item : rData1)
         {
+            if (client1.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
             std::vector<double> freqVector;
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
@@ -950,6 +975,11 @@ TEST_F(IntegrationTest, plain)
         std::vector<double> allFreq;
         for (const auto& item : rData1)
         {
+            if (client2.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
             std::vector<double> freqVector;
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
@@ -976,9 +1006,18 @@ TEST_F(IntegrationTest, plain)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client3.getReceiveStats();
-        EXPECT_EQ(rData1.size(), 1);
+        // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
+        EXPECT_EQ(rData1.size(), 2);
+        size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
+            if (client3.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+            
+            ++audioSsrcCount;
+
             std::vector<double> freqVector;
             std::vector<std::pair<uint64_t, double>> amplitudeProfile;
             auto rec = item.second->getRecording();
@@ -1007,5 +1046,7 @@ TEST_F(IntegrationTest, plain)
 
             // item.second->dumpPcmData();
         }
+        
+        EXPECT_EQ(audioSsrcCount, 1);
     }
 }
