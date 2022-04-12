@@ -157,7 +157,7 @@ void MixerManager::remove(const std::string& id)
 
     findResult->second->markForDeletion();
 
-    EngineCommand::Command command = {EngineCommand::Type::RemoveMixer};
+    EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
     command._command.removeMixer._mixer = _engineMixers[id].get();
     _engine.pushCommand(std::move(command));
 }
@@ -205,7 +205,7 @@ void MixerManager::stop()
             if (!it->second->isMarkedForDeletion())
             {
                 it->second->markForDeletion();
-                EngineCommand::Command command = {EngineCommand::Type::RemoveMixer};
+                EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
                 command._command.removeMixer._mixer = _engineMixers[it->first].get();
                 _engine.pushCommand(std::move(command));
             }
@@ -399,7 +399,7 @@ void MixerManager::engineMessageAllocateAudioBuffer(const EngineMessage::Message
 
     auto audioBuffer = std::make_unique<EngineMixer::AudioBuffer>();
     {
-        EngineCommand::Command command = {EngineCommand::Type::AddAudioBuffer};
+        EngineCommand::Command command(EngineCommand::Type::AddAudioBuffer);
         command._command.addAudioBuffer._mixer = message._command.allocateAudioBuffer._mixer;
         command._command.addAudioBuffer._ssrc = message._command.allocateAudioBuffer._ssrc;
         command._command.addAudioBuffer._audioBuffer = audioBuffer.get();

@@ -1495,7 +1495,8 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
     }
 
     auto& ssrcState = getOutboundSsrc(rtpHeader->ssrc, rtpFrequency);
-    if (static_cast<int16_t>(rtpHeader->sequenceNumber.get() - (ssrcState.getSentSequenceNumber() & 0xFFFFu)) < 1)
+    if (ssrcState.getSentPacketsCount() > 2 &&
+        static_cast<int16_t>(rtpHeader->sequenceNumber.get() - (ssrcState.getSentSequenceNumber() & 0xFFFFu)) < 1)
     {
         logger::info("out of order transmission ssrc %u, seqno %u, last %u",
             _loggableId.c_str(),

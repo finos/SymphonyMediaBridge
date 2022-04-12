@@ -197,7 +197,7 @@ private:
         }
 
         explicit IncomingPacketAggregate(IncomingPacketAggregate&& rhs)
-            : _packet(std::exchange(rhs._packet, nullptr)),
+            : _packet(std::move(rhs._packet)),
               _transport(std::exchange(rhs._transport, nullptr)),
               _extendedSequenceNumber(rhs._extendedSequenceNumber)
         {
@@ -207,7 +207,7 @@ private:
         {
             release();
 
-            _packet = std::exchange(rhs._packet, nullptr);
+            _packet = std::move(rhs._packet);
             _transport = std::exchange(rhs._transport, nullptr);
             _extendedSequenceNumber = rhs._extendedSequenceNumber;
             return *this;

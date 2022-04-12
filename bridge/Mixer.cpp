@@ -914,7 +914,7 @@ void Mixer::allocateVideoPacketCache(const uint32_t ssrc, const size_t endpointI
 
     auto videoPacketCache = std::make_unique<PacketCache>("VideoPacketCache", ssrc);
     {
-        EngineCommand::Command command = {EngineCommand::Type::AddVideoPacketCache};
+        EngineCommand::Command command(EngineCommand::Type::AddVideoPacketCache);
         command._command.addVideoPacketCache._mixer = &_engineMixer;
         command._command.addVideoPacketCache._ssrc = ssrc;
         command._command.addVideoPacketCache._endpointIdHash = endpointIdHash;
@@ -1508,7 +1508,7 @@ bool Mixer::pinEndpoint(const size_t endpointIdHash, const std::string& pinnedEn
         return false;
     }
 
-    EngineCommand::Command command = {EngineCommand::Type::PinEndpoint};
+    EngineCommand::Command command(EngineCommand::Type::PinEndpoint);
     auto& pinEndpoint = command._command.pinEndpoint;
     pinEndpoint._mixer = &_engineMixer;
     pinEndpoint._endpointIdHash = endpointIdHash;
@@ -1521,7 +1521,7 @@ bool Mixer::unpinEndpoint(const size_t endpointIdHash)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    EngineCommand::Command command = {EngineCommand::Type::PinEndpoint};
+    EngineCommand::Command command(EngineCommand::Type::PinEndpoint);
     auto& pinEndpoint = command._command.pinEndpoint;
     pinEndpoint._mixer = &_engineMixer;
     pinEndpoint._endpointIdHash = endpointIdHash;
@@ -2024,7 +2024,7 @@ void Mixer::allocateRecordingRtpPacketCache(const uint32_t ssrc, const size_t en
 
     auto packetCache = std::make_unique<PacketCache>("RecordingRtpPacketCache", ssrc);
     {
-        EngineCommand::Command command = {EngineCommand::Type::AddRecordingRtpPacketCache};
+        EngineCommand::Command command(EngineCommand::Type::AddRecordingRtpPacketCache);
         command._command.addRecordingRtpPacketCache._mixer = &_engineMixer;
         command._command.addRecordingRtpPacketCache._ssrc = ssrc;
         command._command.addRecordingRtpPacketCache._endpointIdHash = endpointIdHash;
