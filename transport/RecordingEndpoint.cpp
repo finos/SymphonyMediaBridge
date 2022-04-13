@@ -65,7 +65,7 @@ RecordingEndpoint::IRecordingEvents* findListener(
 }
 } // namespace
 
-void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::Packet* packet)
+void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet)
 {
     if (recp::isRecControlPacket(packet->get(), packet->getLength()))
     {
@@ -75,7 +75,7 @@ void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, 
             auto listener = findListener(_listeners, srcAddress);
             if (listener)
             {
-                listener->onRecControlReceived(*this, srcAddress, _socket.getBoundPort(), packet, _allocator);
+                listener->onRecControlReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
                 return;
             }
         }
@@ -83,7 +83,6 @@ void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, 
 
     logger::info("Unexpected packet from %s", _name.c_str(), srcAddress.toString().c_str());
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
-    _allocator.free(packet);
 }
 
 void RecordingEndpoint::registerRecordingListener(const SocketAddress& srcAddress, IRecordingEvents* listener)

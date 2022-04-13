@@ -47,6 +47,7 @@ public:
 
     uint64_t getLastSendTime() const { return _rtpSendTime; }
     uint32_t getSentSequenceNumber() const { return _sendCounters.sequenceNumber; }
+    uint32_t getSentPacketsCount() const { return _sendCounters.packets; }
     void fillInReport(rtp::RtcpSenderReport& report, uint64_t timestamp, uint64_t wallClockNtp) const;
 
     void setRtpFrequency(uint32_t rtpFrequency);

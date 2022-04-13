@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 namespace config
@@ -96,7 +97,7 @@ public:
         const SimulcastStream& simulcastStream,
         const SimulcastStream* secondarySimulcastStream = nullptr);
     void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
-    void handleSctpControl(const size_t endpointIdHash, memory::Packet* packet);
+    void handleSctpControl(const size_t endpointIdHash, const memory::Packet& packet);
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     void sendEndpointMessage(const size_t toEndpointIdHash, const size_t fromEndpointIdHash, const char* message);
     void recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc);
@@ -114,6 +115,7 @@ public:
     void clear();
 
     memory::PacketPoolAllocator& getSendAllocator() { return _sendAllocator; }
+    memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
 
     /**
      * Discard incoming packets in queues when engine no longer serves this mixer to ensure decrement of ref counts.
@@ -125,8 +127,7 @@ public:
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
 
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) override;
 
@@ -142,28 +143,20 @@ public:
         size_t length) override;
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         uint64_t timestamp) override;
 
     void onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
 
     void onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
 
-    void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender,
-        memory::AudioPacket* packet,
-        memory::AudioPacketPoolAllocator& receiveAllocator);
+    void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::UniqueAudioPacket packet);
 
-    void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
-        uint64_t timestamp) override;
+    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
 
     jobmanager::JobManager& getJobManager() { return _jobManager; }
 
@@ -177,50 +170,60 @@ private:
     static const size_t maxStreamsPerModality = 4096;
     static const size_t maxRecordingStreams = 8;
 
-    template <typename PacketT, typename AllocatorT>
-    struct IncomingPacketAggregate
+    template <typename PacketT>
+    class IncomingPacketAggregate
     {
-        IncomingPacketAggregate()
-            : _packet(nullptr),
-              _allocator(nullptr),
-              _transport(nullptr),
-              _extendedSequenceNumber(0)
-        {
-        }
+    public:
+        IncomingPacketAggregate() : _transport(nullptr), _extendedSequenceNumber(0) {}
 
-        IncomingPacketAggregate(PacketT* packet, AllocatorT* allocator, transport::RtcTransport* transport)
-            : _packet(packet),
-              _allocator(allocator),
+        IncomingPacketAggregate(PacketT packet, transport::RtcTransport* transport)
+            : _packet(std::move(packet)),
               _transport(transport),
               _extendedSequenceNumber(0)
         {
+            assert(_packet);
+            lockOwner();
         }
 
-        IncomingPacketAggregate(PacketT* packet,
-            AllocatorT* allocator,
+        IncomingPacketAggregate(PacketT packet,
             transport::RtcTransport* transport,
             const uint32_t extendedSequenceNumber)
-            : _packet(packet),
-              _allocator(allocator),
+            : _packet(std::move(packet)),
               _transport(transport),
               _extendedSequenceNumber(extendedSequenceNumber)
         {
+            assert(_packet);
+            lockOwner();
         }
 
-        PacketT* _packet;
-        AllocatorT* _allocator;
-        transport::RtcTransport* _transport;
-        uint32_t _extendedSequenceNumber;
-
-        inline void lockOwner() const
+        explicit IncomingPacketAggregate(IncomingPacketAggregate&& rhs)
+            : _packet(std::move(rhs._packet)),
+              _transport(std::exchange(rhs._transport, nullptr)),
+              _extendedSequenceNumber(rhs._extendedSequenceNumber)
         {
-            if (_transport)
-            {
-                ++_transport->getJobCounter();
-            }
         }
 
-        inline void release() const
+        IncomingPacketAggregate& operator=(IncomingPacketAggregate&& rhs)
+        {
+            release();
+
+            _packet = std::move(rhs._packet);
+            _transport = std::exchange(rhs._transport, nullptr);
+            _extendedSequenceNumber = rhs._extendedSequenceNumber;
+            return *this;
+        }
+
+        IncomingPacketAggregate(const IncomingPacketAggregate&) = delete;
+        IncomingPacketAggregate& operator=(const IncomingPacketAggregate&) = delete;
+
+        ~IncomingPacketAggregate() { release(); }
+
+        transport::RtcTransport* transport() { return _transport; }
+        PacketT& packet() { return _packet; }
+        uint32_t extendedSequenceNumber() const { return _extendedSequenceNumber; }
+
+    private:
+        void release()
         {
             if (_transport)
             {
@@ -230,13 +233,25 @@ private:
 #else
                 --_transport->getJobCounter();
 #endif
+                _transport = nullptr;
             }
-            _allocator->free(_packet);
         }
+
+        void lockOwner() const
+        {
+            if (_transport)
+            {
+                ++_transport->getJobCounter();
+            }
+        }
+
+        PacketT _packet;
+        transport::RtcTransport* _transport;
+        uint32_t _extendedSequenceNumber;
     };
 
-    using IncomingPacketInfo = IncomingPacketAggregate<memory::Packet, memory::PacketPoolAllocator>;
-    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::AudioPacket, memory::AudioPacketPoolAllocator>;
+    using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket>;
+    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::UniqueAudioPacket>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -300,18 +315,14 @@ private:
     void checkPacketCounters(const uint64_t timestamp);
     void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
     void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
-
-    bool enqueuePacket(const IncomingPacketInfo& packetInfo, concurrency::MpmcQueue<IncomingPacketInfo>& queue);
 
     SsrcInboundContext* getInboundSsrcContext(const uint32_t ssrc);
     SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,

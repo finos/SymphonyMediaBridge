@@ -8,11 +8,7 @@ namespace codec
 {
 class OpusDecoder;
 } // namespace codec
-namespace memory
-{
-class Packet;
 
-} // namespace memory
 namespace bridge
 {
 
@@ -91,8 +87,6 @@ struct SctpMessage
 {
     EngineMixer* _mixer;
     size_t _endpointIdHash;
-    memory::Packet* _message;
-    memory::PacketPoolAllocator* _allocator;
 };
 
 struct RecordingStopperMessage
@@ -162,9 +156,30 @@ union MessageUnion
 
 struct Message
 {
+    Message() = default;
+    Message(const Message&) = delete;
+    Message(Type t) : _type(t) {}
+    Message(Message&& rhs)
+    {
+        _type = rhs._type;
+        _command = rhs._command;
+        _packet = std::move(rhs._packet);
+    }
+
+    Message& operator=(const Message&) = delete;
+
+    Message& operator=(Message&& rhs)
+    {
+        _type = rhs._type;
+        _command = rhs._command;
+        _packet = std::move(rhs._packet);
+        return *this;
+    }
+
     Type _type;
     MessageUnion _command;
-};
+    memory::UniquePacket _packet;
+}; // namespace bridge
 
 } // namespace EngineMessage
 

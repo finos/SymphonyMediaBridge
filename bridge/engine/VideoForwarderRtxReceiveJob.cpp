@@ -8,33 +8,22 @@
 namespace bridge
 {
 
-VideoForwarderRtxReceiveJob::VideoForwarderRtxReceiveJob(memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+VideoForwarderRtxReceiveJob::VideoForwarderRtxReceiveJob(memory::UniquePacket packet,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& ssrcContext,
     const uint32_t mainSsrc,
     const uint32_t extendedSequenceNumber)
     : CountedJob(sender->getJobCounter()),
-      _packet(packet),
-      _allocator(allocator),
+      _packet(std::move(packet)),
       _engineMixer(engineMixer),
       _sender(sender),
       _ssrcContext(ssrcContext),
       _mainSsrc(mainSsrc),
       _extendedSequenceNumber(extendedSequenceNumber)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-VideoForwarderRtxReceiveJob::~VideoForwarderRtxReceiveJob()
-{
-    if (_packet)
-    {
-        _allocator.free(_packet);
-        _packet = nullptr;
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void VideoForwarderRtxReceiveJob::run()
@@ -42,16 +31,12 @@ void VideoForwarderRtxReceiveJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
     // RTX packets with padding flag set are empty padding packets for bandwidth estimation purposes, drop early.
     if (rtpHeader->padding == 1)
     {
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -66,20 +51,16 @@ void VideoForwarderRtxReceiveJob::run()
                 "VideoForwarderReceiveJob",
                 _ssrcContext._ssrc,
                 _engineMixer.getLoggableId().c_str());
-            _allocator.free(_packet);
-            _packet = nullptr;
             return;
         }
     }
 
-    if (!_sender->unprotect(_packet))
+    if (!_sender->unprotect(*_packet))
     {
         logger::error("Failed to unprotect srtp %u, mixer %s",
             "VideoForwarderRtxReceiveJob",
             _ssrcContext._ssrc,
             _engineMixer.getLoggableId().c_str());
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -89,8 +70,6 @@ void VideoForwarderRtxReceiveJob::run()
     if (!_ssrcContext._videoMissingPacketsTracker.get())
     {
         assert(false);
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -98,13 +77,10 @@ void VideoForwarderRtxReceiveJob::run()
     if (!_ssrcContext._videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
             extendedSequenceNumber))
     {
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
-    _engineMixer.onForwarderVideoRtpPacketDecrypted(_sender, _packet, _allocator, extendedSequenceNumber);
-    _packet = nullptr;
+    _engineMixer.onForwarderVideoRtpPacketDecrypted(_sender, std::move(_packet), extendedSequenceNumber);
 }
 
 } // namespace bridge

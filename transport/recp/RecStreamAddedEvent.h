@@ -16,14 +16,17 @@ struct RecStreamAddedEvent
     uint8_t codec;
     nwuint16_t endpointLen;
 
-    static RecStreamAddedEvent* fromPtr(void* pointer, size_t len)
+    static const RecStreamAddedEvent* fromPtr(const void* pointer, size_t len)
     {
         assert((intptr_t)pointer % alignof(RecStreamAddedEvent) == 0);
         assert(len >= MIN_SIZE);
-        return reinterpret_cast<RecStreamAddedEvent*>(pointer);
+        return reinterpret_cast<const RecStreamAddedEvent*>(pointer);
     }
 
-    static RecStreamAddedEvent* fromPacket(memory::Packet& packet) { return fromPtr(packet.get(), packet.getLength()); }
+    static const RecStreamAddedEvent* fromPacket(const memory::Packet& packet)
+    {
+        return fromPtr(packet.get(), packet.getLength());
+    }
 };
 
 // Ensure no padding will be added

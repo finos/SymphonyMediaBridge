@@ -9,13 +9,12 @@ class SslDtls;
 class SrtpClientFactory
 {
 public:
-    explicit SrtpClientFactory(SslDtls& sslDtls, memory::PacketPoolAllocator& allocator);
+    explicit SrtpClientFactory(SslDtls& sslDtls);
 
     std::unique_ptr<SrtpClient> create(SrtpClient::IEvents* eventListener = nullptr);
 
 private:
     SslDtls& _sslDtls;
-    memory::PacketPoolAllocator& _allocator;
 };
 
 } // namespace transport

@@ -252,10 +252,11 @@ set(FILES
         memory/AudioPacketPoolAllocator.h
         memory/PoolAllocator.h
         memory/PriorityQueue.h
-        memory/RefCountedPacket.h
         memory/RingAllocator.cpp
         memory/RingAllocator.h
         memory/RingBuffer.h
+        memory/MemoryFile.h
+        memory/MemoryFile.cpp
         rtp/RtcpFeedback.cpp
         rtp/RtcpFeedback.h
         rtp/RtcpHeader.cpp
@@ -315,6 +316,8 @@ set(FILES
         transport/ice/IceCandidate.cpp
         transport/ice/IceCandidate.h
         transport/ice/IceComponent.h
+        transport/ice/IceSerialize.h
+        transport/ice/IceSerialize.cpp
         transport/ice/IceSession.cpp
         transport/ice/IceSession.h
         transport/ice/Stun.cpp

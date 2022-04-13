@@ -10,7 +10,7 @@ FakeCrossTraffic::FakeCrossTraffic(memory::PacketPoolAllocator& allocator, uint3
 {
 }
 
-memory::Packet* FakeCrossTraffic::getPacket(uint64_t timestamp)
+memory::UniquePacket FakeCrossTraffic::getPacket(uint64_t timestamp)
 {
     if (_bandwidthKbps == 0)
     {
@@ -23,7 +23,7 @@ memory::Packet* FakeCrossTraffic::getPacket(uint64_t timestamp)
 
     if (utils::Time::diff(_releaseTime, timestamp) >= 0)
     {
-        auto* packet = memory::makePacket(_allocator);
+        auto packet = memory::makeUniquePacket(_allocator);
         packet->get()[0] = CROSS_TRAFFIC_PROTOCOL;
         packet->setLength(randomPacketSize());
         const auto deltaTime = utils::Time::sec * _mtu / (_bandwidthKbps * int64_t(125));

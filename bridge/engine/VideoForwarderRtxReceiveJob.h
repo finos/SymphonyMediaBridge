@@ -23,20 +23,17 @@ class SsrcInboundContext;
 class VideoForwarderRtxReceiveJob : public jobmanager::CountedJob
 {
 public:
-    VideoForwarderRtxReceiveJob(memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+    VideoForwarderRtxReceiveJob(memory::UniquePacket packet,
         transport::RtcTransport* sender,
         bridge::EngineMixer& engineMixer,
         bridge::SsrcInboundContext& ssrcContext,
         const uint32_t mainSsrc,
         const uint32_t extendedSequenceNumber);
 
-    virtual ~VideoForwarderRtxReceiveJob();
     void run() override;
 
 private:
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::UniquePacket _packet;
     bridge::EngineMixer& _engineMixer;
     transport::RtcTransport* _sender;
     bridge::SsrcInboundContext& _ssrcContext;

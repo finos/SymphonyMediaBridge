@@ -57,7 +57,7 @@ const char* toString(const SrtpClient::State state)
     }
 }
 
-SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener, memory::PacketPoolAllocator& allocator)
+SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     : _isInitialized(false),
       _state(State::IDLE),
       _loggableId("SrtpClient"),
@@ -70,7 +70,6 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener, memory::PacketP
       _localSrtp(nullptr),
       _nullCipher(true),
       _eventSink(eventListener),
-      _allocator(allocator),
       _pendingPackets(32)
 {
     assert(_ssl);
@@ -103,11 +102,7 @@ SrtpClient::~SrtpClient()
 {
     BIO_set_data(_writeBio, nullptr);
     SSL_free(_ssl);
-    memory::Packet* packet = nullptr;
-    while (_pendingPackets.pop(packet))
-    {
-        _allocator.free(packet);
-    }
+
     if (_localSrtp)
     {
         srtp_dealloc(_localSrtp);
@@ -159,12 +154,10 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
         _eventSink->onDtlsStateChange(this, _state);
     }
 
-    memory::Packet* packet = nullptr;
-    while (_state == State::CONNECTING && _pendingPackets.pop(packet))
+    for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
     {
         logger::debug("forwarding pending DTLS message", _loggableId.c_str());
-        onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
-        _allocator.free(packet);
+        onMessageReceived(std::move(packet));
     }
 }
 
@@ -210,11 +203,9 @@ void SrtpClient::dtlsHandShake()
         _eventSink->onDtlsStateChange(this, _state);
     }
 
-    memory::Packet* packet = nullptr;
-    while (_state == State::CONNECTING && _pendingPackets.pop(packet))
+    for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
     {
-        onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
-        _allocator.free(packet);
+        onMessageReceived(std::move(packet));
     }
 }
 
@@ -279,10 +270,9 @@ int64_t SrtpClient::processTimeout()
     return nextTimeout();
 }
 
-bool SrtpClient::unprotect(memory::Packet* packet)
+bool SrtpClient::unprotect(memory::Packet& packet)
 {
     assert(_isInitialized);
-    assert(packet);
 
     if (_nullCipher)
     {
@@ -295,17 +285,17 @@ bool SrtpClient::unprotect(memory::Packet* packet)
     }
 
     // srtp_unprotect assumes data is word aligned
-    assert(reinterpret_cast<uintptr_t>(packet->get()) % 4 == 0);
+    assert(reinterpret_cast<uintptr_t>(packet.get()) % 4 == 0);
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
 
-    auto bufferLength = utils::checkedCast<int32_t>(packet->getLength());
-    if (rtp::isRtpPacket(*packet))
+    auto bufferLength = utils::checkedCast<int32_t>(packet.getLength());
+    if (rtp::isRtpPacket(packet))
     {
-        const auto result = srtp_unprotect(_remoteSrtp, packet->get(), &bufferLength);
+        const auto result = srtp_unprotect(_remoteSrtp, packet.get(), &bufferLength);
         if (result != srtp_err_status_ok)
         {
-            const auto header = rtp::RtpHeader::fromPacket(*packet);
+            const auto header = rtp::RtpHeader::fromPacket(packet);
             logger::warn("Srtp unprotect error: %d, ssrc %u, seq %u, ts %u",
                 _loggableId.c_str(),
                 static_cast<int32_t>(result),
@@ -315,12 +305,12 @@ bool SrtpClient::unprotect(memory::Packet* packet)
             return false;
         }
     }
-    else if (rtp::isRtcpPacket(*packet))
+    else if (rtp::isRtcpPacket(packet))
     {
-        const auto result = srtp_unprotect_rtcp(_remoteSrtp, packet->get(), &bufferLength);
+        const auto result = srtp_unprotect_rtcp(_remoteSrtp, packet.get(), &bufferLength);
         if (result != srtp_err_status_ok)
         {
-            auto header = rtp::RtcpHeader::fromPacket(*packet);
+            auto header = rtp::RtcpHeader::fromPacket(packet);
             logger::warn("srtcp unprotect error type %u, %d",
                 _loggableId.c_str(),
                 header ? header->packetType : 0,
@@ -333,14 +323,14 @@ bool SrtpClient::unprotect(memory::Packet* packet)
             return false;
         }
     }
-    packet->setLength(utils::checkedCast<size_t>(bufferLength));
+    packet.setLength(utils::checkedCast<size_t>(bufferLength));
     return true;
 }
 
-bool SrtpClient::protect(memory::Packet* packet)
+bool SrtpClient::protect(memory::Packet& packet)
 {
     assert(_isInitialized);
-    assert(packet);
+
     if (_nullCipher)
     {
         return true;
@@ -352,18 +342,18 @@ bool SrtpClient::protect(memory::Packet* packet)
     }
 
     // srtp_protect assumes data is word aligned
-    assert(reinterpret_cast<uintptr_t>(packet->get()) % 4 == 0);
+    assert(reinterpret_cast<uintptr_t>(packet.get()) % 4 == 0);
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
 
-    auto bufferLength = utils::checkedCast<int32_t>(packet->getLength());
+    auto bufferLength = utils::checkedCast<int32_t>(packet.getLength());
     assert(bufferLength > 0);
-    if (rtp::isRtpPacket(*packet))
+    if (rtp::isRtpPacket(packet))
     {
-        const auto result = srtp_protect(_localSrtp, packet->get(), &bufferLength);
+        const auto result = srtp_protect(_localSrtp, packet.get(), &bufferLength);
         if (result != srtp_err_status_ok)
         {
-            const auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+            const auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
             logger::warn("Srtp protect error: %d rtp ssrc %u, type %u, seqno %u, timestamp %u",
                 _loggableId.c_str(),
                 static_cast<int32_t>(result),
@@ -375,12 +365,12 @@ bool SrtpClient::protect(memory::Packet* packet)
             return false;
         }
     }
-    else if (rtp::isRtcpPacket(*packet))
+    else if (rtp::isRtcpPacket(packet))
     {
-        const auto result = srtp_protect_rtcp(_localSrtp, packet->get(), &bufferLength);
+        const auto result = srtp_protect_rtcp(_localSrtp, packet.get(), &bufferLength);
         if (result != srtp_err_status_ok)
         {
-            auto header = rtp::RtcpHeader::fromPacket(*packet);
+            auto header = rtp::RtcpHeader::fromPacket(packet);
             logger::info("rtcp type %u", _loggableId.c_str(), header->packetType);
             if (header->packetType == rtp::RtcpPacketType::SENDER_REPORT)
             {
@@ -391,7 +381,7 @@ bool SrtpClient::protect(memory::Packet* packet)
         }
     }
 
-    packet->setLength(utils::checkedCast<size_t>(bufferLength));
+    packet.setLength(utils::checkedCast<size_t>(bufferLength));
     return true;
 }
 
@@ -588,7 +578,7 @@ bool SrtpClient::createSrtp()
     return true;
 }
 
-void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
+void SrtpClient::onMessageReceived(memory::UniquePacket packet)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     assert(_isInitialized);
@@ -596,15 +586,7 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
     if (_state != State::CONNECTING && _state != State::CONNECTED)
     {
         logger::debug("DTLS received when not ready", _loggableId.c_str());
-        auto* packet = memory::makePacket(_allocator, buffer, length);
-        if (packet && !_pendingPackets.push(packet))
-        {
-            _allocator.free(packet);
-        }
-        else if (!packet)
-        {
-            logger::error("cannot process received srtp due to depleted pool allocator", _loggableId.c_str());
-        }
+        _pendingPackets.push(std::move(packet));
         return;
     }
 
@@ -614,7 +596,7 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
         return;
     }
 
-    const int sslResult = BIO_write(_readBio, buffer, utils::checkedCast<int32_t>(length));
+    const int sslResult = BIO_write(_readBio, packet->get(), utils::checkedCast<int32_t>(packet->getLength()));
     if (sslResult <= 0)
     {
         logSslError("Failed to process message", SSL_get_error(_ssl, sslResult));
@@ -655,10 +637,10 @@ void SrtpClient::onMessageReceived(const char* buffer, const size_t length)
     }
 }
 
-bool SrtpClient::unprotectApplicationData(memory::Packet* packet)
+bool SrtpClient::unprotectApplicationData(memory::Packet& packet)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
-    assert(*packet->get() == transport::DTLSContentType::applicationData);
+    assert(*packet.get() == transport::DTLSContentType::applicationData);
     if (_nullCipher)
     {
         logger::debug("null cipher ignoring message", _loggableId.c_str());
@@ -668,13 +650,13 @@ bool SrtpClient::unprotectApplicationData(memory::Packet* packet)
     {
         return false;
     }
-    BIO_write(_readBio, packet->get(), utils::checkedCast<int32_t>(packet->getLength()));
+    BIO_write(_readBio, packet.get(), utils::checkedCast<int32_t>(packet.getLength()));
     ERR_clear_error();
-    auto bytesRead = SSL_read(_ssl, packet->get(), packet->size);
+    auto bytesRead = SSL_read(_ssl, packet.get(), packet.size);
     if (bytesRead > 0)
     {
-        assert(static_cast<size_t>(bytesRead) <= packet->getLength());
-        packet->setLength(bytesRead);
+        assert(static_cast<size_t>(bytesRead) <= packet.getLength());
+        packet.setLength(bytesRead);
         return true;
     }
     else

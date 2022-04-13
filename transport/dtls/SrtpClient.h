@@ -34,7 +34,7 @@ public:
         virtual void onDtlsStateChange(SrtpClient* srtpClient, State state) = 0;
     };
 
-    SrtpClient(SslDtls& sslDtls, IEvents* eventListener, memory::PacketPoolAllocator& allocator);
+    SrtpClient(SslDtls& sslDtls, IEvents* eventListener);
     ~SrtpClient() override;
 
     void setSslWriteBioListener(SslWriteBioListener* sslWriteBioListener);
@@ -45,8 +45,8 @@ public:
         const std::string& fingerprintHash,
         const bool isDtlsClient);
 
-    bool unprotect(memory::Packet* packet);
-    bool protect(memory::Packet* packet);
+    bool unprotect(memory::Packet& packet);
+    bool protect(memory::Packet& packet);
     void removeLocalSsrc(const uint32_t ssrc);
     bool setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
     bool setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
@@ -54,14 +54,14 @@ public:
     bool isDtlsConnected() const { return (_state == State::CONNECTED); }
     bool isDtlsClient() const { return _isDtlsClient; }
 
-    void onMessageReceived(const char* buffer, const size_t length) override;
+    void onMessageReceived(memory::UniquePacket packet) override;
 
     int64_t nextTimeout();
     int64_t processTimeout();
 
     State getState() const { return _state; }
 
-    bool unprotectApplicationData(memory::Packet* packet);
+    bool unprotectApplicationData(memory::Packet& packet);
     void sendApplicationData(const void* data, size_t length);
 
 private:
@@ -87,8 +87,7 @@ private:
 
     DBGCHECK_SINGLETHREADED_MUTEX(_mutexGuard);
 
-    memory::PacketPoolAllocator& _allocator;
-    concurrency::MpmcQueue<memory::Packet*> _pendingPackets;
+    concurrency::MpmcQueue<memory::UniquePacket> _pendingPackets;
 
     void sslRead();
     bool compareFingerprint();

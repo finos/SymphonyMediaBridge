@@ -2,6 +2,7 @@
 #include "bwe/RateController.h"
 #include "config/Config.h"
 #include "jobmanager/WorkerThread.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcePoll.h"
@@ -25,6 +26,7 @@ using namespace testing;
 struct TransportIntegrationTest : public ::testing::Test
 {
     memory::PacketPoolAllocator _sendAllocator;
+    memory::AudioPacketPoolAllocator _audioAllocator;
     config::Config _config1;
     config::Config _config2;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
@@ -54,6 +56,7 @@ struct TransportClientPair : public transport::DataReceiver
         transport::TransportFactory& transportFactory2,
         uint32_t ssrc,
         memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
         transport::SslDtls& sslDtls,
         jobmanager::JobManager& jobManager,
         bool blockUdp);
@@ -66,17 +69,14 @@ struct TransportClientPair : public transport::DataReceiver
     void stop();
 
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         uint64_t timestamp) override;
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint64_t timestamp) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onConnected(transport::RtcTransport*) override {}
@@ -90,12 +90,12 @@ struct TransportClientPair : public transport::DataReceiver
         size_t length) override{};
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         uint64_t timestamp) override{};
 
     uint32_t _ssrc;
     memory::PacketPoolAllocator& _sendAllocator;
+    memory::AudioPacketPoolAllocator& _audioAllocator;
     std::shared_ptr<transport::RtcTransport> _transport1;
     std::shared_ptr<transport::RtcTransport> _transport2;
     uint16_t _sequenceNumber;

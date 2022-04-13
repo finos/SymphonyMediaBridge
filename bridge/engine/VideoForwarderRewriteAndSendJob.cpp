@@ -11,27 +11,18 @@ namespace bridge
 
 VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
     SsrcInboundContext& senderInboundContext,
-    memory::Packet* packet,
+    memory::UniquePacket packet,
     transport::Transport& transport,
     const uint32_t extendedSequenceNumber)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
       _senderInboundContext(senderInboundContext),
-      _packet(packet),
+      _packet(std::move(packet)),
       _transport(transport),
       _extendedSequenceNumber(extendedSequenceNumber)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-VideoForwarderRewriteAndSendJob::~VideoForwarderRewriteAndSendJob()
-{
-    if (_packet)
-    {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void VideoForwarderRewriteAndSendJob::run()
@@ -39,8 +30,6 @@ void VideoForwarderRewriteAndSendJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -60,8 +49,6 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (isRetransmittedPacket)
         {
-            _outboundContext._allocator.free(_packet);
-            _packet = nullptr;
             return;
         }
         if (!isKeyFrame)
@@ -75,8 +62,6 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (!isKeyFrame)
         {
-            _outboundContext._allocator.free(_packet);
-            _packet = nullptr;
             return;
         }
         else
@@ -87,14 +72,12 @@ void VideoForwarderRewriteAndSendJob::run()
 
     uint32_t rewrittenExtendedSequenceNumber = 0;
     if (!Vp8Rewriter::rewrite(_outboundContext,
-            _packet,
+            *_packet,
             _outboundContext._ssrc,
             _extendedSequenceNumber,
             _transport.getLoggableId().c_str(),
             rewrittenExtendedSequenceNumber))
     {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -104,8 +87,6 @@ void VideoForwarderRewriteAndSendJob::run()
             _outboundContext._sequenceCounter,
             nextSequenceNumber))
     {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
     rtpHeader->sequenceNumber = nextSequenceNumber;
@@ -116,10 +97,8 @@ void VideoForwarderRewriteAndSendJob::run()
 
     if (_outboundContext._packetCache.isSet() && _outboundContext._packetCache.get())
     {
-        if (!_outboundContext._packetCache.get()->add(_packet, nextSequenceNumber))
+        if (!_outboundContext._packetCache.get()->add(*_packet, nextSequenceNumber))
         {
-            _outboundContext._allocator.free(_packet);
-            _packet = nullptr;
             return;
         }
     }
@@ -132,20 +111,15 @@ void VideoForwarderRewriteAndSendJob::run()
             rtpHeader->sequenceNumber.get(),
             _transport.getLoggableId().c_str());
 
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
     if (isRetransmittedPacket)
     {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
-    _transport.protectAndSend(_packet, _outboundContext._allocator);
-    _packet = nullptr;
+    _transport.protectAndSend(std::move(_packet));
 }
 
 } // namespace bridge

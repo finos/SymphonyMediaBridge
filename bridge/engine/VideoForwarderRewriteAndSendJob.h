@@ -1,11 +1,7 @@
 #pragma once
 
 #include "jobmanager/Job.h"
-
-namespace memory
-{
-class Packet;
-}
+#include "memory/PacketPoolAllocator.h"
 
 namespace transport
 {
@@ -23,17 +19,16 @@ class VideoForwarderRewriteAndSendJob : public jobmanager::CountedJob
 public:
     VideoForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
         SsrcInboundContext& senderInboundContext,
-        memory::Packet* packet,
+        memory::UniquePacket packet,
         transport::Transport& transport,
         const uint32_t extendedSequenceNumber);
 
-    virtual ~VideoForwarderRewriteAndSendJob();
     void run() override;
 
 private:
     SsrcOutboundContext& _outboundContext;
     SsrcInboundContext& _senderInboundContext;
-    memory::Packet* _packet;
+    memory::UniquePacket _packet;
     transport::Transport& _transport;
     uint32_t _extendedSequenceNumber;
 };

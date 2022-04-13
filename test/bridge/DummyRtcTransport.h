@@ -15,8 +15,8 @@ public:
     bool isRunning() const override { return true; }
     bool hasPendingJobs() const override { return true; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
-    void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& allocator) override {}
-    bool unprotect(memory::Packet* packet) override { return true; }
+    void protectAndSend(memory::UniquePacket packet) override {}
+    bool unprotect(memory::Packet& packet) override { return true; }
     void removeSrtpLocalSsrc(const uint32_t ssrc) override {}
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override { return true; }
     bool isGatheringComplete() const override { return true; }
@@ -28,7 +28,7 @@ public:
     bool setRemotePeer(const transport::SocketAddress& target) override { return true; }
     void setRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
-        memory::PacketPoolAllocator&) override
+        memory::AudioPacketPoolAllocator&) override
     {
     }
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jobmanager/JobManager.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/DataReceiver.h"
 #include "transport/PacketCounters.h"
@@ -56,7 +57,7 @@ public:
     virtual const SocketAddress& getRemotePeer() const = 0;
     virtual void setRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
-        memory::PacketPoolAllocator& allocator) = 0;
+        memory::AudioPacketPoolAllocator& allocator) = 0;
     virtual void setRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) = 0;

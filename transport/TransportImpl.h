@@ -6,6 +6,7 @@
 #include "dtls/SslWriteBioListener.h"
 #include "ice/IceSession.h"
 #include "logger/Logger.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "rtp/SendTimeDial.h"
 #include "sctp/SctpAssociation.h"
 #include "sctp/SctpServerPort.h"
@@ -91,8 +92,8 @@ public: // Transport
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
 
     /** Called from Transport thread threads*/
-    void protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator) override;
-    bool unprotect(memory::Packet* packet) override;
+    void protectAndSend(memory::UniquePacket packet) override;
+    bool unprotect(memory::Packet& packet) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override;
     void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) override;
@@ -109,7 +110,7 @@ public: // Transport
     const SocketAddress& getRemotePeer() const override { return _peerRtpPort; }
     void setRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::AudioPacketPoolAllocator& allocator) override;
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) override;
@@ -184,26 +185,22 @@ public: // end point callbacks
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::UniquePacket packet) override;
 
     void onDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::UniquePacket packet) override;
 
     void onRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::UniquePacket packet) override;
 
     void onIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+        memory::UniquePacket packet) override;
 
     void onPortClosed(Endpoint& endpoint) override;
 
@@ -239,23 +236,19 @@ public: // end point callbacks
 
     void internalDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::UniquePacket packet,
         uint64_t timestamp);
     void internalIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::UniquePacket packet,
         uint64_t timestamp);
     void internalRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::UniquePacket packet,
         uint64_t timestamp);
     void internalRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::UniquePacket packet,
         uint64_t timestamp);
 
     void onServerPortClosed(ServerEndpoint& endpoint) override {}
@@ -267,12 +260,11 @@ private:
     friend class ConnectSctpJob;
     friend class RunTickJob;
 
-    void protectAndSendRtp(uint64_t timestamp, memory::Packet* packet, memory::PacketPoolAllocator& sendAllocator);
+    void protectAndSendRtp(uint64_t timestamp, memory::UniquePacket packet);
     void doProtectAndSend(uint64_t timestamp,
-        memory::Packet* packet,
+        memory::UniquePacket packet,
         const SocketAddress& target,
-        Endpoint* endpoint,
-        memory::PacketPoolAllocator& allocator);
+        Endpoint* endpoint);
     void sendPadding(uint64_t timestamp);
     void sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t nextPacketSize);
 
@@ -280,7 +272,8 @@ private:
         uint64_t timestamp,
         std::__1::chrono::system_clock::time_point wallClock);
 
-    void doSetRemoteIce(const memory::Packet* credentials, const memory::Packet* const* candidatePackets);
+    void doSetRemoteIce(const memory::AudioPacket& credentials, const memory::AudioPacket& candidates);
+
     void doSetRemoteDtls(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide);
@@ -290,14 +283,14 @@ private:
     void doConnectSctp();
     void doRunTick(uint64_t timestamp);
 
-    void appendRemb(memory::Packet* rtcpPacket,
+    void appendRemb(memory::Packet& rtcpPacket,
         const uint64_t timestamp,
         uint32_t senderSsrc,
         const uint32_t* activeInbound,
         int activeInboundCount);
 
     void sendReports(uint64_t timestamp, bool rembReady = false);
-    void sendRtcp(memory::Packet* rtcpPacket, memory::PacketPoolAllocator& allocator, const uint64_t timestamp);
+    void sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp);
 
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 
@@ -391,13 +384,8 @@ private:
     uint32_t _rtxProbeSsrc;
     uint32_t* _rtxProbeSequenceCounter;
 
-    struct PacketInfo
-    {
-        memory::Packet* packet;
-        memory::PacketPoolAllocator& allocator;
-    };
-    memory::RandomAccessBacklog<PacketInfo, 512> _pacingQueue;
-    memory::RandomAccessBacklog<PacketInfo, 512> _rtxPacingQueue;
+    memory::RandomAccessBacklog<memory::UniquePacket, 512> _pacingQueue;
+    memory::RandomAccessBacklog<memory::UniquePacket, 512> _rtxPacingQueue;
     std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;

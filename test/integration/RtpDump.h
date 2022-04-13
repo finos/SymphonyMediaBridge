@@ -20,17 +20,17 @@ public:
     bool open(const char* filename);
     bool isOpen() const { return _fHandle != nullptr; }
 
-    memory::Packet* getNext(uint64_t now);
-    void free(memory::Packet* packet);
+    memory::UniquePacket getNext(uint64_t now);
+
     bridge::RtpMap getRtpMap() const { return _rtpMap; }
 
     memory::PacketPoolAllocator& _allocator;
 
 private:
-    memory::Packet* readPacket();
+    memory::UniquePacket readPacket();
 
     FILE* _fHandle;
-    memory::Packet* _packet;
+    memory::UniquePacket _packet;
 
     uint64_t _timeReference;
     struct RtpCursor
@@ -46,4 +46,4 @@ private:
     bridge::RtpMap _rtpMap;
 };
 
-}
+} // namespace test

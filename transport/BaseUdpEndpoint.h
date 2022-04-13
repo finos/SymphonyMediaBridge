@@ -21,11 +21,7 @@ public:
         RtcePoll& epoll,
         bool isShared);
 
-    virtual ~BaseUdpEndpoint();
-
-    void sendTo(const transport::SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override;
+    void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
 
     void registerDefaultListener(IEvents* defaultListener) override;
 
@@ -52,7 +48,7 @@ public:
 public: // internal job interface
     // called on receiveJobs threads
     virtual void internalReceive(int fd, uint32_t batchSize);
-    virtual void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::Packet* packet) = 0;
+    virtual void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet) = 0;
     // called on sendJobs threads
     virtual void internalSend();
 
@@ -73,8 +69,7 @@ protected:
     struct OutboundPacket
     {
         transport::SocketAddress target;
-        memory::Packet* packet;
-        memory::PacketPoolAllocator* allocator;
+        memory::UniquePacket packet;
     };
 
     jobmanager::JobQueue _receiveJobs;

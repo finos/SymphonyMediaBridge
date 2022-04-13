@@ -31,7 +31,7 @@ void dumpPacket(FILE* fh, const memory::Packet& packet, size_t cappedSize)
     fwrite(packet.get(), recordSize, 1, fh);
 }
 
-VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::Packet* packet,
+VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::UniquePacket packet,
     memory::PacketPoolAllocator& allocator,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
@@ -40,7 +40,7 @@ VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::Packet* packet,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
     : CountedJob(sender->getJobCounter()),
-      _packet(packet),
+      _packet(std::move(packet)),
       _allocator(allocator),
       _engineMixer(engineMixer),
       _sender(sender),
@@ -49,17 +49,8 @@ VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::Packet* packet,
       _extendedSequenceNumber(extendedSequenceNumber),
       _timestamp(timestamp)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-VideoForwarderReceiveJob::~VideoForwarderReceiveJob()
-{
-    if (_packet)
-    {
-        _allocator.free(_packet);
-        _packet = nullptr;
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void VideoForwarderReceiveJob::run()
@@ -79,13 +70,11 @@ void VideoForwarderReceiveJob::run()
                 _sender->getLoggableId().c_str(),
                 _ssrcContext._ssrc,
                 _engineMixer.getLoggableId().c_str());
-            _allocator.free(_packet);
-            _packet = nullptr;
             return;
         }
     }
 
-    if (!_sender->unprotect(_packet))
+    if (!_sender->unprotect(*_packet))
     {
         const auto header = rtp::RtpHeader::fromPacket(*_packet);
         logger::error("Failed to unprotect srtp %s, ssrc %u, seq %u, eseq %u, lreseq %u, lueseq %u, ts %u, mixer %s",
@@ -98,8 +87,6 @@ void VideoForwarderReceiveJob::run()
             _ssrcContext._lastUnprotectedExtendedSequenceNumber,
             header != nullptr ? header->timestamp.get() : 0,
             _engineMixer.getLoggableId().c_str());
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -107,8 +94,6 @@ void VideoForwarderReceiveJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -254,16 +239,12 @@ void VideoForwarderReceiveJob::run()
                 _sender->getLoggableId().c_str(),
                 sequenceNumber,
                 _ssrcContext._ssrc);
-            _allocator.free(_packet);
-            _packet = nullptr;
             return;
         }
     }
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext._rtpMap._payloadType));
-    _engineMixer.onForwarderVideoRtpPacketDecrypted(_sender, _packet, _allocator, _extendedSequenceNumber);
-
-    _packet = nullptr;
+    _engineMixer.onForwarderVideoRtpPacketDecrypted(_sender, std::move(_packet), _extendedSequenceNumber);
 }
 
 } // namespace bridge

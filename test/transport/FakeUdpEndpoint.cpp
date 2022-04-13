@@ -26,11 +26,7 @@ bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
 
 void FakeUdpEndpoint::process(uint64_t timestamp) {}
 
-void FakeUdpEndpoint::sendTo(const transport::SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
-{
-}
+void FakeUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) {}
 
 void FakeUdpEndpoint::registerListener(const std::string& stunUserName, IEvents* listener) {}
 void FakeUdpEndpoint::registerListener(const transport::SocketAddress& remotePort, IEvents* listener) {}

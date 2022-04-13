@@ -1,5 +1,6 @@
 #include "transport/TransportFactory.h"
 #include "config/Config.h"
+#include "memory/PacketPoolAllocator.h"
 #include "transport/RecordingTransport.h"
 #include "transport/RtcTransport.h"
 #include "transport/TcpEndpoint.h"
@@ -11,9 +12,9 @@ namespace transport
 {
 
 class TransportFactoryImpl final : public TransportFactory,
-                             public ServerEndpoint::IEvents,
-                             public TcpEndpointFactory,
-                             public Endpoint::IEvents
+                                   public ServerEndpoint::IEvents,
+                                   public TcpEndpointFactory,
+                                   public Endpoint::IEvents
 {
 public:
     TransportFactoryImpl(jobmanager::JobManager& jobManager,
@@ -390,7 +391,8 @@ public:
                             streamHashId,
                             peer,
                             aesKey,
-                            salt);
+                            salt,
+                            _mainAllocator);
                     }
                 }
 
@@ -429,32 +431,28 @@ private:
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override
+        memory::UniquePacket packet) override
     {
     }
 
     void onDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override
+        memory::UniquePacket packet) override
     {
     }
 
     void onRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override
+        memory::UniquePacket packet) override
     {
     }
 
     void onIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator) override
+        memory::UniquePacket packet) override
     {
     }
 

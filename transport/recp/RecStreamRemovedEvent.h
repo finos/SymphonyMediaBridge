@@ -12,14 +12,24 @@ struct RecStreamRemovedEvent
     RecHeader header;
     nwuint32_t ssrc;
 
-    static RecStreamRemovedEvent* fromPtr(void* pointer, size_t len)
+    static const RecStreamRemovedEvent* fromPtr(const void* pointer, size_t len)
     {
         assert((intptr_t)pointer % alignof(RecStreamRemovedEvent) == 0);
         assert(len >= MIN_SIZE);
-        return reinterpret_cast<RecStreamRemovedEvent*>(pointer);
+        return reinterpret_cast<const RecStreamRemovedEvent*>(pointer);
+    }
+
+    static RecStreamRemovedEvent* fromPtr(void* pointer, size_t len)
+    {
+        return const_cast<RecStreamRemovedEvent*>(fromPtr(static_cast<const void*>(pointer), len));
     }
 
     static RecStreamRemovedEvent* fromPacket(memory::Packet& packet)
+    {
+        return fromPtr(packet.get(), packet.getLength());
+    }
+
+    static const RecStreamRemovedEvent* fromPacket(const memory::Packet& packet)
     {
         return fromPtr(packet.get(), packet.getLength());
     }

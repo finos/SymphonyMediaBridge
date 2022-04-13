@@ -29,10 +29,18 @@ struct ClientPair : public TransportClientPair
         TransportFactory& transportFactory2,
         uint32_t ssrc,
         memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
         transport::SslDtls& sslDtls,
         JobManager& jobManager,
         bool blockUdp)
-        : TransportClientPair(transportFactory1, transportFactory2, ssrc, allocator, sslDtls, jobManager, blockUdp),
+        : TransportClientPair(transportFactory1,
+              transportFactory2,
+              ssrc,
+              allocator,
+              audioAllocator,
+              sslDtls,
+              jobManager,
+              blockUdp),
           _stream1(_transport1->getId(), *_transport1, _sendAllocator),
           _stream2(_transport2->getId(), *_transport2, _sendAllocator)
     {
@@ -106,8 +114,14 @@ TEST_F(SctpIntegrationTest, connectUdp)
     ASSERT_TRUE(_transportFactory1->isGood());
     ASSERT_TRUE(_transportFactory2->isGood());
 
-    ClientPair
-        clients(*_transportFactory1, *_transportFactory2, 11001u, *_mainPoolAllocator, *_sslDtls, *_jobManager, false);
+    ClientPair clients(*_transportFactory1,
+        *_transportFactory2,
+        11001u,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_sslDtls,
+        *_jobManager,
+        false);
 
     const auto startTime = utils::Time::getAbsoluteTime();
     clients.connect(startTime);

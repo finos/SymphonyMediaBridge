@@ -3,7 +3,6 @@
 #include "bridge/engine/RecordingOutboundContext.h"
 #include "bridge/engine/UnackedPacketsTracker.h"
 #include "logger/Logger.h"
-#include "memory/RefCountedPacket.h"
 #include "transport/RecordingTransport.h"
 #include "transport/recp/RecHeader.h"
 
@@ -47,12 +46,7 @@ void ProcessUnackedRecordingEventPacketsJob::run()
 
 void ProcessUnackedRecordingEventPacketsJob::sendIfCached(const uint16_t sequenceNumber)
 {
-    auto scopedRef = memory::RefCountedPacket::ScopedRef(_recordingOutboundContext._packetCache.get(sequenceNumber));
-    if (!scopedRef._refCountedPacket)
-    {
-        return;
-    }
-    auto cachedPacket = scopedRef._refCountedPacket->get();
+    auto cachedPacket = _recordingOutboundContext._packetCache.get(sequenceNumber);
     if (!cachedPacket)
     {
         return;
@@ -63,19 +57,16 @@ void ProcessUnackedRecordingEventPacketsJob::sendIfCached(const uint16_t sequenc
         return;
     }
 
-    auto packet = memory::makePacket(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator, *cachedPacket);
     if (!packet)
     {
         return;
     }
 
-    memcpy(packet->get(), cachedPacket->get(), cachedPacket->getLength());
-    packet->setLength(cachedPacket->getLength());
-
 #if DEBUG_REC_EVENT_ACK
     logger::debug("Sending cached rec event packet seq %u", "ProcessUnackedRecordingEventPacketsJob", sequenceNumber);
 #endif
 
-    _transport.protectAndSend(packet, _allocator);
+    _transport.protectAndSend(std::move(packet));
 }
 } // namespace bridge

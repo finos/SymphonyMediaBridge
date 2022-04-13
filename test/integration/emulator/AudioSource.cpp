@@ -1,6 +1,7 @@
 #include "test/integration/emulator/AudioSource.h"
 #include "codec/AudioLevel.h"
 #include "codec/Opus.h"
+#include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
 #include "utils/Time.h"
 #include <cmath>
@@ -20,7 +21,7 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc)
 {
 }
 
-memory::Packet* AudioSource::getPacket(uint64_t timestamp)
+memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
 {
     if (timeToRelease(timestamp) > 0)
     {
@@ -33,7 +34,7 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     }
     _nextRelease += utils::Time::ms * 20;
 
-    auto* packet = memory::makePacket(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     assert(packet);
     if (!packet)
     {
@@ -80,8 +81,7 @@ memory::Packet* AudioSource::getPacket(uint64_t timestamp)
     }
     else
     {
-        _allocator.free(packet);
-        return nullptr;
+        return memory::UniquePacket();
     }
 }
 

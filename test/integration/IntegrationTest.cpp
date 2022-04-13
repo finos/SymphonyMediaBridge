@@ -25,6 +25,7 @@
 
 IntegrationTest::IntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
+      _audioAllocator(memory::packetPoolSize, "IntegrationTestAudio"),
       _jobManager(std::make_unique<jobmanager::JobManager>()),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(nullptr),
@@ -51,7 +52,7 @@ void IntegrationTest::initBridge(config::Config& config)
     _bridge->initialize();
 
     _sslDtls = &_bridge->getSslDtls();
-    _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPoolAllocator);
+    _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
 
     std::string configJson =
         "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10050, \"recording.singlePort\":0}";
@@ -463,34 +464,17 @@ private:
 class AudioSendJob : public jobmanager::Job
 {
 public:
-    AudioSendJob(transport::Transport& transport,
-        memory::Packet* packet,
-        emulator::AudioSource& source,
-        uint64_t timestamp)
+    AudioSendJob(transport::Transport& transport, memory::UniquePacket packet, uint64_t timestamp)
         : _transport(transport),
-          _packet(packet),
-          _source(source)
+          _packet(std::move(packet))
     {
     }
 
-    ~AudioSendJob()
-    {
-        if (_packet)
-        {
-            _source.getAllocator().free(_packet);
-        }
-    }
-
-    void run() override
-    {
-        _transport.protectAndSend(_packet, _source.getAllocator());
-        _packet = nullptr;
-    }
+    void run() override { _transport.protectAndSend(std::move(_packet)); }
 
 private:
     transport::Transport& _transport;
-    memory::Packet* _packet;
-    emulator::AudioSource& _source;
+    memory::UniquePacket _packet;
 };
 
 class SfuClient : public transport::DataReceiver
@@ -498,9 +482,11 @@ class SfuClient : public transport::DataReceiver
 public:
     SfuClient(uint32_t id,
         memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
         transport::TransportFactory& transportFactory,
         transport::SslDtls& sslDtls)
         : _allocator(allocator),
+          _audioAllocator(audioAllocator),
           _transportFactory(transportFactory),
           _sslDtls(sslDtls),
           _receivedData(256),
@@ -551,7 +537,7 @@ public:
             credentials.first = bundle["transport"]["ufrag"];
             credentials.second = bundle["transport"]["pwd"];
 
-            _transport->setRemoteIce(credentials, candidates, _allocator);
+            _transport->setRemoteIce(credentials, candidates, _audioAllocator);
 
             std::string fingerPrint = bundle["transport"]["fingerprints"][0]["fingerprint"];
             _transport->setRemoteDtlsFingerprint(bundle["transport"]["fingerprints"][0]["hash"], fingerPrint, true);
@@ -596,7 +582,7 @@ public:
 
     void process(uint64_t timestamp)
     {
-        auto* packet = _audioSource->getPacket(timestamp);
+        auto packet = _audioSource->getPacket(timestamp);
         if (packet)
         {
             /*const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
@@ -607,7 +593,7 @@ public:
                 _allocator.free(packet);
                 return;
             }*/
-            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, packet, *_audioSource, timestamp);
+            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, std::move(packet), timestamp);
         }
     }
 
@@ -629,7 +615,7 @@ public:
         }
 
         void onRtpPacketReceived(transport::RtcTransport* sender,
-            memory::Packet* packet,
+            memory::Packet& packet,
             uint32_t extendedSequenceNumber,
             uint64_t timestamp)
         {
@@ -639,13 +625,13 @@ public:
                 return;
             }
 
-            auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+            auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
             addOpus(reinterpret_cast<unsigned char*>(rtpHeader->getPayload()),
-                packet->getLength() - rtpHeader->headerLength(),
+                packet.getLength() - rtpHeader->headerLength(),
                 extendedSequenceNumber);
         }
 
-        void addOpus(unsigned char* opusData, int32_t payloadLength, uint32_t extendedSequenceNumber)
+        void addOpus(const unsigned char* opusData, int32_t payloadLength, uint32_t extendedSequenceNumber)
         {
             int16_t decodedData[memory::AudioPacket::size];
 
@@ -684,8 +670,7 @@ public:
 
 public:
     void onRtpPacketReceived(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        const memory::UniquePacket packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -707,7 +692,7 @@ public:
         {
             if (rtpHeader->payloadType == 111 && _recordingActive.load())
             {
-                it->second->onRtpPacketReceived(sender, packet, extendedSequenceNumber, timestamp);
+                it->second->onRtpPacketReceived(sender, *packet, extendedSequenceNumber, timestamp);
             }
         }
 
@@ -720,15 +705,10 @@ public:
                 extendedSequenceNumber,
                 _receivedData.size());
         }
-        receiveAllocator.free(packet);
     }
 
-    void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
-        uint64_t timestamp) override
+    void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onConnected(transport::RtcTransport* sender) override
@@ -749,8 +729,7 @@ public:
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         uint64_t timestamp) override
     {
     }
@@ -773,6 +752,7 @@ public:
 private:
     utils::IdGenerator _idGenerator;
     memory::PacketPoolAllocator& _allocator;
+    memory::AudioPacketPoolAllocator& _audioAllocator;
     transport::TransportFactory& _transportFactory;
     transport::SslDtls& _sslDtls;
     concurrency::MpmcHashmap32<uint32_t, RtpReceiver*> _receivedData;
@@ -858,9 +838,9 @@ TEST_F(IntegrationTest, plain)
     EXPECT_TRUE(conf.isSuccess());
     utils::Time::nanoSleep(1 * utils::Time::sec);
 
-    SfuClient client1(++_instanceCounter, *_mainPoolAllocator, *_transportFactory, *_sslDtls);
-    SfuClient client2(++_instanceCounter, *_mainPoolAllocator, *_transportFactory, *_sslDtls);
-    SfuClient client3(++_instanceCounter, *_mainPoolAllocator, *_transportFactory, *_sslDtls);
+    SfuClient client1(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient client2(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient client3(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
 
     client1.initiateCall(baseUrl, conf.getId(), true, true, true, "ssrc-rewrite");
     client2.initiateCall(baseUrl, conf.getId(), false, true, true, "ssrc-rewrite");

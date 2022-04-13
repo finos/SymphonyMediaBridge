@@ -438,9 +438,9 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
         sizeof(msg2) - 1,
         _timestamp);
     A.process();
-    auto* sctpOpen = A._sendQueue.pop();
-    auto* sctpMsg1 = A._sendQueue.pop();
-    auto* sctpMsg2 = A._sendQueue.pop();
+    auto sctpOpen = A._sendQueue.pop();
+    auto sctpMsg1 = A._sendQueue.pop();
+    auto sctpMsg2 = A._sendQueue.pop();
 
     B._port->onPacketReceived(sctpMsg1->get(), sctpMsg1->getLength(), _timestamp);
     EXPECT_EQ(B.getReceivedMessageCount(), 0);
@@ -448,8 +448,8 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     EXPECT_EQ(B.getReceivedMessageCount(), 0);
 
     _timestamp += B.process();
-    auto* sack1 = B._sendQueue.pop();
-    auto* sack2 = B._sendQueue.pop();
+    auto sack1 = B._sendQueue.pop();
+    auto sack2 = B._sendQueue.pop();
 
     EXPECT_NE(sack1, nullptr);
     EXPECT_NE(sack2, nullptr);
@@ -459,23 +459,14 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     EXPECT_EQ(B.getReceivedMessageCount(), 3);
     _timestamp += B.process();
     _timestamp += B.process();
-    auto* sack3 = B._sendQueue.pop();
+    auto sack3 = B._sendQueue.pop();
 
     dataStream.onSctpMessage(&fakeTransport, 0, 55, 0x32, sctpOpen->get() + 28, sctpOpen->getLength() - 28);
     auto openAckMsg = fakeTransport._sendQueue.front();
     fakeTransport._sendQueue.pop();
     B._session->sendMessage(A.getStreamId(), openAckMsg.protocol, openAckMsg.data, openAckMsg.length, _timestamp);
     B.process();
-    auto* openAck = B._sendQueue.pop();
+    auto openAck = B._sendQueue.pop();
     EXPECT_NE(sack3, nullptr);
     EXPECT_NE(openAck, nullptr);
-
-    A.getAllocator().free(sctpOpen);
-    A.getAllocator().free(sctpMsg1);
-    A.getAllocator().free(sctpMsg2);
-
-    B.getAllocator().free(sack1);
-    B.getAllocator().free(sack2);
-    B.getAllocator().free(sack3);
-    B.getAllocator().free(openAck);
 }

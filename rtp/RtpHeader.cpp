@@ -189,14 +189,14 @@ uint32_t nsToSecondsFp6_18(uint64_t timestampNs)
     return ((timestampNs * NOMINATOR) / DENOMINATOR) & 0xFFFFFFu;
 }
 
-void setTransmissionTimestamp(memory::Packet* packet, uint8_t extensionId, uint64_t timestamp)
+void setTransmissionTimestamp(memory::Packet& packet, uint8_t extensionId, uint64_t timestamp)
 {
-    if (!rtp::isRtpPacket(*packet))
+    if (!rtp::isRtpPacket(packet))
     {
         return;
     }
 
-    auto* rtpHeader = RtpHeader::fromPacket(*packet);
+    auto* rtpHeader = RtpHeader::fromPacket(packet);
     if (!rtpHeader)
     {
         return;

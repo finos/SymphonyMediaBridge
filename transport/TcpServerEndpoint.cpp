@@ -313,7 +313,7 @@ void TcpServerEndpoint::internalReceive(int fd)
     }
 
     auto& pendingTcp = it->second;
-    auto* packet = pendingTcp.packetizer.receive();
+    auto packet = pendingTcp.packetizer.receive();
     if (packet)
     {
         if (ice::isStunMessage(packet->get(), packet->getLength()))
@@ -350,8 +350,7 @@ void TcpServerEndpoint::internalReceive(int fd)
                         listenIt->second->onIceReceived(*endpoint,
                             pendingTcp.peerPort,
                             endpoint->getLocalPort(),
-                            packet,
-                            _allocator);
+                            std::move(packet));
 
                         _iceListeners.erase(listenIt->first);
                         return;
@@ -376,7 +375,7 @@ void TcpServerEndpoint::internalReceive(int fd)
                     pendingTcp.peerPort,
                     ice::StunError::Code::Unauthorized,
                     "Unknown user");
-                _allocator.free(packet);
+
                 tmpSocket.detachHandle(); // it must not be closed now
                 _epoll.remove(fd, this);
                 _pendingConnections.erase(fd);
@@ -387,7 +386,7 @@ void TcpServerEndpoint::internalReceive(int fd)
         logger::debug("packet received was not valid ICE. closing tcp connection %s",
             _name.c_str(),
             pendingTcp.peerPort.toString().c_str());
-        _allocator.free(packet);
+
         // attack, close the socket
         _epoll.remove(fd, this);
         _pendingConnections.erase(fd);

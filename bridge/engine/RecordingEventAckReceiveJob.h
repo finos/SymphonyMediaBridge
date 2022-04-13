@@ -16,18 +16,14 @@ class UnackedPacketsTracker;
 class RecordingEventAckReceiveJob : public jobmanager::CountedJob
 {
 public:
-    RecordingEventAckReceiveJob(memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+    RecordingEventAckReceiveJob(memory::UniquePacket packet,
         transport::RecordingTransport* sender,
         UnackedPacketsTracker& recEventUnackedPacketsTracker);
-
-    ~RecordingEventAckReceiveJob() override;
 
     void run() override;
 
 private:
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::UniquePacket _packet;
     UnackedPacketsTracker& _recEventUnackedPacketsTracker;
 };
 

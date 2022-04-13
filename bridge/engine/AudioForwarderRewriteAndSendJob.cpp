@@ -9,26 +9,17 @@ namespace bridge
 {
 
 AudioForwarderRewriteAndSendJob::AudioForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
-    memory::Packet* packet,
+    memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
     transport::Transport& transport)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
-      _packet(packet),
+      _packet(std::move(packet)),
       _extendedSequenceNumber(extendedSequenceNumber),
       _transport(transport)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-AudioForwarderRewriteAndSendJob::~AudioForwarderRewriteAndSendJob()
-{
-    if (_packet)
-    {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void AudioForwarderRewriteAndSendJob::run()
@@ -49,10 +40,9 @@ void AudioForwarderRewriteAndSendJob::run()
             _outboundContext._sequenceCounter,
             nextSequenceNumber))
     {
-        _outboundContext._allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
+
     header->ssrc = _outboundContext._ssrc;
     header->sequenceNumber = nextSequenceNumber;
     header->timestamp = _outboundContext._timestampOffset + header->timestamp;
@@ -61,8 +51,7 @@ void AudioForwarderRewriteAndSendJob::run()
         _outboundContext._lastSentTimestamp = header->timestamp;
     }
 
-    _transport.protectAndSend(_packet, _outboundContext._allocator);
-    _packet = nullptr;
+    _transport.protectAndSend(std::move(_packet));
 }
 
 } // namespace bridge

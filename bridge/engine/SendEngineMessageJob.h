@@ -13,14 +13,14 @@ class SendEngineMessageJob : public jobmanager::CountedJob
 public:
     SendEngineMessageJob(transport::Transport& transport,
         EngineMessageListener& messageListener,
-        const EngineMessage::Message& message)
+        EngineMessage::Message&& message)
         : CountedJob(transport.getJobCounter()),
           _messageListener(messageListener),
-          _message(message)
+          _message(std::move(message))
     {
     }
 
-    void run() override { _messageListener.onMessage(_message); }
+    void run() override { _messageListener.onMessage(std::move(_message)); }
 
 private:
     EngineMessageListener& _messageListener;

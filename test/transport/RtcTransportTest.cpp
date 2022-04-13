@@ -66,6 +66,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         : _name("ClientPair"),
           _ssrc(ssrc),
           _sendAllocator(allocatorPacketCount, _name.c_str()),
+          _audioAllocator(16, _name.c_str()),
           _transport1(enableIce ? transportFactory->createOnSharedPort(ice::IceRole::CONTROLLED, 128, 1)
                                 : transportFactory->create(128, 1)),
           _transport2(enableIce ? transportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 128, 2)
@@ -92,10 +93,10 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         {
             _transport1->setRemoteIce(_transport2->getLocalCredentials(),
                 _transport2->getLocalCandidates(),
-                _sendAllocator);
+                _audioAllocator);
             _transport2->setRemoteIce(_transport1->getLocalCredentials(),
                 _transport1->getLocalCandidates(),
-                _sendAllocator);
+                _audioAllocator);
         }
         else
         {
@@ -162,15 +163,14 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     {
         for (auto packet = src.getPacket(timestamp); packet; packet = src.getPacket(timestamp))
         {
-            transport->getJobQueue().addJob<transport::SendJob>(*transport, packet, _sendAllocator);
+            transport->getJobQueue().addJob<transport::SendJob>(*transport, std::move(packet));
         }
     }
 
     bool isConnected() { return _transport1->isConnected() && _transport2->isConnected(); }
 
     void onRtpPacketReceived(RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         uint64_t timestamp) override
     {
@@ -204,23 +204,19 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
             report.previousReport = timestamp;
         }
 
-        sender->getJobQueue().addJob<transport::SrtpUnprotectJob>(sender, packet, receiveAllocator, this);
+        sender->getJobQueue().addJob<transport::SrtpUnprotectJob>(sender, std::move(packet), this);
     }
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         const uint64_t timestamp) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
+        memory::UniquePacket packet,
         std::atomic_uint32_t& ownerCount) override
     {
-        receiveAllocator.free(packet);
     }
 
     void onConnected(RtcTransport*) override {}
@@ -233,14 +229,12 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         const void* data,
         size_t length) override{};
 
-    void onRecControlReceived(RecordingTransport* sender,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& receiveAllocator,
-        uint64_t timestamp) override{};
+    void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override{};
 
     logger::LoggableId _name;
     uint32_t _ssrc;
     memory::PacketPoolAllocator _sendAllocator;
+    memory::AudioPacketPoolAllocator _audioAllocator;
     std::shared_ptr<RtcTransport> _transport1;
     std::shared_ptr<RtcTransport> _transport2;
     std::atomic_uint32_t _jobsCounter1;
@@ -276,7 +270,7 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
           _jobManager(std::make_unique<jobmanager::JobManager>()),
           _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096 * 32, "testMain")),
           _sslDtls(std::make_unique<transport::SslDtls>()),
-          _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls, *_mainPoolAllocator)),
+          _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls)),
           _network(transport::createRtcePoll()),
           _pacer(5 * 1000000)
     {

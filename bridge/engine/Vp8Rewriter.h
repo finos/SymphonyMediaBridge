@@ -41,13 +41,13 @@ constexpr uint16_t extractRolloverCounter(const uint32_t extendedSequenceNumber)
 }
 
 inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
-    memory::Packet* rewritePacket,
+    memory::Packet& rewritePacket,
     const uint32_t rewriteSsrc,
     const uint32_t extendedSequenceNumber,
     const char* transportName,
     uint32_t& outExtendedSequenceNumber)
 {
-    auto rtpHeader = rtp::RtpHeader::fromPacket(*rewritePacket);
+    auto rtpHeader = rtp::RtpHeader::fromPacket(rewritePacket);
     if (!rtpHeader)
     {
         return false;

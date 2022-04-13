@@ -4,15 +4,18 @@
 #include "dtls/SrtpClient.h"
 #include "dtls/SrtpClientFactory.h"
 #include "dtls/SslDtls.h"
+#include "ice/IceSerialize.h"
 #include "ice/IceSession.h"
 #include "logger/Logger.h"
 #include "logger/PacketLogger.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "sctp/SctpAssociation.h"
 #include "transport/DtlsJob.h"
 #include "transport/IceJob.h"
 #include "transport/SctpJob.h"
+#include "transport/ice/IceSerialize.h"
 #include "utils/SocketAddress.h"
 #include "utils/StdExtensions.h"
 #include <arpa/inet.h>
@@ -34,52 +37,37 @@ public:
     PacketReceiveJob(TransportImpl& transport,
         Endpoint& endpoint,
         const SocketAddress& source,
-        memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+        memory::UniquePacket packet,
         void (TransportImpl::*receiveMethod)(Endpoint& endpoint,
             const SocketAddress& source,
-            memory::Packet* packet,
-            memory::PacketPoolAllocator& allocator,
+            memory::UniquePacket packet,
             uint64_t timestamp))
         : _transport(transport),
           _endpoint(endpoint),
-          _packet(packet),
-          _allocator(allocator),
+          _packet(std::move(packet)),
           _source(source),
           _timestamp(utils::Time::getAbsoluteTime()),
           _receiveMethod(receiveMethod)
     {
     }
 
-    ~PacketReceiveJob()
-    {
-        if (_packet)
-        {
-            _allocator.free(_packet);
-        }
-    }
+    ~PacketReceiveJob() {}
 
     void run() override
     {
         DBGCHECK_SINGLETHREADED(_transport._singleThreadMutex);
 
-        (_transport.*_receiveMethod)(_endpoint, _source, _packet, _allocator, _timestamp);
-        _packet = nullptr;
+        (_transport.*_receiveMethod)(_endpoint, _source, std::move(_packet), _timestamp);
     }
 
 private:
     TransportImpl& _transport;
     Endpoint& _endpoint;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::UniquePacket _packet;
     const SocketAddress _source;
     uint64_t _timestamp;
 
-    void (TransportImpl::*_receiveMethod)(Endpoint&,
-        const SocketAddress&,
-        memory::Packet*,
-        memory::PacketPoolAllocator&,
-        uint64_t);
+    void (TransportImpl::*_receiveMethod)(Endpoint&, const SocketAddress&, memory::UniquePacket packet, uint64_t);
 };
 
 class IceDisconnectJob : public jobmanager::Job
@@ -117,76 +105,49 @@ public:
     IceSetRemoteJob(TransportImpl& transport,
         const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
-        memory::PacketPoolAllocator& allocator)
+        memory::AudioPacketPoolAllocator& allocator)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
-          _allocator(allocator),
-          _iceCredentials(nullptr),
-          _iceCandidates{0}
+          _iceCredentials(memory::makeUniquePacket(allocator)),
+          _iceCandidates(memory::makeUniquePacket(allocator))
     {
-        _iceCredentials = memory::makePacket(allocator);
-        if (!_iceCredentials)
+        if (!_iceCredentials || !_iceCandidates)
         {
             logger::error("failed to allocate packet", "setRemoteIce");
+            _iceCredentials.reset();
+            _iceCandidates.reset();
             return;
         }
         auto& iceSettings = *reinterpret_cast<IceCredentials*>(_iceCredentials->get());
         utils::strncpy(iceSettings.ufrag, credentials.first.c_str(), sizeof(iceSettings.ufrag));
         utils::strncpy(iceSettings.password, credentials.second.c_str(), sizeof(iceSettings.password));
 
-        memory::Packet* icePacket = nullptr;
-        for (size_t i = 0; i < candidates.size() && i < maxCandidatePackets * IceCandidates::maxCandidateCount; ++i)
+        memory::MemoryFile stream(_iceCandidates->get(), _iceCandidates->size);
+        for (auto& candidate : candidates)
         {
-            if (i % IceCandidates::maxCandidateCount == 0)
+            stream << candidate;
+            if (!stream.isGood())
             {
-                icePacket = memory::makePacket(allocator);
-                if (!icePacket)
-                {
-                    logger::error("failed to allocate packet", "setRemoteIce");
-                    return;
-                }
-                _iceCandidates[i / maxCandidatePackets] = icePacket;
-                auto& iceCandidates = *reinterpret_cast<IceCandidates*>(icePacket->get());
-                iceCandidates.candidateCount = 0;
+                logger::warn("Not all candidates could be added. ICE will likely work anyway.",
+                    _transport.getLoggableId().c_str());
+                break;
             }
-            auto& iceCandidates = *reinterpret_cast<IceCandidates*>(icePacket->get());
-            iceCandidates.candidates[i % IceCandidates::maxCandidateCount] = candidates[i];
-            iceCandidates.candidateCount++;
         }
+        _iceCandidates->setLength(stream.getPosition());
     }
 
     void run() override
     {
-        if (!_iceCredentials)
+        if (_iceCredentials && _iceCandidates)
         {
-            return;
-        }
-
-        _transport.doSetRemoteIce(_iceCredentials, _iceCandidates);
-    }
-
-    ~IceSetRemoteJob()
-    {
-        if (_iceCredentials)
-        {
-            _allocator.free(_iceCredentials);
-        }
-
-        for (size_t i = 0; i < maxCandidatePackets; ++i)
-        {
-            if (!_iceCandidates[i])
-            {
-                break;
-            }
-            _allocator.free(_iceCandidates[i]);
+            _transport.doSetRemoteIce(*_iceCredentials, *_iceCandidates);
         }
     }
 
 private:
     TransportImpl& _transport;
-    memory::PacketPoolAllocator& _allocator;
-    memory::Packet* _iceCredentials;
-    memory::Packet* _iceCandidates[maxCandidatePackets + 1];
+    memory::UniqueAudioPacket _iceCredentials;
+    memory::UniqueAudioPacket _iceCandidates;
 };
 
 struct DtlsCredentials
@@ -210,15 +171,14 @@ public:
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
           _srtpClient(srtpClient),
-          _packet(nullptr),
-          _allocator(allocator)
+          _packet(nullptr)
     {
         DtlsCredentials credentials;
         utils::strncpy(credentials.fingerprintHash, fingerprintHash, sizeof(credentials.fingerprintHash));
         utils::strncpy(credentials.fingerprintType, fingerprintType, sizeof(credentials.fingerprintType));
         credentials.dtlsClientSide = clientSide;
 
-        _packet = memory::makePacket(allocator, &credentials, sizeof(credentials));
+        _packet = memory::makeUniquePacket(allocator, &credentials, sizeof(credentials));
     }
 
     void run() override
@@ -237,14 +197,12 @@ public:
                 credentials->fingerprintHash,
                 credentials->dtlsClientSide);
         }
-        _allocator.free(_packet);
     }
 
 private:
     TransportImpl& _transport;
     SrtpClient& _srtpClient;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::UniquePacket _packet;
 };
 
 // must be serialized after set Ice and set Dtls
@@ -283,8 +241,7 @@ public:
         : CountedJob(transport.getJobCounter()),
           _jobQueue(jobQueue),
           _sctpAssociation(association),
-          _packet(memory::makePacket(allocator)),
-          _allocator(allocator),
+          _packet(memory::makeUniquePacket(allocator)),
           _transport(transport)
     {
         if (_packet)
@@ -292,7 +249,6 @@ public:
             if (sizeof(SctpDataChunk) + length > memory::Packet::size)
             {
                 logger::error("sctp message too big %u", _transport.getLoggableId().c_str(), length);
-                allocator.free(_packet);
                 return;
             }
 
@@ -305,14 +261,6 @@ public:
         else
         {
             logger::error("failed to create packet for outbound sctp", transport.getLoggableId().c_str());
-        }
-    }
-
-    ~SctpSendJob()
-    {
-        if (_packet)
-        {
-            _allocator.free(_packet);
         }
     }
 
@@ -358,16 +306,12 @@ public:
         {
             SctpTimerJob::start(_jobQueue, _transport, _sctpAssociation, nextTimeout);
         }
-
-        _allocator.free(_packet);
-        _packet = nullptr;
     }
 
 private:
     jobmanager::JobQueue& _jobQueue;
     sctp::SctpAssociation& _sctpAssociation;
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::UniquePacket _packet;
     TransportImpl& _transport;
 };
 
@@ -737,19 +681,6 @@ TransportImpl::~TransportImpl()
             delete endpoint;
         }
     }
-
-    while (!_pacingQueue.empty())
-    {
-        auto& info = _pacingQueue.back();
-        info.allocator.free(info.packet);
-        _pacingQueue.pop_back();
-    }
-    while (!_rtxPacingQueue.empty())
-    {
-        auto& info = _rtxPacingQueue.back();
-        info.allocator.free(info.packet);
-        _rtxPacingQueue.pop_back();
-    }
 }
 
 void TransportImpl::stop()
@@ -842,21 +773,18 @@ void TransportImpl::onServerPortUnregistered(ServerEndpoint& endpoint)
 void TransportImpl::onRtpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+    memory::UniquePacket packet)
 {
     if (!_jobQueue
-             .addJob<PacketReceiveJob>(*this, endpoint, source, packet, allocator, &TransportImpl::internalRtpReceived))
+             .addJob<PacketReceiveJob>(*this, endpoint, source, std::move(packet), &TransportImpl::internalRtpReceived))
     {
         logger::error("job queue full RTCP", _loggableId.c_str());
-        allocator.free(packet);
     }
 }
 
 void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+    memory::UniquePacket packet,
     const uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -865,21 +793,18 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     if (!_srtpClient->isDtlsConnected())
     {
         logger::debug("RTP received, dtls not connected yet", _loggableId.c_str());
-        allocator.free(packet);
         return;
     }
 
     DataReceiver* const dataReceiver = _dataReceiver.load();
     if (!dataReceiver)
     {
-        allocator.free(packet);
         return;
     }
 
     const auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     if (!rtpHeader)
     {
-        allocator.free(packet);
         return;
     }
 
@@ -921,31 +846,27 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
         static_cast<int16_t>(
             static_cast<uint16_t>(ssrcState.getExtendedSequenceNumber() & 0xFFFFu) - rtpHeader->sequenceNumber.get());
 
-    dataReceiver->onRtpPacketReceived(this, packet, allocator, extendedSequenceNumber, timestamp);
+    dataReceiver->onRtpPacketReceived(this, std::move(packet), extendedSequenceNumber, timestamp);
 }
 
 void TransportImpl::onDtlsReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+    memory::UniquePacket packet)
 {
     if (!_jobQueue.addJob<PacketReceiveJob>(*this,
             endpoint,
             source,
-            packet,
-            allocator,
+            std::move(packet),
             &TransportImpl::internalDtlsReceived))
     {
         logger::warn("job queue full DTLS", _loggableId.c_str());
-        allocator.free(packet);
     }
 }
 
 void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+    memory::UniquePacket packet,
     uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -954,7 +875,7 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     {
         DataReceiver* const dataReceiver = _dataReceiver.load();
 
-        if (dataReceiver && _sctpServerPort && _srtpClient->unprotectApplicationData(packet))
+        if (dataReceiver && _sctpServerPort && _srtpClient->unprotectApplicationData(*packet))
         {
             _sctpServerPort->onPacketReceived(packet->get(), packet->getLength(), timestamp);
         }
@@ -965,34 +886,28 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
             _loggableId.c_str(),
             source.toString().c_str(),
             packet->getLength());
-        _srtpClient->onMessageReceived(reinterpret_cast<const char*>(packet->get()), packet->getLength());
+        _srtpClient->onMessageReceived(std::move(packet));
     }
-
-    allocator.free(packet);
 }
 
 void TransportImpl::onRtcpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+    memory::UniquePacket packet)
 {
     if (!_jobQueue.addJob<PacketReceiveJob>(*this,
             endpoint,
             source,
-            packet,
-            allocator,
+            std::move(packet),
             &TransportImpl::internalRtcpReceived))
     {
         logger::warn("job queue full RTCP", _loggableId.c_str());
-        allocator.free(packet);
     }
 }
 
 void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+    memory::UniquePacket packet,
     uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -1000,14 +915,12 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     if (!_srtpClient->isDtlsConnected())
     {
         logger::debug("RTCP received, dtls not connected yet", _loggableId.c_str());
-        allocator.free(packet);
         return;
     }
 
     auto* dataReceiver = _dataReceiver.load();
     if (!dataReceiver)
     {
-        allocator.free(packet);
         return;
     }
 
@@ -1016,7 +929,7 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     _bwe->onUnmarkedTraffic(packet->getLength(), timestamp);
 
     const auto now = std::chrono::system_clock::now();
-    if (unprotect(packet) && rtp::isValidRtcpPacket(*packet))
+    if (unprotect(*packet) && rtp::isValidRtcpPacket(*packet))
     {
         rtp::CompoundRtcpPacket compound(packet->get(), packet->getLength());
         for (auto& report : compound)
@@ -1024,7 +937,7 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
             processRtcpReport(report, receiveTime, now);
         }
 
-        dataReceiver->onRtcpPacketDecoded(this, packet, allocator, receiveTime);
+        dataReceiver->onRtcpPacketDecoded(this, std::move(packet), receiveTime);
         return;
     }
     else
@@ -1036,20 +949,17 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
             header->packetType,
             header->length.get());
     }
-    allocator.free(packet);
 }
 
 void TransportImpl::onIceReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+    memory::UniquePacket packet)
 {
     if (_rtpIceSession)
     {
         if (ice::isResponse(packet->get()) && !_rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
         {
-            allocator.free(packet);
             return;
         }
 
@@ -1061,17 +971,15 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
     }
 
     if (!_jobQueue
-             .addJob<PacketReceiveJob>(*this, endpoint, source, packet, allocator, &TransportImpl::internalIceReceived))
+             .addJob<PacketReceiveJob>(*this, endpoint, source, std::move(packet), &TransportImpl::internalIceReceived))
     {
         logger::error("job queue full ICE", _loggableId.c_str());
-        allocator.free(packet);
     }
 }
 
 void TransportImpl::internalIceReceived(Endpoint& endpoint,
     const SocketAddress& source,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+    memory::UniquePacket packet,
     uint64_t timestamp)
 {
     ++_inboundMetrics.packetCount;
@@ -1107,8 +1015,6 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
         _rtpEndpoints.push_back(&endpoint);
         _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
     }
-
-    allocator.free(packet);
 }
 
 void TransportImpl::onIceDisconnect(Endpoint& endpoint)
@@ -1429,23 +1335,18 @@ uint32_t TransportImpl::getRtxPacingQueueCount() const
 }
 
 void TransportImpl::doProtectAndSend(uint64_t timestamp,
-    memory::Packet* packet,
+    memory::UniquePacket packet,
     const SocketAddress& target,
-    Endpoint* endpoint,
-    memory::PacketPoolAllocator& allocator)
+    Endpoint* endpoint)
 {
     _outboundMetrics.bytesCount += packet->getLength();
     ++_outboundMetrics.packetCount;
 
     assert(packet->getLength() + 24 <= _config.mtu);
-    if (endpoint && _srtpClient->protect(packet))
+    if (endpoint && _srtpClient->protect(*packet))
     {
         _sendRateTracker.update(packet->getLength(), timestamp);
-        endpoint->sendTo(target, packet, allocator);
-    }
-    else
-    {
-        allocator.free(packet);
+        endpoint->sendTo(target, std::move(packet));
     }
 }
 
@@ -1458,12 +1359,13 @@ void TransportImpl::sendPadding(uint64_t timestamp)
 
     auto budget = _rateController.getPacingBudget(timestamp);
     auto* pacingQueue = _rtxPacingQueue.empty() ? &_pacingQueue : &_rtxPacingQueue;
-    while (!pacingQueue->empty() && budget >= pacingQueue->back().packet->getLength() + _config.ipOverhead)
+    while (!pacingQueue->empty() && budget >= pacingQueue->back()->getLength() + _config.ipOverhead)
     {
-        PacketInfo packetInfo = pacingQueue->back();
-        budget -= std::min(budget, packetInfo.packet->getLength() + _config.ipOverhead);
+        auto packet = std::move(pacingQueue->back());
         pacingQueue->pop_back();
-        protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+        budget -= std::min(budget, packet->getLength() + _config.ipOverhead);
+
+        protectAndSendRtp(timestamp, std::move(packet));
         pacingQueue = _rtxPacingQueue.empty() ? &_pacingQueue : &_rtxPacingQueue;
     }
 
@@ -1471,7 +1373,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
     auto paddingCount = _rateController.getPadding(timestamp, 0, padding);
     for (uint32_t i = 0; padding > 100 && i < paddingCount && _selectedRtp; ++i)
     {
-        auto padPacket = memory::makePacket(_mainAllocator);
+        auto padPacket = memory::makeUniquePacket(_mainAllocator);
         if (padPacket)
         {
             padPacket->clear();
@@ -1495,7 +1397,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
 
             // fake a really old packet
             reinterpret_cast<uint16_t*>(padRtpHeader->getPayload())[0] = hton<uint16_t>(23033);
-            protectAndSendRtp(timestamp, padPacket, _mainAllocator);
+            protectAndSendRtp(timestamp, std::move(padPacket));
         }
         else
         {
@@ -1515,13 +1417,13 @@ void TransportImpl::sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t 
     const auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
     for (uint32_t i = 0; i < paddingCount && _selectedRtcp; ++i)
     {
-        auto padPacket = memory::makePacket(_mainAllocator);
+        auto padPacket = memory::makeUniquePacket(_mainAllocator);
         if (padPacket)
         {
             auto* rtcpPadding = rtp::RtcpApplicationSpecific::create(padPacket->get(), ssrc, "BRPP", padding);
             padPacket->setLength(rtcpPadding->header.size());
             _rateController.onRtcpPaddingSent(timestamp, ssrc, padPacket->getLength());
-            doProtectAndSend(timestamp, padPacket, _peerRtcpPort, _selectedRtcp, _mainAllocator);
+            doProtectAndSend(timestamp, std::move(padPacket), _peerRtcpPort, _selectedRtcp);
         }
     }
 }
@@ -1533,16 +1435,11 @@ void clearPacingQueueIfFull(T& pacingQueue)
 {
     if (pacingQueue.full())
     {
-        while (!pacingQueue.empty())
-        {
-            auto& info = pacingQueue.back();
-            info.allocator.free(info.packet);
-            pacingQueue.pop_back();
-        }
+        pacingQueue.clear();
     }
 }
 } // namespace
-void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAllocator& allocator)
+void TransportImpl::protectAndSend(memory::UniquePacket packet)
 {
     DBGCHECK_SINGLETHREADED(_singleThreadMutex);
 
@@ -1551,7 +1448,6 @@ void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAll
 
     if (!_srtpClient || !_selectedRtp || !isConnected())
     {
-        allocator.free(packet);
         return;
     }
 
@@ -1566,33 +1462,27 @@ void TransportImpl::protectAndSend(memory::Packet* packet, memory::PacketPoolAll
         clearPacingQueueIfFull(_rtxPacingQueue);
         if (payloadType == rtxPayloadType)
         {
-            _rtxPacingQueue.push_front({packet, allocator});
+            _rtxPacingQueue.push_front(std::move(packet));
         }
         else if (!isAudio)
         {
-            _pacingQueue.push_front({packet, allocator});
+            _pacingQueue.push_front(std::move(packet));
         }
         else
         {
             sendRtcpPadding(timestamp, rtpHeader->ssrc, packet->getLength());
-            protectAndSendRtp(timestamp, packet, allocator);
+            protectAndSendRtp(timestamp, std::move(packet));
         }
 
         doRunTick(timestamp);
     }
     else if (_selectedRtcp)
     {
-        sendRtcp(packet, allocator, timestamp);
-    }
-    else
-    {
-        allocator.free(packet);
+        sendRtcp(std::move(packet), timestamp);
     }
 }
 
-void TransportImpl::protectAndSendRtp(uint64_t timestamp,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator)
+void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket packet)
 {
     const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     const auto payloadType = rtpHeader->payloadType;
@@ -1601,11 +1491,12 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp,
 
     if (_absSendTimeExtensionId)
     {
-        rtp::setTransmissionTimestamp(packet, _absSendTimeExtensionId, timestamp);
+        rtp::setTransmissionTimestamp(*packet, _absSendTimeExtensionId, timestamp);
     }
 
     auto& ssrcState = getOutboundSsrc(rtpHeader->ssrc, rtpFrequency);
-    if (static_cast<int16_t>(rtpHeader->sequenceNumber.get() - (ssrcState.getSentSequenceNumber() & 0xFFFFu)) < 1)
+    if (ssrcState.getSentPacketsCount() > 2 &&
+        static_cast<int16_t>(rtpHeader->sequenceNumber.get() - (ssrcState.getSentSequenceNumber() & 0xFFFFu)) < 1)
     {
         logger::info("out of order transmission ssrc %u, seqno %u, last %u",
             _loggableId.c_str(),
@@ -1616,7 +1507,7 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp,
 
     ssrcState.onRtpSent(timestamp, *packet);
     _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
-    doProtectAndSend(timestamp, packet, _peerRtpPort, _selectedRtp, allocator);
+    doProtectAndSend(timestamp, std::move(packet), _peerRtpPort, _selectedRtp);
 }
 
 // Send sender reports and receiver reports as needed for the inbound and outbound ssrcs.
@@ -1664,7 +1555,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
     const uint64_t ntp32Tick = 0x10000u; // 1/65536 sec
 
     bool rembAdded = false;
-    memory::Packet* rtcpPacket = nullptr;
+    memory::UniquePacket rtcpPacket;
     uint32_t senderSsrc = 0;
     for (uint32_t i = 0; i < senderReportCount; ++i)
     {
@@ -1678,7 +1569,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
         if (!rtcpPacket)
         {
-            rtcpPacket = memory::makePacket(_mainAllocator);
+            rtcpPacket = memory::makeUniquePacket(_mainAllocator);
             if (!rtcpPacket)
             {
                 logger::warn("No space available to send SR", _loggableId.c_str());
@@ -1701,19 +1592,18 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             receiveIt->second.fillInReportBlock(timestamp, block, wallClock);
         }
         rtcpPacket->setLength(rtcpPacket->getLength() + senderReport->header.size());
-        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket));
+        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
 
         if (!rembAdded)
         {
-            appendRemb(rtcpPacket, timestamp, it->first, activeSsrcs, activeCount);
+            appendRemb(*rtcpPacket, timestamp, it->first, activeSsrcs, activeCount);
             rembAdded = true;
         }
 
         if (rtcpPacket->getLength() + MINIMUM_SR + std::min(receiverReportCount, 4u) * sizeof(rtp::ReportBlock) >
             _config.mtu)
         {
-            sendRtcp(rtcpPacket, _mainAllocator, timestamp);
-            rtcpPacket = nullptr;
+            sendRtcp(std::move(rtcpPacket), timestamp);
         }
     }
 
@@ -1728,13 +1618,12 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             rtcpPacket->getLength() + MINIMUM_RR + std::min(4u, receiverReportCount) * sizeof(rtp::ReportBlock) >
                 _config.mtu)
         {
-            sendRtcp(rtcpPacket, _mainAllocator, timestamp);
-            rtcpPacket = nullptr;
+            sendRtcp(std::move(rtcpPacket), timestamp);
         }
 
         if (!rtcpPacket)
         {
-            rtcpPacket = memory::makePacket(_mainAllocator);
+            rtcpPacket = memory::makeUniquePacket(_mainAllocator);
             if (!rtcpPacket)
             {
                 logger::warn("No space available to send RR", _loggableId.c_str());
@@ -1756,11 +1645,11 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             receiveIt->second.fillInReportBlock(timestamp, block, wallClock);
         }
         rtcpPacket->setLength(receiverReport->header.size());
-        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket));
+        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
 
         if (!rembAdded)
         {
-            appendRemb(rtcpPacket, timestamp, senderSsrc, activeSsrcs, activeCount);
+            appendRemb(*rtcpPacket, timestamp, senderSsrc, activeSsrcs, activeCount);
             rembAdded = true;
         }
 
@@ -1768,32 +1657,31 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             rtcpPacket->getLength() + MINIMUM_RR + std::min(15u, receiverReportCount) * sizeof(rtp::ReportBlock) >
                 _config.mtu)
         {
-            sendRtcp(rtcpPacket, _mainAllocator, timestamp);
-            rtcpPacket = nullptr;
+            sendRtcp(std::move(rtcpPacket), timestamp);
         }
     }
 
     if (rtcpPacket)
     {
-        sendRtcp(rtcpPacket, _mainAllocator, timestamp);
+        sendRtcp(std::move(rtcpPacket), timestamp);
     }
 }
 
 // always add REMB right after SR/RR when there is still space in the packet
-void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
+void TransportImpl::appendRemb(memory::Packet& rtcpPacket,
     const uint64_t timestamp,
     uint32_t senderSsrc,
     const uint32_t* activeInbound,
     int activeInboundCount)
 {
-    if (rtcpPacket->getLength() + sizeof(rtp::RtcpRembFeedback) + sizeof(uint32_t) * activeInboundCount >
+    if (rtcpPacket.getLength() + sizeof(rtp::RtcpRembFeedback) + sizeof(uint32_t) * activeInboundCount >
         _config.rtcp.mtu)
     {
         assert(false);
         return;
     }
 
-    auto& remb = rtp::RtcpRembFeedback::create(rtcpPacket->get() + rtcpPacket->getLength(), senderSsrc);
+    auto& remb = rtp::RtcpRembFeedback::create(rtcpPacket.get() + rtcpPacket.getLength(), senderSsrc);
 
     if (_config.bwe.logDownlinkEstimates && timestamp - _lastLogTimestamp >= utils::Time::sec * 5)
     {
@@ -1825,17 +1713,15 @@ void TransportImpl::appendRemb(memory::Packet* rtcpPacket,
     {
         remb.addSsrc(activeInbound[i]);
     }
-    rtcpPacket->setLength(rtcpPacket->getLength() + remb.header.size());
-    assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket));
+    rtcpPacket.setLength(rtcpPacket.getLength() + remb.header.size());
+    assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
 }
 
-void TransportImpl::sendRtcp(memory::Packet* rtcpPacket,
-    memory::PacketPoolAllocator& allocator,
-    const uint64_t timestamp)
+void TransportImpl::sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp)
 {
     auto* report = rtp::RtcpReport::fromPacket(*rtcpPacket);
 
-    if (report == nullptr ||
+    if (!report ||
         (report->header.packetType != rtp::RtcpPacketType::SENDER_REPORT &&
             report->header.packetType != rtp::RtcpPacketType::RECEIVER_REPORT))
     {
@@ -1853,7 +1739,6 @@ void TransportImpl::sendRtcp(memory::Packet* rtcpPacket,
         if (rtcpPacket->getLength() + originalReportLength > memory::Packet::size)
         {
             assert(false);
-            allocator.free(rtcpPacket);
             return;
         }
 
@@ -1864,12 +1749,11 @@ void TransportImpl::sendRtcp(memory::Packet* rtcpPacket,
     if (!rtp::CompoundRtcpPacket::isValid(rtcpPacket->get(), rtcpPacket->getLength()))
     {
         logger::warn("corrupt outbound rtcp packet", _loggableId.c_str());
-        allocator.free(rtcpPacket);
         return;
     }
 
     onSendingRtcp(*rtcpPacket, timestamp);
-    doProtectAndSend(timestamp, rtcpPacket, _peerRtcpPort, _selectedRtcp, allocator);
+    doProtectAndSend(timestamp, std::move(rtcpPacket), _peerRtcpPort, _selectedRtcp);
 }
 
 void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64_t timestamp)
@@ -1905,7 +1789,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
     _rtcp.lastSendTime = timestamp;
 }
 
-bool TransportImpl::unprotect(memory::Packet* packet)
+bool TransportImpl::unprotect(memory::Packet& packet)
 {
     if (_srtpClient && _srtpClient->isInitialized())
     {
@@ -2017,7 +1901,7 @@ bool TransportImpl::setRemotePeer(const SocketAddress& target)
 // Only support for RTP component, no rtcp component
 void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& credentials,
     const ice::IceCandidates& candidates,
-    memory::PacketPoolAllocator& allocator)
+    memory::AudioPacketPoolAllocator& allocator)
 {
     if (_rtpIceSession)
     {
@@ -2025,42 +1909,38 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
     }
 }
 
-void TransportImpl::doSetRemoteIce(const memory::Packet* credentialPacket,
-    const memory::Packet* const* candidatePackets)
+void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
+    const memory::AudioPacket& candidatesPacket)
 {
     if (!_rtpIceSession)
     {
         return;
     }
 
-    auto& credentials = *reinterpret_cast<const IceCredentials*>(credentialPacket->get());
+    auto& credentials = *reinterpret_cast<const IceCredentials*>(credentialPacket.get());
     _rtpIceSession->setRemoteCredentials(std::pair<std::string, std::string>(credentials.ufrag, credentials.password));
 
-    uint32_t candidateCount = 0;
-    for (const memory::Packet* const* packetCursor = candidatePackets; *packetCursor; packetCursor++)
+    memory::MemoryFile stream(candidatesPacket.get(), candidatesPacket.getLength());
+    while (stream.isGood())
     {
-        auto& iceCandidates = *reinterpret_cast<const IceCandidates*>((*packetCursor)->get());
-        for (size_t i = 0; i < iceCandidates.candidateCount && candidateCount++ < _config.ice.maxCandidateCount; ++i)
+        ice::IceCandidate candidate;
+        stream >> candidate;
+        if (stream.isGood() && candidate.component == ice::IceComponent::RTP && !candidate.empty())
         {
-            const ice::IceCandidate& candidate = iceCandidates.candidates[i];
-            if (candidate.component == ice::IceComponent::RTP && !candidate.empty())
+            if (candidate.transportType == ice::TransportType::UDP)
             {
-                if (candidate.transportType == ice::TransportType::UDP)
+                _rtpIceSession->addRemoteCandidate(candidate);
+            }
+            else if (candidate.transportType == ice::TransportType::TCP && candidate.tcpType == ice::TcpType::PASSIVE)
+            {
+                auto endpoints = _tcpEndpointFactory->createTcpEndpoints(candidate.address.getFamily());
+                for (Endpoint* endpoint : endpoints)
                 {
-                    _rtpIceSession->addRemoteCandidate(candidate);
-                }
-                else if (candidate.transportType == ice::TransportType::TCP &&
-                    candidate.tcpType == ice::TcpType::PASSIVE)
-                {
-                    auto endpoints = _tcpEndpointFactory->createTcpEndpoints(candidate.address.getFamily());
-                    for (Endpoint* endpoint : endpoints)
-                    {
-                        endpoint->registerDefaultListener(this);
-                        ++_callbackRefCount;
-                        _rtpEndpoints.push_back(endpoint);
+                    endpoint->registerDefaultListener(this);
+                    ++_callbackRefCount;
+                    _rtpEndpoints.push_back(endpoint);
 
-                        _rtpIceSession->addRemoteCandidate(candidate, endpoint);
-                    }
+                    _rtpIceSession->addRemoteCandidate(candidate, endpoint);
                 }
             }
         }
@@ -2272,10 +2152,10 @@ int32_t TransportImpl::sendDtls(const char* buffer, const uint32_t length)
         return 0;
     }
 
-    auto packet = memory::makePacket(_mainAllocator, buffer, length);
+    auto packet = memory::makeUniquePacket(_mainAllocator, buffer, length);
     if (packet)
     {
-        _selectedRtp->sendTo(_peerRtpPort, packet, _mainAllocator);
+        _selectedRtp->sendTo(_peerRtpPort, std::move(packet));
         return length;
     }
     else
@@ -2485,15 +2365,11 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
     {
         while (!_rtxPacingQueue.empty())
         {
-            PacketInfo packetInfo = _rtxPacingQueue.back();
-            _rtxPacingQueue.pop_back();
-            protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+            protectAndSendRtp(timestamp, _rtxPacingQueue.fetchBack());
         }
         while (!_pacingQueue.empty())
         {
-            PacketInfo packetInfo = _pacingQueue.back();
-            _pacingQueue.pop_back();
-            protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
+            protectAndSendRtp(timestamp, _pacingQueue.fetchBack());
         }
         _pacingInUse = false;
         return;
@@ -2510,15 +2386,14 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
             pacingQueue = &_rtxPacingQueue;
         }
 
-        PacketInfo packetInfo(pacingQueue->back());
-        if (packetInfo.packet->getLength() + _config.ipOverhead <= budget)
+        if (pacingQueue->back()->getLength() + _config.ipOverhead <= budget)
         {
-            budget -= packetInfo.packet->getLength() + _config.ipOverhead;
-            auto* rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet);
+            memory::UniquePacket packet(pacingQueue->fetchBack());
+            budget -= packet->getLength() + _config.ipOverhead;
+            auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
             ssrc = rtpHeader->ssrc;
             rtpTimestamp = rtpHeader->timestamp;
-            protectAndSendRtp(timestamp, packetInfo.packet, packetInfo.allocator);
-            pacingQueue->pop_back();
+            protectAndSendRtp(timestamp, std::move(packet));
         }
         else
         {

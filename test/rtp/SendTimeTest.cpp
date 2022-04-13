@@ -112,7 +112,7 @@ TEST(RtpSendTimeTest, multipleExtensions)
     EXPECT_EQ(it->data[1], 2);
     EXPECT_EQ(it->data[2], 3);
 
-    rtp::setTransmissionTimestamp(&packet, absSendTimeId, 0x102030);
+    rtp::setTransmissionTimestamp(packet, absSendTimeId, 0x102030);
     it = rtpHeader->getExtensionHeader()->extensions().begin();
     EXPECT_EQ(it->getId(), audioLevelId);
     EXPECT_EQ(it->data[0], 122);

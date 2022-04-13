@@ -19,7 +19,7 @@ SendPliJob::SendPliJob(const uint32_t fromSsrc,
 
 void SendPliJob::run()
 {
-    auto* packet = memory::makePacket(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     if (!packet)
     {
         return;
@@ -32,7 +32,7 @@ void SendPliJob::run()
         _fromSsrc);
     auto* feedback = rtp::createPLI(packet->get(), _fromSsrc, _aboutSsrc);
     packet->setLength(feedback->_header.size());
-    _transport.protectAndSend(packet, _allocator);
+    _transport.protectAndSend(std::move(packet));
 }
 
 } // namespace bridge

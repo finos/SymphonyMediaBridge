@@ -12,10 +12,10 @@ RecStreamAddedEvent* castPacket(memory::Packet* packet)
     return reinterpret_cast<RecStreamAddedEvent*>(packet);
 }
 
-uint8_t* getEndpointBuffRef(memory::Packet* packet)
+uint8_t* getEndpointBuffRef(memory::Packet& packet)
 {
     // The endpoint value is placed right after the endpoint len (2 byes)
-    return &(packet->get()[REC_HEADER_SIZE + 6 + 2]);
+    return &(packet.get()[REC_HEADER_SIZE + 6 + 2]);
 }
 
 } // namespace
@@ -67,7 +67,7 @@ RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setEndpoint(const std::s
     packet->setLength(newEndPosPlusPadding + bytesAfterEndpoint);
 
     castPacket(packet)->endpointLen = static_cast<uint16_t>(endpoint.size());
-    std::memcpy(getEndpointBuffRef(packet), endpoint.c_str(), endpoint.size());
+    std::memcpy(getEndpointBuffRef(*packet), endpoint.c_str(), endpoint.size());
 
     return *this;
 }

@@ -2,9 +2,11 @@
 #include "crypto/SslHelper.h"
 #include "jobmanager/JobManager.h"
 #include "logger/Logger.h"
+#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/Packet.h"
 #include "transport/RtcSocket.h"
 #include "transport/RtcePoll.h"
+#include "transport/ice/IceSerialize.h"
 #include "transport/ice/IceSession.h"
 #include "transport/ice/Stun.h"
 #include <atomic>
@@ -1513,4 +1515,48 @@ TEST(IceTest, udpTcpTimeout)
     auto selectedPairClient = sessions[0]->getSelectedPair();
     EXPECT_EQ(selectedPairClient.first.baseAddress.getPort(), 2000);
     EXPECT_EQ(selectedPairClient.second.address.getPort(), 3000);
+}
+
+TEST(IceTest, serialize)
+{
+    memory::AudioPacket p;
+    memory::MemoryFile f(p.get(), memory::AudioPacket::size);
+
+    ice::IceCandidate c("912342340823",
+        ice::IceComponent::RTP,
+        ice::TransportType::UDP,
+        5001,
+        transport::SocketAddress(transport::SocketAddress::parse("172.16.0.10", 2000)),
+        transport::SocketAddress(transport::SocketAddress::parse("10.16.0.10", 2000)),
+        ice::IceCandidate::Type::SRFLX);
+
+    f << c;
+    f << c;
+
+    f.rewind();
+    ice::IceCandidate m;
+    f >> m;
+    EXPECT_EQ(c.address, m.address);
+    EXPECT_EQ(c.baseAddress, m.baseAddress);
+    EXPECT_EQ(c.type, m.type);
+    EXPECT_EQ(c.transportType, m.transportType);
+
+    ice::IceCandidate n;
+    f >> n;
+    EXPECT_EQ(c.address, n.address);
+    EXPECT_EQ(c.baseAddress, n.baseAddress);
+    EXPECT_EQ(c.type, n.type);
+    EXPECT_EQ(c.transportType, n.transportType);
+
+    for (int i = 0; i < 180; ++i)
+    {
+        f << c;
+        if (!f.isGood())
+        {
+            EXPECT_EQ(i, 103);
+            p.setLength(f.getPosition());
+            EXPECT_EQ(f.getPosition(), 5775);
+            break;
+        }
+    }
 }

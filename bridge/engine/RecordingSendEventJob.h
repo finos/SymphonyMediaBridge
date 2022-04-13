@@ -17,19 +17,15 @@ class UnackedPacketsTracker;
 class RecordingSendEventJob : public jobmanager::CountedJob
 {
 public:
-    RecordingSendEventJob(memory::Packet* packet,
-        memory::PacketPoolAllocator& allocator,
+    RecordingSendEventJob(memory::UniquePacket packet,
         transport::RecordingTransport& transport,
         PacketCache& recEventPacketCache,
         UnackedPacketsTracker& unackedPacketsTracker);
 
-    ~RecordingSendEventJob() override;
-
     void run() override;
 
 private:
-    memory::Packet* _packet;
-    memory::PacketPoolAllocator& _allocator;
+    memory::UniquePacket _packet;
     transport::RecordingTransport& _transport;
     PacketCache& _recEventPacketCache;
     UnackedPacketsTracker& _unackedPacketsTracker;

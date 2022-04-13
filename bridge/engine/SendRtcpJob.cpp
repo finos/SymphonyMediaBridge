@@ -4,19 +4,16 @@
 namespace bridge
 {
 
-SendRtcpJob::SendRtcpJob(memory::Packet* rtcpPacket,
-    transport::Transport& transport,
-    memory::PacketPoolAllocator& allocator)
+SendRtcpJob::SendRtcpJob(memory::UniquePacket rtcpPacket, transport::Transport& transport)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _transport(transport),
-      _packet(rtcpPacket),
-      _allocator(allocator)
+      _packet(std::move(rtcpPacket))
 {
 }
 
 void SendRtcpJob::run()
 {
-    _transport.protectAndSend(_packet, _allocator);
+    _transport.protectAndSend(std::move(_packet));
 }
 
 } // namespace bridge

@@ -73,18 +73,8 @@ public:
     T& back() { return (*this)[_count - 1]; }
     const T& back() const { return (*this)[_count - 1]; }
 
-    void push_front(const T& item)
-    {
-        --_head;
-        if (size() == N)
-        {
-            reinterpret_cast<T*>(&_data[_head % N])->~T();
-            --_count;
-        }
-
-        new (&_data[_head % N]) T(item);
-        ++_count;
-    }
+    void push_front(T&& item) { emplace_front(std::move(item)); }
+    void push_front(const T& item) { emplace_front(item); }
 
     template <typename... Args>
     void emplace_front(Args&&... args)
@@ -115,6 +105,13 @@ public:
             reinterpret_cast<T*>(&_data[(_head + _count - 1) % N])->~T();
             --_count;
         }
+    }
+
+    T fetchBack()
+    {
+        auto value = std::move(back());
+        pop_back();
+        return value;
     }
 
 private:

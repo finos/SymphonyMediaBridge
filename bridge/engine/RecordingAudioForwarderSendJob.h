@@ -1,6 +1,7 @@
 #pragma once
 
 #include "jobmanager/Job.h"
+#include "memory/PacketPoolAllocator.h"
 #include <cstdint>
 
 namespace memory
@@ -22,17 +23,15 @@ class RecordingAudioForwarderSendJob : public jobmanager::CountedJob
 {
 public:
     RecordingAudioForwarderSendJob(SsrcOutboundContext& outboundContext,
-        memory::Packet* packet,
+        memory::UniquePacket packet,
         transport::RecordingTransport& transport,
         const uint32_t extendedSequenceNumber);
-
-    ~RecordingAudioForwarderSendJob() override;
 
     void run() override;
 
 private:
     SsrcOutboundContext& _outboundContext;
-    memory::Packet* _packet;
+    memory::UniquePacket _packet;
     transport::RecordingTransport& _transport;
     uint32_t _extendedSequenceNumber;
 };

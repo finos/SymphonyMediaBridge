@@ -111,7 +111,6 @@ struct SctpControl
 {
     EngineMixer* _mixer;
     size_t _endpointIdHash;
-    memory::Packet* _message;
 };
 
 struct PinEndpoint
@@ -241,8 +240,29 @@ union CommandUnion
 
 struct Command
 {
+    Command() = default;
+    Command(const Command&) = delete;
+    Command(Type t) : _type(t) {}
+    Command(Command&& rhs)
+    {
+        _type = rhs._type;
+        _command = rhs._command;
+        _packet = std::move(rhs._packet);
+    }
+
+    Command& operator=(const Command&) = delete;
+
+    Command& operator=(Command&& rhs)
+    {
+        _type = rhs._type;
+        _command = rhs._command;
+        _packet = std::move(rhs._packet);
+        return *this;
+    }
+
     Type _type;
     CommandUnion _command;
+    memory::UniquePacket _packet;
 };
 
 } // namespace EngineCommand

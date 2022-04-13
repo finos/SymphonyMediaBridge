@@ -44,20 +44,20 @@ TEST(BweTest, absTimestampExt)
     packet.setLength(header->headerLength());
 
     uint64_t t1 = 0;
-    rtp::setTransmissionTimestamp(&packet, 4, t1);
+    rtp::setTransmissionTimestamp(packet, 4, t1);
     uint32_t sendTime = 0;
     rtp::getTransmissionTimestamp(packet, 4, sendTime);
     EXPECT_EQ(sendTime, 0);
     uint64_t t2 = t1 + utils::Time::ms * 63999;
-    rtp::setTransmissionTimestamp(&packet, 4, t2);
+    rtp::setTransmissionTimestamp(packet, 4, t2);
     rtp::getTransmissionTimestamp(packet, 4, sendTime);
     EXPECT_EQ(sendTime, 16776953);
     uint64_t t3 = t1 + utils::Time::sec * 64;
-    rtp::setTransmissionTimestamp(&packet, 4, t3);
+    rtp::setTransmissionTimestamp(packet, 4, t3);
     rtp::getTransmissionTimestamp(packet, 4, sendTime);
     EXPECT_EQ(sendTime, 0);
     uint64_t t4 = t1 + utils::Time::ms * 65555;
-    rtp::setTransmissionTimestamp(&packet, 4, t4);
+    rtp::setTransmissionTimestamp(packet, 4, t4);
     rtp::getTransmissionTimestamp(packet, 4, sendTime);
     EXPECT_EQ(sendTime, rtp::nsToSecondsFp6_18(utils::Time::ms * 1555));
 }

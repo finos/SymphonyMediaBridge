@@ -74,9 +74,11 @@ public:
             if (_readCursor.compare_exchange_weak(pos, pos + 1))
             {
                 // we own the read position now. If thread pauses here,
-                // the write cannot reach here until the state is set empty.
+                // A writer cannot write due to commited state and will not increase write cursor.
+                // A reader fail to update readCursor and has to try next slot.
+                // A reader that wrapped will not pass readable test because the pos == writepos
                 auto& entry = _elements[pos % _maxElements];
-                target = entry.value;
+                target = std::move(entry.value);
                 entry.state.store(CellState::emptySlot, std::memory_order_release);
                 return true;
             }
@@ -103,9 +105,12 @@ public:
             if (_writeCursor.compare_exchange_weak(pos, pos + 1))
             {
                 // Assume we pause here.
-                // The emptyslot state will prevent read cursor and thereby write cursor to get here.
+                // The emptyslot state will stop read cursor.
+                // The writeCursor has moved and another writer will have to try the next slot.
+                // If writers wrap back here, they cannot write because q is full as read cursor could not pass this
+                // point.
                 auto& entry = _elements[pos % _maxElements];
-                entry.value = obj;
+                entry.value = std::move(obj);
                 entry.state.store(CellState::committed, std::memory_order_release);
                 return true;
             }
@@ -129,6 +134,16 @@ public:
 
     bool empty() const { return !isReadable(_readCursor.load(std::memory_order_consume)); }
 
+    void clear()
+    {
+        if (!empty())
+        {
+            T elem;
+            while (pop(elem))
+                ;
+        }
+    }
+
 private:
     const uint32_t _maxElements;
     std::atomic_uint32_t _readCursor;
@@ -148,12 +163,14 @@ private:
 
     bool isWritable(const uint32_t pos) const
     {
-        return _elements[pos % _maxElements].state.load(std::memory_order_acquire) == CellState::emptySlot;
+        return _elements[pos % _maxElements].state.load(std::memory_order_consume) == CellState::emptySlot &&
+            pos - _readCursor.load(std::memory_order_consume) < _maxElements;
     }
 
     bool isReadable(const uint32_t pos) const
     {
-        return _elements[pos % _maxElements].state.load(std::memory_order_acquire) == CellState::committed;
+        return _elements[pos % _maxElements].state.load(std::memory_order_consume) == CellState::committed &&
+            pos != _writeCursor.load(std::memory_order_consume);
     }
 };
 } // namespace concurrency

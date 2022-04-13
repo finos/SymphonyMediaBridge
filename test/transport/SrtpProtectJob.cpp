@@ -5,21 +5,19 @@ namespace transport
 {
 
 SrtpProtectJob::SrtpProtectJob(std::atomic_uint32_t& ownerJobsCounter,
-    memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+    memory::UniquePacket packet,
     transport::Transport& transport)
     : jobmanager::CountedJob(ownerJobsCounter),
-      _packet(packet),
-      _allocator(allocator),
+      _packet(std::move(packet)),
       _transport(transport)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void SrtpProtectJob::run()
 {
-    _transport.protectAndSend(_packet, _allocator);
+    _transport.protectAndSend(std::move(_packet));
 }
 
 } // namespace transport

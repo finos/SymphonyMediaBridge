@@ -24,7 +24,7 @@ bool VideoSource::open(const char* filename)
     {
         for (int i = 0; i < 5; ++i)
         {
-            auto* packet = readPacket();
+            auto packet = readPacket();
             if (!packet)
             {
                 break;
@@ -34,10 +34,8 @@ bool VideoSource::open(const char* filename)
                 auto* header = rtp::RtpHeader::fromPacket(*packet);
                 _rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8, header->payloadType, 90000);
                 rewind(_fHandle);
-                _allocator.free(packet);
                 break;
             }
-            _allocator.free(packet);
         }
     }
     return _fHandle != nullptr;
@@ -49,19 +47,15 @@ VideoSource::~VideoSource()
     {
         fclose(_fHandle);
     }
-    if (_packet)
-    {
-        _allocator.free(_packet);
-    }
 }
 
-memory::Packet* VideoSource::getNext(uint64_t now)
+memory::UniquePacket VideoSource::getNext(uint64_t now)
 {
     if (_aborted)
     {
-        return nullptr;
+        return memory::UniquePacket();
     }
-    if (_packet == nullptr)
+    if (!_packet)
     {
         for (_packet = readPacket(); _packet && !rtp::isRtpPacket(*_packet);)
         {
@@ -83,19 +77,19 @@ memory::Packet* VideoSource::getNext(uint64_t now)
     auto* rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (static_cast<int64_t>(rtpTime - _cursor.timestamp) >= 0)
     {
-        auto packet = _packet;
+        memory::UniquePacket packet(std::move(_packet));
 
         rtpHeader->sequenceNumber = _cursor.sequenceNumber++;
         rtpHeader->timestamp = _cursor.timestamp + _rtpTimestampOffset;
         _packet = readPacket();
-        if (_packet == nullptr)
+        if (!_packet)
         {
             rewind(_fHandle);
             _packet = readPacket();
             if (!_packet)
             {
                 _aborted = true;
-                return nullptr;
+                return memory::UniquePacket();
             }
         }
         auto* nextRtpHeader = rtp::RtpHeader::fromPacket(*_packet);
@@ -103,26 +97,24 @@ memory::Packet* VideoSource::getNext(uint64_t now)
         return packet;
     }
 
-    return nullptr;
+    return memory::UniquePacket();
 }
 
-memory::Packet* VideoSource::readPacket()
+memory::UniquePacket VideoSource::readPacket()
 {
-    auto* packet = memory::makePacket(_allocator);
+    auto packet = memory::makeUniquePacket(_allocator);
     uint16_t size;
     uint16_t originalSize;
     int bytesRead = fread(&size, 2, 1, _fHandle);
     bytesRead += fread(&originalSize, 2, 1, _fHandle);
     if (bytesRead != 2)
     {
-        _allocator.free(packet);
-        return nullptr;
+        return memory::UniquePacket();
     }
     bytesRead = fread(packet->get(), 1, size, _fHandle);
     if (bytesRead != size)
     {
-        _allocator.free(packet);
-        return nullptr;
+        return memory::UniquePacket();
     }
     packet->setLength(originalSize);
     if (!rtp::isRtpPacket(*packet))
@@ -132,8 +124,4 @@ memory::Packet* VideoSource::readPacket()
     return packet;
 }
 
-void VideoSource::free(memory::Packet* packet)
-{
-    _allocator.free(packet);
-}
 } // namespace test

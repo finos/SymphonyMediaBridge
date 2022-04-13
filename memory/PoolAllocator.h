@@ -12,11 +12,11 @@
 #include <unistd.h>
 
 #if !defined(ENABLE_ALLOCATOR_METRICS)
-    #ifdef DEBUG
-        #define ENABLE_ALLOCATOR_METRICS 1
-    #else
-        #define ENABLE_ALLOCATOR_METRICS 0
-    #endif
+#ifdef DEBUG
+#define ENABLE_ALLOCATOR_METRICS 1
+#else
+#define ENABLE_ALLOCATOR_METRICS 0
+#endif
 #endif
 
 namespace memory
@@ -39,8 +39,28 @@ class PoolAllocator
     }
 
 public:
+    class Deleter
+    {
+    public:
+        Deleter() : _allocator(nullptr) {}
+        Deleter(PoolAllocator<ELEMENT_SIZE>* allocator) : _allocator(allocator) {}
+
+        template <typename T>
+        void operator()(T* r)
+        {
+            assert(_allocator);
+            if (_allocator)
+            {
+                _allocator->free(r);
+            }
+        }
+
+        PoolAllocator<ELEMENT_SIZE>* _allocator;
+    };
+
     PoolAllocator(size_t elementCount, const std::string&& name)
-        : _name(std::move(name)),
+        : _deleter(this),
+          _name(std::move(name)),
           _size(calculateNeededSpace(elementCount)),
           _originalElementCount(_size / sizeof(Entry))
     {
@@ -66,6 +86,14 @@ public:
 
     ~PoolAllocator()
     {
+        logAllocatedElements();
+        munmap(_elements, _size);
+    }
+
+    Deleter& getDeleter() { return _deleter; }
+
+    void logAllocatedElements()
+    {
 #if DEBUG
         if (_originalElementCount != size())
         {
@@ -81,7 +109,6 @@ public:
             }
         }
 #endif
-        munmap(_elements, _size);
     }
 
     PoolAllocator(const PoolAllocator&) = delete;
@@ -178,6 +205,7 @@ private:
 #endif
     };
 
+    Deleter _deleter;
     std::string _name;
     Entry* _elements;
     uint64_t _cacheLineSeparator1[6];

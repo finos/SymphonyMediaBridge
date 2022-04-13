@@ -85,7 +85,7 @@ void WebRtcDataStream::onSctpMessage(webrtc::DataStreamTransport* sender,
     }
 }
 
-memory::Packet* makePacket(uint16_t streamId,
+memory::UniquePacket makeUniquePacket(uint16_t streamId,
     uint32_t payloadProtocol,
     const void* message,
     size_t messageSize,
@@ -97,10 +97,10 @@ memory::Packet* makePacket(uint16_t streamId,
         return nullptr;
     }
 
-    auto* packet = memory::makePacket(allocator);
+    auto packet = memory::makeUniquePacket(allocator);
     if (!packet)
     {
-        return nullptr;
+        return packet;
     }
 
     auto* header = reinterpret_cast<SctpStreamMessageHeader*>(packet->get());

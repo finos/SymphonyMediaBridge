@@ -35,21 +35,9 @@ RcCall::RcCall(memory::PacketPoolAllocator& allocator,
     }
 }
 
-RcCall::~RcCall()
+void RcCall::push(std::unique_ptr<fakenet::NetworkLink>& link, memory::UniquePacket packet)
 {
-    while (!_upLink->empty() || !_downLink->empty())
-    {
-        _allocator.free(_upLink->pop());
-        _allocator.free(_downLink->pop());
-    }
-}
-
-void RcCall::push(std::unique_ptr<fakenet::NetworkLink>& link, memory::Packet* packet)
-{
-    if (!link->push(packet, _timeCursor))
-    {
-        _allocator.free(packet);
-    }
+    link->push(std::move(packet), _timeCursor);
 }
 
 void RcCall::setDownlink(NetworkLink* link)
@@ -73,7 +61,7 @@ void RcCall::sendRtpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize)
 {
     for (; count > 0; count--)
     {
-        auto padPacket = memory::makePacket(_allocator);
+        auto padPacket = memory::makeUniquePacket(_allocator);
         if (padPacket)
         {
             padPacket->clear();
@@ -89,7 +77,7 @@ void RcCall::sendRtpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize)
             _bwe.onRtpSent(_timeCursor, padRtpHeader->ssrc, padRtpHeader->sequenceNumber, padPacket->getLength());
 
             _mixVideoSendState.onRtpSent(_timeCursor, *padPacket);
-            push(_upLink, padPacket);
+            push(_upLink, std::move(padPacket));
         }
     }
 }
@@ -98,17 +86,17 @@ void RcCall::sendRtcpPadding(uint32_t count, uint32_t ssrc, uint16_t paddingSize
 {
     for (; count > 0; --count)
     {
-        auto padPacket = memory::makePacket(_allocator);
+        auto padPacket = memory::makeUniquePacket(_allocator);
         auto* rtcpPadding = rtp::RtcpApplicationSpecific::create(padPacket->get(), ssrc, "BRPP", paddingSize);
         padPacket->setLength(rtcpPadding->header.size());
         _bwe.onRtcpPaddingSent(_timeCursor, ssrc, padPacket->getLength());
-        push(_upLink, padPacket);
+        push(_upLink, std::move(padPacket));
     }
 }
 
 void RcCall::sendSR(uint32_t ssrc, transport::RtpSenderState& sendState, uint64_t wallClock)
 {
-    auto rtcpPacket = memory::makePacket(_allocator);
+    auto rtcpPacket = memory::makeUniquePacket(_allocator);
     if (rtcpPacket)
     {
         auto* report = rtp::RtcpSenderReport::create(rtcpPacket->get());
@@ -120,10 +108,10 @@ void RcCall::sendSR(uint32_t ssrc, transport::RtpSenderState& sendState, uint64_
             (report->ntpSeconds.get() << 16) | (report->ntpFractions.get() >> 16),
             rtcpPacket->getLength());
         sendState.onRtcpSent(_timeCursor, &report->header, rtcpPacket->getLength());
-        push(_upLink, rtcpPacket);
 
         uint16_t paddingSize = 0;
         auto count = _bwe.getPadding(_timeCursor, rtcpPacket->getLength(), paddingSize);
+        push(_upLink, std::move(rtcpPacket));
         if (_rtxProbeSsrc.isSet())
         {
             sendRtpPadding(count, _rtxProbeSsrc.get(), paddingSize);
@@ -138,7 +126,7 @@ void RcCall::sendSR(uint32_t ssrc, transport::RtpSenderState& sendState, uint64_
 void RcCall::transmitChannel(Channel& channel, uint64_t srClockOffset)
 {
 
-    for (auto* packet = channel.source->getPacket(_timeCursor); packet; packet = channel.source->getPacket(_timeCursor))
+    for (auto packet = channel.source->getPacket(_timeCursor); packet; packet = channel.source->getPacket(_timeCursor))
     {
         const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
         const uint32_t ssrc = rtpHeader->ssrc;
@@ -153,11 +141,10 @@ void RcCall::transmitChannel(Channel& channel, uint64_t srClockOffset)
         {
             sendRtcpPadding(count, ssrc, paddingSize);
         }
-        push(_upLink, packet);
 
         channel.sendState.onRtpSent(_timeCursor, *packet);
         _bwe.onRtpSent(_timeCursor, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
-
+        push(_upLink, std::move(packet));
         if (channel.sendState.timeToSenderReport(_timeCursor) == 0)
         {
             channel.lastSenderReport = _timeCursor;
@@ -168,7 +155,7 @@ void RcCall::transmitChannel(Channel& channel, uint64_t srClockOffset)
 
 void RcCall::processReceiverSide()
 {
-    for (auto* packet = _upLink->pop(_timeCursor); packet; packet = _upLink->pop(_timeCursor))
+    for (auto packet = _upLink->pop(_timeCursor); packet; packet = _upLink->pop(_timeCursor))
     {
         if (rtp::isRtpPacket(*packet))
         {
@@ -217,8 +204,6 @@ void RcCall::processReceiverSide()
                     packet->getLength());*/
             }
         }
-
-        _allocator.free(packet);
     }
 
     int64_t remainingTimeToRR = std::numeric_limits<int64_t>::max();
@@ -229,7 +214,7 @@ void RcCall::processReceiverSide()
 
     if (remainingTimeToRR == 0)
     {
-        auto rtcpPacket = memory::makePacket(_allocator);
+        auto rtcpPacket = memory::makeUniquePacket(_allocator);
         if (rtcpPacket)
         {
             auto* report = rtp::RtcpReceiverReport::create(rtcpPacket->get());
@@ -248,7 +233,7 @@ void RcCall::processReceiverSide()
                 ++index;
             }
             rtcpPacket->setLength(report->header.size());
-            push(_downLink, rtcpPacket);
+            push(_downLink, std::move(rtcpPacket));
         }
     }
 }
@@ -256,7 +241,7 @@ void RcCall::processReceiverSide()
 void RcCall::processReceiverReports()
 {
     const auto wallclockNtp32 = utils::Time::toNtp32(getWallClock());
-    for (auto* packet = _downLink->pop(_timeCursor); packet; packet = _downLink->pop(_timeCursor))
+    for (auto packet = _downLink->pop(_timeCursor); packet; packet = _downLink->pop(_timeCursor))
     {
         if (rtp::isRtcpPacket(*packet))
         {
@@ -298,7 +283,6 @@ void RcCall::processReceiverReports()
                 }
             }
         }
-        _allocator.free(packet);
     }
 }
 

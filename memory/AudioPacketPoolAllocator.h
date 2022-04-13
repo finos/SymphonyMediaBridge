@@ -13,7 +13,11 @@ class AudioPacket : public FixedPacket<5800>
 
 using AudioPacketPoolAllocator = PoolAllocator<sizeof(AudioPacket)>;
 
-inline AudioPacket* makePacket(AudioPacketPoolAllocator& allocator)
+// Be very careful with reset as the deleter is not changed if already set. You may try to deallocate
+// packet in the wrong pool.
+typedef std::unique_ptr<memory::AudioPacket, AudioPacketPoolAllocator::Deleter> UniqueAudioPacket;
+
+inline UniqueAudioPacket makeUniquePacket(AudioPacketPoolAllocator& allocator)
 {
     auto pointer = allocator.allocate();
     assert(pointer);
@@ -22,24 +26,26 @@ inline AudioPacket* makePacket(AudioPacketPoolAllocator& allocator)
         logger::error("Unable to allocate packet, no space left in pool %s",
             "AudioPacketPoolAllocator",
             allocator.getName().c_str());
-        return nullptr;
+        return UniqueAudioPacket();
     }
 
-    return new (pointer) memory::AudioPacket();
+    new (pointer) memory::AudioPacket();
+
+    return UniqueAudioPacket(reinterpret_cast<memory::AudioPacket*>(pointer), allocator.getDeleter());
 }
 
-inline AudioPacket* makePacket(AudioPacketPoolAllocator& allocator, const void* data, size_t length)
+inline UniqueAudioPacket makeUniquePacket(AudioPacketPoolAllocator& allocator, const void* data, size_t length)
 {
     assert(length <= memory::AudioPacket::size);
     if (length > memory::AudioPacket::size)
     {
-        return nullptr;
+        return UniqueAudioPacket();
     }
 
-    auto packet = makePacket(allocator);
+    auto packet = makeUniquePacket(allocator);
     if (!packet)
     {
-        return packet;
+        return UniqueAudioPacket();
     }
 
     std::memcpy(packet->get(), data, length);
@@ -47,9 +53,9 @@ inline AudioPacket* makePacket(AudioPacketPoolAllocator& allocator, const void* 
     return packet;
 }
 
-inline AudioPacket* makePacket(AudioPacketPoolAllocator& allocator, const Packet& packet)
+inline UniqueAudioPacket makeUniquePacket(AudioPacketPoolAllocator& allocator, const Packet& packet)
 {
-    return makePacket(allocator, packet.get(), packet.getLength());
+    return makeUniquePacket(allocator, packet.get(), packet.getLength());
 }
 
 } // namespace memory

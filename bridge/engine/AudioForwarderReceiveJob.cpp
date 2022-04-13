@@ -17,7 +17,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 {
     if (decodedFrames > 0)
     {
-        auto pcmPacket = memory::makePacket(_audioPacketAllocator, *_packet);
+        auto pcmPacket = memory::makeUniquePacket(_audioPacketAllocator, *_packet);
         if (!pcmPacket)
         {
             return;
@@ -27,7 +27,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
         memcpy(rtpHeader->getPayload(), decodedData, decodedPayloadLength);
         pcmPacket->setLength(rtpHeader->headerLength() + decodedPayloadLength);
 
-        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, pcmPacket, _audioPacketAllocator);
+        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, std::move(pcmPacket));
         return;
     }
 
@@ -99,8 +99,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
     onPacketDecoded(decodedFrames, decodedData);
 }
 
-AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
-    memory::PacketPoolAllocator& allocator,
+AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
     memory::AudioPacketPoolAllocator& audioPacketAllocator,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
@@ -110,8 +109,7 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
     const bool hasMixedAudioStreams,
     const uint32_t extendedSequenceNumber)
     : CountedJob(sender->getJobCounter()),
-      _packet(packet),
-      _allocator(allocator),
+      _packet(std::move(packet)),
       _audioPacketAllocator(audioPacketAllocator),
       _engineMixer(engineMixer),
       _sender(sender),
@@ -121,17 +119,8 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::Packet* packet,
       _hasMixedAudioStreams(hasMixedAudioStreams),
       _extendedSequenceNumber(extendedSequenceNumber)
 {
-    assert(packet);
-    assert(packet->getLength() > 0);
-}
-
-AudioForwarderReceiveJob::~AudioForwarderReceiveJob()
-{
-    if (_packet)
-    {
-        _allocator.free(_packet);
-        _packet = nullptr;
-    }
+    assert(_packet);
+    assert(_packet->getLength() > 0);
 }
 
 void AudioForwarderReceiveJob::run()
@@ -139,8 +128,6 @@ void AudioForwarderReceiveJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
 
@@ -164,8 +151,6 @@ void AudioForwarderReceiveJob::run()
 
         if (audioLevel >= _silenceThresholdLevel)
         {
-            _allocator.free(_packet);
-            _packet = nullptr;
             _ssrcContext._markNextPacket = true;
             return;
         }
@@ -182,20 +167,16 @@ void AudioForwarderReceiveJob::run()
                 "AudioForwarderReceiveJob",
                 _ssrcContext._ssrc,
                 _engineMixer.getLoggableId().c_str());
-            _allocator.free(_packet);
-            _packet = nullptr;
             return;
         }
     }
 
-    if (!_sender->unprotect(_packet))
+    if (!_sender->unprotect(*_packet))
     {
         logger::error("Failed to unprotect srtp %u, mixer %s",
             "AudioForwarderReceiveJob",
             _ssrcContext._ssrc,
             _engineMixer.getLoggableId().c_str());
-        _allocator.free(_packet);
-        _packet = nullptr;
         return;
     }
     _ssrcContext._lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
@@ -212,9 +193,7 @@ void AudioForwarderReceiveJob::run()
     }
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext._rtpMap._payloadType));
-    _engineMixer.onForwarderAudioRtpPacketDecrypted(_sender, _packet, _allocator, _extendedSequenceNumber);
-
-    _packet = nullptr;
+    _engineMixer.onForwarderAudioRtpPacketDecrypted(_sender, std::move(_packet), _extendedSequenceNumber);
 }
 
 } // namespace bridge
