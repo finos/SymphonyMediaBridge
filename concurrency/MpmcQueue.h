@@ -71,10 +71,17 @@ public:
                 continue;
             }
 
+            if (pos == _writeCursor.load(std::memory_order_consume))
+            {
+                return false; // we wrapped and caught up with a pending read
+            }
+
             if (_readCursor.compare_exchange_weak(pos, pos + 1))
             {
                 // we own the read position now. If thread pauses here,
-                // the write cannot reach here until the state is set empty.
+                // a writer cannot write due to commited state.
+                // A reader fail to update readCursor and has to try next slot.
+                // If we wrap, writers cannot write into this slot but another reader will be able to read it!!
                 auto& entry = _elements[pos % _maxElements];
                 target = std::move(entry.value);
                 entry.state.store(CellState::emptySlot, std::memory_order_release);
@@ -100,10 +107,17 @@ public:
                 continue;
             }
 
+            if (pos - _readCursor.load(std::memory_order_consume) >= _maxElements)
+            {
+                return false; // it could be full and we wrapped
+            }
+
             if (_writeCursor.compare_exchange_weak(pos, pos + 1))
             {
                 // Assume we pause here.
-                // The emptyslot state will prevent read cursor and thereby write cursor to get here.
+                // The emptyslot state will stop read cursor.
+                // The _writeCursor has moved and another writer will have to try the next slot.
+                // Since read cursor is stopped on reading this, we cannot wrap write cursor
                 auto& entry = _elements[pos % _maxElements];
                 entry.value = std::move(obj);
                 entry.state.store(CellState::committed, std::memory_order_release);
@@ -125,9 +139,17 @@ public:
                 _writeCursor.load(std::memory_order_relaxed) - _readCursor.load(std::memory_order_relaxed)));
     }
 
-    bool full() const { return !isWritable(_writeCursor.load(std::memory_order_consume)); }
+    bool full() const
+    {
+        auto pos = _writeCursor.load(std::memory_order_consume);
+        return !isWritable(pos) || pos - _readCursor.load(std::memory_order_consume) >= _maxElements;
+    }
 
-    bool empty() const { return !isReadable(_readCursor.load(std::memory_order_consume)); }
+    bool empty() const
+    {
+        auto pos = _readCursor.load(std::memory_order_consume);
+        return !isReadable(pos) || pos == _writeCursor.load(std::memory_order_consume);
+    }
 
     void clear()
     {
