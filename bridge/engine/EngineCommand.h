@@ -246,7 +246,7 @@ struct Command
     Command(Command&& rhs)
     {
         _type = rhs._type;
-        _command = rhs._command; // TODO would need move assignment in the substructs ?
+        _command = rhs._command;
         _packet = std::move(rhs._packet);
     }
 
@@ -255,7 +255,7 @@ struct Command
     Command& operator=(Command&& rhs)
     {
         _type = rhs._type;
-        _command = rhs._command; // TODO would need move assignment in the substructs ?
+        _command = rhs._command;
         _packet = std::move(rhs._packet);
         return *this;
     }
