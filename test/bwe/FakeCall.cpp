@@ -29,11 +29,6 @@ Call::~Call()
 {
     for (auto* link : _links)
     {
-        while (!link->empty())
-        {
-            link->pop();
-        }
-
         delete link;
     }
 

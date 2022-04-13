@@ -35,15 +35,6 @@ RcCall::RcCall(memory::PacketPoolAllocator& allocator,
     }
 }
 
-RcCall::~RcCall()
-{
-    while (!_upLink->empty() || !_downLink->empty())
-    {
-        _upLink->pop();
-        _downLink->pop();
-    }
-}
-
 void RcCall::push(std::unique_ptr<fakenet::NetworkLink>& link, memory::UniquePacket packet)
 {
     link->push(std::move(packet), _timeCursor);

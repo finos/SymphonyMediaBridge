@@ -21,8 +21,6 @@ public:
         RtcePoll& epoll,
         bool isShared);
 
-    virtual ~BaseUdpEndpoint();
-
     void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
 
     void registerDefaultListener(IEvents* defaultListener) override;

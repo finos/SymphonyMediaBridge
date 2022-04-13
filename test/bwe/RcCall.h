@@ -49,8 +49,6 @@ public:
         bool audio,
         uint64_t duration);
 
-    ~RcCall();
-
     void addLink(NetworkLink* link);
     void addSource(MediaSource* source);
 

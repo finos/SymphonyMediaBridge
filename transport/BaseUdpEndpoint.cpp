@@ -77,12 +77,6 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
     }
 }
 
-BaseUdpEndpoint::~BaseUdpEndpoint()
-{
-    OutboundPacket outboundPacket;
-    while (_sendQueue.pop(outboundPacket)) {}
-}
-
 void BaseUdpEndpoint::internalClosePort(int countDown)
 {
     if (countDown > 0)
