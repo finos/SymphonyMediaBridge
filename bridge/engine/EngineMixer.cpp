@@ -1867,16 +1867,16 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 }
 
                 auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-                if (!packet)
+                if (packet)
                 {
-                    logger::warn("send allocator depleted FwdSend", _loggableId.c_str());
-                }
-                if (packet &&
-                    !audioStream->_transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                    audioStream->_transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                         std::move(packet),
                         packetInfo.extendedSequenceNumber(),
-                        audioStream->_transport))
+                        audioStream->_transport);
+                }
+                else
                 {
+                    logger::warn("send allocator depleted FwdSend", _loggableId.c_str());
                 }
             }
         }
@@ -1903,16 +1903,16 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             {
                 ssrcOutboundContext->onRtpSent(timestamp);
                 auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-                if (!packet)
+                if (packet)
+                {
+                    transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
+                        std::move(packet),
+                        transportEntry.second,
+                        packetInfo.extendedSequenceNumber());
+                }
+                else
                 {
                     logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
-                }
-                else if (!transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(
-                             *ssrcOutboundContext,
-                             std::move(packet),
-                             transportEntry.second,
-                             packetInfo.extendedSequenceNumber()))
-                {
                 }
             }
         }
@@ -2090,12 +2090,8 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             if (videoStream->_transport.isConnected())
             {
-                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-                if (!packet)
-                {
-                    logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
-                }
                 ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
+                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
                 if (packet)
                 {
                     videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
@@ -2103,6 +2099,10 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                         std::move(packet),
                         videoStream->_transport,
                         packetInfo.extendedSequenceNumber());
+                }
+                else
+                {
+                    logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
                 }
             }
         }
@@ -2130,14 +2130,8 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
 
             for (const auto& transportEntry : recordingStream->_transports)
             {
+                ssrcOutboundContext->onRtpSent(timestamp); // active jobs on this ssrc context
                 auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-                if (!packet)
-                {
-                    logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
-                }
-
-                // marks that we have active jobs on this ssrc context
-                ssrcOutboundContext->onRtpSent(timestamp);
                 if (packet)
                 {
                     transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
@@ -2145,6 +2139,10 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                         std::move(packet),
                         transportEntry.second,
                         packetInfo.extendedSequenceNumber());
+                }
+                else
+                {
+                    logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
                 }
             }
         }
