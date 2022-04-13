@@ -553,7 +553,7 @@ void MixerManager::engineMessageSctp(EngineMessage::Message&& message)
         // transport
         EngineCommand::Command command{EngineCommand::Type::SctpControl};
         auto& sctpControl = command._command.sctpControl;
-        command._packet = std::move(message._packet);
+        command._packet.swap(message._packet);
         sctpControl._mixer = sctpMessage._mixer;
         sctpControl._endpointIdHash = sctpMessage._endpointIdHash;
         _engine.pushCommand(std::move(command));

@@ -278,7 +278,7 @@ struct ReceivedMessage
         {
             return false;
         }
-        packet = std::move(packetPtr);
+        packet.swap(packetPtr);
         iobuffer.iov_base = packet->get();
         iobuffer.iov_len = memory::Packet::size;
 
