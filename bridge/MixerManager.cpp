@@ -219,8 +219,8 @@ void MixerManager::stop()
             break;
     }
 
-    std::lock_guard<std::mutex> locker(_configurationLock);
     _threadRunning = false;
+
     _managerThread->join();
     logger::info("MixerManager thread stopped", "MixerManager");
 }
