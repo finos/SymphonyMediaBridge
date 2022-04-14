@@ -81,6 +81,8 @@ public:
     virtual uint32_t getRtxPacingQueueCount() const = 0;
     virtual uint64_t getRtt() const = 0;
     virtual PacketCounters getCumulativeReceiveCounters(uint32_t ssrc) const = 0;
+    virtual PacketCounters getCumulativeAudioReceiveCounters() const = 0;
+    virtual PacketCounters getCumulativeVideoReceiveCounters() const = 0;
     virtual PacketCounters getAudioReceiveCounters(uint64_t idleTimestamp) const = 0;
     virtual PacketCounters getVideoReceiveCounters(uint64_t idleTimestamp) const = 0;
     virtual PacketCounters getAudioSendCounters(uint64_t idleTimestamp) const = 0;

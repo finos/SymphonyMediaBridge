@@ -65,7 +65,6 @@ public:
         uint32_t _dataStreams = 0;
         uint32_t pacingQueue = 0;
         uint32_t rtxPacingQueue = 0;
-
     };
 
     Mixer(std::string id,
@@ -271,7 +270,7 @@ private:
 
     RecordingStream* findRecordingStream(const std::string& recordingId);
 
-    void stopTransportIfNeeded(transport::Transport* streamTransport, const std::string& endpointId);
+    void stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId);
 };
 
 } // namespace bridge
