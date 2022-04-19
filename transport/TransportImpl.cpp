@@ -1303,6 +1303,32 @@ PacketCounters TransportImpl::getVideoReceiveCounters(uint64_t idleTimestamp) co
     return total;
 }
 
+PacketCounters TransportImpl::getCumulativeAudioReceiveCounters() const
+{
+    PacketCounters total;
+    for (auto& it : _inboundSsrcCounters)
+    {
+        if (it.second.payloadType == _audio.payloadType)
+        {
+            total += it.second.getCumulativeCounters();
+        }
+    }
+    return total;
+}
+
+PacketCounters TransportImpl::getCumulativeVideoReceiveCounters() const
+{
+    PacketCounters total;
+    for (auto& it : _inboundSsrcCounters)
+    {
+        if (it.second.payloadType != _audio.payloadType)
+        {
+            total += it.second.getCumulativeCounters();
+        }
+    }
+    return total;
+}
+
 PacketCounters TransportImpl::getCumulativeReceiveCounters(uint32_t ssrc) const
 {
     auto it = _inboundSsrcCounters.find(ssrc);
