@@ -1396,6 +1396,8 @@ void TransportImpl::sendPadding(uint64_t timestamp)
     }
 
     uint16_t padding = 0;
+    auto& rtxSenderState = getOutboundSsrc(_rtxProbeSsrc, 90000);
+    auto rtpTimeStamp = rtxSenderState.getRtpTimestamp(timestamp);
     auto paddingCount = _rateController.getPadding(timestamp, 0, padding);
     for (uint32_t i = 0; padding > 100 && i < paddingCount && _selectedRtp; ++i)
     {
@@ -1407,7 +1409,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
             auto padRtpHeader = rtp::RtpHeader::create(*padPacket);
             padRtpHeader->ssrc = _rtxProbeSsrc;
             padRtpHeader->payloadType = rtxPayloadType;
-            padRtpHeader->timestamp = 1293887;
+            padRtpHeader->timestamp = rtpTimeStamp;
             padRtpHeader->sequenceNumber = (*_rtxProbeSequenceCounter)++ & 0xFFFF;
             padRtpHeader->padding = 1;
             padPacket->get()[padPacket->getLength() - 1] = 0x01;

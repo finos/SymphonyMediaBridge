@@ -68,8 +68,9 @@ public:
         uint64_t rtpHeaderOctets = 0;
     };
 
-private:
     uint32_t getRtpTimestamp(uint64_t timestamp) const;
+
+private:
     struct RemoteCounters
     {
         RemoteCounters()
