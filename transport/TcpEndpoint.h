@@ -137,6 +137,8 @@ private:
     void onSocketWriteable(int fd) override;
     void onSocketShutdown(int fd) override;
 
+    void sendPacket(const memory::Packet& packet);
+
     jobmanager::JobQueue _receiveJobs;
     jobmanager::JobQueue _sendJobs;
     memory::PacketPoolAllocator& _allocator; // only for ICE
@@ -147,6 +149,7 @@ private:
 
     RtcePoll& _epoll;
     memory::UniquePacket _pendingStunRequest;
+    memory::Packet _remainder;
 };
 
 } // namespace transport

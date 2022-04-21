@@ -337,6 +337,8 @@ void TcpServerEndpoint::internalReceive(int fd)
                             pendingTcp.peerPort);
                         _pendingConnections.erase(fd);
 
+                        endpoint->configureBufferSizes(_config.ice.tcp.sendBuffer, _config.ice.tcp.recvBuffer);
+
                         // if read event is fired now we may miss it and it is edge triggered.
                         // everything relies on that the ice session will want to respond to the request
                         _epoll.add(fd, endpoint);
@@ -463,8 +465,9 @@ void TcpServerEndpoint::sendIceErrorResponse(transport::RtcSocket& socket,
 
     response.addFingerprint();
 
+    size_t bytesSent = 0;
     nwuint16_t shim(response.size());
-    socket.sendAggregate(&shim, sizeof(uint16_t), &response, response.size());
+    socket.sendAggregate(&shim, sizeof(uint16_t), &response, response.size(), bytesSent);
 }
 
 } // namespace transport

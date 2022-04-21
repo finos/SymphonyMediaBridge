@@ -50,6 +50,8 @@ public:
     CFG_PROP(uint16_t, port, 4443);
     CFG_PROP(uint32_t, iceTimeoutSec, 7);
     CFG_PROP(uint16_t, aliasPort, 0);
+    CFG_PROP(uint32_t, sendBuffer, 512 * 1024);
+    CFG_PROP(uint32_t, recvBuffer, 512 * 1024);
     CFG_GROUP_END(tcp)
 
     CFG_GROUP_END(ice);

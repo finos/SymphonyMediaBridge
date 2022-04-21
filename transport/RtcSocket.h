@@ -53,14 +53,14 @@ public:
         size_t length0,
         const void* buf1,
         size_t length1,
+        size_t& bytesSent,
         const SocketAddress& target = SocketAddress());
+
     int sendAggregate(const void* buf0,
         size_t length0,
-        const void* buf1,
-        size_t length1,
-        const void* buf2,
-        size_t length2,
+        size_t& bytesSent,
         const SocketAddress& target = SocketAddress());
+
     int sendMultiple(Message* messages, size_t count);
 
     SocketAddress getBoundPort() const { return _boundPort; }
@@ -71,7 +71,10 @@ public:
     static const char* explain(int errorCode);
 
 private:
-    int sendAggregate(const struct iovec* messages, uint16_t messageCount, const SocketAddress& target);
+    int sendAggregate(const struct iovec* messages,
+        uint16_t messageCount,
+        size_t& bytesSent,
+        const SocketAddress& target);
 
     SocketAddress _boundPort;
     int _fd;

@@ -179,32 +179,26 @@ bool RtcSocket::isGood() const
 // returns 0 on success else error code from errno
 int RtcSocket::sendTo(const void* msg, size_t length, const SocketAddress& target)
 {
+    size_t bytesSent = 0;
     const struct iovec buffers[1] = {{const_cast<void*>(msg), length}};
-    return sendAggregate(buffers, 1, target);
+    return sendAggregate(buffers, 1, bytesSent, target);
 }
 
 int RtcSocket::sendAggregate(const void* buf0,
     size_t length0,
     const void* buf1,
     size_t length1,
+    size_t& bytesSent,
     const SocketAddress& target)
 {
     const struct iovec buffers[2] = {{const_cast<void*>(buf0), length0}, {const_cast<void*>(buf1), length1}};
-    return sendAggregate(buffers, 2, target);
+    return sendAggregate(buffers, 2, bytesSent, target);
 }
 
-int RtcSocket::sendAggregate(const void* buf0,
-    size_t length0,
-    const void* buf1,
-    size_t length1,
-    const void* buf2,
-    size_t length2,
-    const SocketAddress& target)
+int RtcSocket::sendAggregate(const void* buf0, size_t length0, size_t& bytesSent, const SocketAddress& target)
 {
-    const struct iovec buffers[3] = {{const_cast<void*>(buf0), length0},
-        {const_cast<void*>(buf1), length1},
-        {const_cast<void*>(buf2), length2}};
-    return sendAggregate(buffers, 3, target);
+    const struct iovec buffers[1] = {{const_cast<void*>(buf0), length0}};
+    return sendAggregate(buffers, 1, bytesSent, target);
 }
 
 namespace
@@ -219,7 +213,11 @@ size_t lengthOf(const msghdr& header)
     return result;
 }
 } // namespace
-int RtcSocket::sendAggregate(const struct iovec* messages, uint16_t messageCount, const SocketAddress& target)
+
+int RtcSocket::sendAggregate(const struct iovec* messages,
+    uint16_t messageCount,
+    size_t& bytesSent,
+    const SocketAddress& target)
 {
     if (!isGood())
     {
@@ -243,25 +241,24 @@ int RtcSocket::sendAggregate(const struct iovec* messages, uint16_t messageCount
     {
         rc = ::sendmsg(_fd, &header, MSG_DONTWAIT);
         errorCode = errno;
-        if (rc == totalLength || errorCode == EINPROGRESS)
+        if (rc <= 0 && (errorCode == EAGAIN || errorCode == EWOULDBLOCK))
         {
-            break;
+            continue;
         }
 
-        if (errorCode != EAGAIN && errorCode != EWOULDBLOCK)
-        {
-            break;
-        }
+        break;
     }
 
-    if (rc == totalLength || errorCode == EINPROGRESS)
+    if (rc == totalLength)
     {
+        bytesSent = rc;
         return 0;
     }
-    else
+    else if (rc > 0)
     {
-        return errno;
+        bytesSent = rc;
     }
+    return errorCode;
 }
 
 // returns errno or 0

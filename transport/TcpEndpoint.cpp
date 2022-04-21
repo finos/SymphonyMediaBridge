@@ -259,16 +259,7 @@ void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory:
         continueSend();
     }
 
-    nwuint16_t packetLength(packet->getLength());
-    int rc = _socket.sendAggregate(&packetLength, sizeof(uint16_t), packet->get(), packet->getLength());
-    if (rc != 0)
-    {
-        logger::warn("failed send to %s, err (%d) %s",
-            _name.c_str(),
-            target.toString().c_str(),
-            rc,
-            _socket.explain(rc));
-    }
+    sendPacket(*packet);
 }
 
 void TcpEndpoint::continueSend()
@@ -277,21 +268,54 @@ void TcpEndpoint::continueSend()
     if (_pendingStunRequest && _state == State::CONNECTED)
     {
         // stun requests are always created on own allocator in SendStunRequest
-        nwuint16_t packetLength(_pendingStunRequest->getLength());
-        int rc = _socket.sendAggregate(&packetLength,
-            sizeof(uint16_t),
-            _pendingStunRequest->get(),
-            _pendingStunRequest->getLength());
+        sendPacket(*_pendingStunRequest);
 
         _pendingStunRequest.reset();
-        if (rc != 0)
+    }
+}
+
+void TcpEndpoint::sendPacket(const memory::Packet& packet)
+{
+    if (_remainder.getLength() > 0)
+    {
+        size_t bytesSent;
+        auto rc = _socket.sendAggregate(_remainder.get(), _remainder.getLength(), bytesSent);
+        if (bytesSent < _remainder.getLength())
         {
-            logger::warn("failed send to %s, err (%d) %s",
-                _name.c_str(),
-                _peerPort.toString().c_str(),
-                rc,
-                _socket.explain(rc));
+            memory::Packet tmp;
+            tmp.append(reinterpret_cast<uint8_t*>(_remainder.get()) + bytesSent, _remainder.getLength() - bytesSent);
+            tmp.copyTo(_remainder);
         }
+        else
+        {
+            _remainder.setLength(0);
+        }
+        if (_remainder.getLength() > 0)
+        {
+            logger::warn("discarding packet, err %d", _name.c_str(), rc);
+            return;
+        }
+    }
+
+    size_t bytesSent = 0;
+    nwuint16_t shim(packet.getLength());
+    auto rc = _socket.sendAggregate(&shim, sizeof(uint16_t), packet.get(), packet.getLength(), bytesSent);
+    if (bytesSent <= 1)
+    {
+        auto data = reinterpret_cast<uint8_t*>(&shim);
+        _remainder.append(data + bytesSent, sizeof(shim) - bytesSent);
+        _remainder.append(packet.get(), packet.getLength());
+        logger::debug("partial packet sent %zu / %zu, err %d", _name.c_str(), bytesSent, packet.getLength(), rc);
+    }
+    else if (bytesSent < packet.getLength() + sizeof(shim))
+    {
+        bytesSent -= sizeof(uint16_t);
+        _remainder.append(packet.get() + bytesSent, packet.getLength() - bytesSent);
+        logger::debug("partial packet sent %zu / %zu, err %d", _name.c_str(), bytesSent, packet.getLength(), rc);
+    }
+    else if (bytesSent == 0)
+    {
+        logger::warn("discarding packet. err %d", _name.c_str(), rc);
     }
 }
 
@@ -478,6 +502,7 @@ void TcpEndpoint::start() {}
 
 bool TcpEndpoint::configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize)
 {
+    logger::debug("tcp endpoint buffer sizes send %zu, recv %zu", _name.c_str(), sendBufferSize, receiveBufferSize);
     return 0 == _socket.setSendBuffer(sendBufferSize) && 0 == _socket.setReceiveBuffer(receiveBufferSize);
 }
 
