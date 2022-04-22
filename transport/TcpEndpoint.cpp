@@ -282,18 +282,16 @@ void TcpEndpoint::sendPacket(const memory::Packet& packet)
         auto rc = _socket.sendAggregate(_remainder.get(), _remainder.getLength(), bytesSent);
         if (bytesSent < _remainder.getLength())
         {
-            memory::Packet tmp;
-            tmp.append(reinterpret_cast<uint8_t*>(_remainder.get()) + bytesSent, _remainder.getLength() - bytesSent);
-            tmp.copyTo(_remainder);
+            std::memmove(_remainder.get(),
+                reinterpret_cast<uint8_t*>(_remainder.get()) + bytesSent,
+                _remainder.getLength() - bytesSent);
+            _remainder.setLength(_remainder.getLength() - bytesSent);
+            logger::warn("discarding packet, err %d %s", _name.c_str(), rc, _socket.explain(rc));
+            return;
         }
         else
         {
             _remainder.setLength(0);
-        }
-        if (_remainder.getLength() > 0)
-        {
-            logger::warn("discarding packet, err %d", _name.c_str(), rc);
-            return;
         }
     }
 
@@ -305,17 +303,23 @@ void TcpEndpoint::sendPacket(const memory::Packet& packet)
         auto data = reinterpret_cast<uint8_t*>(&shim);
         _remainder.append(data + bytesSent, sizeof(shim) - bytesSent);
         _remainder.append(packet.get(), packet.getLength());
-        logger::debug("partial packet sent %zu / %zu, err %d", _name.c_str(), bytesSent, packet.getLength(), rc);
+        logger::debug("partial packet sent %zu / %zu, err %d %s",
+            _name.c_str(),
+            bytesSent,
+            packet.getLength(),
+            rc,
+            _socket.explain(rc));
     }
     else if (bytesSent < packet.getLength() + sizeof(shim))
     {
         bytesSent -= sizeof(uint16_t);
         _remainder.append(packet.get() + bytesSent, packet.getLength() - bytesSent);
-        logger::debug("partial packet sent %zu / %zu, err %d", _name.c_str(), bytesSent, packet.getLength(), rc);
-    }
-    else if (bytesSent == 0)
-    {
-        logger::warn("discarding packet. err %d", _name.c_str(), rc);
+        logger::debug("partial packet sent %zu / %zu, err %d %s",
+            _name.c_str(),
+            bytesSent,
+            packet.getLength(),
+            rc,
+            _socket.explain(rc));
     }
 }
 
