@@ -36,7 +36,7 @@ public:
             return false;
         }
         auto job = new (jobArea) JOB_TYPE(std::forward<U>(args)...);
-        if (!_jobQueue.push(reinterpret_cast<Job*>(job)))
+        if (!_jobQueue.push(static_cast<Job*>(job)))
         {
             job->~Job();
             _jobPool.free(job);
