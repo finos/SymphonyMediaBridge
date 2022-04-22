@@ -39,7 +39,7 @@ public:
         {
             return false;
         }
-        return addJobItem(static_cast<Job*>(job));
+        return addJobItem(job);
     }
 
     template <typename JOB_TYPE, typename... U>
@@ -51,7 +51,7 @@ public:
             return false;
         }
 
-        if (!_timers.addTimer(groupId, id, timeoutUs * 1000, static_cast<Job*>(job)))
+        if (!_timers.addTimer(groupId, id, timeoutUs * 1000, job))
         {
             freeJob(job);
             return false;
@@ -69,7 +69,7 @@ public:
             return false;
         }
 
-        if (!_timers.replaceTimer(groupId, id, timeoutUs * 1000, static_cast<Job*>(job)))
+        if (!_timers.replaceTimer(groupId, id, timeoutUs * 1000, job))
         {
             freeJob(job);
             return false;
