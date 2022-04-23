@@ -224,9 +224,6 @@ int RtcSocket::sendAggregate(const struct iovec* messages,
         return ENOTSOCK;
     }
 
-    ssize_t rc = 0;
-    int errorCode = 0;
-
     const struct msghdr header = {
         target.empty() ? nullptr : const_cast<void*>(reinterpret_cast<const void*>(target.getSockAddr())),
         target.empty() ? 0 : static_cast<socklen_t>(target.getSockAddrSize()),
@@ -242,31 +239,22 @@ int RtcSocket::sendAggregate(const struct iovec* messages,
         return 0;
     }
 
-    for (int i = 0; i < 2 && rc != totalLength; ++i)
+    int errorCode = EWOULDBLOCK;
+    for (int i = 0; i < 2 && (errorCode == EAGAIN || errorCode == EWOULDBLOCK); ++i)
     {
-        rc = ::sendmsg(_fd, &header, MSG_DONTWAIT);
-        errorCode = errno;
-        if (rc < 0 && (errorCode == EAGAIN || errorCode == EWOULDBLOCK))
+        ssize_t rc = ::sendmsg(_fd, &header, MSG_DONTWAIT);
+        if (rc >= 0)
         {
-            continue;
+            bytesSent = rc;
+            return (bytesSent == totalLength ? 0 : EAGAIN);
         }
-
-        break;
+        else
+        {
+            bytesSent = 0;
+            errorCode = errno;
+        }
     }
 
-    if (rc == totalLength)
-    {
-        bytesSent = rc;
-        return 0;
-    }
-    else if (rc > 0)
-    {
-        bytesSent = rc;
-    }
-    else if (rc == 0 && errorCode == 0)
-    {
-        return EWOULDBLOCK;
-    }
     return errorCode;
 }
 
