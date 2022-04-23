@@ -265,7 +265,7 @@ int RtcSocket::sendAggregate(const struct iovec* messages,
     }
     else if (rc == 0 && errorCode == 0)
     {
-        return EAGAIN;
+        return EWOULDBLOCK;
     }
     return errorCode;
 }
