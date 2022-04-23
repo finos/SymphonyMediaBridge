@@ -68,6 +68,22 @@ private:
     TcpServerEndpoint& _endPoint;
 };
 
+class MaintenanceJob : public jobmanager::Job
+{
+public:
+    MaintenanceJob(TcpServerEndpoint& serverEndpoint, uint64_t timestamp)
+        : _serverEndpoint(serverEndpoint),
+          _timestamp(timestamp)
+    {
+    }
+
+    void run() override { _serverEndpoint.cleanupStaleConnections(_timestamp); }
+
+private:
+    TcpServerEndpoint& _serverEndpoint;
+    uint64_t _timestamp;
+};
+
 TcpServerEndpoint::PendingTcp::PendingTcp(int fd,
     memory::PacketPoolAllocator& allocator,
     const SocketAddress& localPort_,
@@ -144,6 +160,8 @@ void TcpServerEndpoint::close()
     }
 }
 
+void TcpServerEndpoint::maintenance(uint64_t timestamp) {}
+
 void TcpServerEndpoint::registerListener(const std::string& stunUserName, Endpoint::IEvents* listener)
 {
     _iceListeners.emplace(stunUserName, listener);
@@ -199,10 +217,8 @@ void TcpServerEndpoint::onSocketReadable(int fd)
 
 // erase old connection attempts
 // If at 90% capacity, identify most frequent peer ip and black list it
-void TcpServerEndpoint::cleanupStaleConnections()
+void TcpServerEndpoint::cleanupStaleConnections(const uint64_t timestamp)
 {
-    auto timestamp = utils::Time::getAbsoluteTime();
-
     for (auto item : _blackList)
     {
         if (utils::Time::diffGT(item.second, timestamp, utils::Time::minute * 5))
@@ -270,7 +286,7 @@ void TcpServerEndpoint::cleanupStaleConnections()
 
 void TcpServerEndpoint::internalAccept()
 {
-    cleanupStaleConnections();
+    cleanupStaleConnections(utils::Time::getAbsoluteTime());
     SocketAddress peerPort;
     SocketAddress localPort;
     int clientSocket = -1;

@@ -56,6 +56,8 @@ public:
         const uint8_t salt[12]) = 0;
     virtual EndpointMetrics getSharedUdpEndpointsMetrics() const = 0;
     virtual bool isGood() const = 0;
+
+    virtual void maintenance(uint64_t timestamp);
 };
 
 std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager& jobManager,

@@ -88,6 +88,7 @@ public:
     virtual void close() = 0;
     virtual const char* getName() const = 0;
     virtual Endpoint::State getState() const = 0;
+    virtual void maintenance(uint64_t timestamp) = 0;
 };
 
 class TcpEndpointFactory

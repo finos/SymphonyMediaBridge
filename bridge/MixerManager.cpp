@@ -235,7 +235,8 @@ void MixerManager::run()
     {
         try
         {
-            pacer.tick(utils::Time::getAbsoluteTime());
+            auto timestamp = utils::Time::getAbsoluteTime();
+            pacer.tick(timestamp);
 
             for (EngineMessage::Message nextMessage; _engineMessages.pop(nextMessage);)
             {
@@ -306,6 +307,7 @@ void MixerManager::run()
 
             if (++_stats._ticksSinceLastUpdate >= 50)
             {
+                _transportFactory.maintenance(timestamp);
                 updateStats();
             }
         }
@@ -687,7 +689,7 @@ void MixerManager::engineMessageRemoveRecordingTransport(const EngineMessage::Me
 Stats::MixerManagerStats MixerManager::getStats()
 {
     Stats::MixerManagerStats result;
-    auto systemStats = _systemStatCollector.collect();
+    auto systemStats = _systemStatCollector.collect(_config.port, _config.ice.tcp.port);
 
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
