@@ -116,6 +116,8 @@ std::string MixerManagerStats::describe()
     result["rtc_tcp4_connections"] = _systemStats.connections.tcp4.rtp;
     result["rtc_tcp6_connections"] = _systemStats.connections.tcp6.rtp;
 
+    result["http_tcp_connections"] = _systemStats.connections.tcp4.http;
+
     result["inbound_audio_streams"] = _engineStats.activeMixers.inbound.audio.activeStreamCount;
     result["outbound_audio_streams"] = _engineStats.activeMixers.outbound.audio.activeStreamCount;
     result["inbound_video_streams"] = _engineStats.activeMixers.inbound.video.activeStreamCount;
@@ -407,8 +409,8 @@ ConnectionsStats SystemStatsCollector::collectNetStats(uint16_t httpPort, uint16
 
 namespace
 {
-
-void readSocketInfo(FILE* file, uid_t myUid, uint16_t localPortFilter, uint32_t& count)
+template <class Predicate>
+void readSocketInfo(FILE* file, uid_t myUid, Predicate predicate, uint32_t& count)
 {
     if (!file)
     {
@@ -416,20 +418,22 @@ void readSocketInfo(FILE* file, uid_t myUid, uint16_t localPortFilter, uint32_t&
         return;
     }
 
+    ::rewind(file);
     uint32_t port = 0;
+    uint32_t remotePort = 0;
     char ignore[513];
     uid_t uid;
-    const char* formatString = "%*d: %*32[^:]:%x %*32[^:]:%*x %*x %*8[^:]:%*8s %*x:%*x %*x %u";
+    const char* formatString = "%*d: %*32[^:]:%x %*32[^:]:%x %*x %*8[^:]:%*8s %*x:%*x %*x %u";
     fgets(ignore, sizeof(ignore), file);
     for (int i = 0; i < 500; ++i)
     {
-        int items = fscanf(file, formatString, &port, &uid);
+        int items = fscanf(file, formatString, &port, &remotePort, &uid);
         fgets(ignore, sizeof(ignore), file);
-        if (items >= 2 && uid == myUid && (localPortFilter == 0 || port == localPortFilter))
+        if (items >= 3 && uid == myUid && predicate(port, remotePort))
         {
             ++count;
         }
-        else if (items < 2)
+        else if (items < 3)
         {
             break;
         }
@@ -448,12 +452,41 @@ ConnectionsStats SystemStatsCollector::collectLinuxNetStat(uint16_t httpPort, ui
     const auto myUid = getuid();
 
     ConnectionsStats result;
-    readSocketInfo(hTcp4Stat.get(), myUid, httpPort, result.tcp4.http);
-    readSocketInfo(hTcp4Stat.get(), myUid, tcpRtpPort, result.tcp4.rtp);
-    readSocketInfo(hUdp4Stat.get(), myUid, 0, result.udp4);
-    readSocketInfo(hTcp6Stat.get(), myUid, httpPort, result.tcp6.http);
-    readSocketInfo(hTcp6Stat.get(), myUid, tcpRtpPort, result.tcp6.rtp);
-    readSocketInfo(hUdp6Stat.get(), myUid, 0, result.udp6);
+    readSocketInfo(
+        hTcp4Stat.get(),
+        myUid,
+        [httpPort](uint32_t localPort, uint32_t remotePort) { return localPort == httpPort && remotePort != 0; },
+        result.tcp4.http);
+
+    readSocketInfo(
+        hTcp4Stat.get(),
+        myUid,
+        [tcpRtpPort](uint32_t localPort, uint32_t remotePort) { return localPort == tcpRtpPort && remotePort != 0; },
+        result.tcp4.rtp);
+
+    readSocketInfo(
+        hUdp4Stat.get(),
+        myUid,
+        [](uint32_t localPort, uint32_t remotePort) { return true; },
+        result.udp4);
+
+    readSocketInfo(
+        hTcp6Stat.get(),
+        myUid,
+        [httpPort](uint32_t localPort, uint32_t remotePort) { return localPort == httpPort && remotePort != 0; },
+        result.tcp6.http);
+
+    readSocketInfo(
+        hTcp6Stat.get(),
+        myUid,
+        [tcpRtpPort](uint32_t localPort, uint32_t remotePort) { return localPort == tcpRtpPort && remotePort != 0; },
+        result.tcp6.rtp);
+
+    readSocketInfo(
+        hUdp6Stat.get(),
+        myUid,
+        [](uint32_t localPort, uint32_t remotePort) { return true; },
+        result.udp6);
 
     return result;
 }
