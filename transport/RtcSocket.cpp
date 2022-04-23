@@ -237,11 +237,16 @@ int RtcSocket::sendAggregate(const struct iovec* messages,
         0};
 
     const auto totalLength = static_cast<ssize_t>(lengthOf(header));
+    if (totalLength == 0)
+    {
+        return 0;
+    }
+
     for (int i = 0; i < 2 && rc != totalLength; ++i)
     {
         rc = ::sendmsg(_fd, &header, MSG_DONTWAIT);
         errorCode = errno;
-        if (rc <= 0 && (errorCode == EAGAIN || errorCode == EWOULDBLOCK))
+        if (rc < 0 && (errorCode == EAGAIN || errorCode == EWOULDBLOCK))
         {
             continue;
         }
@@ -257,6 +262,10 @@ int RtcSocket::sendAggregate(const struct iovec* messages,
     else if (rc > 0)
     {
         bytesSent = rc;
+    }
+    else if (rc == 0 && errorCode == 0)
+    {
+        return EAGAIN;
     }
     return errorCode;
 }
