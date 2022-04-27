@@ -242,7 +242,7 @@ int RtcSocket::sendAggregate(const struct iovec* messages,
     int errorCode = EWOULDBLOCK;
     for (int i = 0; i < 2 && (errorCode == EAGAIN || errorCode == EWOULDBLOCK); ++i)
     {
-        ssize_t rc = ::sendmsg(_fd, &header, MSG_DONTWAIT);
+        ssize_t rc = ::sendmsg(_fd, &header, MSG_DONTWAIT | MSG_NOSIGNAL);
         if (rc >= 0)
         {
             bytesSent = rc;
@@ -283,7 +283,7 @@ int RtcSocket::sendMultiple(Message* messages, const size_t count)
 
         const auto totalLength = static_cast<ssize_t>(lengthOf(singleMessage));
         ssize_t rc = 0;
-        rc = ::sendmsg(_fd, &singleMessage, MSG_DONTWAIT);
+        rc = ::sendmsg(_fd, &singleMessage, MSG_DONTWAIT | MSG_NOSIGNAL);
         if (rc != totalLength)
         {
             const int errorCode = errno;
@@ -322,7 +322,7 @@ int RtcSocket::sendMultiple(Message* messages, const size_t count)
     for (size_t sendCursor = 0; sendCursor < count;)
     {
         const auto remainingCount = count - sendCursor;
-        int rc = ::sendmmsg(_fd, items + sendCursor, remainingCount, MSG_DONTWAIT);
+        int rc = ::sendmmsg(_fd, items + sendCursor, remainingCount, MSG_DONTWAIT | MSG_NOSIGNAL);
         if (rc == static_cast<int>(remainingCount))
         {
             return errorCount;

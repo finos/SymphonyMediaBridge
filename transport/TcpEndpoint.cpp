@@ -230,7 +230,10 @@ void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniqueP
     assert(!memory::PacketPoolAllocator::isCorrupt(packet.get()));
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
-        _sendJobs.addJob<SendJob>(*this, std::move(packet), target);
+        if (!_sendJobs.addJob<SendJob>(*this, std::move(packet), target))
+        {
+            logger::warn("failed to add SendJob", _name.c_str());
+        }
     }
 }
 
@@ -356,7 +359,10 @@ void TcpEndpoint::onSocketShutdown(int fd)
     {
         logger::debug("peer shut down socket ", _name.c_str());
         _state = State::CLOSING;
-        _receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd);
+        if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
+        {
+            logger::warn("failed to add ReceiveJob", _name.c_str());
+        }
         _epoll.remove(fd, this);
     }
 }
@@ -405,7 +411,10 @@ void TcpEndpoint::onSocketReadable(int fd)
     {
         if (!_pendingRead.test_and_set())
         {
-            _receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd);
+            if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
+            {
+                logger::warn("failed to add Receivejob", _name.c_str());
+            }
         }
     }
 }
@@ -416,7 +425,10 @@ void TcpEndpoint::onSocketWriteable(int fd)
     {
         _state = State::CONNECTED;
         logger::debug("connected to %s", _name.c_str(), _peerPort.toString().c_str());
-        _sendJobs.addJob<ContinueSendJob>(*this);
+        if (!_sendJobs.addJob<ContinueSendJob>(*this))
+        {
+            logger::warn("failed to add ContinueSendJob", _name.c_str());
+        }
     }
 }
 

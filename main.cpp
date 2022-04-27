@@ -94,8 +94,11 @@ int main(int argc, char** argv)
         sigactionData.sa_handler = fatalSignalHandler;
         sigactionData.sa_flags = 0;
         sigemptyset(&sigactionData.sa_mask);
-
         struct sigaction oldHandler = {};
+
+        sigaction(SIGPIPE, &sigactionData, &oldHandler);
+        oldSignalHandlers.emplace(SIGPIPE, oldHandler);
+
         sigaction(SIGSEGV, &sigactionData, &oldHandler);
         oldSignalHandlers.emplace(SIGSEGV, oldHandler);
 
@@ -110,6 +113,9 @@ int main(int argc, char** argv)
 
         sigaction(SIGFPE, &sigactionData, &oldHandler);
         oldSignalHandlers.emplace(SIGFPE, oldHandler);
+
+        sigaction(SIGSYS, &sigactionData, &oldHandler);
+        oldSignalHandlers.emplace(SIGSYS, oldHandler);
     }
 
     if (argc < 2)
