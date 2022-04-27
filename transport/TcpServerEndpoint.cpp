@@ -77,7 +77,7 @@ public:
     {
     }
 
-    void run() override { _serverEndpoint.cleanupStaleConnections(_timestamp); }
+    void run() override { _serverEndpoint.internalMaintenance(_timestamp); }
 
 private:
     TcpServerEndpoint& _serverEndpoint;
@@ -113,7 +113,8 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
       _iceListeners(maxSessions),
       _epoll(rtcePoll),
       _listener(listener),
-      _config(config)
+      _config(config),
+      _lastMaintenance(0)
 {
     int rc = _socket.open(localPort, localPort.getPort(), SOCK_STREAM);
     if (rc)
@@ -160,7 +161,10 @@ void TcpServerEndpoint::close()
     }
 }
 
-void TcpServerEndpoint::maintenance(uint64_t timestamp) {}
+void TcpServerEndpoint::maintenance(uint64_t timestamp)
+{
+    _receiveJobs.addJob<MaintenanceJob>(*this, timestamp);
+}
 
 void TcpServerEndpoint::registerListener(const std::string& stunUserName, Endpoint::IEvents* listener)
 {
@@ -212,6 +216,15 @@ void TcpServerEndpoint::onSocketReadable(int fd)
     else
     {
         _receiveJobs.addJob<tcp::ReceiveJob<TcpServerEndpoint>>(*this, fd);
+    }
+}
+
+void TcpServerEndpoint::internalMaintenance(uint64_t timestamp)
+{
+    if (!_lastMaintenance || utils::Time::diffGE(_lastMaintenance, timestamp, utils::Time::sec * 5))
+    {
+        _lastMaintenance = timestamp;
+        cleanupStaleConnections(timestamp);
     }
 }
 

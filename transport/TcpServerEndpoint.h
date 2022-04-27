@@ -51,6 +51,7 @@ public: // internal job methods
     void internalAccept();
     void internalShutdown(int fd);
     void internalClosePendingSocket(int fd);
+    void internalMaintenance(uint64_t timestamp);
     void cleanupStaleConnections(uint64_t timestamp);
 
 private:
@@ -93,5 +94,6 @@ private:
     RtcePoll& _epoll;
     TcpServerEndpoint::IEvents* _listener;
     const config::Config& _config;
+    uint64_t _lastMaintenance;
 };
 } // namespace transport
