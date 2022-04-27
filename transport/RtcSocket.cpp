@@ -233,7 +233,7 @@ int RtcSocket::sendAggregate(const struct iovec* messages,
         0,
         0};
 
-    const auto totalLength = static_cast<ssize_t>(lengthOf(header));
+    const auto totalLength = static_cast<size_t>(lengthOf(header));
     if (totalLength == 0)
     {
         return 0;

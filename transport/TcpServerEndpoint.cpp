@@ -110,8 +110,6 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
         return;
     }
     _state = Endpoint::State::CREATED;
-    _socket.setSendBuffer(128 * 1024);
-    _socket.setReceiveBuffer(128 * 1024);
     logger::info("server port %s", _name.c_str(), _socket.getBoundPort().toString().c_str());
 }
 
@@ -336,8 +334,6 @@ void TcpServerEndpoint::internalReceive(int fd)
                             pendingTcp.localPort,
                             pendingTcp.peerPort);
                         _pendingConnections.erase(fd);
-
-                        endpoint->configureBufferSizes(_config.ice.tcp.sendBuffer, _config.ice.tcp.recvBuffer);
 
                         // if read event is fired now we may miss it and it is edge triggered.
                         // everything relies on that the ice session will want to respond to the request

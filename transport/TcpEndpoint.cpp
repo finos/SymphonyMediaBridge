@@ -57,10 +57,11 @@ private:
 
 } // namespace
 
-RtpDepacketizer::RtpDepacketizer(int fd_, memory::PacketPoolAllocator& allocator)
-    : fd(fd_),
+RtpDepacketizer::RtpDepacketizer(int socketHandle, memory::PacketPoolAllocator& allocator)
+    : fd(socketHandle),
       _receivedBytes(0),
-      _allocator(allocator)
+      _allocator(allocator),
+      _streamPrestine(true)
 {
 }
 
@@ -88,7 +89,7 @@ memory::UniquePacket RtpDepacketizer::receive()
         if (_header.get() >= memory::Packet::size)
         {
             // attack with malicious length specifier
-            // create invalid stunmessage will cause connection to close
+            _streamPrestine = false;
             return memory::makeUniquePacket(_allocator);
         }
     }
@@ -122,6 +123,7 @@ memory::UniquePacket RtpDepacketizer::receive()
 void RtpDepacketizer::close()
 {
     ::close(fd);
+    fd = -1;
 }
 
 // Used for accepted socket
@@ -232,8 +234,6 @@ void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniqueP
     }
 }
 
-// TODO if the socket blocks due to send buffer/window full. We will lose packet.
-// could queue packets and use writeable event to continue writing once the send window increases
 void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
 {
     if (_state == State::CONNECTING)
@@ -478,8 +478,8 @@ void TcpEndpoint::internalReceive(int fd)
         }
         else
         {
-            // we received from an ICE validated tcp end point. Ok to log.
             logger::warn("unexpected packet %zu", _name.c_str(), packet->getLength());
+            onSocketShutdown(fd);
         }
     }
 }
