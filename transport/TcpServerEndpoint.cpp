@@ -221,7 +221,7 @@ void TcpServerEndpoint::onSocketReadable(int fd)
 
 void TcpServerEndpoint::internalMaintenance(uint64_t timestamp)
 {
-    if (!_lastMaintenance || utils::Time::diffGE(_lastMaintenance, timestamp, utils::Time::sec * 5))
+    if (!_lastMaintenance || utils::Time::diffGE(_lastMaintenance, timestamp, _config.ice.tcp.iceTimeoutSec))
     {
         _lastMaintenance = timestamp;
         cleanupStaleConnections(timestamp);
