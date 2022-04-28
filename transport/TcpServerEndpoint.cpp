@@ -110,8 +110,6 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
         return;
     }
     _state = Endpoint::State::CREATED;
-    _socket.setSendBuffer(128 * 1024);
-    _socket.setReceiveBuffer(128 * 1024);
     logger::info("server port %s", _name.c_str(), _socket.getBoundPort().toString().c_str());
 }
 
@@ -463,8 +461,9 @@ void TcpServerEndpoint::sendIceErrorResponse(transport::RtcSocket& socket,
 
     response.addFingerprint();
 
+    size_t bytesSent = 0;
     nwuint16_t shim(response.size());
-    socket.sendAggregate(&shim, sizeof(uint16_t), &response, response.size());
+    socket.sendAggregate(&shim, sizeof(uint16_t), &response, response.size(), bytesSent);
 }
 
 } // namespace transport

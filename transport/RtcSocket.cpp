@@ -179,32 +179,26 @@ bool RtcSocket::isGood() const
 // returns 0 on success else error code from errno
 int RtcSocket::sendTo(const void* msg, size_t length, const SocketAddress& target)
 {
+    size_t bytesSent = 0;
     const struct iovec buffers[1] = {{const_cast<void*>(msg), length}};
-    return sendAggregate(buffers, 1, target);
+    return sendAggregate(buffers, 1, bytesSent, target);
 }
 
 int RtcSocket::sendAggregate(const void* buf0,
     size_t length0,
     const void* buf1,
     size_t length1,
+    size_t& bytesSent,
     const SocketAddress& target)
 {
     const struct iovec buffers[2] = {{const_cast<void*>(buf0), length0}, {const_cast<void*>(buf1), length1}};
-    return sendAggregate(buffers, 2, target);
+    return sendAggregate(buffers, 2, bytesSent, target);
 }
 
-int RtcSocket::sendAggregate(const void* buf0,
-    size_t length0,
-    const void* buf1,
-    size_t length1,
-    const void* buf2,
-    size_t length2,
-    const SocketAddress& target)
+int RtcSocket::sendAggregate(const void* buf0, size_t length0, size_t& bytesSent, const SocketAddress& target)
 {
-    const struct iovec buffers[3] = {{const_cast<void*>(buf0), length0},
-        {const_cast<void*>(buf1), length1},
-        {const_cast<void*>(buf2), length2}};
-    return sendAggregate(buffers, 3, target);
+    const struct iovec buffers[1] = {{const_cast<void*>(buf0), length0}};
+    return sendAggregate(buffers, 1, bytesSent, target);
 }
 
 namespace
@@ -219,15 +213,16 @@ size_t lengthOf(const msghdr& header)
     return result;
 }
 } // namespace
-int RtcSocket::sendAggregate(const struct iovec* messages, uint16_t messageCount, const SocketAddress& target)
+
+int RtcSocket::sendAggregate(const struct iovec* messages,
+    uint16_t messageCount,
+    size_t& bytesSent,
+    const SocketAddress& target)
 {
     if (!isGood())
     {
         return ENOTSOCK;
     }
-
-    ssize_t rc = 0;
-    int errorCode = 0;
 
     const struct msghdr header = {
         target.empty() ? nullptr : const_cast<void*>(reinterpret_cast<const void*>(target.getSockAddr())),
@@ -238,30 +233,29 @@ int RtcSocket::sendAggregate(const struct iovec* messages, uint16_t messageCount
         0,
         0};
 
-    const auto totalLength = static_cast<ssize_t>(lengthOf(header));
-    for (int i = 0; i < 2 && rc != totalLength; ++i)
-    {
-        rc = ::sendmsg(_fd, &header, MSG_DONTWAIT);
-        errorCode = errno;
-        if (rc == totalLength || errorCode == EINPROGRESS)
-        {
-            break;
-        }
-
-        if (errorCode != EAGAIN && errorCode != EWOULDBLOCK)
-        {
-            break;
-        }
-    }
-
-    if (rc == totalLength || errorCode == EINPROGRESS)
+    const auto totalLength = static_cast<size_t>(lengthOf(header));
+    if (totalLength == 0)
     {
         return 0;
     }
-    else
+
+    int errorCode = EWOULDBLOCK;
+    for (int i = 0; i < 2 && (errorCode == EAGAIN || errorCode == EWOULDBLOCK); ++i)
     {
-        return errno;
+        ssize_t rc = ::sendmsg(_fd, &header, MSG_DONTWAIT | MSG_NOSIGNAL);
+        if (rc >= 0)
+        {
+            bytesSent = rc;
+            return (bytesSent == totalLength ? 0 : EAGAIN);
+        }
+        else
+        {
+            bytesSent = 0;
+            errorCode = errno;
+        }
     }
+
+    return errorCode;
 }
 
 // returns errno or 0
@@ -289,7 +283,7 @@ int RtcSocket::sendMultiple(Message* messages, const size_t count)
 
         const auto totalLength = static_cast<ssize_t>(lengthOf(singleMessage));
         ssize_t rc = 0;
-        rc = ::sendmsg(_fd, &singleMessage, MSG_DONTWAIT);
+        rc = ::sendmsg(_fd, &singleMessage, MSG_DONTWAIT | MSG_NOSIGNAL);
         if (rc != totalLength)
         {
             const int errorCode = errno;
@@ -328,7 +322,7 @@ int RtcSocket::sendMultiple(Message* messages, const size_t count)
     for (size_t sendCursor = 0; sendCursor < count;)
     {
         const auto remainingCount = count - sendCursor;
-        int rc = ::sendmmsg(_fd, items + sendCursor, remainingCount, MSG_DONTWAIT);
+        int rc = ::sendmmsg(_fd, items + sendCursor, remainingCount, MSG_DONTWAIT | MSG_NOSIGNAL);
         if (rc == static_cast<int>(remainingCount))
         {
             return errorCount;

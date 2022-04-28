@@ -270,7 +270,6 @@ public:
     Endpoint* createTcpEndpoint(const transport::SocketAddress& baseAddress) override
     {
         auto endpoint = new TcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll);
-        endpoint->configureBufferSizes(512 * 1024, 5 * 1024 * 1024);
         return endpoint;
     }
 

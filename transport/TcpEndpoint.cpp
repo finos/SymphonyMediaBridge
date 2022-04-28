@@ -57,10 +57,11 @@ private:
 
 } // namespace
 
-RtpDepacketizer::RtpDepacketizer(int fd_, memory::PacketPoolAllocator& allocator)
-    : fd(fd_),
+RtpDepacketizer::RtpDepacketizer(int socketHandle, memory::PacketPoolAllocator& allocator)
+    : fd(socketHandle),
       _receivedBytes(0),
-      _allocator(allocator)
+      _allocator(allocator),
+      _streamPrestine(true)
 {
 }
 
@@ -88,7 +89,7 @@ memory::UniquePacket RtpDepacketizer::receive()
         if (_header.get() >= memory::Packet::size)
         {
             // attack with malicious length specifier
-            // create invalid stunmessage will cause connection to close
+            _streamPrestine = false;
             return memory::makeUniquePacket(_allocator);
         }
     }
@@ -122,6 +123,7 @@ memory::UniquePacket RtpDepacketizer::receive()
 void RtpDepacketizer::close()
 {
     ::close(fd);
+    fd = -1;
 }
 
 // Used for accepted socket
@@ -228,12 +230,13 @@ void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniqueP
     assert(!memory::PacketPoolAllocator::isCorrupt(packet.get()));
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
-        _sendJobs.addJob<SendJob>(*this, std::move(packet), target);
+        if (!_sendJobs.addJob<SendJob>(*this, std::move(packet), target))
+        {
+            logger::warn("failed to add SendJob", _name.c_str());
+        }
     }
 }
 
-// TODO if the socket blocks due to send buffer/window full. We will lose packet.
-// could queue packets and use writeable event to continue writing once the send window increases
 void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
 {
     if (_state == State::CONNECTING)
@@ -259,16 +262,7 @@ void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory:
         continueSend();
     }
 
-    nwuint16_t packetLength(packet->getLength());
-    int rc = _socket.sendAggregate(&packetLength, sizeof(uint16_t), packet->get(), packet->getLength());
-    if (rc != 0)
-    {
-        logger::warn("failed send to %s, err (%d) %s",
-            _name.c_str(),
-            target.toString().c_str(),
-            rc,
-            _socket.explain(rc));
-    }
+    sendPacket(*packet);
 }
 
 void TcpEndpoint::continueSend()
@@ -277,21 +271,58 @@ void TcpEndpoint::continueSend()
     if (_pendingStunRequest && _state == State::CONNECTED)
     {
         // stun requests are always created on own allocator in SendStunRequest
-        nwuint16_t packetLength(_pendingStunRequest->getLength());
-        int rc = _socket.sendAggregate(&packetLength,
-            sizeof(uint16_t),
-            _pendingStunRequest->get(),
-            _pendingStunRequest->getLength());
+        sendPacket(*_pendingStunRequest);
 
         _pendingStunRequest.reset();
-        if (rc != 0)
+    }
+}
+
+void TcpEndpoint::sendPacket(const memory::Packet& packet)
+{
+    if (_remainder.getLength() > 0)
+    {
+        size_t bytesSent;
+        auto rc = _socket.sendAggregate(_remainder.get(), _remainder.getLength(), bytesSent);
+        if (bytesSent < _remainder.getLength())
         {
-            logger::warn("failed send to %s, err (%d) %s",
-                _name.c_str(),
-                _peerPort.toString().c_str(),
-                rc,
-                _socket.explain(rc));
+            std::memmove(_remainder.get(),
+                reinterpret_cast<uint8_t*>(_remainder.get()) + bytesSent,
+                _remainder.getLength() - bytesSent);
+            _remainder.setLength(_remainder.getLength() - bytesSent);
+            logger::warn("discarding packet, err %d %s", _name.c_str(), rc, _socket.explain(rc));
+            return;
         }
+        else
+        {
+            _remainder.setLength(0);
+        }
+    }
+
+    size_t bytesSent = 0;
+    nwuint16_t shim(packet.getLength());
+    auto rc = _socket.sendAggregate(&shim, sizeof(uint16_t), packet.get(), packet.getLength(), bytesSent);
+    if (bytesSent <= 1)
+    {
+        auto data = reinterpret_cast<uint8_t*>(&shim);
+        _remainder.append(data + bytesSent, sizeof(shim) - bytesSent);
+        _remainder.append(packet.get(), packet.getLength());
+        logger::debug("partial packet sent %zu / %zu, err %d %s",
+            _name.c_str(),
+            bytesSent,
+            packet.getLength(),
+            rc,
+            _socket.explain(rc));
+    }
+    else if (bytesSent < packet.getLength() + sizeof(shim))
+    {
+        bytesSent -= sizeof(uint16_t);
+        _remainder.append(packet.get() + bytesSent, packet.getLength() - bytesSent);
+        logger::debug("partial packet sent %zu / %zu, err %d %s",
+            _name.c_str(),
+            bytesSent,
+            packet.getLength(),
+            rc,
+            _socket.explain(rc));
     }
 }
 
@@ -328,7 +359,10 @@ void TcpEndpoint::onSocketShutdown(int fd)
     {
         logger::debug("peer shut down socket ", _name.c_str());
         _state = State::CLOSING;
-        _receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd);
+        if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
+        {
+            logger::warn("failed to add ReceiveJob", _name.c_str());
+        }
         _epoll.remove(fd, this);
     }
 }
@@ -377,7 +411,10 @@ void TcpEndpoint::onSocketReadable(int fd)
     {
         if (!_pendingRead.test_and_set())
         {
-            _receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd);
+            if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
+            {
+                logger::warn("failed to add Receivejob", _name.c_str());
+            }
         }
     }
 }
@@ -388,7 +425,10 @@ void TcpEndpoint::onSocketWriteable(int fd)
     {
         _state = State::CONNECTED;
         logger::debug("connected to %s", _name.c_str(), _peerPort.toString().c_str());
-        _sendJobs.addJob<ContinueSendJob>(*this);
+        if (!_sendJobs.addJob<ContinueSendJob>(*this))
+        {
+            logger::warn("failed to add ContinueSendJob", _name.c_str());
+        }
     }
 }
 
@@ -450,8 +490,8 @@ void TcpEndpoint::internalReceive(int fd)
         }
         else
         {
-            // we received from an ICE validated tcp end point. Ok to log.
             logger::warn("unexpected packet %zu", _name.c_str(), packet->getLength());
+            onSocketShutdown(fd);
         }
     }
 }
@@ -478,6 +518,7 @@ void TcpEndpoint::start() {}
 
 bool TcpEndpoint::configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize)
 {
+    logger::debug("tcp endpoint buffer sizes send %zu, recv %zu", _name.c_str(), sendBufferSize, receiveBufferSize);
     return 0 == _socket.setSendBuffer(sendBufferSize) && 0 == _socket.setReceiveBuffer(receiveBufferSize);
 }
 
