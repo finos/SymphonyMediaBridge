@@ -305,7 +305,7 @@ void MixerManager::run()
                 }
             }
 
-            if (++_stats._ticksSinceLastUpdate >= 50)
+            if (++_stats.ticksSinceLastUpdate >= 50)
             {
                 _transportFactory.maintenance(timestamp);
                 updateStats();
@@ -694,12 +694,13 @@ Stats::MixerManagerStats MixerManager::getStats()
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
 
-        result._conferences = _stats._conferences;
-        result._videoStreams = _stats._videoStreams;
-        result._audioStreams = _stats._audioStreams;
-        result._dataStreams = _stats._dataStreams;
-        result._engineStats = _stats._engine;
+        result._conferences = _stats.conferences;
+        result._videoStreams = _stats.videoStreams;
+        result._audioStreams = _stats.audioStreams;
+        result._dataStreams = _stats.dataStreams;
+        result._engineStats = _stats.engine;
         result._systemStats = systemStats;
+        result._largestConference = _stats.largestConference;
     }
 
     EndpointMetrics udpMetrics = _transportFactory.getSharedUdpEndpointsMetrics();
@@ -718,21 +719,23 @@ void MixerManager::updateStats()
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    _stats._conferences = _mixers.size();
-    _stats._videoStreams = 0;
-    _stats._audioStreams = 0;
-    _stats._dataStreams = 0;
+    _stats.conferences = _mixers.size();
+    _stats.videoStreams = 0;
+    _stats.audioStreams = 0;
+    _stats.dataStreams = 0;
+    _stats.largestConference = 0;
 
     for (const auto& mixer : _mixers)
     {
         const auto stats = mixer.second->getStats();
-        _stats._videoStreams += stats._videoStreams;
-        _stats._audioStreams += stats._audioStreams;
-        _stats._dataStreams += stats._videoStreams;
+        _stats.videoStreams += stats.videoStreams;
+        _stats.audioStreams += stats.audioStreams;
+        _stats.dataStreams += stats.videoStreams;
+        _stats.largestConference = std::max(stats.transports, _stats.largestConference);
     }
 
-    _stats._engine = _engine.getStats();
-    _stats._ticksSinceLastUpdate = 0;
+    _stats.engine = _engine.getStats();
+    _stats.ticksSinceLastUpdate = 0;
 
     if (_mainAllocator.size() < 512)
     {

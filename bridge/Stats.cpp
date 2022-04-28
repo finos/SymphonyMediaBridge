@@ -95,6 +95,7 @@ std::string MixerManagerStats::describe()
     nlohmann::json result;
     result["current_timestamp"] = utils::Time::getAbsoluteTime() / 1000000ULL;
     result["conferences"] = _conferences;
+    result["largestConference"] = _largestConference;
     result["participants"] = std::max({_videoStreams, _audioStreams, _dataStreams});
     result["audiochannels"] = _audioStreams;
     result["videochannels"] = _videoStreams;

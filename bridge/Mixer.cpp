@@ -959,9 +959,10 @@ Mixer::Stats Mixer::getStats()
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     Mixer::Stats result;
-    result._videoStreams = _videoStreams.size();
-    result._audioStreams = _audioStreams.size();
-    result._dataStreams = _dataStreams.size();
+    result.videoStreams = _videoStreams.size();
+    result.audioStreams = _audioStreams.size();
+    result.dataStreams = _dataStreams.size();
+    result.transports = _bundleTransports.size();
     return result;
 }
 

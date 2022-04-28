@@ -57,6 +57,7 @@ struct MixerManagerStats
     uint32_t _videoStreams = 0;
     uint32_t _audioStreams = 0;
     uint32_t _dataStreams = 0;
+    uint32_t _largestConference = 0;
     EngineStats::EngineStats _engineStats;
     uint32_t _jobQueueLength = 0;
 
@@ -65,8 +66,6 @@ struct MixerManagerStats
     uint32_t _udpSharedEndpointsSendQueue = 0;
     uint32_t _udpSharedEndpointsReceiveKbps = 0;
     uint32_t _udpSharedEndpointsSendKbps = 0;
-
-    MixerManagerStats() {}
 
     std::string describe();
 };
