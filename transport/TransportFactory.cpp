@@ -421,6 +421,14 @@ public:
 
     bool isGood() const override { return _good; }
 
+    void maintenance(uint64_t timestamp) override
+    {
+        for (auto* endpoint : _tcpServerEndpoints)
+        {
+            endpoint->maintenance(timestamp);
+        }
+    }
+
 private:
     void onServerPortClosed(ServerEndpoint& endpoint) override
     {

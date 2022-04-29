@@ -72,14 +72,13 @@ public:
 private:
     struct MixerStats
     {
-        MixerStats() : _conferences(0), _audioStreams(0), _videoStreams(0), _dataStreams(0), _ticksSinceLastUpdate(0) {}
-
-        uint32_t _conferences;
-        uint32_t _audioStreams;
-        uint32_t _videoStreams;
-        uint32_t _dataStreams;
-        uint32_t _ticksSinceLastUpdate;
-        EngineStats::EngineStats _engine;
+        uint32_t conferences = 0;
+        uint32_t audioStreams = 0;
+        uint32_t videoStreams = 0;
+        uint32_t dataStreams = 0;
+        uint32_t ticksSinceLastUpdate = 0;
+        uint32_t largestConference = 0;
+        EngineStats::EngineStats engine;
     };
 
     utils::IdGenerator& _idGenerator;

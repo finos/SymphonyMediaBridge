@@ -95,6 +95,7 @@ std::string MixerManagerStats::describe()
     nlohmann::json result;
     result["current_timestamp"] = utils::Time::getAbsoluteTime() / 1000000ULL;
     result["conferences"] = _conferences;
+    result["largestConference"] = _largestConference;
     result["participants"] = std::max({_videoStreams, _audioStreams, _dataStreams});
     result["audiochannels"] = _audioStreams;
     result["videochannels"] = _videoStreams;
@@ -113,6 +114,10 @@ std::string MixerManagerStats::describe()
     result["bit_rate_upload"] = _engineStats.activeMixers.outbound.total().bitrateKbps;
     result["total_udp_connections"] = _systemStats.connections.udpTotol();
     result["total_tcp_connections"] = _systemStats.connections.tcpTotal();
+    result["rtc_tcp4_connections"] = _systemStats.connections.tcp4.rtp;
+    result["rtc_tcp6_connections"] = _systemStats.connections.tcp6.rtp;
+
+    result["http_tcp_connections"] = _systemStats.connections.tcp4.http;
 
     result["inbound_audio_streams"] = _engineStats.activeMixers.inbound.audio.activeStreamCount;
     result["outbound_audio_streams"] = _engineStats.activeMixers.outbound.audio.activeStreamCount;
@@ -222,7 +227,7 @@ bool SystemStatsCollector::readSystemStat(FILE* h, SystemCpu& stat) const
     return infoRead;
 }
 
-SystemStats SystemStatsCollector::collect()
+SystemStats SystemStatsCollector::collect(uint16_t httpPort, uint16_t tcpRtpPort)
 {
     concurrency::ScopedSpinLocker lock(_collectingStats, std::chrono::nanoseconds(0));
     SystemStats result;
@@ -244,7 +249,7 @@ SystemStats SystemStatsCollector::collect()
 
 #ifdef __APPLE__
     auto sample0 = collectMacCpuSample();
-    auto netStat = collectNetStats();
+    auto netStat = collectNetStats(0, 0);
 
     auto toSleep = utils::Time::sec - (utils::Time::getAbsoluteTime() - sample0.timestamp);
     utils::Time::nanoSleep(toSleep);
@@ -262,7 +267,7 @@ SystemStats SystemStatsCollector::collect()
     const auto taskIds = getTaskIds();
     auto start = utils::Time::getAbsoluteTime();
     auto sample0 = collectLinuxCpuSample(taskIds);
-    auto netStat = collectNetStats();
+    auto netStat = collectNetStats(httpPort, tcpRtpPort);
 
     auto toSleep = 1000000000UL - (utils::Time::getAbsoluteTime() - start);
     utils::Time::nanoSleep(toSleep);
@@ -378,7 +383,7 @@ std::vector<int> SystemStatsCollector::getTaskIds() const
     return result;
 }
 #endif
-ConnectionsStats SystemStatsCollector::collectNetStats()
+ConnectionsStats SystemStatsCollector::collectNetStats(uint16_t httpPort, uint16_t tcpRtpPort)
 {
 
 #ifdef __APPLE__
@@ -399,14 +404,14 @@ ConnectionsStats SystemStatsCollector::collectNetStats()
     }
     return result;
 #else
-    return collectLinuxNetStat();
+    return collectLinuxNetStat(httpPort, tcpRtpPort);
 #endif
 }
 
 namespace
 {
-
-void readSocketInfo(FILE* file, uid_t myUid, uint32_t& count)
+template <class Predicate>
+void readSocketInfo(FILE* file, uid_t myUid, Predicate predicate, uint32_t& count)
 {
     if (!file)
     {
@@ -414,20 +419,22 @@ void readSocketInfo(FILE* file, uid_t myUid, uint32_t& count)
         return;
     }
 
+    ::rewind(file);
     uint32_t port = 0;
+    uint32_t remotePort = 0;
     char ignore[513];
     uid_t uid;
-    const char* formatString = "%*d: %*32[^:]:%x %*32[^:]:%*x %*x %*8[^:]:%*8s %*x:%*x %*x %u";
+    const char* formatString = "%*d: %*32[^:]:%x %*32[^:]:%x %*x %*8[^:]:%*8s %*x:%*x %*x %u";
     fgets(ignore, sizeof(ignore), file);
     for (int i = 0; i < 500; ++i)
     {
-        int items = fscanf(file, formatString, &port, &uid);
+        int items = fscanf(file, formatString, &port, &remotePort, &uid);
         fgets(ignore, sizeof(ignore), file);
-        if (items >= 2 && uid == myUid)
+        if (items >= 3 && uid == myUid && predicate(port, remotePort))
         {
             ++count;
         }
-        else if (items < 2)
+        else if (items < 3)
         {
             break;
         }
@@ -436,7 +443,7 @@ void readSocketInfo(FILE* file, uid_t myUid, uint32_t& count)
 
 } // namespace
 
-ConnectionsStats SystemStatsCollector::collectLinuxNetStat()
+ConnectionsStats SystemStatsCollector::collectLinuxNetStat(uint16_t httpPort, uint16_t tcpRtpPort)
 {
     utils::ScopedFileHandle hTcp4Stat(fopen("/proc/self/net/tcp", "r"));
     utils::ScopedFileHandle hTcp6Stat(fopen("/proc/self/net/tcp6", "r"));
@@ -446,10 +453,41 @@ ConnectionsStats SystemStatsCollector::collectLinuxNetStat()
     const auto myUid = getuid();
 
     ConnectionsStats result;
-    readSocketInfo(hTcp4Stat.get(), myUid, result.tcp4);
-    readSocketInfo(hUdp4Stat.get(), myUid, result.udp4);
-    readSocketInfo(hTcp6Stat.get(), myUid, result.tcp6);
-    readSocketInfo(hUdp6Stat.get(), myUid, result.udp6);
+    readSocketInfo(
+        hTcp4Stat.get(),
+        myUid,
+        [httpPort](uint32_t localPort, uint32_t remotePort) { return localPort == httpPort && remotePort != 0; },
+        result.tcp4.http);
+
+    readSocketInfo(
+        hTcp4Stat.get(),
+        myUid,
+        [tcpRtpPort](uint32_t localPort, uint32_t remotePort) { return localPort == tcpRtpPort && remotePort != 0; },
+        result.tcp4.rtp);
+
+    readSocketInfo(
+        hUdp4Stat.get(),
+        myUid,
+        [](uint32_t localPort, uint32_t remotePort) { return true; },
+        result.udp4);
+
+    readSocketInfo(
+        hTcp6Stat.get(),
+        myUid,
+        [httpPort](uint32_t localPort, uint32_t remotePort) { return localPort == httpPort && remotePort != 0; },
+        result.tcp6.http);
+
+    readSocketInfo(
+        hTcp6Stat.get(),
+        myUid,
+        [tcpRtpPort](uint32_t localPort, uint32_t remotePort) { return localPort == tcpRtpPort && remotePort != 0; },
+        result.tcp6.rtp);
+
+    readSocketInfo(
+        hUdp6Stat.get(),
+        myUid,
+        [](uint32_t localPort, uint32_t remotePort) { return true; },
+        result.udp6);
 
     return result;
 }

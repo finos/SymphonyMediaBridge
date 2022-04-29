@@ -68,6 +68,22 @@ private:
     TcpServerEndpoint& _endPoint;
 };
 
+class MaintenanceJob : public jobmanager::Job
+{
+public:
+    MaintenanceJob(TcpServerEndpoint& serverEndpoint, uint64_t timestamp)
+        : _serverEndpoint(serverEndpoint),
+          _timestamp(timestamp)
+    {
+    }
+
+    void run() override { _serverEndpoint.internalMaintenance(_timestamp); }
+
+private:
+    TcpServerEndpoint& _serverEndpoint;
+    uint64_t _timestamp;
+};
+
 TcpServerEndpoint::PendingTcp::PendingTcp(int fd,
     memory::PacketPoolAllocator& allocator,
     const SocketAddress& localPort_,
@@ -97,7 +113,8 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
       _iceListeners(maxSessions),
       _epoll(rtcePoll),
       _listener(listener),
-      _config(config)
+      _config(config),
+      _lastMaintenance(0)
 {
     int rc = _socket.open(localPort, localPort.getPort(), SOCK_STREAM);
     if (rc)
@@ -140,6 +157,11 @@ void TcpServerEndpoint::close()
         _state = Endpoint::State::CLOSING;
         _epoll.remove(_socket.fd(), this);
     }
+}
+
+void TcpServerEndpoint::maintenance(uint64_t timestamp)
+{
+    _receiveJobs.addJob<MaintenanceJob>(*this, timestamp);
 }
 
 void TcpServerEndpoint::registerListener(const std::string& stunUserName, Endpoint::IEvents* listener)
@@ -195,12 +217,19 @@ void TcpServerEndpoint::onSocketReadable(int fd)
     }
 }
 
+void TcpServerEndpoint::internalMaintenance(uint64_t timestamp)
+{
+    if (!_lastMaintenance || utils::Time::diffGE(_lastMaintenance, timestamp, _config.ice.tcp.iceTimeoutSec))
+    {
+        _lastMaintenance = timestamp;
+        cleanupStaleConnections(timestamp);
+    }
+}
+
 // erase old connection attempts
 // If at 90% capacity, identify most frequent peer ip and black list it
-void TcpServerEndpoint::cleanupStaleConnections()
+void TcpServerEndpoint::cleanupStaleConnections(const uint64_t timestamp)
 {
-    auto timestamp = utils::Time::getAbsoluteTime();
-
     for (auto item : _blackList)
     {
         if (utils::Time::diffGT(item.second, timestamp, utils::Time::minute * 5))
@@ -268,7 +297,7 @@ void TcpServerEndpoint::cleanupStaleConnections()
 
 void TcpServerEndpoint::internalAccept()
 {
-    cleanupStaleConnections();
+    cleanupStaleConnections(utils::Time::getAbsoluteTime());
     SocketAddress peerPort;
     SocketAddress localPort;
     int clientSocket = -1;
