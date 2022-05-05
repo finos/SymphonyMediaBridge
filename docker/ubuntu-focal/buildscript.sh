@@ -36,7 +36,7 @@ if [ ! -d libs ]; then
   mkdir libs
 fi
 
-
+cp /usr/lib/x86_64-linux-gnu/libatomic.so.1 libs
 cp /usr/local/lib/libc++.so.1 libs
 cp /usr/local/lib/libc++abi.so.1 libs
 cp /usr/local/lib/libssl.so.1.1 libs
