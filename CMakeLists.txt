@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.6.2)
 project(smb)
 
 option(ENABLE_LEGACY_API "ENABLE_LEGACY_API" OFF)
+option(ENABLE_LIBATOMIC "ENABLE_LIBATOMIC" OFF)
 option(ENABLE_ALLOCATOR_METRICS "Force enable the allocator metrics. It will be active by default in DEBUG" OFF)
 
 set(ADDITIONAL_CXX_FLAGS, "")
@@ -16,6 +17,11 @@ endif (ENABLE_LEGACY_API)
 if (ENABLE_ALLOCATOR_METRICS)
     set(ADDITIONAL_CXX_FLAGS "${ADDITIONAL_CXX_FLAGS} -DENABLE_ALLOCATOR_METRICS=1")
     message(STATUS "Enable Allocator metrics: ON")
+endif()
+
+if (ENABLE_LIBATOMIC)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -latomic")
+    message(STATUS "Enable Atomic lib: ON")
 endif()
 
 set(CMAKE_CXX_STANDARD 14)
@@ -47,7 +53,7 @@ elseif(UNIX)
 
     set(CMAKE_INSTALL_RPATH "./libs")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt -latomic")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt")
 else()
     message(FATAL_ERROR "Building on this platform is not supported.")
 endif()
