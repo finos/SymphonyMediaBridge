@@ -16,6 +16,7 @@ RtpSenderState::SendCounters operator-(RtpSenderState::SendCounters a, const Rtp
     a.packets -= b.packets;
     a.sequenceNumber -= b.sequenceNumber;
     a.timestamp -= b.timestamp;
+    a.rtpTimestamp -= b.rtpTimestamp;
     return a;
 }
 
@@ -36,8 +37,8 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
 {
     _rtpSendTime = timestamp;
     auto* header = rtp::RtpHeader::fromPacket(packet);
-    _rtpTimestampCorrelation.local = timestamp;
-    _rtpTimestampCorrelation.rtp = header->timestamp;
+    _sendCounters.timestamp = timestamp;
+    _sendCounters.rtpTimestamp = header->timestamp;
 
     if (_sendCounters.payloadOctets == 0)
     {
@@ -66,7 +67,6 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
 
     if (utils::Time::diffGE(_sendCounterSnapshot.timestamp, timestamp, utils::Time::sec))
     {
-        _sendCounters.timestamp = timestamp;
         auto report = _sendCounters - _sendCounterSnapshot;
         _recentSent.write(report);
         _sendCounterSnapshot = _sendCounters;
@@ -75,7 +75,7 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
         _summary.read(summary);
         summary.sequenceNumberSent = _sendCounters.sequenceNumber;
         summary.packetsSent = _sendCounters.packets;
-        summary.rtpTimestamp = _rtpTimestampCorrelation.rtp;
+        summary.rtpTimestamp = _sendCounters.rtpTimestamp;
         _summary.write(summary);
     }
 }
@@ -95,8 +95,8 @@ void RtpSenderState::onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* heade
 
 uint32_t RtpSenderState::getRtpTimestamp(uint64_t timestamp) const
 {
-    const auto diff = static_cast<int64_t>(timestamp - _rtpTimestampCorrelation.local) / 1000;
-    return _rtpTimestampCorrelation.rtp + static_cast<uint32_t>(_rtpFrequency * diff / 1000000llu);
+    const auto diff = static_cast<int64_t>(timestamp - _sendCounters.timestamp) / 1000;
+    return _sendCounters.rtpTimestamp + static_cast<uint32_t>(_rtpFrequency * diff / 1000000llu);
 }
 
 void RtpSenderState::fillInReport(rtp::RtcpSenderReport& report, uint64_t timestamp, uint64_t wallClockNtp) const
@@ -159,6 +159,7 @@ void RtpSenderState::onReceiverBlockReceived(uint64_t timestamp,
     s.packetsSent = _sendCounters.packets;
     s.rttNtp = newReport.rttNtp;
     s.initialRtpTimestamp = _initialRtpTimestamp;
+    s.rtpTimestamp = _sendCounters.rtpTimestamp;
     _summary.write(s);
 
     _remoteReport = newReport;

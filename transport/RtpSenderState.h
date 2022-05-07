@@ -62,13 +62,13 @@ public:
 
     struct SendCounters
     {
-        uint32_t packets = 0;
-        uint32_t sequenceNumber = 0;
-        uint32_t rtpTimestamp = 0;
         uint64_t payloadOctets = 0;
         uint64_t timestamp = 0;
         uint64_t rtcpOctets = 0;
         uint64_t rtpHeaderOctets = 0;
+        uint32_t packets = 0;
+        uint32_t sequenceNumber = 0;
+        uint32_t rtpTimestamp = 0;
     };
 
     uint32_t getRtpTimestamp(uint64_t timestamp) const;
@@ -96,12 +96,6 @@ private:
 
     SendCounters _sendCounters;
     SendCounters _sendCounterSnapshot;
-
-    struct
-    {
-        uint32_t rtp = 0;
-        uint64_t local = 0;
-    } _rtpTimestampCorrelation;
 
     std::atomic_uint64_t _rtpSendTime;
     uint64_t _senderReportSendTime;
