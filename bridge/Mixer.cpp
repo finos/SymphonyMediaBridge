@@ -44,27 +44,24 @@ void logTransportPacketLoss(const std::string& endpointId, transport::RtcTranspo
         const auto ssrc = reportSummaryEntry.first;
         const auto& reportSummary = reportSummaryEntry.second;
 
-        if (reportSummary.extendedSeqNoReceived > reportSummary.sequenceNumberSent ||
-            reportSummary.sequenceNumberSent - reportSummary.extendedSeqNoReceived >= 100 ||
-            reportSummary.lostPackets > 0)
-        {
-
-            logger::info("EndpointId %s %s, outbound ssrc %u, packets %" PRIu64 ", last sent seq %u, last reported "
-                         "seen seq %u, reported loss count %" PRIu64,
-                mixerId,
-                endpointId.c_str(),
-                transport.getLoggableId().c_str(),
-                ssrc,
-                reportSummary.packets,
-                reportSummary.sequenceNumberSent,
-                reportSummary.extendedSeqNoReceived,
-                reportSummary.lostPackets);
-        }
+        logger::info(
+            "EndpointId %s %s, outbound ssrc %u, packets %u"
+            ", last sent seq %u, last received %u, reported loss count %u, initial RTP timestamp %u, RTP timestamp %u",
+            mixerId,
+            endpointId.c_str(),
+            transport.getLoggableId().c_str(),
+            ssrc,
+            reportSummary.packetsSent,
+            reportSummary.sequenceNumberSent,
+            reportSummary.extendedSeqNoReceived,
+            reportSummary.lostPackets,
+            reportSummary.initialRtpTimestamp,
+            reportSummary.rtpTimestamp);
     }
 
     auto audioStats = transport.getCumulativeAudioReceiveCounters();
     auto videoStats = transport.getCumulativeVideoReceiveCounters();
-    if (audioStats.lostPackets > 1 || videoStats.lostPackets > 1)
+    if (audioStats.getPacketsReceived() > 0)
     {
         logger::info("EndpointId %s %s, inbound audio packets received %" PRIu64 ", lost %" PRIu64 ", octets %" PRIu64
                      "B",
@@ -74,7 +71,10 @@ void logTransportPacketLoss(const std::string& endpointId, transport::RtcTranspo
             audioStats.getPacketsReceived(),
             audioStats.lostPackets,
             audioStats.octets);
+    }
 
+    if (videoStats.getPacketsReceived() > 0)
+    {
         logger::info("EndpointId %s %s, inbound video packets received %" PRIu64 ", lost %" PRIu64 ", octets %" PRIu64
                      "B",
             mixerId,
