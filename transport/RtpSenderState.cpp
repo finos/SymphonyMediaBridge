@@ -165,6 +165,9 @@ void RtpSenderState::onReceiverBlockReceived(uint64_t timestamp,
     _remoteReport = newReport;
 }
 
+/**
+ *  Cumulative send and receive stats. Except for lossFraction that is recent report.
+ * */
 ReportSummary RtpSenderState::getSummary() const
 {
     ReportSummary s;
@@ -173,8 +176,9 @@ ReportSummary RtpSenderState::getSummary() const
 }
 
 /**
- * The packet count is how many packets reported as received so it fits with packet loss count.
- * PacketsPerSecond, bitrateKbps, octets are actual sent.
+ * Recent receive and send counters.
+ * Packets and lost packets are from recent receive report to calculate loss rate between receive reports.
+ * packetsPerSecond, bitrateKbps, octets are actual sent in recent interval.
  */
 PacketCounters RtpSenderState::getCounters() const
 {
