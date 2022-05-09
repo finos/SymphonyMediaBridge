@@ -40,6 +40,12 @@ void AudioForwarderRewriteAndSendJob::run()
             _outboundContext._sequenceCounter,
             nextSequenceNumber))
     {
+        logger::warn("%s dropping packet ssrc %u, seq %u, timestamp %u",
+            "AudioForwarderRewriteAndSendJob",
+            _transport.getLoggableId().c_str(),
+            header->ssrc.get(),
+            header->sequenceNumber.get(),
+            header->timestamp.get());
         return;
     }
 

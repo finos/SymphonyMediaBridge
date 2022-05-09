@@ -23,15 +23,17 @@ namespace transport
 {
 struct ReportSummary
 {
-    bool empty() const { return packets == 0 && sequenceNumberSent == 0; }
-
+    bool empty() const { return packetsSent == 0 && sequenceNumberSent == 0; }
     uint64_t getRtt() const { return (static_cast<uint64_t>(rttNtp) * utils::Time::sec) >> 16; }
-    uint64_t packets = 0;
-    uint64_t lostPackets = 0;
+
+    uint32_t lostPackets = 0;
     double lossFraction = 0;
     uint32_t extendedSeqNoReceived = 0;
     uint32_t sequenceNumberSent = 0;
     uint32_t rttNtp = 0;
+    uint32_t packetsSent = 0;
+    uint32_t initialRtpTimestamp = 0;
+    uint32_t rtpTimestamp = 0;
 };
 
 class RtpSenderState
@@ -60,12 +62,13 @@ public:
 
     struct SendCounters
     {
-        uint32_t packets = 0;
-        uint32_t sequenceNumber = 0;
         uint64_t payloadOctets = 0;
         uint64_t timestamp = 0;
         uint64_t rtcpOctets = 0;
         uint64_t rtpHeaderOctets = 0;
+        uint32_t packets = 0;
+        uint32_t sequenceNumber = 0;
+        uint32_t rtpTimestamp = 0;
     };
 
     uint32_t getRtpTimestamp(uint64_t timestamp) const;
@@ -94,16 +97,11 @@ private:
     SendCounters _sendCounters;
     SendCounters _sendCounterSnapshot;
 
-    struct
-    {
-        uint32_t rtp = 0;
-        uint64_t local = 0;
-    } _rtpTimestampCorrelation;
-
     std::atomic_uint64_t _rtpSendTime;
     uint64_t _senderReportSendTime;
     uint32_t _senderReportNtp;
     uint32_t _lossSinceSenderReport;
+    uint32_t _initialRtpTimestamp;
 
     const config::Config& _config;
     uint64_t _scheduledSenderReport;
@@ -111,9 +109,9 @@ private:
     RemoteCounters _remoteReport;
 
     uint32_t _rtpFrequency;
-    concurrency::MpmcPublish<PacketCounters, 4> _counters;
+    concurrency::MpmcPublish<PacketCounters, 4> _recentReceived;
     concurrency::MpmcPublish<ReportSummary, 4> _summary;
-    concurrency::MpmcPublish<SendCounters, 4> _sendReport;
+    concurrency::MpmcPublish<SendCounters, 4> _recentSent;
 };
 
 } // namespace transport
