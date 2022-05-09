@@ -385,23 +385,8 @@ std::vector<int> SystemStatsCollector::getTaskIds() const
 #endif
 ConnectionsStats SystemStatsCollector::collectNetStats(uint16_t httpPort, uint16_t tcpRtpPort)
 {
-
 #ifdef __APPLE__
     ConnectionsStats result;
-    const std::string processId = std::to_string(getpid());
-    auto netStatOutput = exec("netstat -nav | grep " + processId);
-
-    for (const auto& netStatLine : netStatOutput)
-    {
-        if (netStatLine.rfind("tcp", 0) == 0)
-        {
-            result.tcp4++;
-        }
-        else if (netStatLine.rfind("udp", 0) == 0)
-        {
-            result.udp4++;
-        }
-    }
     return result;
 #else
     return collectLinuxNetStat(httpPort, tcpRtpPort);
