@@ -306,10 +306,12 @@ public:
                      json::array({{{"id", 1}, {"uri", "urn:ietf:params:rtp-hdrext:ssrc-audio-level"}},
                          {{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}}})},
                     {"ssrcs", json::array({audioSsrc})},
-                    {"payload-type", {{"id", 111}, {"name", "opus"}, {"clockrate", 48000}, {"channels", 2}}},
-                    {"rtcp-fbs", json::array()}});
-
-            audioContent["payload-type"]["parameters"] = json::object({{"minptime", "10"}, {"useinbandfec", "1"}});
+                    {"payload-type",
+                        {{"id", 111},
+                            {"name", "opus"},
+                            {"clockrate", 48000},
+                            {"channels", 2},
+                            {"rtcp-fbs", json::array()}}}});
 
             body["audio"] = audioContent;
         }
