@@ -1061,6 +1061,7 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     auto videoStreamItr = _videoStreams.find(endpointId);
     if (videoStreamItr == _videoStreams.end())
     {
+        logger::error("no video stream allocated for end point %s", _loggableId.c_str(), endpointId.c_str());
         return false;
     }
     auto videoStream = videoStreamItr->second.get();

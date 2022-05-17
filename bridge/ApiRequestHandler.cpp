@@ -449,7 +449,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                 const auto conferenceId = token.str();
                 if (!token.next)
                 {
-                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+                    throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
                 }
                 token = utils::StringTokenizer::tokenize(token, '/');
                 const auto endpointId = token.str();
@@ -489,6 +489,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                 }
                 else
                 {
+                    logger::warn("failed to perform action %s", "RequestHandler", action.c_str());
                     throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
                 }
             }
@@ -621,6 +622,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
         const auto& bundleTransport = allocateChannel._bundleTransport.get();
         if (!bundleTransport._ice || !bundleTransport._dtls)
         {
+            logger::warn("ICE and DTLS are required", "ApiRequestHandler");
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
         }
 
@@ -806,9 +808,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
 
         if (!bundleTransport._ice || !bundleTransport._dtls)
         {
-            logger::warn("Bundling without ice not supported, conference %s",
-                "ApiRequestHandler",
-                conferenceId.c_str());
+            logger::warn("Bundling without ice not supported, conference %s", "RequestHandler", conferenceId.c_str());
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
         }
 
@@ -1001,7 +1001,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
     const auto responseBody = api::Generator::generateAllocateEndpointResponse(channelsDescription);
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
     response._headers["Content-type"] = "text/json";
-    logger::debug("PATCH response %s", "RequestHandler", response._body.c_str());
+    logger::debug("POST response %s", "RequestHandler", response._body.c_str());
     requestLogger.setResponse(response);
     return response;
 }
