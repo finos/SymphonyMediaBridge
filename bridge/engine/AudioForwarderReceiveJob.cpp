@@ -1,8 +1,11 @@
 #include "bridge/engine/AudioForwarderReceiveJob.h"
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/EngineMixer.h"
+#include "codec/G711.h"
+#include "codec/G711codec.h"
 #include "codec/Opus.h"
 #include "codec/OpusDecoder.h"
+#include "codec/PcmUtils.h"
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
@@ -97,6 +100,31 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
     const auto decodedFrames =
         decoder.decode(_extendedSequenceNumber, payloadStart, payloadLength, decodedData, framesInPacketBuffer);
     onPacketDecoded(decodedFrames, decodedData);
+}
+
+void AudioForwarderReceiveJob::decodeG711(const memory::Packet& g711Packet)
+{
+    auto rtpHeader = rtp::RtpHeader::fromPacket(g711Packet);
+
+    auto pcmPacket = memory::makeUniquePacket(_engineMixer.getAudioAllocator(), g711Packet);
+    auto pcmHeader = rtp::RtpHeader::fromPacket(*pcmPacket);
+
+    const auto sampleCount = g711Packet.getLength() - rtpHeader->headerLength();
+    auto pcmPayload = reinterpret_cast<int16_t*>(pcmHeader->getPayload());
+    if (rtpHeader->payloadType == codec::Pcma::payloadType)
+    {
+        codec::PcmaCodec::decode(rtpHeader->getPayload(), pcmPayload, sampleCount);
+        pcmPacket->setLength(pcmHeader->headerLength() + sampleCount * sizeof(int16_t));
+        // resample
+        codec::makeStereo(pcmPayload, sampleCount);
+    }
+    else if (rtpHeader->payloadType == codec::Pcmu::payloadType)
+    {
+        codec::PcmuCodec::decode(rtpHeader->getPayload(), pcmPayload, sampleCount);
+        // resample
+        codec::makeStereo(pcmPayload, sampleCount);
+        pcmPacket->setLength(pcmHeader->headerLength() + sampleCount * sizeof(int16_t) * 2);
+    }
 }
 
 AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
@@ -216,6 +244,12 @@ void AudioForwarderReceiveJob::run()
     if (_hasMixedAudioStreams && _ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS)
     {
         decodeOpus(*_packet);
+    }
+    else if (_hasMixedAudioStreams &&
+        (rtpHeader->payloadType == codec::Pcma::payloadType ||
+            rtpHeader->payloadType == static_cast<uint16_t>(bridge::RtpMap::Format::PCMU)))
+    {
+        decodeG711(*_packet);
     }
 
     if (_ssrcContext.markNextPacket && !silence)

@@ -2,6 +2,7 @@
 #include "bridge/engine/AudioRewriter.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
+#include "codec/G711.h"
 #include "codec/Opus.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
@@ -54,6 +55,21 @@ AudioForwarderRewriteAndSendJob::AudioForwarderRewriteAndSendJob(SsrcOutboundCon
     assert(_packet);
     assert(_packet->getLength() > 0);
 }
+
+namespace
+{
+uint32_t clockCyclesPerPacket(uint8_t payloadType)
+{
+    if (payloadType == codec::Pcmu::payloadType || payloadType == codec::Pcma::payloadType)
+    {
+        return codec::Pcma::sampleRate / codec::Pcma::packetsPerSecond;
+    }
+    else
+    {
+        return codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+    }
+}
+} // namespace
 
 void AudioForwarderRewriteAndSendJob::run()
 {

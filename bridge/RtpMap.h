@@ -13,10 +13,12 @@ struct RtpMap
 {
     enum class Format
     {
-        VP8,
-        VP8RTX,
-        OPUS,
-        EMPTY
+        PCMU = 0,
+        PCMA = 8,
+        VP8 = 100,
+        VP8RTX = 96,
+        OPUS = 111,
+        EMPTY = 4096
     };
 
     RtpMap() : format(Format::EMPTY), payloadType(0x7F), sampleRate(0) {}
