@@ -134,12 +134,12 @@ public:
             _status = http_process(_request);
             if (_prevSize != _request->response_size)
             {
-                logger::debug("%zu byte(s) received.", "", _request->response_size);
+                logger::debug("%zu byte(s) received.", "HttpPostRequest", _request->response_size);
                 _prevSize = _request->response_size;
             }
             if (utils::Time::getAbsoluteTime() - startTime > timeout)
             {
-                logger::error("Timeout waiting for response", "AwsHarvester");
+                logger::error("Timeout waiting for response", "HttpPostRequest");
                 _status = HTTP_STATUS_FAILED;
                 break;
             }
@@ -198,9 +198,9 @@ public:
 class Conference
 {
 public:
-    void create(const char* baseUrl)
+    void create(const std::string& baseUrl)
     {
-        HttpPostRequest request((std::string(baseUrl) + "/colibri/conferences").c_str(), "{\"last-n\":9}");
+        HttpPostRequest request((baseUrl + "/conferences").c_str(), "{\"last-n\":9}");
         request.awaitResponse(3000 * utils::Time::ms);
 
         if (request.isSuccess())
@@ -220,6 +220,188 @@ private:
     bool _success = false;
 };
 
+class Channel
+{
+public:
+    Channel() : _id(newGuuid()), _audioId(newIdString()), _dataId(newIdString()), _videoId(newIdString()) {}
+
+    void create(const std::string& baseUrl,
+        std::string conferenceId,
+        bool initiator,
+        bool audio,
+        bool video,
+        bool forwardMedia)
+    {
+        assert(!conferenceId.empty());
+        _conferenceId = conferenceId;
+        _relayType = forwardMedia ? "ssrc-rewrite" : "mixed";
+        _baseUrl = baseUrl;
+
+        using namespace nlohmann;
+        json body = {{"action", "allocate"},
+            {"bundle-transport", {{"ice-controlling", true}, {"ice", true}, {"dtls", true}, {"rtcp-mux", true}}}};
+
+        if (audio)
+        {
+            body["audio"] = {{"relay-type", _relayType.c_str()}};
+        }
+        if (video)
+        {
+            body["video"] = {{"relay-type", "ssrc-rewrite"}};
+        }
+        if (audio || video)
+        {
+            body["data"] = json::object();
+        }
+
+        logger::debug("allocate ch with %s", "", body.dump().c_str());
+        HttpPostRequest request((std::string(baseUrl) + "/conferences/" + conferenceId + "/" + _id).c_str(),
+            body.dump().c_str());
+        request.awaitResponse(9000 * utils::Time::ms);
+
+        if (request.isSuccess())
+        {
+            _offer = request.getJsonBody();
+            raw = request.getResponse();
+        }
+        else
+        {
+            logger::error("failed to allocate channel %d", "Test", request.getCode());
+        }
+    }
+
+    void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
+        const ice::IceCandidates& candidates,
+        const std::string& fingerprint,
+        uint32_t audioSsrc,
+        uint32_t* videoSsrcs)
+    {
+        using namespace nlohmann;
+        json body = {{"action", "configure"}};
+
+        auto transportSpec = json::object({{"dtls", {{"setup", "active"}, {"type", "sha-256"}, {"hash", fingerprint}}},
+            {"ice", {{"ufrag", iceCredentials.first}, {"pwd", iceCredentials.second}, {"candidates", json::array()}}}});
+
+        for (auto& c : candidates)
+        {
+            auto jsonCandidate = json::object({{"foundation", c.getFoundation()},
+                {"component", c.component},
+                {"protocol", c.transportType == ice::TransportType::UDP ? "udp" : "tcp"},
+                {"priority", c.priority},
+                {"ip", c.address.ipToString()},
+                {"port", c.address.getPort()},
+                {"type", "host"},
+                {"generation", 0},
+                {"network", 1}});
+
+            transportSpec["ice"]["candidates"].push_back(jsonCandidate);
+        }
+
+        body["bundle-transport"] = transportSpec;
+
+        if (audioSsrc != 0)
+        {
+            auto audioContent = json::object(
+                {{"rtp-hdrexts",
+                     json::array({{{"id", 1}, {"uri", "urn:ietf:params:rtp-hdrext:ssrc-audio-level"}},
+                         {{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}}})},
+                    {"ssrcs", json::array({audioSsrc})},
+                    {"payload-type",
+                        {{"id", 111},
+                            {"name", "opus"},
+                            {"clockrate", 48000},
+                            {"channels", 2},
+                            {"rtcp-fbs", json::array()}}}});
+
+            body["audio"] = audioContent;
+        }
+
+        if (videoSsrcs)
+        {
+            auto videoContent = json::object();
+            auto payloadTypes = json::array();
+            payloadTypes.push_back(json::object({{"id", 100},
+                {"name", "VP8"},
+                {"clockrate", "90000"},
+                {"parameters", json::object()},
+                {"rtcp-fbs",
+                    json::array({{{"type", "goog-remb"}},
+                        {{"type", "ccm"}, {"subtype", "fir"}},
+                        {{"type", "nack"}},
+                        {{"type", "nack"}, {"subtype", "pli"}}})}}));
+
+            payloadTypes.push_back(json::object({{"id", 96},
+                {"name", "rtx"},
+                {"clockrate", "90000"},
+                {"rtcp-fbs", json::array()},
+                {"parameters", {{"apt", "100"}}}}));
+
+            videoContent["payload-types"] = payloadTypes;
+            auto sources = json::array();
+            for (uint32_t* pSsrc = videoSsrcs; *pSsrc != 0; ++pSsrc)
+            {
+                sources.push_back(*pSsrc);
+            }
+            videoContent["ssrcs"] = sources;
+
+            auto ssrcGroups = json::array();
+            auto mainSsrcs = json::array();
+            for (uint32_t* pSsrc = videoSsrcs; *pSsrc != 0; pSsrc += 2)
+            {
+                mainSsrcs.push_back(*pSsrc);
+            }
+            ssrcGroups.push_back(json::object({{"ssrcs", mainSsrcs}, {"semantics", "SIM"}}));
+
+            for (uint32_t* pSsrc = videoSsrcs; *pSsrc != 0; pSsrc += 2)
+            {
+                ssrcGroups.push_back(
+                    json::object({{"ssrcs", json::array({*pSsrc, *(pSsrc + 1)})}, {"semantics", "FID"}}));
+            }
+            videoContent["ssrc-groups"] = ssrcGroups;
+
+            videoContent["rtp-hdrexts"] =
+                json::array({{{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}},
+                    {{"id", 4}, {"uri", "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id"}}});
+
+            body["video"] = videoContent;
+        }
+
+        body["data"] = json::object({{"port", 5000}});
+
+        logger::info("patch channel with %s", "Test", body.dump().c_str());
+
+        HttpPostRequest request((_baseUrl + "/conferences/" + _conferenceId + "/" + _id).c_str(), body.dump().c_str());
+        request.awaitResponse(3000 * utils::Time::ms);
+
+        if (request.isSuccess())
+        {
+            raw = request.getResponse();
+        }
+        else
+        {
+            logger::error("failed to patch channel %d", "Test", request.getCode());
+        }
+    }
+
+    bool isSuccess() const { return !raw.empty(); }
+
+    nlohmann::json getOffer() const { return _offer; }
+    std::string getEndpointId() const { return _id; }
+    uint32_t getEndpointIdHash() const { return std::hash<std::string>{}(_id); }
+    std::string raw;
+
+private:
+    std::string _id;
+    std::string _conferenceId;
+
+    std::string _audioId;
+    std::string _dataId;
+    std::string _videoId;
+    std::string _relayType;
+    nlohmann::json _offer;
+    std::string _baseUrl;
+};
+
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
 {
     using namespace nlohmann;
@@ -234,20 +416,21 @@ nlohmann::json newContent(const std::string& endpointId, const char* type, const
 
     return contentItem;
 }
-class Channel
+
+class ColibriChannel
 {
 public:
-    Channel() : _id(newGuuid()), _audioId(newIdString()), _dataId(newIdString()), _videoId(newIdString()) {}
+    ColibriChannel() : _id(newGuuid()), _audioId(newIdString()), _dataId(newIdString()), _videoId(newIdString()) {}
 
-    void create(const char* baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        bool audio,
-        bool video,
-        std::string relayType)
+    void create(const std::string& baseUrl,
+        const std::string& conferenceId,
+        const bool initiator,
+        const bool audio,
+        const bool video,
+        const bool forwardMedia)
     {
         _conferenceId = conferenceId;
-        _relayType = relayType;
+        _relayType = forwardMedia ? "ssrc-rewrite" : "mixer";
         _baseUrl = baseUrl;
 
         using namespace nlohmann;
@@ -255,11 +438,11 @@ public:
 
         if (audio)
         {
-            body["contents"].push_back(newContent(_id, "audio", relayType.c_str(), initiator));
+            body["contents"].push_back(newContent(_id, "audio", _relayType.c_str(), initiator));
         }
         if (video)
         {
-            auto videoContent = newContent(_id, "video", relayType.c_str(), initiator);
+            auto videoContent = newContent(_id, "video", "ssrc-rewrite", initiator);
             videoContent["channels"][0]["last-n"] = 5;
             body["contents"].push_back(videoContent);
         }
@@ -338,7 +521,9 @@ public:
                         {"rtp-hdrexts",
                             json::array({{{"id", 1}, {"uri", "urn:ietf:params:rtp-hdrext:ssrc-audio-level"}},
                                 {{"id", 3},
-                                    {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}}})}})})}});
+                                    {"uri",
+                                        "http://www.webrtc.org/experiments/rtp-hdrext/"
+                                        "abs-send-time"}}})}})})}});
 
             auto payloadTypesJson = json::array();
             payloadTypesJson.push_back(json::object({{"id", 111},
@@ -477,6 +662,7 @@ private:
     memory::UniquePacket _packet;
 };
 
+template <typename ChannelType>
 class SfuClient : public transport::DataReceiver
 {
 public:
@@ -503,17 +689,17 @@ public:
         }
     }
 
-    void initiateCall(const char* baseUrl,
+    void initiateCall(const std::string& baseUrl,
         std::string conferenceId,
         bool initiator,
         bool audio,
         bool video,
-        std::string relayType)
+        bool forwardMedia)
     {
-        _channel.create(baseUrl, conferenceId, initiator, audio, video, relayType);
+        _channel.create(baseUrl, conferenceId, initiator, audio, video, forwardMedia);
     }
 
-    void processOffer()
+    void processLegacyOffer()
     {
         auto offer = _channel.getOffer();
         _transport =
@@ -525,10 +711,10 @@ public:
             ice::IceCandidates candidates;
             for (auto& c : bundle["transport"]["candidates"])
             {
-                candidates.push_back(ice::IceCandidate(c["foundation"].get<std::string>().c_str(),
+                candidates.push_back(ice::IceCandidate(c["foundation"].template get<std::string>().c_str(),
                     ice::IceComponent::RTP,
                     c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
-                    c["priority"].get<uint32_t>(),
+                    c["priority"].template get<uint32_t>(),
                     transport::SocketAddress::parse(c["ip"], c["port"]),
                     ice::IceCandidate::Type::HOST));
             }
@@ -561,6 +747,50 @@ public:
         }
     }
 
+    void processOffer()
+    {
+        auto offer = _channel.getOffer();
+        _transport =
+            _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, 256 * 1024, _channel.getEndpointIdHash());
+        _transport->setDataReceiver(this);
+
+        auto bundle = offer["bundle-transport"];
+        ice::IceCandidates candidates;
+
+        for (auto& c : bundle["ice"]["candidates"])
+        {
+            candidates.push_back(ice::IceCandidate(c["foundation"].template get<std::string>().c_str(),
+                ice::IceComponent::RTP,
+                c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
+                c["priority"].template get<uint32_t>(),
+                transport::SocketAddress::parse(c["ip"], c["port"]),
+                ice::IceCandidate::Type::HOST));
+        }
+
+        std::pair<std::string, std::string> credentials;
+        credentials.first = bundle["ice"]["ufrag"];
+        credentials.second = bundle["ice"]["pwd"];
+
+        _transport->setRemoteIce(credentials, candidates, _audioAllocator);
+
+        std::string fingerPrint = bundle["dtls"]["hash"];
+        _transport->setRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
+
+        if (offer.find("audio") != offer.end())
+        {
+            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next());
+            _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
+        }
+
+        if (offer.find("video") != offer.end())
+        {
+            for (uint32_t ssrc : offer["video"]["ssrcs"])
+            {
+                _remoteVideoSsrc.emplace(ssrc);
+            }
+        }
+    }
+
     void connect()
     {
         uint32_t videoSsrcs[7];
@@ -569,6 +799,8 @@ public:
         {
             videoSsrcs[i] = _idGenerator.next();
         }
+
+        assert(_audioSource);
 
         _channel.sendResponse(_transport->getLocalCredentials(),
             _transport->getLocalCandidates(),
@@ -597,7 +829,7 @@ public:
         }
     }
 
-    Channel _channel;
+    ChannelType _channel;
 
     class RtpReceiver
     {
@@ -696,9 +928,9 @@ public:
             }
         }
 
-        if ((extendedSequenceNumber % 500) == 0)
+        if ((extendedSequenceNumber % 100) == 0)
         {
-            logger::debug("%s pkt %u received %u, ssrc count %zu",
+            logger::debug("%s ssrc %u received seq %u, ssrc count %zu",
                 _loggableId.c_str(),
                 _channel.getEndpointId().c_str(),
                 rtpHeader->ssrc.get(),
@@ -734,10 +966,7 @@ public:
     {
     }
 
-    bool isRemoteVideoSsrc(uint32_t ssrc) const
-    {
-        return _remoteVideoSsrc.find(ssrc) != _remoteVideoSsrc.end();
-    }
+    bool isRemoteVideoSsrc(uint32_t ssrc) const { return _remoteVideoSsrc.find(ssrc) != _remoteVideoSsrc.end(); }
 
     void stopRecording() { _recordingActive = false; }
 
@@ -831,20 +1060,32 @@ TEST_F(IntegrationTest, plain)
                            "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
     initBridge(_config);
 
-    const auto baseUrl = "http://127.0.0.1:8080";
+    const std::string baseUrl = "http://127.0.0.1:8080";
 
     Conference conf;
-    conf.create(baseUrl);
+    conf.create(baseUrl + "/colibri");
     EXPECT_TRUE(conf.isSuccess());
     utils::Time::nanoSleep(1 * utils::Time::sec);
 
-    SfuClient client1(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
-    SfuClient client2(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
-    SfuClient client3(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient<ColibriChannel> client1(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client2(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client3(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
 
-    client1.initiateCall(baseUrl, conf.getId(), true, true, true, "ssrc-rewrite");
-    client2.initiateCall(baseUrl, conf.getId(), false, true, true, "ssrc-rewrite");
-    client3.initiateCall(baseUrl, conf.getId(), false, true, true, "mixer");
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+    client3.initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
     EXPECT_TRUE(client1._channel.isSuccess());
     EXPECT_TRUE(client2._channel.isSuccess());
@@ -855,9 +1096,9 @@ TEST_F(IntegrationTest, plain)
         return;
     }
 
-    client1.processOffer();
-    client2.processOffer();
-    client3.processOffer();
+    client1.processLegacyOffer();
+    client2.processLegacyOffer();
+    client3.processLegacyOffer();
 
     client1.connect();
     client2.connect();
@@ -995,7 +1236,7 @@ TEST_F(IntegrationTest, plain)
             {
                 continue;
             }
-            
+
             ++audioSsrcCount;
 
             std::vector<double> freqVector;
@@ -1026,7 +1267,228 @@ TEST_F(IntegrationTest, plain)
 
             // item.second->dumpPcmData();
         }
-        
+
+        EXPECT_EQ(audioSsrcCount, 1);
+    }
+}
+
+class Foo
+{
+};
+
+TEST_F(IntegrationTest, plainNewApi)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString("{\"ip\":\"127.0.0.1\", "
+                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    initBridge(_config);
+
+    const auto baseUrl = "http://127.0.0.1:8080";
+
+    Conference conf;
+    conf.create(baseUrl);
+    EXPECT_TRUE(conf.isSuccess());
+    utils::Time::nanoSleep(1 * utils::Time::sec);
+
+    SfuClient<Channel> client1(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient<Channel> client2(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient<Channel> client3(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+    client3.initiateCall(baseUrl, conf.getId(), false, true, true, false);
+
+    EXPECT_TRUE(client1._channel.isSuccess());
+    EXPECT_TRUE(client2._channel.isSuccess());
+    EXPECT_TRUE(client3._channel.isSuccess());
+
+    if (!client1._channel.isSuccess() && client2._channel.isSuccess() && client3._channel.isSuccess())
+    {
+        return;
+    }
+
+    client1.processOffer();
+    client2.processOffer();
+    client3.processOffer();
+
+    client1.connect();
+    client2.connect();
+    client3.connect();
+
+    while (
+        !client1._transport->isConnected() || !client2._transport->isConnected() || !client3._transport->isConnected())
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+        logger::debug("waiting for connect...", "test");
+    }
+
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+    client3._audioSource->setFrequency(2100);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+    client3._audioSource->setVolume(0.6);
+
+    utils::Pacer pacer(10 * utils::Time::ms);
+    for (int i = 0; i < 500; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp);
+        client2.process(timestamp);
+        client3.process(timestamp);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+    client3._transport->stop();
+
+    client3.stopRecording();
+    client2.stopRecording();
+    client1.stopRecording();
+
+    HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
+    statsRequest.awaitResponse(1500 * utils::Time::ms);
+    EXPECT_TRUE(statsRequest.isSuccess());
+    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+    confRequest.awaitResponse(500 * utils::Time::ms);
+    EXPECT_TRUE(confRequest.isSuccess());
+
+    client1._transport->stop();
+    client2._transport->stop();
+
+    for (int i = 0; i < 10 &&
+         (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
+             client3._transport->hasPendingJobs());
+         ++i)
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+    }
+
+    const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+    {
+        auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+        const auto& rData1 = client1.getReceiveStats();
+        std::vector<double> allFreq;
+
+        for (const auto& item : rData1)
+        {
+            if (client1.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+            EXPECT_EQ(freqVector.size(), 1);
+            allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+            EXPECT_EQ(amplitudeProfile.size(), 2);
+            if (amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+            }
+
+            // item.second->dumpPcmData();
+        }
+
+        std::sort(allFreq.begin(), allFreq.end());
+        EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
+        EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
+    }
+    {
+        auto audioCounters = client2._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        const auto& rData1 = client2.getReceiveStats();
+        std::vector<double> allFreq;
+        for (const auto& item : rData1)
+        {
+            if (client2.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+            EXPECT_EQ(freqVector.size(), 1);
+            allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+            EXPECT_EQ(amplitudeProfile.size(), 2);
+            if (amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+            }
+
+            // item.second->dumpPcmData();
+        }
+
+        std::sort(allFreq.begin(), allFreq.end());
+        EXPECT_NEAR(allFreq[0], 600.0, 25.0);
+        EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
+    }
+    {
+        auto audioCounters = client3._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        const auto& rData1 = client3.getReceiveStats();
+        // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
+        EXPECT_EQ(rData1.size(), 2);
+        size_t audioSsrcCount = 0;
+        for (const auto& item : rData1)
+        {
+            if (client3.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            ++audioSsrcCount;
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+
+            std::sort(freqVector.begin(), freqVector.end());
+            EXPECT_EQ(freqVector.size(), 2);
+            if (freqVector.size() == 2)
+            {
+                EXPECT_NEAR(freqVector[0], 600.0, 25.0);
+                EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
+            }
+
+            EXPECT_GE(amplitudeProfile.size(), 4);
+            for (auto& item : amplitudeProfile)
+            {
+                logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
+            }
+            if (amplitudeProfile.size() >= 4)
+            {
+                EXPECT_EQ(amplitudeProfile[0].second, 0);
+
+                EXPECT_NEAR(amplitudeProfile[3].second, 1826, 250);
+                EXPECT_NEAR(amplitudeProfile[3].first, 48000 * 1.67, 2400);
+
+                EXPECT_NEAR(amplitudeProfile.back().second, 1730, 250);
+                EXPECT_LE(amplitudeProfile.back().first, 2 * 48000);
+            }
+
+            // item.second->dumpPcmData();
+        }
+
         EXPECT_EQ(audioSsrcCount, 1);
     }
 }
