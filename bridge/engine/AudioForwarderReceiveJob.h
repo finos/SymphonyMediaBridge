@@ -37,6 +37,7 @@ public:
 private:
     void decode(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket);
     int computeOpusAudioLevel(const memory::Packet& opusPacket);
+    void decodeG711(const memory::Packet& g711Packet);
 
     ActiveMediaList& _activeMediaList;
     const uint8_t _silenceThresholdLevel;

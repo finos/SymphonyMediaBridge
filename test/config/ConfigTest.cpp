@@ -12,8 +12,8 @@ public:
     CFG_MANDATORY_PROP(std::string, str2);
     CFG_PROP(int, int1, 11);
     CFG_MANDATORY_PROP(int, int2);
-    CFG_PROP(u_int64_t, uint64_1, 21);
-    CFG_MANDATORY_PROP(u_int64_t, uint64_2);
+    CFG_PROP(uint64_t, uint64_1, 21);
+    CFG_MANDATORY_PROP(uint64_t, uint64_2);
     CFG_GROUP()
     CFG_PROP(int, g_int, 1);
     CFG_PROP(std::string, g_str, "g1_str_def");
@@ -45,8 +45,8 @@ void verifySampleConfig(const TestConfig& cfg)
     ASSERT_STREQ(cfg.str2.get().c_str(), "foo");
     ASSERT_EQ(cfg.int1, 11);
     ASSERT_EQ(cfg.int2, 123);
-    ASSERT_EQ(cfg.uint64_1, 21);
-    ASSERT_EQ(cfg.uint64_2, 678);
+    ASSERT_EQ(cfg.uint64_1, uint64_t(21));
+    ASSERT_EQ(cfg.uint64_2, uint64_t(678));
     ASSERT_EQ(cfg.g1.g_int, 1);
     ASSERT_STREQ(cfg.g1.g_str.get().c_str(), "g1_str1");
     ASSERT_EQ(cfg.g2.g_int, 987);
