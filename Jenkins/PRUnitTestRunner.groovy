@@ -39,8 +39,12 @@ parallel "Release el7": {
     }
 }, "DCheck": {
     node('be-integration') {
+        prRunner("DCheck", "el8")
+    }
+}, "LCov": {
+    node('be-integration') {
         try {
-            prRunner("DCheck", "el8")
+            prRunner("LCov", "el8")
         } finally {
             stage("Post Actions") {
                 dir ("el8/smb") {
