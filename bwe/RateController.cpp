@@ -491,6 +491,7 @@ RateController::BacklogAnalysis RateController::analyzeBacklog(uint32_t reportNt
     return report;
 }
 
+#ifdef DEBUG
 void RateController::dumpBacklog(const uint32_t seqno, const uint32_t ssrc)
 {
     uint32_t queueSize = 0;
@@ -540,6 +541,9 @@ void RateController::dumpBacklog(const uint32_t seqno, const uint32_t ssrc)
         }
     }
 }
+#else
+void RateController::dumpBacklog(const uint32_t seqno, const uint32_t ssrc) {}
+#endif
 
 void RateController::onReportReceived(uint64_t timestamp,
     uint32_t count,
@@ -598,8 +602,9 @@ void RateController::onReportReceived(uint64_t timestamp,
         _probe.lastGoodProbe = timestamp;
         _probeMetrics.resetCounters();
     }
-    else if (_canRtxPad // Probing on RTCP ssrc with low frequency of RR (most likely audio only calls). Maybe there is no point to reduce the probe interval in such cases
-            && utils::Time::diffGE(_probe.lastGoodProbe, timestamp, longIntervalWithoutValidProbes))
+    else if (_canRtxPad // Probing on RTCP ssrc with low frequency of RR (most likely audio only calls). Maybe there is
+                        // no point to reduce the probe interval in such cases
+        && utils::Time::diffGE(_probe.lastGoodProbe, timestamp, longIntervalWithoutValidProbes))
     {
         _probe.resetProbeInterval();
 
