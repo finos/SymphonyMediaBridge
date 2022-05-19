@@ -2,12 +2,14 @@
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/AudioLevel.h"
+#include "codec/AudioTools.h"
+#include "codec/G711codec.h"
+#include "codec/Opus.h"
 #include "codec/OpusEncoder.h"
 #include "memory/Packet.h"
 #include "rtp/RtpHeader.h"
 
-namespace bridge
-{
+using namespace bridge;
 
 EncodeJob::EncodeJob(memory::UniqueAudioPacket packet,
     SsrcOutboundContext& outboundContext,
@@ -25,73 +27,110 @@ EncodeJob::EncodeJob(memory::UniqueAudioPacket packet,
 
 void EncodeJob::run()
 {
+    auto& targetFormat = _outboundContext.rtpMap;
+    if (targetFormat.format != bridge::RtpMap::Format::OPUS && targetFormat.format != bridge::RtpMap::Format::PCMA &&
+        targetFormat.format != bridge::RtpMap::Format::PCMU)
+    {
+        logger::warn("Unknown target format %u", "EncodeJob", static_cast<uint16_t>(targetFormat.format));
+        return;
+    }
+
     const auto pcm16Header = rtp::RtpHeader::fromPacket(*_packet);
     if (!pcm16Header)
     {
         return;
     }
 
-    auto& targetFormat = _outboundContext.rtpMap;
-    if (targetFormat.format != bridge::RtpMap::Format::OPUS)
+    auto encodedPacket = memory::makeUniquePacket(_outboundContext.allocator);
+    if (!encodedPacket)
     {
-        logger::warn("Unknown target format %u", "EncodeJob", static_cast<uint16_t>(targetFormat.format));
+        logger::error("failed to make packet for encoded audio data", "EncodeJob");
         return;
     }
 
-    if (!_outboundContext.opusEncoder)
+    auto* pcm16Data = reinterpret_cast<int16_t*>(pcm16Header->getPayload());
+    uint32_t pcm16DataLength = _packet->getLength() - pcm16Header->headerLength();
+
+    auto rtpHeader = rtp::RtpHeader::create(*encodedPacket);
+
+    if (targetFormat.format == bridge::RtpMap::Format::OPUS)
     {
-        _outboundContext.opusEncoder = std::make_unique<codec::OpusEncoder>();
-    }
 
-    auto opusPacket = memory::makeUniquePacket(_outboundContext.allocator);
-    if (!opusPacket)
+        if (!_outboundContext.opusEncoder)
+        {
+            _outboundContext.opusEncoder = std::make_unique<codec::OpusEncoder>();
+        }
+
+        rtp::RtpHeaderExtension extensionHead(rtpHeader->getExtensionHeader());
+        auto cursor = extensionHead.extensions().begin();
+        if (_outboundContext.rtpMap.absSendTimeExtId.isSet())
+        {
+            rtp::GeneralExtension1Byteheader absSendTime(_outboundContext.rtpMap.absSendTimeExtId.get(), 3);
+            extensionHead.addExtension(cursor, absSendTime);
+        }
+        if (_outboundContext.rtpMap.audioLevelExtId.isSet())
+        {
+            rtp::GeneralExtension1Byteheader audioLevel(_outboundContext.rtpMap.audioLevelExtId.get(), 1);
+            audioLevel.data[0] = codec::computeAudioLevel(*_packet);
+            extensionHead.addExtension(cursor, audioLevel);
+        }
+        if (!extensionHead.empty())
+        {
+            rtpHeader->setExtensions(extensionHead);
+            encodedPacket->setLength(rtpHeader->headerLength());
+        }
+
+        const size_t frames = pcm16DataLength / EngineMixer::bytesPerSample / EngineMixer::channelsPerFrame;
+
+        const auto encodedBytes = _outboundContext.opusEncoder->encode(pcm16Data,
+            frames,
+            rtpHeader->getPayload(),
+            encodedPacket->size - rtpHeader->headerLength());
+
+        if (encodedBytes <= 0)
+        {
+            logger::error("Failed to encode opus, %d", "OpusEncodeJob", encodedBytes);
+            return;
+        }
+
+        encodedPacket->setLength(rtpHeader->headerLength() + encodedBytes);
+        rtpHeader->ssrc = _outboundContext.ssrc;
+        rtpHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
+        rtpHeader->sequenceNumber = ++_outboundContext.getSequenceNumberReference() & 0xFFFFu;
+        rtpHeader->payloadType = targetFormat.payloadType;
+        _transport.protectAndSend(std::move(encodedPacket));
+    }
+    else if (targetFormat.format == bridge::RtpMap::Format::PCMA || targetFormat.format == bridge::RtpMap::Format::PCMU)
     {
-        logger::error("failed to make packet for opus encoded data", "OpusEncodeJob");
-        return;
+        if (!_outboundContext.resampler)
+        {
+            _outboundContext.resampler =
+                codec::createPcmResampler(codec::Opus::sampleRate / codec::Opus::packetsPerSecond, 48000, 8000);
+            if (!_outboundContext.resampler)
+            {
+                return;
+            }
+        }
+
+        codec::makeMono(pcm16Data, pcm16DataLength);
+        pcm16DataLength /= 2;
+        pcm16DataLength = _outboundContext.resampler->resample(pcm16Data, pcm16DataLength, pcm16Data);
+
+        if (targetFormat.format == bridge::RtpMap::Format::PCMA)
+        {
+            codec::PcmuCodec::encode(pcm16Data, rtpHeader->getPayload(), pcm16DataLength);
+            encodedPacket->setLength(rtpHeader->headerLength() + pcm16DataLength);
+        }
+        else if (targetFormat.format == bridge::RtpMap::Format::PCMU)
+        {
+            codec::PcmuCodec::encode(pcm16Data, rtpHeader->getPayload(), pcm16DataLength);
+            encodedPacket->setLength(rtpHeader->headerLength() + pcm16DataLength);
+        }
+
+        rtpHeader->ssrc = _outboundContext.ssrc;
+        rtpHeader->timestamp = (_rtpTimestamp * 8llu) & 0xFFFFFFFFllu;
+        rtpHeader->sequenceNumber = ++_outboundContext.getSequenceNumberReference() & 0xFFFFu;
+        rtpHeader->payloadType = targetFormat.payloadType;
+        _transport.protectAndSend(std::move(encodedPacket));
     }
-
-    auto opusHeader = rtp::RtpHeader::create(*opusPacket);
-
-    rtp::RtpHeaderExtension extensionHead(opusHeader->getExtensionHeader());
-    auto cursor = extensionHead.extensions().begin();
-    if (_outboundContext.rtpMap.absSendTimeExtId.isSet())
-    {
-        rtp::GeneralExtension1Byteheader absSendTime(_outboundContext.rtpMap.absSendTimeExtId.get(), 3);
-        extensionHead.addExtension(cursor, absSendTime);
-    }
-    if (_outboundContext.rtpMap.audioLevelExtId.isSet())
-    {
-        rtp::GeneralExtension1Byteheader audioLevel(_outboundContext.rtpMap.audioLevelExtId.get(), 1);
-        audioLevel.data[0] = codec::computeAudioLevel(*_packet);
-        extensionHead.addExtension(cursor, audioLevel);
-    }
-    if (!extensionHead.empty())
-    {
-        opusHeader->setExtensions(extensionHead);
-        opusPacket->setLength(opusHeader->headerLength());
-    }
-
-    const uint32_t payloadLength = _packet->getLength() - pcm16Header->headerLength();
-    const size_t frames = payloadLength / EngineMixer::bytesPerSample / EngineMixer::channelsPerFrame;
-    const auto* pcm16Data = reinterpret_cast<int16_t*>(pcm16Header->getPayload());
-
-    const auto encodedBytes = _outboundContext.opusEncoder->encode(pcm16Data,
-        frames,
-        opusHeader->getPayload(),
-        opusPacket->size - opusHeader->headerLength());
-
-    if (encodedBytes <= 0)
-    {
-        logger::error("Failed to encode opus, %d", "OpusEncodeJob", encodedBytes);
-        return;
-    }
-
-    opusPacket->setLength(opusHeader->headerLength() + encodedBytes);
-    opusHeader->ssrc = _outboundContext.ssrc;
-    opusHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
-    opusHeader->sequenceNumber = ++_outboundContext.getSequenceNumberReference() & 0xFFFFu;
-    opusHeader->payloadType = targetFormat.payloadType;
-    _transport.protectAndSend(std::move(opusPacket));
 }
-
-} // namespace bridge

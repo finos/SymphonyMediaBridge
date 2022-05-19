@@ -5,14 +5,6 @@
 
 namespace codec
 {
-void makeStereo(int16_t* data, size_t count)
-{
-    for (int i = count - 1; i >= 0; i--)
-    {
-        data[i * 2] = data[i];
-        data[i * 2 + 1] = data[i];
-    }
-}
 
 void swingTailMono(int16_t* data, const uint32_t sampleRate, const size_t count, const int step)
 {

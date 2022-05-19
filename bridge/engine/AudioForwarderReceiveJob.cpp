@@ -6,7 +6,7 @@
 #include "codec/G711codec.h"
 #include "codec/Opus.h"
 #include "codec/OpusDecoder.h"
-#include "codec/PcmUtils.h"
+#include "codec/PcmResampler.h"
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
@@ -148,6 +148,16 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 
 void AudioForwarderReceiveJob::decodeG711(const memory::Packet& g711Packet)
 {
+    if (!_ssrcContext._resampler)
+    {
+        _ssrcContext._resampler =
+            codec::createPcmResampler(codec::Opus::sampleRate / codec::Opus::packetsPerSecond, 8000, 48000);
+    }
+    if (!_ssrcContext._resampler)
+    {
+        return;
+    }
+
     auto rtpHeader = rtp::RtpHeader::fromPacket(g711Packet);
 
     auto pcmPacket = memory::makeUniquePacket(_engineMixer.getAudioAllocator(), g711Packet);
@@ -158,17 +168,28 @@ void AudioForwarderReceiveJob::decodeG711(const memory::Packet& g711Packet)
     if (rtpHeader->payloadType == codec::Pcma::payloadType)
     {
         codec::PcmaCodec::decode(rtpHeader->getPayload(), pcmPayload, sampleCount);
-        pcmPacket->setLength(pcmHeader->headerLength() + sampleCount * sizeof(int16_t));
-        // resample
-        codec::makeStereo(pcmPayload, sampleCount);
+
+        auto producedSamples = _ssrcContext._resampler->resample(pcmPayload, sampleCount, pcmPayload);
+        if (producedSamples < sampleCount)
+        {
+            return;
+        }
+        codec::makeStereo(pcmPayload, producedSamples);
+        pcmPacket->setLength(pcmHeader->headerLength() + sampleCount * codec::Opus::channelsPerFrame * sizeof(int16_t));
     }
     else if (rtpHeader->payloadType == codec::Pcmu::payloadType)
     {
         codec::PcmuCodec::decode(rtpHeader->getPayload(), pcmPayload, sampleCount);
-        // resample
-        codec::makeStereo(pcmPayload, sampleCount);
-        pcmPacket->setLength(pcmHeader->headerLength() + sampleCount * sizeof(int16_t) * 2);
+        auto producedSamples = _ssrcContext._resampler->resample(pcmPayload, sampleCount, pcmPayload);
+        if (producedSamples < sampleCount)
+        {
+            return;
+        }
+        codec::makeStereo(pcmPayload, producedSamples);
+        pcmPacket->setLength(pcmHeader->headerLength() + sampleCount * codec::Opus::channelsPerFrame * sizeof(int16_t));
     }
+
+    _engineMixer.onMixerAudioRtpPacketDecoded(_sender, std::move(pcmPacket));
 }
 */
 

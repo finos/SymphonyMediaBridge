@@ -5,6 +5,7 @@
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "codec/AudioReceivePipeline.h"
 #include "codec/OpusDecoder.h"
+#include "codec/PcmResampler.h"
 #include "jobmanager/JobQueue.h"
 #include "transport/RtcTransport.h"
 #include "utils/Optional.h"
@@ -134,6 +135,7 @@ public:
 
 private:
     std::atomic_uint64_t _lastRtpReceiveTime;
+    std::unique_ptr<codec::PcmResampler> _resampler;
 };
 
 } // namespace bridge
