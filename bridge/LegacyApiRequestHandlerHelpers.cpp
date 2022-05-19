@@ -61,6 +61,14 @@ std::vector<RtpMap> makeRtpMaps(const legacyapi::Channel& channel)
         {
             rtpMaps.emplace_back(RtpMap::Format::OPUS);
         }
+        else if (payloadType._name.compare("pcma") == 0)
+        {
+            rtpMaps.emplace_back(RtpMap::pcma());
+        }
+        else if (payloadType._name.compare("pcmu") == 0)
+        {
+            rtpMaps.emplace_back(RtpMap::pcmu());
+        }
         else if (payloadType._name.compare("VP8") == 0)
         {
             rtpMaps.emplace_back(RtpMap::Format::VP8);

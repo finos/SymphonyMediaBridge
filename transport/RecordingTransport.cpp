@@ -1,4 +1,5 @@
 #include "transport/RecordingTransport.h"
+#include "codec/G711.h"
 #include "codec/Opus.h"
 #include "codec/Vp8.h"
 #include "config/Config.h"
@@ -340,6 +341,10 @@ void RecordingTransport::onSendingStreamAddedEvent(const memory::Packet& packet)
     {
     case codec::Opus::payloadType:
         frequency = codec::Opus::sampleRate;
+        break;
+    case codec::Pcma::payloadType:
+    case codec::Pcmu::payloadType:
+        frequency = codec::Pcma::sampleRate;
         break;
     case codec::Vp8::payloadType:
         frequency = codec::Vp8::sampleRate;
