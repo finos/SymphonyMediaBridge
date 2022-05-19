@@ -2,6 +2,7 @@
 
 #include "bridge/RtpMap.h"
 #include "codec/OpusEncoder.h"
+#include "codec/PcmResampler.h"
 #include "memory/PacketPoolAllocator.h"
 #include "utils/Optional.h"
 #include "utils/Time.h"
@@ -108,6 +109,7 @@ public:
 
     // Retain rec OutboundSsrc before marking for deletion to sustain retransmissions longer.
     bool recordingOutboundDecommissioned;
+    std::unique_ptr<codec::PcmResampler> _resampler;
 };
 
 } // namespace bridge

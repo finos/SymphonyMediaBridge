@@ -233,6 +233,9 @@ set(FILES
         codec/G711codec.cpp
         codec/PcmUtils.h
         codec/PcmUtils.cpp
+        codec/SpeexResampler.cpp
+        codec/PcmResampler.h
+        codec/PcmResampler.cpp
         concurrency/EventSemaphore.cpp
         concurrency/EventSemaphore.h
         concurrency/LockFreeList.cpp

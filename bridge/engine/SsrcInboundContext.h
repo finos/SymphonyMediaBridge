@@ -4,6 +4,7 @@
 #include "bridge/engine/PliScheduler.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "codec/OpusDecoder.h"
+#include "codec/PcmResampler.h"
 #include "jobmanager/JobQueue.h"
 #include "transport/RtcTransport.h"
 #include "transport/RtpReceiveState.h"
@@ -102,6 +103,7 @@ public:
 
 private:
     std::atomic_uint64_t _lastReceiveTime;
+    std::unique_ptr<codec::PcmResampler> _resampler;
 };
 
 } // namespace bridge
