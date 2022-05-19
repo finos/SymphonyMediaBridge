@@ -29,13 +29,26 @@ public:
         _responseStatusCode = static_cast<uint32_t>(response._statusCode);
     }
 
+    void setErrorMessage(const std::string& message)
+    {
+        _errorMessages = message;
+    }
+
     ~RequestLogger()
     {
-        logger::info("Outgoing response [%s] %u", "RequestHandler", _requestId.c_str(), _responseStatusCode);
+        if (_errorMessages.empty())
+        {
+            logger::info("Outgoing response [%s] %u", "RequestHandler", _requestId.c_str(), _responseStatusCode);
+        }
+        else
+        {
+            logger::info("Outgoing response [%s] %u. Error message: %s", "RequestHandler", _requestId.c_str(), _responseStatusCode, _errorMessages.c_str());
+        }
     }
 
 private:
     std::string _requestId;
+    std::string _errorMessages;
     uint32_t _responseStatusCode;
 };
 
