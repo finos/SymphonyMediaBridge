@@ -524,9 +524,10 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
         catch (nlohmann::detail::exception e)
         {
             logger::warn("Error processing json", "RequestHandler");
-            auto response = makeErrorResponse(httpd::StatusCode::BAD_REQUEST, e.what());
+            std::string message = "nlohmann:" + std::string(e.what());
+            auto response = makeErrorResponse(httpd::StatusCode::BAD_REQUEST, message);
             requestLogger.setResponse(response);
-            requestLogger.setErrorMessage(e.what());
+            requestLogger.setErrorMessage(message);
             return response;
         }
         catch (std::exception e)
