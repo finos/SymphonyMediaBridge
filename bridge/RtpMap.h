@@ -11,20 +11,42 @@ namespace bridge
 
 struct RtpMap
 {
-    enum class Format : uint16_t
+    enum class Format
     {
-        VP8 = 100,
-        VP8RTX = 96,
-        OPUS = 111,
-        EMPTY = 4096
+        VP8,
+        VP8RTX,
+        OPUS,
+        EMPTY
     };
-
-    static const RtpMap& opus();
-    static const RtpMap& vp8();
 
     RtpMap() : _format(Format::EMPTY), _payloadType(4096), _sampleRate(0) {}
 
-    RtpMap(const Format format, const uint32_t payloadType, const uint32_t sampleRate)
+    explicit RtpMap(const Format format) : _format(format)
+    {
+        switch (format)
+        {
+        case Format::VP8:
+            _payloadType = 100;
+            _sampleRate = 90000;
+            break;
+        case Format::VP8RTX:
+            _payloadType = 96;
+            _sampleRate = 90000;
+            break;
+        case Format::OPUS:
+            _payloadType = 111;
+            _sampleRate = 48000;
+            _channels.set(2);
+            break;
+        default:
+            assert(false);
+            _payloadType = 4096;
+            _sampleRate = 0;
+            break;
+        }
+    }
+
+    RtpMap(const Format format, const uint16_t payloadType, const uint32_t sampleRate)
         : _format(format),
           _payloadType(payloadType),
           _sampleRate(sampleRate)
@@ -32,7 +54,7 @@ struct RtpMap
     }
 
     RtpMap(const Format format,
-        const uint32_t payloadType,
+        const uint16_t payloadType,
         const uint32_t sampleRate,
         const utils::Optional<uint32_t>& channels)
         : _format(format),
@@ -45,7 +67,7 @@ struct RtpMap
     RtpMap(const RtpMap& rtpMap) = default;
 
     Format _format;
-    uint32_t _payloadType;
+    uint16_t _payloadType;
     uint32_t _sampleRate;
     utils::Optional<uint32_t> _channels;
     std::unordered_map<std::string, std::string> _parameters;

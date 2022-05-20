@@ -102,6 +102,7 @@ void VideoForwarderRewriteAndSendJob::run()
             return;
         }
     }
+    rtpHeader->payloadType = _outboundContext._rtpMap._payloadType;
 
     if (!_transport.isConnected())
     {

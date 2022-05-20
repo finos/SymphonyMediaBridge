@@ -52,6 +52,7 @@ void AudioForwarderRewriteAndSendJob::run()
     header->ssrc = _outboundContext._ssrc;
     header->sequenceNumber = nextSequenceNumber;
     header->timestamp = _outboundContext._timestampOffset + header->timestamp;
+    header->payloadType = _outboundContext._rtpMap._payloadType;
     if (static_cast<int32_t>(header->timestamp - _outboundContext._lastSentTimestamp) > 0)
     {
         _outboundContext._lastSentTimestamp = header->timestamp;

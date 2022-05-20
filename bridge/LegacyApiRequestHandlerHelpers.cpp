@@ -58,15 +58,15 @@ std::vector<RtpMap> makeRtpMaps(const legacyapi::Channel& channel)
         RtpMap rtpMap;
         if (payloadType._name.compare("opus") == 0)
         {
-            rtpMaps.emplace_back(RtpMap::opus());
+            rtpMaps.emplace_back(RtpMap::Format::OPUS);
         }
         else if (payloadType._name.compare("VP8") == 0)
         {
-            rtpMaps.emplace_back(RtpMap::vp8());
+            rtpMaps.emplace_back(RtpMap::Format::VP8);
         }
         else if (payloadType._name.compare("rtx") == 0)
         {
-            rtpMaps.emplace_back(RtpMap(RtpMap::Format::VP8RTX, 96, 90000));
+            rtpMaps.emplace_back(RtpMap::Format::VP8RTX);
         }
 
         for (const auto& parameter : payloadType._parameters)

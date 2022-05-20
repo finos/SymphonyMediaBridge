@@ -18,8 +18,9 @@ class Vp8RewriterTest : public ::testing::Test
     void SetUp() override
     {
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "Vp8RewriterTest");
-        _ssrcOutboundContext =
-            std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc, *_allocator, bridge::RtpMap::vp8());
+        _ssrcOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc,
+            *_allocator,
+            bridge::RtpMap(bridge::RtpMap::Format::VP8));
     }
     void TearDown() override { _ssrcOutboundContext.reset(); }
 
