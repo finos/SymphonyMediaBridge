@@ -42,7 +42,7 @@ public:
         }
         else
         {
-            logger::info("Outgoing response [%s] %u. Error message: %s", "RequestHandler", _requestId.c_str(), _responseStatusCode, _errorMessages.c_str());
+            logger::warn("Outgoing response [%s] %u. Error message: %s", "RequestHandler", _requestId.c_str(), _responseStatusCode, _errorMessages.c_str());
         }
     }
 
