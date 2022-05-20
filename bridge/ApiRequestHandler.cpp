@@ -648,7 +648,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
         const auto& bundleTransport = allocateChannel._bundleTransport.get();
         if (!bundleTransport._ice || !bundleTransport._dtls)
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Bundle tranports requires both ICE and DTLS");
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Bundle transports requires both ICE and DTLS");
         }
 
         const auto iceRole = bundleTransport._iceControlling.isSet() && !bundleTransport._iceControlling.get()
@@ -666,7 +666,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             std::string outChannelId;
             if (!mixer->addBundledAudioStream(outChannelId, endpointId, mixed, ssrcRewrite))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "It was not possible to add bundled audio stream. Usually happens due to an already existent audio stream");
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "It was not possible to add bundled audio stream. Usually happens due to an already existing audio stream");
             }
             audioChannelId.set(outChannelId);
         }
@@ -701,7 +701,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             const auto& audio = allocateChannel._audio.get();
             if (!audio._transport.isSet())
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Tranport specification of audio channel is required");
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Transport specification of audio channel is required");
             }
 
             const auto& transport = audio._transport.get();
@@ -727,7 +727,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             const auto& video = allocateChannel._video.get();
             if (!video._transport.isSet())
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Tranport specification of video channel is required");
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Transport specification of video channel is required");
             }
 
             const auto& transport = video._transport.get();
@@ -834,7 +834,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
         if (!bundleTransport._ice || !bundleTransport._dtls)
         {
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-                utils::format("Bundling without ice not supported, conference %s", conferenceId.c_str()));
+                utils::format("Bundling without ice is not supported, conference %s", conferenceId.c_str()));
         }
 
         const auto& transportDescriptionIce = transportDescription._ice.get();
