@@ -24,49 +24,65 @@
 namespace
 {
 
-template <typename T>
-void logStreamOutboundLoss(const T& stream, const char* mixerId)
+void logTransportPacketLoss(const std::string& endpointId, transport::RtcTransport& transport, const char* mixerId)
 {
-    if (!stream._transport)
-    {
-        return;
-    }
-
-    const auto lossCount = stream._transport->getSenderLossCount();
+    const auto lossCount = transport.getSenderLossCount();
     if (lossCount > 0)
     {
-        logger::info("Stream id %s, endpointId %s far side reports %u packets lost",
+        logger::info("EndpointId %s %s far side reports %u packets lost",
             mixerId,
-            stream._id.c_str(),
-            stream._endpointId.c_str(),
+            endpointId.c_str(),
+            transport.getLoggableId().c_str(),
             lossCount);
     }
 
     std::unordered_map<uint32_t, transport::ReportSummary> reportSummaries;
-    stream._transport->getReportSummary(reportSummaries);
+    transport.getReportSummary(reportSummaries);
 
     for (const auto& reportSummaryEntry : reportSummaries)
     {
         const auto ssrc = reportSummaryEntry.first;
         const auto& reportSummary = reportSummaryEntry.second;
 
-        if (reportSummary.extendedSeqNoReceived > reportSummary.sequenceNumberSent ||
-            reportSummary.sequenceNumberSent - reportSummary.extendedSeqNoReceived >= 100 ||
-            reportSummary.lostPackets > 0)
-        {
+        logger::info(
+            "EndpointId %s %s, outbound ssrc %u, packets %u"
+            ", last sent seq %u, last received %u, reported loss count %u, initial RTP timestamp %u, RTP timestamp %u",
+            mixerId,
+            endpointId.c_str(),
+            transport.getLoggableId().c_str(),
+            ssrc,
+            reportSummary.packetsSent,
+            reportSummary.sequenceNumberSent,
+            reportSummary.extendedSeqNoReceived,
+            reportSummary.lostPackets,
+            reportSummary.initialRtpTimestamp,
+            reportSummary.rtpTimestamp);
+    }
 
-            logger::info("Stream id %s, endpointId %s, outbound ssrc %u, packets %" PRIu64
-                         ", last sent seq %u, last reported "
-                         "seen seq %u, reported loss count %" PRIu64,
-                mixerId,
-                stream._id.c_str(),
-                stream._endpointId.c_str(),
-                ssrc,
-                reportSummary.packets,
-                reportSummary.sequenceNumberSent,
-                reportSummary.extendedSeqNoReceived,
-                reportSummary.lostPackets);
-        }
+    auto audioStats = transport.getCumulativeAudioReceiveCounters();
+    auto videoStats = transport.getCumulativeVideoReceiveCounters();
+    if (audioStats.getPacketsReceived() > 0)
+    {
+        logger::info("EndpointId %s %s, inbound audio packets received %" PRIu64 ", lost %" PRIu64 ", octets %" PRIu64
+                     "B",
+            mixerId,
+            endpointId.c_str(),
+            transport.getLoggableId().c_str(),
+            audioStats.getPacketsReceived(),
+            audioStats.lostPackets,
+            audioStats.octets);
+    }
+
+    if (videoStats.getPacketsReceived() > 0)
+    {
+        logger::info("EndpointId %s %s, inbound video packets received %" PRIu64 ", lost %" PRIu64 ", octets %" PRIu64
+                     "B",
+            mixerId,
+            endpointId.c_str(),
+            transport.getLoggableId().c_str(),
+            videoStats.getPacketsReceived(),
+            videoStats.lostPackets,
+            videoStats.octets);
     }
 }
 
@@ -165,6 +181,7 @@ void Mixer::stopTransports()
     for (auto& bundleTransportEntry : _bundleTransports)
     {
         assert(bundleTransportEntry.second._transport.get());
+        logTransportPacketLoss("", *bundleTransportEntry.second._transport, _loggableId.c_str());
 
         bundleTransportEntry.second._transport->stop();
         if (!waitForPendingJobs(700, 5, *bundleTransportEntry.second._transport))
@@ -185,6 +202,7 @@ void Mixer::stopTransports()
             continue;
         }
 
+        logTransportPacketLoss("", *audioStreamEntry.second->_transport, _loggableId.c_str());
         audioStreamEntry.second->_transport->stop();
         if (!waitForPendingJobs(700, 5, *audioStreamEntry.second->_transport))
         {
@@ -202,6 +220,8 @@ void Mixer::stopTransports()
         {
             continue;
         }
+
+        logTransportPacketLoss("", *videoStreamEntry.second->_transport, _loggableId.c_str());
         videoStreamEntry.second->_transport->stop();
         if (!waitForPendingJobs(700, 5, *videoStreamEntry.second->_transport))
         {
@@ -642,8 +662,6 @@ void Mixer::engineAudioStreamRemoved(EngineAudioStream* engineStream)
     }
 
     auto& stream = streamItr->second;
-    logStreamOutboundLoss(*stream, _loggableId.c_str());
-
     logger::info("AudioStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
         stream->_id.c_str(),
@@ -675,8 +693,6 @@ void Mixer::engineVideoStreamRemoved(EngineVideoStream* engineStream)
     }
 
     auto& stream = streamItr->second;
-    logStreamOutboundLoss(*stream, _loggableId.c_str());
-
     logger::info("VideoStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
         stream->_id.c_str(),
@@ -943,9 +959,10 @@ Mixer::Stats Mixer::getStats()
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     Mixer::Stats result;
-    result._videoStreams = _videoStreams.size();
-    result._audioStreams = _audioStreams.size();
-    result._dataStreams = _dataStreams.size();
+    result.videoStreams = _videoStreams.size();
+    result.audioStreams = _audioStreams.size();
+    result.dataStreams = _dataStreams.size();
+    result.transports = _bundleTransports.size();
     return result;
 }
 
@@ -1044,6 +1061,7 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     auto videoStreamItr = _videoStreams.find(endpointId);
     if (videoStreamItr == _videoStreams.end())
     {
+        logger::error("no video stream allocated for end point %s", _loggableId.c_str(), endpointId.c_str());
         return false;
     }
     auto videoStream = videoStreamItr->second.get();
@@ -1608,9 +1626,9 @@ RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)
     return nullptr;
 }
 
-void Mixer::stopTransportIfNeeded(transport::Transport* streamTransport, const std::string& endpointId)
+void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId)
 {
-    transport::Transport* transport = nullptr;
+    transport::RtcTransport* transport = nullptr;
 
     auto bundleTransportItr = _bundleTransports.find(endpointId);
     if (bundleTransportItr != _bundleTransports.end())
@@ -1640,6 +1658,8 @@ void Mixer::stopTransportIfNeeded(transport::Transport* streamTransport, const s
     {
         return;
     }
+
+    logTransportPacketLoss(endpointId, *transport, _loggableId.c_str());
 
     logger::info("Engine stream removed, stopping transport %s, endpointId %s.",
         _loggableId.c_str(),

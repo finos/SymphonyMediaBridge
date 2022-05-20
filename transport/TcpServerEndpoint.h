@@ -42,6 +42,8 @@ public:
 
     virtual Endpoint::State getState() const override { return _state; }
 
+    void maintenance(uint64_t timestamp) override;
+
 public: // internal job methods
     void internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener);
     void internalClosePort(int countDown);
@@ -49,6 +51,8 @@ public: // internal job methods
     void internalAccept();
     void internalShutdown(int fd);
     void internalClosePendingSocket(int fd);
+    void internalMaintenance(uint64_t timestamp);
+    void cleanupStaleConnections(uint64_t timestamp);
 
 private:
     void onSocketPollStarted(int fd) override;
@@ -57,7 +61,6 @@ private:
     void onSocketShutdown(int fd) override;
     void onSocketWriteable(int fd) override {}
 
-    void cleanupStaleConnections();
     void acceptNewConnection();
 
     void sendIceErrorResponse(transport::RtcSocket& socket,
@@ -91,5 +94,6 @@ private:
     RtcePoll& _epoll;
     TcpServerEndpoint::IEvents* _listener;
     const config::Config& _config;
+    uint64_t _lastMaintenance;
 };
 } // namespace transport

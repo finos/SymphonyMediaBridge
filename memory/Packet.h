@@ -33,7 +33,7 @@ public:
         dst.setLength(getLength());
     }
 
-    void append(void* data, size_t length)
+    void append(const void* data, size_t length)
     {
         if (length + _length <= size)
         {

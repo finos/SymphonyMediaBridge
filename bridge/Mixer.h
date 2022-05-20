@@ -60,12 +60,12 @@ class Mixer
 public:
     struct Stats
     {
-        uint32_t _videoStreams = 0;
-        uint32_t _audioStreams = 0;
-        uint32_t _dataStreams = 0;
+        uint32_t videoStreams = 0;
+        uint32_t audioStreams = 0;
+        uint32_t dataStreams = 0;
         uint32_t pacingQueue = 0;
         uint32_t rtxPacingQueue = 0;
-
+        uint32_t transports = 0;
     };
 
     Mixer(std::string id,
@@ -271,7 +271,7 @@ private:
 
     RecordingStream* findRecordingStream(const std::string& recordingId);
 
-    void stopTransportIfNeeded(transport::Transport* streamTransport, const std::string& endpointId);
+    void stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId);
 };
 
 } // namespace bridge

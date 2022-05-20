@@ -11,9 +11,6 @@ function pr() {
 mkdir -p ubuntu-focal/smb
 pushd ubuntu-focal/smb
 
-export CC=clang
-export CXX=clang++
-
 pr "Generating versioninfo"
 ../../tools/scripts/versioninfo.sh
 
@@ -39,6 +36,9 @@ if [ ! -d libs ]; then
   mkdir libs
 fi
 
+cp /usr/lib/x86_64-linux-gnu/libatomic.so.1 libs
+cp /usr/local/lib/libc++.so.1 libs
+cp /usr/local/lib/libc++abi.so.1 libs
 cp /usr/local/lib/libssl.so.1.1 libs
 cp /usr/local/lib/libcrypto.so.1.1 libs
 cp /usr/local/lib/libmicrohttpd.so.12 libs

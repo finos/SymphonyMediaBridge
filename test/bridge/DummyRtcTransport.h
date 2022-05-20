@@ -61,6 +61,9 @@ public:
     {
         return transport::PacketCounters();
     }
+    transport::PacketCounters getCumulativeVideoReceiveCounters() const override { return transport::PacketCounters(); }
+    transport::PacketCounters getCumulativeAudioReceiveCounters() const override { return transport::PacketCounters(); }
+
     transport::PacketCounters getAudioReceiveCounters(uint64_t idleTimestamp) const override
     {
         return transport::PacketCounters();

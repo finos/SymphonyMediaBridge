@@ -11,7 +11,7 @@ RUN cd /tmp \
     && cd /tmp/openssl-1.1.1l \
     && ./config \
     && make -j8 \
-    && make install
+    && make install_sw
 
 
 RUN cd /tmp && wget https://cmake.org/files/v3.18/cmake-3.18.0.tar.gz && tar -xvzf cmake-3.18.0.tar.gz \
@@ -23,7 +23,9 @@ RUN cd /tmp \
     && cd clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
     && cp -rn * /usr/local \
     && cd /tmp && rm -rf clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
-    && ln -s /usr/local/bin/lld /usr/local/bin/ld
+    && ln -s /usr/local/bin/lld /usr/local/bin/ld \
+    && rm clang+llvm-12.0.1-x86_64-linux.tar.xz
+
 
 # Build libsrtp 2.4.2
 RUN cd /tmp \

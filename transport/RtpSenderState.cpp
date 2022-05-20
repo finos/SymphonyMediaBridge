@@ -16,6 +16,7 @@ RtpSenderState::SendCounters operator-(RtpSenderState::SendCounters a, const Rtp
     a.packets -= b.packets;
     a.sequenceNumber -= b.sequenceNumber;
     a.timestamp -= b.timestamp;
+    a.rtpTimestamp -= b.rtpTimestamp;
     return a;
 }
 
@@ -25,6 +26,7 @@ RtpSenderState::RtpSenderState(uint32_t rtpFrequency, const config::Config& conf
       _senderReportSendTime(0),
       _senderReportNtp(0),
       _lossSinceSenderReport(0),
+      _initialRtpTimestamp(0),
       _config(config),
       _scheduledSenderReport(0),
       _rtpFrequency(rtpFrequency)
@@ -35,8 +37,8 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
 {
     _rtpSendTime = timestamp;
     auto* header = rtp::RtpHeader::fromPacket(packet);
-    _rtpTimestampCorrelation.local = timestamp;
-    _rtpTimestampCorrelation.rtp = header->timestamp;
+    _sendCounters.timestamp = timestamp;
+    _sendCounters.rtpTimestamp = header->timestamp;
 
     if (_sendCounters.payloadOctets == 0)
     {
@@ -44,7 +46,14 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
         _sendCounterSnapshot.timestamp = timestamp;
         _remoteReport.extendedSeqNoReceived = _sendCounters.sequenceNumber;
         _remoteReport.timestamp = timestamp;
+        _initialRtpTimestamp = header->timestamp;
         payloadType = header->payloadType;
+        ReportSummary summary;
+        summary.initialRtpTimestamp = header->timestamp;
+        summary.sequenceNumberSent = header->sequenceNumber;
+        summary.packetsSent = 1;
+        summary.rtpTimestamp = summary.initialRtpTimestamp;
+        _summary.write(summary);
     }
     _sendCounters.payloadOctets += packet.getLength() - header->headerLength();
     _sendCounters.rtpHeaderOctets += header->headerLength();
@@ -58,10 +67,16 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
 
     if (utils::Time::diffGE(_sendCounterSnapshot.timestamp, timestamp, utils::Time::sec))
     {
-        _sendCounters.timestamp = timestamp;
         auto report = _sendCounters - _sendCounterSnapshot;
-        _sendReport.write(report);
+        _recentSent.write(report);
         _sendCounterSnapshot = _sendCounters;
+
+        ReportSummary summary;
+        _summary.read(summary);
+        summary.sequenceNumberSent = _sendCounters.sequenceNumber;
+        summary.packetsSent = _sendCounters.packets;
+        summary.rtpTimestamp = _sendCounters.rtpTimestamp;
+        _summary.write(summary);
     }
 }
 
@@ -80,8 +95,8 @@ void RtpSenderState::onRtcpSent(uint64_t timestamp, const rtp::RtcpHeader* heade
 
 uint32_t RtpSenderState::getRtpTimestamp(uint64_t timestamp) const
 {
-    const auto diff = static_cast<int64_t>(timestamp - _rtpTimestampCorrelation.local) / 1000;
-    return _rtpTimestampCorrelation.rtp + static_cast<uint32_t>(_rtpFrequency * diff / 1000000llu);
+    const auto diff = static_cast<int64_t>(timestamp - _sendCounters.timestamp) / 1000;
+    return _sendCounters.rtpTimestamp + static_cast<uint32_t>(_rtpFrequency * diff / 1000000llu);
 }
 
 void RtpSenderState::fillInReport(rtp::RtcpSenderReport& report, uint64_t timestamp, uint64_t wallClockNtp) const
@@ -133,21 +148,26 @@ void RtpSenderState::onReceiverBlockReceived(uint64_t timestamp,
     counters.lostPackets = newReport.cumulativeLoss - _remoteReport.cumulativeLoss;
     counters.packets = newReport.extendedSeqNoReceived - _remoteReport.extendedSeqNoReceived;
     counters.period = timestamp - _remoteReport.timestamp;
-    _counters.write(counters);
+    _recentReceived.write(counters);
     _lossSinceSenderReport += counters.lostPackets;
 
     ReportSummary s;
     s.extendedSeqNoReceived = newReport.extendedSeqNoReceived;
     s.sequenceNumberSent = _sendCounters.sequenceNumber;
-    s.lostPackets = counters.lostPackets;
+    s.lostPackets = newReport.cumulativeLoss;
     s.lossFraction = newReport.lossFraction;
-    s.packets = counters.packets;
+    s.packetsSent = _sendCounters.packets;
     s.rttNtp = newReport.rttNtp;
+    s.initialRtpTimestamp = _initialRtpTimestamp;
+    s.rtpTimestamp = _sendCounters.rtpTimestamp;
     _summary.write(s);
 
     _remoteReport = newReport;
 }
 
+/**
+ *  Cumulative send and receive stats. Except for lossFraction that is recent report.
+ * */
 ReportSummary RtpSenderState::getSummary() const
 {
     ReportSummary s;
@@ -156,16 +176,17 @@ ReportSummary RtpSenderState::getSummary() const
 }
 
 /**
- * The packet count is how many packets reported as received so it fits with packet loss count.
- * PacketsPerSecond, bitrateKbps, octets are actual sent.
+ * Recent receive and send counters.
+ * Packets and lost packets are from recent receive report to calculate loss rate between receive reports.
+ * packetsPerSecond, bitrateKbps, octets are actual sent in recent interval.
  */
 PacketCounters RtpSenderState::getCounters() const
 {
     PacketCounters s;
-    _counters.read(s);
+    _recentReceived.read(s);
 
     SendCounters sendReport;
-    _sendReport.read(sendReport);
+    _recentSent.read(sendReport);
 
     s.octets = sendReport.payloadOctets + sendReport.rtcpOctets + sendReport.rtpHeaderOctets;
     s.bitrateKbps = s.octets * 8 * utils::Time::ms / std::max(utils::Time::ms * 10, sendReport.timestamp);

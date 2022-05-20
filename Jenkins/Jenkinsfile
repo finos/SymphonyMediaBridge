@@ -95,7 +95,7 @@ node('be-integration') {
             }
         }
 
-        docker.image('gcr.io/sym-dev-rtc/buildsmb7:latest').inside {
+        docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:latest').inside {
             stage('Create archive') {
                 sh "zip -r ${baseName}-${version}.zip el7/smb/smb el7/smb/versioninfo.txt el7/smb/libs/ el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-focal/smb/smb ubuntu-focal/smb/versioninfo.txt ubuntu-focal/smb/libs/ ubuntu-focal-deb/smb/*.tar.gz ubuntu-focal-deb/smb/*.deb aws-linux/smb/versioninfo.txt aws-linux/smb/libs/ aws-linux/smb/smb"
             }

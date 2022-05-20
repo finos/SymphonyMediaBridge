@@ -196,10 +196,9 @@ api::EndpointDescription::PayloadType parsePatchEndpointPayloadType(const nlohma
     if (data.find("parameters") != data.end())
     {
         const auto& parametersJson = data["parameters"];
-        for (const auto& parameterJson : parametersJson)
+        for (auto it = parametersJson.begin(); it != parametersJson.end(); ++it)
         {
-            payloadType._parameters.emplace_back(
-                std::make_pair(parameterJson["name"].get<std::string>(), parameterJson["value"].get<std::string>()));
+            payloadType._parameters.emplace_back(std::make_pair(it.key(), it.value()));
         }
     }
 
@@ -366,17 +365,20 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             videoChannel._ssrcGroups.emplace_back(std::move(ssrcGroup));
         }
 
-        for (const auto& ssrcAttributeJson : videoJson["ssrc-attributes"])
+        if (videoJson.find("ssrc-attributes") != videoJson.end())
         {
-            api::EndpointDescription::SsrcAttribute ssrcAttribute;
-            ssrcAttribute._content = ssrcAttributeJson["content"].get<std::string>();
-            for (const auto& ssrcJson : ssrcAttributeJson["ssrcs"])
+            for (const auto& ssrcAttributeJson : videoJson["ssrc-attributes"])
             {
-                const auto ssrc =
-                    ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
-                ssrcAttribute._ssrcs.push_back(ssrc);
+                api::EndpointDescription::SsrcAttribute ssrcAttribute;
+                ssrcAttribute._content = ssrcAttributeJson["content"].get<std::string>();
+                for (const auto& ssrcJson : ssrcAttributeJson["ssrcs"])
+                {
+                    const auto ssrc =
+                        ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+                    ssrcAttribute._ssrcs.push_back(ssrc);
+                }
+                videoChannel._ssrcAttributes.push_back(ssrcAttribute);
             }
-            videoChannel._ssrcAttributes.push_back(ssrcAttribute);
         }
 
         if (videoJson.find("ssrc-whitelist") != videoJson.end())

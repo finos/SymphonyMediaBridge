@@ -270,7 +270,6 @@ public:
     Endpoint* createTcpEndpoint(const transport::SocketAddress& baseAddress) override
     {
         auto endpoint = new TcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll);
-        endpoint->configureBufferSizes(512 * 1024, 5 * 1024 * 1024);
         return endpoint;
     }
 
@@ -421,6 +420,14 @@ public:
     }
 
     bool isGood() const override { return _good; }
+
+    void maintenance(uint64_t timestamp) override
+    {
+        for (auto* endpoint : _tcpServerEndpoints)
+        {
+            endpoint->maintenance(timestamp);
+        }
+    }
 
 private:
     void onServerPortClosed(ServerEndpoint& endpoint) override

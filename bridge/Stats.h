@@ -13,14 +13,22 @@ namespace Stats
 
 struct ConnectionsStats
 {
-    uint32_t tcp4;
-    uint32_t udp4;
-    uint32_t tcp6;
-    uint32_t udp6;
+    struct Protocols
+    {
+        uint32_t http = 0;
+        uint32_t rtp = 0;
 
-    ConnectionsStats() : tcp4(0), udp4(0), tcp6(0), udp6(0) {}
+        uint32_t total() const { return http + rtp; }
+    };
 
-    uint32_t tcpTotal() const { return tcp4 + tcp6; }
+    Protocols tcp4;
+    uint32_t udp4 = 0;
+    Protocols tcp6;
+    uint32_t udp6 = 0;
+
+    ConnectionsStats() {}
+
+    uint32_t tcpTotal() const { return tcp4.total() + tcp6.total(); }
     uint32_t udpTotol() const { return udp4 + udp6; }
 };
 
@@ -49,6 +57,7 @@ struct MixerManagerStats
     uint32_t _videoStreams = 0;
     uint32_t _audioStreams = 0;
     uint32_t _dataStreams = 0;
+    uint32_t _largestConference = 0;
     EngineStats::EngineStats _engineStats;
     uint32_t _jobQueueLength = 0;
 
@@ -57,8 +66,6 @@ struct MixerManagerStats
     uint32_t _udpSharedEndpointsSendQueue = 0;
     uint32_t _udpSharedEndpointsReceiveKbps = 0;
     uint32_t _udpSharedEndpointsSendKbps = 0;
-
-    MixerManagerStats() {}
 
     std::string describe();
 };
@@ -69,7 +76,7 @@ struct MixerManagerStats
 class SystemStatsCollector
 {
 public:
-    SystemStats collect();
+    SystemStats collect(uint16_t httpPort, uint16_t tcpRtpPort);
 
 private:
     struct ProcStat
@@ -133,8 +140,8 @@ private:
 #endif
 
     LinuxCpuSample collectLinuxCpuSample(const std::vector<int>& taskIds) const;
-    ConnectionsStats collectLinuxNetStat();
-    ConnectionsStats collectNetStats();
+    ConnectionsStats collectLinuxNetStat(uint16_t httpPort, uint16_t tcpRtpPort);
+    ConnectionsStats collectNetStats(uint16_t httpPort, uint16_t tcpRtpPort);
     std::vector<int> getTaskIds() const;
 };
 

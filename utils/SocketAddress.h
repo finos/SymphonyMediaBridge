@@ -53,7 +53,14 @@ public:
 
     bool empty() const { return _address.gen.sa_family == AF_UNSPEC; }
     bool isLinkLocal() const;
-    static bool isSupported(sockaddr* addr) { return addr->sa_family == AF_INET || addr->sa_family == AF_INET6; }
+    static bool isSupported(sockaddr* addr)
+    {
+        if (!addr)
+        {
+            return false;
+        }
+        return addr->sa_family == AF_INET || addr->sa_family == AF_INET6;
+    }
 
     static std::vector<SocketAddress> activeInterfaces(bool includeLoopback, bool includeLinkLocal);
     static SocketAddress parse(const std::string& ip, uint16_t port = 0);

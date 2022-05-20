@@ -648,7 +648,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
         const auto& bundleTransport = allocateChannel._bundleTransport.get();
         if (!bundleTransport._ice || !bundleTransport._dtls)
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Bundle tranports are supported only using ICE and DTLS");
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Bundle tranports requires both ICE and DTLS");
         }
 
         const auto iceRole = bundleTransport._iceControlling.isSet() && !bundleTransport._iceControlling.get()
@@ -1026,7 +1026,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
     const auto responseBody = api::Generator::generateAllocateEndpointResponse(channelsDescription);
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
     response._headers["Content-type"] = "text/json";
-    logger::debug("PATCH response %s", "RequestHandler", response._body.c_str());
+    logger::debug("POST response %s", "RequestHandler", response._body.c_str());
     requestLogger.setResponse(response);
     return response;
 }

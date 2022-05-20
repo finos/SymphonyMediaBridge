@@ -16,7 +16,7 @@ public:
 
     memory::UniquePacket receive();
 
-    bool isGood() const { return fd != -1; }
+    bool isGood() const { return fd != -1 && _streamPrestine; }
 
     void close();
 
@@ -27,6 +27,7 @@ private:
     size_t _receivedBytes;
     memory::UniquePacket _incompletePacket;
     memory::PacketPoolAllocator& _allocator;
+    bool _streamPrestine;
 };
 
 namespace tcp
@@ -137,6 +138,8 @@ private:
     void onSocketWriteable(int fd) override;
     void onSocketShutdown(int fd) override;
 
+    void sendPacket(const memory::Packet& packet);
+
     jobmanager::JobQueue _receiveJobs;
     jobmanager::JobQueue _sendJobs;
     memory::PacketPoolAllocator& _allocator; // only for ICE
@@ -147,6 +150,7 @@ private:
 
     RtcePoll& _epoll;
     memory::UniquePacket _pendingStunRequest;
+    memory::Packet _remainder;
 };
 
 } // namespace transport
