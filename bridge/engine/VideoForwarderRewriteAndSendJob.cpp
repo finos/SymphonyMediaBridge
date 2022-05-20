@@ -94,6 +94,7 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         _outboundContext._lastKeyFrameSequenceNumber = nextSequenceNumber;
     }
+    rtpHeader->payloadType = _outboundContext._rtpMap._payloadType;
 
     if (_outboundContext._packetCache.isSet() && _outboundContext._packetCache.get())
     {
@@ -102,7 +103,6 @@ void VideoForwarderRewriteAndSendJob::run()
             return;
         }
     }
-    rtpHeader->payloadType = _outboundContext._rtpMap._payloadType;
 
     if (!_transport.isConnected())
     {
