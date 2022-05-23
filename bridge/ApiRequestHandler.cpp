@@ -19,12 +19,26 @@
 #include "transport/ice/IceCandidate.h"
 #include "utils/CheckedCast.h"
 #include "utils/StringTokenizer.h"
+#include "utils/Format.h"
+
 
 namespace
 {
 
 const uint32_t gatheringCompleteMaxWaitMs = 5000;
 const uint32_t gatheringCompleteWaitMs = 100;
+
+
+httpd::Response makeErrorResponse(httpd::StatusCode statusCode, const std::string& message)
+{
+    nlohmann::json errorBody;
+    errorBody["status_code"] = static_cast<uint32_t>(statusCode);
+    errorBody["message"] = message;
+    auto response = httpd::Response(statusCode, errorBody.dump());
+    response._headers["Content-type"] = "text/json";
+    return response;
+}
+
 
 api::EndpointDescription::Candidate iceCandidateToApi(const ice::IceCandidate& iceCandidate)
 {
@@ -141,7 +155,8 @@ bridge::RtpMap makeRtpMap(const api::EndpointDescription::PayloadType& payloadTy
     }
     else
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("rtp payload '%s' not supported", payloadType._name.c_str()));
     }
 
     for (const auto& parameter : payloadType._parameters)
@@ -277,26 +292,25 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDes
     return simulcastStreams;
 }
 
-bool makeTransportType(const std::string& protocol, ice::TransportType& outTransportType)
+ice::TransportType parseTransportType(const std::string& protocol)
 {
     if (protocol.compare("udp") == 0)
     {
-        outTransportType = ice::TransportType::UDP;
-    }
-    else if (protocol.compare("tcp") == 0)
-    {
-        outTransportType = ice::TransportType::TCP;
-    }
-    else if (protocol.compare("ssltcp") == 0)
-    {
-        outTransportType = ice::TransportType::SSLTCP;
-    }
-    else
-    {
-        return false;
+        return ice::TransportType::UDP;
     }
 
-    return true;
+    if (protocol.compare("tcp") == 0)
+    {
+        return ice::TransportType::TCP;
+    }
+
+    if (protocol.compare("ssltcp") == 0)
+    {
+        return ice::TransportType::SSLTCP;
+    }
+
+    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+        utils::format("Transport protocol type '%s' not supported", protocol.c_str()));
 }
 
 bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::EndpointDescription::Video& video)
@@ -337,12 +351,7 @@ std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> g
 
     for (const auto& candidate : ice._candidates)
     {
-        ice::TransportType transportType;
-        if (!makeTransportType(candidate._protocol, transportType))
-        {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
-        }
-
+        const ice::TransportType transportType = parseTransportType(candidate._protocol);
         if (candidate._type.compare("host") == 0)
         {
             candidates.emplace_back(candidate._foundation.c_str(),
@@ -435,21 +444,23 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                 }
                 else
                 {
-                    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED);
+                    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+                            utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
                 }
             }
             else if (utils::StringTokenizer::isEqual(token, "conferences") && token.next)
             {
                 if (request._method != httpd::Method::POST)
                 {
-                    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED);
+                    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+                        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
                 }
 
                 token = utils::StringTokenizer::tokenize(token, '/');
                 const auto conferenceId = token.str();
                 if (!token.next)
                 {
-                    throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
+                    throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, "Endpoint not found");
                 }
                 token = utils::StringTokenizer::tokenize(token, '/');
                 const auto endpointId = token.str();
@@ -459,7 +470,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                 const auto actionJsonItr = requestBodyJson.find("action");
                 if (actionJsonItr == requestBodyJson.end())
                 {
-                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Missing required json property: action");
                 }
                 const auto& action = actionJsonItr->get<std::string>();
 
@@ -489,34 +500,49 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                 }
                 else
                 {
-                    logger::warn("failed to perform action %s", "RequestHandler", action.c_str());
-                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+                        utils::format("Action '%s' is not supported", action.c_str()));
                 }
             }
         }
         catch (httpd::RequestErrorException e)
         {
-            httpd::Response response(e.getStatusCode());
+            auto response = makeErrorResponse(e.getStatusCode(), e.getMessage());
             requestLogger.setResponse(response);
+            requestLogger.setErrorMessage(e.getMessage());
             return response;
         }
-        catch (nlohmann::detail::parse_error)
+        catch (nlohmann::detail::parse_error e)
         {
             logger::warn("Error parsing json", "RequestHandler");
-            httpd::Response response(httpd::StatusCode::BAD_REQUEST);
+            std::string errorMessage = "Invalid json format";
+            auto response = makeErrorResponse(httpd::StatusCode::BAD_REQUEST, errorMessage);
             requestLogger.setResponse(response);
+            requestLogger.setErrorMessage(errorMessage);
             return response;
         }
-        catch (std::exception)
+        catch (nlohmann::detail::exception e)
+        {
+            logger::warn("Error processing json", "RequestHandler");
+            std::string message = "nlohmann:" + std::string(e.what());
+            auto response = makeErrorResponse(httpd::StatusCode::BAD_REQUEST, message);
+            requestLogger.setResponse(response);
+            requestLogger.setErrorMessage(message);
+            return response;
+        }
+        catch (std::exception e)
         {
             logger::error("Exception in createConference", "RequestHandler");
-            httpd::Response response(httpd::StatusCode::BAD_REQUEST);
+            auto response = makeErrorResponse(httpd::StatusCode::BAD_REQUEST, e.what());
             requestLogger.setResponse(response);
+            requestLogger.setErrorMessage(e.what());
             return response;
         }
 
-        httpd::Response response(httpd::StatusCode::NOT_FOUND);
+        const auto errorMessage = utils::format("URL is not point to a valid endpoint: '%s'", request._url.c_str());
+        auto response = makeErrorResponse(httpd::StatusCode::NOT_FOUND, errorMessage);
         requestLogger.setResponse(response);
+        requestLogger.setErrorMessage(errorMessage);
         return response;
     }
     catch (...)
@@ -573,7 +599,7 @@ httpd::Response ApiRequestHandler::allocateConference(RequestLogger& requestLogg
     const auto requestBodyJson = nlohmann::json::parse(requestBody);
     if (!requestBodyJson.is_object())
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Allocate conference endpoint expects a json object");
     }
 
     const auto allocateConference = api::Parser::parseAllocateConference(requestBodyJson);
@@ -582,7 +608,7 @@ httpd::Response ApiRequestHandler::allocateConference(RequestLogger& requestLogg
                                                    : _mixerManager.create();
     if (!mixer)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+        throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Conference creation has failed");
     }
 
     logger::info("Allocate conference %s, mixer %s, last-n %d",
@@ -610,7 +636,8 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
     assert(scopedMixerLock.owns_lock());
     if (!mixer)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
+            utils::format("Conference '%s' not found", conferenceId.c_str()));
     }
 
     utils::Optional<std::string> audioChannelId;
@@ -622,8 +649,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
         const auto& bundleTransport = allocateChannel._bundleTransport.get();
         if (!bundleTransport._ice || !bundleTransport._dtls)
         {
-            logger::warn("ICE and DTLS are required", "ApiRequestHandler");
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Bundle transports requires both ICE and DTLS");
         }
 
         const auto iceRole = bundleTransport._iceControlling.isSet() && !bundleTransport._iceControlling.get()
@@ -641,7 +667,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             std::string outChannelId;
             if (!mixer->addBundledAudioStream(outChannelId, endpointId, mixed, ssrcRewrite))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "It was not possible to add bundled audio stream. Usually happens due to an already existing audio stream");
             }
             audioChannelId.set(outChannelId);
         }
@@ -654,7 +680,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             std::string outChannelId;
             if (!mixer->addBundledVideoStream(outChannelId, endpointId, ssrcRewrite))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Add bundled video stream has failed");
             }
             videoChannelId.set(outChannelId);
         }
@@ -664,7 +690,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             std::string outChannelId;
             if (!mixer->addBundledDataStream(outChannelId, endpointId))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Add bundled data channel has failed");
             }
             dataChannelId.set(outChannelId);
         }
@@ -676,7 +702,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             const auto& audio = allocateChannel._audio.get();
             if (!audio._transport.isSet())
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Transport specification of audio channel is required");
             }
 
             const auto& transport = audio._transport.get();
@@ -692,7 +718,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             std::string outChannelId;
             if (!mixer->addAudioStream(outChannelId, endpointId, iceRole, mixed, false))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Adding audio stream has failed");
             }
             audioChannelId.set(outChannelId);
         }
@@ -702,7 +728,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             const auto& video = allocateChannel._video.get();
             if (!video._transport.isSet())
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Transport specification of video channel is required");
             }
 
             const auto& transport = video._transport.get();
@@ -717,14 +743,14 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             std::string outChannelId;
             if (!mixer->addVideoStream(outChannelId, endpointId, iceRole, false))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Adding video stream has failed");
             }
             videoChannelId.set(outChannelId);
         }
 
         if (allocateChannel._data.isSet())
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Data channels are not supported for non-bundled transports");
         }
     }
 
@@ -779,7 +805,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
             mixer->removeDataStream(dataChannelId.get());
         }
 
-        throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+        throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Candidates gathering timeout");
     }
 
     return generateAllocateEndpointResponse(requestLogger, allocateChannel, *mixer, conferenceId, endpointId);
@@ -803,13 +829,13 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
         TransportDescription transportDescription;
         if (!mixer.getTransportBundleDescription(endpointId, transportDescription))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to get bundled description");
         }
 
         if (!bundleTransport._ice || !bundleTransport._dtls)
         {
-            logger::warn("Bundling without ice not supported, conference %s", "RequestHandler", conferenceId.c_str());
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+                utils::format("Bundling without ice is not supported, conference %s", conferenceId.c_str()));
         }
 
         const auto& transportDescriptionIce = transportDescription._ice.get();
@@ -847,7 +873,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
         if (!mixer.getAudioStreamDescription(endpointId, streamDescription) ||
             !mixer.getAudioStreamTransportDescription(endpointId, transportDescription))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to get audio description");
         }
 
         responseAudio._ssrcs = streamDescription._localSsrcs;
@@ -913,7 +939,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
         if (!mixer.getVideoStreamDescription(endpointId, streamDescription) ||
             !mixer.getVideoStreamTransportDescription(endpointId, transportDescription))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to get video description");
         }
 
         responseVideo._ssrcs = streamDescription._localSsrcs;
@@ -991,7 +1017,7 @@ httpd::Response ApiRequestHandler::generateAllocateEndpointResponse(RequestLogge
         DataStreamDescription streamDescription;
         if (!mixer.getDataStreamDescription(endpointId, streamDescription))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to get data stream description");
         }
 
         responseData._port = streamDescription._sctpPort.isSet() ? streamDescription._sctpPort.get() : 5000;
@@ -1016,7 +1042,8 @@ httpd::Response ApiRequestHandler::configureEndpoint(RequestLogger& requestLogge
     assert(scopedMixerLock.owns_lock());
     if (!mixer)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
+            utils::format("Conference '%s' not found", conferenceId.c_str()));
     }
 
     if (endpointDescription._audio.isSet())
@@ -1045,7 +1072,7 @@ httpd::Response ApiRequestHandler::configureEndpoint(RequestLogger& requestLogge
                     candidatesAndCredentials.second,
                     candidatesAndCredentials.first))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Bundled transport ICE configuration has failed");
             }
         }
 
@@ -1056,13 +1083,13 @@ httpd::Response ApiRequestHandler::configureEndpoint(RequestLogger& requestLogge
 
             if (!mixer->configureBundleTransportDtls(endpointId, dtls._type, dtls._hash, !isRemoteSideDtlsClient))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Bundled transport DTLS configuration has failed");
             }
         }
 
         if (!mixer->startBundleTransport(endpointId))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Start bundled transport has failed");
         }
     }
 
@@ -1078,9 +1105,14 @@ void ApiRequestHandler::configureAudioEndpoint(const api::EndpointDescription& e
     const std::string& endpointId)
 {
     const auto& audio = endpointDescription._audio.get();
-    if (mixer.isAudioStreamConfigured(endpointId) || !audio._payloadType.isSet())
+    if (mixer.isAudioStreamConfigured(endpointId))
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Audio stream was configured already");
+    }
+
+    if (!audio._payloadType.isSet())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Audio payload type is required");
     }
 
     const auto rtpMap = makeRtpMap(audio._payloadType.get());
@@ -1103,7 +1135,8 @@ void ApiRequestHandler::configureAudioEndpoint(const api::EndpointDescription& e
 
     if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, audioLevelExtensionId, absSendTimeExtensionId))
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Audio stream not found for endpoint '%s'", endpointId.c_str()));
     }
 
     if (audio._transport.isSet())
@@ -1116,7 +1149,7 @@ void ApiRequestHandler::configureAudioEndpoint(const api::EndpointDescription& e
                     candidatesAndCredentials.second,
                     candidatesAndCredentials.first))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "ICE configuration for audio stream has failed");
             }
         }
         else if (transport._connection.isSet())
@@ -1125,7 +1158,7 @@ void ApiRequestHandler::configureAudioEndpoint(const api::EndpointDescription& e
             const auto remotePeer = transport::SocketAddress::parse(connection._ip, connection._port);
             if (!mixer.configureAudioStreamTransportConnection(endpointId, remotePeer))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Transport connection configuration for audio stream has failed");
             }
         }
 
@@ -1136,27 +1169,27 @@ void ApiRequestHandler::configureAudioEndpoint(const api::EndpointDescription& e
 
             if (!mixer.configureAudioStreamTransportDtls(endpointId, dtls._type, dtls._hash, !isRemoteSideDtlsClient))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "DTLS configuration for audio stream has failed");
             }
         }
         else
         {
             if (!mixer.configureAudioStreamTransportDisableDtls(endpointId))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Disabling DTLS for audio stream has failed");
             }
         }
 
         if (!mixer.addAudioStreamToEngine(endpointId) || !mixer.startAudioStreamTransport(endpointId))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to start audio stream");
         }
     }
     else
     {
         if (!mixer.addAudioStreamToEngine(endpointId))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to add audio stream");
         }
     }
 }
@@ -1166,9 +1199,14 @@ void ApiRequestHandler::configureVideoEndpoint(const api::EndpointDescription& e
     const std::string& endpointId)
 {
     const auto& video = endpointDescription._video.get();
-    if (mixer.isVideoStreamConfigured(endpointId) || video._payloadTypes.empty())
+    if (mixer.isVideoStreamConfigured(endpointId))
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Video stream was configured already");
+    }
+
+    if (video._payloadTypes.empty())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Video payload type is required");
     }
 
     std::vector<RtpMap> rtpMaps;
@@ -1182,7 +1220,7 @@ void ApiRequestHandler::configureVideoEndpoint(const api::EndpointDescription& e
     auto simulcastStreams = makeSimulcastStreams(video, endpointId);
     if (simulcastStreams.size() > 2)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Max simulcast streams allowed is 2");
     }
 
     utils::Optional<SimulcastStream> secondarySimulcastStream;
@@ -1207,7 +1245,7 @@ void ApiRequestHandler::configureVideoEndpoint(const api::EndpointDescription& e
             absSendTimeExtensionId,
             ssrcWhitelist))
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Max simulcast streams allowed is 2");
     }
 
     if (video._transport.isSet())
@@ -1221,7 +1259,7 @@ void ApiRequestHandler::configureVideoEndpoint(const api::EndpointDescription& e
                     candidatesAndCredentials.second,
                     candidatesAndCredentials.first))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Video stream configuration has failed");
             }
         }
         else if (transport._connection.isSet())
@@ -1230,7 +1268,7 @@ void ApiRequestHandler::configureVideoEndpoint(const api::EndpointDescription& e
             const auto remotePeer = transport::SocketAddress::parse(connection._ip, connection._port);
             if (!mixer.configureVideoStreamTransportConnection(endpointId, remotePeer))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Transport connection configuration for video stream has failed");
             }
         }
 
@@ -1241,27 +1279,27 @@ void ApiRequestHandler::configureVideoEndpoint(const api::EndpointDescription& e
 
             if (!mixer.configureVideoStreamTransportDtls(endpointId, dtls._type, dtls._hash, !isRemoteSideDtlsClient))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Disabling DTLS for video stream has failed");
             }
         }
         else
         {
             if (!mixer.configureVideoStreamTransportDisableDtls(endpointId))
             {
-                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Disabling DTLS for video stream has failed");
             }
         }
 
         if (!mixer.addVideoStreamToEngine(endpointId) || !mixer.startVideoStreamTransport(endpointId))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to start video stream");
         }
     }
     else
     {
         if (!mixer.addVideoStreamToEngine(endpointId))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to add video stream");
         }
     }
 }
@@ -1273,7 +1311,7 @@ void ApiRequestHandler::configureDataEndpoint(const api::EndpointDescription& en
     const auto& data = endpointDescription._data.get();
     if (!mixer.configureDataStream(endpointId, data._port) || !mixer.addDataStreamToEngine(endpointId))
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+       throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to add data stream");
     }
 }
 
@@ -1287,12 +1325,18 @@ httpd::Response ApiRequestHandler::reconfigureEndpoint(RequestLogger& requestLog
     assert(scopedMixerLock.owns_lock());
     if (!mixer)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
+            utils::format("Conference '%s' not found", conferenceId.c_str()));
     }
 
-    if (!mixer->isAudioStreamConfigured(endpointId) || !mixer->isVideoStreamConfigured(endpointId))
+    if (!mixer->isAudioStreamConfigured(endpointId))
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Can't reconfigure audio because it was not configured in first place");
+    }
+
+    if (!mixer->isVideoStreamConfigured(endpointId))
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Can't reconfigure video because it was not configured in first place");
     }
 
     if (endpointDescription._audio.isSet())
@@ -1306,7 +1350,7 @@ httpd::Response ApiRequestHandler::reconfigureEndpoint(RequestLogger& requestLog
 
         if (!mixer->reconfigureAudioStream(endpointId, remoteSsrc))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to reconfigure audio stream");
         }
     }
 
@@ -1316,7 +1360,7 @@ httpd::Response ApiRequestHandler::reconfigureEndpoint(RequestLogger& requestLog
         auto simulcastStreams = makeSimulcastStreams(video, endpointId);
         if (simulcastStreams.size() > 2)
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Max simulcast streams allowed is 2");
         }
 
         if (simulcastStreams.empty())
@@ -1335,7 +1379,7 @@ httpd::Response ApiRequestHandler::reconfigureEndpoint(RequestLogger& requestLog
         const auto ssrcWhitelist = makeWhitelistedSsrcsArray(video);
         if (!mixer->reconfigureVideoStream(endpointId, simulcastStreams[0], secondarySimulcastStream, ssrcWhitelist))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to reconfigure video stream");
         }
     }
 
@@ -1355,7 +1399,8 @@ httpd::Response ApiRequestHandler::recordEndpoint(RequestLogger& requestLogger,
     assert(scopedMixerLock.owns_lock());
     if (!mixer)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
+            utils::format("Conference '%s' not found", conferenceId.c_str()));
     }
 
     const bool isRecordingStart =
@@ -1372,21 +1417,22 @@ httpd::Response ApiRequestHandler::recordEndpoint(RequestLogger& requestLogger,
 
         if (!mixer->addOrUpdateRecording(conferenceId, recording._channels, description))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to create/update recording streams");
         }
     }
     else if (!recording._channels.empty())
     {
         if (!mixer->removeRecordingTransports(conferenceId, recording._channels))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to remove recording channels");
         }
     }
     else
     {
         if (!mixer->removeRecording(recording._recordingId))
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR);
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
+                utils::format("Fail to remove recording id '%s'", recording._recordingId.c_str()));
         }
     }
 
@@ -1406,7 +1452,8 @@ httpd::Response ApiRequestHandler::expireEndpoint(RequestLogger& requestLogger,
     assert(scopedMixerLock.owns_lock());
     if (!mixer)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND);
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
+            utils::format("Conference '%s' not found", conferenceId.c_str()));
     }
 
     mixer->removeAudioStream(endpointId);
