@@ -26,12 +26,12 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
         if (senderInboundContext._rtpMap._audioLevelExtId.isSet() &&
             rtpHeaderExtension.getId() == senderInboundContext._rtpMap._audioLevelExtId.get())
         {
-            rtpHeaderExtension.setId(senderInboundContext._rtpMap._audioLevelExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._audioLevelExtId.get());
         }
         else if (senderInboundContext._rtpMap._absSendTimeExtId.isSet() &&
             rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
         {
-            rtpHeaderExtension.setId(senderInboundContext._rtpMap._absSendTimeExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
         }
     }
 }

@@ -26,7 +26,7 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
         if (senderInboundContext._rtpMap._absSendTimeExtId.isSet() &&
             rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
         {
-            rtpHeaderExtension.setId(senderInboundContext._rtpMap._absSendTimeExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
             return;
         }
     }
