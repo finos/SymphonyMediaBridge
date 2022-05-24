@@ -70,6 +70,7 @@ public:
 
     virtual void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) = 0;
     virtual void setAbsSendTimeExtensionId(uint8_t extensionId) = 0;
+    virtual void setVideoRtxPayloadType(const uint16_t payloadType) = 0;
 
     virtual bool isIceEnabled() const = 0;
     virtual bool isDtlsEnabled() const = 0;

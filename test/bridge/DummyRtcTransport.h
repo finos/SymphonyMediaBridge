@@ -45,6 +45,7 @@ public:
     bool isDtlsClient() override { return true; }
     void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) override {}
     void setAbsSendTimeExtensionId(uint8_t extensionId) override {}
+    void setVideoRtxPayloadType(const uint16_t payloadType) override {}
     bool start() override { return true; }
     bool isIceEnabled() const override { return true; }
     bool isDtlsEnabled() const override { return true; }

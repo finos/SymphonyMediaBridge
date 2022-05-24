@@ -27,8 +27,6 @@
 namespace transport
 {
 
-constexpr uint32_t rtxPayloadType = 96;
-
 // we have to serialize operations on srtp client
 // timers, start and receive must be done from same serialized jobmanager.
 class PacketReceiveJob : public jobmanager::Job
@@ -430,6 +428,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _inboundSsrcCounters(16),
       _isRunning(true),
       _absSendTimeExtensionId(0),
+      _videoRtxPayloadType(0),
       _sctpConfig(sctpConfig),
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
@@ -516,6 +515,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _inboundSsrcCounters(16),
       _isRunning(true),
       _absSendTimeExtensionId(0),
+      _videoRtxPayloadType(0),
       _sctpConfig(sctpConfig),
       _bwe(std::make_unique<bwe::BandwidthEstimator>(bweConfig)),
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
@@ -1408,7 +1408,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
             padPacket->setLength(padding);
             auto padRtpHeader = rtp::RtpHeader::create(*padPacket);
             padRtpHeader->ssrc = _rtxProbeSsrc;
-            padRtpHeader->payloadType = rtxPayloadType;
+            padRtpHeader->payloadType = _videoRtxPayloadType;
             padRtpHeader->timestamp = rtpTimeStamp;
             padRtpHeader->sequenceNumber = (*_rtxProbeSequenceCounter)++ & 0xFFFF;
             padRtpHeader->padding = 1;
@@ -1488,7 +1488,7 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
 
         clearPacingQueueIfFull(_pacingQueue);
         clearPacingQueueIfFull(_rtxPacingQueue);
-        if (payloadType == rtxPayloadType)
+        if (payloadType == _videoRtxPayloadType)
         {
             _rtxPacingQueue.push_front(std::move(packet));
         }
@@ -2205,6 +2205,11 @@ void TransportImpl::setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequen
 void TransportImpl::setAbsSendTimeExtensionId(uint8_t extensionId)
 {
     _absSendTimeExtensionId = extensionId;
+}
+
+void TransportImpl::setVideoRtxPayloadType(const uint16_t payloadType)
+{
+    _videoRtxPayloadType = payloadType;
 }
 
 uint16_t TransportImpl::allocateOutboundSctpStream()

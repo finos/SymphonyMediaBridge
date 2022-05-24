@@ -1,5 +1,4 @@
 #include "bridge/engine/VideoNackReceiveJob.h"
-#include "bridge/RtpMap.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "rtp/RtpHeader.h"
@@ -133,7 +132,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     }
 
     rtpHeader->ssrc = _feedbackSsrc;
-    rtpHeader->payloadType = static_cast<uint16_t>(RtpMap::Format::VP8RTX);
+    rtpHeader->payloadType = _ssrcOutboundContext._rtpMap._payloadType;
     rtpHeader->sequenceNumber = _ssrcOutboundContext._sequenceCounter & 0xFFFF;
     ++_ssrcOutboundContext._sequenceCounter;
 
