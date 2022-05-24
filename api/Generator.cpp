@@ -76,13 +76,11 @@ nlohmann::json generatePayloadType(const api::EndpointDescription::PayloadType& 
     payloadTypeJson["clockrate"] = payloadType._clockRate;
     setIfExists(payloadTypeJson, "channels", payloadType._channels);
 
-    payloadTypeJson["parameters"] = nlohmann::json::array();
-    nlohmann::json parameterJson;
+    payloadTypeJson["parameters"] = nlohmann::json::object();
+
     for (const auto& parameter : payloadType._parameters)
     {
-        parameterJson["name"] = parameter.first;
-        parameterJson["value"] = parameter.second;
-        payloadTypeJson["parameters"].push_back(parameterJson);
+        payloadTypeJson["parameters"][parameter.first] = parameter.second;
     }
 
     payloadTypeJson["rtcp-fbs"] = nlohmann::json::array();
