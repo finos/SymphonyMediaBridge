@@ -228,10 +228,10 @@ public class Parser {
         audio.rtcpFbs.put(smbAudio.payloadType.id, rtcpFbs);
 
         final var fmtpsStringBuilder = new StringBuilder();
-        for (var parameter : smbAudio.payloadType.parameters) {
-            fmtpsStringBuilder.append(parameter.name);
+        for (var parameter : smbAudio.payloadType.parameters.entrySet()) {
+            fmtpsStringBuilder.append(parameter.getKey());
             fmtpsStringBuilder.append("=");
-            fmtpsStringBuilder.append(parameter.value);
+            fmtpsStringBuilder.append(parameter.getValue());
             fmtpsStringBuilder.append(";");
         }
         audio.fmtps.put(smbAudio.payloadType.id, fmtpsStringBuilder.toString());
@@ -280,10 +280,10 @@ public class Parser {
             video.rtcpFbs.put(smbPayloadType.id, rtcpFbs);
 
             final var fmtpsStringBuilder = new StringBuilder();
-            for (var parameter : smbPayloadType.parameters) {
-                fmtpsStringBuilder.append(parameter.name);
+            for (var parameter : smbPayloadType.parameters.entrySet()) {
+                fmtpsStringBuilder.append(parameter.getKey());
                 fmtpsStringBuilder.append("=");
-                fmtpsStringBuilder.append(parameter.value);
+                fmtpsStringBuilder.append(parameter.getValue());
                 fmtpsStringBuilder.append(";");
             }
             video.fmtps.put(smbPayloadType.id, fmtpsStringBuilder.toString());
@@ -356,16 +356,12 @@ public class Parser {
                 audio.payloadType.clockrate = mediaDescription.rtpMaps.get(firstPayloadType).clockRate;
                 audio.payloadType.channels = mediaDescription.rtpMaps.get(firstPayloadType).parameter;
 
-                audio.payloadType.parameters = new ArrayList<>();
                 final var parameters = mediaDescription.fmtps.get(firstPayloadType);
                 if (parameters != null) {
                     final var parametersSplit = mediaDescription.fmtps.get(firstPayloadType).split(";");
                     for (final var parameter : parametersSplit) {
                         final var split = parameter.split("=");
-                        final var smbParameter = new SmbPayloadType.Parameter();
-                        smbParameter.name = split[0];
-                        smbParameter.value = split[1];
-                        audio.payloadType.parameters.add(smbParameter);
+                        audio.payloadType.addParameter(split[0], split[1]);
                     }
                 }
 
@@ -401,16 +397,12 @@ public class Parser {
                     smbPayloadType.clockrate = mediaDescription.rtpMaps.get(payloadType).clockRate;
                     smbPayloadType.channels = null;
 
-                    smbPayloadType.parameters = new ArrayList<>();
                     final var parameters = mediaDescription.fmtps.get(payloadType);
                     if (parameters != null) {
                         final var parametersSplit = mediaDescription.fmtps.get(payloadType).split(";");
                         for (final var parameter : parametersSplit) {
                             final var split = parameter.split("=");
-                            final var smbParameter = new SmbPayloadType.Parameter();
-                            smbParameter.name = split[0];
-                            smbParameter.value = split[1];
-                            smbPayloadType.parameters.add(smbParameter);
+                            smbPayloadType.addParameter(split[0], split[1]);
                         }
                     }
 

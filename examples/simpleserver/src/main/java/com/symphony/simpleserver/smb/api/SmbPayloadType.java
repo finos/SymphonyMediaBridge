@@ -1,7 +1,9 @@
 package com.symphony.simpleserver.smb.api;
 
+import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonSetter;
-
+import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 
 public class SmbPayloadType {
@@ -10,17 +12,18 @@ public class SmbPayloadType {
         public String subtype;
     }
 
-    public static class Parameter {
-        public String name;
-        public String value;
-    }
-
     public Integer id;
     public String name;
     public Integer clockrate;
     public Integer channels;
-    public List<Parameter> parameters;
+    public Map<String, Object> parameters = new HashMap<String, Object>();
 
+    @JsonAnySetter
+    public void addParameter(String key, Object value){
+        parameters.put(key, value);
+    }
+
+        
     @JsonSetter("rtcp-fbs")
     public List<RtcpFeedback> rtcpFeedbacks;
 }
