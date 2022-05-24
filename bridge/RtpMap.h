@@ -72,6 +72,8 @@ struct RtpMap
     utils::Optional<uint32_t> _channels;
     std::unordered_map<std::string, std::string> _parameters;
     std::vector<std::pair<std::string, utils::Optional<std::string>>> _rtcpFeedbacks;
+    utils::Optional<uint8_t> _audioLevelExtId;
+    utils::Optional<uint8_t> _absSendTimeExtId;
 };
 
 } // namespace bridge

@@ -1000,15 +1000,12 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
 
     audioStream->_rtpMap = rtpMap;
     audioStream->_remoteSsrc = remoteSsrc;
-    if (audioLevelExtensionId.isSet())
-    {
-        audioStream->_audioLevelExtensionId = audioLevelExtensionId.get();
-    }
+    audioStream->_rtpMap._audioLevelExtId = audioLevelExtensionId;
     audioStream->_transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
-    if (absSendTimeExtensionId.isSet())
+    audioStream->_rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+    if (audioStream->_rtpMap._absSendTimeExtId.isSet())
     {
-        audioStream->_absSendTimeExtensionId = absSendTimeExtensionId.get();
-        audioStream->_transport->setAbsSendTimeExtensionId(absSendTimeExtensionId.get());
+        audioStream->_transport->setAbsSendTimeExtensionId(audioStream->_rtpMap._absSendTimeExtId.get());
     }
     return true;
 }
@@ -1111,10 +1108,10 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
         videoStream->_secondarySimulcastStream = secondarySimulcastStream;
     }
 
-    if (absSendTimeExtensionId.isSet())
+    videoStream->_rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+    if (videoStream->_rtpMap._absSendTimeExtId.isSet())
     {
-        videoStream->_absSendTimeExtensionId = absSendTimeExtensionId.get();
-        videoStream->_transport->setAbsSendTimeExtensionId(absSendTimeExtensionId.get());
+        videoStream->_transport->setAbsSendTimeExtensionId(videoStream->_rtpMap._absSendTimeExtId.get());
     }
 
     std::memcpy(&videoStream->_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
@@ -1430,8 +1427,6 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
             audioStream->_localSsrc,
             audioStream->_remoteSsrc,
             *(audioStream->_transport.get()),
-            audioStream->_audioLevelExtensionId,
-            audioStream->_absSendTimeExtensionId,
             audioStream->_audioMixed,
             audioStream->_rtpMap,
             audioStream->_ssrcRewrite));
@@ -1471,7 +1466,6 @@ bool Mixer::addVideoStreamToEngine(const std::string& endpointId)
             *(videoStream->_transport.get()),
             videoStream->_rtpMap,
             videoStream->_feedbackRtpMap,
-            videoStream->_absSendTimeExtensionId,
             videoStream->_ssrcWhitelist,
             videoStream->_ssrcRewrite,
             _videoPinSsrcs));

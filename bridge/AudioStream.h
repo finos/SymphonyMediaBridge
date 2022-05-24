@@ -23,10 +23,7 @@ struct AudioStream
           _endpointIdHash(std::hash<std::string>{}(_endpointId)),
           _localSsrc(localSsrc),
           _transport(transport),
-          _audioLevelExtensionId(-1),
-          _absSendTimeExtensionId(0),
           _audioMixed(audioMixed),
-          _rtpMap(),
           _markedForDeletion(false),
           _ssrcRewrite(ssrcRewrite),
           _isConfigured(false)
@@ -40,8 +37,6 @@ struct AudioStream
     utils::Optional<uint32_t> _remoteSsrc;
 
     std::shared_ptr<transport::RtcTransport> _transport;
-    int32_t _audioLevelExtensionId;
-    uint8_t _absSendTimeExtensionId;
     bool _audioMixed;
 
     bridge::RtpMap _rtpMap;

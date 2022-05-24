@@ -25,7 +25,6 @@ struct VideoStream
           _localSsrc(localSsrc),
           _simulcastStream{0},
           _transport(transport),
-          _absSendTimeExtensionId(0),
           _markedForDeletion(false),
           _ssrcRewrite(ssrcRewrite),
           _isConfigured(false)
@@ -42,7 +41,6 @@ struct VideoStream
 
     bridge::RtpMap _rtpMap;
     bridge::RtpMap _feedbackRtpMap;
-    uint8_t _absSendTimeExtensionId;
 
     SsrcWhitelist _ssrcWhitelist;
 

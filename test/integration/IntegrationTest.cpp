@@ -842,7 +842,7 @@ public:
             transport::RtcTransport* transport,
             uint64_t timestamp)
             : _rtpMap(rtpMap),
-              _context(ssrc, _rtpMap, 1, transport, timestamp),
+              _context(ssrc, _rtpMap, transport, timestamp),
               _loggableId("rtprcv", instanceId)
         {
             _recording.reserve(256 * 1024);
@@ -913,10 +913,12 @@ public:
         auto it = _receivedData.find(rtpHeader->ssrc.get());
         if (it == _receivedData.end())
         {
+            bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
+            rtpMap._audioLevelExtId.set(1);
             _receivedData.emplace(rtpHeader->ssrc.get(),
                 new RtpReceiver(_loggableId.getInstanceId(),
                     rtpHeader->ssrc.get(),
-                    bridge::RtpMap(bridge::RtpMap::Format::OPUS, 111, codec::Opus::sampleRate),
+                    rtpMap,
                     sender,
                     timestamp));
             it = _receivedData.find(rtpHeader->ssrc.get());

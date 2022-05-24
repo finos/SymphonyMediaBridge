@@ -29,7 +29,6 @@ struct EngineVideoStream
         transport::RtcTransport& transport,
         const bridge::RtpMap& rtpMap,
         const bridge::RtpMap& feedbackRtpMap,
-        const uint8_t absSendTimeExtensionId,
         const SsrcWhitelist& ssrcWhitelist,
         const bool ssrcRewrite,
         const std::vector<SimulcastLevel>& videoPinSsrcs)
@@ -42,7 +41,6 @@ struct EngineVideoStream
           _transport(transport),
           _rtpMap(rtpMap),
           _feedbackRtpMap(feedbackRtpMap),
-          _absSendTimeExtensionId(absSendTimeExtensionId),
           _ssrcRewrite(ssrcRewrite),
           _videoPinSsrcs(SsrcRewrite::ssrcArraySize)
     {
@@ -86,8 +84,6 @@ struct EngineVideoStream
 
     bridge::RtpMap _rtpMap;
     bridge::RtpMap _feedbackRtpMap;
-
-    uint8_t _absSendTimeExtensionId;
 
     SsrcWhitelist _ssrcWhitelist;
     bool _ssrcRewrite;

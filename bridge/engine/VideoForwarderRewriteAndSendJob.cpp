@@ -6,6 +6,34 @@
 #include "transport/Transport.h"
 #include "utils/OutboundSequenceNumber.h"
 
+namespace
+{
+
+inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
+    const bridge::SsrcInboundContext& senderInboundContext,
+    const bridge::SsrcOutboundContext& receiverOutboundContext)
+{
+    assert(rtpHeader);
+
+    const auto headerExtensions = rtpHeader->getExtensionHeader();
+    if (!headerExtensions)
+    {
+        return;
+    }
+
+    for (auto& rtpHeaderExtension : headerExtensions->extensions())
+    {
+        if (senderInboundContext._rtpMap._absSendTimeExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
+        {
+            rtpHeaderExtension.setId(senderInboundContext._rtpMap._absSendTimeExtId.get());
+            return;
+        }
+    }
+}
+
+} // namespace
+
 namespace bridge
 {
 
@@ -34,9 +62,8 @@ void VideoForwarderRewriteAndSendJob::run()
     }
 
     bool isRetransmittedPacket = false;
-    if (rtpHeader->payloadType == static_cast<uint16_t>(RtpMap::Format::VP8RTX))
+    if (_outboundContext._rtpMap._format == RtpMap::Format::VP8RTX)
     {
-        rtpHeader->payloadType = static_cast<uint16_t>(RtpMap::Format::VP8);
         isRetransmittedPacket = true;
     }
 
@@ -95,6 +122,7 @@ void VideoForwarderRewriteAndSendJob::run()
         _outboundContext._lastKeyFrameSequenceNumber = nextSequenceNumber;
     }
     rtpHeader->payloadType = _outboundContext._rtpMap._payloadType;
+    rewriteHeaderExtensions(rtpHeader, _senderInboundContext, _outboundContext);
 
     if (_outboundContext._packetCache.isSet() && _outboundContext._packetCache.get())
     {

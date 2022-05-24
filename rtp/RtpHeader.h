@@ -26,7 +26,8 @@ public:
         data[0] = 0;
     }
 
-    uint8_t getId() const { return _id; }
+    inline uint8_t getId() const { return _id; }
+    inline void setId(const uint8_t id) { _id = id; }
     void setDataLength(uint8_t length);
     uint8_t getDataLength() const;
 

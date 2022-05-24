@@ -12,16 +12,12 @@ namespace bridge
 EncodeJob::EncodeJob(memory::UniqueAudioPacket packet,
     SsrcOutboundContext& outboundContext,
     transport::Transport& transport,
-    uint64_t rtpTimestamp,
-    uint8_t audioLevelExtensionId,
-    uint8_t absSendTimeExtensionId)
+    const uint64_t rtpTimestamp)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _packet(std::move(packet)),
       _outboundContext(outboundContext),
       _transport(transport),
-      _rtpTimestamp(rtpTimestamp),
-      _audioLevelExtensionId(audioLevelExtensionId),
-      _absSendTimeExtensionId(absSendTimeExtensionId)
+      _rtpTimestamp(rtpTimestamp)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -54,14 +50,14 @@ void EncodeJob::run()
 
         rtp::RtpHeaderExtension extensionHead(opusHeader->getExtensionHeader());
         auto cursor = extensionHead.extensions().begin();
-        if (_absSendTimeExtensionId)
+        if (_outboundContext._rtpMap._absSendTimeExtId.isSet())
         {
-            rtp::GeneralExtension1Byteheader absSendTime(_absSendTimeExtensionId, 3);
+            rtp::GeneralExtension1Byteheader absSendTime(_outboundContext._rtpMap._absSendTimeExtId.get(), 3);
             extensionHead.addExtension(cursor, absSendTime);
         }
-        if (_audioLevelExtensionId)
+        if (_outboundContext._rtpMap._audioLevelExtId.isSet())
         {
-            rtp::GeneralExtension1Byteheader audioLevel(_audioLevelExtensionId, 1);
+            rtp::GeneralExtension1Byteheader audioLevel(_outboundContext._rtpMap._audioLevelExtId.get(), 1);
             audioLevel.data[0] = codec::computeAudioLevel(*_packet);
             extensionHead.addExtension(cursor, audioLevel);
         }

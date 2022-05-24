@@ -329,7 +329,9 @@ private:
         const uint32_t payloadType,
         const uint64_t timestamp);
     SsrcOutboundContext* obtainOutboundSsrcContext(EngineAudioStream& audioStream, const uint32_t ssrc);
-    SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
+    SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream,
+        const uint32_t ssrc,
+        const RtpMap& rtpMap);
     SsrcOutboundContext* getOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
     SsrcOutboundContext* getOutboundSsrcContext(EngineRecordingStream& recordingStream, const uint32_t ssrc);
 
