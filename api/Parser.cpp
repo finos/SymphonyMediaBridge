@@ -87,7 +87,7 @@ api::AllocateEndpoint::Transport parseAllocateEndpointTransport(const nlohmann::
     api::AllocateEndpoint::Transport transport;
     setIfExists(transport._ice, data, "ice");
     setIfExists(transport._iceControlling, data, "ice-controlling");
-    setIfExists(transport._dtls, data, "ice");
+    setIfExists(transport._dtls, data, "dtls");
     return transport;
 }
 
