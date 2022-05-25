@@ -143,7 +143,6 @@ constexpr size_t EngineMixer::iterationDurationMs;
 EngineMixer::EngineMixer(const std::string& id,
     jobmanager::JobManager& jobManager,
     EngineMessageListener& messageListener,
-    const size_t inactivityTimeoutMs,
     const uint32_t localVideoSsrc,
     const config::Config& config,
     memory::PacketPoolAllocator& sendAllocator,
@@ -169,8 +168,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _rtpTimestampSource(1000),
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator),
-      _noIncomingPacketsIntervalMs(0),
-      _maxNoIncomingPacketsIntervalMs(inactivityTimeoutMs),
+      _lastReceiveTime(utils::Time::getAbsoluteTime()),
       _noTicks(0),
       _ticksPerSSRCCheck(ticksPerSSRCCheck),
       _engineStreamDirector(std::make_unique<EngineStreamDirector>(config)),
@@ -783,12 +781,17 @@ void EngineMixer::flush()
     _incomingRtcp.clear();
 }
 
+void EngineMixer::forwardPackets(const uint64_t engineTimestamp)
+{
+    processIncomingRtpPackets(engineTimestamp);
+}
+
 void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 {
     _rtpTimestampSource += framesPerIteration1kHz;
 
     // 1. Process all incoming packets
-    processIncomingRtpPackets(engineIterationStartTimestamp);
+    forwardPackets(engineIterationStartTimestamp);
     processIncomingRtcpPackets(engineIterationStartTimestamp);
 
     // 2. Check for stale streams
@@ -1977,8 +1980,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
     if (numRtpPackets == 0)
     {
-        _noIncomingPacketsIntervalMs += iterationDurationMs;
-        if (_noIncomingPacketsIntervalMs >= _maxNoIncomingPacketsIntervalMs)
+        if (utils::Time::diffGE(_lastReceiveTime, timestamp, _config.mixerInactivityTimeoutMs * utils::Time::ms))
         {
             EngineMessage::Message message(EngineMessage::Type::MixerTimedOut);
             message._command.mixerTimedOut._mixer = this;
@@ -1987,7 +1989,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     }
     else
     {
-        _noIncomingPacketsIntervalMs = 0;
+        _lastReceiveTime = timestamp;
     }
 }
 
@@ -2174,7 +2176,7 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
             }
         }
 
-        _noIncomingPacketsIntervalMs = 0;
+        _lastReceiveTime = timestamp;
     }
 }
 
