@@ -21,8 +21,9 @@ const auto intervalNs = 1000000UL * bridge::EngineMixer::iterationDurationMs;
 namespace bridge
 {
 
-Engine::Engine()
-    : _messageListener(nullptr),
+Engine::Engine(const config::Config& config)
+    : _config(config),
+      _messageListener(nullptr),
       _running(true),
       _pendingCommands(1024),
       _tickCounter(0),
@@ -203,6 +204,7 @@ void Engine::run()
         {
             ++currentStatSample.timeSlipCount;
         }
+
         while (toSleep > 0)
         {
             for (auto mixerEntry = _mixers.head(); toSleep > int64_t(utils::Time::ms) && mixerEntry;
@@ -214,7 +216,8 @@ void Engine::run()
             toSleep = pacer.timeToNextTick(utils::Time::getAbsoluteTime());
             if (toSleep > 0)
             {
-                utils::Time::nanoSleep(std::min(utils::checkedCast<uint64_t>(toSleep), utils::Time::ms * 2));
+                utils::Time::nanoSleep(
+                    std::min(utils::checkedCast<uint64_t>(toSleep), utils::Time::ms * _config.rtpForwardInterval));
             }
         }
     }

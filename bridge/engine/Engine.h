@@ -4,6 +4,7 @@
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
+#include "config/Config.h"
 #include "memory/List.h"
 #include "utils/Trackers.h"
 #include <sys/types.h>
@@ -18,7 +19,7 @@ class EngineMessageListener;
 class Engine
 {
 public:
-    Engine();
+    Engine(const config::Config& config);
 
     void setMessageListener(EngineMessageListener* messageListener);
     void stop();
@@ -32,6 +33,7 @@ private:
     static const size_t maxMixers = 4096;
     static const uint32_t STATS_UPDATE_TICKS = 200;
 
+    const config::Config& _config;
     EngineMessageListener* _messageListener;
     std::atomic<bool> _running;
 
