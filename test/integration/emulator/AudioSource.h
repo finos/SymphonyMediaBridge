@@ -12,7 +12,7 @@ namespace emulator
 class AudioSource
 {
 public:
-    AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc);
+    AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, uint32_t ptime = 20);
     ~AudioSource(){};
     memory::UniquePacket getPacket(uint64_t timestamp);
     int64_t timeToRelease(uint64_t timestamp) const;
@@ -35,6 +35,7 @@ private:
     uint16_t _sequenceCounter;
     uint16_t _amplitude;
     double _frequency;
+    uint32_t _ptime;
 };
 
 } // namespace emulator

@@ -9,7 +9,7 @@
 namespace emulator
 {
 
-AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc)
+AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, uint32_t ptime)
     : _ssrc(ssrc),
       _nextRelease(0),
       _allocator(allocator),
@@ -17,7 +17,8 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc)
       _rtpTimestamp(101203),
       _sequenceCounter(100),
       _amplitude(0),
-      _frequency(340.0)
+      _frequency(340.0),
+      _ptime(ptime)
 {
 }
 
@@ -32,7 +33,7 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     {
         _nextRelease = timestamp;
     }
-    _nextRelease += utils::Time::ms * 20;
+    _nextRelease += utils::Time::ms * _ptime;
 
     auto packet = memory::makeUniquePacket(_allocator);
     assert(packet);
@@ -46,10 +47,10 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     rtpHeader->sequenceNumber = _sequenceCounter++;
     rtpHeader->ssrc = _ssrc;
     rtpHeader->timestamp = _rtpTimestamp;
-    _rtpTimestamp += 960;
 
-    const auto samplesPerPacket = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+    const auto samplesPerPacket = codec::Opus::sampleRate * _ptime / 1000;
     int16_t audio[codec::Opus::channelsPerFrame * samplesPerPacket];
+    _rtpTimestamp += samplesPerPacket;
 
     for (uint64_t x = 0; x < samplesPerPacket; ++x)
     {
