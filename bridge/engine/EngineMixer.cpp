@@ -781,9 +781,9 @@ void EngineMixer::flush()
     _incomingRtcp.clear();
 }
 
-uint32_t EngineMixer::forwardPackets(const uint64_t engineTimestamp)
+void EngineMixer::forwardPackets(const uint64_t engineTimestamp)
 {
-    return processIncomingRtpPackets(engineTimestamp);
+    processIncomingRtpPackets(engineTimestamp);
 }
 
 void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
@@ -1832,7 +1832,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     return nullptr;
 }
 
-uint32_t EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
+void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 {
     uint32_t numRtpPackets = 0;
 
@@ -1991,8 +1991,6 @@ uint32_t EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     {
         _lastReceiveTime = timestamp;
     }
-
-    return numRtpPackets;
 }
 
 uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)

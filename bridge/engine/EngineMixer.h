@@ -122,7 +122,7 @@ public:
     void flush();
 
     void run(const uint64_t engineIterationStartTimestamp);
-    uint32_t forwardPackets(const uint64_t engineTimestamp);
+    void forwardPackets(const uint64_t engineTimestamp);
 
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
 
@@ -295,7 +295,7 @@ private:
 
     uint64_t _lastVideoBandwidthCheck;
 
-    uint32_t processIncomingRtpPackets(const uint64_t timestamp);
+    void processIncomingRtpPackets(const uint64_t timestamp);
     uint32_t processIncomingVideoRtpPackets(const uint64_t timestamp);
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
