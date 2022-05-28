@@ -93,7 +93,10 @@ private:
 class SetRtxProbeSourceJob : public jobmanager::CountedJob
 {
 public:
-    SetRtxProbeSourceJob(transport::RtcTransport& transport, uint32_t ssrc, uint32_t* sequenceCounter)
+    SetRtxProbeSourceJob(transport::RtcTransport& transport,
+        const uint32_t ssrc,
+        uint32_t* sequenceCounter,
+        const uint16_t payloadType)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
           _ssrc(ssrc),
@@ -101,12 +104,13 @@ public:
     {
     }
 
-    void run() override { _transport.setRtxProbeSource(_ssrc, _sequenceCounter); }
+    void run() override { _transport.setRtxProbeSource(_ssrc, _sequenceCounter, _payloadType); }
 
 private:
     transport::RtcTransport& _transport;
     uint32_t _ssrc;
     uint32_t* _sequenceCounter;
+    uint16_t _payloadType;
 };
 
 /**
@@ -288,7 +292,8 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     {
         engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
             engineVideoStream->_localSsrc,
-            &outboundContext->_sequenceCounter);
+            &outboundContext->_sequenceCounter,
+            outboundContext->_rtpMap._payloadType);
     }
 
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
@@ -323,7 +328,8 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
         {
             engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
                 engineVideoStream->_localSsrc,
-                nullptr);
+                nullptr,
+                engineVideoStream->_feedbackRtpMap._payloadType);
             auto goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
             if (goodByePacket)
             {

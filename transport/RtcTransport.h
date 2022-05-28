@@ -70,7 +70,6 @@ public:
 
     virtual void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) = 0;
     virtual void setAbsSendTimeExtensionId(uint8_t extensionId) = 0;
-    virtual void setVideoRtxPayloadType(const uint16_t payloadType) = 0;
 
     virtual bool isIceEnabled() const = 0;
     virtual bool isDtlsEnabled() const = 0;
@@ -90,7 +89,7 @@ public:
     virtual PacketCounters getVideoSendCounters(uint64_t idleTimestamp) const = 0;
     virtual void getReportSummary(std::unordered_map<uint32_t, ReportSummary>& outReportSummary) const = 0;
 
-    virtual void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) = 0;
+    virtual void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) = 0;
 
     virtual void runTick(uint64_t timestamp) = 0;
 };

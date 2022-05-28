@@ -45,7 +45,6 @@ public:
     bool isDtlsClient() override { return true; }
     void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) override {}
     void setAbsSendTimeExtensionId(uint8_t extensionId) override {}
-    void setVideoRtxPayloadType(const uint16_t payloadType) override {}
     bool start() override { return true; }
     bool isIceEnabled() const override { return true; }
     bool isDtlsEnabled() const override { return true; }
@@ -88,7 +87,7 @@ public:
     uint16_t allocateOutboundSctpStream() override { return 0; }
     const transport::SocketAddress& getRemotePeer() const override { return _socketAddress; }
 
-    void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) override {}
+    void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) override {}
 
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;

@@ -1113,10 +1113,6 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     {
         videoStream->_transport->setAbsSendTimeExtensionId(videoStream->_rtpMap._absSendTimeExtId.get());
     }
-    if (videoStream->_feedbackRtpMap._format != RtpMap::Format::EMPTY)
-    {
-        videoStream->_transport->setVideoRtxPayloadType(videoStream->_feedbackRtpMap._payloadType);
-    }
 
     std::memcpy(&videoStream->_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
     return true;
