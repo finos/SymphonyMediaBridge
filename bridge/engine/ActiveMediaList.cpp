@@ -25,9 +25,12 @@ ActiveMediaList::AudioParticipant::AudioParticipant()
 
 ActiveMediaList::ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
     const std::vector<SimulcastLevel>& videoSsrcs,
-    const uint32_t defaultLastN)
+    const uint32_t defaultLastN,
+    uint32_t audioLastN)
     : _defaultLastN(defaultLastN),
       _maxActiveListSize(defaultLastN + 1),
+      _audioLastN(audioLastN),
+      _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
       _incomingAudioLevels(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
@@ -47,7 +50,6 @@ ActiveMediaList::ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
       _lastRunTimestampMs(0),
       _lastChangeTimestampMs(0)
 {
-    assert(audioSsrcs.size() >= _maxActiveListSize);
     assert(videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -89,11 +91,10 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
         _dominantSpeaker = endpointIdHash;
     }
 
-    if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
+    if (_audioSsrcRewriteMap.size() == _audioLastN)
     {
         return false;
     }
-
     uint32_t ssrc;
     if (!_audioSsrcs.pop(ssrc))
     {
@@ -338,13 +339,14 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     }
 
     {
-        std::array<size_t, numConsideredActiveSpeakers> highestScoringSpeakersArray = {0, 0, 0};
-        for (size_t i = 0; i < highestScoringSpeakersArray.size() && !_highestScoringSpeakers.isEmpty(); ++i)
+        size_t highestScoringSpeakersArray[_audioLastN];
+        size_t i = 0;
+        for (i = 0; i < _audioLastN && !_highestScoringSpeakers.isEmpty(); ++i)
         {
             highestScoringSpeakersArray[i] = _highestScoringSpeakers.top()._participant;
             _highestScoringSpeakers.pop();
         }
-        updateActiveAudioList(highestScoringSpeakersArray);
+        updateActiveAudioList(highestScoringSpeakersArray, i);
     }
 
     if (timestampMs - _lastChangeTimestampMs + 10 * (requiredConsecutiveWins - 1) < maxSwitchDominantSpeakerEveryMs)
@@ -383,15 +385,14 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     }
 }
 
-bool ActiveMediaList::updateActiveAudioList(
-    const std::array<size_t, numConsideredActiveSpeakers>& highestScoringSpeakers)
+bool ActiveMediaList::updateActiveAudioList(const size_t* highestScoringSpeakers, size_t count)
 {
 #if DEBUG
     utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
     bool listUpdated = false;
-    const auto numItemsToAdd = std::min(highestScoringSpeakers.size(), _maxActiveListSize);
+    const auto numItemsToAdd = std::min(count, _maxSpeakers);
     for (size_t i = 0; i < numItemsToAdd; ++i)
     {
         const auto endpointIdHash = highestScoringSpeakers[i];
@@ -415,7 +416,7 @@ bool ActiveMediaList::updateActiveAudioList(
             }
         }
 
-        if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
+        if (_audioSsrcRewriteMap.size() == _maxSpeakers)
         {
             size_t removedEndpointIdHash;
             if (!_activeAudioList.popFromHead(removedEndpointIdHash))
