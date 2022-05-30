@@ -219,7 +219,7 @@ private:
     uint64_t _lastRunTimestampMs;
     uint64_t _lastChangeTimestampMs;
 
-    bool updateActiveAudioList(const size_t* highestScoringSpeakers, size_t count);
+    void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
 };
 
