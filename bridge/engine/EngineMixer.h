@@ -67,7 +67,6 @@ public:
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
         EngineMessageListener& messageListener,
-        const size_t inactivityTimeoutMs,
         const uint32_t localVideoSsrc,
         const config::Config& config,
         memory::PacketPoolAllocator& sendAllocator,
@@ -123,6 +122,7 @@ public:
     void flush();
 
     void run(const uint64_t engineIterationStartTimestamp);
+    void forwardPackets(const uint64_t engineTimestamp);
 
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
 
@@ -281,8 +281,7 @@ private:
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
-    size_t _noIncomingPacketsIntervalMs;
-    const size_t _maxNoIncomingPacketsIntervalMs;
+    uint64_t _lastReceiveTime;
 
     size_t _noTicks;
     const size_t _ticksPerSSRCCheck;

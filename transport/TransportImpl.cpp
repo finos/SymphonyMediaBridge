@@ -778,7 +778,7 @@ void TransportImpl::onRtpReceived(Endpoint& endpoint,
     if (!_jobQueue
              .addJob<PacketReceiveJob>(*this, endpoint, source, std::move(packet), &TransportImpl::internalRtpReceived))
     {
-        logger::error("job queue full RTCP", _loggableId.c_str());
+        logger::error("job queue full RTP", _loggableId.c_str());
     }
 }
 

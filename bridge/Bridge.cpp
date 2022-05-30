@@ -61,7 +61,7 @@ Bridge::Bridge(const config::Config& config)
       _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(32 * 1024, "main")),
       _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(128 * 1024, "send")),
       _audioPacketAllocator(std::make_unique<memory::AudioPacketPoolAllocator>(4 * 1024, "audio")),
-      _engine(std::make_unique<bridge::Engine>())
+      _engine(std::make_unique<bridge::Engine>(config))
 {
 }
 

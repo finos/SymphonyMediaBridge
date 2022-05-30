@@ -105,7 +105,6 @@ Mixer* MixerManager::create(uint32_t lastN)
         std::make_unique<EngineMixer>(id,
             _jobManager,
             *this,
-            _config.mixerInactivityTimeoutMs,
             localVideoSsrc,
             _config,
             _sendAllocator,
