@@ -100,7 +100,8 @@ public:
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
           _ssrc(ssrc),
-          _sequenceCounter(sequenceCounter)
+          _sequenceCounter(sequenceCounter),
+          _payloadType(payloadType)
     {
     }
 
