@@ -244,7 +244,7 @@ void VideoForwarderReceiveJob::run()
     }
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext._rtpMap._payloadType));
-    _engineMixer.onForwarderVideoRtpPacketDecrypted(_sender, std::move(_packet), _extendedSequenceNumber);
+    _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), _extendedSequenceNumber);
 }
 
 } // namespace bridge

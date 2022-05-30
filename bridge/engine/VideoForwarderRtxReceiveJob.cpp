@@ -80,7 +80,7 @@ void VideoForwarderRtxReceiveJob::run()
         return;
     }
 
-    _engineMixer.onForwarderVideoRtpPacketDecrypted(_sender, std::move(_packet), extendedSequenceNumber);
+    _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), extendedSequenceNumber);
 }
 
 } // namespace bridge

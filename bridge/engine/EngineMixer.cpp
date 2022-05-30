@@ -93,20 +93,25 @@ private:
 class SetRtxProbeSourceJob : public jobmanager::CountedJob
 {
 public:
-    SetRtxProbeSourceJob(transport::RtcTransport& transport, uint32_t ssrc, uint32_t* sequenceCounter)
+    SetRtxProbeSourceJob(transport::RtcTransport& transport,
+        const uint32_t ssrc,
+        uint32_t* sequenceCounter,
+        const uint16_t payloadType)
         : CountedJob(transport.getJobCounter()),
           _transport(transport),
           _ssrc(ssrc),
-          _sequenceCounter(sequenceCounter)
+          _sequenceCounter(sequenceCounter),
+          _payloadType(payloadType)
     {
     }
 
-    void run() override { _transport.setRtxProbeSource(_ssrc, _sequenceCounter); }
+    void run() override { _transport.setRtxProbeSource(_ssrc, _sequenceCounter, _payloadType); }
 
 private:
     transport::RtcTransport& _transport;
     uint32_t _ssrc;
     uint32_t* _sequenceCounter;
+    uint16_t _payloadType;
 };
 
 /**
@@ -281,12 +286,15 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         engineVideoStream->_transport.getLoggableId().c_str(),
         endpointIdHash);
 
-    auto* outboundContext = obtainOutboundSsrcContext(*engineVideoStream, engineVideoStream->_localSsrc);
+    auto* outboundContext = obtainOutboundSsrcContext(*engineVideoStream,
+        engineVideoStream->_localSsrc,
+        engineVideoStream->_feedbackRtpMap);
     if (outboundContext)
     {
         engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
             engineVideoStream->_localSsrc,
-            &outboundContext->_sequenceCounter);
+            &outboundContext->_sequenceCounter,
+            outboundContext->_rtpMap._payloadType);
     }
 
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
@@ -321,7 +329,8 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
         {
             engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
                 engineVideoStream->_localSsrc,
-                nullptr);
+                nullptr,
+                engineVideoStream->_feedbackRtpMap._payloadType);
             auto goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
             if (goodByePacket)
             {
@@ -1558,34 +1567,36 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     }
 }
 
-void EngineMixer::onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* sender,
+void EngineMixer::onForwarderAudioRtpPacketDecrypted(SsrcInboundContext& inboundContext,
     memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
-    if (!_incomingForwarderAudioRtp.push(IncomingPacketInfo(std::move(packet), sender, extendedSequenceNumber)))
+    if (!_incomingForwarderAudioRtp.push(
+            IncomingPacketInfo(std::move(packet), &inboundContext, extendedSequenceNumber)))
     {
         logger::error("Failed to push incoming forwarder audio packet onto queue", getLoggableId().c_str());
         assert(false);
     }
 }
 
-void EngineMixer::onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* sender,
+void EngineMixer::onForwarderVideoRtpPacketDecrypted(SsrcInboundContext& inboundContext,
     memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber)
 {
     assert(packet);
-    if (!_incomingForwarderVideoRtp.push(IncomingPacketInfo(std::move(packet), sender, extendedSequenceNumber)))
+    if (!_incomingForwarderVideoRtp.push(
+            IncomingPacketInfo(std::move(packet), &inboundContext, extendedSequenceNumber)))
     {
         logger::error("Failed to push incoming forwarder video packet onto queue", getLoggableId().c_str());
         assert(false);
     }
 }
 
-void EngineMixer::onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::UniqueAudioPacket packet)
+void EngineMixer::onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet)
 {
     assert(packet);
-    if (!_incomingMixerAudioRtp.push(IncomingAudioPacketInfo(std::move(packet), sender)))
+    if (!_incomingMixerAudioRtp.push(IncomingAudioPacketInfo(std::move(packet), &inboundContext)))
     {
         logger::error("Failed to push incoming mixer audio packet onto queue", getLoggableId().c_str());
         assert(false);
@@ -1629,7 +1640,9 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(EngineAudioStream& a
     return &emplaceResult.first->second;
 }
 
-SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc)
+SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(EngineVideoStream& videoStream,
+    const uint32_t ssrc,
+    const RtpMap& rtpMap)
 {
     auto ssrcOutboundContextItr = videoStream._ssrcOutboundContexts.find(ssrc);
     if (ssrcOutboundContextItr != videoStream._ssrcOutboundContexts.cend())
@@ -1637,7 +1650,7 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(EngineVideoStream& v
         return &ssrcOutboundContextItr->second;
     }
 
-    auto emplaceResult = videoStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream._rtpMap);
+    auto emplaceResult = videoStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap);
 
     if (!emplaceResult.second && emplaceResult.first == videoStream._ssrcOutboundContexts.end())
     {
@@ -1675,17 +1688,6 @@ SsrcOutboundContext* EngineMixer::getOutboundSsrcContext(EngineRecordingStream& 
     return nullptr;
 }
 
-SsrcInboundContext* EngineMixer::getInboundSsrcContext(const uint32_t ssrc)
-{
-    auto contextIterator = _ssrcInboundContexts.find(ssrc);
-    if (contextIterator != _ssrcInboundContexts.cend())
-    {
-        return &contextIterator->second;
-    }
-
-    return nullptr;
-}
-
 SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     transport::RtcTransport* sender,
     const uint32_t payloadType,
@@ -1708,12 +1710,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc,
-            ssrc,
-            audioStream->_rtpMap,
-            audioStream->_audioLevelExtensionId,
-            sender,
-            timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, audioStream->_rtpMap, sender, timestamp);
 
         if (!emplaceResult.second && emplaceResult.first == _ssrcInboundContexts.end())
         {
@@ -1721,12 +1718,13 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        logger::info(
-            "Created new inbound context for audio stream ssrc %u, endpointIdHash %lu, audioLevelExtensionId %d, %s",
+        logger::info("Created new inbound context for audio stream ssrc %u, endpointIdHash %lu, audioLevelExtId %d, "
+                     "absSendTimeExtId %d, %s",
             _loggableId.c_str(),
             ssrc,
             audioStream->_endpointIdHash,
-            audioStream->_audioLevelExtensionId,
+            audioStream->_rtpMap._audioLevelExtId.isSet() ? audioStream->_rtpMap._audioLevelExtId.get() : -1,
+            audioStream->_rtpMap._absSendTimeExtId.isSet() ? audioStream->_rtpMap._absSendTimeExtId.get() : -1,
             sender->getLoggableId().c_str());
         return &emplaceResult.first->second;
     }
@@ -1767,7 +1765,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_rtpMap, -1, sender, timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_rtpMap, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getFeedbackSsrcFor(ssrc);
@@ -1812,8 +1810,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult =
-            _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_feedbackRtpMap, -1, sender, timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_feedbackRtpMap, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext._rewriteSsrc = rewriteSsrc;
         inboundContext._rtxSsrc = videoStream->getMainSsrcFor(ssrc);
@@ -1840,6 +1837,12 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     {
         ++numRtpPackets;
 
+        const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
+        if (!rtpHeader)
+        {
+            continue;
+        }
+
         for (auto& audioStreamEntry : _engineAudioStreams)
         {
             auto audioStream = audioStreamEntry.second;
@@ -1850,8 +1853,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
             if (audioStream->_transport.isConnected())
             {
-                const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
-                auto ssrc = rtpHeader->ssrc.get();
+                auto ssrc = packetInfo.inboundContext()->_ssrc;
                 if (audioStream->_ssrcRewrite)
                 {
                     const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
@@ -1873,6 +1875,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 if (packet)
                 {
                     audioStream->_transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                        *(packetInfo.inboundContext()),
                         std::move(packet),
                         packetInfo.extendedSequenceNumber(),
                         audioStream->_transport);
@@ -1892,8 +1895,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 continue;
             }
 
-            const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
-            const auto ssrc = rtpHeader->ssrc.get();
+            const auto ssrc = packetInfo.inboundContext()->_ssrc;
             auto* ssrcOutboundContext = getOutboundSsrcContext(*recordingStream, ssrc);
             if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
             {
@@ -2005,11 +2007,6 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
         {
             continue;
         }
-        auto inboundSsrcContext = getInboundSsrcContext(rtpHeader->ssrc);
-        if (!inboundSsrcContext)
-        {
-            continue;
-        }
         const auto senderEndpointIdHash = packetInfo.transport()->getEndpointIdHash();
 
         for (auto& videoStreamEntry : _engineVideoStreams)
@@ -2021,17 +2018,17 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 continue;
             }
 
-            if (!_engineStreamDirector->shouldForwardSsrc(endpointIdHash, inboundSsrcContext->_ssrc))
+            if (!_engineStreamDirector->shouldForwardSsrc(endpointIdHash, packetInfo.inboundContext()->_ssrc))
             {
                 continue;
             }
 
-            if (shouldSkipBecauseOfWhitelist(*videoStream, inboundSsrcContext->_ssrc))
+            if (shouldSkipBecauseOfWhitelist(*videoStream, packetInfo.inboundContext()->_ssrc))
             {
                 continue;
             }
 
-            auto ssrc = inboundSsrcContext->_rewriteSsrc;
+            auto ssrc = packetInfo.inboundContext()->_rewriteSsrc;
             if (videoStream->_ssrcRewrite)
             {
                 const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
@@ -2070,7 +2067,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
             }
 
-            auto* ssrcOutboundContext = obtainOutboundSsrcContext(*videoStream, ssrc);
+            auto* ssrcOutboundContext = obtainOutboundSsrcContext(*videoStream, ssrc, videoStream->_rtpMap);
             if (!ssrcOutboundContext)
             {
                 continue;
@@ -2097,7 +2094,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 if (packet)
                 {
                     videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                        *inboundSsrcContext,
+                        *(packetInfo.inboundContext()),
                         std::move(packet),
                         videoStream->_transport,
                         packetInfo.extendedSequenceNumber());
@@ -2117,12 +2114,14 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 continue;
             }
 
-            if (!_engineStreamDirector->shouldForwardSsrc(recordingStream->_endpointIdHash, inboundSsrcContext->_ssrc))
+            if (!_engineStreamDirector->shouldForwardSsrc(recordingStream->_endpointIdHash,
+                    packetInfo.inboundContext()->_ssrc))
             {
                 continue;
             }
 
-            auto* ssrcOutboundContext = getOutboundSsrcContext(*recordingStream, inboundSsrcContext->_rewriteSsrc);
+            auto* ssrcOutboundContext =
+                getOutboundSsrcContext(*recordingStream, packetInfo.inboundContext()->_rewriteSsrc);
             if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
             {
                 continue;
@@ -2137,7 +2136,7 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
                 if (packet)
                 {
                     transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                        *inboundSsrcContext,
+                        *(packetInfo.inboundContext()),
                         std::move(packet),
                         transportEntry.second,
                         packetInfo.extendedSequenceNumber());
@@ -2279,7 +2278,8 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         return;
     }
 
-    auto feedbackSsrcOutboundContext = obtainOutboundSsrcContext(*rtcpSenderVideoStream, feedbackSsrc);
+    auto feedbackSsrcOutboundContext =
+        obtainOutboundSsrcContext(*rtcpSenderVideoStream, feedbackSsrc, rtcpSenderVideoStream->_feedbackRtpMap);
     if (!feedbackSsrcOutboundContext)
     {
         return;
@@ -2395,9 +2395,7 @@ inline void EngineMixer::processAudioStreams()
             audioStream->_transport.getJobQueue().addJob<EncodeJob>(std::move(audioPacket),
                 *ssrcContext,
                 audioStream->_transport,
-                _rtpTimestampSource,
-                audioStream->_audioLevelExtensionId,
-                audioStream->_absSendTimeExtensionId);
+                _rtpTimestampSource);
         }
     }
 }

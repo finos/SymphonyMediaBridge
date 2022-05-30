@@ -27,7 +27,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
         memcpy(rtpHeader->getPayload(), decodedData, decodedPayloadLength);
         pcmPacket->setLength(rtpHeader->headerLength() + decodedPayloadLength);
 
-        _engineMixer.onMixerAudioRtpPacketDecoded(_sender, std::move(pcmPacket));
+        _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
         return;
     }
 
@@ -138,7 +138,8 @@ void AudioForwarderReceiveJob::run()
 
         for (const auto& rtpHeaderExtension : rtpHeaderExtensions->extensions())
         {
-            if (rtpHeaderExtension.getId() != _ssrcContext._audioLevelExtensionId)
+            if (!_ssrcContext._rtpMap._audioLevelExtId.isSet() ||
+                rtpHeaderExtension.getId() != _ssrcContext._rtpMap._audioLevelExtId.get())
             {
                 continue;
             }
@@ -193,7 +194,7 @@ void AudioForwarderReceiveJob::run()
     }
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext._rtpMap._payloadType));
-    _engineMixer.onForwarderAudioRtpPacketDecrypted(_sender, std::move(_packet), _extendedSequenceNumber);
+    _engineMixer.onForwarderAudioRtpPacketDecrypted(_ssrcContext, std::move(_packet), _extendedSequenceNumber);
 }
 
 } // namespace bridge

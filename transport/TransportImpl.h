@@ -96,7 +96,7 @@ public: // Transport
     bool unprotect(memory::Packet& packet) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override;
-    void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) override;
+    void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) override;
 
     /** Called from httpd threads */
     bool isGatheringComplete() const override;
@@ -163,6 +163,7 @@ public: // Transport
 
     void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) override;
     void setAbsSendTimeExtensionId(uint8_t extensionId) override;
+
     bool sendSctp(uint16_t streamId, uint32_t protocolId, const void* data, uint16_t length) override;
     uint16_t allocateOutboundSctpStream() override;
     void setSctp(uint16_t localPort, uint16_t remotePort) override;
@@ -365,6 +366,7 @@ private:
         uint32_t rtpFrequency;
     } _audio;
     uint8_t _absSendTimeExtensionId;
+    uint16_t _videoRtxPayloadType;
 
     const sctp::SctpConfig& _sctpConfig;
     utils::Optional<uint16_t> _remoteSctpPort;

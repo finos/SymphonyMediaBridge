@@ -146,15 +146,15 @@ public:
         memory::UniquePacket packet,
         uint64_t timestamp) override;
 
-    void onForwarderAudioRtpPacketDecrypted(transport::RtcTransport* sender,
+    void onForwarderAudioRtpPacketDecrypted(SsrcInboundContext& inboundContext,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
 
-    void onForwarderVideoRtpPacketDecrypted(transport::RtcTransport* sender,
+    void onForwarderVideoRtpPacketDecrypted(SsrcInboundContext& inboundContext,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
 
-    void onMixerAudioRtpPacketDecoded(transport::RtcTransport* sender, memory::UniqueAudioPacket packet);
+    void onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet);
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
 
@@ -174,11 +174,22 @@ private:
     class IncomingPacketAggregate
     {
     public:
-        IncomingPacketAggregate() : _transport(nullptr), _extendedSequenceNumber(0) {}
+        IncomingPacketAggregate() : _inboundContext(nullptr), _transport(nullptr), _extendedSequenceNumber(0) {}
 
         IncomingPacketAggregate(PacketT packet, transport::RtcTransport* transport)
             : _packet(std::move(packet)),
+              _inboundContext(nullptr),
               _transport(transport),
+              _extendedSequenceNumber(0)
+        {
+            assert(_packet);
+            lockOwner();
+        }
+
+        IncomingPacketAggregate(PacketT packet, SsrcInboundContext* inboundContext)
+            : _packet(std::move(packet)),
+              _inboundContext(inboundContext),
+              _transport(inboundContext->_sender),
               _extendedSequenceNumber(0)
         {
             assert(_packet);
@@ -189,7 +200,20 @@ private:
             transport::RtcTransport* transport,
             const uint32_t extendedSequenceNumber)
             : _packet(std::move(packet)),
+              _inboundContext(nullptr),
               _transport(transport),
+              _extendedSequenceNumber(extendedSequenceNumber)
+        {
+            assert(_packet);
+            lockOwner();
+        }
+
+        IncomingPacketAggregate(PacketT packet,
+            SsrcInboundContext* inboundContext,
+            const uint32_t extendedSequenceNumber)
+            : _packet(std::move(packet)),
+              _inboundContext(inboundContext),
+              _transport(inboundContext->_sender),
               _extendedSequenceNumber(extendedSequenceNumber)
         {
             assert(_packet);
@@ -198,6 +222,7 @@ private:
 
         explicit IncomingPacketAggregate(IncomingPacketAggregate&& rhs)
             : _packet(std::move(rhs._packet)),
+              _inboundContext(std::exchange(rhs._inboundContext, nullptr)),
               _transport(std::exchange(rhs._transport, nullptr)),
               _extendedSequenceNumber(rhs._extendedSequenceNumber)
         {
@@ -208,6 +233,7 @@ private:
             release();
 
             _packet = std::move(rhs._packet);
+            _inboundContext = std::exchange(rhs._inboundContext, nullptr);
             _transport = std::exchange(rhs._transport, nullptr);
             _extendedSequenceNumber = rhs._extendedSequenceNumber;
             return *this;
@@ -218,9 +244,10 @@ private:
 
         ~IncomingPacketAggregate() { release(); }
 
-        transport::RtcTransport* transport() { return _transport; }
-        PacketT& packet() { return _packet; }
-        uint32_t extendedSequenceNumber() const { return _extendedSequenceNumber; }
+        inline SsrcInboundContext* inboundContext() { return _inboundContext; }
+        inline transport::RtcTransport* transport() { return _transport; }
+        inline PacketT& packet() { return _packet; }
+        inline uint32_t extendedSequenceNumber() const { return _extendedSequenceNumber; }
 
     private:
         void release()
@@ -246,6 +273,7 @@ private:
         }
 
         PacketT _packet;
+        SsrcInboundContext* _inboundContext;
         transport::RtcTransport* _transport;
         uint32_t _extendedSequenceNumber;
     };
@@ -323,13 +351,14 @@ private:
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
 
-    SsrcInboundContext* getInboundSsrcContext(const uint32_t ssrc);
     SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,
         transport::RtcTransport* sender,
         const uint32_t payloadType,
         const uint64_t timestamp);
     SsrcOutboundContext* obtainOutboundSsrcContext(EngineAudioStream& audioStream, const uint32_t ssrc);
-    SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
+    SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream,
+        const uint32_t ssrc,
+        const RtpMap& rtpMap);
     SsrcOutboundContext* getOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
     SsrcOutboundContext* getOutboundSsrcContext(EngineRecordingStream& recordingStream, const uint32_t ssrc);
 

@@ -1,19 +1,54 @@
 #include "bridge/engine/AudioForwarderRewriteAndSendJob.h"
+#include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Opus.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
 #include "utils/OutboundSequenceNumber.h"
 
+namespace
+{
+
+inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
+    const bridge::SsrcInboundContext& senderInboundContext,
+    const bridge::SsrcOutboundContext& receiverOutboundContext)
+{
+    assert(rtpHeader);
+
+    const auto headerExtensions = rtpHeader->getExtensionHeader();
+    if (!headerExtensions)
+    {
+        return;
+    }
+
+    for (auto& rtpHeaderExtension : headerExtensions->extensions())
+    {
+        if (senderInboundContext._rtpMap._audioLevelExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext._rtpMap._audioLevelExtId.get())
+        {
+            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._audioLevelExtId.get());
+        }
+        else if (senderInboundContext._rtpMap._absSendTimeExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
+        {
+            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
+        }
+    }
+}
+
+} // namespace
+
 namespace bridge
 {
 
 AudioForwarderRewriteAndSendJob::AudioForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
+    SsrcInboundContext& senderInboundContext,
     memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
     transport::Transport& transport)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
+      _senderInboundContext(senderInboundContext),
       _packet(std::move(packet)),
       _extendedSequenceNumber(extendedSequenceNumber),
       _transport(transport)
@@ -25,6 +60,11 @@ AudioForwarderRewriteAndSendJob::AudioForwarderRewriteAndSendJob(SsrcOutboundCon
 void AudioForwarderRewriteAndSendJob::run()
 {
     auto header = rtp::RtpHeader::fromPacket(*_packet);
+    if (!header)
+    {
+        return;
+    }
+
     bool newSource = _outboundContext._lastRewrittenSsrc != header->ssrc;
     _outboundContext._lastRewrittenSsrc = header->ssrc;
     if (newSource)
@@ -52,11 +92,13 @@ void AudioForwarderRewriteAndSendJob::run()
     header->ssrc = _outboundContext._ssrc;
     header->sequenceNumber = nextSequenceNumber;
     header->timestamp = _outboundContext._timestampOffset + header->timestamp;
+    header->payloadType = _outboundContext._rtpMap._payloadType;
     if (static_cast<int32_t>(header->timestamp - _outboundContext._lastSentTimestamp) > 0)
     {
         _outboundContext._lastSentTimestamp = header->timestamp;
     }
 
+    rewriteHeaderExtensions(header, _senderInboundContext, _outboundContext);
     _transport.protectAndSend(std::move(_packet));
 }
 

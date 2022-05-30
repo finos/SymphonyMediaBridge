@@ -33,12 +33,10 @@ class SsrcInboundContext
 public:
     SsrcInboundContext(const uint32_t ssrc,
         const bridge::RtpMap& rtpMap,
-        const int32_t audioLevelExtensionId,
         transport::RtcTransport* sender,
         uint64_t timestamp)
         : _ssrc(ssrc),
           _rtpMap(rtpMap),
-          _audioLevelExtensionId(audioLevelExtensionId),
           _sender(sender),
           _markNextPacket(true),
           _rewriteSsrc(ssrc),
@@ -63,7 +61,6 @@ public:
 
     uint32_t _ssrc;
     const bridge::RtpMap _rtpMap;
-    int32_t _audioLevelExtensionId;
     transport::RtcTransport* _sender;
     utils::Optional<uint32_t> _rtxSsrc; // points to main from rtc and to rtx from main
 

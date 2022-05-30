@@ -36,8 +36,9 @@ class VideoNackReceiveJobTest : public ::testing::Test
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "VideoNackReceiveJobTest");
-        _ssrcOutboundContext =
-            std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc, *_allocator, bridge::RtpMap::vp8());
+        _ssrcOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc,
+            *_allocator,
+            bridge::RtpMap(bridge::RtpMap::Format::VP8));
 
         _packetCache = std::make_unique<bridge::PacketCache>("VideoNackReceiveJobTest", outboundSsrc);
     }

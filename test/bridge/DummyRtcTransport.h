@@ -87,7 +87,7 @@ public:
     uint16_t allocateOutboundSctpStream() override { return 0; }
     const transport::SocketAddress& getRemotePeer() const override { return _socketAddress; }
 
-    void setRtxProbeSource(uint32_t ssrc, uint32_t* sequenceCounter) override {}
+    void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) override {}
 
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
