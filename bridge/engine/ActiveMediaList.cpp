@@ -215,33 +215,8 @@ bool ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
     return true;
 }
 
-// Algorithm:
-// 1. Allow switching at most once per two second
-// 2. Calculate average of (dBov + 127) level over time period for last 2s window and last
-//    ~100ms window
-// 3. Keep track of peak value (_maxRecentLevel) for each participant
-// 4. Keep track of noise level (_noiseLevel) for each participant where _noiseLevel value is
-//    the minimum level seen recently in the ~100ms window
-// 5. Peak is decayed towards average of the 2s Window if no new max is recevied
-// 6. Noise level estimate is increased if no new minimum is found
-//
-// Score is calcuated as diff (spread) between _maxRecentLevel and _noiseLevel - somewhat reduced if
-// user has been muted. To take over the dominant speaker position a participant has to have the highest score
-// three times in a row
-void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged)
+void ActiveMediaList::updateLevels(const uint64_t timestampMs)
 {
-#if DEBUG
-    utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
-#endif
-
-    outDominantSpeakerChanged = false;
-    outUserMediaMapChanged = false;
-
-    if ((timestampMs - _lastRunTimestampMs) < intervalMs)
-    {
-        return;
-    }
-
     for (auto& participantLevelEntry : _audioParticipants)
     {
         auto& participantLevels = participantLevelEntry.second;
@@ -255,12 +230,6 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
         participantLevels._noiseLevel = participantLevels._noiseLevel + AudioParticipant::noiseLevelRampup;
         participantLevels._noiseLevel =
             std::max(participantLevels._noiseLevel, static_cast<float>(AudioParticipant::minNoiseLevel));
-    }
-
-    if (_incomingAudioLevels.empty())
-    {
-        _lastRunTimestampMs = timestampMs;
-        return;
     }
 
     for (AudioLevelEntry levelEntry; _incomingAudioLevels.pop(levelEntry);)
@@ -310,12 +279,12 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
             participantLevels._nonZeroLevelsShortWindow++;
         }
     }
+}
 
-    auto newDominantSpeaker = _dominantSpeaker;
-
-    float maxDominantSpeakerScore = 0.0;
-    float currentDominantSpeakerScore = 0.0;
+void ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
+{
     _highestScoringSpeakers.clear();
+    currentDominantSpeakerScore = 0;
 
     for (auto& participantLevelEntry : _audioParticipants)
     {
@@ -329,16 +298,58 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
             currentDominantSpeakerScore = participantScore;
         }
 
-        if (participantScore > maxDominantSpeakerScore)
-        {
-            maxDominantSpeakerScore = participantScore;
-            newDominantSpeaker = participantLevelEntry.first;
-        }
-
         _highestScoringSpeakers.push({participantLevelEntry.first, participantScore});
     }
+}
 
-    for (size_t i = 0; i < _audioLastN && !_highestScoringSpeakers.isEmpty(); ++i)
+// Algorithm for video switching:
+// 1. Allow switching at most once per two second
+// 2. Calculate average of (dBov + 127) level over time period for last 2s window and last
+//    ~100ms window
+// 3. Keep track of peak value (_maxRecentLevel) for each participant
+// 4. Keep track of noise level (_noiseLevel) for each participant where _noiseLevel value is
+//    the minimum level seen recently in the ~100ms window
+// 5. Peak is decayed towards average of the 2s Window if no new max is recevied
+// 6. Noise level estimate is increased if no new minimum is found
+//
+// Score is calcuated as diff (spread) between _maxRecentLevel and _noiseLevel - somewhat reduced if
+// user has been muted.
+// To take over the dominant speaker position a participant has to have the highest score
+// three times in a row. Current dominant speaker score must also be < 75% of new dominant speaker score. That is 33%
+// louder over the entire measurement window. The time passed since last speaker switch must be > 2s.
+void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged)
+{
+#if DEBUG
+    utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
+#endif
+
+    outDominantSpeakerChanged = false;
+    outUserMediaMapChanged = false;
+
+    if ((timestampMs - _lastRunTimestampMs) < intervalMs)
+    {
+        return;
+    }
+    _lastRunTimestampMs = timestampMs;
+
+    bool newLevelsAvailable = !_incomingAudioLevels.empty();
+    updateLevels(timestampMs);
+    if (!newLevelsAvailable)
+    {
+        return;
+    }
+
+    float currentDominantSpeakerScore = 0.0;
+    rankSpeakers(currentDominantSpeakerScore);
+    if (_highestScoringSpeakers.empty())
+    {
+        return;
+    }
+
+    auto newDominantSpeaker = _highestScoringSpeakers.top()._participant;
+    float maxDominantSpeakerScore = _highestScoringSpeakers.top()._score;
+
+    for (size_t i = 0; i < _audioLastN && !_highestScoringSpeakers.empty(); ++i)
     {
         updateActiveAudioList(_highestScoringSpeakers.top()._participant);
         _highestScoringSpeakers.pop();
@@ -349,6 +360,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
         return;
     }
 
+    // nominate dominant speaker (for video)
     if (newDominantSpeaker == _prevWinningDominantSpeaker)
     {
         _consecutiveDominantSpeakerWins++;

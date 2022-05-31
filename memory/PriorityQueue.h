@@ -52,7 +52,7 @@ public:
         --_nextFree;
     }
 
-    bool isEmpty() const { return _nextFree == 0; }
+    bool empty() const { return _nextFree == 0; }
     void clear() { _nextFree = 0; }
 
 private:
