@@ -84,8 +84,7 @@ Mixer* MixerManager::create(uint32_t lastN)
     std::vector<SimulcastLevel> videoSsrcs;
     std::vector<SimulcastLevel> videoPinSsrcs;
 
-    // Last-n + extra
-    for (uint32_t i = 0; i < lastN + 2; ++i)
+    for (uint32_t i = 0; i < _config.audio.lastN + _config.audio.lastNextra; ++i)
     {
         audioSsrcs.push_back(_ssrcGenerator.next());
     }

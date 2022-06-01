@@ -3,6 +3,7 @@
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
 #include "logger/Logger.h"
+#include "memory/PartialSortExtractor.h"
 #include "utils/ScopedInvariantChecker.h"
 #include "utils/ScopedReentrancyBlocker.h"
 
@@ -25,9 +26,12 @@ ActiveMediaList::AudioParticipant::AudioParticipant()
 
 ActiveMediaList::ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
     const std::vector<SimulcastLevel>& videoSsrcs,
-    const uint32_t defaultLastN)
+    const uint32_t defaultLastN,
+    uint32_t audioLastN)
     : _defaultLastN(defaultLastN),
       _maxActiveListSize(defaultLastN + 1),
+      _audioLastN(audioLastN),
+      _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
       _incomingAudioLevels(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
@@ -47,7 +51,6 @@ ActiveMediaList::ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
       _lastRunTimestampMs(0),
       _lastChangeTimestampMs(0)
 {
-    assert(audioSsrcs.size() >= _maxActiveListSize);
     assert(videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -89,15 +92,9 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
         _dominantSpeaker = endpointIdHash;
     }
 
-    if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
-    {
-        return false;
-    }
-
     uint32_t ssrc;
     if (!_audioSsrcs.pop(ssrc))
     {
-        assert(false);
         return false;
     }
 
@@ -314,8 +311,8 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
 
     float maxDominantSpeakerScore = 0.0;
     float currentDominantSpeakerScore = 0.0;
-    _highestScoringSpeakers.clear();
 
+    size_t levelCount = 0;
     for (auto& participantLevelEntry : _audioParticipants)
     {
         const auto& participantLevels = participantLevelEntry.second;
@@ -334,17 +331,16 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
             newDominantSpeaker = participantLevelEntry.first;
         }
 
-        _highestScoringSpeakers.push({participantLevelEntry.first, participantScore});
+        _highestScoringSpeakers[levelCount++] = AudioParticipantScore{participantLevelEntry.first, participantScore};
     }
 
+    memory::PartialSortExtractor<AudioParticipantScore> heap(_highestScoringSpeakers.begin(),
+        _highestScoringSpeakers.begin() + levelCount);
+
+    for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
-        std::array<size_t, numConsideredActiveSpeakers> highestScoringSpeakersArray = {0, 0, 0};
-        for (size_t i = 0; i < highestScoringSpeakersArray.size() && !_highestScoringSpeakers.isEmpty(); ++i)
-        {
-            highestScoringSpeakersArray[i] = _highestScoringSpeakers.top()._participant;
-            _highestScoringSpeakers.pop();
-        }
-        updateActiveAudioList(highestScoringSpeakersArray);
+        updateActiveAudioList(heap.top()._participant);
+        heap.pop();
     }
 
     if (timestampMs - _lastChangeTimestampMs + 10 * (requiredConsecutiveWins - 1) < maxSwitchDominantSpeakerEveryMs)
@@ -383,78 +379,57 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     }
 }
 
-bool ActiveMediaList::updateActiveAudioList(
-    const std::array<size_t, numConsideredActiveSpeakers>& highestScoringSpeakers)
+void ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
 {
 #if DEBUG
     utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
 
-    bool listUpdated = false;
-    const auto numItemsToAdd = std::min(highestScoringSpeakers.size(), _maxActiveListSize);
-    for (size_t i = 0; i < numItemsToAdd; ++i)
+    if (_audioSsrcRewriteMap.end() != _audioSsrcRewriteMap.find(endpointIdHash))
     {
-        const auto endpointIdHash = highestScoringSpeakers[i];
-        if (!endpointIdHash)
-        {
-            continue;
-        }
-
-        {
-            const auto audioSsrcRewriteMapItr = _audioSsrcRewriteMap.find(endpointIdHash);
-            if (audioSsrcRewriteMapItr != _audioSsrcRewriteMap.end())
-            {
-                if (!_activeAudioList.remove(endpointIdHash))
-                {
-                    assert(false);
-                    return false;
-                }
-                const auto pushResult = _activeAudioList.pushToTail(endpointIdHash);
-                assert(pushResult);
-                continue;
-            }
-        }
-
-        if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
-        {
-            size_t removedEndpointIdHash;
-            if (!_activeAudioList.popFromHead(removedEndpointIdHash))
-            {
-                assert(false);
-                return false;
-            }
-
-            const auto audioSsrcRewriteMapItr = _audioSsrcRewriteMap.find(removedEndpointIdHash);
-            if (audioSsrcRewriteMapItr == _audioSsrcRewriteMap.end())
-            {
-                assert(false);
-                return false;
-            }
-
-            const auto ssrc = audioSsrcRewriteMapItr->second;
-            _audioSsrcRewriteMap.erase(removedEndpointIdHash);
-            _audioSsrcs.push(ssrc);
-        }
-
-        uint32_t ssrc;
-        if (!_audioSsrcs.pop(ssrc))
+        if (!_activeAudioList.remove(endpointIdHash))
         {
             assert(false);
-            return false;
+            return;
         }
-
-        _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
-        const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
+        const auto pushResult = _activeAudioList.pushToTail(endpointIdHash);
         assert(pushResult);
-
-        listUpdated = true;
-        logger::debug("endpointIdHash %lu, ssrc %u added to active audio list",
-            "ActiveMediaList",
-            endpointIdHash,
-            ssrc);
+        return;
     }
 
-    return listUpdated;
+    if (_audioSsrcRewriteMap.size() == _maxSpeakers)
+    {
+        size_t removedEndpointIdHash;
+        if (!_activeAudioList.popFromHead(removedEndpointIdHash))
+        {
+            assert(false);
+            return;
+        }
+
+        const auto audioSsrcRewriteMapItr = _audioSsrcRewriteMap.find(removedEndpointIdHash);
+        if (audioSsrcRewriteMapItr == _audioSsrcRewriteMap.end())
+        {
+            assert(false);
+            return;
+        }
+
+        const auto ssrc = audioSsrcRewriteMapItr->second;
+        _audioSsrcRewriteMap.erase(removedEndpointIdHash);
+        _audioSsrcs.push(ssrc);
+    }
+
+    uint32_t ssrc;
+    if (!_audioSsrcs.pop(ssrc))
+    {
+        assert(false);
+        return;
+    }
+
+    _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
+    const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
+    assert(pushResult);
+
+    logger::debug("endpointIdHash %lu, ssrc %u added to active audio list", "ActiveMediaList", endpointIdHash, ssrc);
 }
 
 bool ActiveMediaList::updateActiveVideoList(const size_t endpointIdHash)

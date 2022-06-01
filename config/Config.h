@@ -27,6 +27,8 @@ public:
     CFG_GROUP()
     // Value between 0 and 127, where 127 is the lowest audio level and 0 the highest.
     CFG_PROP(int32_t, silenceThresholdLevel, 127);
+    CFG_PROP(uint32_t, lastN, 3);
+    CFG_PROP(uint32_t, lastNextra, 2);
     CFG_GROUP_END(audio);
 
     CFG_GROUP()

@@ -5,7 +5,6 @@
 #include "concurrency/MpmcHashmap.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
-#include "memory/PriorityQueue.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -28,9 +27,6 @@ class ActiveMediaList
 public:
     static const size_t maxParticipants = 1024;
 
-    /** The max number of considered active speakers for switching in to the active audio list per process iteration. */
-    static const size_t numConsideredActiveSpeakers = 3;
-
     struct VideoScreenShareSsrcMapping
     {
         uint32_t _ssrc;
@@ -39,7 +35,8 @@ public:
 
     ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
         const std::vector<SimulcastLevel>& videoSsrcs,
-        const uint32_t defaultLastN);
+        const uint32_t defaultLastN,
+        uint32_t audioLastN);
 
     bool addAudioParticipant(const size_t endpointIdHash);
     bool removeAudioParticipant(const size_t endpointIdHash);
@@ -188,8 +185,10 @@ private:
         bool operator>=(const AudioParticipantScore& rhs) const { return _score >= rhs._score; }
     };
 
-    uint32_t _defaultLastN;
-    size_t _maxActiveListSize;
+    const uint32_t _defaultLastN;
+    const size_t _maxActiveListSize;
+    const size_t _audioLastN;
+    const size_t _maxSpeakers;
 
     concurrency::MpmcHashmap32<size_t, AudioParticipant> _audioParticipants;
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
@@ -199,7 +198,7 @@ private:
 
     size_t _dominantSpeaker;
     size_t _prevWinningDominantSpeaker;
-    memory::PriorityQueue<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
+    std::array<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
     int32_t _consecutiveDominantSpeakerWins;
 
     concurrency::MpmcHashmap32<size_t, VideoParticipant> _videoParticipants;
@@ -219,7 +218,7 @@ private:
     uint64_t _lastRunTimestampMs;
     uint64_t _lastChangeTimestampMs;
 
-    bool updateActiveAudioList(const std::array<size_t, numConsideredActiveSpeakers>& highestScoringSpeakers);
+    void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
 };
 

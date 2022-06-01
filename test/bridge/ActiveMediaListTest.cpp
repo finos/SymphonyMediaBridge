@@ -14,6 +14,7 @@ namespace
 {
 
 static const uint32_t defaultLastN = 2;
+static const uint32_t audioLastN = 3;
 
 void threadFunction(jobmanager::JobManager* jobManager)
 {
@@ -59,7 +60,7 @@ private:
     void SetUp() override
     {
 
-        for (uint32_t i = 0; i < 10; ++i)
+        for (uint32_t i = 0; i < 5; ++i)
         {
             _audioSsrcs.push_back(i);
         }
@@ -78,7 +79,8 @@ private:
         _jobQueue = std::make_unique<jobmanager::JobQueue>(*_jobManager);
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
-        _activeMediaList = std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, defaultLastN);
+        _activeMediaList =
+            std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, defaultLastN, audioLastN);
 
         _engineAudioStreams.clear();
         _engineVideoStreams.clear();
@@ -243,16 +245,18 @@ TEST_F(ActiveMediaListTest, audioParticipantsAddedToAudioRewriteMap)
 
 TEST_F(ActiveMediaListTest, audioParticipantsNotAddedToFullAudioRewriteMap)
 {
-    _activeMediaList->addAudioParticipant(1);
-    _activeMediaList->addAudioParticipant(2);
-    _activeMediaList->addAudioParticipant(3);
-    _activeMediaList->addAudioParticipant(4);
+
+    for (int i = 1; i < 7; ++i)
+    {
+        _activeMediaList->addAudioParticipant(i);
+    }
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(2));
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(3));
-    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(4));
+
+    for (int i = 1; i < 6; ++i)
+    {
+        EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(i));
+    }
 }
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
@@ -261,16 +265,21 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
     _activeMediaList->addAudioParticipant(2);
     _activeMediaList->addAudioParticipant(3);
     _activeMediaList->addAudioParticipant(4);
+    _activeMediaList->addAudioParticipant(5);
+    _activeMediaList->addAudioParticipant(6);
 
-    _activeMediaList->onNewAudioLevel(4, 10);
+    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(audioLastN + 2, audioRewriteMap.size());
+
+    _activeMediaList->onNewAudioLevel(6, 10);
 
     bool dominantSpeakerChanged = false;
     bool userMediaMapChanged = false;
     _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
 
-    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(4));
-    EXPECT_EQ(3, audioRewriteMap.size());
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(5, audioRewriteMap.size());
 }
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominant)
@@ -284,6 +293,9 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
             _activeMediaList->onNewAudioLevel(i, element);
         }
     }
+
+    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
 
     bool dominantSpeakerChanged = false;
     bool userMediaMapChanged = false;
@@ -301,14 +313,13 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
 
     for (const auto element : ActiveMediaListTestLevels::shortUtterance)
     {
-        _activeMediaList->onNewAudioLevel(4, element);
+        _activeMediaList->onNewAudioLevel(6, element);
     }
 
     _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
 
-    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(4));
-    EXPECT_EQ(3, audioRewriteMap.size());
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(5, audioRewriteMap.size());
 }
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallList)
@@ -346,7 +357,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallLastN)
 {
-    auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, 1);
+    auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, 1, 3);
 
     smallActiveMediaList->addAudioParticipant(1);
     smallActiveMediaList->addAudioParticipant(2);
