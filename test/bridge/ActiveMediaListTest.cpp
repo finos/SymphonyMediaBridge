@@ -248,16 +248,18 @@ TEST_F(ActiveMediaListTest, audioParticipantsAddedToAudioRewriteMap)
 
 TEST_F(ActiveMediaListTest, audioParticipantsNotAddedToFullAudioRewriteMap)
 {
-    _activeMediaList->addAudioParticipant(1);
-    _activeMediaList->addAudioParticipant(2);
-    _activeMediaList->addAudioParticipant(3);
-    _activeMediaList->addAudioParticipant(4);
+
+    for (int i = 1; i < 7; ++i)
+    {
+        _activeMediaList->addAudioParticipant(i);
+    }
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(2));
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(3));
-    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(4));
+
+    for (int i = 1; i < 6; ++i)
+    {
+        EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(i));
+    }
 }
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
@@ -266,19 +268,21 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
     _activeMediaList->addAudioParticipant(2);
     _activeMediaList->addAudioParticipant(3);
     _activeMediaList->addAudioParticipant(4);
+    _activeMediaList->addAudioParticipant(5);
+    _activeMediaList->addAudioParticipant(6);
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(4));
-    EXPECT_EQ(audioLastN, audioRewriteMap.size());
+    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(audioLastN + 2, audioRewriteMap.size());
 
-    _activeMediaList->onNewAudioLevel(4, 10);
+    _activeMediaList->onNewAudioLevel(6, 10);
 
     bool dominantSpeakerChanged = false;
     bool userMediaMapChanged = false;
     _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
 
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(4));
-    EXPECT_EQ(4, audioRewriteMap.size());
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(5, audioRewriteMap.size());
 }
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominant)
@@ -294,7 +298,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     }
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(4));
+    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
 
     bool dominantSpeakerChanged = false;
     bool userMediaMapChanged = false;
@@ -312,13 +316,13 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
 
     for (const auto element : ActiveMediaListTestLevels::shortUtterance)
     {
-        _activeMediaList->onNewAudioLevel(4, element);
+        _activeMediaList->onNewAudioLevel(6, element);
     }
 
     _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
 
-    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(4));
-    EXPECT_EQ(4, audioRewriteMap.size());
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(5, audioRewriteMap.size());
 }
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallList)
