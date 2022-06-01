@@ -91,10 +91,6 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
         _dominantSpeaker = endpointIdHash;
     }
 
-    if (_audioSsrcRewriteMap.size() == _audioLastN)
-    {
-        return false;
-    }
     uint32_t ssrc;
     if (!_audioSsrcs.pop(ssrc))
     {
