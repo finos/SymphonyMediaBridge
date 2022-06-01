@@ -156,7 +156,6 @@ private:
 
         int32_t _totalLevelLongWindow;
         int32_t _totalLevelShortWindow;
-        int32_t _nonZeroLevelsLongWindow;
         int32_t _nonZeroLevelsShortWindow;
         float _maxRecentLevel;
         float _noiseLevel;
@@ -218,6 +217,8 @@ private:
     uint64_t _lastRunTimestampMs;
     uint64_t _lastChangeTimestampMs;
 
+    size_t rankSpeakers(float& currentDominantSpeakerScore);
+    void updateLevels(const uint64_t timestampMs);
     void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
 };

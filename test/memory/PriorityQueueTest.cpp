@@ -50,7 +50,7 @@ TEST_F(PriorityQueueTest, popRemovesMax)
     EXPECT_EQ(1, priorityQueue.top());
 
     priorityQueue.pop();
-    EXPECT_TRUE(priorityQueue.isEmpty());
+    EXPECT_TRUE(priorityQueue.empty());
 }
 
 TEST_F(PriorityQueueTest, pushPop)
@@ -80,5 +80,5 @@ TEST_F(PriorityQueueTest, pushPop)
         priorityQueue.pop();
     }
 
-    EXPECT_TRUE(priorityQueue.isEmpty());
+    EXPECT_TRUE(priorityQueue.empty());
 }
