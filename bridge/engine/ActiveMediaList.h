@@ -134,10 +134,14 @@ public:
 private:
     static const size_t intervalMs = 10;
     static const int32_t requiredConsecutiveWins = 3;
+
     // Only allow a new switch after 2s
     static const uint32_t maxSwitchDominantSpeakerEveryMs = 2000;
+
     // 100 entries corresponding to 2s for the case of 20ms packets
+    // TODO this is not very good for 10ms since those post twice as many levels per interval
     static const size_t numLevels = 100;
+
     // Short Window (5 packets, typically 100ms) used to estimate noise level
     static const size_t lengthShortWindow = 5;
 

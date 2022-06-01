@@ -215,6 +215,8 @@ bool ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
     return true;
 }
 
+// note that  zero level is mainly produced by muted participants. All unmuted produce non zero level.
+// nonZerolevelWindow thus means how long a participant has been unmuted.
 void ActiveMediaList::updateLevels(const uint64_t timestampMs)
 {
     for (auto& participantLevelEntry : _audioParticipants)
@@ -281,6 +283,9 @@ void ActiveMediaList::updateLevels(const uint64_t timestampMs)
     }
 }
 
+// for unmuted speakers, their nonZeroLongWindow count will be the same.
+// This means their score depends only on maxRecentLevel and noiseLevel.
+// A recently unmuted participant has difficulty to enter the ranking list for the first 2s
 void ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
 {
     _highestScoringSpeakers.clear();
