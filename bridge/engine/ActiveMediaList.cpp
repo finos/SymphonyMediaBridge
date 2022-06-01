@@ -3,6 +3,7 @@
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
 #include "logger/Logger.h"
+#include "memory/PartialSortExtractor.h"
 #include "utils/ScopedInvariantChecker.h"
 #include "utils/ScopedReentrancyBlocker.h"
 
@@ -94,7 +95,6 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
     uint32_t ssrc;
     if (!_audioSsrcs.pop(ssrc))
     {
-        assert(false);
         return false;
     }
 
@@ -311,8 +311,8 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
 
     float maxDominantSpeakerScore = 0.0;
     float currentDominantSpeakerScore = 0.0;
-    _highestScoringSpeakers.clear();
 
+    size_t levelCount = 0;
     for (auto& participantLevelEntry : _audioParticipants)
     {
         const auto& participantLevels = participantLevelEntry.second;
@@ -331,13 +331,16 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
             newDominantSpeaker = participantLevelEntry.first;
         }
 
-        _highestScoringSpeakers.push({participantLevelEntry.first, participantScore});
+        _highestScoringSpeakers[levelCount++] = AudioParticipantScore{participantLevelEntry.first, participantScore};
     }
 
-    for (size_t i = 0; i < _audioLastN && !_highestScoringSpeakers.isEmpty(); ++i)
+    memory::PartialSortExtractor<AudioParticipantScore> heap(_highestScoringSpeakers.begin(),
+        _highestScoringSpeakers.begin() + levelCount);
+
+    for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
-        updateActiveAudioList(_highestScoringSpeakers.top()._participant);
-        _highestScoringSpeakers.pop();
+        updateActiveAudioList(heap.top()._participant);
+        heap.pop();
     }
 
     if (timestampMs - _lastChangeTimestampMs + 10 * (requiredConsecutiveWins - 1) < maxSwitchDominantSpeakerEveryMs)

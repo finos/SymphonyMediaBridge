@@ -5,7 +5,6 @@
 #include "concurrency/MpmcHashmap.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
-#include "memory/PriorityQueue.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -199,7 +198,7 @@ private:
 
     size_t _dominantSpeaker;
     size_t _prevWinningDominantSpeaker;
-    memory::PriorityQueue<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
+    std::array<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
     int32_t _consecutiveDominantSpeakerWins;
 
     concurrency::MpmcHashmap32<size_t, VideoParticipant> _videoParticipants;
