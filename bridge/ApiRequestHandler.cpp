@@ -361,7 +361,8 @@ std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> g
                 transport::SocketAddress::parse(candidate._ip, candidate._port),
                 ice::IceCandidate::Type::HOST);
         }
-        else if (candidate._type.compare("srflx") == 0 && candidate._relAddr.isSet() && candidate._relPort.isSet())
+        else if ((candidate._type.compare("srflx") == 0 || candidate._type.compare("relay") == 0) &&
+                candidate._relAddr.isSet() && candidate._relPort.isSet())
         {
             candidates.emplace_back(candidate._foundation.c_str(),
                 candidate._component == 1 ? ice::IceComponent::RTP : ice::IceComponent::RTCP,
@@ -369,7 +370,7 @@ std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> g
                 candidate._priority,
                 transport::SocketAddress::parse(candidate._ip, candidate._port),
                 transport::SocketAddress::parse(candidate._relAddr.get(), candidate._relPort.get()),
-                ice::IceCandidate::Type::SRFLX);
+                candidate._type.compare("srflx") == 0 ? ice::IceCandidate::Type::SRFLX : ice::IceCandidate::Type::RELAY);
         }
     }
 
