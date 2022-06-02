@@ -1003,7 +1003,6 @@ void analyzeRecording(const std::vector<int16_t>& recording,
     const char* logId)
 {
     utils::RateTracker<5> amplitudeTracker(codec::Opus::sampleRate / 10);
-    size_t analysisWindowSize = 0;
     const size_t fftWindowSize = 2048;
     std::valarray<std::complex<double>> testVector(fftWindowSize);
 
@@ -1033,7 +1032,6 @@ void analyzeRecording(const std::vector<int16_t>& recording,
         {
             testVector[x] = std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
         }
-        analysisWindowSize = cursor + fftWindowSize;
 
         SampleDataUtils::fft(testVector);
 
