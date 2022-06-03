@@ -25,23 +25,6 @@ json to_json(const T (&data)[N])
     return v;
 }
 } // namespace nlohmann
-namespace
-{
-
-// runs a system command and returns its output line-by-line
-std::vector<std::string> exec(const std::string& command)
-{
-    std::vector<std::string> result;
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
-    std::array<char, 1024> buffer;
-    while (pipe && fgets(buffer.data(), buffer.size(), pipe.get()))
-    {
-        result.push_back(buffer.data());
-    }
-    return result;
-}
-
-} // namespace
 
 namespace bridge
 {

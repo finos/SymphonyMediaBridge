@@ -199,7 +199,6 @@ TEST(BweReRun, DISABLED_fromTrace)
         csvOut.writeLine("%s", legend);
         csvOutAll.writeLine("%s", legend);
         logger::info("processing %s", "bweRerun", trace.c_str());
-        double prevRtime = 0;
 
         utils::RateTracker<25> rate(100 * utils::Time::ms);
         const char* formatLine = "%.2f, %.3f,%.1f,%.3f,%.3f,%.3f,%.3f,%u,%u,%.6f,%.2f, %.2f";
@@ -256,7 +255,6 @@ TEST(BweReRun, DISABLED_fromTrace)
                 prevBw = bw;
                 prevDelay = delay;
             }
-            prevRtime = localTimestamp;
         }
         logger::info("%" PRIu64 "s finished at %.3fkbps",
             "",

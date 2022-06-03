@@ -2405,8 +2405,6 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
     }
 
     auto budget = _rateController.getPacingBudget(timestamp);
-    uint32_t ssrc = 0;
-    uint32_t rtpTimestamp = 0;
     while (!_pacingQueue.empty() || !_rtxPacingQueue.empty())
     {
         auto* pacingQueue = &_pacingQueue;
@@ -2419,9 +2417,6 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
         {
             memory::UniquePacket packet(pacingQueue->fetchBack());
             budget -= packet->getLength() + _config.ipOverhead;
-            auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
-            ssrc = rtpHeader->ssrc;
-            rtpTimestamp = rtpHeader->timestamp;
             protectAndSendRtp(timestamp, std::move(packet));
         }
         else
