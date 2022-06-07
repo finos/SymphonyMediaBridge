@@ -85,12 +85,13 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
         return false;
     }
 
+    _audioParticipants.emplace(endpointIdHash, AudioParticipant());
+
     if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
     {
         return false;
     }
 
-    _audioParticipants.emplace(endpointIdHash, AudioParticipant());
     if (!_dominantSpeaker)
     {
         _dominantSpeaker = endpointIdHash;
