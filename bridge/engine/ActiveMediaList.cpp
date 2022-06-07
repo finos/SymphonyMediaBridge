@@ -85,6 +85,11 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
         return false;
     }
 
+    if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
+    {
+        return false;
+    }
+
     _audioParticipants.emplace(endpointIdHash, AudioParticipant());
     if (!_dominantSpeaker)
     {
@@ -94,6 +99,7 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
     uint32_t ssrc;
     if (!_audioSsrcs.pop(ssrc))
     {
+        assert(false);
         return false;
     }
 
@@ -303,10 +309,10 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
 // 3. Keep track of peak value (_maxRecentLevel) for each participant
 // 4. Keep track of noise level (_noiseLevel) for each participant where _noiseLevel value is
 //    the minimum level seen recently in the ~100ms window
-// 5. Peak is decayed towards average of the 2s Window if no new max is recevied
+// 5. Peak is decayed towards average of the 2s Window if no new max is received
 // 6. Noise level estimate is increased if no new minimum is found
 //
-// Score is calcuated as diff (spread) between _maxRecentLevel and _noiseLevel - somewhat reduced if
+// Score is calculated as diff (spread) between _maxRecentLevel and _noiseLevel - somewhat reduced if
 // user has been muted.
 // To take over the dominant speaker position a participant has to have the highest score
 // three times in a row. Current dominant speaker score must also be < 75% of new dominant speaker score. That is 33%
@@ -326,9 +332,12 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     }
     _lastRunTimestampMs = timestampMs;
 
-    bool newLevelsAvailable = !_incomingAudioLevels.empty();
+
+    // This can happen after a user has been removed
+    const bool needToActiveAudioList = _audioParticipants.size() > _audioSsrcRewriteMap.size();
+    const bool newLevelsAvailable = !_incomingAudioLevels.empty();
     updateLevels(timestampMs);
-    if (!newLevelsAvailable)
+    if (!(needToActiveAudioList || newLevelsAvailable))
     {
         return;
     }
@@ -407,7 +416,7 @@ void ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
         return;
     }
 
-    if (_audioSsrcRewriteMap.size() == _maxSpeakers)
+    if (_audioSsrcRewriteMap.size() == _maxActiveListSize)
     {
         size_t removedEndpointIdHash;
         if (!_activeAudioList.popFromHead(removedEndpointIdHash))
