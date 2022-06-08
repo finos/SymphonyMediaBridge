@@ -558,6 +558,9 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
     {
         EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(i));
     }
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(2));
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(3));
 
     EXPECT_EQ(5, audioRewriteMap.size());
 }

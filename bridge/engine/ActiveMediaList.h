@@ -60,7 +60,7 @@ public:
 
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
-    inline size_t getDominantSpeaker() const { return _dominantSpeaker; }
+    inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
@@ -176,13 +176,13 @@ private:
 
     struct AudioParticipantScore
     {
-        size_t _participant;
-        float _score;
+        size_t participant;
+        float score;
 
-        bool operator<(const AudioParticipantScore& rhs) const { return _score < rhs._score; }
-        bool operator>(const AudioParticipantScore& rhs) const { return _score > rhs._score; }
-        bool operator<=(const AudioParticipantScore& rhs) const { return _score <= rhs._score; }
-        bool operator>=(const AudioParticipantScore& rhs) const { return _score >= rhs._score; }
+        bool operator<(const AudioParticipantScore& rhs) const { return score < rhs.score; }
+        bool operator>(const AudioParticipantScore& rhs) const { return score > rhs.score; }
+        bool operator<=(const AudioParticipantScore& rhs) const { return score <= rhs.score; }
+        bool operator>=(const AudioParticipantScore& rhs) const { return score >= rhs.score; }
     };
 
     logger::LoggableId _logId;
@@ -197,7 +197,7 @@ private:
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
     memory::List<size_t, 32> _activeAudioList;
 
-    size_t _dominantSpeaker;
+    size_t _dominantSpeakerId;
     size_t _prevWinningDominantSpeaker;
     std::array<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
     int32_t _consecutiveDominantSpeakerWins;
