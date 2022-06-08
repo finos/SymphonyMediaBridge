@@ -23,11 +23,13 @@ ActiveMediaList::AudioParticipant::AudioParticipant()
     memset(_levels.data(), 0, _levels.size());
 }
 
-ActiveMediaList::ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
+ActiveMediaList::ActiveMediaList(size_t instanceId,
+    const std::vector<uint32_t>& audioSsrcs,
     const std::vector<SimulcastLevel>& videoSsrcs,
     const uint32_t defaultLastN,
     uint32_t audioLastN)
-    : _defaultLastN(defaultLastN),
+    : _logId("ActiveMediaList", instanceId),
+      _defaultLastN(defaultLastN),
       _maxActiveListSize(defaultLastN + 1),
       _audioLastN(audioLastN),
       _maxSpeakers(audioSsrcs.size()),
@@ -35,7 +37,7 @@ ActiveMediaList::ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
       _incomingAudioLevels(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
-      _dominantSpeaker(0),
+      _dominantSpeakerId(0),
       _prevWinningDominantSpeaker(0),
       _consecutiveDominantSpeakerWins(0),
       _videoParticipants(maxParticipants),
@@ -86,9 +88,9 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
     }
 
     _audioParticipants.emplace(endpointIdHash, AudioParticipant());
-    if (!_dominantSpeaker)
+    if (!_dominantSpeakerId)
     {
-        _dominantSpeaker = endpointIdHash;
+        _dominantSpeakerId = endpointIdHash;
     }
 
     uint32_t ssrc;
@@ -96,6 +98,8 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
     {
         return false;
     }
+
+    logger::info("new endpoint %zu, ssrc %u added to active audio list", _logId.c_str(), endpointIdHash, ssrc);
 
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
     const bool pushResult = _activeAudioList.pushToHead(endpointIdHash);
@@ -154,7 +158,7 @@ bool ActiveMediaList::addVideoParticipant(const size_t endpointIdHash,
 
     if (_activeVideoListLookupMap.size() == _maxActiveListSize)
     {
-        return endpointIdHash != _dominantSpeaker || updateActiveVideoList(_dominantSpeaker);
+        return endpointIdHash != _dominantSpeakerId || updateActiveVideoList(_dominantSpeakerId);
     }
 
     if (simulcastStream.isSendingVideo() ||
@@ -172,9 +176,10 @@ bool ActiveMediaList::addVideoParticipant(const size_t endpointIdHash,
     }
 
     const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
+    logger::info("new endpoint %zu added to active video list", _logId.c_str(), endpointIdHash);
     _activeVideoListLookupMap.emplace(endpointIdHash, _activeVideoList.head());
     assert(pushResult);
-    return endpointIdHash != _dominantSpeaker || updateActiveVideoList(_dominantSpeaker);
+    return endpointIdHash != _dominantSpeakerId || updateActiveVideoList(_dominantSpeakerId);
 }
 
 bool ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
@@ -283,9 +288,15 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
     for (auto& participantLevelEntry : _audioParticipants)
     {
         const auto& participantLevels = participantLevelEntry.second;
-        const float participantScore = participantLevels._maxRecentLevel - participantLevels._noiseLevel;
+        if (participantLevels._maxRecentLevel == 0)
+        {
+            continue;
+        }
 
-        if (participantLevelEntry.first == _dominantSpeaker)
+        const float participantScore =
+            std::max(0.0f, participantLevels._maxRecentLevel - participantLevels._noiseLevel);
+
+        if (participantLevelEntry.first == _dominantSpeakerId)
         {
             currentDominantSpeakerScore = participantScore;
         }
@@ -306,8 +317,7 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
 // 5. Peak is decayed towards average of the 2s Window if no new max is recevied
 // 6. Noise level estimate is increased if no new minimum is found
 //
-// Score is calcuated as diff (spread) between _maxRecentLevel and _noiseLevel - somewhat reduced if
-// user has been muted.
+// Score is calcuated as diff (spread) between _maxRecentLevel and _noiseLevel.
 // To take over the dominant speaker position a participant has to have the highest score
 // three times in a row. Current dominant speaker score must also be < 75% of new dominant speaker score. That is 33%
 // louder over the entire measurement window. The time passed since last speaker switch must be > 2s.
@@ -343,12 +353,11 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     memory::PartialSortExtractor<AudioParticipantScore> heap(_highestScoringSpeakers.begin(),
         _highestScoringSpeakers.begin() + speakerCount);
 
-    auto newDominantSpeaker = heap.top()._participant;
-    float maxDominantSpeakerScore = heap.top()._score;
+    auto dominantSpeaker = heap.top();
 
     for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
-        updateActiveAudioList(heap.top()._participant);
+        updateActiveAudioList(heap.top().participant);
         heap.pop();
     }
 
@@ -358,34 +367,34 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     }
 
     // nominate dominant speaker (for video)
-    if (newDominantSpeaker == _prevWinningDominantSpeaker)
+    if (dominantSpeaker.participant == _prevWinningDominantSpeaker)
     {
         _consecutiveDominantSpeakerWins++;
     }
     else
     {
         _consecutiveDominantSpeakerWins = 1;
-        _prevWinningDominantSpeaker = newDominantSpeaker;
+        _prevWinningDominantSpeaker = dominantSpeaker.participant;
     }
 
     _lastRunTimestampMs = timestampMs;
-    if (newDominantSpeaker != _dominantSpeaker &&
-        ((!_dominantSpeaker || currentDominantSpeakerScore < 0.01) ||
+    if (dominantSpeaker.participant != _dominantSpeakerId &&
+        ((!_dominantSpeakerId || currentDominantSpeakerScore < 0.01) ||
             (_consecutiveDominantSpeakerWins >= requiredConsecutiveWins &&
-                currentDominantSpeakerScore < 0.75 * maxDominantSpeakerScore &&
+                currentDominantSpeakerScore < 0.75 * dominantSpeaker.score &&
                 timestampMs - _lastChangeTimestampMs >= maxSwitchDominantSpeakerEveryMs)))
     {
         logger::info("process dominant speaker switch %lu (score %f) -> %lu (score %f)",
-            "ActiveMediaList",
-            _dominantSpeaker,
+            _logId.c_str(),
+            _dominantSpeakerId,
             currentDominantSpeakerScore,
-            newDominantSpeaker,
-            maxDominantSpeakerScore);
+            dominantSpeaker.participant,
+            dominantSpeaker.score);
 
         _lastChangeTimestampMs = timestampMs;
-        _dominantSpeaker = newDominantSpeaker;
+        _dominantSpeakerId = dominantSpeaker.participant;
         outDominantSpeakerChanged = true;
-        outUserMediaMapChanged = updateActiveVideoList(_dominantSpeaker);
+        outUserMediaMapChanged = updateActiveVideoList(_dominantSpeakerId);
     }
 }
 
@@ -439,7 +448,7 @@ void ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
     const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
     assert(pushResult);
 
-    logger::debug("endpointIdHash %lu, ssrc %u added to active audio list", "ActiveMediaList", endpointIdHash, ssrc);
+    logger::debug("endpointIdHash %zu, ssrc %u added to active audio list", _logId.c_str(), endpointIdHash, ssrc);
 }
 
 bool ActiveMediaList::updateActiveVideoList(const size_t endpointIdHash)
