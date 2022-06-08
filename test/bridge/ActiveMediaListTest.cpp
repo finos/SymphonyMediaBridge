@@ -322,6 +322,48 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     EXPECT_EQ(5, audioRewriteMap.size());
 }
 
+TEST_F(ActiveMediaListTest, activeAudioParticipantDominantSpeakerMustNotChangeIfEveryoneMute)
+{
+    _activeMediaList->addAudioParticipant(1);
+    EXPECT_EQ(1, _activeMediaList->getDominantSpeaker());
+
+    _activeMediaList->addAudioParticipant(2);
+    _activeMediaList->addAudioParticipant(3);
+    _activeMediaList->addAudioParticipant(4);
+    EXPECT_EQ(1, _activeMediaList->getDominantSpeaker());
+
+    bool dominantSpeakerChanged = false;
+    bool userMediaMapChanged = false;
+    _activeMediaList->onNewAudioLevel(1, 127);
+    _activeMediaList->onNewAudioLevel(2, 127);
+    _activeMediaList->onNewAudioLevel(3, 127);
+    _activeMediaList->onNewAudioLevel(3, 127);
+    _activeMediaList->onNewAudioLevel(4, 127);
+    _activeMediaList->process(3000, dominantSpeakerChanged, userMediaMapChanged);
+    EXPECT_FALSE(dominantSpeakerChanged);
+    EXPECT_EQ(1, _activeMediaList->getDominantSpeaker());
+
+    _activeMediaList->addAudioParticipant(5);
+    _activeMediaList->addAudioParticipant(6);
+    EXPECT_EQ(1, _activeMediaList->getDominantSpeaker());
+
+    const auto iteration = 20;
+    for (int i = 0; i < iteration; ++i)
+    {
+        _activeMediaList->onNewAudioLevel(1, 127);
+        _activeMediaList->onNewAudioLevel(2, 127);
+        _activeMediaList->onNewAudioLevel(3, 127);
+        _activeMediaList->onNewAudioLevel(3, 127);
+        _activeMediaList->onNewAudioLevel(4, 127);
+        _activeMediaList->onNewAudioLevel(5, 127);
+        _activeMediaList->onNewAudioLevel(6, 127);
+
+        _activeMediaList->process(3020 + i * 20, dominantSpeakerChanged, userMediaMapChanged);
+        EXPECT_FALSE(dominantSpeakerChanged);
+        EXPECT_EQ(1, _activeMediaList->getDominantSpeaker());
+    }
+}
+
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallList)
 {
     const size_t numParticipants = 2;
