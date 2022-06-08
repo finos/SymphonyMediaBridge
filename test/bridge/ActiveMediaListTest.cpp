@@ -80,7 +80,7 @@ private:
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
         _activeMediaList =
-            std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, defaultLastN, audioLastN);
+            std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, defaultLastN, audioLastN);
 
         _engineAudioStreams.clear();
         _engineVideoStreams.clear();
@@ -357,7 +357,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallLastN)
 {
-    auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(_audioSsrcs, _videoSsrcs, 1, 3);
+    auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, 1, 3);
 
     smallActiveMediaList->addAudioParticipant(1);
     smallActiveMediaList->addAudioParticipant(2);
@@ -526,4 +526,36 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     EXPECT_FALSE(endpointsContainsId(messageJson, "2"));
     EXPECT_FALSE(endpointsContainsId(messageJson, "3"));
     EXPECT_TRUE(endpointsContainsId(messageJson, "4"));
+}
+
+TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
+{
+    const int memberCount = 9;
+    for (int i = 1; i < memberCount; ++i)
+    {
+        _activeMediaList->addAudioParticipant(i);
+    }
+
+    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(audioLastN + 2, audioRewriteMap.size());
+    uint64_t timestamp = utils::Time::sec;
+    for (int i = 0; i < 25; ++i)
+    {
+        timestamp += 20;
+        _activeMediaList->onNewAudioLevel(1, 50);
+        _activeMediaList->onNewAudioLevel(6, 0x7F);
+        _activeMediaList->onNewAudioLevel(7, 0x7F);
+        _activeMediaList->onNewAudioLevel(8, 0x7F);
+        bool dominantSpeakerChanged = false;
+        bool userMediaMapChanged = false;
+        _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+    }
+
+    for (int i = 6; i < memberCount; ++i)
+    {
+        EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(i));
+    }
+
+    EXPECT_EQ(5, audioRewriteMap.size());
 }

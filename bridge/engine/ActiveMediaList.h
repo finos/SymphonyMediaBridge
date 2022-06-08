@@ -33,7 +33,8 @@ public:
         uint32_t _rewriteSsrc;
     };
 
-    ActiveMediaList(const std::vector<uint32_t>& audioSsrcs,
+    ActiveMediaList(size_t instanceId,
+        const std::vector<uint32_t>& audioSsrcs,
         const std::vector<SimulcastLevel>& videoSsrcs,
         const uint32_t defaultLastN,
         uint32_t audioLastN);
@@ -184,6 +185,7 @@ private:
         bool operator>=(const AudioParticipantScore& rhs) const { return _score >= rhs._score; }
     };
 
+    logger::LoggableId _logId;
     const uint32_t _defaultLastN;
     const size_t _maxActiveListSize;
     const size_t _audioLastN;
