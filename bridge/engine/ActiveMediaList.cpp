@@ -99,7 +99,7 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
         return false;
     }
 
-    logger::info("endpoint %zu, ssrc %u added to active audio list", _logId.c_str(), endpointIdHash, ssrc);
+    logger::info("new endpoint %zu, ssrc %u added to active audio list", _logId.c_str(), endpointIdHash, ssrc);
 
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
     const bool pushResult = _activeAudioList.pushToHead(endpointIdHash);
@@ -288,8 +288,13 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
     for (auto& participantLevelEntry : _audioParticipants)
     {
         const auto& participantLevels = participantLevelEntry.second;
-        const float participantScore = participantLevels._maxRecentLevel - participantLevels._noiseLevel;
-        // std::max(0.0f, participantLevels._maxRecentLevel - participantLevels._noiseLevel);
+        if (participantLevels._maxRecentLevel == 0)
+        {
+            continue;
+        }
+
+        const float participantScore =
+            std::max(0.0f, participantLevels._maxRecentLevel - participantLevels._noiseLevel);
 
         if (participantLevelEntry.first == _dominantSpeaker)
         {

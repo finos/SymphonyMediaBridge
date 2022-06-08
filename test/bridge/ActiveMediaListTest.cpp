@@ -540,7 +540,8 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
     EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
     EXPECT_EQ(audioLastN + 2, audioRewriteMap.size());
     uint64_t timestamp = utils::Time::sec;
-    for (int i = 0; i < 25; ++i)
+    // 2-5 are not sending media at all.
+    for (int i = 0; i < 95; ++i)
     {
         timestamp += 20;
         _activeMediaList->onNewAudioLevel(1, 50);
@@ -552,7 +553,7 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
         _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
     }
 
-    for (int i = 6; i < memberCount; ++i)
+    for (int i = 1 + audioLastN + 2; i < memberCount; ++i)
     {
         EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(i));
     }
