@@ -541,6 +541,7 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
     EXPECT_EQ(audioLastN + 2, audioRewriteMap.size());
     uint64_t timestamp = utils::Time::sec;
     // 2-5 are not sending media at all.
+    // 6-8 behave as muted, sending level 0x7F
     for (int i = 0; i < 95; ++i)
     {
         timestamp += 20;
