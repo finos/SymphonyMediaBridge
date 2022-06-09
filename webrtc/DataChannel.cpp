@@ -6,6 +6,7 @@ DataChannelOpenMessage& DataChannelOpenMessage::create(void* location, const std
 {
     auto* m = reinterpret_cast<DataChannelOpenMessage*>(location);
 
+    m->messageType = DATA_CHANNEL_OPEN;
     m->channelType = ChannelType::DATA_CHANNEL_RELIABLE;
     m->labelLength = label.size();
     m->reliability = 0;

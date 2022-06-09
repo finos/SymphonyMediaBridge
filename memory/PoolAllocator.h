@@ -103,7 +103,7 @@ public:
                 const Entry& entry = _elements[i];
                 if (entry._beginGuard == 0xEFEFEFEFEFEFEFEFLLU)
                 {
-                    logger::warn("element leak at %p", _name.c_str(), &entry);
+                    logger::warnImmediate("element leak at %p", _name.c_str(), &entry);
                     logger::logStack(entry._callStack + 1, 9, _name.c_str());
                 }
             }

@@ -3,6 +3,7 @@
 #include "logger/Logger.h"
 #include <cassert>
 #include <cstdint>
+#include <mutex>
 #include <openssl/asn1.h>
 #include <openssl/bn.h>
 #include <openssl/err.h>
@@ -171,11 +172,22 @@ long writeBioCtrl(BIO* bio, int32_t cmd, long num, void* ptr)
 namespace transport
 {
 
+uint32_t SslDtls::_instanceCounter = 0;
+std::mutex _sslInitMutex;
+
 SslDtls::SslDtls() : _sslContext(nullptr), _evpPkeyRsa(nullptr), _certificate(nullptr), _writeBioMethods(nullptr)
 {
-    SSL_library_init();
-    SSL_load_error_strings();
-    OpenSSL_add_all_algorithms();
+    {
+        std::lock_guard<std::mutex> lock(_sslInitMutex);
+        if (0 == _instanceCounter++)
+        {
+            SSL_library_init();
+            SSL_load_error_strings();
+            OpenSSL_add_all_algorithms();
+            const auto srtpInitResult = srtp_init();
+            assert(srtpInitResult == srtp_err_status_ok);
+        }
+    }
 
     _sslContext = SSL_CTX_new(DTLS_method());
 
@@ -214,9 +226,6 @@ SslDtls::SslDtls() : _sslContext(nullptr), _evpPkeyRsa(nullptr), _certificate(nu
     result = SSL_CTX_set_cipher_list(_sslContext, "HIGH:!aNULL:!MD5:!RC4");
     assert(result);
 
-    const auto srtpInitResult = srtp_init();
-    assert(srtpInitResult == srtp_err_status_ok);
-
     _writeBioMethods = BIO_meth_new(BIO_TYPE_BIO, "SrtpClient write BIO");
     assert(_writeBioMethods);
 
@@ -244,7 +253,12 @@ SslDtls::~SslDtls()
     }
 
     BIO_meth_free(_writeBioMethods);
-    srtp_shutdown();
+
+    std::lock_guard<std::mutex> lock(_sslInitMutex);
+    if (0 == --_instanceCounter)
+    {
+        srtp_shutdown();
+    }
 }
 
 } // namespace transport

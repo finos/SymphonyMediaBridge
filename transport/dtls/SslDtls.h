@@ -42,6 +42,7 @@ private:
     X509* _certificate;
     std::string _localFingerprint;
     BIO_METHOD* _writeBioMethods;
+    static uint32_t _instanceCounter;
 };
 
 inline bool isDtlsPacket(const void* data)

@@ -44,6 +44,7 @@ struct EngineDataStream;
 struct EngineRecordingStream;
 struct EngineVideoStream;
 struct SimulcastLevel;
+struct EngineBarbell;
 
 class EngineMixer : public transport::DataReceiver
 {
@@ -110,6 +111,8 @@ public:
         transport::RecordingTransport* transport,
         UnackedPacketsTracker* recUnackedPacketsTracker);
     void removeTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
+    void addBarbell(EngineBarbell* barbell);
+    void removeBarbell(size_t idHash);
 
     void clear();
 
@@ -298,6 +301,7 @@ private:
     concurrency::MpmcHashmap32<size_t, EngineVideoStream*> _engineVideoStreams;
     concurrency::MpmcHashmap32<size_t, EngineDataStream*> _engineDataStreams;
     concurrency::MpmcHashmap32<size_t, EngineRecordingStream*> _engineRecordingStreams;
+    concurrency::MpmcHashmap32<size_t, EngineBarbell*> _engineBarbells;
 
     concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext> _ssrcInboundContexts;
 

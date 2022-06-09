@@ -70,6 +70,7 @@ private:
     void addRecordingRtpPacketCache(EngineCommand::Command& nextCommand);
     void addTransportToRecordingStream(EngineCommand::Command& nextCommand);
     void removeTransportFromRecordingStream(EngineCommand::Command& nextCommand);
+    void addBarbell(EngineCommand::Command& nextCommand);
 };
 
 } // namespace bridge

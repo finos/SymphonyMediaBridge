@@ -4,11 +4,10 @@
 
 namespace emulator
 {
-class HttpPostRequest
+class HttpRequest
 {
 public:
-    HttpPostRequest(const char* url, const char* body);
-    ~HttpPostRequest();
+    ~HttpRequest();
 
     void awaitResponse(uint64_t timeout);
 
@@ -23,7 +22,7 @@ public:
     int getCode() const { return _request->status_code; }
 
 protected:
-    HttpPostRequest() : _request(nullptr), _status(HTTP_STATUS_PENDING), _prevSize(0) {}
+    HttpRequest() : _request(nullptr), _status(HTTP_STATUS_PENDING), _prevSize(0) {}
     http_t* _request;
 
 private:
@@ -31,19 +30,30 @@ private:
     size_t _prevSize;
 };
 
-class HttpPatchRequest : public HttpPostRequest
+class HttpPostRequest : public HttpRequest
+{
+public:
+    HttpPostRequest(const char* url, const char* body);
+};
+
+class HttpPatchRequest : public HttpRequest
 {
 public:
     HttpPatchRequest(const char* url, const char* body)
     {
         _request = http_patch(url, body, body ? std::strlen(body) : 0, nullptr);
+        assert(_request);
     }
 };
 
-class HttpGetRequest : public HttpPostRequest
+class HttpGetRequest : public HttpRequest
 {
 public:
-    HttpGetRequest(const char* url) { _request = http_get(url, nullptr); }
+    HttpGetRequest(const char* url)
+    {
+        _request = http_get(url, nullptr);
+        assert(_request);
+    }
 };
 
 } // namespace emulator

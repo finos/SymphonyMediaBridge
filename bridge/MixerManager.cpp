@@ -6,6 +6,7 @@
 #include "bridge/VideoStream.h"
 #include "bridge/engine/Engine.h"
 #include "bridge/engine/EngineAudioStream.h"
+#include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineDataStream.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/EngineRecordingStream.h"
@@ -297,6 +298,9 @@ void MixerManager::run()
                     engineMessageRemoveRecordingTransport(nextMessage);
                     break;
 
+                case EngineMessage::Type::BarbellRemoved:
+                    engineBarbellRemoved(nextMessage._command.barbellRemoved);
+                    break;
                 default:
                     assert(false);
                     break;
@@ -681,6 +685,17 @@ void MixerManager::engineMessageRemoveRecordingTransport(const EngineMessage::Me
     }
 
     mixerItr->second->removeRecordingTransport(command._streamId, command._endpointIdHash);
+}
+
+void MixerManager::engineBarbellRemoved(const EngineMessage::EngineBarbellRemoved& message)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+
+    auto mixerIt = _mixers.find(message.mixer->getId());
+    if (mixerIt != _mixers.end())
+    {
+        mixerIt->second->engineBarbellRemoved(message.barbell);
+    }
 }
 
 // This method may block up to 1s to collect the statistics

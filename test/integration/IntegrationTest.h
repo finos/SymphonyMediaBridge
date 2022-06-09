@@ -36,5 +36,3 @@ struct IntegrationTest : public ::testing::Test
 
     void initBridge(config::Config& config);
 };
-
-

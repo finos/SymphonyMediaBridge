@@ -177,9 +177,9 @@ api::EndpointDescription::Transport parsePatchEndpointTransport(const nlohmann::
     {
         api::EndpointDescription::Dtls dtls;
         const auto& dtlsJson = data["dtls"];
-        dtls._type = dtlsJson["type"].get<std::string>();
-        dtls._hash = dtlsJson["hash"].get<std::string>();
-        dtls._setup = dtlsJson["setup"].get<std::string>();
+        dtls.type = dtlsJson["type"].get<std::string>();
+        dtls.hash = dtlsJson["hash"].get<std::string>();
+        dtls.setup = dtlsJson["setup"].get<std::string>();
         transport._dtls.set(dtls);
     }
 

@@ -122,4 +122,21 @@ public:
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
 };
+
+class Barbell
+{
+public:
+    Barbell();
+
+    std::string allocate(std::string baseUrl, std::string conferenceId, bool controlling);
+
+    void configure(std::string body);
+    std::string _id;
+
+private:
+    nlohmann::json _offer;
+    std::string _baseUrl;
+    std::string _conferenceId;
+};
+
 } // namespace emulator

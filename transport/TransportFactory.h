@@ -64,6 +64,8 @@ public:
         const size_t endpointIdHash,
         const Endpoints& rtpPorts) = 0;
 
+    virtual bool openRtpMuxPorts(Endpoints& rtpPorts) const = 0;
+
     virtual void maintenance(uint64_t timestamp) = 0;
 };
 

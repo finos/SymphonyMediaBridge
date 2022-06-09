@@ -79,6 +79,14 @@ __attribute__((format(printf, 1, 3))) inline void logAlways(const char* format, 
     va_end(arglist);
 }
 
+__attribute__((format(printf, 1, 3))) inline void warnImmediate(const char* format, const char* logGroup, ...)
+{
+    va_list arglist;
+    va_start(arglist, logGroup);
+    logv("WARN", logGroup, true, format, arglist);
+    va_end(arglist);
+}
+
 __attribute__((format(printf, 1, 3))) inline void errorImmediate(const char* format, const char* logGroup, ...)
 {
     va_list arglist;

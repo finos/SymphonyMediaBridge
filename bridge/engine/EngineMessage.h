@@ -16,6 +16,7 @@ class EngineMixer;
 struct EngineAudioStream;
 struct EngineVideoStream;
 struct EngineDataStream;
+struct EngineBarbell;
 struct EngineRecordingStream;
 struct RecordingDescription;
 
@@ -116,6 +117,12 @@ struct RemoveRecordingTransport
     size_t _endpointIdHash;
 };
 
+struct EngineBarbellRemoved
+{
+    EngineMixer* mixer;
+    EngineBarbell* barbell;
+};
+
 enum class Type
 {
     MixerRemoved,
@@ -132,7 +139,8 @@ enum class Type
     RecordingStopped,
     AllocateRecordingRtpPacketCache,
     FreeRecordingRtpPacketCache,
-    RemoveRecordingTransport
+    RemoveRecordingTransport,
+    BarbellRemoved
 };
 
 union MessageUnion
@@ -152,6 +160,7 @@ union MessageUnion
     AllocateRecordingRtpPacketCache allocateRecordingRtpPacketCache;
     FreeRecordingRtpPacketCache freeRecordingRtpPacketCache;
     RemoveRecordingTransport removeRecordingTransport;
+    EngineBarbellRemoved barbellRemoved;
 };
 
 struct Message
