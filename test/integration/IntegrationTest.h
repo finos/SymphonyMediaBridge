@@ -36,3 +36,100 @@ struct IntegrationTest : public ::testing::Test
 
     void initBridge(config::Config& config);
 };
+
+template <typename T>
+class GroupCall
+{
+public:
+    GroupCall(const std::vector<T*> clients) : _clients(clients) {}
+
+    bool connect(uint64_t timeout)
+    {
+        auto start = utils::Time::getAbsoluteTime();
+        for (auto client : _clients)
+        {
+            if (!client->_channel.isSuccess())
+            {
+                return false;
+            }
+        }
+
+        for (auto client : _clients)
+        {
+            client->processOffer();
+            if (!client->_transport || !client->_audioSource)
+            {
+                return false;
+            }
+        }
+
+        for (auto client : _clients)
+        {
+            client->connect();
+        }
+
+        for (size_t connectedCount = 0; utils::Time::getAbsoluteTime() - start < timeout; connectedCount = 0)
+        {
+            for (auto client : _clients)
+            {
+                if (!client->_transport->isConnected())
+                {
+                    break;
+                }
+                else
+                {
+                    ++connectedCount;
+                }
+            }
+
+            if (connectedCount == _clients.size())
+            {
+                return true;
+            }
+            utils::Time::nanoSleep(1 * utils::Time::sec);
+            logger::debug("waiting for connect...", "test");
+        }
+
+        return false;
+    }
+
+    void run(uint64_t period)
+    {
+        const auto start = utils::Time::getAbsoluteTime();
+        utils::Pacer pacer(10 * utils::Time::ms);
+        for (auto timestamp = utils::Time::getAbsoluteTime(); timestamp - start < period;)
+        {
+            for (auto client : _clients)
+            {
+                client->process(timestamp);
+            }
+            pacer.tick(utils::Time::getAbsoluteTime());
+            utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+            timestamp = utils::Time::getAbsoluteTime();
+        }
+    }
+
+    bool awaitPendingJobs(uint64_t timeout)
+    {
+        auto start = utils::Time::getAbsoluteTime();
+        for (size_t runCount = 1; utils::Time::getAbsoluteTime() - start < timeout;)
+        {
+            runCount = 0;
+            utils::Time::nanoSleep(utils::Time::ms * 100);
+            for (auto client : _clients)
+            {
+                if (client->_transport->hasPendingJobs())
+                {
+                    ++runCount;
+                }
+            }
+            if (runCount == 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::vector<T*> _clients;
+};
