@@ -422,6 +422,7 @@ set(TEST_FILES
     test/sctp/SctpEndpoint.cpp
     test/sctp/SctpBasicsTests.cpp
     test/sctp/SctpTransferTests.cpp
+    test/transport/ice/IceCandidateTest.cpp
     test/transport/SctpTest.cpp
     test/transport/RtcTransportTest.cpp
     test/transport/RtpTest.cpp

@@ -33,6 +33,7 @@ public:
     SocketAddress(const SocketAddress& ip, uint16_t port) : SocketAddress(&ip._address.gen) { setPort(port); }
 
     int getFamily() const { return _address.gen.sa_family; }
+    const std::string& getFamilyString() const;
 
     const sockaddr* getSockAddr() const { return &_address.gen; }
 
