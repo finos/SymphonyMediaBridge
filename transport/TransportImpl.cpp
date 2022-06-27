@@ -1383,17 +1383,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
         return;
     }
 
-    auto budget = _rateController.getPacingBudget(timestamp);
-    auto* pacingQueue = _rtxPacingQueue.empty() ? &_pacingQueue : &_rtxPacingQueue;
-    while (!pacingQueue->empty() && budget >= pacingQueue->back()->getLength() + _config.ipOverhead)
-    {
-        auto packet = std::move(pacingQueue->back());
-        pacingQueue->pop_back();
-        budget -= std::min(budget, packet->getLength() + _config.ipOverhead);
-
-        protectAndSendRtp(timestamp, std::move(packet));
-        pacingQueue = _rtxPacingQueue.empty() ? &_pacingQueue : &_rtxPacingQueue;
-    }
+    drainPacingBuffer(timestamp);
 
     uint16_t padding = 0;
     auto& rtxSenderState = getOutboundSsrc(_rtxProbeSsrc, 90000);
@@ -2404,30 +2394,26 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
         return;
     }
 
-    auto budget = _rateController.getPacingBudget(timestamp);
-    while (!_pacingQueue.empty() || !_rtxPacingQueue.empty())
-    {
-        auto* pacingQueue = &_pacingQueue;
-        if (!_rtxPacingQueue.empty())
-        {
-            pacingQueue = &_rtxPacingQueue;
-        }
-
-        if (pacingQueue->back()->getLength() + _config.ipOverhead <= budget)
-        {
-            memory::UniquePacket packet(pacingQueue->fetchBack());
-            budget -= packet->getLength() + _config.ipOverhead;
-            protectAndSendRtp(timestamp, std::move(packet));
-        }
-        else
-        {
-            break;
-        }
-    }
+    drainPacingBuffer(timestamp);
 
     sendPadding(timestamp);
 
     _pacingInUse = !_pacingQueue.empty() || !_rtxPacingQueue.empty();
+}
+
+inline memory::UniquePacket TransportImpl::tryFetchPriorityPacket(size_t budget)
+{
+    auto queue = _rtxPacingQueue.empty() ? _pacingQueue : _rtxPacingQueue;
+    return !queue.empty() && budget >= queue.back()->getLength() + _config.ipOverhead ? queue.fetchBack() : nullptr;
+}
+
+void TransportImpl::drainPacingBuffer(uint64_t timestamp) 
+{
+    auto budget = _rateController.getPacingBudget(timestamp);
+    while (auto packet = tryFetchPriorityPacket(budget)) {
+        budget -= packet->getLength() + _config.ipOverhead;
+        protectAndSendRtp(timestamp, std::move(packet));
+    } 
 }
 
 } // namespace transport

@@ -41,6 +41,9 @@ struct SctpConfig;
 
 namespace transport
 {
+
+typedef memory::RandomAccessBacklog<memory::UniquePacket, 512> pacing_queue_t;
+
 class TransportImpl : public RtcTransport,
                       private SslWriteBioListener,
                       public Endpoint::IEvents,
@@ -301,6 +304,8 @@ private:
     RtpSenderState& getOutboundSsrc(uint32_t ssrc, uint32_t rtpFrequency);
 
     void onTransportConnected();
+    void drainPacingBuffer(uint64_t timestamp);
+    inline memory::UniquePacket tryFetchPriorityPacket(size_t budget);
 
     std::atomic_bool _isInitialized;
     logger::LoggableId _loggableId;
@@ -388,8 +393,8 @@ private:
     uint32_t _rtxProbeSsrc;
     uint32_t* _rtxProbeSequenceCounter;
 
-    memory::RandomAccessBacklog<memory::UniquePacket, 512> _pacingQueue;
-    memory::RandomAccessBacklog<memory::UniquePacket, 512> _rtxPacingQueue;
+    pacing_queue_t _pacingQueue;
+    pacing_queue_t _rtxPacingQueue;
     std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
