@@ -18,6 +18,20 @@ uint8_t* getEndpointBuffRef(memory::Packet& packet)
     return &(packet.get()[REC_HEADER_SIZE + 6 + 2]);
 }
 
+uint8_t getCodecNumberFor(bridge::RtpMap::Format format)
+{
+    switch (format)
+    {
+    case bridge::RtpMap::Format::VP8:
+        return 100;
+    case bridge::RtpMap::Format::OPUS:
+        return 111;
+    default:
+        assert(false);
+        return 0xff;
+    }
+}
+
 } // namespace
 
 RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setSsrc(uint32_t ssrc)
@@ -38,9 +52,9 @@ RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setRtpPayloadType(uint8_
     return *this;
 }
 
-RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setBridgeCodecNumber(uint8_t codecNumber)
+RecStreamAddedEventBuilder& RecStreamAddedEventBuilder::setPayloadFormat(bridge::RtpMap::Format format)
 {
-    castPacket(getPacket())->codec = codecNumber;
+    castPacket(getPacket())->codec = getCodecNumberFor(format);
     return *this;
 }
 

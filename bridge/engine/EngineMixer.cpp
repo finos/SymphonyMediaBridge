@@ -667,7 +667,7 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
         if (!packet)
         {
             // This need to be improved. If we can't allocate this event, the recording
-            // must fail. We have to find away to report this failier
+            // must fail. We have to find a way to report this glitch
             logger::error("No space available to allocate rec start event", _loggableId.c_str());
             continue;
         }
@@ -707,7 +707,7 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
         if (!packet)
         {
             // This need to be improved. If we can't allocate this event, the recording
-            // must fail as we will not know when it finish. We have to find away to report this failier
+            // must fail as we will not know when it finish. We have to find a way to report this glitch
             logger::error("No space available to allocate rec stop event", _loggableId.c_str());
             continue;
         }
@@ -2864,7 +2864,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
                          .setTimestamp(timestamp)
                          .setSsrc(ssrc)
                          .setRtpPayloadType(static_cast<uint8_t>(audioStream._rtpMap._payloadType))
-                         .setBridgeCodecNumber(static_cast<uint8_t>(audioStream._rtpMap._format))
+                         .setPayloadFormat(audioStream._rtpMap._format)
                          .setEndpoint(audioStream._endpointId)
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
@@ -3000,7 +3000,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
                          .setSsrc(ssrc)
                          .setIsScreenSharing(simulcast._contentType == SimulcastStream::VideoContentType::SLIDES)
                          .setRtpPayloadType(static_cast<uint8_t>(videoStream._rtpMap._payloadType))
-                         .setBridgeCodecNumber(static_cast<uint8_t>(videoStream._rtpMap._format))
+                         .setPayloadFormat(videoStream._rtpMap._format)
                          .setEndpoint(videoStream._endpointId)
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
