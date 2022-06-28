@@ -303,7 +303,7 @@ private:
     RtpSenderState& getOutboundSsrc(uint32_t ssrc, uint32_t rtpFrequency);
 
     void onTransportConnected();
-    void drainPacingBuffer(uint64_t timestamp);
+    void drainPacingBuffer(uint64_t timestamp, bool useEstimatedBudget = true);
     inline memory::UniquePacket tryFetchPriorityPacket(size_t budget);
 
     std::atomic_bool _isInitialized;
