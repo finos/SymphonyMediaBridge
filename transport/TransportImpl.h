@@ -272,7 +272,6 @@ private:
         const SocketAddress& target,
         Endpoint* endpoint);
     void sendPadding(uint64_t timestamp);
-    void sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t nextPacketSize);
 
     void processRtcpReport(const rtp::RtcpHeader& packet,
         uint64_t timestamp,

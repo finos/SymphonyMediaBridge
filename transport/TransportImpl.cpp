@@ -1424,28 +1424,6 @@ void TransportImpl::sendPadding(uint64_t timestamp)
     }
 }
 
-void TransportImpl::sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t nextPacketSize)
-{
-    if (!_config.rctl.enable || _rtxProbeSequenceCounter)
-    {
-        return;
-    }
-
-    uint16_t padding = 0;
-    const auto paddingCount = _rateController.getPadding(timestamp, nextPacketSize, padding);
-    for (uint32_t i = 0; i < paddingCount && _selectedRtcp; ++i)
-    {
-        auto padPacket = memory::makeUniquePacket(_mainAllocator);
-        if (padPacket)
-        {
-            auto* rtcpPadding = rtp::RtcpApplicationSpecific::create(padPacket->get(), ssrc, "BRPP", padding);
-            padPacket->setLength(rtcpPadding->header.size());
-            _rateController.onRtcpPaddingSent(timestamp, ssrc, padPacket->getLength());
-            doProtectAndSend(timestamp, std::move(padPacket), _peerRtcpPort, _selectedRtcp);
-        }
-    }
-}
-
 namespace
 {
 template <typename T>
@@ -1488,7 +1466,6 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
         }
         else
         {
-            sendRtcpPadding(timestamp, rtpHeader->ssrc, packet->getLength());
             protectAndSendRtp(timestamp, std::move(packet));
         }
 
