@@ -320,6 +320,14 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     sendVideoStreamToRecording(*engineVideoStream, true);
 }
 
+void stopProbingVideoStream(EngineVideoStream* engineVideoStream) 
+{
+    engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
+                                                engineVideoStream->_localSsrc,
+                                                nullptr,
+                                                engineVideoStream->_feedbackRtpMap._payloadType);
+}
+
 void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
 {
     engineVideoStream->_transport.getJobQueue().getJobManager().abortTimedJob(engineVideoStream->_transport.getId(),
@@ -331,10 +339,7 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
         outboundContext->_markedForDeletion = true;
         if (engineVideoStream->_transport.isConnected())
         {
-            engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
-                engineVideoStream->_localSsrc,
-                nullptr,
-                engineVideoStream->_feedbackRtpMap._payloadType);
+            stopProbingVideoStream(engineVideoStream);
             auto goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
             if (goodByePacket)
             {
@@ -1065,6 +1070,11 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                     message._command.freeVideoPacketCache._ssrc = outboundContextEntry.first;
                     message._command.freeVideoPacketCache._endpointIdHash = videoStreamEntry.first;
                     _messageListener.onMessage(std::move(message));
+                }
+
+                // Removing BE probing for this video stream SSRC.
+                {
+                     stopProbingVideoStream(videoStreamEntry.second);
                 }
 
                 logger::info("Removing idle outbound context ssrc %u, endpointIdHash %lu",
