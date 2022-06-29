@@ -266,6 +266,11 @@ private:
     friend class ConnectSctpJob;
     friend class RunTickJob;
 
+    enum DrainPacingBufferMode {
+        DrainAll,
+        UseBudget,
+    };
+
     void protectAndSendRtp(uint64_t timestamp, memory::UniquePacket packet);
     void doProtectAndSend(uint64_t timestamp,
         memory::UniquePacket packet,
@@ -303,7 +308,7 @@ private:
     RtpSenderState& getOutboundSsrc(uint32_t ssrc, uint32_t rtpFrequency);
 
     void onTransportConnected();
-    void drainPacingBuffer(uint64_t timestamp, bool useEstimatedBudget = true);
+    void drainPacingBuffer(uint64_t timestamp, DrainPacingBufferMode);
     inline memory::UniquePacket tryFetchPriorityPacket(size_t budget);
 
     std::atomic_bool _isInitialized;

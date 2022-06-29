@@ -1383,7 +1383,7 @@ void TransportImpl::sendPadding(uint64_t timestamp)
         return;
     }
 
-    drainPacingBuffer(timestamp);
+    drainPacingBuffer(timestamp, UseBudget);
 
     uint16_t padding = 0;
     auto& rtxSenderState = getOutboundSsrc(_rtxProbeSsrc, 90000);
@@ -2357,9 +2357,9 @@ void TransportImpl::runTick(uint64_t timestamp)
 
 void TransportImpl::doRunTick(const uint64_t timestamp)
 {
-    bool useBE = _config.rctl.enable && _config.bwe.useUplinkEstimate;
-    drainPacingBuffer(timestamp, useBE);
-    if (useBE) {
+    auto drainMode = _config.rctl.enable && _config.bwe.useUplinkEstimate ? UseBudget : DrainAll;
+    drainPacingBuffer(timestamp, drainMode);
+    if (UseBudget == drainMode) {
         sendPadding(timestamp);
     }
     _pacingInUse = !_pacingQueue.empty() || !_rtxPacingQueue.empty();
@@ -2371,9 +2371,9 @@ inline memory::UniquePacket TransportImpl::tryFetchPriorityPacket(size_t budget)
     return !queue.empty() && budget >= queue.back()->getLength() + _config.ipOverhead ? queue.fetchBack() : nullptr;
 }
 
-void TransportImpl::drainPacingBuffer(uint64_t timestamp, bool useEstimatedBudget) 
+void TransportImpl::drainPacingBuffer(uint64_t timestamp, DrainPacingBufferMode mode)
 {
-    auto budget = useEstimatedBudget ? _rateController.getPacingBudget(timestamp) : SIZE_MAX;
+    auto budget = UseBudget == mode ? _rateController.getPacingBudget(timestamp) : SIZE_MAX;
     while (auto packet = tryFetchPriorityPacket(budget)) {
         budget -= packet->getLength() + _config.ipOverhead;
         protectAndSendRtp(timestamp, std::move(packet));
