@@ -12,6 +12,21 @@ TEST(RecStreamAddedEventBuilderTest, buildEmptyPacket)
     EXPECT_STREQ(crypto::toHexString(packet->get(), packet->getLength()).c_str(), "00020000000000000000000000000000");
 }
 
+TEST(RecStreamAddedEventBuilderTest, payloadFormats)
+{
+    memory::PacketPoolAllocator allocator(4096 * 32, "testMain");
+    auto packetAddStreamOpus = RecStreamAddedEventBuilder(allocator)
+        .setPayloadFormat(bridge::RtpMap::Format::OPUS)
+        .build();
+
+    auto packetAddStreamVp8 = RecStreamAddedEventBuilder(allocator)
+        .setPayloadFormat(bridge::RtpMap::Format::VP8)
+        .build();
+
+    EXPECT_STREQ(crypto::toHexString(packetAddStreamOpus->get(), packetAddStreamOpus->getLength()).c_str(), "000200000000000000000000006f0000");
+    EXPECT_STREQ(crypto::toHexString(packetAddStreamVp8->get(), packetAddStreamVp8->getLength()).c_str(), "00020000000000000000000000640000");
+}
+
 TEST(RecStreamAddedEventBuilderTest, setWallClockAfterEndpoint)
 {
     const std::string endpointId = "endpoint-id-t";
@@ -26,7 +41,7 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockAfterEndpoint)
                       .setSsrc(0x11224400)
                       .setIsScreenSharing(true)
                       .setRtpPayloadType(0x70)
-                      .setBridgeCodecNumber(0xBB)
+                      .setPayloadFormat(bridge::RtpMap::Format::OPUS)
                       .setEndpoint(endpointId)
                       .setWallClock(wallClock)
                       .build();
@@ -40,7 +55,7 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockAfterEndpoint)
         .append("ffaa1122") // timestamp
         .append("11224400") // ssrc
         .append("f0") // Screen share flag + RTP payload type
-        .append("bb") // Bridge codec number
+        .append("6f") // Bridge codec number
         .append("000d") // Endpoint id size
         .append(crypto::toHexString(endpointId.c_str(), endpointId.size())) // endpoint value
         .append(std::string(expectedPaddingBytes * 2, '0')) // padding
@@ -63,7 +78,7 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithPadding)
                       .setSsrc(0x11224400)
                       .setIsScreenSharing(false)
                       .setRtpPayloadType(0x70)
-                      .setBridgeCodecNumber(0xBB)
+                      .setPayloadFormat(bridge::RtpMap::Format::OPUS)
                       .setWallClock(wallClock)
                       .setEndpoint(endpointId)
                       .build();
@@ -77,7 +92,7 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithPadding)
         .append("ffaa1122") // timestamp
         .append("11224400") // ssrc
         .append("70") // Screen share flag + RTP payload type
-        .append("bb") // Bridge codec number
+        .append("6f") // Bridge codec number
         .append("000d") // Endpoint id size
         .append(crypto::toHexString(endpointId.c_str(), endpointId.size())) // endpoint value
         .append(std::string(expectedPaddingBytes * 2, '0')) // padding
@@ -99,7 +114,7 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithoutPadding)
                       .setSsrc(0x11224400)
                       .setIsScreenSharing(true)
                       .setRtpPayloadType(0x70)
-                      .setBridgeCodecNumber(0xBB)
+                      .setPayloadFormat(bridge::RtpMap::Format::OPUS)
                       .setWallClock(wallClock)
                       .setEndpoint(endpointId)
                       .build();
@@ -113,7 +128,7 @@ TEST(RecStreamAddedEventBuilderTest, setWallClockBeforeEndpointWithoutPadding)
         .append("ffaa1122") // timestamp
         .append("11224400") // ssrc
         .append("f0") // Screen share flag + RTP payload type
-        .append("bb") // Bridge codec number
+        .append("6f") // Bridge codec number
         .append("0010") // Endpoint id size
         .append(crypto::toHexString(endpointId.c_str(), endpointId.size())) // endpoint value
         .append(expectedWallClockNtpValue); // padding

@@ -65,6 +65,7 @@ struct PacketGenerator
     uint16_t rtpSsrc;
     uint32_t rtpTimestamp;
     uint8_t rtpPayload;
+    bridge::RtpMap::Format rtpPayloadFormat;
     uint32_t counter;
 
     explicit PacketGenerator(memory::PacketPoolAllocator& packetAllocator)
@@ -72,6 +73,7 @@ struct PacketGenerator
           rtpSsrc(1),
           rtpTimestamp(3000),
           rtpPayload(100),
+          rtpPayloadFormat(bridge::RtpMap::Format::VP8),
           counter(0)
     {
     }
@@ -113,7 +115,7 @@ private:
             .setSsrc(rtpSsrc)
             .setIsScreenSharing(false)
             .setRtpPayloadType(rtpPayload)
-            .setBridgeCodecNumber(rtpPayload)
+            .setPayloadFormat(rtpPayloadFormat)
             .setEndpoint("test")
             .setWallClock(std::chrono::system_clock::now())
             .build();
