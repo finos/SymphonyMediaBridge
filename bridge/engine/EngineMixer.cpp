@@ -186,7 +186,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _config(config),
       _lastN(lastN),
       _numMixedAudioStreams(0),
-      _lastVideoBandwidthCheck(0)
+      _lastVideoBandwidthCheck(0),
+      _probingVideoStreams(false)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -290,16 +291,7 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         engineVideoStream->_transport.getLoggableId().c_str(),
         endpointIdHash);
 
-    auto* outboundContext = obtainOutboundSsrcContext(*engineVideoStream,
-        engineVideoStream->_localSsrc,
-        engineVideoStream->_feedbackRtpMap);
-    if (outboundContext)
-    {
-        engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
-            engineVideoStream->_localSsrc,
-            &outboundContext->_sequenceCounter,
-            outboundContext->_rtpMap._payloadType);
-    }
+    startProbingVideoStream(*engineVideoStream);
 
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
     if (engineVideoStream->_simulcastStream._numLevels > 0)
@@ -320,14 +312,6 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     sendVideoStreamToRecording(*engineVideoStream, true);
 }
 
-void stopProbingVideoStream(EngineVideoStream* engineVideoStream) 
-{
-    engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
-                                                engineVideoStream->_localSsrc,
-                                                nullptr,
-                                                engineVideoStream->_feedbackRtpMap._payloadType);
-}
-
 void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
 {
     engineVideoStream->_transport.getJobQueue().getJobManager().abortTimedJob(engineVideoStream->_transport.getId(),
@@ -339,7 +323,7 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
         outboundContext->_markedForDeletion = true;
         if (engineVideoStream->_transport.isConnected())
         {
-            stopProbingVideoStream(engineVideoStream);
+            stopProbingVideoStream(*engineVideoStream);
             auto goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
             if (goodByePacket)
             {
@@ -822,6 +806,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     // 3. Update bandwidth estimates
     if (_config.bwe.useUplinkEstimate)
     {
+        checkIfBandwidthEstimationIsNeeded(engineIterationStartTimestamp);
         updateDirectorUplinkEstimates(engineIterationStartTimestamp);
         checkVideoBandwidth(engineIterationStartTimestamp);
     }
@@ -1070,11 +1055,6 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                     message._command.freeVideoPacketCache._ssrc = outboundContextEntry.first;
                     message._command.freeVideoPacketCache._endpointIdHash = videoStreamEntry.first;
                     _messageListener.onMessage(std::move(message));
-                }
-
-                // Removing BE probing for this video stream SSRC.
-                {
-                     stopProbingVideoStream(videoStreamEntry.second);
                 }
 
                 logger::info("Removing idle outbound context ssrc %u, endpointIdHash %lu",
@@ -3223,10 +3203,66 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     }
 }
 
+void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
+{
+    auto* outboundContext = obtainOutboundSsrcContext(engineVideoStream,
+        engineVideoStream._localSsrc,
+        engineVideoStream._feedbackRtpMap);
+    if (outboundContext) {
+        engineVideoStream._transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream._transport,
+            engineVideoStream._localSsrc,
+            &outboundContext->_sequenceCounter,
+            outboundContext->_rtpMap._payloadType);
+    }
+    _probingVideoStreams = true;
+}
+
+void EngineMixer::stopProbingVideoStream(const EngineVideoStream& engineVideoStream)
+{
+    engineVideoStream._transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream._transport,
+                                                engineVideoStream._localSsrc,
+                                                nullptr,
+                                                engineVideoStream._feedbackRtpMap._payloadType);
+}
+
+bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const
+{
+    bool videoInUse = false;
+    for (auto& inboundContextEntry : _ssrcInboundContexts) {
+        const auto& inboundContext = inboundContextEntry.second;
+
+        if (utils::Time::diffLE(inboundContext._lastReceiveTime.load(), timestamp, threshold) &&
+            inboundContext._rtpMap._format != RtpMap::Format::VP8RTX) {
+            videoInUse = true;
+            break;
+        }
+    }
+
+    return videoInUse;
+}
+
+void EngineMixer::checkIfBandwidthEstimationIsNeeded(const uint64_t timestamp)
+{
+    auto enableBEProbing = isVideoInUse(timestamp, utils::Time::sec * 30);
+
+    if (enableBEProbing == _probingVideoStreams)
+        return;
+
+    for (auto& videoStream: _engineVideoStreams) {
+        if (videoStream.second) {
+            if (enableBEProbing)
+                startProbingVideoStream(*videoStream.second);
+            else
+                stopProbingVideoStream(*videoStream.second);
+        }
+    }
+
+    _probingVideoStreams = enableBEProbing;
+}
+
 void EngineMixer::runTransportTicks(const uint64_t timestamp)
 {
-    for (auto videoIt : _engineVideoStreams)
-    {
+    for (auto videoIt : _engineVideoStreams) {
         auto& videoStream = *videoIt.second;
         videoStream._transport.runTick(timestamp);
     }
