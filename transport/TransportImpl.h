@@ -309,7 +309,7 @@ private:
 
     void onTransportConnected();
     void drainPacingBuffer(uint64_t timestamp, DrainPacingBufferMode);
-    inline memory::UniquePacket tryFetchPriorityPacket(size_t budget);
+    memory::UniquePacket tryFetchPriorityPacket(size_t budget);
 
     std::atomic_bool _isInitialized;
     logger::LoggableId _loggableId;

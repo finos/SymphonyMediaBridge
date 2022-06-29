@@ -2365,7 +2365,7 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
     _pacingInUse = !_pacingQueue.empty() || !_rtxPacingQueue.empty();
 }
 
-inline memory::UniquePacket TransportImpl::tryFetchPriorityPacket(size_t budget)
+memory::UniquePacket TransportImpl::tryFetchPriorityPacket(size_t budget)
 {
     auto queue = _rtxPacingQueue.empty() ? _pacingQueue : _rtxPacingQueue;
     return !queue.empty() && budget >= queue.back()->getLength() + _config.ipOverhead ? queue.fetchBack() : nullptr;
