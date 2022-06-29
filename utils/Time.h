@@ -31,10 +31,10 @@ inline uint32_t toNtp32(const uint64_t ntpTimestamp)
     return 0xFFFFFFFFu & (ntpTimestamp >> 16);
 }
 
-const uint64_t us = 1000;
-const uint64_t ms = 1000 * us;
-const uint64_t sec = ms * 1000;
-const uint64_t minute = sec * 60;
+constexpr uint64_t us = 1000;
+constexpr uint64_t ms = 1000 * us;
+constexpr uint64_t sec = ms * 1000;
+constexpr uint64_t minute = sec * 60;
 
 inline uint32_t absToNtp32(const uint64_t timestamp)
 {
