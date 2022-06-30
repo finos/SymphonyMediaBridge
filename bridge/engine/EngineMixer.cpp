@@ -3258,9 +3258,13 @@ void EngineMixer::checkIfBandwidthEstimationIsNeeded(const uint64_t timestamp)
         if (videoStream.second)
         {
             if (enableBEProbing)
+            {
                 startProbingVideoStream(*videoStream.second);
+            }
             else
+            {
                 stopProbingVideoStream(*videoStream.second);
+            }
         }
     }
 
