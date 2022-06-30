@@ -266,7 +266,7 @@ private:
     friend class ConnectSctpJob;
     friend class RunTickJob;
 
-    enum DrainPacingBufferMode {
+    enum class DrainPacingBufferMode {
         DrainAll,
         UseBudget,
     };
