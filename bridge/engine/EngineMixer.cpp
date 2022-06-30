@@ -187,6 +187,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _lastN(lastN),
       _numMixedAudioStreams(0),
       _lastVideoBandwidthCheck(0),
+      _lastVideoPacketProcessed(0),
       _probingVideoStreams(false)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -2006,6 +2007,8 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
         }
         const auto senderEndpointIdHash = packetInfo.transport()->getEndpointIdHash();
 
+        _lastVideoPacketProcessed = timestamp;
+
         for (auto& videoStreamEntry : _engineVideoStreams)
         {
             const auto endpointIdHash = videoStreamEntry.first;
@@ -3230,20 +3233,7 @@ void EngineMixer::stopProbingVideoStream(const EngineVideoStream& engineVideoStr
 
 bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const
 {
-    bool videoInUse = false;
-    for (auto& inboundContextEntry : _ssrcInboundContexts)
-    {
-        const auto& inboundContext = inboundContextEntry.second;
-
-        if (utils::Time::diffLE(inboundContext._lastReceiveTime.load(), timestamp, threshold) &&
-            inboundContext._rtpMap._format != RtpMap::Format::VP8RTX)
-        {
-            videoInUse = true;
-            break;
-        }
-    }
-
-    return videoInUse;
+    return utils::Time::diffLE(_lastVideoPacketProcessed, timestamp, threshold);
 }
 
 void EngineMixer::checkIfBandwidthEstimationIsNeeded(const uint64_t timestamp)

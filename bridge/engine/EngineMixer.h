@@ -322,6 +322,7 @@ private:
     uint32_t _numMixedAudioStreams;
 
     uint64_t _lastVideoBandwidthCheck;
+    uint64_t _lastVideoPacketProcessed;
     bool _probingVideoStreams;
 
     void processIncomingRtpPackets(const uint64_t timestamp);
