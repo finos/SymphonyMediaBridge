@@ -291,7 +291,10 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         engineVideoStream->_transport.getLoggableId().c_str(),
         endpointIdHash);
 
-    startProbingVideoStream(*engineVideoStream);
+    if (_probingVideoStreams)
+    {
+        startProbingVideoStream(*engineVideoStream);
+    }
 
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
     if (engineVideoStream->_simulcastStream._numLevels > 0)
