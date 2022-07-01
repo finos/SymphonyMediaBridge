@@ -237,6 +237,7 @@ public:
         _conferenceId = conferenceId;
         _relayType = forwardMedia ? "ssrc-rewrite" : "mixed";
         _baseUrl = baseUrl;
+        _videoEnabled = video;
 
         using namespace nlohmann;
         json body = {{"action", "allocate"},
@@ -385,6 +386,7 @@ public:
     }
 
     bool isSuccess() const { return !raw.empty(); }
+    bool isVideoEnabled() const { return _videoEnabled; }
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
@@ -401,6 +403,7 @@ private:
     std::string _relayType;
     nlohmann::json _offer;
     std::string _baseUrl;
+    bool _videoEnabled;
 };
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
@@ -433,6 +436,7 @@ public:
         _conferenceId = conferenceId;
         _relayType = forwardMedia ? "ssrc-rewrite" : "mixer";
         _baseUrl = baseUrl;
+        _videoEnabled = video;
 
         using namespace nlohmann;
         json body = {{"id", conferenceId}, {"contents", json::array()}};
@@ -629,6 +633,7 @@ public:
     }
 
     bool isSuccess() const { return !raw.empty(); }
+    bool isVideoEnabled() const { return _videoEnabled; }
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
@@ -645,6 +650,7 @@ private:
     std::string _relayType;
     nlohmann::json _offer;
     std::string _baseUrl;
+    bool _videoEnabled;
 };
 
 class MediaSendJob : public jobmanager::Job
@@ -797,12 +803,15 @@ public:
     void connect()
     {
         uint32_t videoSsrcs[7];
-        videoSsrcs[6] = 0;
-        for (int i = 0; i < 6; ++i)
+        if (_channel.isVideoEnabled())
         {
-            videoSsrcs[i] = _idGenerator.next();
-            _videoSources.emplace(videoSsrcs[i],
-                std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
+            videoSsrcs[6] = 0;
+            for (int i = 0; i < 6; ++i)
+            {
+                videoSsrcs[i] = _idGenerator.next();
+                _videoSources.emplace(videoSsrcs[i],
+                    std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
+            }
         }
 
         assert(_audioSource);
@@ -811,7 +820,7 @@ public:
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),
-            videoSsrcs);
+            _channel.isVideoEnabled() ? videoSsrcs : nullptr);
 
         _transport->start();
         _transport->connect();
@@ -1282,6 +1291,103 @@ TEST_F(IntegrationTest, plain)
 
         EXPECT_EQ(audioSsrcCount, 1);
     }
+}
+
+TEST_F(IntegrationTest, audioOnlyNoPadding)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString("{\"ip\":\"127.0.0.1\", "
+                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    initBridge(_config);
+
+    const std::string baseUrl = "http://127.0.0.1:8080";
+
+    Conference conf;
+    conf.create(baseUrl + "/colibri");
+    EXPECT_TRUE(conf.isSuccess());
+    utils::Time::nanoSleep(1 * utils::Time::sec);
+
+    SfuClient<ColibriChannel> client1(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client2(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client3(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+
+    // Audio only for all three participants.
+    client1.initiateCall(baseUrl, conf.getId(), true, true, false, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, false, true);
+    client3.initiateCall(baseUrl, conf.getId(), false, true, false, false);
+
+    EXPECT_TRUE(client1._channel.isSuccess());
+    EXPECT_TRUE(client2._channel.isSuccess());
+    EXPECT_TRUE(client3._channel.isSuccess());
+
+    if (!client1._channel.isSuccess() && client2._channel.isSuccess() && client3._channel.isSuccess())
+    {
+        return;
+    }
+
+    client1.processLegacyOffer();
+    client2.processLegacyOffer();
+    client3.processLegacyOffer();
+
+    client1.connect();
+    client2.connect();
+    client3.connect();
+
+    while (
+        !client1._transport->isConnected() || !client2._transport->isConnected() || !client3._transport->isConnected())
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+        logger::debug("waiting for connect...", "test");
+    }
+
+    utils::Pacer pacer(10 * utils::Time::ms);
+    for (int i = 0; i < 100; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp);
+        client2.process(timestamp);
+        client3.process(timestamp);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    client3.stopRecording();
+    client2.stopRecording();
+    client1.stopRecording();
+
+    client1._transport->stop();
+    client2._transport->stop();
+    client3._transport->stop();
+
+    for (int i = 0; i < 10 &&
+         (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
+             client3._transport->hasPendingJobs());
+         ++i)
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+    }
+    const auto& rData1 = client3.getReceiveStats();
+    // We expect only one ssrc (audio), since padding (that comes on video ssrc) is disabled for audio only calls).
+    EXPECT_EQ(rData1.size(), 1);
 }
 
 class Foo
