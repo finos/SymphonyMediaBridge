@@ -52,7 +52,7 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             packet->setLength(packetSize);
             auto rtpHeader = rtp::RtpHeader::create(*packet);
             rtpHeader->ssrc = _ssrc;
-            rtpHeader->payloadType = 111;
+            rtpHeader->payloadType = 100;
             rtpHeader->sequenceNumber = _sequenceCounter++;
             rtpHeader->timestamp = _rtpTimestamp;
 

@@ -8,6 +8,7 @@
 #include "jobmanager/WorkerThread.h"
 #include "memory/PacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
+#include "test/bwe/FakeVideoSource.h"
 #include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/AudioSource.h"
 #include "transport/DataReceiver.h"
@@ -646,10 +647,10 @@ private:
     std::string _baseUrl;
 };
 
-class AudioSendJob : public jobmanager::Job
+class MediaSendJob : public jobmanager::Job
 {
 public:
-    AudioSendJob(transport::Transport& transport, memory::UniquePacket packet, uint64_t timestamp)
+    MediaSendJob(transport::Transport& transport, memory::UniquePacket packet, uint64_t timestamp)
         : _transport(transport),
           _packet(std::move(packet))
     {
@@ -800,6 +801,8 @@ public:
         for (int i = 0; i < 6; ++i)
         {
             videoSsrcs[i] = _idGenerator.next();
+            _videoSources.emplace(videoSsrcs[i],
+                std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
         }
 
         assert(_audioSource);
@@ -827,7 +830,16 @@ public:
                 _allocator.free(packet);
                 return;
             }*/
-            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, std::move(packet), timestamp);
+            _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+        }
+
+        for (const auto& videoSource : _videoSources)
+        {
+            auto packet = videoSource.second->getPacket(timestamp);
+            if (packet)
+            {
+                _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+            }
         }
     }
 
@@ -916,11 +928,7 @@ public:
             bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
             rtpMap._audioLevelExtId.set(1);
             _receivedData.emplace(rtpHeader->ssrc.get(),
-                new RtpReceiver(_loggableId.getInstanceId(),
-                    rtpHeader->ssrc.get(),
-                    rtpMap,
-                    sender,
-                    timestamp));
+                new RtpReceiver(_loggableId.getInstanceId(), rtpHeader->ssrc.get(), rtpMap, sender, timestamp));
             it = _receivedData.find(rtpHeader->ssrc.get());
         }
 
@@ -978,6 +986,7 @@ public:
 
     std::unique_ptr<emulator::AudioSource> _audioSource;
     // Video source that produces fake VP8
+    std::unordered_map<uint32_t, std::unique_ptr<fakenet::FakeVideoSource>> _videoSources;
 
     const concurrency::MpmcHashmap32<uint32_t, RtpReceiver*>& getReceiveStats() const { return _receivedData; }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
