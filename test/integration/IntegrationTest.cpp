@@ -1407,8 +1407,12 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
     EXPECT_EQ(rData3.size(), 1);
 }
 
-TEST_F(IntegrationTest, twoSidesNoPaddingForReceiver)
+TEST_F(IntegrationTest, videoOffPaddingOff)
 {
+    /*
+       Test checks that after video is off and cooldown interval passed, no padding will be sent for the call that
+       became audio-only.
+    */
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
         return;
@@ -1417,8 +1421,9 @@ TEST_F(IntegrationTest, twoSidesNoPaddingForReceiver)
     return;
 #endif
 
-    _config.readFromString("{\"ip\":\"127.0.0.1\", "
-                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    _config.readFromString(
+        "{\"ip\":\"127.0.0.1\", "
+        "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"beCooldownInterval\":1}");
     initBridge(_config);
 
     const std::string baseUrl = "http://127.0.0.1:8080";
@@ -1438,10 +1443,17 @@ TEST_F(IntegrationTest, twoSidesNoPaddingForReceiver)
         _audioAllocator,
         *_transportFactory,
         *_sslDtls);
+    SfuClient<ColibriChannel> client3(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
 
     // Audio only for all three participants.
     client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
     client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+    // Client 3 will join after client 2, which produce video, will leave.
+    client3.initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
     EXPECT_TRUE(client1._channel.isSuccess());
     EXPECT_TRUE(client2._channel.isSuccess());
@@ -1482,24 +1494,65 @@ TEST_F(IntegrationTest, twoSidesNoPaddingForReceiver)
     }
 
     client2.stopRecording();
-    client1.stopRecording();
-
-    client1._transport->stop();
     client2._transport->stop();
 
-    for (int i = 0; i < 10 && (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs()); ++i)
+    const auto numSsrcClient1Received = client1.getReceiveStats().size();
+
+    // Video producer (client2) stopped, waiting 1.5s for beCooldownInterval timeout to take effect
+    // (configured for 1 s for this test).
+
+    for (int i = 0; i < 150; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, false);
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    // client 3 joins.
+    client3.processLegacyOffer();
+    client3.connect();
+
+    while (!client3._transport->isConnected())
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+        logger::debug("waiting for connect...", "test");
+    }
+
+    client3._audioSource->setFrequency(2100);
+    client3._audioSource->setVolume(0.6);
+
+    for (int i = 0; i < 100; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, false);
+        client3.process(timestamp, false);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    client1.stopRecording();
+    client3.stopRecording();
+
+    client1._transport->stop();
+    client3._transport->stop();
+
+    for (int i = 0; i < 10 &&
+         (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
+             client3._transport->hasPendingJobs());
+         ++i)
     {
         utils::Time::nanoSleep(1 * utils::Time::sec);
     }
 
     const auto& rData1 = client1.getReceiveStats();
-    auto s1 = rData1.size();
-
     const auto& rData2 = client2.getReceiveStats();
-    auto s2 = rData2.size();
+    const auto& rData3 = client3.getReceiveStats();
 
-    EXPECT_EQ(s1, 3); // s2's audio, s2's video + padding
-    EXPECT_EQ(s2, 2); // s1's aidio, + padding
+    EXPECT_EQ(numSsrcClient1Received, 3); // s2's audio, s2's video + padding
+    EXPECT_EQ(rData1.size(), 4); // s2's audio, s3's audio, s2's video + padding
+    EXPECT_EQ(rData2.size(), 2); // s1's aidio, + padding
+    EXPECT_EQ(rData3.size(),
+        1); // s1's aidio, no padding, since it joined the call whith no video.  !!!TODO config timeout
 }
 
 class Foo

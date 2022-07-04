@@ -28,7 +28,7 @@ public:
     uint32_t getSsrc() const override { return _ssrc; }
 
 private:
-    void tryMakeKeyFrame(unsigned char*, size_t) const;
+    void tryFillFramePayload(unsigned char*, size_t, bool) const;
     void setNextFrameSize();
 
     memory::PacketPoolAllocator& _allocator;
@@ -44,6 +44,7 @@ private:
     uint32_t _sequenceCounter;
     utils::AvgRateTracker _avgRate;
     uint32_t _rtpTimestamp;
+    bool _keyFrame;
 };
 
 } // namespace fakenet

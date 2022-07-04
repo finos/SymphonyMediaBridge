@@ -104,6 +104,7 @@ public:
 
     CFG_PROP(uint32_t, mtu, 1480);
     CFG_PROP(uint32_t, ipOverhead, 20 + 14);
+    CFG_PROP(uint64_t, beCooldownInterval, 30); // Time after the last video packet BE still works.
 };
 
 } // namespace config
