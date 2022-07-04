@@ -1,6 +1,15 @@
 #include "utils/SocketAddress.h"
 #include <string>
 
+namespace
+{
+
+const std::string FAMILY_IPV4_STR = "IPv4";
+const std::string FAMILY_IPV6_STR = "IPv6";
+const std::string FAMILY_UNSPEC_STR = "UNSPEC";
+
+} // namespace
+
 namespace transport
 {
 SocketAddress::SocketAddress()
@@ -86,6 +95,19 @@ SocketAddress& SocketAddress::setPort(uint16_t port)
 {
     _address.v4.sin_port = htons(port);
     return *this;
+}
+
+const std::string& SocketAddress::getFamilyString() const
+{
+    switch (getFamily())
+    {
+    case AF_INET:
+        return FAMILY_IPV4_STR;
+    case AF_INET6:
+        return FAMILY_IPV6_STR;
+    default:
+        return FAMILY_UNSPEC_STR;
+    }
 }
 
 std::string SocketAddress::ipToString() const

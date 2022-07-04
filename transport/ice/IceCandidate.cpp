@@ -1,6 +1,22 @@
 #include "IceCandidate.h"
 #include "utils/StdExtensions.h"
 #include <cinttypes>
+
+namespace
+{
+
+const std::string UNKNOWN = "UNKNOWN";
+
+const std::string ICE_TYPE_HOST_STR = "HOST";
+const std::string ICE_TYPE_SRFLX_STR = "SRFLX";
+const std::string ICE_TYPE_PRFLX_STR = "PRFLX";
+const std::string ICE_TYPE_RELAY_STR = "RELAY";
+
+const std::string TRANSPORT_TYPE_UDP_STR = "UDP";
+const std::string TRANSPORT_TYPE_TCP_STR = "TCP";
+const std::string TRANSPORT_TYPE_SSLTCP_STR = "SSLTCP";
+
+} // namespace
 namespace ice
 {
 IceCandidate::IceCandidate()
@@ -106,4 +122,38 @@ IceCandidate& IceCandidate::operator=(const IceCandidate& b)
 
     return *this;
 }
+
+
+const std::string& toString(IceCandidate::Type type)
+{
+    switch (type)
+    {
+    case IceCandidate::Type::HOST:
+        return ICE_TYPE_HOST_STR;
+    case IceCandidate::Type::SRFLX:
+        return ICE_TYPE_SRFLX_STR;
+    case IceCandidate::Type::PRFLX:
+        return ICE_TYPE_PRFLX_STR;
+    case IceCandidate::Type::RELAY:
+        return ICE_TYPE_RELAY_STR;
+    }
+
+    return UNKNOWN;
+}
+
+const std::string& toString(TransportType type)
+{
+    switch (type)
+    {
+    case TransportType::UDP:
+        return TRANSPORT_TYPE_UDP_STR;
+    case TransportType::TCP:
+        return TRANSPORT_TYPE_TCP_STR;
+    case TransportType::SSLTCP:
+        return TRANSPORT_TYPE_SSLTCP_STR;
+    }
+
+    return UNKNOWN;
+}
+
 } // namespace ice

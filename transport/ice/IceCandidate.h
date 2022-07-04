@@ -78,4 +78,8 @@ public:
 private:
     char _foundation[MAX_FOUNDATION + 1];
 };
+
+const std::string& toString(IceCandidate::Type type);
+const std::string& toString(TransportType type);
+
 } // namespace ice

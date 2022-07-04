@@ -2018,12 +2018,17 @@ void TransportImpl::onIcePreliminary(ice::IceSession* session,
         (session->getState() == ice::IceSession::State::READY ||
             session->getState() == ice::IceSession::State::CONNECTING))
     {
-        logger::debug("switching to %s - %s",
-            _loggableId.c_str(),
-            endpoint->getLocalPort().toString().c_str(),
-            sourcePort.toString().c_str());
+
         _selectedRtp = static_cast<transport::Endpoint*>(endpoint); // temporary selection
         _peerRtpPort = sourcePort;
+
+        logger::info("temporary candidate selected %s %s, %s - %s",
+            _loggableId.c_str(),
+            endpoint->getLocalPort().getFamilyString().c_str(),
+            ice::toString(endpoint->getTransportType()).c_str(),
+            endpoint->getLocalPort().toString().c_str(),
+            sourcePort.toString().c_str());
+
         if (_srtpClient->getState() == SrtpClient::State::READY)
         {
             DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
@@ -2065,6 +2070,12 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                 _selectedRtcp = endpoint;
                 _peerRtpPort = candidatePair.second.address;
                 _peerRtcpPort = candidatePair.second.address;
+
+                logger::info("candidate selected %s %s, %s",
+                    _loggableId.c_str(),
+                    _peerRtpPort.getFamilyString().c_str(),
+                    ice::toString(endpoint->getTransportType()).c_str(),
+                    ice::toString(candidatePair.second.type).c_str());
             }
             else if (endpoint->getTransportType() == ice::TransportType::TCP)
             {
