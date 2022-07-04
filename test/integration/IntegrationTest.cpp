@@ -802,11 +802,11 @@ public:
 
     void connect()
     {
-        uint32_t videoSsrcs[7];
+        uint32_t videoSsrcs[3];
         if (_channel.isVideoEnabled())
         {
-            videoSsrcs[6] = 0;
-            for (int i = 0; i < 6; ++i)
+            videoSsrcs[2] = 0;
+            for (int i = 0; i < 2; ++i)
             {
                 videoSsrcs[i] = _idGenerator.next();
                 _videoSources.emplace(videoSsrcs[i],
@@ -826,7 +826,9 @@ public:
         _transport->connect();
     }
 
-    void process(uint64_t timestamp)
+    void process(uint64_t timestamp) { process(timestamp, true); }
+
+    void process(uint64_t timestamp, bool sendVideo)
     {
         auto packet = _audioSource->getPacket(timestamp);
         if (packet)
@@ -842,12 +844,15 @@ public:
             _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
         }
 
-        for (const auto& videoSource : _videoSources)
+        if (sendVideo)
         {
-            auto packet = videoSource.second->getPacket(timestamp);
-            if (packet)
+            for (const auto& videoSource : _videoSources)
             {
-                _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+                auto packet = videoSource.second->getPacket(timestamp);
+                if (packet)
+                {
+                    _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+                }
             }
         }
     }
@@ -1248,8 +1253,8 @@ TEST_F(IntegrationTest, plain)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client3.getReceiveStats();
-        // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 2);
+        // We expect one audio ssrc, three video and one padding
+        EXPECT_EQ(rData1.size(), 4);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -1331,8 +1336,8 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         *_sslDtls);
 
     // Audio only for all three participants.
-    client1.initiateCall(baseUrl, conf.getId(), true, true, false, true);
-    client2.initiateCall(baseUrl, conf.getId(), false, true, false, true);
+    client1.initiateCall(baseUrl, conf.getId(), true, true, false, false);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, false, false);
     client3.initiateCall(baseUrl, conf.getId(), false, true, false, false);
 
     EXPECT_TRUE(client1._channel.isSuccess());
@@ -1359,13 +1364,21 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         logger::debug("waiting for connect...", "test");
     }
 
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+    client3._audioSource->setFrequency(2100);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+    client3._audioSource->setVolume(0.6);
+
     utils::Pacer pacer(10 * utils::Time::ms);
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < 500; ++i)
     {
         const auto timestamp = utils::Time::getAbsoluteTime();
-        client1.process(timestamp);
-        client2.process(timestamp);
-        client3.process(timestamp);
+        client1.process(timestamp, false);
+        client2.process(timestamp, false);
+        client3.process(timestamp, false);
         pacer.tick(utils::Time::getAbsoluteTime());
         utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
     }
@@ -1385,9 +1398,108 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
     {
         utils::Time::nanoSleep(1 * utils::Time::sec);
     }
-    const auto& rData1 = client3.getReceiveStats();
+    const auto& rData1 = client1.getReceiveStats();
+    const auto& rData2 = client2.getReceiveStats();
+    const auto& rData3 = client3.getReceiveStats();
     // We expect only one ssrc (audio), since padding (that comes on video ssrc) is disabled for audio only calls).
     EXPECT_EQ(rData1.size(), 1);
+    EXPECT_EQ(rData2.size(), 1);
+    EXPECT_EQ(rData3.size(), 1);
+}
+
+TEST_F(IntegrationTest, twoSidesNoPaddingForReceiver)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString("{\"ip\":\"127.0.0.1\", "
+                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    initBridge(_config);
+
+    const std::string baseUrl = "http://127.0.0.1:8080";
+
+    Conference conf;
+    conf.create(baseUrl + "/colibri");
+    EXPECT_TRUE(conf.isSuccess());
+    utils::Time::nanoSleep(1 * utils::Time::sec);
+
+    SfuClient<ColibriChannel> client1(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client2(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+
+    // Audio only for all three participants.
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+
+    EXPECT_TRUE(client1._channel.isSuccess());
+    EXPECT_TRUE(client2._channel.isSuccess());
+
+    if (!client1._channel.isSuccess() && client2._channel.isSuccess())
+    {
+        return;
+    }
+
+    client1.processLegacyOffer();
+    client2.processLegacyOffer();
+
+    client1.connect();
+    client2.connect();
+
+    while (!client1._transport->isConnected() || !client2._transport->isConnected())
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+        logger::debug("waiting for connect...", "test");
+    }
+
+    // Have to produce some audio volume above "silence threshold", otherwise audio packats
+    // won't be forwarded by SFU.
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+
+    utils::Pacer pacer(10 * utils::Time::ms);
+    for (int i = 0; i < 100; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, false);
+        client2.process(timestamp, true);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    client2.stopRecording();
+    client1.stopRecording();
+
+    client1._transport->stop();
+    client2._transport->stop();
+
+    for (int i = 0; i < 10 && (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs()); ++i)
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+    }
+
+    const auto& rData1 = client1.getReceiveStats();
+    auto s1 = rData1.size();
+
+    const auto& rData2 = client2.getReceiveStats();
+    auto s2 = rData2.size();
+
+    EXPECT_EQ(s1, 3); // s2's audio, s2's video + padding
+    EXPECT_EQ(s2, 2); // s1's aidio, + padding
 }
 
 class Foo
@@ -1564,7 +1676,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
         const auto& rData1 = client3.getReceiveStats();
         // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 2);
+        EXPECT_EQ(rData1.size(), 4);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -1786,7 +1898,7 @@ TEST_F(IntegrationTest, ptime10)
 
         const auto& rData1 = client3.getReceiveStats();
         // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 2);
+        EXPECT_EQ(rData1.size(), 4);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {

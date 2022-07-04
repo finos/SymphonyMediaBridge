@@ -21,6 +21,17 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
 {
 }
 
+void FakeVideoSource::tryMakeKeyFrame(unsigned char* packet, size_t length) const
+{
+    auto rtpHeader = rtp::RtpHeader::fromPtr(packet, length);
+    if (rtpHeader->headerLength() + 1 < length)
+    {
+        auto payload = rtpHeader->getPayload();
+        payload[0] = 1 << 4; // Partition ID: 0, payloadDescriptorSize: 1
+        payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
+    }
+}
+
 memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
 {
     if (_bandwidthKbps == 0)
@@ -72,6 +83,9 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
                 _releaseTime = _frameReleaseTime;
             }
             _avgRate.update(packet->getLength() * 8, timestamp);
+
+            tryMakeKeyFrame(packet->get(), packet->getLength());
+
             return packet;
         }
         else

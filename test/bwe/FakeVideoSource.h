@@ -28,6 +28,7 @@ public:
     uint32_t getSsrc() const override { return _ssrc; }
 
 private:
+    void tryMakeKeyFrame(unsigned char*, size_t) const;
     void setNextFrameSize();
 
     memory::PacketPoolAllocator& _allocator;
