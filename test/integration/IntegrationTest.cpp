@@ -1278,20 +1278,20 @@ TEST_F(IntegrationTest, plain)
             EXPECT_NEAR(freqVector[0], 600.0, 25.0);
             EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
 
-            EXPECT_GE(amplitudeProfile.size(), 4);
+            EXPECT_GE(amplitudeProfile.size(), 2);
             for (auto& item : amplitudeProfile)
             {
                 logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
             }
-            if (amplitudeProfile.size() >= 4)
+            // We expect a ramp-up of volume like this:
+            // start from 0;
+            // ramp-up to about 1826 (+-250) in 1.67s (+-0,2s)
+            if (amplitudeProfile.size() >= 2)
             {
                 EXPECT_EQ(amplitudeProfile[0].second, 0);
 
-                EXPECT_NEAR(amplitudeProfile[3].second, 1826, 250);
-                EXPECT_NEAR(amplitudeProfile[3].first, 48000 * 1.67, 2400);
-
-                EXPECT_NEAR(amplitudeProfile.back().second, 1730, 250);
-                EXPECT_LE(amplitudeProfile.back().first, 2 * 48000);
+                EXPECT_NEAR(amplitudeProfile.back().second, 1826, 250);
+                EXPECT_NEAR(amplitudeProfile.back().first, 48000 * 1.67, 48000 * 0.2);
             }
 
             // item.second->dumpPcmData();
