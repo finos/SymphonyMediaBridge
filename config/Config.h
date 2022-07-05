@@ -70,6 +70,7 @@ public:
     CFG_PROP(uint32_t, ceiling, 9000);
     CFG_PROP(uint32_t, initialEstimate, 1200);
     CFG_PROP(bool, debugLog, false);
+    CFG_PROP(uint64_t, cooldownInterval, 30); // Time after the last video packet BE still works.
     CFG_GROUP_END(rctl)
 
     CFG_GROUP()
@@ -104,7 +105,6 @@ public:
 
     CFG_PROP(uint32_t, mtu, 1480);
     CFG_PROP(uint32_t, ipOverhead, 20 + 14);
-    CFG_PROP(uint64_t, beCooldownInterval, 30); // Time after the last video packet BE still works.
 };
 
 } // namespace config

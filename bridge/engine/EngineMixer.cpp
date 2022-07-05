@@ -3238,7 +3238,7 @@ bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshol
 
 void EngineMixer::checkIfBandwidthEstimationIsNeeded(const uint64_t timestamp)
 {
-    auto enableBEProbing = isVideoInUse(timestamp, utils::Time::sec * _config.beCooldownInterval);
+    auto enableBEProbing = isVideoInUse(timestamp, utils::Time::sec * _config.rctl.cooldownInterval);
 
     if (enableBEProbing == _probingVideoStreams)
         return;
