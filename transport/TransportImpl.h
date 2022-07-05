@@ -41,9 +41,6 @@ struct SctpConfig;
 
 namespace transport
 {
-
-typedef memory::RandomAccessBacklog<memory::UniquePacket, 512> pacing_queue_t;
-
 class TransportImpl : public RtcTransport,
                       private SslWriteBioListener,
                       public Endpoint::IEvents,
@@ -266,7 +263,8 @@ private:
     friend class ConnectSctpJob;
     friend class RunTickJob;
 
-    enum class DrainPacingBufferMode {
+    enum class DrainPacingBufferMode
+    {
         DrainAll,
         UseBudget,
     };
@@ -397,8 +395,9 @@ private:
     uint32_t _rtxProbeSsrc;
     uint32_t* _rtxProbeSequenceCounter;
 
-    pacing_queue_t _pacingQueue;
-    pacing_queue_t _rtxPacingQueue;
+    using PacingQueue = memory::RandomAccessBacklog<memory::UniquePacket, 512>;
+    PacingQueue _pacingQueue;
+    PacingQueue _rtxPacingQueue;
     std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;

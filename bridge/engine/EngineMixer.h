@@ -342,7 +342,7 @@ private:
     void updateDirectorUplinkEstimates(const uint64_t engineIterationStartTimestamp);
     void processMissingPackets(const uint64_t timestamp);
     void checkPacketCounters(const uint64_t timestamp);
-    void checkIfBandwidthEstimationIsNeeded(const uint64_t timestamp);
+    void checkIfRateControlIsNeeded(const uint64_t timestamp);
     bool isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const;
     void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,

@@ -810,7 +810,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     // 3. Update bandwidth estimates
     if (_config.bwe.useUplinkEstimate)
     {
-        checkIfBandwidthEstimationIsNeeded(engineIterationStartTimestamp);
+        checkIfRateControlIsNeeded(engineIterationStartTimestamp);
         updateDirectorUplinkEstimates(engineIterationStartTimestamp);
         checkVideoBandwidth(engineIterationStartTimestamp);
     }
@@ -3236,7 +3236,7 @@ bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshol
     return utils::Time::diffLE(_lastVideoPacketProcessed, timestamp, threshold);
 }
 
-void EngineMixer::checkIfBandwidthEstimationIsNeeded(const uint64_t timestamp)
+void EngineMixer::checkIfRateControlIsNeeded(const uint64_t timestamp)
 {
     auto enableBEProbing = isVideoInUse(timestamp, utils::Time::sec * _config.rctl.cooldownInterval);
 
