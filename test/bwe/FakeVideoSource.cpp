@@ -17,8 +17,27 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
       _ssrc(ssrc),
       _sequenceCounter(0),
       _avgRate(0.0005),
-      _rtpTimestamp(5000)
+      _rtpTimestamp(5000),
+      _keyFrame(true)
 {
+}
+
+void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, bool keyFrame) const
+{
+    auto rtpHeader = rtp::RtpHeader::fromPtr(packet, length);
+    if (rtpHeader->headerLength() + 1 < length)
+    {
+        auto payload = rtpHeader->getPayload();
+        if (keyFrame)
+        {
+            payload[0] = 1 << 4; // Partition ID: 0, payloadDescriptorSize: 1
+        }
+        else
+        {
+            payload[0] = 0;
+        }
+        payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
+    }
 }
 
 memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
@@ -52,7 +71,7 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             packet->setLength(packetSize);
             auto rtpHeader = rtp::RtpHeader::create(*packet);
             rtpHeader->ssrc = _ssrc;
-            rtpHeader->payloadType = 111;
+            rtpHeader->payloadType = 100;
             rtpHeader->sequenceNumber = _sequenceCounter++;
             rtpHeader->timestamp = _rtpTimestamp;
 
@@ -72,6 +91,10 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
                 _releaseTime = _frameReleaseTime;
             }
             _avgRate.update(packet->getLength() * 8, timestamp);
+
+            tryFillFramePayload(packet->get(), packet->getLength(), _keyFrame);
+            _keyFrame = false;
+
             return packet;
         }
         else
@@ -98,6 +121,7 @@ void FakeVideoSource::setNextFrameSize()
     if (_counter % (_fps * 15) == 0)
     {
         meanSize *= 4;
+        _keyFrame = true;
     }
     ++_counter;
     _frameSize = randomSize(meanSize, 0.2);

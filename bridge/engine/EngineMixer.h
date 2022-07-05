@@ -322,6 +322,8 @@ private:
     uint32_t _numMixedAudioStreams;
 
     uint64_t _lastVideoBandwidthCheck;
+    uint64_t _lastVideoPacketProcessed;
+    bool _probingVideoStreams;
 
     void processIncomingRtpPackets(const uint64_t timestamp);
     uint32_t processIncomingVideoRtpPackets(const uint64_t timestamp);
@@ -340,6 +342,8 @@ private:
     void updateDirectorUplinkEstimates(const uint64_t engineIterationStartTimestamp);
     void processMissingPackets(const uint64_t timestamp);
     void checkPacketCounters(const uint64_t timestamp);
+    void checkIfBandwidthEstimationIsNeeded(const uint64_t timestamp);
+    bool isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const;
     void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         transport::RtcTransport* sender,
         memory::UniquePacket packet,
@@ -407,6 +411,8 @@ private:
         EngineRecordingStream& recordingStream);
 
     void processRecordingMissingPackets(const uint64_t timestamp);
+    void startProbingVideoStream(EngineVideoStream&);
+    void stopProbingVideoStream(const EngineVideoStream&);
 };
 
 } // namespace bridge
