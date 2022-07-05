@@ -802,15 +802,18 @@ public:
 
     void connect()
     {
-        uint32_t videoSsrcs[3];
+        uint32_t videoSsrcs[7];
         if (_channel.isVideoEnabled())
         {
-            videoSsrcs[2] = 0;
-            for (int i = 0; i < 2; ++i)
+            videoSsrcs[6] = 0;
+            for (int i = 0; i < 6; ++i)
             {
                 videoSsrcs[i] = _idGenerator.next();
-                _videoSources.emplace(videoSsrcs[i],
-                    std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
+                if (0 == i % 2)
+                {
+                    _videoSources.emplace(videoSsrcs[i],
+                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
+                }
             }
         }
 
