@@ -4,10 +4,10 @@
 namespace
 {
 
-const nlohmann::json EMPTY_JSON_ARRAY = nlohmann::json::array();
-
 const nlohmann::json& optionalJsonArray(const nlohmann::json& data, const char* arrayProperty)
 {
+    static const nlohmann::json EMPTY_JSON_ARRAY = nlohmann::json::array();
+
     const auto it = data.find(arrayProperty);
     return it == data.end() ? EMPTY_JSON_ARRAY : *it;
 }
