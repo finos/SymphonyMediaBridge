@@ -263,13 +263,18 @@ private:
     friend class ConnectSctpJob;
     friend class RunTickJob;
 
+    enum class DrainPacingBufferMode
+    {
+        DrainAll,
+        UseBudget,
+    };
+
     void protectAndSendRtp(uint64_t timestamp, memory::UniquePacket packet);
     void doProtectAndSend(uint64_t timestamp,
         memory::UniquePacket packet,
         const SocketAddress& target,
         Endpoint* endpoint);
     void sendPadding(uint64_t timestamp);
-    void sendRtcpPadding(uint64_t timestamp, uint32_t ssrc, uint16_t nextPacketSize);
 
     void processRtcpReport(const rtp::RtcpHeader& packet,
         uint64_t timestamp,
@@ -301,6 +306,8 @@ private:
     RtpSenderState& getOutboundSsrc(uint32_t ssrc, uint32_t rtpFrequency);
 
     void onTransportConnected();
+    void drainPacingBuffer(uint64_t timestamp, DrainPacingBufferMode);
+    memory::UniquePacket tryFetchPriorityPacket(size_t budget);
 
     std::atomic_bool _isInitialized;
     logger::LoggableId _loggableId;
@@ -388,8 +395,9 @@ private:
     uint32_t _rtxProbeSsrc;
     uint32_t* _rtxProbeSequenceCounter;
 
-    memory::RandomAccessBacklog<memory::UniquePacket, 512> _pacingQueue;
-    memory::RandomAccessBacklog<memory::UniquePacket, 512> _rtxPacingQueue;
+    using PacingQueue = memory::RandomAccessBacklog<memory::UniquePacket, 512>;
+    PacingQueue _pacingQueue;
+    PacingQueue _rtxPacingQueue;
     std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;

@@ -70,6 +70,7 @@ public:
     CFG_PROP(uint32_t, ceiling, 9000);
     CFG_PROP(uint32_t, initialEstimate, 1200);
     CFG_PROP(bool, debugLog, false);
+    CFG_PROP(uint64_t, cooldownInterval, 30); // Time until rtcl inactivates after last received video
     CFG_GROUP_END(rctl)
 
     CFG_GROUP()

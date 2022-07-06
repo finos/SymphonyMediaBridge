@@ -8,6 +8,7 @@
 #include "jobmanager/WorkerThread.h"
 #include "memory/PacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
+#include "test/bwe/FakeVideoSource.h"
 #include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/AudioSource.h"
 #include "transport/DataReceiver.h"
@@ -236,6 +237,7 @@ public:
         _conferenceId = conferenceId;
         _relayType = forwardMedia ? "ssrc-rewrite" : "mixed";
         _baseUrl = baseUrl;
+        _videoEnabled = video;
 
         using namespace nlohmann;
         json body = {{"action", "allocate"},
@@ -384,6 +386,7 @@ public:
     }
 
     bool isSuccess() const { return !raw.empty(); }
+    bool isVideoEnabled() const { return _videoEnabled; }
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
@@ -400,6 +403,7 @@ private:
     std::string _relayType;
     nlohmann::json _offer;
     std::string _baseUrl;
+    bool _videoEnabled;
 };
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
@@ -432,6 +436,7 @@ public:
         _conferenceId = conferenceId;
         _relayType = forwardMedia ? "ssrc-rewrite" : "mixer";
         _baseUrl = baseUrl;
+        _videoEnabled = video;
 
         using namespace nlohmann;
         json body = {{"id", conferenceId}, {"contents", json::array()}};
@@ -628,6 +633,7 @@ public:
     }
 
     bool isSuccess() const { return !raw.empty(); }
+    bool isVideoEnabled() const { return _videoEnabled; }
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
@@ -644,12 +650,13 @@ private:
     std::string _relayType;
     nlohmann::json _offer;
     std::string _baseUrl;
+    bool _videoEnabled;
 };
 
-class AudioSendJob : public jobmanager::Job
+class MediaSendJob : public jobmanager::Job
 {
 public:
-    AudioSendJob(transport::Transport& transport, memory::UniquePacket packet, uint64_t timestamp)
+    MediaSendJob(transport::Transport& transport, memory::UniquePacket packet, uint64_t timestamp)
         : _transport(transport),
           _packet(std::move(packet))
     {
@@ -796,10 +803,18 @@ public:
     void connect()
     {
         uint32_t videoSsrcs[7];
-        videoSsrcs[6] = 0;
-        for (int i = 0; i < 6; ++i)
+        if (_channel.isVideoEnabled())
         {
-            videoSsrcs[i] = _idGenerator.next();
+            videoSsrcs[6] = 0;
+            for (int i = 0; i < 6; ++i)
+            {
+                videoSsrcs[i] = _idGenerator.next();
+                if (0 == i % 2)
+                {
+                    _videoSources.emplace(videoSsrcs[i],
+                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
+                }
+            }
         }
 
         assert(_audioSource);
@@ -808,13 +823,15 @@ public:
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),
-            videoSsrcs);
+            _channel.isVideoEnabled() ? videoSsrcs : nullptr);
 
         _transport->start();
         _transport->connect();
     }
 
-    void process(uint64_t timestamp)
+    void process(uint64_t timestamp) { process(timestamp, true); }
+
+    void process(uint64_t timestamp, bool sendVideo)
     {
         auto packet = _audioSource->getPacket(timestamp);
         if (packet)
@@ -827,7 +844,19 @@ public:
                 _allocator.free(packet);
                 return;
             }*/
-            _transport->getJobQueue().addJob<AudioSendJob>(*_transport, std::move(packet), timestamp);
+            _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+        }
+
+        if (sendVideo)
+        {
+            for (const auto& videoSource : _videoSources)
+            {
+                auto packet = videoSource.second->getPacket(timestamp);
+                if (packet)
+                {
+                    _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+                }
+            }
         }
     }
 
@@ -916,11 +945,7 @@ public:
             bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
             rtpMap._audioLevelExtId.set(1);
             _receivedData.emplace(rtpHeader->ssrc.get(),
-                new RtpReceiver(_loggableId.getInstanceId(),
-                    rtpHeader->ssrc.get(),
-                    rtpMap,
-                    sender,
-                    timestamp));
+                new RtpReceiver(_loggableId.getInstanceId(), rtpHeader->ssrc.get(), rtpMap, sender, timestamp));
             it = _receivedData.find(rtpHeader->ssrc.get());
         }
 
@@ -978,6 +1003,7 @@ public:
 
     std::unique_ptr<emulator::AudioSource> _audioSource;
     // Video source that produces fake VP8
+    std::unordered_map<uint32_t, std::unique_ptr<fakenet::FakeVideoSource>> _videoSources;
 
     const concurrency::MpmcHashmap32<uint32_t, RtpReceiver*>& getReceiveStats() const { return _receivedData; }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
@@ -1230,8 +1256,8 @@ TEST_F(IntegrationTest, plain)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client3.getReceiveStats();
-        // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 2);
+        // We expect one audio ssrc, three video and one padding
+        EXPECT_EQ(rData1.size(), 4);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -1252,20 +1278,20 @@ TEST_F(IntegrationTest, plain)
             EXPECT_NEAR(freqVector[0], 600.0, 25.0);
             EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
 
-            EXPECT_GE(amplitudeProfile.size(), 4);
+            EXPECT_GE(amplitudeProfile.size(), 2);
             for (auto& item : amplitudeProfile)
             {
                 logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
             }
-            if (amplitudeProfile.size() >= 4)
+            // We expect a ramp-up of volume like this:
+            // start from 0;
+            // ramp-up to about 1826 (+-250) in 1.67s (+-0,2s)
+            if (amplitudeProfile.size() >= 2)
             {
                 EXPECT_EQ(amplitudeProfile[0].second, 0);
 
-                EXPECT_NEAR(amplitudeProfile[3].second, 1826, 250);
-                EXPECT_NEAR(amplitudeProfile[3].first, 48000 * 1.67, 2400);
-
-                EXPECT_NEAR(amplitudeProfile.back().second, 1730, 250);
-                EXPECT_LE(amplitudeProfile.back().first, 2 * 48000);
+                EXPECT_NEAR(amplitudeProfile.back().second, 1826, 250);
+                EXPECT_NEAR(amplitudeProfile.back().first, 48000 * 1.67, 48000 * 0.2);
             }
 
             // item.second->dumpPcmData();
@@ -1273,6 +1299,263 @@ TEST_F(IntegrationTest, plain)
 
         EXPECT_EQ(audioSsrcCount, 1);
     }
+}
+
+TEST_F(IntegrationTest, audioOnlyNoPadding)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString("{\"ip\":\"127.0.0.1\", "
+                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    initBridge(_config);
+
+    const std::string baseUrl = "http://127.0.0.1:8080";
+
+    Conference conf;
+    conf.create(baseUrl + "/colibri");
+    EXPECT_TRUE(conf.isSuccess());
+    utils::Time::nanoSleep(1 * utils::Time::sec);
+
+    SfuClient<ColibriChannel> client1(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client2(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client3(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+
+    // Audio only for all three participants.
+    client1.initiateCall(baseUrl, conf.getId(), true, true, false, false);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, false, false);
+    client3.initiateCall(baseUrl, conf.getId(), false, true, false, false);
+
+    EXPECT_TRUE(client1._channel.isSuccess());
+    EXPECT_TRUE(client2._channel.isSuccess());
+    EXPECT_TRUE(client3._channel.isSuccess());
+
+    if (!client1._channel.isSuccess() && client2._channel.isSuccess() && client3._channel.isSuccess())
+    {
+        return;
+    }
+
+    client1.processLegacyOffer();
+    client2.processLegacyOffer();
+    client3.processLegacyOffer();
+
+    client1.connect();
+    client2.connect();
+    client3.connect();
+
+    while (
+        !client1._transport->isConnected() || !client2._transport->isConnected() || !client3._transport->isConnected())
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+        logger::debug("waiting for connect...", "test");
+    }
+
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+    client3._audioSource->setFrequency(2100);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+    client3._audioSource->setVolume(0.6);
+
+    utils::Pacer pacer(10 * utils::Time::ms);
+    for (int i = 0; i < 500; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, false);
+        client2.process(timestamp, false);
+        client3.process(timestamp, false);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    client3.stopRecording();
+    client2.stopRecording();
+    client1.stopRecording();
+
+    client1._transport->stop();
+    client2._transport->stop();
+    client3._transport->stop();
+
+    for (int i = 0; i < 10 &&
+         (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
+             client3._transport->hasPendingJobs());
+         ++i)
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+    }
+    const auto& rData1 = client1.getReceiveStats();
+    const auto& rData2 = client2.getReceiveStats();
+    const auto& rData3 = client3.getReceiveStats();
+    // We expect only one ssrc (audio), since padding (that comes on video ssrc) is disabled for audio only calls).
+    EXPECT_EQ(rData1.size(), 1);
+    EXPECT_EQ(rData2.size(), 1);
+    EXPECT_EQ(rData3.size(), 1);
+}
+
+TEST_F(IntegrationTest, videoOffPaddingOff)
+{
+    /*
+       Test checks that after video is off and cooldown interval passed, no padding will be sent for the call that
+       became audio-only.
+    */
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString(
+        "{\"ip\":\"127.0.0.1\", "
+        "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"rctl.cooldownInterval\":1}");
+    initBridge(_config);
+
+    const std::string baseUrl = "http://127.0.0.1:8080";
+
+    Conference conf;
+    conf.create(baseUrl + "/colibri");
+    EXPECT_TRUE(conf.isSuccess());
+    utils::Time::nanoSleep(1 * utils::Time::sec);
+
+    SfuClient<ColibriChannel> client1(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client2(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+    SfuClient<ColibriChannel> client3(++_instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_transportFactory,
+        *_sslDtls);
+
+    // Audio only for all three participants.
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+    // Client 3 will join after client 2, which produce video, will leave.
+    client3.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+
+    EXPECT_TRUE(client1._channel.isSuccess());
+    EXPECT_TRUE(client2._channel.isSuccess());
+
+    if (!client1._channel.isSuccess() && client2._channel.isSuccess())
+    {
+        return;
+    }
+
+    client1.processLegacyOffer();
+    client2.processLegacyOffer();
+
+    client1.connect();
+    client2.connect();
+
+    while (!client1._transport->isConnected() || !client2._transport->isConnected())
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+        logger::debug("waiting for connect...", "test");
+    }
+
+    // Have to produce some audio volume above "silence threshold", otherwise audio packats
+    // won't be forwarded by SFU.
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+
+    utils::Pacer pacer(10 * utils::Time::ms);
+    for (int i = 0; i < 100; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, false);
+        client2.process(timestamp, true);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    client2.stopRecording();
+    client2._transport->stop();
+
+    const auto numSsrcClient1Received = client1.getReceiveStats().size();
+
+    // Video producer (client2) stopped, waiting 1.5s for rctl.cooldownInterval timeout to take effect
+    // (configured for 1 s for this test).
+
+    for (int i = 0; i < 150; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, false);
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    // client 3 joins.
+    client3.processLegacyOffer();
+    client3.connect();
+
+    while (!client3._transport->isConnected())
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+        logger::debug("waiting for connect...", "test");
+    }
+
+    client3._audioSource->setFrequency(2100);
+    client3._audioSource->setVolume(0.6);
+
+    for (int i = 0; i < 100; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, false);
+        client3.process(timestamp, false);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    client1.stopRecording();
+    client3.stopRecording();
+
+    client1._transport->stop();
+    client3._transport->stop();
+
+    for (int i = 0; i < 10 &&
+         (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
+             client3._transport->hasPendingJobs());
+         ++i)
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+    }
+
+    const auto& rData1 = client1.getReceiveStats();
+    const auto& rData2 = client2.getReceiveStats();
+    const auto& rData3 = client3.getReceiveStats();
+
+    EXPECT_EQ(numSsrcClient1Received, 3); // s2's audio, s2's video + padding
+    EXPECT_EQ(rData1.size(), 4); // s2's audio, s3's audio, s2's video + padding
+    EXPECT_EQ(rData2.size(), 2); // s1's aidio, + padding
+    EXPECT_EQ(rData3.size(),
+        1); // s1's aidio, no padding, since it joined the call whith no video.  !!!TODO config timeout
 }
 
 class Foo
@@ -1449,7 +1732,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
         const auto& rData1 = client3.getReceiveStats();
         // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 2);
+        EXPECT_EQ(rData1.size(), 4);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -1473,20 +1756,20 @@ TEST_F(IntegrationTest, plainNewApi)
                 EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
             }
 
-            EXPECT_GE(amplitudeProfile.size(), 4);
+            EXPECT_GE(amplitudeProfile.size(), 2);
             for (auto& item : amplitudeProfile)
             {
                 logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
             }
-            if (amplitudeProfile.size() >= 4)
+            // We expect a ramp-up of volume like this:
+            // start from 0;
+            // ramp-up to about 1826 (+-250) in 1.67s (+-0,2s)
+            if (amplitudeProfile.size() >= 2)
             {
                 EXPECT_EQ(amplitudeProfile[0].second, 0);
 
-                EXPECT_NEAR(amplitudeProfile[3].second, 1826, 250);
-                EXPECT_NEAR(amplitudeProfile[3].first, 48000 * 1.67, 2400);
-
-                EXPECT_NEAR(amplitudeProfile.back().second, 1730, 250);
-                EXPECT_LE(amplitudeProfile.back().first, 2 * 48000);
+                EXPECT_NEAR(amplitudeProfile.back().second, 1826, 250);
+                EXPECT_NEAR(amplitudeProfile.back().first, 48000 * 1.67, 48000 * 0.2);
             }
 
             // item.second->dumpPcmData();
@@ -1671,7 +1954,7 @@ TEST_F(IntegrationTest, ptime10)
 
         const auto& rData1 = client3.getReceiveStats();
         // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 2);
+        EXPECT_EQ(rData1.size(), 4);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -1695,20 +1978,20 @@ TEST_F(IntegrationTest, ptime10)
                 EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
             }
 
-            EXPECT_GE(amplitudeProfile.size(), 4);
+            EXPECT_GE(amplitudeProfile.size(), 2);
             for (auto& item : amplitudeProfile)
             {
                 logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
             }
-            if (amplitudeProfile.size() >= 4)
+            // We expect a ramp-up of volume like this:
+            // start from 0;
+            // ramp-up to about 1826 (+-250) in 1.67s (+-0,2s)
+            if (amplitudeProfile.size() >= 2)
             {
                 EXPECT_EQ(amplitudeProfile[0].second, 0);
 
-                EXPECT_NEAR(amplitudeProfile[3].second, 1826, 250);
-                EXPECT_NEAR(amplitudeProfile[3].first, 48000 * 1.67, 2400);
-
-                EXPECT_NEAR(amplitudeProfile.back().second, 1730, 250);
-                EXPECT_LE(amplitudeProfile.back().first, 2 * 48000);
+                EXPECT_NEAR(amplitudeProfile.back().second, 1826, 250);
+                EXPECT_NEAR(amplitudeProfile.back().first, 48000 * 1.67, 48000 * 0.2);
             }
 
             // item.second->dumpPcmData();

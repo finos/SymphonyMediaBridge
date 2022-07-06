@@ -186,7 +186,9 @@ EngineMixer::EngineMixer(const std::string& id,
       _config(config),
       _lastN(lastN),
       _numMixedAudioStreams(0),
-      _lastVideoBandwidthCheck(0)
+      _lastVideoBandwidthCheck(0),
+      _lastVideoPacketProcessed(0),
+      _probingVideoStreams(false)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -290,15 +292,9 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         engineVideoStream->_transport.getLoggableId().c_str(),
         endpointIdHash);
 
-    auto* outboundContext = obtainOutboundSsrcContext(*engineVideoStream,
-        engineVideoStream->_localSsrc,
-        engineVideoStream->_feedbackRtpMap);
-    if (outboundContext)
+    if (_probingVideoStreams)
     {
-        engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
-            engineVideoStream->_localSsrc,
-            &outboundContext->_sequenceCounter,
-            outboundContext->_rtpMap._payloadType);
+        startProbingVideoStream(*engineVideoStream);
     }
 
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
@@ -331,10 +327,7 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
         outboundContext->_markedForDeletion = true;
         if (engineVideoStream->_transport.isConnected())
         {
-            engineVideoStream->_transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream->_transport,
-                engineVideoStream->_localSsrc,
-                nullptr,
-                engineVideoStream->_feedbackRtpMap._payloadType);
+            stopProbingVideoStream(*engineVideoStream);
             auto goodByePacket = createGoodBye(outboundContext->_ssrc, outboundContext->_allocator);
             if (goodByePacket)
             {
@@ -817,6 +810,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     // 3. Update bandwidth estimates
     if (_config.bwe.useUplinkEstimate)
     {
+        checkIfRateControlIsNeeded(engineIterationStartTimestamp);
         updateDirectorUplinkEstimates(engineIterationStartTimestamp);
         checkVideoBandwidth(engineIterationStartTimestamp);
     }
@@ -2012,6 +2006,8 @@ uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
             continue;
         }
         const auto senderEndpointIdHash = packetInfo.transport()->getEndpointIdHash();
+
+        _lastVideoPacketProcessed = timestamp;
 
         for (auto& videoStreamEntry : _engineVideoStreams)
         {
@@ -3211,6 +3207,58 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             slidesLimit,
             _sendAllocator);
     }
+}
+
+void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
+{
+    auto* outboundContext =
+        obtainOutboundSsrcContext(engineVideoStream, engineVideoStream._localSsrc, engineVideoStream._feedbackRtpMap);
+    if (outboundContext)
+    {
+        engineVideoStream._transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream._transport,
+            engineVideoStream._localSsrc,
+            &outboundContext->_sequenceCounter,
+            outboundContext->_rtpMap._payloadType);
+    }
+    _probingVideoStreams = true;
+}
+
+void EngineMixer::stopProbingVideoStream(const EngineVideoStream& engineVideoStream)
+{
+    engineVideoStream._transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream._transport,
+        engineVideoStream._localSsrc,
+        nullptr,
+        engineVideoStream._feedbackRtpMap._payloadType);
+}
+
+bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const
+{
+    return utils::Time::diffLE(_lastVideoPacketProcessed, timestamp, threshold);
+}
+
+void EngineMixer::checkIfRateControlIsNeeded(const uint64_t timestamp)
+{
+    auto enableBEProbing = isVideoInUse(timestamp, utils::Time::sec * _config.rctl.cooldownInterval);
+
+    if (enableBEProbing == _probingVideoStreams)
+        return;
+
+    for (auto& videoStream : _engineVideoStreams)
+    {
+        if (videoStream.second)
+        {
+            if (enableBEProbing)
+            {
+                startProbingVideoStream(*videoStream.second);
+            }
+            else
+            {
+                stopProbingVideoStream(*videoStream.second);
+            }
+        }
+    }
+
+    _probingVideoStreams = enableBEProbing;
 }
 
 void EngineMixer::runTransportTicks(const uint64_t timestamp)
