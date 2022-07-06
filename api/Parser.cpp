@@ -346,7 +346,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             videoChannel._transport.set(parsePatchEndpointTransport(videoJson["transport"]));
         }
 
-        for (const auto& ssrcJson : videoJson["ssrcs"])
+        for (const auto& ssrcJson : safeJsonArray(videoJson, "ssrcs"))
         {
             const auto ssrc = ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
             videoChannel._ssrcs.push_back(ssrc);
