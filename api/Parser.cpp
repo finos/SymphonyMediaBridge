@@ -352,7 +352,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             videoChannel._ssrcs.push_back(ssrc);
         }
 
-        for (const auto& payloadTypeJson : requiredJsonArray(videoJson, "payload-types"))
+        for (const auto& payloadTypeJson : safeJsonArray(videoJson, "payload-types"))
         {
             videoChannel._payloadTypes.emplace_back(parsePatchEndpointPayloadType(payloadTypeJson));
         }
