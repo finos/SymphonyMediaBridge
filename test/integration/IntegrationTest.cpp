@@ -221,17 +221,90 @@ private:
     bool _success = false;
 };
 
-class Channel
+class BaseChannel
 {
 public:
-    Channel() : _id(newGuuid()), _audioId(newIdString()), _dataId(newIdString()), _videoId(newIdString()) {}
+    BaseChannel() : _id(newGuuid()), _audioId(newIdString()), _dataId(newIdString()), _videoId(newIdString()) {}
 
-    void create(const std::string& baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        bool audio,
-        bool video,
-        bool forwardMedia)
+    virtual void create(const std::string& baseUrl,
+        const std::string& conferenceId,
+        const bool initiator,
+        const bool audio,
+        const bool video,
+        const bool forwardMedia) = 0;
+
+    virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
+        const ice::IceCandidates& candidates,
+        const std::string& fingerprint,
+        uint32_t audioSsrc,
+        uint32_t* videoSsrcs) = 0;
+
+    virtual void configureTransport(transport::RtcTransport& transport,
+        memory::AudioPacketPoolAllocator& allocator) = 0;
+
+    virtual bool isAudioOffered() const = 0;
+
+    virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const = 0;
+
+public:
+    bool isSuccess() const { return !raw.empty(); }
+    bool isVideoEnabled() const { return _videoEnabled; }
+
+    nlohmann::json getOffer() const { return _offer; }
+    std::string getEndpointId() const { return _id; }
+    uint32_t getEndpointIdHash() const { return std::hash<std::string>{}(_id); }
+    std::string raw;
+
+protected:
+    static constexpr const char* ICE_GROUP = "ice";
+    static constexpr const char* TRANSPORT_GROUP = "transport";
+
+    void setRemoteIce(transport::RtcTransport& transport,
+        nlohmann::json bundle,
+        const char* candidatesGroupName,
+        memory::AudioPacketPoolAllocator& allocator)
+    {
+        ice::IceCandidates candidates;
+
+        for (auto& c : bundle[candidatesGroupName]["candidates"])
+        {
+            candidates.push_back(ice::IceCandidate(c["foundation"].template get<std::string>().c_str(),
+                ice::IceComponent::RTP,
+                c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
+                c["priority"].template get<uint32_t>(),
+                transport::SocketAddress::parse(c["ip"], c["port"]),
+                ice::IceCandidate::Type::HOST));
+        }
+
+        std::pair<std::string, std::string> credentials;
+        credentials.first = bundle[candidatesGroupName]["ufrag"];
+        credentials.second = bundle[candidatesGroupName]["pwd"];
+
+        transport.setRemoteIce(credentials, candidates, allocator);
+    }
+
+protected:
+    std::string _id;
+    std::string _conferenceId;
+
+    std::string _audioId;
+    std::string _dataId;
+    std::string _videoId;
+    std::string _relayType;
+    nlohmann::json _offer;
+    std::string _baseUrl;
+    bool _videoEnabled;
+};
+
+class Channel : public BaseChannel
+{
+public:
+    virtual void create(const std::string& baseUrl,
+        const std::string& conferenceId,
+        const bool initiator,
+        const bool audio,
+        const bool video,
+        const bool forwardMedia) override
     {
         assert(!conferenceId.empty());
         _conferenceId = conferenceId;
@@ -272,11 +345,11 @@ public:
         }
     }
 
-    void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
+    virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
         const std::string& fingerprint,
         uint32_t audioSsrc,
-        uint32_t* videoSsrcs)
+        uint32_t* videoSsrcs) override
     {
         using namespace nlohmann;
         json body = {{"action", "configure"}};
@@ -385,34 +458,19 @@ public:
         }
     }
 
-    void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator)
+    virtual void configureTransport(transport::RtcTransport& transport,
+        memory::AudioPacketPoolAllocator& allocator) override
     {
         auto bundle = _offer["bundle-transport"];
-        ice::IceCandidates candidates;
-
-        for (auto& c : bundle["ice"]["candidates"])
-        {
-            candidates.push_back(ice::IceCandidate(c["foundation"].template get<std::string>().c_str(),
-                ice::IceComponent::RTP,
-                c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
-                c["priority"].template get<uint32_t>(),
-                transport::SocketAddress::parse(c["ip"], c["port"]),
-                ice::IceCandidate::Type::HOST));
-        }
-
-        std::pair<std::string, std::string> credentials;
-        credentials.first = bundle["ice"]["ufrag"];
-        credentials.second = bundle["ice"]["pwd"];
-
-        transport.setRemoteIce(credentials, candidates, allocator);
+        setRemoteIce(transport, bundle, ICE_GROUP, allocator);
 
         std::string fingerPrint = bundle["dtls"]["hash"];
         transport.setRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
     }
 
-    bool isAudioOffered() const { return _offer.find("audio") != _offer.end(); }
+    virtual bool isAudioOffered() const override { return _offer.find("audio") != _offer.end(); }
 
-    std::unordered_set<uint32_t> getOfferedVideoSsrcs() const
+    virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override
     {
         std::unordered_set<uint32_t> ssrcs;
         if (_offer.find("video") != _offer.end())
@@ -425,26 +483,6 @@ public:
 
         return ssrcs;
     }
-
-    bool isSuccess() const { return !raw.empty(); }
-    bool isVideoEnabled() const { return _videoEnabled; }
-
-    nlohmann::json getOffer() const { return _offer; }
-    std::string getEndpointId() const { return _id; }
-    uint32_t getEndpointIdHash() const { return std::hash<std::string>{}(_id); }
-    std::string raw;
-
-private:
-    std::string _id;
-    std::string _conferenceId;
-
-    std::string _audioId;
-    std::string _dataId;
-    std::string _videoId;
-    std::string _relayType;
-    nlohmann::json _offer;
-    std::string _baseUrl;
-    bool _videoEnabled;
 };
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
@@ -462,17 +500,15 @@ nlohmann::json newContent(const std::string& endpointId, const char* type, const
     return contentItem;
 }
 
-class ColibriChannel
+class ColibriChannel : public BaseChannel
 {
 public:
-    ColibriChannel() : _id(newGuuid()), _audioId(newIdString()), _dataId(newIdString()), _videoId(newIdString()) {}
-
-    void create(const std::string& baseUrl,
+    virtual void create(const std::string& baseUrl,
         const std::string& conferenceId,
         const bool initiator,
         const bool audio,
         const bool video,
-        const bool forwardMedia)
+        const bool forwardMedia) override
     {
         _conferenceId = conferenceId;
         _relayType = forwardMedia ? "ssrc-rewrite" : "mixer";
@@ -519,11 +555,11 @@ public:
         }
     }
 
-    void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
+    virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
         const std::string& fingerprint,
         uint32_t audioSsrc,
-        uint32_t* videoSsrcs)
+        uint32_t* videoSsrcs) override
     {
         using namespace nlohmann;
         json body = {{"id", _conferenceId},
@@ -673,33 +709,19 @@ public:
         }
     }
 
-    void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator)
+    virtual void configureTransport(transport::RtcTransport& transport,
+        memory::AudioPacketPoolAllocator& allocator) override
     {
         for (auto& bundle : _offer["channel-bundles"])
         {
-            ice::IceCandidates candidates;
-            for (auto& c : bundle["transport"]["candidates"])
-            {
-                candidates.push_back(ice::IceCandidate(c["foundation"].template get<std::string>().c_str(),
-                    ice::IceComponent::RTP,
-                    c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
-                    c["priority"].template get<uint32_t>(),
-                    transport::SocketAddress::parse(c["ip"], c["port"]),
-                    ice::IceCandidate::Type::HOST));
-            }
-
-            std::pair<std::string, std::string> credentials;
-            credentials.first = bundle["transport"]["ufrag"];
-            credentials.second = bundle["transport"]["pwd"];
-
-            transport.setRemoteIce(credentials, candidates, allocator);
+            setRemoteIce(transport, bundle, TRANSPORT_GROUP, allocator);
 
             std::string fingerPrint = bundle["transport"]["fingerprints"][0]["fingerprint"];
             transport.setRemoteDtlsFingerprint(bundle["transport"]["fingerprints"][0]["hash"], fingerPrint, true);
         }
     }
 
-    bool isAudioOffered() const
+    virtual bool isAudioOffered() const override
     {
         for (auto& content : _offer["contents"])
         {
@@ -711,7 +733,7 @@ public:
         return false;
     }
 
-    std::unordered_set<uint32_t> getOfferedVideoSsrcs() const
+    virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override
     {
         std::unordered_set<uint32_t> ssrcs;
         for (auto& content : _offer["contents"])
@@ -728,26 +750,6 @@ public:
         }
         return ssrcs;
     }
-
-    bool isSuccess() const { return !raw.empty(); }
-    bool isVideoEnabled() const { return _videoEnabled; }
-
-    nlohmann::json getOffer() const { return _offer; }
-    std::string getEndpointId() const { return _id; }
-    uint32_t getEndpointIdHash() const { return std::hash<std::string>{}(_id); }
-    std::string raw;
-
-private:
-    std::string _id;
-    std::string _conferenceId;
-
-    std::string _audioId;
-    std::string _dataId;
-    std::string _videoId;
-    std::string _relayType;
-    nlohmann::json _offer;
-    std::string _baseUrl;
-    bool _videoEnabled;
 };
 
 class MediaSendJob : public jobmanager::Job
