@@ -12,6 +12,7 @@
 #include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/ApiChannel.h"
 #include "test/integration/emulator/AudioSource.h"
+#include "test/integration/emulator/HttpRequests.h"
 #include "test/integration/emulator/SfuClient.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
@@ -88,86 +89,6 @@ void IntegrationTest::TearDown()
 
     logger::info("IntegrationTest torn down", "IntegrationTest");
 }
-
-class HttpPostRequest
-{
-public:
-    HttpPostRequest(const char* url, const char* body) : _request(nullptr), _status(HTTP_STATUS_PENDING), _prevSize(0)
-    {
-        _request = http_post(url, body, body ? std::strlen(body) : 0, nullptr);
-    }
-
-    ~HttpPostRequest() { http_release(_request); }
-
-    void awaitResponse(uint64_t timeout)
-    {
-        const auto startTime = utils::Time::getAbsoluteTime();
-
-        while (_status == HTTP_STATUS_PENDING)
-        {
-            _status = http_process(_request);
-            if (_prevSize != _request->response_size)
-            {
-                logger::debug("%zu byte(s) received.", "HttpPostRequest", _request->response_size);
-                _prevSize = _request->response_size;
-            }
-            if (utils::Time::getAbsoluteTime() - startTime > timeout)
-            {
-                logger::error("Timeout waiting for response", "HttpPostRequest");
-                _status = HTTP_STATUS_FAILED;
-                break;
-            }
-            utils::Time::nanoSleep(2 * utils::Time::ms);
-        }
-    }
-
-    bool isPending() const { return _status == HTTP_STATUS_PENDING; }
-    bool hasFailed() const { return _status == HTTP_STATUS_FAILED; }
-    bool isSuccess() const { return _status == HTTP_STATUS_COMPLETED; }
-
-    std::string getResponse() const
-    {
-        if (isSuccess())
-        {
-            return (char const*)_request->response_data;
-        }
-        return "";
-    }
-
-    nlohmann::json getJsonBody() const
-    {
-        if (isSuccess())
-        {
-            return nlohmann::json::parse(static_cast<const char*>(_request->response_data));
-        }
-        return nlohmann::json();
-    }
-
-    int getCode() const { return _request->status_code; }
-
-protected:
-    HttpPostRequest() : _request(nullptr), _status(HTTP_STATUS_PENDING), _prevSize(0) {}
-    http_t* _request;
-
-private:
-    http_status_t _status;
-    size_t _prevSize;
-};
-
-class HttpPatchRequest : public HttpPostRequest
-{
-public:
-    HttpPatchRequest(const char* url, const char* body)
-    {
-        _request = http_patch(url, body, body ? std::strlen(body) : 0, nullptr);
-    }
-};
-
-class HttpGetRequest : public HttpPostRequest
-{
-public:
-    HttpGetRequest(const char* url) { _request = http_get(url, nullptr); }
-};
 
 namespace
 {
