@@ -1,11 +1,7 @@
+#pragma once
 #include "codec/OpusEncoder.h"
 #include "memory/PacketPoolAllocator.h"
 #include <cstdint>
-
-namespace memory
-{
-class Packet;
-}
 
 namespace emulator
 {
