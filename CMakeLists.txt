@@ -446,6 +446,11 @@ set(TEST_FILES
     test/integration/RtpDump.cpp
     test/integration/emulator/AudioSource.cpp
     test/integration/emulator/AudioSource.h
+    test/integration/emulator/ApiChannel.h
+    test/integration/emulator/ApiChannel.cpp
+    test/integration/emulator/SfuClient.h
+    test/integration/emulator/HttpRequests.h
+    test/integration/emulator/HttpRequests.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
     test/gtest_main.cpp
