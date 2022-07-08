@@ -4,6 +4,29 @@
 namespace
 {
 
+const nlohmann::json& optionalJsonArray(const nlohmann::json& data, const char* arrayProperty)
+{
+    static const nlohmann::json EMPTY_JSON_ARRAY = nlohmann::json::array();
+
+    const auto it = data.find(arrayProperty);
+    return it == data.end() ? EMPTY_JSON_ARRAY : *it;
+}
+
+const nlohmann::json& requiredJsonArray(const nlohmann::json& data, const char* arrayProperty)
+{
+    const auto it = data.find(arrayProperty);
+    if (it == data.end())
+    {
+        const auto sb = std::string()
+            .append("Missing required array property: ")
+            .append(arrayProperty);
+
+        throw nlohmann::detail::other_error::create(-1, sb);
+    }
+
+    return *it;
+}
+
 template <typename T>
 void setIfExists(utils::Optional<T>& target, const nlohmann::json& data, const char* name)
 {
@@ -202,20 +225,17 @@ api::EndpointDescription::PayloadType parsePatchEndpointPayloadType(const nlohma
         }
     }
 
-    if (data.find("rtcp-fbs") != data.end())
+    for (const auto& rtcpFbJson : optionalJsonArray(data, "rtcp-fbs"))
     {
-        for (const auto& rtcpFbJson : data["rtcp-fbs"])
+        const auto& type = rtcpFbJson["type"].get<std::string>();
+        if (rtcpFbJson.find("subtype") != rtcpFbJson.end())
         {
-            const auto& type = rtcpFbJson["type"].get<std::string>();
-            if (rtcpFbJson.find("subtype") != rtcpFbJson.end())
-            {
-                const auto& subtype = rtcpFbJson["subtype"].get<std::string>();
-                payloadType._rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>(subtype));
-            }
-            else
-            {
-                payloadType._rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>());
-            }
+            const auto& subtype = rtcpFbJson["subtype"].get<std::string>();
+            payloadType._rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>(subtype));
+        }
+        else
+        {
+            payloadType._rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>());
         }
     }
 
@@ -292,14 +312,11 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             audioChannel._transport.set(parsePatchEndpointTransport(audioJson["transport"]));
         }
 
-        if (audioJson.find("ssrcs") != audioJson.end())
+        for (const auto& ssrcJson : optionalJsonArray(audioJson, "ssrcs"))
         {
-            for (const auto& ssrcJson : audioJson["ssrcs"])
-            {
-                const auto ssrc =
-                    ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
-                audioChannel._ssrcs.push_back(ssrc);
-            }
+            const auto ssrc =
+                ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+            audioChannel._ssrcs.push_back(ssrc);
         }
 
         if (audioJson.find("payload-type") != audioJson.end())
@@ -307,15 +324,12 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             audioChannel._payloadType.set(parsePatchEndpointPayloadType(audioJson["payload-type"]));
         }
 
-        if (audioJson.find("rtp-hdrexts") != audioJson.end())
+        for (const auto& rtpHdrExtJson : optionalJsonArray(audioJson, "rtp-hdrexts"))
         {
-            for (const auto& rtpHdrExtJson : audioJson["rtp-hdrexts"])
+            const auto id = rtpHdrExtJson["id"].get<uint32_t>();
+            if (id > 0 && id < 15)
             {
-                const auto id = rtpHdrExtJson["id"].get<uint32_t>();
-                if (id > 0 && id < 15)
-                {
-                    audioChannel._rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
-                }
+                audioChannel._rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
             }
         }
 
@@ -332,18 +346,18 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             videoChannel._transport.set(parsePatchEndpointTransport(videoJson["transport"]));
         }
 
-        for (const auto& ssrcJson : videoJson["ssrcs"])
+        for (const auto& ssrcJson : optionalJsonArray(videoJson, "ssrcs"))
         {
             const auto ssrc = ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
             videoChannel._ssrcs.push_back(ssrc);
         }
 
-        for (const auto& payloadTypeJson : videoJson["payload-types"])
+        for (const auto& payloadTypeJson : optionalJsonArray(videoJson, "payload-types"))
         {
             videoChannel._payloadTypes.emplace_back(parsePatchEndpointPayloadType(payloadTypeJson));
         }
 
-        for (const auto& rtpHdrExtJson : videoJson["rtp-hdrexts"])
+        for (const auto& rtpHdrExtJson : optionalJsonArray(videoJson, "rtp-hdrexts"))
         {
             const auto id = rtpHdrExtJson["id"].get<uint32_t>();
             if (id > 0 && id < 15)
@@ -352,10 +366,10 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             }
         }
 
-        for (const auto& ssrcGroupJson : videoJson["ssrc-groups"])
+        for (const auto& ssrcGroupJson : optionalJsonArray(videoJson, "ssrc-groups"))
         {
             api::EndpointDescription::SsrcGroup ssrcGroup;
-            for (const auto& ssrcJson : ssrcGroupJson["ssrcs"])
+            for (const auto& ssrcJson : requiredJsonArray(ssrcGroupJson, "ssrcs"))
             {
                 const uint32_t ssrc =
                     ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
@@ -365,20 +379,17 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             videoChannel._ssrcGroups.emplace_back(std::move(ssrcGroup));
         }
 
-        if (videoJson.find("ssrc-attributes") != videoJson.end())
+        for (const auto& ssrcAttributeJson : optionalJsonArray(videoJson, "ssrc-attributes"))
         {
-            for (const auto& ssrcAttributeJson : videoJson["ssrc-attributes"])
+            api::EndpointDescription::SsrcAttribute ssrcAttribute;
+            ssrcAttribute._content = ssrcAttributeJson["content"].get<std::string>();
+            for (const auto& ssrcJson : requiredJsonArray(ssrcAttributeJson, "ssrcs"))
             {
-                api::EndpointDescription::SsrcAttribute ssrcAttribute;
-                ssrcAttribute._content = ssrcAttributeJson["content"].get<std::string>();
-                for (const auto& ssrcJson : ssrcAttributeJson["ssrcs"])
-                {
-                    const auto ssrc =
-                        ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
-                    ssrcAttribute._ssrcs.push_back(ssrc);
-                }
-                videoChannel._ssrcAttributes.push_back(ssrcAttribute);
+                const auto ssrc =
+                    ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+                ssrcAttribute._ssrcs.push_back(ssrc);
             }
+            videoChannel._ssrcAttributes.push_back(ssrcAttribute);
         }
 
         if (videoJson.find("ssrc-whitelist") != videoJson.end())
@@ -417,14 +428,12 @@ Recording parseRecording(const nlohmann::json& data)
     recording._recordingId = recordingJson["recording-id"].get<std::string>();
     recording._userId = recordingJson["user-id"].get<std::string>();
 
-    const auto& modalaties = recordingJson["recording-modalities"];
-    setIfExistsOrDefault<>(recording._isAudioEnabled, modalaties, "audio", false);
-    setIfExistsOrDefault<>(recording._isVideoEnabled, modalaties, "video", false);
-    setIfExistsOrDefault<>(recording._isScreenshareEnabled, modalaties, "screenshare", false);
+    const auto& modalities = recordingJson["recording-modalities"];
+    setIfExistsOrDefault<>(recording._isAudioEnabled, modalities, "audio", false);
+    setIfExistsOrDefault<>(recording._isVideoEnabled, modalities, "video", false);
+    setIfExistsOrDefault<>(recording._isScreenshareEnabled, modalities, "screenshare", false);
 
-    if (recordingJson.find("channels") != recordingJson.end())
-    {
-        for (const auto& channelJson : recordingJson["channels"])
+    for (const auto& channelJson : optionalJsonArray(recordingJson, "channels"))
         {
             api::RecordingChannel recordingChannel;
             setIfExists<>(recordingChannel._id, channelJson, "id");
@@ -440,6 +449,7 @@ Recording parseRecording(const nlohmann::json& data)
             {
                 utils::Base64::decode(aesKeyEnc, recordingChannel._aesKey, 32);
             }
+
             if (!saltEnc.empty())
             {
                 utils::Base64::decode(saltEnc, recordingChannel._aesSalt, 12);
@@ -447,7 +457,6 @@ Recording parseRecording(const nlohmann::json& data)
 
             recording._channels.emplace_back(recordingChannel);
         }
-    }
 
     return recording;
 }
