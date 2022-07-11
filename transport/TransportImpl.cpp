@@ -68,6 +68,22 @@ private:
     void (TransportImpl::*_receiveMethod)(Endpoint&, const SocketAddress&, memory::UniquePacket packet, uint64_t);
 };
 
+class TcpConnected : public jobmanager::Job
+{
+public:
+    TcpConnected(TransportImpl& transport, std::shared_ptr<Endpoint> endpoint)
+        : _transport(transport),
+          _endpoint(endpoint)
+    {
+    }
+
+    void run() override { _transport.internalIceTcpConnect(_endpoint); }
+
+private:
+    TransportImpl& _transport;
+    std::shared_ptr<Endpoint> _endpoint;
+};
+
 class IceDisconnectJob : public jobmanager::Job
 {
 public:
@@ -354,8 +370,8 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     ice::IceRole iceRole,
     const bwe::Config& bweConfig,
     const bwe::RateControllerConfig& rateControllerConfig,
-    const std::vector<Endpoint*>& rtpEndPoints,
-    const std::vector<ServerEndpoint*>& tcpEndpoints,
+    const Endpoints& rtpEndPoints,
+    const ServerEndpoints& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
     memory::PacketPoolAllocator& allocator)
 {
@@ -381,8 +397,8 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     const sctp::SctpConfig& sctpConfig,
     const bwe::Config& bweConfig,
     const bwe::RateControllerConfig& rateControllerConfig,
-    const std::vector<Endpoint*>& rtpEndPoints,
-    const std::vector<Endpoint*>& rtcpEndPoints,
+    const Endpoints& rtpEndPoints,
+    const Endpoints& rtcpEndPoints,
     memory::PacketPoolAllocator& allocator)
 {
     return std::make_shared<TransportImpl>(jobmanager,
@@ -404,8 +420,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     const sctp::SctpConfig& sctpConfig,
     const bwe::Config& bweConfig,
     const bwe::RateControllerConfig& rateControllerConfig,
-    const std::vector<Endpoint*>& rtpEndPoints,
-    const std::vector<Endpoint*>& rtcpEndPoints,
+    const Endpoints& rtpEndPoints,
+    const Endpoints& rtcpEndPoints,
     memory::PacketPoolAllocator& allocator)
     : _isInitialized(false),
       _loggableId("Transport"),
@@ -446,13 +462,13 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     }
     _srtpClient->setSslWriteBioListener(this);
 
-    for (auto* endpoint : rtpEndPoints)
+    for (auto& endpoint : rtpEndPoints)
     {
         _rtpEndpoints.push_back(endpoint);
         endpoint->registerDefaultListener(this);
         ++_callbackRefCount;
     }
-    for (auto* endpoint : rtcpEndPoints)
+    for (auto& endpoint : rtcpEndPoints)
     {
         _rtcpEndpoints.push_back(endpoint);
         endpoint->registerDefaultListener(this);
@@ -465,11 +481,11 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
 
     if (_rtpEndpoints.size() == 1)
     {
-        _selectedRtp = _rtpEndpoints.front();
+        _selectedRtp = _rtpEndpoints.front().get();
     }
     if (_rtcpEndpoints.size() == 1)
     {
-        _selectedRtcp = _rtcpEndpoints.front();
+        _selectedRtcp = _rtcpEndpoints.front().get();
     }
 
     _isInitialized = true;
@@ -489,8 +505,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     const ice::IceRole iceRole,
     const bwe::Config& bweConfig,
     const bwe::RateControllerConfig& rateControllerConfig,
-    const std::vector<Endpoint*>& sharedEndpoints,
-    const std::vector<ServerEndpoint*>& tcpEndpoints,
+    const Endpoints& sharedEndpoints,
+    const ServerEndpoints& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
     memory::PacketPoolAllocator& allocator)
     : _isInitialized(false),
@@ -542,7 +558,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     for (auto& endpoint : sharedEndpoints)
     {
         _rtpEndpoints.push_back(endpoint);
-        _rtpIceSession->attachLocalEndpoint(endpoint);
+        _rtpIceSession->attachLocalEndpoint(endpoint.get());
         endpoint->registerListener(_rtpIceSession->getLocalCredentials().first, this);
         ++_callbackRefCount;
 
@@ -550,17 +566,17 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
         {
             auto addressPort = iceConfig.publicIpv4;
             addressPort.setPort(endpoint->getLocalPort().getPort());
-            _rtpIceSession->addLocalCandidate(addressPort, endpoint);
+            _rtpIceSession->addLocalCandidate(addressPort, endpoint.get());
         }
         if (!iceConfig.publicIpv6.empty() && endpoint->getLocalPort().getFamily() == AF_INET6)
         {
             auto addressPort = iceConfig.publicIpv6;
             addressPort.setPort(endpoint->getLocalPort().getPort());
-            _rtpIceSession->addLocalCandidate(addressPort, endpoint);
+            _rtpIceSession->addLocalCandidate(addressPort, endpoint.get());
         }
     }
     int index = 0;
-    for (auto* endpoint : tcpEndpoints)
+    for (auto& endpoint : tcpEndpoints)
     {
         _rtpIceSession->addLocalTcpCandidate(ice::IceCandidate::Type::HOST,
             index++,
@@ -639,17 +655,11 @@ bool TransportImpl::start()
 {
     for (auto& endpoint : _rtpEndpoints)
     {
-        if (!endpoint->isShared())
-        {
-            endpoint->start();
-        }
+        endpoint->start();
     }
     for (auto& endpoint : _rtcpEndpoints)
     {
-        if (!endpoint->isShared())
-        {
-            endpoint->start();
-        }
+        endpoint->start();
     }
     return true;
 }
@@ -665,21 +675,6 @@ TransportImpl::~TransportImpl()
             _jobCounter.load(),
             _callbackRefCount.load(),
             _jobQueue.getCount());
-    }
-
-    for (auto* endpoint : _rtpEndpoints)
-    {
-        if (!endpoint->isShared())
-        {
-            delete endpoint;
-        }
-    }
-    for (auto* endpoint : _rtcpEndpoints)
-    {
-        if (!endpoint->isShared())
-        {
-            delete endpoint;
-        }
     }
 }
 
@@ -702,7 +697,7 @@ void TransportImpl::stop()
         _sctpAssociation->close();
     }
 
-    for (auto* endpoint : _tcpServerEndpoints)
+    for (auto& endpoint : _tcpServerEndpoints)
     {
         endpoint->unregisterListener(_rtpIceSession->getLocalCredentials().first, this);
     }
@@ -714,7 +709,7 @@ void TransportImpl::stop()
         utils::Time::nanoSleep(10 * utils::Time::ms);
     }
 
-    for (auto* ep : _rtpEndpoints)
+    for (auto& ep : _rtpEndpoints)
     {
         if (!ep->isShared())
         {
@@ -726,7 +721,7 @@ void TransportImpl::stop()
             ep->unregisterListener(this);
         }
     }
-    for (auto* ep : _rtcpEndpoints)
+    for (auto& ep : _rtcpEndpoints)
     {
         if (!ep->isShared())
         {
@@ -977,6 +972,26 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
     }
 }
 
+void TransportImpl::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint)
+{
+    if (_rtpIceSession)
+    {
+        if (!_jobQueue.addJob<TcpConnected>(*this, endpoint))
+        {
+            logger::error("job queue full ICE, TCP connect", _loggableId.c_str());
+        }
+    }
+}
+
+void TransportImpl::internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint)
+{
+    logger::debug("new tcp connection %s", _loggableId.c_str(), endpoint->getName());
+
+    endpoint->registerDefaultListener(this);
+    ++_callbackRefCount;
+    _rtpEndpoints.push_back(endpoint);
+}
+
 void TransportImpl::internalIceReceived(Endpoint& endpoint,
     const SocketAddress& source,
     memory::UniquePacket packet,
@@ -1005,14 +1020,6 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
     }
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)
     {
-        logger::debug("new tcp connection %s received %zu",
-            _loggableId.c_str(),
-            endpoint.getName(),
-            packet->getLength());
-
-        endpoint.registerDefaultListener(this);
-        ++_callbackRefCount;
-        _rtpEndpoints.push_back(&endpoint);
         _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
     }
 }
@@ -1929,13 +1936,13 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
             else if (candidate.transportType == ice::TransportType::TCP && candidate.tcpType == ice::TcpType::PASSIVE)
             {
                 auto endpoints = _tcpEndpointFactory->createTcpEndpoints(candidate.address.getFamily());
-                for (Endpoint* endpoint : endpoints)
+                for (auto& endpoint : endpoints)
                 {
                     endpoint->registerDefaultListener(this);
                     ++_callbackRefCount;
                     _rtpEndpoints.push_back(endpoint);
 
-                    _rtpIceSession->addRemoteCandidate(candidate, endpoint);
+                    _rtpIceSession->addRemoteCandidate(candidate, endpoint.get());
                 }
             }
         }
@@ -2033,8 +2040,8 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
             if (endpoint->getState() == Endpoint::State::CONNECTED &&
                 endpoint->getLocalPort() == candidatePair.first.baseAddress)
             {
-                _selectedRtp = endpoint;
-                _selectedRtcp = endpoint;
+                _selectedRtp = endpoint.get();
+                _selectedRtcp = endpoint.get();
                 _peerRtpPort = candidatePair.second.address;
                 _peerRtcpPort = candidatePair.second.address;
 

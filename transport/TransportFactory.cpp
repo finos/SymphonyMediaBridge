@@ -51,11 +51,12 @@ public:
         {
             for (uint32_t portOffset = 0; portOffset < std::max(1u, config.ice.sharedPorts.get()); ++portOffset)
             {
-                _sharedEndpoints.push_back(std::vector<Endpoint*>());
+                _sharedEndpoints.push_back(Endpoints());
                 for (SocketAddress portAddress : interfaces)
                 {
                     portAddress.setPort(config.ice.singlePort + portOffset);
-                    auto endPoint = new UdpEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true);
+                    auto endPoint =
+                        std::make_shared<UdpEndpoint>(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true);
 
                     if (endPoint->isGood())
                     {
@@ -77,7 +78,6 @@ public:
                         logger::error("failed to open main media port on interface %s",
                             "TransportFactory",
                             portAddress.toString().c_str());
-                        delete endPoint;
                     }
                 }
             }
@@ -87,8 +87,13 @@ public:
             for (SocketAddress portAddress : interfaces)
             {
                 portAddress.setPort(config.ice.tcp.port);
-                auto endPoint =
-                    new TcpServerEndpoint(_jobManager, _mainAllocator, _rtcePoll, 1024, this, portAddress, config);
+                auto endPoint = std::make_shared<TcpServerEndpoint>(_jobManager,
+                    _mainAllocator,
+                    _rtcePoll,
+                    1024,
+                    this,
+                    portAddress,
+                    config);
                 if (endPoint->isGood())
                 {
                     ++_callbackRefCount;
@@ -105,7 +110,6 @@ public:
                     logger::error("failed to open TCP server port at %s",
                         "TransportFactory",
                         portAddress.toString().c_str());
-                    delete endPoint;
                 }
             }
         }
@@ -113,12 +117,16 @@ public:
         {
             for (uint32_t portOffset = 0; portOffset < std::max(1u, config.recording.sharedPorts.get()); ++portOffset)
             {
-                _sharedRecordingEndpoints.emplace_back(std::vector<RecordingEndpoint*>());
+                _sharedRecordingEndpoints.emplace_back(std::vector<std::shared_ptr<RecordingEndpoint>>());
                 for (SocketAddress portAddress : interfaces)
                 {
                     portAddress.setPort(config.recording.singlePort + portOffset);
-                    auto endPoint =
-                        new RecordingEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true);
+                    auto endPoint = std::make_shared<RecordingEndpoint>(jobManager,
+                        1024,
+                        _mainAllocator,
+                        portAddress,
+                        _rtcePoll,
+                        true);
 
                     if (endPoint->isGood())
                     {
@@ -138,7 +146,6 @@ public:
                         logger::error("failed to open recording port on interface %s",
                             "TransportFactory",
                             portAddress.toString().c_str());
-                        delete endPoint;
                     }
                 }
             }
@@ -147,20 +154,20 @@ public:
 
     ~TransportFactoryImpl()
     {
-        for (auto* serverEndpoint : _tcpServerEndpoints)
+        for (auto& serverEndpoint : _tcpServerEndpoints)
         {
             serverEndpoint->close();
         }
         for (auto& sharedEndpointList : _sharedEndpoints)
         {
-            for (auto* endPoint : sharedEndpointList)
+            for (auto& endPoint : sharedEndpointList)
             {
                 endPoint->closePort();
             }
         }
         for (auto& sharedRecordingEndpointList : _sharedRecordingEndpoints)
         {
-            for (auto* recEndPoint : sharedRecordingEndpointList)
+            for (auto& recEndPoint : sharedRecordingEndpointList)
             {
                 recEndPoint->closePort();
             }
@@ -169,37 +176,27 @@ public:
         {
             std::this_thread::yield();
         }
-        for (auto& sharedEndpointList : _sharedEndpoints)
-        {
-            for (auto* endPoint : sharedEndpointList)
-            {
-                delete endPoint;
-            }
-        }
-        for (auto& sharedRecordingEndpointList : _sharedRecordingEndpoints)
-        {
-            for (auto* recEndPoint : sharedRecordingEndpointList)
-            {
-                delete recEndPoint;
-            }
-        }
-        for (auto* serverEndpoint : _tcpServerEndpoints)
-        {
-            delete serverEndpoint;
-        }
     }
 
-    bool openPorts(const SocketAddress& ip, std::vector<Endpoint*>& rtpPorts, std::vector<Endpoint*>& rtcpPorts) const
+    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts, Endpoints& rtcpPorts) const
     {
         const auto portRange = std::make_pair(_config.ice.udpPortRangeLow, _config.ice.udpPortRangeHigh);
         const int portCount = (portRange.second - portRange.first + 1);
         const int offset = _randomGenerator.next() % portCount;
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
-        auto rtpEndpoint =
-            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false);
-        auto rtcpEndpoint =
-            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort + 1), _rtcePoll, false);
+        auto rtpEndpoint = std::make_shared<UdpEndpoint>(_jobManager,
+            32,
+            _mainAllocator,
+            SocketAddress(ip, firstPort),
+            _rtcePoll,
+            false);
+        auto rtcpEndpoint = std::make_shared<UdpEndpoint>(_jobManager,
+            32,
+            _mainAllocator,
+            SocketAddress(ip, firstPort + 1),
+            _rtcePoll,
+            false);
 
         for (int i = 2; i < portCount && (!rtpEndpoint->isGood() || !rtcpEndpoint->isGood()); i += 2)
         {
@@ -215,8 +212,6 @@ public:
         }
         else
         {
-            delete rtpEndpoint;
-            delete rtcpEndpoint;
             logger::error("Failed to create udp end points in port range", "TransportFactory");
             return false;
         }
@@ -231,15 +226,19 @@ public:
         return true;
     }
 
-    bool openPorts(const SocketAddress& ip, std::vector<Endpoint*>& rtpPorts) const
+    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts, bool shared) const
     {
         auto portRange = std::make_pair(_config.ice.udpPortRangeLow, _config.ice.udpPortRangeHigh);
         const int portCount = (portRange.second - portRange.first + 1);
         const int offset = _randomGenerator.next() % portCount;
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
-        auto rtpEndpoint =
-            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false);
+        auto rtpEndpoint = std::make_shared<UdpEndpoint>(_jobManager,
+            32,
+            _mainAllocator,
+            SocketAddress(ip, firstPort),
+            _rtcePoll,
+            false);
 
         for (int i = 2; i < portCount && !rtpEndpoint->isGood(); i += 2)
         {
@@ -253,7 +252,6 @@ public:
         }
         else
         {
-            delete rtpEndpoint;
             logger::error("Failed to create udp end point in port range", "TransportFactory");
             return false;
         }
@@ -267,15 +265,27 @@ public:
         return true;
     }
 
-    Endpoint* createTcpEndpoint(const transport::SocketAddress& baseAddress) override
+    bool openRtpMuxPorts(Endpoints& rtpPorts, bool shared) override
     {
-        auto endpoint = new TcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll);
+        for (auto nic : _interfaces)
+        {
+            if (!openPorts(nic, rtpPorts, shared))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    std::shared_ptr<Endpoint> createTcpEndpoint(const transport::SocketAddress& baseAddress) override
+    {
+        auto endpoint = std::make_shared<TcpEndpoint>(_jobManager, _mainAllocator, baseAddress, _rtcePoll);
         return endpoint;
     }
 
-    virtual std::vector<Endpoint*> createTcpEndpoints(int ipFamily) override
+    virtual Endpoints createTcpEndpoints(int ipFamily) override
     {
-        std::vector<Endpoint*> endPoints;
+        Endpoints endPoints;
         for (auto& nic : _interfaces)
         {
             if (ipFamily == nic.getFamily())
@@ -302,8 +312,8 @@ public:
         const size_t sendPoolSize,
         const size_t endpointId) override
     {
-        std::vector<Endpoint*> rtpPorts;
-        if (openPorts(_interfaces.front(), rtpPorts))
+        Endpoints rtpPorts;
+        if (openPorts(_interfaces.front(), rtpPorts, false))
         {
             return transport::createTransport(_jobManager,
                 _srtpClientFactory,
@@ -321,6 +331,26 @@ public:
         }
 
         return nullptr;
+    }
+
+    std::shared_ptr<RtcTransport> createOnPorts(const ice::IceRole iceRole,
+        const size_t sendPoolSize,
+        const size_t endpointId,
+        const Endpoints& rtpPorts) override
+    {
+        return transport::createTransport(_jobManager,
+            _srtpClientFactory,
+            endpointId,
+            _config,
+            _sctpConfig,
+            _iceConfig,
+            iceRole,
+            _bweConfig,
+            _rateControllerConfig,
+            rtpPorts,
+            _tcpServerEndpoints,
+            this,
+            _mainAllocator);
     }
 
     std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole,
@@ -345,8 +375,8 @@ public:
 
     std::shared_ptr<RtcTransport> create(const size_t sendPoolSize, const size_t endpointId) override
     {
-        std::vector<Endpoint*> rtpPorts;
-        std::vector<Endpoint*> rtcpPorts;
+        Endpoints rtpPorts;
+        Endpoints rtcpPorts;
         if (openPorts(_interfaces.front(), rtpPorts, rtcpPorts))
         {
             return transport::createTransport(_jobManager,
@@ -380,7 +410,7 @@ public:
                 for (size_t endpointIndex = 0; endpointIndex < _sharedRecordingEndpoints[listIndex].size();
                      ++endpointIndex)
                 {
-                    auto* endpoint = _sharedRecordingEndpoints[listIndex][endpointIndex];
+                    auto endpoint = _sharedRecordingEndpoints[listIndex][endpointIndex];
                     if (endpoint->getLocalPort().getFamily() == peer.getFamily())
                     {
                         return createRecordingTransport(_jobManager,
@@ -410,7 +440,7 @@ public:
         EndpointMetrics metrics;
         for (auto& endpoints : _sharedEndpoints)
         {
-            for (auto* endpoint : endpoints)
+            for (auto& endpoint : endpoints)
             {
                 metrics += endpoint->getMetrics(timestamp);
             }
@@ -423,7 +453,7 @@ public:
 
     void maintenance(uint64_t timestamp) override
     {
-        for (auto* endpoint : _tcpServerEndpoints)
+        for (auto& endpoint : _tcpServerEndpoints)
         {
             endpoint->maintenance(timestamp);
         }
@@ -463,6 +493,8 @@ private:
     {
     }
 
+    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint) override {}
+
     void onPortClosed(Endpoint& endpoint) override { --_callbackRefCount; }
     void onUnregistered(Endpoint& endpoint) override {}
     void onServerPortUnregistered(ServerEndpoint& endpoint) override {}
@@ -476,14 +508,14 @@ private:
     const bwe::RateControllerConfig& _rateControllerConfig;
     const std::vector<SocketAddress> _interfaces;
     transport::RtcePoll& _rtcePoll;
-    std::vector<std::vector<Endpoint*>> _sharedEndpoints;
+    std::vector<Endpoints> _sharedEndpoints;
     std::atomic_uint32_t _sharedEndpointListIndex;
-    std::vector<ServerEndpoint*> _tcpServerEndpoints;
+    ServerEndpoints _tcpServerEndpoints;
     memory::PacketPoolAllocator& _mainAllocator;
     mutable utils::MersienneRandom<uint32_t> _randomGenerator;
     std::atomic_uint32_t _callbackRefCount;
 
-    std::vector<std::vector<RecordingEndpoint*>> _sharedRecordingEndpoints;
+    std::vector<std::vector<std::shared_ptr<RecordingEndpoint>>> _sharedRecordingEndpoints;
     std::atomic_uint32_t _sharedRecordingEndpointListIndex;
     bool _good;
 };

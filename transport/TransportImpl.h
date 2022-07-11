@@ -41,6 +41,8 @@ struct SctpConfig;
 
 namespace transport
 {
+typedef std::vector<std::shared_ptr<Endpoint>> Endpoints;
+
 class TransportImpl : public RtcTransport,
                       private SslWriteBioListener,
                       public Endpoint::IEvents,
@@ -61,8 +63,8 @@ public:
         const ice::IceRole iceRole,
         const bwe::Config& bweConfig,
         const bwe::RateControllerConfig& rateControllerConfig,
-        const std::vector<Endpoint*>& rtpEndPoints,
-        const std::vector<ServerEndpoint*>& tcpEndPoints,
+        const Endpoints& rtpEndPoints,
+        const ServerEndpoints& tcpEndPoints,
         TcpEndpointFactory* tcpEndpointFactory,
         memory::PacketPoolAllocator& allocator);
 
@@ -73,8 +75,8 @@ public:
         const sctp::SctpConfig& sctpConfig,
         const bwe::Config& bweConfig,
         const bwe::RateControllerConfig& rateControllerConfig,
-        const std::vector<Endpoint*>& rtpEndPoints,
-        const std::vector<Endpoint*>& rtcpEndPoints,
+        const Endpoints& rtpEndPoints,
+        const Endpoints& rtcpEndPoints,
         memory::PacketPoolAllocator& allocator);
 
     ~TransportImpl() override;
@@ -205,6 +207,8 @@ public: // end point callbacks
         const SocketAddress& target,
         memory::UniquePacket packet) override;
 
+    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint) override;
+
     void onPortClosed(Endpoint& endpoint) override;
 
     void onIceDisconnect(Endpoint& endpoint);
@@ -253,6 +257,7 @@ public: // end point callbacks
         const SocketAddress& source,
         memory::UniquePacket packet,
         uint64_t timestamp);
+    void internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint);
 
     void onServerPortClosed(ServerEndpoint& endpoint) override {}
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
@@ -318,10 +323,9 @@ private:
     bool _dtlsEnabled;
     std::unique_ptr<ice::IceSession> _rtpIceSession;
 
-    typedef std::vector<Endpoint*> Endpoints;
     Endpoints _rtpEndpoints;
     Endpoints _rtcpEndpoints;
-    std::vector<ServerEndpoint*> _tcpServerEndpoints;
+    ServerEndpoints _tcpServerEndpoints;
     TcpEndpointFactory* _tcpEndpointFactory;
     std::atomic_int _callbackRefCount;
     std::atomic_uint32_t _jobCounter;

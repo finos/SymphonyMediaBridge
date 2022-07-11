@@ -20,7 +20,7 @@ class RecordingTransport final : public Transport, public RecordingEndpoint::IRe
 public:
     RecordingTransport(jobmanager::JobManager& jobManager,
         const config::Config& config,
-        RecordingEndpoint* recordingEndpoint,
+        std::shared_ptr<RecordingEndpoint> recordingEndpoint,
         const size_t endpointIdHash,
         const size_t streamIdHash,
         const SocketAddress& remotePeer,
@@ -76,7 +76,7 @@ private:
     void onSendingStreamRemovedEvent(const memory::Packet& packet);
     RtpSenderState* getOutboundSsrc(const uint32_t ssrc);
 
-    void protectAndSend(memory::UniquePacket packet, const SocketAddress& target, Endpoint* endpoint);
+    void protectAndSend(memory::UniquePacket packet, const SocketAddress& target, Endpoint& endpoint);
 
     std::atomic_bool _isInitialized;
     logger::LoggableId _loggableId;
@@ -87,7 +87,7 @@ private:
 
     std::atomic_bool _isRunning;
 
-    RecordingEndpoint* _recordingEndpoint;
+    std::shared_ptr<RecordingEndpoint> _recordingEndpoint;
     transport::SocketAddress _peerPort;
 
     std::atomic<DataReceiver*> _dataReceiver;
@@ -109,7 +109,7 @@ private:
 
 std::unique_ptr<RecordingTransport> createRecordingTransport(jobmanager::JobManager& jobManager,
     const config::Config& config,
-    RecordingEndpoint* recordingEndpoint,
+    std::shared_ptr<RecordingEndpoint> recordingEndpoint,
     const size_t endpointIdHash,
     const size_t streamIdHash,
     const SocketAddress& peer,

@@ -356,7 +356,7 @@ void TcpServerEndpoint::internalReceive(int fd)
                     auto listenIt = _iceListeners.find(names.first);
                     if (listenIt != _iceListeners.end())
                     {
-                        auto* endpoint = new TcpEndpoint(_receiveJobs.getJobManager(),
+                        auto endpoint = std::make_shared<TcpEndpoint>(_receiveJobs.getJobManager(),
                             _allocator,
                             _epoll,
                             fd,
@@ -366,7 +366,7 @@ void TcpServerEndpoint::internalReceive(int fd)
 
                         // if read event is fired now we may miss it and it is edge triggered.
                         // everything relies on that the ice session will want to respond to the request
-                        _epoll.add(fd, endpoint);
+                        _epoll.add(fd, endpoint.get());
                         --_pendingEpollRegistrations; // it is not ours anymore
 
                         logger::debug("ICE request for %s from %s",

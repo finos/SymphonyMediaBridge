@@ -3,6 +3,7 @@
 #include "memory/PacketPoolAllocator.h"
 #include "transport/EndpointMetrics.h"
 #include <functional>
+#include <memory>
 
 namespace transport
 {
@@ -43,6 +44,8 @@ public:
             const SocketAddress& source,
             const SocketAddress& target,
             memory::UniquePacket packet) = 0;
+
+        virtual void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint) = 0;
 
         virtual void onPortClosed(Endpoint& endpoint) = 0;
         virtual void onUnregistered(Endpoint& endpoint) = 0;
@@ -94,7 +97,7 @@ public:
 class TcpEndpointFactory
 {
 public:
-    virtual Endpoint* createTcpEndpoint(const transport::SocketAddress& baseAddress) = 0;
-    virtual std::vector<Endpoint*> createTcpEndpoints(int ipFamily) = 0;
+    virtual std::shared_ptr<Endpoint> createTcpEndpoint(const transport::SocketAddress& baseAddress) = 0;
+    virtual std::vector<std::shared_ptr<Endpoint>> createTcpEndpoints(int ipFamily) = 0;
 };
 } // namespace transport

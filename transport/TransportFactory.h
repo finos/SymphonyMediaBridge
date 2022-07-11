@@ -34,6 +34,8 @@ class RecordingTransport;
 class RtcePoll;
 class RtcTransport;
 class SocketAddress;
+class Endpoint;
+typedef std::vector<std::shared_ptr<Endpoint>> Endpoints;
 
 class TransportFactory
 {
@@ -56,6 +58,12 @@ public:
         const uint8_t salt[12]) = 0;
     virtual EndpointMetrics getSharedUdpEndpointsMetrics() const = 0;
     virtual bool isGood() const = 0;
+
+    virtual bool openRtpMuxPorts(Endpoints& rtpPorts, bool shared) = 0;
+    virtual std::shared_ptr<RtcTransport> createOnPorts(const ice::IceRole iceRole,
+        const size_t sendPoolSize,
+        const size_t endpointIdHash,
+        const Endpoints& rtpPorts) = 0;
 
     virtual void maintenance(uint64_t timestamp) = 0;
 };
