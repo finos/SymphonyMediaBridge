@@ -589,7 +589,7 @@ httpd::Response ApiRequestHandler::handleAbout(const httpd::Request& request,
     }
     else if (utils::StringTokenizer::isEqual(nextToken, "capabilities"))
     {
-        httpd::Response response(httpd::StatusCode::OK, "[SMB_API]");
+        httpd::Response response(httpd::StatusCode::OK, "[\"SMB_API.1\", \"SSRC_REWRITING.1\"]");
         response._headers["Content-type"] = "text/json";
         return response;
     }
