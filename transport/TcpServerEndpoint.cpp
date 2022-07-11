@@ -100,6 +100,7 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
     RtcePoll& rtcePoll,
     size_t maxSessions,
     IEvents* listener,
+    TcpEndpointFactory& tcpEndpointFactory,
     const SocketAddress& localPort,
     const config::Config& config)
     : _state(Endpoint::State::CLOSED),
@@ -114,7 +115,8 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
       _epoll(rtcePoll),
       _listener(listener),
       _config(config),
-      _lastMaintenance(0)
+      _lastMaintenance(0),
+      _tcpEndpointFactory(tcpEndpointFactory)
 {
     int rc = _socket.open(localPort, localPort.getPort(), SOCK_STREAM);
     if (rc)
@@ -356,17 +358,13 @@ void TcpServerEndpoint::internalReceive(int fd)
                     auto listenIt = _iceListeners.find(names.first);
                     if (listenIt != _iceListeners.end())
                     {
-                        auto endpoint = std::make_shared<TcpEndpoint>(_receiveJobs.getJobManager(),
-                            _allocator,
-                            _epoll,
-                            fd,
-                            pendingTcp.localPort,
-                            pendingTcp.peerPort);
+                        auto endpoint =
+                            _tcpEndpointFactory.createTcpEndpoint(fd, pendingTcp.localPort, pendingTcp.peerPort);
+
                         _pendingConnections.erase(fd);
 
-                        // if read event is fired now we may miss it and it is edge triggered.
-                        // everything relies on that the ice session will want to respond to the request
-                        _epoll.add(fd, endpoint.get());
+                        listenIt->second->onIceTcpConnect(endpoint);
+
                         --_pendingEpollRegistrations; // it is not ours anymore
 
                         logger::debug("ICE request for %s from %s",

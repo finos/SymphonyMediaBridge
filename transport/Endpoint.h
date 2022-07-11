@@ -99,5 +99,8 @@ class TcpEndpointFactory
 public:
     virtual std::shared_ptr<Endpoint> createTcpEndpoint(const transport::SocketAddress& baseAddress) = 0;
     virtual std::vector<std::shared_ptr<Endpoint>> createTcpEndpoints(int ipFamily) = 0;
+    virtual std::shared_ptr<Endpoint> createTcpEndpoint(int fd,
+        const transport::SocketAddress& localPort,
+        const transport::SocketAddress& peerPort) = 0;
 };
 } // namespace transport

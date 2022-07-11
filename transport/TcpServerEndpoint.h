@@ -10,6 +10,7 @@ class Config;
 
 namespace transport
 {
+
 // "passive" ICE end point
 // Used as TCP candidate for remote side to attempt connection to
 // On connection attempt:
@@ -24,6 +25,7 @@ public:
         RtcePoll& rtcePoll,
         size_t maxPengingSessions,
         TcpServerEndpoint::IEvents* defaultListener,
+        TcpEndpointFactory& tcpEndpointFactory,
         const SocketAddress& localPort,
         const config::Config& config);
 
@@ -95,5 +97,6 @@ private:
     TcpServerEndpoint::IEvents* _listener;
     const config::Config& _config;
     uint64_t _lastMaintenance;
+    TcpEndpointFactory& _tcpEndpointFactory;
 };
 } // namespace transport

@@ -59,7 +59,6 @@ public:
     virtual EndpointMetrics getSharedUdpEndpointsMetrics() const = 0;
     virtual bool isGood() const = 0;
 
-    virtual bool openRtpMuxPorts(Endpoints& rtpPorts, bool shared) = 0;
     virtual std::shared_ptr<RtcTransport> createOnPorts(const ice::IceRole iceRole,
         const size_t sendPoolSize,
         const size_t endpointIdHash,

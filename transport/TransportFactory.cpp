@@ -1,4 +1,5 @@
 #include "transport/TransportFactory.h"
+#include "concurrency/MpmcHashmap.h"
 #include "config/Config.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/RecordingTransport.h"
@@ -16,6 +17,27 @@ class TransportFactoryImpl final : public TransportFactory,
                                    public TcpEndpointFactory,
                                    public Endpoint::IEvents
 {
+    class EndpointDeleter
+    {
+    public:
+        EndpointDeleter(TransportFactoryImpl* factory) : _allocator(factory) {}
+
+        template <typename T>
+        void operator()(T* r)
+        {
+            assert(_allocator);
+            if (_allocator)
+            {
+                _allocator->shutdownEndpoint(r);
+            }
+        }
+
+        TransportFactoryImpl* _allocator;
+    };
+
+    EndpointDeleter getDeleter() const { return _deleter; }
+    EndpointDeleter _deleter;
+
 public:
     TransportFactoryImpl(jobmanager::JobManager& jobManager,
         SrtpClientFactory& srtpClientFactory,
@@ -27,7 +49,8 @@ public:
         const std::vector<SocketAddress>& interfaces,
         transport::RtcePoll& rtcePoll,
         memory::PacketPoolAllocator& mainAllocator)
-        : _jobManager(jobManager),
+        : _deleter(this),
+          _jobManager(jobManager),
           _srtpClientFactory(srtpClientFactory),
           _config(config),
           _sctpConfig(sctpConfig),
@@ -40,7 +63,9 @@ public:
           _mainAllocator(mainAllocator),
           _callbackRefCount(0),
           _sharedRecordingEndpointListIndex(0),
-          _good(true)
+          _good(true),
+          _pendingClosePorts(256),
+          _pendingCloseServerPorts(256)
     {
 #ifdef __APPLE__
         const size_t receiveBufferSize = 5 * 1024 * 1024;
@@ -55,13 +80,13 @@ public:
                 for (SocketAddress portAddress : interfaces)
                 {
                     portAddress.setPort(config.ice.singlePort + portOffset);
-                    auto endPoint =
-                        std::make_shared<UdpEndpoint>(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true);
+                    auto endPoint = std::shared_ptr<UdpEndpoint>(
+                        new UdpEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
+                        getDeleter());
 
                     if (endPoint->isGood())
                     {
                         endPoint->registerDefaultListener(this);
-                        ++_callbackRefCount;
                         if (!endPoint->configureBufferSizes(2 * 1024 * 1024, receiveBufferSize))
                         {
                             logger::error("failed to set socket send buffer %d", "TransportFactory", errno);
@@ -87,16 +112,18 @@ public:
             for (SocketAddress portAddress : interfaces)
             {
                 portAddress.setPort(config.ice.tcp.port);
-                auto endPoint = std::make_shared<TcpServerEndpoint>(_jobManager,
-                    _mainAllocator,
-                    _rtcePoll,
-                    1024,
-                    this,
-                    portAddress,
-                    config);
+                auto endPoint = std::shared_ptr<TcpServerEndpoint>(new TcpServerEndpoint(_jobManager,
+                                                                       _mainAllocator,
+                                                                       _rtcePoll,
+                                                                       1024,
+                                                                       this,
+                                                                       *this,
+                                                                       portAddress,
+                                                                       config),
+                    getDeleter());
+
                 if (endPoint->isGood())
                 {
-                    ++_callbackRefCount;
                     // no need to set buffers as we will not send on this socket
                     logger::info("opened main TCP server port at %s",
                         "TransportFactory",
@@ -121,17 +148,13 @@ public:
                 for (SocketAddress portAddress : interfaces)
                 {
                     portAddress.setPort(config.recording.singlePort + portOffset);
-                    auto endPoint = std::make_shared<RecordingEndpoint>(jobManager,
-                        1024,
-                        _mainAllocator,
-                        portAddress,
-                        _rtcePoll,
-                        true);
+                    auto endPoint = std::shared_ptr<RecordingEndpoint>(
+                        new RecordingEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
+                        getDeleter());
 
                     if (endPoint->isGood())
                     {
                         endPoint->registerDefaultListener(this);
-                        ++_callbackRefCount;
                         if (!endPoint->configureBufferSizes(2 * 1024 * 1024, receiveBufferSize))
                         {
                             logger::error("failed to set socket send buffer %d", "TransportFactory", errno);
@@ -154,24 +177,9 @@ public:
 
     ~TransportFactoryImpl()
     {
-        for (auto& serverEndpoint : _tcpServerEndpoints)
-        {
-            serverEndpoint->close();
-        }
-        for (auto& sharedEndpointList : _sharedEndpoints)
-        {
-            for (auto& endPoint : sharedEndpointList)
-            {
-                endPoint->closePort();
-            }
-        }
-        for (auto& sharedRecordingEndpointList : _sharedRecordingEndpoints)
-        {
-            for (auto& recEndPoint : sharedRecordingEndpointList)
-            {
-                recEndPoint->closePort();
-            }
-        }
+        _tcpServerEndpoints.clear();
+        _sharedEndpoints.clear();
+        _sharedRecordingEndpoints.clear();
         while (_callbackRefCount > 0)
         {
             std::this_thread::yield();
@@ -185,18 +193,13 @@ public:
         const int offset = _randomGenerator.next() % portCount;
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
-        auto rtpEndpoint = std::make_shared<UdpEndpoint>(_jobManager,
-            32,
-            _mainAllocator,
-            SocketAddress(ip, firstPort),
-            _rtcePoll,
-            false);
-        auto rtcpEndpoint = std::make_shared<UdpEndpoint>(_jobManager,
-            32,
-            _mainAllocator,
-            SocketAddress(ip, firstPort + 1),
-            _rtcePoll,
-            false);
+        auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(
+            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
+            getDeleter());
+
+        auto rtcpEndpoint = std::shared_ptr<UdpEndpoint>(
+            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort + 1), _rtcePoll, false),
+            getDeleter());
 
         for (int i = 2; i < portCount && (!rtpEndpoint->isGood() || !rtcpEndpoint->isGood()); i += 2)
         {
@@ -226,19 +229,16 @@ public:
         return true;
     }
 
-    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts, bool shared) const
+    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts) const
     {
         auto portRange = std::make_pair(_config.ice.udpPortRangeLow, _config.ice.udpPortRangeHigh);
         const int portCount = (portRange.second - portRange.first + 1);
         const int offset = _randomGenerator.next() % portCount;
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
-        auto rtpEndpoint = std::make_shared<UdpEndpoint>(_jobManager,
-            32,
-            _mainAllocator,
-            SocketAddress(ip, firstPort),
-            _rtcePoll,
-            false);
+        auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(
+            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
+            getDeleter());
 
         for (int i = 2; i < portCount && !rtpEndpoint->isGood(); i += 2)
         {
@@ -265,21 +265,23 @@ public:
         return true;
     }
 
-    bool openRtpMuxPorts(Endpoints& rtpPorts, bool shared) override
-    {
-        for (auto nic : _interfaces)
-        {
-            if (!openPorts(nic, rtpPorts, shared))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
     std::shared_ptr<Endpoint> createTcpEndpoint(const transport::SocketAddress& baseAddress) override
     {
-        auto endpoint = std::make_shared<TcpEndpoint>(_jobManager, _mainAllocator, baseAddress, _rtcePoll);
+        return std::shared_ptr<TcpEndpoint>(new TcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll),
+            getDeleter());
+    }
+
+    std::shared_ptr<Endpoint> createTcpEndpoint(int fd,
+        const transport::SocketAddress& localPort,
+        const transport::SocketAddress& peerPort) override
+    {
+        auto endpoint = std::shared_ptr<TcpEndpoint>(
+            new TcpEndpoint(_jobManager, _mainAllocator, _rtcePoll, fd, localPort, peerPort),
+            getDeleter());
+
+        // if read event is fired now we may miss it and it is edge triggered.
+        // everything relies on that the ice session will want to respond to the request
+        _rtcePoll.add(fd, endpoint.get());
         return endpoint;
     }
 
@@ -313,7 +315,7 @@ public:
         const size_t endpointId) override
     {
         Endpoints rtpPorts;
-        if (openPorts(_interfaces.front(), rtpPorts, false))
+        if (openPorts(_interfaces.front(), rtpPorts))
         {
             return transport::createTransport(_jobManager,
                 _srtpClientFactory,
@@ -459,12 +461,58 @@ public:
         }
     }
 
+    void shutdownEndpoint(Endpoint* endpoint)
+    {
+        endpoint->registerDefaultListener(this);
+        _pendingClosePorts.emplace(endpoint, endpoint);
+        ++_callbackRefCount;
+        endpoint->closePort();
+    }
+
+    void shutdownEndpoint(ServerEndpoint* endpoint)
+    {
+        _pendingCloseServerPorts.emplace(endpoint, endpoint);
+        ++_callbackRefCount;
+        endpoint->close();
+    }
+
 private:
+    template <typename T>
+    class DeleteJob : public jobmanager::Job
+    {
+    public:
+        DeleteJob(T* o) : _object(o) {}
+
+        void run() override { delete _object; }
+
+    private:
+        T* _object;
+    };
+
     void onServerPortClosed(ServerEndpoint& endpoint) override
     {
-        --_callbackRefCount;
         logger::info("TCP server port %s closed.", "TransportFactory", endpoint.getLocalPort().toString().c_str());
+        auto portIt = _pendingCloseServerPorts.find(&endpoint);
+        if (portIt != _pendingCloseServerPorts.cend())
+        {
+            _pendingCloseServerPorts.erase(portIt->first);
+            _jobManager.addJob<DeleteJob<ServerEndpoint>>(&endpoint);
+        }
+        --_callbackRefCount;
     }
+
+    void onPortClosed(Endpoint& endpoint) override
+    {
+        auto portIt = _pendingClosePorts.find(&endpoint);
+        if (portIt != _pendingClosePorts.cend())
+        {
+            logger::debug("deleting %s", "TransportFactory", portIt->second->getLocalPort().toString().c_str());
+            _pendingClosePorts.erase(portIt->first);
+            _jobManager.addJob<DeleteJob<Endpoint>>(&endpoint);
+        }
+        --_callbackRefCount;
+    }
+
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
@@ -495,7 +543,6 @@ private:
 
     void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint) override {}
 
-    void onPortClosed(Endpoint& endpoint) override { --_callbackRefCount; }
     void onUnregistered(Endpoint& endpoint) override {}
     void onServerPortUnregistered(ServerEndpoint& endpoint) override {}
 
@@ -518,6 +565,9 @@ private:
     std::vector<std::vector<std::shared_ptr<RecordingEndpoint>>> _sharedRecordingEndpoints;
     std::atomic_uint32_t _sharedRecordingEndpointListIndex;
     bool _good;
+
+    concurrency::MpmcHashmap32<Endpoint*, Endpoint*> _pendingClosePorts;
+    concurrency::MpmcHashmap32<ServerEndpoint*, ServerEndpoint*> _pendingCloseServerPorts;
 };
 
 std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager& jobManager,

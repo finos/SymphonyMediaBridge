@@ -711,27 +711,11 @@ void TransportImpl::stop()
 
     for (auto& ep : _rtpEndpoints)
     {
-        if (!ep->isShared())
-        {
-            ep->registerDefaultListener(this);
-            ep->closePort();
-        }
-        else
-        {
-            ep->unregisterListener(this);
-        }
+        ep->unregisterListener(this);
     }
     for (auto& ep : _rtcpEndpoints)
     {
-        if (!ep->isShared())
-        {
-            ep->registerDefaultListener(this);
-            ep->closePort();
-        }
-        else
-        {
-            ep->unregisterListener(this);
-        }
+        ep->unregisterListener(this);
     }
 
     _jobQueue.getJobManager().abortTimedJobs(getId());
@@ -2056,6 +2040,18 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                 endpoint->closePort();
             }
         }
+
+        while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
+            _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+        {
+            _rtpEndpoints.pop_back();
+        }
+        while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
+            _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+        {
+            _rtpEndpoints.erase(_rtpEndpoints.begin());
+        }
+
         if (isConnected())
         {
             onTransportConnected();
