@@ -220,6 +220,10 @@ void BaseUdpEndpoint::closePort()
             logger::error("Failed to request epoll unregistration", _name.c_str());
         }
     }
+    else
+    {
+        logger::warn("socket already closed", _name.c_str());
+    }
 }
 
 void BaseUdpEndpoint::onSocketPollStarted(int fd)

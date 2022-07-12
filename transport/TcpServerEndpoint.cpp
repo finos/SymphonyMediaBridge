@@ -147,12 +147,12 @@ void TcpServerEndpoint::start()
         int rc = _socket.listen(16);
         if (rc != 0)
         {
-            close();
+            closePort();
         }
     }
 }
 
-void TcpServerEndpoint::close()
+void TcpServerEndpoint::closePort()
 {
     if (_state != Endpoint::State::CLOSING && _state != Endpoint::State::CLOSED)
     {
@@ -166,9 +166,14 @@ void TcpServerEndpoint::maintenance(uint64_t timestamp)
     _receiveJobs.addJob<MaintenanceJob>(*this, timestamp);
 }
 
-void TcpServerEndpoint::registerListener(const std::string& stunUserName, Endpoint::IEvents* listener)
+void TcpServerEndpoint::registerListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
 {
+    if (_iceListeners.contains(stunUserName))
+    {
+        return;
+    }
     _iceListeners.emplace(stunUserName, listener);
+    listener->onServerPortRegistered(*this);
 }
 
 void TcpServerEndpoint::unregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
@@ -178,6 +183,11 @@ void TcpServerEndpoint::unregisterListener(const std::string& stunUserName, Serv
 
 void TcpServerEndpoint::internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
 {
+    if (!_iceListeners.contains(stunUserName))
+    {
+        return;
+    }
+
     _iceListeners.erase(stunUserName);
     listener->onServerPortUnregistered(*this);
 }
@@ -363,7 +373,10 @@ void TcpServerEndpoint::internalReceive(int fd)
 
                         _pendingConnections.erase(fd);
 
-                        listenIt->second->onIceTcpConnect(endpoint);
+                        listenIt->second->onIceTcpConnect(endpoint,
+                            pendingTcp.peerPort,
+                            endpoint->getLocalPort(),
+                            std::move(packet));
 
                         --_pendingEpollRegistrations; // it is not ours anymore
 
@@ -372,12 +385,8 @@ void TcpServerEndpoint::internalReceive(int fd)
                             users->getNames().first.c_str(),
                             endpoint->getLocalPort().toString().c_str());
 
-                        listenIt->second->onIceReceived(*endpoint,
-                            pendingTcp.peerPort,
-                            endpoint->getLocalPort(),
-                            std::move(packet));
-
                         _iceListeners.erase(listenIt->first);
+                        listenIt->second->onServerPortUnregistered(*this);
                         return;
                     }
 
@@ -456,8 +465,9 @@ void TcpServerEndpoint::internalClosePort(int countDown)
     }
     else
     {
-        _state = Endpoint::State::CLOSED;
+
         _socket.close();
+        _state = Endpoint::State::CLOSED;
         _listener->onServerPortClosed(*this);
     }
 }

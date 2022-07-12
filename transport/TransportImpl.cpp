@@ -71,17 +71,35 @@ private:
 class TcpConnected : public jobmanager::Job
 {
 public:
-    TcpConnected(TransportImpl& transport, std::shared_ptr<Endpoint> endpoint)
+    TcpConnected(TransportImpl& transport,
+        std::shared_ptr<Endpoint> endpoint,
+        const SocketAddress& source,
+        memory::UniquePacket packet)
         : _transport(transport),
-          _endpoint(endpoint)
+          _endpoint(endpoint),
+          _source(source),
+          _packet(std::move(packet))
     {
     }
 
-    void run() override { _transport.internalIceTcpConnect(_endpoint); }
+    void run() override { _transport.internalIceTcpConnect(_endpoint, _source, std::move(_packet)); }
 
 private:
     TransportImpl& _transport;
     std::shared_ptr<Endpoint> _endpoint;
+    const SocketAddress _source;
+    memory::UniquePacket _packet;
+};
+
+class Unregister : public jobmanager::CountedJob
+{
+public:
+    Unregister(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
+
+    void run() override { _transport.internalUnregister(); }
+
+private:
+    TransportImpl& _transport;
 };
 
 class IceDisconnectJob : public jobmanager::Job
@@ -342,12 +360,19 @@ private:
 
 // Placed last in queue during shutdown to reduce ref count when all jobs are complete.
 // This means other jobs in the transport job queue do not have to have counters
-class ShutdownJob : public jobmanager::CountedJob
+class UnregisterJob : public jobmanager::CountedJob
 {
 public:
-    explicit ShutdownJob(std::atomic_uint32_t& ownerCount) : CountedJob(ownerCount) {}
+    explicit UnregisterJob(std::atomic_uint32_t& counter) : CountedJob(counter), _counter(counter) {}
 
-    void run() override {}
+    void run() override
+    {
+        auto value = --_counter;
+        assert(value != 0xFFFFFFFFu);
+    }
+
+private:
+    std::atomic_uint32_t& _counter;
 };
 
 class RunTickJob : public jobmanager::CountedJob
@@ -429,7 +454,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _config(config),
       _srtpClient(srtpClientFactory.create(this)),
       _dtlsEnabled(false),
-      _callbackRefCount(0),
+      _tcpEndpointFactory(nullptr),
+      _jobCounter(0),
       _selectedRtp(nullptr),
       _selectedRtcp(nullptr),
       _dataReceiver(nullptr),
@@ -466,17 +492,11 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     {
         _rtpEndpoints.push_back(endpoint);
         endpoint->registerDefaultListener(this);
-        ++_callbackRefCount;
     }
     for (auto& endpoint : rtcpEndPoints)
     {
         _rtcpEndpoints.push_back(endpoint);
         endpoint->registerDefaultListener(this);
-        ++_callbackRefCount;
-    }
-    if (_callbackRefCount > 0)
-    {
-        _jobCounter = 1;
     }
 
     if (_rtpEndpoints.size() == 1)
@@ -489,11 +509,11 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     }
 
     _isInitialized = true;
-    logger::debug("started with %zu rtp + %zu rtcp endpoints. refcount %u",
+    logger::debug("started with %zu rtp + %zu rtcp endpoints. job count %u",
         _loggableId.c_str(),
         _rtpEndpoints.size(),
         _rtcpEndpoints.size(),
-        _callbackRefCount.load());
+        _jobCounter.load());
 }
 
 TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
@@ -516,7 +536,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _srtpClient(srtpClientFactory.create(this)),
       _dtlsEnabled(false),
       _tcpEndpointFactory(tcpEndpointFactory),
-      _callbackRefCount(0),
+      _jobCounter(0),
       _selectedRtp(nullptr),
       _selectedRtcp(nullptr),
       _dataReceiver(nullptr),
@@ -560,7 +580,6 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
         _rtpEndpoints.push_back(endpoint);
         _rtpIceSession->attachLocalEndpoint(endpoint.get());
         endpoint->registerListener(_rtpIceSession->getLocalCredentials().first, this);
-        ++_callbackRefCount;
 
         if (!iceConfig.publicIpv4.empty() && endpoint->getLocalPort().getFamily() == AF_INET)
         {
@@ -585,7 +604,6 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
             ice::TcpType::PASSIVE);
         _tcpServerEndpoints.push_back(endpoint);
         endpoint->registerListener(_rtpIceSession->getLocalCredentials().first, this);
-        ++_callbackRefCount;
 
         if (!iceConfig.publicIpv4.empty() && endpoint->getLocalPort().getFamily() == AF_INET)
         {
@@ -628,19 +646,15 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
             }
         }
     }
-    if (_callbackRefCount > 0)
-    {
-        _jobCounter = 1;
-    }
 
     _rtpIceSession->gatherLocalCandidates(iceConfig.gather.stunServers, utils::Time::getAbsoluteTime());
 
     _isInitialized = true;
-    logger::debug("started with %zu udp + %zu tcp endpoints. refcount %u",
+    logger::debug("started with %zu udp + %zu tcp endpoints. job count %u",
         _loggableId.c_str(),
         _rtpEndpoints.size(),
         _tcpServerEndpoints.size(),
-        _callbackRefCount.load());
+        _jobCounter.load());
 
     if (!_config.bwe.packetLogLocation.get().empty())
     {
@@ -668,12 +682,11 @@ TransportImpl::~TransportImpl()
 {
     if (_jobCounter.load() > 0 || _isRunning || _jobQueue.getCount() > 0)
     {
-        logger::warn("~TransportImpl not idle %p running%u jobcount %u cbrefs %u, serialjobs %zu",
+        logger::warn("~TransportImpl not idle %p running%u jobcount %u, serialjobs %zu",
             _loggableId.c_str(),
             this,
             _isRunning.load(),
             _jobCounter.load(),
-            _callbackRefCount.load(),
             _jobQueue.getCount());
     }
 }
@@ -686,7 +699,7 @@ void TransportImpl::stop()
         return;
     }
     logger::debug("stopping jobcount %u, running%u", _loggableId.c_str(), _jobCounter.load(), _isRunning.load());
-
+    _isRunning = false;
     if (_rtpIceSession)
     {
         _rtpIceSession->stop();
@@ -696,19 +709,23 @@ void TransportImpl::stop()
     {
         _sctpAssociation->close();
     }
+    _isInitialized = false;
 
+    _jobQueue.addJob<Unregister>(*this);
+}
+
+void TransportImpl::internalUnregister()
+{
+    logger::debug("unreg from rtpendpoints jobcount %u, endpoints %zu",
+        _loggableId.c_str(),
+        _jobCounter.load(),
+        _rtpEndpoints.size());
     for (auto& endpoint : _tcpServerEndpoints)
     {
         endpoint->unregisterListener(_rtpIceSession->getLocalCredentials().first, this);
     }
 
-    // there may be new tcp endpoints being created due to setRemoteIce candidates jobs
-    for (const uint64_t waitStart = utils::Time::getAbsoluteTime(); _jobCounter.load() > 1 &&
-         utils::Time::diffLE(waitStart, utils::Time::getAbsoluteTime(), 100 * utils::Time::ms);)
-    {
-        utils::Time::nanoSleep(10 * utils::Time::ms);
-    }
-
+    // TODO a pending job for ice send could register a new callback to transport!!!!
     for (auto& ep : _rtpEndpoints)
     {
         ep->unregisterListener(this);
@@ -719,34 +736,30 @@ void TransportImpl::stop()
     }
 
     _jobQueue.getJobManager().abortTimedJobs(getId());
-    _isRunning = false;
+}
+
+void TransportImpl::onRegistered(Endpoint& endpoint)
+{
+    ++_jobCounter;
+    logger::debug("registered endpoint %s, %d", _loggableId.c_str(), endpoint.getName(), _jobCounter.load());
 }
 
 void TransportImpl::onUnregistered(Endpoint& endpoint)
 {
-    logger::debug("unregistered %s, %d, %p", _loggableId.c_str(), endpoint.getName(), _callbackRefCount.load(), this);
-    if (_callbackRefCount.fetch_sub(1) == 1)
-    {
-        // put a job last in queue to reduce owner count when all jobs are complete
-        _jobQueue.addJob<ShutdownJob>(_jobCounter);
-        _jobQueue.getJobManager().abortTimedJobs(getId());
-        logger::debug("transport events stopped jobcount %u", _loggableId.c_str(), _jobCounter.load() - 1);
-        _isInitialized = false;
-        --_jobCounter;
-    }
+    logger::debug("unregistered %s, %d", _loggableId.c_str(), endpoint.getName(), _jobCounter.load());
+    _jobQueue.addJob<UnregisterJob>(_jobCounter);
 }
 
 void TransportImpl::onServerPortUnregistered(ServerEndpoint& endpoint)
 {
-    logger::debug("unregistered %s, %d, %p", _loggableId.c_str(), endpoint.getName(), _callbackRefCount.load(), this);
-    if (_callbackRefCount.fetch_sub(1) == 1)
-    {
-        // put a job last in queue to reduce owner count when all jobs are complete
-        _jobQueue.addJob<ShutdownJob>(_jobCounter);
-        logger::debug("transport events stopped %u", _loggableId.c_str(), _jobCounter.load() - 1);
-        _isInitialized = false;
-        --_jobCounter;
-    }
+    logger::debug("unregistered %s, %d", _loggableId.c_str(), endpoint.getName(), _jobCounter.load());
+    _jobQueue.addJob<UnregisterJob>(_jobCounter);
+}
+
+void TransportImpl::onServerPortRegistered(ServerEndpoint& endpoint)
+{
+    logger::debug("registered %s, %d", _loggableId.c_str(), endpoint.getName(), _jobCounter.load());
+    ++_jobCounter;
 }
 
 void TransportImpl::onRtpReceived(Endpoint& endpoint,
@@ -956,24 +969,34 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
     }
 }
 
-void TransportImpl::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint)
+void TransportImpl::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
+    const SocketAddress& source,
+    const SocketAddress& target,
+    memory::UniquePacket packet)
 {
-    if (_rtpIceSession)
+    if (_rtpIceSession && _isRunning)
     {
-        if (!_jobQueue.addJob<TcpConnected>(*this, endpoint))
+        if (!_jobQueue.addJob<TcpConnected>(*this, endpoint, source, std::move(packet)))
         {
             logger::error("job queue full ICE, TCP connect", _loggableId.c_str());
         }
     }
 }
 
-void TransportImpl::internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint)
+void TransportImpl::internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
+    const SocketAddress& source,
+    memory::UniquePacket packet)
 {
+    if (!_isRunning)
+    {
+        return;
+    }
+
     logger::debug("new tcp connection %s", _loggableId.c_str(), endpoint->getName());
 
     endpoint->registerDefaultListener(this);
-    ++_callbackRefCount;
     _rtpEndpoints.push_back(endpoint);
+    internalIceReceived(*endpoint, source, std::move(packet), utils::Time::getAbsoluteTime());
 }
 
 void TransportImpl::internalIceReceived(Endpoint& endpoint,
@@ -1917,13 +1940,13 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
             {
                 _rtpIceSession->addRemoteCandidate(candidate);
             }
-            else if (candidate.transportType == ice::TransportType::TCP && candidate.tcpType == ice::TcpType::PASSIVE)
+            else if (candidate.transportType == ice::TransportType::TCP && candidate.tcpType == ice::TcpType::PASSIVE &&
+                _tcpEndpointFactory)
             {
                 auto endpoints = _tcpEndpointFactory->createTcpEndpoints(candidate.address.getFamily());
                 for (auto& endpoint : endpoints)
                 {
                     endpoint->registerDefaultListener(this);
-                    ++_callbackRefCount;
                     _rtpEndpoints.push_back(endpoint);
 
                     _rtpIceSession->addRemoteCandidate(candidate, endpoint.get());
@@ -2035,20 +2058,18 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                     ice::toString(endpoint->getTransportType()).c_str(),
                     ice::toString(candidatePair.second.type).c_str());
             }
-            else if (endpoint->getTransportType() == ice::TransportType::TCP)
-            {
-                endpoint->closePort();
-            }
         }
 
         while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
             _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
         {
+            _rtpEndpoints.back()->unregisterListener(this);
             _rtpEndpoints.pop_back();
         }
         while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
-            _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+            _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
         {
+            _rtpEndpoints.front()->unregisterListener(this);
             _rtpEndpoints.erase(_rtpEndpoints.begin());
         }
 

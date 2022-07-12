@@ -6,6 +6,8 @@
 #include "rtp/RtpHeader.h"
 #include <cstdint>
 
+#include "crypto/SslHelper.h"
+
 namespace transport
 {
 
@@ -26,21 +28,22 @@ private:
     Endpoint::IEvents* _listener;
 };
 
-class UnRegisterStunListenerJob : public jobmanager::Job
+class UnRegisterNotifyListenerJob : public jobmanager::Job
 {
 public:
-    UnRegisterStunListenerJob(UdpEndpoint& endpoint, __uint128_t transactionId)
+    UnRegisterNotifyListenerJob(UdpEndpoint& endpoint, Endpoint::IEvents& listener)
         : _endpoint(endpoint),
-          _transactionId(transactionId)
+          _listener(listener)
     {
     }
 
-    void run() override { _endpoint.internalUnregisterStunListener(_transactionId); }
+    void run() override { _listener.onUnregistered(_endpoint); }
 
 private:
     UdpEndpoint& _endpoint;
-    __uint128_t _transactionId;
+    Endpoint::IEvents& _listener;
 };
+
 } // namespace
 
 // When this endpoint is shared the number of registration jobs and packets in queue will be plenty
@@ -56,6 +59,11 @@ UdpEndpoint::UdpEndpoint(jobmanager::JobManager& jobManager,
       _dtlsListeners(maxSessionCount * 16),
       _iceResponseListeners(maxSessionCount * 64)
 {
+}
+
+UdpEndpoint::~UdpEndpoint()
+{
+    logger::debug("removed", _name.c_str());
 }
 
 void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
@@ -80,6 +88,12 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
                 {
                     logger::warn("Pending ICE request lookup table is full", _name.c_str());
                 }
+                else
+                {
+                    logger::debug("reg listener for %s",
+                        _name.c_str(),
+                        crypto::toHexString(&transactionId, sizeof(transactionId)).c_str());
+                }
             }
         }
     }
@@ -96,9 +110,11 @@ void UdpEndpoint::unregisterListener(IEvents* listener)
 
 void UdpEndpoint::cancelStunTransaction(__uint128_t transactionId)
 {
-    if (!_receiveJobs.addJob<UnRegisterStunListenerJob>(*this, transactionId))
+    // Hashmap allows erasing elements while iterating.
+    auto itPair = _iceResponseListeners.find(transactionId);
+    if (itPair != _iceResponseListeners.cend())
     {
-        logger::error("failed to post unregister stun job", _name.c_str());
+        _iceResponseListeners.erase(transactionId);
     }
 }
 
@@ -111,6 +127,7 @@ void UdpEndpoint::internalUnregisterListener(IEvents* listener)
         if (item.second == listener)
         {
             _iceListeners.erase(item.first);
+            _receiveJobs.addJob<UnRegisterNotifyListenerJob>(*this, *listener);
         }
     }
 
@@ -119,6 +136,7 @@ void UdpEndpoint::internalUnregisterListener(IEvents* listener)
         if (responseListener.second == listener)
         {
             _iceResponseListeners.erase(responseListener.first);
+            // must be iceListener to be iceResponseListener so no extra unreg notification
         }
     }
 
@@ -127,16 +145,9 @@ void UdpEndpoint::internalUnregisterListener(IEvents* listener)
         if (item.second == listener)
         {
             _dtlsListeners.erase(item.first);
+            _receiveJobs.addJob<UnRegisterNotifyListenerJob>(*this, *listener);
         }
     }
-
-    listener->onUnregistered(*this);
-}
-
-void UdpEndpoint::internalUnregisterStunListener(__uint128_t transactionId)
-{
-    // Hashmap allows erasing elements while iterating.
-    _iceResponseListeners.erase(transactionId);
 }
 
 namespace
@@ -240,7 +251,13 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
 
 void UdpEndpoint::registerListener(const std::string& stunUserName, IEvents* listener)
 {
+    if (_iceListeners.contains(stunUserName))
+    {
+        return;
+    }
+
     _iceListeners.emplace(stunUserName, listener);
+    listener->onRegistered(*this);
 }
 
 /** If using ICE, must be called from receive job queue to sync unregister */
@@ -250,11 +267,22 @@ void UdpEndpoint::registerListener(const SocketAddress& srcAddress, IEvents* lis
     if (dtlsIt != _dtlsListeners.end())
     {
         // src port is re-used. Unregister will look at listener pointer
+        if (dtlsIt->second == listener)
+        {
+            return;
+        }
+
+        if (dtlsIt->second)
+        {
+            _receiveJobs.addJob<UnRegisterNotifyListenerJob>(*this, *dtlsIt->second);
+        }
         dtlsIt->second = listener;
+        listener->onRegistered(*this);
     }
     else
     {
         _dtlsListeners.emplace(srcAddress, listener);
+        listener->onRegistered(*this);
     }
 }
 

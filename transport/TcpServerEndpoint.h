@@ -32,12 +32,12 @@ public:
     virtual ~TcpServerEndpoint();
 
     void start();
-    void close() override;
+    void closePort() override;
     bool isGood() const { return _socket.isGood(); }
 
     const SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
 
-    void registerListener(const std::string& stunUserName, Endpoint::IEvents* listener) override;
+    void registerListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener) override;
     void unregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener) override;
 
     virtual const char* getName() const override { return _name.c_str(); }
@@ -92,7 +92,7 @@ private:
     uint32_t _pendingEpollRegistrations;
     concurrency::MpmcHashmap32<transport::SocketAddress, uint64_t> _blackList;
     concurrency::MpmcHashmap32<transport::SocketAddress, uint32_t> _pendingConnectCounters;
-    concurrency::MpmcHashmap32<std::string, Endpoint::IEvents*> _iceListeners;
+    concurrency::MpmcHashmap32<std::string, ServerEndpoint::IEvents*> _iceListeners;
     RtcePoll& _epoll;
     TcpServerEndpoint::IEvents* _listener;
     const config::Config& _config;

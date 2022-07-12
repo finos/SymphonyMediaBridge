@@ -186,6 +186,8 @@ public:
         const SocketAddress& sourcePort) override;
 
 public: // end point callbacks
+    void onRegistered(Endpoint& endpoint) override;
+    void onServerPortRegistered(ServerEndpoint& endpoint) override;
     void onUnregistered(Endpoint& endpoint) override;
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
@@ -207,7 +209,10 @@ public: // end point callbacks
         const SocketAddress& target,
         memory::UniquePacket packet) override;
 
-    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint) override;
+    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
+        const SocketAddress& source,
+        const SocketAddress& target,
+        memory::UniquePacket packet) override;
 
     void onPortClosed(Endpoint& endpoint) override;
 
@@ -257,7 +262,10 @@ public: // end point callbacks
         const SocketAddress& source,
         memory::UniquePacket packet,
         uint64_t timestamp);
-    void internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint);
+    void internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
+        const SocketAddress& source,
+        memory::UniquePacket packet);
+    void internalUnregister();
 
     void onServerPortClosed(ServerEndpoint& endpoint) override {}
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
@@ -327,7 +335,7 @@ private:
     Endpoints _rtcpEndpoints;
     ServerEndpoints _tcpServerEndpoints;
     TcpEndpointFactory* _tcpEndpointFactory;
-    std::atomic_int _callbackRefCount;
+
     std::atomic_uint32_t _jobCounter;
     utils::SsrcGenerator _randomGenerator;
 

@@ -65,8 +65,6 @@ struct ClientPair : public transport::DataReceiver
           _transport2(transportFactory->create(4096, 2)),
           _sequenceNumber(0),
           _tickCount(0),
-          _jobsCounter1(1),
-          _jobsCounter2(1),
           _receivedByteCount(0),
           _receivedPacketCount(0),
           _jobManager(jobManager),
@@ -104,10 +102,8 @@ struct ClientPair : public transport::DataReceiver
         {
             _transport2->stop();
         }
-        --_jobsCounter1;
-        --_jobsCounter2;
 
-        while (_jobsCounter1 > 0 || _jobsCounter2 > 0 || _transport2->hasPendingJobs() || _transport1->hasPendingJobs())
+        while (_transport2->hasPendingJobs() || _transport1->hasPendingJobs())
         {
             std::this_thread::yield();
         }
@@ -211,8 +207,6 @@ struct ClientPair : public transport::DataReceiver
     std::shared_ptr<RtcTransport> _transport2;
     uint16_t _sequenceNumber;
     uint32_t _tickCount;
-    std::atomic_uint32_t _jobsCounter1;
-    std::atomic_uint32_t _jobsCounter2;
 
     std::atomic_uint32_t _receivedByteCount;
     time_t _receiveStart;

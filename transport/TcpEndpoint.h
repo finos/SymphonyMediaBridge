@@ -121,7 +121,7 @@ public:
     // called on sendJobs threads
     void internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet);
     void continueSend();
-    void internalUnregisterListener(IEvents* listener);
+
     void internalClosePort(int countDown);
 
 private:

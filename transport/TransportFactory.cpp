@@ -51,6 +51,7 @@ public:
         memory::PacketPoolAllocator& mainAllocator)
         : _deleter(this),
           _jobManager(jobManager),
+          _garbageQueue(_jobManager),
           _srtpClientFactory(srtpClientFactory),
           _config(config),
           _sctpConfig(sctpConfig),
@@ -63,9 +64,7 @@ public:
           _mainAllocator(mainAllocator),
           _callbackRefCount(0),
           _sharedRecordingEndpointListIndex(0),
-          _good(true),
-          _pendingClosePorts(256),
-          _pendingCloseServerPorts(256)
+          _good(true)
     {
 #ifdef __APPLE__
         const size_t receiveBufferSize = 5 * 1024 * 1024;
@@ -463,54 +462,45 @@ public:
 
     void shutdownEndpoint(Endpoint* endpoint)
     {
-        endpoint->registerDefaultListener(this);
-        _pendingClosePorts.emplace(endpoint, endpoint);
-        ++_callbackRefCount;
-        endpoint->closePort();
+        logger::debug("closing %s", "TransportFactory", endpoint->getName());
+        _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _callbackRefCount);
     }
 
     void shutdownEndpoint(ServerEndpoint* endpoint)
     {
-        _pendingCloseServerPorts.emplace(endpoint, endpoint);
-        ++_callbackRefCount;
-        endpoint->close();
+        logger::debug("closing %s", "TransportFactory", endpoint->getName());
+        _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(endpoint, _callbackRefCount);
     }
 
 private:
     template <typename T>
-    class DeleteJob : public jobmanager::Job
+    class DeleteJob : public jobmanager::CountedJob
     {
     public:
-        DeleteJob(T* o) : _object(o) {}
+        DeleteJob(T* endpoint, std::atomic_uint32_t& counter) : CountedJob(counter), _endpoint(endpoint) {}
 
-        void run() override { delete _object; }
+        void run() override
+        {
+            _endpoint->closePort();
+            while (_endpoint->getState() != Endpoint::State::CLOSED)
+            {
+                std::this_thread::yield();
+            }
+            delete _endpoint;
+        }
 
     private:
-        T* _object;
+        T* _endpoint;
     };
 
     void onServerPortClosed(ServerEndpoint& endpoint) override
     {
-        logger::info("TCP server port %s closed.", "TransportFactory", endpoint.getLocalPort().toString().c_str());
-        auto portIt = _pendingCloseServerPorts.find(&endpoint);
-        if (portIt != _pendingCloseServerPorts.cend())
-        {
-            _pendingCloseServerPorts.erase(portIt->first);
-            _jobManager.addJob<DeleteJob<ServerEndpoint>>(&endpoint);
-        }
-        --_callbackRefCount;
+        logger::info("TCP server port %s closed.", "TransportFactory", endpoint.getName());
     }
 
     void onPortClosed(Endpoint& endpoint) override
     {
-        auto portIt = _pendingClosePorts.find(&endpoint);
-        if (portIt != _pendingClosePorts.cend())
-        {
-            logger::debug("deleting %s", "TransportFactory", portIt->second->getLocalPort().toString().c_str());
-            _pendingClosePorts.erase(portIt->first);
-            _jobManager.addJob<DeleteJob<Endpoint>>(&endpoint);
-        }
-        --_callbackRefCount;
+        logger::debug("deleting %s", "TransportFactory", endpoint.getName());
     }
 
     void onRtpReceived(Endpoint& endpoint,
@@ -541,12 +531,20 @@ private:
     {
     }
 
-    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint) override {}
+    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
+        const SocketAddress& source,
+        const SocketAddress& target,
+        memory::UniquePacket packet) override
+    {
+    }
 
+    void onRegistered(Endpoint& endpoint) override {}
     void onUnregistered(Endpoint& endpoint) override {}
+    void onServerPortRegistered(ServerEndpoint& endpoint) override {}
     void onServerPortUnregistered(ServerEndpoint& endpoint) override {}
 
     jobmanager::JobManager& _jobManager;
+    jobmanager::JobQueue _garbageQueue;
     SrtpClientFactory& _srtpClientFactory;
     const config::Config& _config;
     const sctp::SctpConfig& _sctpConfig;
@@ -565,9 +563,6 @@ private:
     std::vector<std::vector<std::shared_ptr<RecordingEndpoint>>> _sharedRecordingEndpoints;
     std::atomic_uint32_t _sharedRecordingEndpointListIndex;
     bool _good;
-
-    concurrency::MpmcHashmap32<Endpoint*, Endpoint*> _pendingClosePorts;
-    concurrency::MpmcHashmap32<ServerEndpoint*, ServerEndpoint*> _pendingCloseServerPorts;
 };
 
 std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager& jobManager,

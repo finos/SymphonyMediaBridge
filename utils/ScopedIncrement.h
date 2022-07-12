@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cassert>
 
 namespace utils
 {
@@ -10,7 +11,15 @@ class ScopedIncrement
 public:
     explicit ScopedIncrement(std::atomic_uint32_t& counter) : _counter(counter) { ++_counter; }
 
-    ~ScopedIncrement() { --_counter; }
+    ~ScopedIncrement()
+    {
+#if DEBUG
+        auto value = --_counter;
+        assert(value != 0xFFFFFFFFu);
+#else
+        --counter;
+#endif
+    }
 
     std::atomic_uint32_t& getCounter() { return _counter; }
 
@@ -18,4 +27,4 @@ private:
     std::atomic_uint32_t& _counter;
 };
 
-}
+} // namespace utils

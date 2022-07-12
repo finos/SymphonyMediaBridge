@@ -106,8 +106,6 @@ TransportClientPair::TransportClientPair(transport::TransportFactory& transportF
       _tickCount(0),
       _connectStart(0),
       _signalDelay(0),
-      _jobsCounter1(1),
-      _jobsCounter2(1),
       _receivedByteCount(0),
       _receivedPacketCount(0),
       _jobManager(jobManager)
@@ -154,11 +152,8 @@ void TransportClientPair::stop()
     {
         _transport2->stop();
     }
-    --_jobsCounter1;
-    --_jobsCounter2;
 
-    while (_jobsCounter1 > 0 || _jobsCounter2 > 0 || (_transport1 && _transport1->hasPendingJobs()) ||
-        (_transport2 && _transport2->hasPendingJobs()))
+    while ((_transport1 && _transport1->hasPendingJobs()) || (_transport2 && _transport2->hasPendingJobs()))
     {
         std::this_thread::yield();
     }
@@ -166,9 +161,6 @@ void TransportClientPair::stop()
 
 TransportClientPair::~TransportClientPair()
 {
-    EXPECT_TRUE(_jobsCounter1 == 0);
-    EXPECT_TRUE(_jobsCounter2 == 0);
-    EXPECT_TRUE(_jobsCounter2 == 0);
     EXPECT_TRUE(!(_transport1 && _transport1->hasPendingJobs()));
     EXPECT_TRUE(!(_transport2 && _transport2->hasPendingJobs()));
 }
