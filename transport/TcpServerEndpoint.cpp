@@ -427,7 +427,7 @@ void TcpServerEndpoint::internalReceive(int fd)
 }
 
 /**
- * a recently accepted client socket is disconnected from far side before we reeive anything
+ * a recently accepted client socket is disconnected from far side before we received anything
  */
 void TcpServerEndpoint::onSocketShutdown(int fd)
 {
