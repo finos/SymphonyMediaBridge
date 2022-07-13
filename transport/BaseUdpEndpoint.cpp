@@ -89,10 +89,6 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
 
 BaseUdpEndpoint::~BaseUdpEndpoint()
 {
-    if (_socket.isGood())
-    {
-        _socket.close();
-    }
 }
 
 void BaseUdpEndpoint::internalStopped()

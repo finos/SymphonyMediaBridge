@@ -179,10 +179,6 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
 
 TcpEndpoint::~TcpEndpoint()
 {
-    if (_socket.isGood())
-    {
-        _socket.close();
-    }
     logger::debug("removed", _name.c_str());
 }
 
@@ -194,7 +190,6 @@ void TcpEndpoint::connect(const SocketAddress& remotePort)
         if (_socket.isGood())
         {
             _state = State::CONNECTING;
-            logger::debug("state CONNECTING", _name.c_str());
             _epoll.add(_socket.fd(), this);
         }
     }
@@ -336,7 +331,6 @@ void TcpEndpoint::sendPacket(const memory::Packet& packet)
 // - unregister from rtcepoll incoming data
 // - await pending receive jobs to complete
 // - await pending send jobs to complete
-// - report on IEvents that port has closed
 void TcpEndpoint::stop()
 {
     if (_state == State::CONNECTING || _state == State::CONNECTED)
@@ -360,7 +354,7 @@ void TcpEndpoint::onSocketShutdown(int fd)
 {
     if (_depacketizer.fd == fd && (_state == State::CONNECTING || _state == State::CONNECTED))
     {
-        logger::debug("peer shut down socket CLOSING", _name.c_str());
+        logger::debug("peer shut down socket STOPPING", _name.c_str());
         _state = State::STOPPING;
         if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
         {
@@ -431,7 +425,6 @@ void TcpEndpoint::onSocketWriteable(int fd)
 
 void TcpEndpoint::unregisterListener(IEvents* listener)
 {
-    logger::debug("unreg request", _name.c_str());
     if (listener == _defaultListener)
     {
         _defaultListener = nullptr;

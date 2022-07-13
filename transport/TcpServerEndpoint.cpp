@@ -133,7 +133,6 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
 
 TcpServerEndpoint::~TcpServerEndpoint()
 {
-    _socket.close();
     logger::info("removed", _name.c_str());
 }
 
