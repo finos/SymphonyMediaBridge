@@ -21,15 +21,12 @@ public:
         RtcePoll& epoll,
         bool isShared);
 
-    ~BaseUdpEndpoint();
-
     void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
 
     void registerDefaultListener(IEvents* defaultListener) override;
-
     void start() override;
     bool openPort(uint16_t port);
-    void stop() override;
+    void stop(Endpoint::IStopEvents* listener) override;
 
     SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
 
@@ -81,6 +78,7 @@ protected:
 
     RtcePoll& _epoll;
     std::atomic_uint32_t _epollCountdown;
+    Endpoint::IStopEvents* _stopListener;
     const bool _isShared;
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
     std::atomic_flag _pendingSend = ATOMIC_FLAG_INIT;

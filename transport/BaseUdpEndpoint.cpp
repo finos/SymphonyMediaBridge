@@ -87,18 +87,14 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
     }
 }
 
-BaseUdpEndpoint::~BaseUdpEndpoint()
-{
-}
-
 void BaseUdpEndpoint::internalStopped()
 {
     assert(_epollCountdown == 0);
     _state = State::CREATED;
-    const auto defaultListener = _defaultListener.load();
-    if (defaultListener)
+
+    if (_stopListener)
     {
-        defaultListener->onEndpointStopped(*this);
+        _stopListener->onEndpointStopped(*this);
     }
 }
 
@@ -213,10 +209,11 @@ bool BaseUdpEndpoint::openPort(uint16_t port)
 // - await pending send jobs to complete
 // - close socket
 // - report on IEvents that port has closed
-void BaseUdpEndpoint::stop()
+void BaseUdpEndpoint::stop(Endpoint::IStopEvents* listener)
 {
     if (_state == Endpoint::State::CONNECTING || _state == Endpoint::State::CONNECTED)
     {
+        _stopListener = listener;
         _state = Endpoint::State::STOPPING;
         _epollCountdown = 2;
         if (!_epoll.remove(_socket.fd(), this))

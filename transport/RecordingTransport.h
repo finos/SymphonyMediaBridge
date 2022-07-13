@@ -76,7 +76,7 @@ private:
     void onSendingStreamRemovedEvent(const memory::Packet& packet);
     RtpSenderState* getOutboundSsrc(const uint32_t ssrc);
 
-    void protectAndSend(memory::UniquePacket packet, const SocketAddress& target, Endpoint& endpoint);
+    void protectAndSend(memory::UniquePacket packet, const SocketAddress& target);
 
     std::atomic_bool _isInitialized;
     logger::LoggableId _loggableId;

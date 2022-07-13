@@ -153,7 +153,6 @@ TEST_F(RecordingTransportTest, protectAndSend)
                            memory::UniquePacket packet) {});
     EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
     EXPECT_CALL(listener, onRegistered(_)).Times(1);
-    EXPECT_CALL(listener, onEndpointStopped(_)).Times(1);
 
     auto udpEndpoint =
         std::make_shared<UdpEndpoint>(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
@@ -213,8 +212,8 @@ TEST_F(RecordingTransportTest, protectAndSend)
     };
 
     udpEndpoint->registerDefaultListener(&listener);
-    udpEndpoint->stop();
-    recordingEndpoint->stop();
+    udpEndpoint->stop(nullptr);
+    recordingEndpoint->stop(nullptr);
 
     waitForClose(*udpEndpoint);
     waitForClose(*recordingEndpoint);
@@ -252,7 +251,6 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
     EXPECT_CALL(listener, onRtcpReceived(_, _, _, _)).Times(AtLeast(1));
     EXPECT_CALL(listener, onRegistered(_)).Times(1);
-    EXPECT_CALL(listener, onEndpointStopped(_)).Times(1);
 
     UdpEndpoint udpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
     udpEndpoint.registerListener(sourceAddress, &listener);
@@ -315,8 +313,8 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     };
 
     udpEndpoint.registerDefaultListener(&listener);
-    udpEndpoint.stop();
-    recordingEndpoint->stop();
+    udpEndpoint.stop(nullptr);
+    recordingEndpoint->stop(nullptr);
 
     waitForClose(udpEndpoint);
     waitForClose(*recordingEndpoint);

@@ -98,7 +98,6 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
     RtcePoll& rtcePoll,
     size_t maxSessions,
-    IEvents* listener,
     TcpEndpointFactory& tcpEndpointFactory,
     const SocketAddress& localPort,
     const config::Config& config)
@@ -112,7 +111,6 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
       _pendingConnectCounters(maxSessions / 4),
       _iceListeners(maxSessions),
       _epoll(rtcePoll),
-      _listener(listener),
       _config(config),
       _lastMaintenance(0),
       _tcpEndpointFactory(tcpEndpointFactory)
@@ -145,17 +143,25 @@ void TcpServerEndpoint::start()
         int rc = _socket.listen(16);
         if (rc != 0)
         {
-            stop();
+            stop(nullptr);
         }
     }
 }
 
-void TcpServerEndpoint::stop()
+void TcpServerEndpoint::stop(ServerEndpoint::IStopEvents* listener)
 {
     if (_state != Endpoint::State::STOPPING)
     {
+        _stopListener = listener;
         _state = Endpoint::State::STOPPING;
         _epoll.remove(_socket.fd(), this);
+    }
+    else
+    {
+        if (listener)
+        {
+            listener->onEndpointStopped(*this);
+        }
     }
 }
 
@@ -455,9 +461,9 @@ void TcpServerEndpoint::internalStopped()
 {
     assert(_epollCountdown == 0);
     _state = Endpoint::State::CREATED;
-    if (_listener)
+    if (_stopListener)
     {
-        _listener->onEndpointStopped(*this);
+        _stopListener->onEndpointStopped(*this);
     }
 }
 

@@ -125,10 +125,10 @@ void RecordingTransport::protectAndSend(memory::UniquePacket packet)
         return;
     }
 
-    protectAndSend(std::move(packet), _peerPort, *_recordingEndpoint);
+    protectAndSend(std::move(packet), _peerPort);
 }
 
-void RecordingTransport::protectAndSend(memory::UniquePacket packet, const SocketAddress& target, Endpoint& endpoint)
+void RecordingTransport::protectAndSend(memory::UniquePacket packet, const SocketAddress& target)
 {
     assert(packet->getLength() + 24 <= _config.mtu);
 
@@ -172,7 +172,7 @@ void RecordingTransport::protectAndSend(memory::UniquePacket packet, const Socke
             senderState->onRtpSent(timestamp, *packet);
         }
 
-        endpoint.sendTo(target, std::move(packet));
+        _recordingEndpoint->sendTo(target, std::move(packet));
 
         if (isFirstPacket || _rtcp.lastSendTime == 0 ||
             utils::Time::diffGT(_rtcp.lastSendTime, timestamp, _rtcp.reportInterval))
@@ -214,11 +214,11 @@ void RecordingTransport::protectAndSend(memory::UniquePacket packet, const Socke
             recp::REC_HEADER_SIZE);
 
         packet->setLength(recp::REC_HEADER_SIZE + encryptedLength);
-        endpoint.sendTo(target, std::move(packet));
+        _recordingEndpoint->sendTo(target, std::move(packet));
     }
     else if (rtp::isRtcpPacket(*packet))
     {
-        endpoint.sendTo(target, std::move(packet));
+        _recordingEndpoint->sendTo(target, std::move(packet));
     }
     else
     {

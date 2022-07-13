@@ -13,9 +13,11 @@ namespace transport
 {
 
 class TransportFactoryImpl final : public TransportFactory,
-                                   public ServerEndpoint::IEvents,
+                                   //   public ServerEndpoint::IEvents,
                                    public TcpEndpointFactory,
-                                   public Endpoint::IEvents
+                                   //  public Endpoint::IEvents,
+                                   public Endpoint::IStopEvents,
+                                   public ServerEndpoint::IStopEvents
 {
     class EndpointDeleter
     {
@@ -85,14 +87,11 @@ public:
 
                     if (endPoint->isGood())
                     {
-                        endPoint->registerDefaultListener(this);
                         if (!endPoint->configureBufferSizes(2 * 1024 * 1024, receiveBufferSize))
                         {
-                            logger::error("failed to set socket send buffer %d", "TransportFactory", errno);
+                            logger::error("failed to set socket send buffer %d", _name, errno);
                         }
-                        logger::info("opened main media port at %s",
-                            "TransportFactory",
-                            portAddress.toString().c_str());
+                        logger::info("opened main media port at %s", _name, portAddress.toString().c_str());
                         _sharedEndpoints[portOffset].push_back(endPoint);
                         endPoint->start();
                     }
@@ -100,7 +99,7 @@ public:
                     {
                         _good = false;
                         logger::error("failed to open main media port on interface %s",
-                            "TransportFactory",
+                            _name,
                             portAddress.toString().c_str());
                     }
                 }
@@ -111,31 +110,21 @@ public:
             for (SocketAddress portAddress : interfaces)
             {
                 portAddress.setPort(config.ice.tcp.port);
-                auto endPoint = std::shared_ptr<TcpServerEndpoint>(new TcpServerEndpoint(_jobManager,
-                                                                       _mainAllocator,
-                                                                       _rtcePoll,
-                                                                       1024,
-                                                                       this,
-                                                                       *this,
-                                                                       portAddress,
-                                                                       config),
+                auto endPoint = std::shared_ptr<TcpServerEndpoint>(
+                    new TcpServerEndpoint(_jobManager, _mainAllocator, _rtcePoll, 1024, *this, portAddress, config),
                     getDeleter());
 
                 if (endPoint->isGood())
                 {
                     // no need to set buffers as we will not send on this socket
-                    logger::info("opened main TCP server port at %s",
-                        "TransportFactory",
-                        portAddress.toString().c_str());
+                    logger::info("opened main TCP server port at %s", _name, portAddress.toString().c_str());
                     _tcpServerEndpoints.push_back(endPoint);
                     endPoint->start();
                 }
                 else
                 {
                     _good = false;
-                    logger::error("failed to open TCP server port at %s",
-                        "TransportFactory",
-                        portAddress.toString().c_str());
+                    logger::error("failed to open TCP server port at %s", _name, portAddress.toString().c_str());
                 }
             }
         }
@@ -153,12 +142,11 @@ public:
 
                     if (endPoint->isGood())
                     {
-                        endPoint->registerDefaultListener(this);
                         if (!endPoint->configureBufferSizes(2 * 1024 * 1024, receiveBufferSize))
                         {
-                            logger::error("failed to set socket send buffer %d", "TransportFactory", errno);
+                            logger::error("failed to set socket send buffer %d", _name, errno);
                         }
-                        logger::info("opened recording port at %s", "TransportFactory", portAddress.toString().c_str());
+                        logger::info("opened recording port at %s", _name, portAddress.toString().c_str());
                         _sharedRecordingEndpoints[portOffset].push_back(endPoint);
                         endPoint->start();
                     }
@@ -166,7 +154,7 @@ public:
                     {
                         _good = false;
                         logger::error("failed to open recording port on interface %s",
-                            "TransportFactory",
+                            _name,
                             portAddress.toString().c_str());
                     }
                 }
@@ -176,22 +164,18 @@ public:
 
     ~TransportFactoryImpl()
     {
-        for (auto& endpoint : _tcpServerEndpoints)
-        {
-            ++_pendingTasks;
-            endpoint->stop();
-        }
-        while (_pendingTasks > 0)
-        {
-            std::this_thread::yield();
-        }
-
         _tcpServerEndpoints.clear();
         _sharedEndpoints.clear();
         _sharedRecordingEndpoints.clear();
-        while (_pendingTasks > 0)
+        auto start = utils::Time::getAbsoluteTime();
+        while (_pendingTasks > 0 && utils::Time::diffLE(start, utils::Time::getAbsoluteTime(), utils::Time::sec * 10))
         {
             std::this_thread::yield();
+        }
+        if (_pendingTasks > 0)
+        {
+            assert(false);
+            logger::warn("not all endpoints were properly deleted", _name);
         }
     }
 
@@ -224,14 +208,14 @@ public:
         }
         else
         {
-            logger::error("Failed to create udp end points in port range", "TransportFactory");
+            logger::error("Failed to create udp end points in port range", _name);
             return false;
         }
 
         if (!rtpEndpoint->configureBufferSizes(512 * 1024, 5 * 1024 * 1024) ||
             !rtcpEndpoint->configureBufferSizes(512 * 1024, 512 * 1024))
         {
-            logger::error("failed to set socket send buffer %d", "TransportFactory", errno);
+            logger::error("failed to set socket send buffer %d", _name, errno);
             return false;
         }
 
@@ -261,13 +245,13 @@ public:
         }
         else
         {
-            logger::error("Failed to create udp end point in port range", "TransportFactory");
+            logger::error("Failed to create udp end point in port range", _name);
             return false;
         }
 
         if (!rtpEndpoint->configureBufferSizes(512 * 1024, 5 * 1024 * 1024))
         {
-            logger::error("failed to set socket send buffer %d", "TransportFactory", errno);
+            logger::error("failed to set socket send buffer %d", _name, errno);
             return false;
         }
 
@@ -441,7 +425,7 @@ public:
             } while (listIndex != initialIndex);
         }
 
-        logger::error("No shared recording endpoints configured", "TransportFactory");
+        logger::error("No shared recording endpoints configured", _name);
         return nullptr;
     }
 
@@ -472,14 +456,16 @@ public:
 
     void shutdownEndpoint(Endpoint* endpoint)
     {
-        logger::debug("closing %s", "TransportFactory", endpoint->getName());
-        _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
+        logger::debug("closing %s", _name, endpoint->getName());
+        ++_pendingTasks;
+        endpoint->stop(this);
     }
 
     void shutdownEndpoint(ServerEndpoint* endpoint)
     {
-        logger::debug("closing %s", "TransportFactory", endpoint->getName());
-        _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(endpoint, _pendingTasks);
+        logger::debug("closing %s", _name, endpoint->getName());
+        ++_pendingTasks;
+        endpoint->stop(this);
     }
 
 private:
@@ -497,51 +483,17 @@ private:
 
     void onEndpointStopped(ServerEndpoint& endpoint) override
     {
-        --_pendingTasks;
-        logger::info("TCP server port %s closed.", "TransportFactory", endpoint.getName());
+        logger::info("TCP server %s stopped.", _name, endpoint.getName());
+        _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(&endpoint, _pendingTasks);
+        --_pendingTasks; // epoll stop is complete
     }
 
-    void onEndpointStopped(Endpoint& endpoint) override {}
-
-    void onRtpReceived(Endpoint& endpoint,
-        const SocketAddress& source,
-        const SocketAddress& target,
-        memory::UniquePacket packet) override
+    void onEndpointStopped(Endpoint& endpoint) override
     {
+        logger::info("Endpoint %s stopped.", _name, endpoint.getName());
+        _garbageQueue.addJob<DeleteJob<Endpoint>>(&endpoint, _pendingTasks);
+        --_pendingTasks; // epoll stop is complete
     }
-
-    void onDtlsReceived(Endpoint& endpoint,
-        const SocketAddress& source,
-        const SocketAddress& target,
-        memory::UniquePacket packet) override
-    {
-    }
-
-    void onRtcpReceived(Endpoint& endpoint,
-        const SocketAddress& source,
-        const SocketAddress& target,
-        memory::UniquePacket packet) override
-    {
-    }
-
-    void onIceReceived(Endpoint& endpoint,
-        const SocketAddress& source,
-        const SocketAddress& target,
-        memory::UniquePacket packet) override
-    {
-    }
-
-    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
-        const SocketAddress& source,
-        const SocketAddress& target,
-        memory::UniquePacket packet) override
-    {
-    }
-
-    void onRegistered(Endpoint& endpoint) override {}
-    void onUnregistered(Endpoint& endpoint) override {}
-    void onServerPortRegistered(ServerEndpoint& endpoint) override {}
-    void onServerPortUnregistered(ServerEndpoint& endpoint) override {}
 
     jobmanager::JobManager& _jobManager;
     jobmanager::JobQueue _garbageQueue;
@@ -563,7 +515,10 @@ private:
     std::vector<std::vector<std::shared_ptr<RecordingEndpoint>>> _sharedRecordingEndpoints;
     std::atomic_uint32_t _sharedRecordingEndpointListIndex;
     bool _good;
+    static const char* _name;
 };
+
+const char* TransportFactoryImpl::_name = "TransportFactory";
 
 std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager& jobManager,
     SrtpClientFactory& srtpClientFactory,

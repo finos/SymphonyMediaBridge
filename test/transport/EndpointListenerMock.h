@@ -31,7 +31,6 @@ struct EndpointListenerMock : public Endpoint::IEvents
         (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet),
         (override));
 
-    MOCK_METHOD(void, onEndpointStopped, (Endpoint & endpoint), (override));
     MOCK_METHOD(void, onRegistered, (Endpoint & endpoint), (override));
     MOCK_METHOD(void, onUnregistered, (Endpoint & endpoint), (override));
 };

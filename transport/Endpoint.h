@@ -45,10 +45,14 @@ public:
             const SocketAddress& target,
             memory::UniquePacket packet) = 0;
 
-        virtual void onEndpointStopped(Endpoint& endpoint) = 0;
-
         virtual void onRegistered(Endpoint& endpoint) = 0;
         virtual void onUnregistered(Endpoint& endpoint) = 0;
+    };
+
+    class IStopEvents
+    {
+    public:
+        virtual void onEndpointStopped(Endpoint& endpoint) = 0;
     };
 
     virtual ~Endpoint(){};
@@ -62,7 +66,7 @@ public:
     virtual void unregisterListener(IEvents* listener) = 0;
 
     virtual void start() = 0;
-    virtual void stop() = 0;
+    virtual void stop(IStopEvents* listener) = 0;
 
     virtual bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) = 0;
 
@@ -81,7 +85,6 @@ public:
     class IEvents
     {
     public:
-        virtual void onEndpointStopped(ServerEndpoint& endpoint) = 0;
         virtual void onServerPortRegistered(ServerEndpoint& endpoint) = 0;
         virtual void onServerPortUnregistered(ServerEndpoint& endpoint) = 0;
 
@@ -91,10 +94,16 @@ public:
             memory::UniquePacket packet) = 0;
     };
 
+    class IStopEvents
+    {
+    public:
+        virtual void onEndpointStopped(ServerEndpoint& endpoint) = 0;
+    };
+
     virtual const SocketAddress getLocalPort() const = 0;
     virtual void registerListener(const std::string& stunUserName, IEvents* listener) = 0;
     virtual void unregisterListener(const std::string& stunUserName, IEvents* listener) = 0;
-    virtual void stop() = 0;
+    virtual void stop(IStopEvents* event) = 0;
     virtual const char* getName() const = 0;
     virtual Endpoint::State getState() const = 0;
     virtual void maintenance(uint64_t timestamp) = 0;

@@ -31,7 +31,7 @@ public:
     void unregisterListener(IEvents* listener) override;
 
     void start() override;
-    void stop() override;
+    void stop(transport::Endpoint::IStopEvents*) override;
 
     transport::SocketAddress getLocalPort() const override;
 

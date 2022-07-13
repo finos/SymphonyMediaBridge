@@ -214,8 +214,6 @@ public: // end point callbacks
         const SocketAddress& target,
         memory::UniquePacket packet) override;
 
-    void onEndpointStopped(Endpoint& endpoint) override;
-
     void onIceDisconnect(Endpoint& endpoint);
 
     // DataGramTransport for sctp
@@ -267,7 +265,6 @@ public: // end point callbacks
         memory::UniquePacket packet);
     void internalUnregister();
 
-    void onEndpointStopped(ServerEndpoint& endpoint) override {}
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
 
 private:

@@ -206,11 +206,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     {
     }
 
-    void onRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::UniquePacket packet,
-        std::atomic_uint32_t& ownerCount) override
-    {
-    }
+    void onRtpPacketDecrypted(transport::RtcTransport* sender, memory::UniquePacket packet) override {}
 
     void onConnected(RtcTransport*) override {}
     bool onSctpConnectionRequest(RtcTransport*, uint16_t remotePort) override { return true; }

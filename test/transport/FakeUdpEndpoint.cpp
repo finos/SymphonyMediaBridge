@@ -35,7 +35,7 @@ void FakeUdpEndpoint::registerDefaultListener(IEvents* defaultListener) {}
 void FakeUdpEndpoint::unregisterListener(IEvents* listener) {}
 
 void FakeUdpEndpoint::start() {}
-void FakeUdpEndpoint::stop() {}
+void FakeUdpEndpoint::stop(transport::Endpoint::IStopEvents*) {}
 
 transport::SocketAddress FakeUdpEndpoint::getLocalPort() const
 {

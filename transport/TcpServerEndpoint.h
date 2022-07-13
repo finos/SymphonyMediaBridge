@@ -24,7 +24,6 @@ public:
         memory::PacketPoolAllocator& allocator,
         RtcePoll& rtcePoll,
         size_t maxPengingSessions,
-        TcpServerEndpoint::IEvents* defaultListener,
         TcpEndpointFactory& tcpEndpointFactory,
         const SocketAddress& localPort,
         const config::Config& config);
@@ -32,7 +31,7 @@ public:
     virtual ~TcpServerEndpoint();
 
     void start();
-    void stop() override;
+    void stop(ServerEndpoint::IStopEvents* listener) override;
     bool isGood() const { return _socket.isGood(); }
 
     const SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
@@ -95,7 +94,7 @@ private:
     concurrency::MpmcHashmap32<std::string, ServerEndpoint::IEvents*> _iceListeners;
     RtcePoll& _epoll;
     std::atomic_uint32_t _epollCountdown;
-    TcpServerEndpoint::IEvents* _listener;
+    ServerEndpoint::IStopEvents* _stopListener;
     const config::Config& _config;
     uint64_t _lastMaintenance;
     TcpEndpointFactory& _tcpEndpointFactory;

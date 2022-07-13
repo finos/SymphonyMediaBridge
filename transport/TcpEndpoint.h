@@ -99,7 +99,7 @@ public:
     void unregisterListener(IEvents* listener) override;
 
     void start() override;
-    void stop() override;
+    void stop(Endpoint::IStopEvents* listener) override;
 
     void connect(const SocketAddress& remotePort);
 
@@ -156,6 +156,7 @@ private:
 
     RtcePoll& _epoll;
     std::atomic_uint32_t _epollCountdown;
+    Endpoint::IStopEvents* _stopListener;
     memory::UniquePacket _pendingStunRequest;
     memory::Packet _remainder;
 };

@@ -19,7 +19,7 @@ void SrtpUnprotectJob::run()
 {
     if (rtp::isRtpPacket(*_packet) && _sender->unprotect(*_packet))
     {
-        _receiver->onRtpPacketDecrypted(_sender, std::move(_packet), getJobsCounter());
+        _receiver->onRtpPacketDecrypted(_sender, std::move(_packet));
     }
 }
 

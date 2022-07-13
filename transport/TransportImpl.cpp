@@ -1036,15 +1036,6 @@ void TransportImpl::onIceDisconnect(Endpoint& endpoint)
     _rtpIceSession->onTcpDisconnect(&endpoint);
 }
 
-void TransportImpl::onEndpointStopped(Endpoint& endpoint)
-{
-    if (endpoint.getTransportType() == ice::TransportType::TCP)
-    {
-        _jobQueue.addJob<IceDisconnectJob>(*this, endpoint);
-    }
-    endpoint.unregisterListener(this);
-}
-
 namespace
 {
 uint32_t processReportBlocks(const uint32_t count,

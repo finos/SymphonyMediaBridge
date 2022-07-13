@@ -143,7 +143,8 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
       _allocator(allocator),
       _defaultListener(nullptr),
       _epoll(epoll),
-      _epollCountdown(2)
+      _epollCountdown(2),
+      _stopListener(nullptr)
 {
     logger::info("accepted %s-%s", _name.c_str(), localPort.toString().c_str(), peerPort.toString().c_str());
 }
@@ -331,18 +332,19 @@ void TcpEndpoint::sendPacket(const memory::Packet& packet)
 // - unregister from rtcepoll incoming data
 // - await pending receive jobs to complete
 // - await pending send jobs to complete
-void TcpEndpoint::stop()
+void TcpEndpoint::stop(Endpoint::IStopEvents* listener)
 {
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
+        _stopListener = listener;
         _state = State::STOPPING;
         _epoll.remove(_socket.fd(), this);
     }
     else if (_state == State::CREATED)
     {
-        if (_defaultListener)
+        if (listener)
         {
-            _defaultListener->onEndpointStopped(*this);
+            listener->onEndpointStopped(*this);
         }
     }
 }
@@ -390,9 +392,9 @@ void TcpEndpoint::onSocketPollStopped(int fd)
 void TcpEndpoint::internalStopped()
 {
     _state = State::CREATED;
-    if (_defaultListener)
+    if (_stopListener)
     {
-        _defaultListener->onEndpointStopped(*this);
+        _stopListener->onEndpointStopped(*this);
     }
 }
 
