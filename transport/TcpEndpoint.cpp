@@ -142,7 +142,8 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager, 512),
       _allocator(allocator),
       _defaultListener(nullptr),
-      _epoll(epoll)
+      _epoll(epoll),
+      _epollCountdown(2)
 {
     logger::info("accepted %s-%s", _name.c_str(), localPort.toString().c_str(), peerPort.toString().c_str());
 }
@@ -178,6 +179,10 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
 
 TcpEndpoint::~TcpEndpoint()
 {
+    if (_socket.isGood())
+    {
+        _socket.close();
+    }
     logger::debug("removed", _name.c_str());
 }
 
@@ -331,32 +336,19 @@ void TcpEndpoint::sendPacket(const memory::Packet& packet)
 // - unregister from rtcepoll incoming data
 // - await pending receive jobs to complete
 // - await pending send jobs to complete
-// - close socket
 // - report on IEvents that port has closed
-void TcpEndpoint::closePort()
+void TcpEndpoint::stop()
 {
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
-        _state = State::CLOSING;
-        logger::debug("state CLOSING", _name.c_str());
+        _state = State::STOPPING;
         _epoll.remove(_socket.fd(), this);
     }
     else if (_state == State::CREATED)
     {
-        _socket.close();
-        _state = State::CLOSED;
-        logger::debug("state CLOSED", _name.c_str());
         if (_defaultListener)
         {
-            _defaultListener->onPortClosed(*this);
-        }
-    }
-    else
-    {
-        logger::warn("already closed", _name.c_str());
-        if (_defaultListener)
-        {
-            _defaultListener->onPortClosed(*this);
+            _defaultListener->onEndpointStopped(*this);
         }
     }
 }
@@ -369,7 +361,7 @@ void TcpEndpoint::onSocketShutdown(int fd)
     if (_depacketizer.fd == fd && (_state == State::CONNECTING || _state == State::CONNECTED))
     {
         logger::debug("peer shut down socket CLOSING", _name.c_str());
-        _state = State::CLOSING;
+        _state = State::STOPPING;
         if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
         {
             logger::warn("failed to add ReceiveJob", _name.c_str());
@@ -396,24 +388,17 @@ void TcpEndpoint::onSocketPollStarted(int fd)
 
 void TcpEndpoint::onSocketPollStopped(int fd)
 {
-    _receiveJobs.addJob<tcp::ClosePortJob<TcpEndpoint>>(*this, 1);
+    _epollCountdown = 2;
+    _receiveJobs.addJob<tcp::PortStoppedJob<TcpEndpoint>>(*this, _epollCountdown);
+    _sendJobs.addJob<tcp::PortStoppedJob<TcpEndpoint>>(*this, _epollCountdown);
 }
 
-void TcpEndpoint::internalClosePort(int countDown)
+void TcpEndpoint::internalStopped()
 {
-    if (countDown > 0)
+    _state = State::CREATED;
+    if (_defaultListener)
     {
-        _sendJobs.addJob<tcp::ClosePortJob<TcpEndpoint>>(*this, 0);
-    }
-    else
-    {
-        _socket.close();
-        _state = State::CLOSED;
-        logger::debug("state CLOSED", _name.c_str());
-        if (_defaultListener)
-        {
-            _defaultListener->onPortClosed(*this);
-        }
+        _defaultListener->onEndpointStopped(*this);
     }
 }
 

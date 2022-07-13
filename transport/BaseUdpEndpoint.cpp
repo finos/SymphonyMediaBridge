@@ -34,16 +34,25 @@ private:
     int _fd;
 };
 
-class ClosePortJob : public jobmanager::Job
+class StopPortJob : public jobmanager::Job
 {
 public:
-    ClosePortJob(BaseUdpEndpoint& endpoint, int countDown) : _endpoint(endpoint), _countDown(countDown) {}
+    StopPortJob(BaseUdpEndpoint& endpoint, std::atomic_uint32_t& countDown) : _endpoint(endpoint), _countDown(countDown)
+    {
+    }
 
-    void run() override { _endpoint.internalClosePort(_countDown); }
+    void run() override
+    {
+        auto value = --_countDown;
+        if (value == 0)
+        {
+            _endpoint.internalStopped();
+        }
+    }
 
 private:
     BaseUdpEndpoint& _endpoint;
-    int _countDown;
+    std::atomic_uint32_t& _countDown;
 };
 } // namespace
 
@@ -62,6 +71,7 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
       _allocator(allocator),
       _sendQueue(maxSessionCount * 256),
       _epoll(epoll),
+      _epollCountdown(2),
       _isShared(isShared),
       _defaultListener(nullptr),
       _receiveTracker(utils::Time::ms * 100),
@@ -77,25 +87,22 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
     }
 }
 
-void BaseUdpEndpoint::internalClosePort(int countDown)
+BaseUdpEndpoint::~BaseUdpEndpoint()
 {
-    if (countDown > 0)
+    if (_socket.isGood())
     {
-        if (!_sendJobs.addJob<ClosePortJob>(*this, 0))
-        {
-            logger::error("failed to add close port job", _name.c_str());
-        }
-    }
-    else
-    {
-        logger::info("closing %s", _name.c_str(), _socket.getBoundPort().toString().c_str());
         _socket.close();
-        _state = State::CLOSED;
-        const auto defaultListener = _defaultListener.load();
-        if (defaultListener)
-        {
-            defaultListener->onPortClosed(*this);
-        }
+    }
+}
+
+void BaseUdpEndpoint::internalStopped()
+{
+    assert(_epollCountdown == 0);
+    _state = State::CREATED;
+    const auto defaultListener = _defaultListener.load();
+    if (defaultListener)
+    {
+        defaultListener->onEndpointStopped(*this);
     }
 }
 
@@ -210,19 +217,16 @@ bool BaseUdpEndpoint::openPort(uint16_t port)
 // - await pending send jobs to complete
 // - close socket
 // - report on IEvents that port has closed
-void BaseUdpEndpoint::closePort()
+void BaseUdpEndpoint::stop()
 {
-    if (_socket.isGood())
+    if (_state == Endpoint::State::CONNECTING || _state == Endpoint::State::CONNECTED)
     {
-        _state = Endpoint::State::CLOSING;
+        _state = Endpoint::State::STOPPING;
+        _epollCountdown = 2;
         if (!_epoll.remove(_socket.fd(), this))
         {
             logger::error("Failed to request epoll unregistration", _name.c_str());
         }
-    }
-    else
-    {
-        logger::warn("socket already closed", _name.c_str());
     }
 }
 
@@ -236,7 +240,11 @@ void BaseUdpEndpoint::onSocketPollStarted(int fd)
 
 void BaseUdpEndpoint::onSocketPollStopped(int fd)
 {
-    if (!_receiveJobs.addJob<ClosePortJob>(*this, 1))
+    if (!_receiveJobs.addJob<StopPortJob>(*this, _epollCountdown))
+    {
+        logger::error("failed to add poll stop job", _name.c_str());
+    }
+    if (!_sendJobs.addJob<StopPortJob>(*this, _epollCountdown))
     {
         logger::error("failed to add poll stop job", _name.c_str());
     }

@@ -32,7 +32,7 @@ public:
     virtual ~TcpServerEndpoint();
 
     void start();
-    void closePort() override;
+    void stop() override;
     bool isGood() const { return _socket.isGood(); }
 
     const SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
@@ -48,7 +48,7 @@ public:
 
 public: // internal job methods
     void internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener);
-    void internalClosePort(int countDown);
+    void internalStopped();
     void internalReceive(int fd);
     void internalAccept();
     void internalShutdown(int fd);
@@ -94,6 +94,7 @@ private:
     concurrency::MpmcHashmap32<transport::SocketAddress, uint32_t> _pendingConnectCounters;
     concurrency::MpmcHashmap32<std::string, ServerEndpoint::IEvents*> _iceListeners;
     RtcePoll& _epoll;
+    std::atomic_uint32_t _epollCountdown;
     TcpServerEndpoint::IEvents* _listener;
     const config::Config& _config;
     uint64_t _lastMaintenance;

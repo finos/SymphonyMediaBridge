@@ -56,16 +56,15 @@ private:
     int _fd;
 };
 
-class ClosePendingSocketJob : public jobmanager::Job
+class CloseSocketJob : public jobmanager::Job
 {
 public:
-    ClosePendingSocketJob(TcpServerEndpoint& endPoint, int fd) : _fd(fd), _endPoint(endPoint) {}
+    CloseSocketJob(int fd) : _fd(fd) {}
 
-    void run() override { _endPoint.internalClosePendingSocket(_fd); }
+    void run() override { ::close(_fd); }
 
 private:
     int _fd;
-    TcpServerEndpoint& _endPoint;
 };
 
 class MaintenanceJob : public jobmanager::Job
@@ -134,7 +133,7 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
 
 TcpServerEndpoint::~TcpServerEndpoint()
 {
-    assert(!_socket.isGood()); // must close first
+    _socket.close();
     logger::info("removed", _name.c_str());
 }
 
@@ -147,16 +146,16 @@ void TcpServerEndpoint::start()
         int rc = _socket.listen(16);
         if (rc != 0)
         {
-            closePort();
+            stop();
         }
     }
 }
 
-void TcpServerEndpoint::closePort()
+void TcpServerEndpoint::stop()
 {
-    if (_state != Endpoint::State::CLOSING && _state != Endpoint::State::CLOSED)
+    if (_state != Endpoint::State::STOPPING)
     {
-        _state = Endpoint::State::CLOSING;
+        _state = Endpoint::State::STOPPING;
         _epoll.remove(_socket.fd(), this);
     }
 }
@@ -208,12 +207,13 @@ void TcpServerEndpoint::onSocketPollStopped(int fd)
 {
     if (fd == _socket.fd())
     {
+        _epollCountdown = 1;
         logger::info("server events stopped on %s", _name.c_str(), _socket.getBoundPort().toString().c_str());
-        _receiveJobs.addJob<tcp::ClosePortJob<TcpServerEndpoint>>(*this, 1);
+        _receiveJobs.addJob<tcp::PortStoppedJob<TcpServerEndpoint>>(*this, _epollCountdown);
     }
     else
     {
-        _receiveJobs.addJob<ClosePendingSocketJob>(*this, fd);
+        _receiveJobs.addJob<CloseSocketJob>(fd);
     }
 }
 
@@ -427,6 +427,9 @@ void TcpServerEndpoint::internalReceive(int fd)
     }
 }
 
+/**
+ * a recently accepted client socket is disconnected from far side before we reeive anything
+ */
 void TcpServerEndpoint::onSocketShutdown(int fd)
 {
     if (_pendingConnections.contains(fd))
@@ -449,35 +452,13 @@ void TcpServerEndpoint::internalShutdown(int fd)
     }
 }
 
-void TcpServerEndpoint::internalClosePort(int countDown)
+void TcpServerEndpoint::internalStopped()
 {
-    if (countDown > 0)
+    assert(_epollCountdown == 0);
+    _state = Endpoint::State::CREATED;
+    if (_listener)
     {
-        for (auto& it : _pendingConnections)
-        {
-            _epoll.remove(it.second.packetizer.fd, this);
-        }
-        _pendingConnections.clear();
-        if (_pendingEpollRegistrations == 0 && _state == Endpoint::State::CLOSING)
-        {
-            _receiveJobs.addJob<tcp::ClosePortJob<TcpServerEndpoint>>(*this, 0);
-        }
-    }
-    else
-    {
-
-        _socket.close();
-        _state = Endpoint::State::CLOSED;
-        _listener->onServerPortClosed(*this);
-    }
-}
-
-void TcpServerEndpoint::internalClosePendingSocket(int fd)
-{
-    ::close(fd);
-    if (--_pendingEpollRegistrations == 0 && _state == Endpoint::State::CLOSING)
-    {
-        _receiveJobs.addJob<tcp::ClosePortJob<TcpServerEndpoint>>(*this, 0);
+        _listener->onEndpointStopped(*this);
     }
 }
 

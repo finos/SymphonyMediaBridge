@@ -36,7 +36,6 @@ public:
     size_t getId() const override { return _loggableId.getInstanceId(); }
     size_t getEndpointIdHash() const override { return _endpointIdHash; };
 
-    void stop() override;
     bool isRunning() const override { return _isRunning && _isInitialized; }
     bool hasPendingJobs() const override { return _jobCounter.load() > 0; }
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; };
@@ -45,6 +44,7 @@ public:
     void setDataReceiver(DataReceiver* dataReceiver) override;
     bool isConnected() override;
     bool start() override;
+    void stop() override;
     void connect() override{};
     jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
 

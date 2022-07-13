@@ -284,9 +284,9 @@ struct SctpTransportTest : public ::testing::Test
 
     void TearDown() override
     {
-        _transportFactory.reset();
         _testPairs.clear();
         _network->stop();
+        _transportFactory.reset();
         _jobManager->stop();
 
         for (auto& wt : _workerThreads)

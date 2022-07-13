@@ -1036,7 +1036,7 @@ void TransportImpl::onIceDisconnect(Endpoint& endpoint)
     _rtpIceSession->onTcpDisconnect(&endpoint);
 }
 
-void TransportImpl::onPortClosed(Endpoint& endpoint)
+void TransportImpl::onEndpointStopped(Endpoint& endpoint)
 {
     if (endpoint.getTransportType() == ice::TransportType::TCP)
     {

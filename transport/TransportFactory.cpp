@@ -479,29 +479,18 @@ private:
     public:
         DeleteJob(T* endpoint, std::atomic_uint32_t& counter) : CountedJob(counter), _endpoint(endpoint) {}
 
-        void run() override
-        {
-            _endpoint->closePort();
-            while (_endpoint->getState() != Endpoint::State::CLOSED)
-            {
-                std::this_thread::yield();
-            }
-            delete _endpoint;
-        }
+        void run() override { delete _endpoint; }
 
     private:
         T* _endpoint;
     };
 
-    void onServerPortClosed(ServerEndpoint& endpoint) override
+    void onEndpointStopped(ServerEndpoint& endpoint) override
     {
         logger::info("TCP server port %s closed.", "TransportFactory", endpoint.getName());
     }
 
-    void onPortClosed(Endpoint& endpoint) override
-    {
-        logger::debug("deleting %s", "TransportFactory", endpoint.getName());
-    }
+    void onEndpointStopped(Endpoint& endpoint) override {}
 
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,

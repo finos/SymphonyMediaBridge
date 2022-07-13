@@ -21,13 +21,15 @@ public:
         RtcePoll& epoll,
         bool isShared);
 
+    ~BaseUdpEndpoint();
+
     void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
 
     void registerDefaultListener(IEvents* defaultListener) override;
 
     void start() override;
     bool openPort(uint16_t port);
-    void closePort() override;
+    void stop() override;
 
     SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
 
@@ -52,7 +54,7 @@ public: // internal job interface
     // called on sendJobs threads
     virtual void internalSend();
 
-    virtual void internalClosePort(int countDown);
+    virtual void internalStopped();
 
 protected:
     std::atomic<Endpoint::State> _state;
@@ -78,6 +80,7 @@ protected:
     concurrency::MpmcQueue<OutboundPacket> _sendQueue;
 
     RtcePoll& _epoll;
+    std::atomic_uint32_t _epollCountdown;
     const bool _isShared;
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
     std::atomic_flag _pendingSend = ATOMIC_FLAG_INIT;
