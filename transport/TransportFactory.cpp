@@ -62,7 +62,7 @@ public:
           _rtcePoll(rtcePoll),
           _sharedEndpointListIndex(0),
           _mainAllocator(mainAllocator),
-          _callbackRefCount(0),
+          _pendingTasks(0),
           _sharedRecordingEndpointListIndex(0),
           _good(true)
     {
@@ -176,10 +176,20 @@ public:
 
     ~TransportFactoryImpl()
     {
+        for (auto& endpoint : _tcpServerEndpoints)
+        {
+            ++_pendingTasks;
+            endpoint->stop();
+        }
+        while (_pendingTasks > 0)
+        {
+            std::this_thread::yield();
+        }
+
         _tcpServerEndpoints.clear();
         _sharedEndpoints.clear();
         _sharedRecordingEndpoints.clear();
-        while (_callbackRefCount > 0)
+        while (_pendingTasks > 0)
         {
             std::this_thread::yield();
         }
@@ -463,13 +473,13 @@ public:
     void shutdownEndpoint(Endpoint* endpoint)
     {
         logger::debug("closing %s", "TransportFactory", endpoint->getName());
-        _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _callbackRefCount);
+        _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
     }
 
     void shutdownEndpoint(ServerEndpoint* endpoint)
     {
         logger::debug("closing %s", "TransportFactory", endpoint->getName());
-        _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(endpoint, _callbackRefCount);
+        _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(endpoint, _pendingTasks);
     }
 
 private:
@@ -487,6 +497,7 @@ private:
 
     void onEndpointStopped(ServerEndpoint& endpoint) override
     {
+        --_pendingTasks;
         logger::info("TCP server port %s closed.", "TransportFactory", endpoint.getName());
     }
 
@@ -547,7 +558,7 @@ private:
     ServerEndpoints _tcpServerEndpoints;
     memory::PacketPoolAllocator& _mainAllocator;
     mutable utils::MersienneRandom<uint32_t> _randomGenerator;
-    std::atomic_uint32_t _callbackRefCount;
+    std::atomic_uint32_t _pendingTasks;
 
     std::vector<std::vector<std::shared_ptr<RecordingEndpoint>>> _sharedRecordingEndpoints;
     std::atomic_uint32_t _sharedRecordingEndpointListIndex;

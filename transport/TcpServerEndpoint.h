@@ -32,7 +32,7 @@ public:
     virtual ~TcpServerEndpoint();
 
     void start();
-    void stop();
+    void stop() override;
     bool isGood() const { return _socket.isGood(); }
 
     const SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
