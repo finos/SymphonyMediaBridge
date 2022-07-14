@@ -41,7 +41,6 @@ struct SctpConfig;
 
 namespace transport
 {
-typedef std::vector<std::shared_ptr<Endpoint>> Endpoints;
 
 class TransportImpl : public RtcTransport,
                       private SslWriteBioListener,
