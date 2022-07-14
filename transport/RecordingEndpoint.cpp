@@ -34,6 +34,11 @@ RecordingEndpoint::RecordingEndpoint(jobmanager::JobManager& jobManager,
 {
 }
 
+RecordingEndpoint::~RecordingEndpoint()
+{
+    logger::debug("removed", _name.c_str());
+}
+
 void RecordingEndpoint::internalUnregisterListener(IRecordingEvents* listener)
 {
     // Hashmap allows erasing elements while iterating.
