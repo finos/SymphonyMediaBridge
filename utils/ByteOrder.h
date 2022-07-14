@@ -104,7 +104,7 @@ public:
     {
         assert(i < sizeof(_value) / sizeof(RT));
         auto v = reinterpret_cast<const RT*>(&_value);
-        return (isBigEndian() ? v[i] : v[sizeof(_value) / sizeof(RT) - i - 1]) & 0xFFFFu;
+        return (isBigEndian() ? v[i] : v[sizeof(_value) / sizeof(RT) - i - 1]) & 0xFFFFFFFFu;
     }
 
 private:

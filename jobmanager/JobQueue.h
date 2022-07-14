@@ -17,11 +17,12 @@ class JobQueue
 public:
     explicit JobQueue(JobManager& jobManager, size_t poolSize = 4096)
         : _jobManager(jobManager),
+          _jobCount(0),
           _running(true),
           _jobQueue(poolSize),
-          _jobPool(poolSize - 1, "SerialJobPool")
+          _jobPool(poolSize, "SerialJobPool")
     {
-        _runJobPosted.clear();
+        _recover.test_and_set();
     }
 
     template <typename JOB_TYPE, typename... U>
@@ -32,19 +33,28 @@ public:
         auto jobArea = _jobPool.allocate();
         if (!jobArea)
         {
-            ensurePosted();
             return false;
         }
         auto job = new (jobArea) JOB_TYPE(std::forward<U>(args)...);
         if (!_jobQueue.push(job))
         {
+            if (!_recover.test_and_set() && !_jobManager.addJob<RunJob>(this))
+            {
+                _recover.clear();
+            }
             job->~Job();
             _jobPool.free(job);
-            ensurePosted();
             return false;
         }
 
-        ensurePosted();
+        auto count = _jobCount.fetch_add(1);
+        if (count == 0 || !_recover.test_and_set())
+        {
+            if (!_jobManager.addJob<RunJob>(this))
+            {
+                _recover.clear();
+            }
+        }
         return true;
     }
 
@@ -63,7 +73,7 @@ private:
     {
         explicit RunJob(JobQueue* owner) : _owner(owner) {}
 
-        void run() override { _owner->run(*this); }
+        void run() override { _owner->run(); }
 
         JobQueue* _owner;
     };
@@ -79,11 +89,10 @@ private:
         bool& _running;
     };
 
-    void run(RunJob& runJob)
+    void run()
     {
-        Job* job;
-
-        for (int jobCount = 0; jobCount < 10 && _jobQueue.pop(job); ++jobCount)
+        uint32_t processedCount = 0;
+        for (Job* job = nullptr; processedCount < 10 && _jobQueue.pop(job); ++processedCount)
         {
             job->run();
             if (_running)
@@ -100,32 +109,23 @@ private:
             }
         }
 
-        _runJobPosted.clear();
-        if (!_jobQueue.empty())
-        {
-            ensurePosted();
-        }
-    }
-
-private:
-    void ensurePosted()
-    {
-        if (!_runJobPosted.test_and_set())
+        auto count = _jobCount.fetch_sub(processedCount);
+        if (count > processedCount)
         {
             if (!_jobManager.addJob<RunJob>(this))
             {
-                _runJobPosted.clear();
-                // no RunJob posted!
-                // hope for next job to post a RunJob.
+                _recover.clear();
             }
         }
     }
 
+private:
     static const auto maxJobSize = JobManager::maxJobSize;
 
     JobManager& _jobManager;
 
-    std::atomic_flag _runJobPosted;
+    std::atomic_flag _recover = ATOMIC_FLAG_INIT;
+    std::atomic_uint32_t _jobCount;
     bool _running;
 
     concurrency::MpmcQueue<Job*> _jobQueue;
