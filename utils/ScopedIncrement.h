@@ -17,7 +17,7 @@ public:
         auto value = --_counter;
         assert(value != 0xFFFFFFFFu);
 #else
-        --counter;
+        --_counter;
 #endif
     }
 
