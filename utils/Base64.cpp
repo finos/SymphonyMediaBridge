@@ -20,7 +20,7 @@ static const char REVERSE_TABLE[128] = {
 };
 // clang-format on
 
-void Base64::encode(std::string& input, uint8_t* output, uint32_t outputLength)
+void Base64::encode(const std::string& input, uint8_t* output, uint32_t outputLength)
 {
     if (!input.empty())
     {
@@ -52,14 +52,14 @@ void Base64::encode(std::string& input, uint8_t* output, uint32_t outputLength)
             output[index++] = BASE64_TABLE[accumulator & 0x3fu];
         }
         // Use = signs so the end is properly padded.
-        while(index < outputLength)
+        while (index < outputLength)
         {
             output[index++] = '=';
         }
     }
 }
 
-void Base64::decode(std::string& input, uint8_t* output, uint32_t outputLength)
+void Base64::decode(const std::string& input, uint8_t* output, uint32_t outputLength)
 {
     if (!input.empty())
     {
@@ -92,12 +92,12 @@ void Base64::decode(std::string& input, uint8_t* output, uint32_t outputLength)
     }
 }
 
-uint32_t Base64::encodeLength(std::string& input)
+uint32_t Base64::encodeLength(const std::string& input)
 {
     return 4 * (input.length() + 2) / 3;
 }
 
-uint32_t Base64::decodeLength(std::string& input)
+uint32_t Base64::decodeLength(const std::string& input)
 {
     auto paddings = std::count(input.begin(), input.end(), '=');
     return (3 * (input.length() / 4)) - paddings;

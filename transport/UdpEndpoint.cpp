@@ -90,9 +90,8 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
                 }
                 else
                 {
-                    logger::debug("reg listener for %s",
-                        _name.c_str(),
-                        crypto::toHexString(&transactionId, sizeof(transactionId)).c_str());
+                    const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
+                    logger::debug("register ICE listener for %04x%04x%04x", _name.c_str(), id[1], id[2], id[3]);
                 }
             }
         }
