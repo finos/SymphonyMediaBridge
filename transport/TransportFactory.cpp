@@ -13,9 +13,7 @@ namespace transport
 {
 
 class TransportFactoryImpl final : public TransportFactory,
-                                   //   public ServerEndpoint::IEvents,
                                    public TcpEndpointFactory,
-                                   //  public Endpoint::IEvents,
                                    public Endpoint::IStopEvents,
                                    public ServerEndpoint::IStopEvents
 {
