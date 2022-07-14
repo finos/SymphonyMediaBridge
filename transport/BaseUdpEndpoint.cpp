@@ -94,7 +94,7 @@ void BaseUdpEndpoint::internalStopped()
 
     if (_stopListener)
     {
-        _stopListener->onEndpointStopped(*this);
+        _stopListener->onEndpointStopped(this);
     }
 }
 

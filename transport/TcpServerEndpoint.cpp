@@ -160,7 +160,7 @@ void TcpServerEndpoint::stop(ServerEndpoint::IStopEvents* listener)
     {
         if (listener)
         {
-            listener->onEndpointStopped(*this);
+            listener->onEndpointStopped(this);
         }
     }
 }
@@ -463,7 +463,7 @@ void TcpServerEndpoint::internalStopped()
     _state = Endpoint::State::CREATED;
     if (_stopListener)
     {
-        _stopListener->onEndpointStopped(*this);
+        _stopListener->onEndpointStopped(this);
     }
 }
 

@@ -164,6 +164,11 @@ public:
 
     ~TransportFactoryImpl()
     {
+        if (!_tcpServerEndpoints.empty() || !_sharedEndpoints.empty() || !_sharedRecordingEndpoints.empty())
+        {
+            assert(_rtcePoll.isRunning());
+        }
+
         _tcpServerEndpoints.clear();
         _sharedEndpoints.clear();
         _sharedRecordingEndpoints.clear();
@@ -481,17 +486,17 @@ private:
         T* _endpoint;
     };
 
-    void onEndpointStopped(ServerEndpoint& endpoint) override
+    void onEndpointStopped(ServerEndpoint* endpoint) override
     {
-        logger::info("TCP server %s stopped.", _name, endpoint.getName());
-        _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(&endpoint, _pendingTasks);
+        logger::info("TCP server %s stopped.", _name, endpoint->getName());
+        _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }
 
-    void onEndpointStopped(Endpoint& endpoint) override
+    void onEndpointStopped(Endpoint* endpoint) override
     {
-        logger::info("Endpoint %s stopped.", _name, endpoint.getName());
-        _garbageQueue.addJob<DeleteJob<Endpoint>>(&endpoint, _pendingTasks);
+        logger::info("Endpoint %s stopped.", _name, endpoint->getName());
+        _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }
 

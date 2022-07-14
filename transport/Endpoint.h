@@ -52,7 +52,7 @@ public:
     class IStopEvents
     {
     public:
-        virtual void onEndpointStopped(Endpoint& endpoint) = 0;
+        virtual void onEndpointStopped(Endpoint* endpoint) = 0;
     };
 
     virtual ~Endpoint(){};
@@ -97,7 +97,7 @@ public:
     class IStopEvents
     {
     public:
-        virtual void onEndpointStopped(ServerEndpoint& endpoint) = 0;
+        virtual void onEndpointStopped(ServerEndpoint* endpoint) = 0;
     };
 
     virtual const SocketAddress getLocalPort() const = 0;
