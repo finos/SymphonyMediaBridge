@@ -21,8 +21,6 @@ public:
 #endif
     }
 
-    std::atomic_uint32_t& getCounter() { return _counter; }
-
 private:
     std::atomic_uint32_t& _counter;
 };
