@@ -16,6 +16,8 @@ public:
         RtcePoll& epoll,
         bool isShared);
 
+    ~UdpEndpoint();
+
     void sendStunTo(const transport::SocketAddress& target,
         __uint128_t transactionId,
         const void* data,

@@ -24,9 +24,6 @@ class CountedJob : public Job
 public:
     explicit CountedJob(std::atomic_uint32_t& jobsCounter) : _jobsCounterIncrement(jobsCounter) {}
 
-protected:
-    std::atomic_uint32_t& getJobsCounter() { return _jobsCounterIncrement.getCounter(); }
-
 private:
     utils::ScopedIncrement _jobsCounterIncrement;
 };

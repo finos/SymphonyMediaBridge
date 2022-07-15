@@ -102,8 +102,6 @@ struct TransportClientPair : public transport::DataReceiver
     uint32_t _tickCount;
     uint64_t _connectStart;
     uint64_t _signalDelay;
-    std::atomic_uint32_t _jobsCounter1;
-    std::atomic_uint32_t _jobsCounter2;
 
     std::atomic_uint32_t _receivedByteCount;
     time_t _receiveStart;

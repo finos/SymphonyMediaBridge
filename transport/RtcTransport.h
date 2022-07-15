@@ -40,6 +40,8 @@ class Endpoint;
 class ServerEndpoint;
 class TcpEndpointFactory;
 class UdpEndpoint;
+typedef std::vector<std::shared_ptr<ServerEndpoint>> ServerEndpoints;
+typedef std::vector<std::shared_ptr<Endpoint>> Endpoints;
 
 class RtcTransport : public Transport, public webrtc::DataStreamTransport
 {
@@ -101,8 +103,8 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     const sctp::SctpConfig& sctpConfig,
     const bwe::Config& bweConfig,
     const bwe::RateControllerConfig& rateControllerConfig,
-    const std::vector<Endpoint*>& rtpEndPoints,
-    const std::vector<Endpoint*>& rtcpEndPoints,
+    const Endpoints& rtpEndPoints,
+    const Endpoints& rtcpEndPoints,
     memory::PacketPoolAllocator& allocator);
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
@@ -114,8 +116,8 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     ice::IceRole iceRole,
     const bwe::Config& bweConfig,
     const bwe::RateControllerConfig& rateControllerConfig,
-    const std::vector<Endpoint*>& sharedEndPoints,
-    const std::vector<ServerEndpoint*>& tcpEndpoints,
+    const Endpoints& sharedEndPoints,
+    const ServerEndpoints& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
     memory::PacketPoolAllocator& allocator);
 

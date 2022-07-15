@@ -71,8 +71,6 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
                                 : transportFactory->create(128, 1)),
           _transport2(enableIce ? transportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 128, 2)
                                 : transportFactory->create(128, 2)),
-          _jobsCounter1(1),
-          _jobsCounter2(1),
           _jobManager(jobManager),
           _media1(_sendAllocator, ssrc),
           _media2(_sendAllocator, ssrc + 2)
@@ -128,19 +126,14 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
 
     ~ClientPair()
     {
-        --_jobsCounter1;
-        --_jobsCounter2;
         auto start = utils::Time::getAbsoluteTime();
 
-        while (_jobsCounter1 > 0 || _jobsCounter2 > 0 || _transport1->hasPendingJobs() || _transport2->hasPendingJobs())
+        while (_transport1->hasPendingJobs() || _transport2->hasPendingJobs())
         {
             std::this_thread::yield();
             if (utils::Time::diffGT(start, utils::Time::getAbsoluteTime(), utils::Time::ms * 250))
             {
-                logger::error("job counts not released %u, %u",
-                    _name.c_str(),
-                    _jobsCounter1.load(),
-                    _jobsCounter2.load());
+                logger::error("job counts not released", _name.c_str());
                 break;
             }
         }
@@ -213,11 +206,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     {
     }
 
-    void onRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::UniquePacket packet,
-        std::atomic_uint32_t& ownerCount) override
-    {
-    }
+    void onRtpPacketDecrypted(transport::RtcTransport* sender, memory::UniquePacket packet) override {}
 
     void onConnected(RtcTransport*) override {}
     bool onSctpConnectionRequest(RtcTransport*, uint16_t remotePort) override { return true; }
@@ -237,8 +226,6 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
     memory::AudioPacketPoolAllocator _audioAllocator;
     std::shared_ptr<RtcTransport> _transport1;
     std::shared_ptr<RtcTransport> _transport2;
-    std::atomic_uint32_t _jobsCounter1;
-    std::atomic_uint32_t _jobsCounter2;
 
     jobmanager::JobManager& _jobManager;
 

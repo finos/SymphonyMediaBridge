@@ -41,6 +41,7 @@ struct SctpConfig;
 
 namespace transport
 {
+
 class TransportImpl : public RtcTransport,
                       private SslWriteBioListener,
                       public Endpoint::IEvents,
@@ -61,8 +62,8 @@ public:
         const ice::IceRole iceRole,
         const bwe::Config& bweConfig,
         const bwe::RateControllerConfig& rateControllerConfig,
-        const std::vector<Endpoint*>& rtpEndPoints,
-        const std::vector<ServerEndpoint*>& tcpEndPoints,
+        const Endpoints& rtpEndPoints,
+        const ServerEndpoints& tcpEndPoints,
         TcpEndpointFactory* tcpEndpointFactory,
         memory::PacketPoolAllocator& allocator);
 
@@ -73,8 +74,8 @@ public:
         const sctp::SctpConfig& sctpConfig,
         const bwe::Config& bweConfig,
         const bwe::RateControllerConfig& rateControllerConfig,
-        const std::vector<Endpoint*>& rtpEndPoints,
-        const std::vector<Endpoint*>& rtcpEndPoints,
+        const Endpoints& rtpEndPoints,
+        const Endpoints& rtcpEndPoints,
         memory::PacketPoolAllocator& allocator);
 
     ~TransportImpl() override;
@@ -184,6 +185,8 @@ public:
         const SocketAddress& sourcePort) override;
 
 public: // end point callbacks
+    void onRegistered(Endpoint& endpoint) override;
+    void onServerPortRegistered(ServerEndpoint& endpoint) override;
     void onUnregistered(Endpoint& endpoint) override;
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
@@ -205,7 +208,10 @@ public: // end point callbacks
         const SocketAddress& target,
         memory::UniquePacket packet) override;
 
-    void onPortClosed(Endpoint& endpoint) override;
+    void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
+        const SocketAddress& source,
+        const SocketAddress& target,
+        memory::UniquePacket packet) override;
 
     void onIceDisconnect(Endpoint& endpoint);
 
@@ -253,8 +259,11 @@ public: // end point callbacks
         const SocketAddress& source,
         memory::UniquePacket packet,
         uint64_t timestamp);
+    void internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
+        const SocketAddress& source,
+        memory::UniquePacket packet);
+    void internalUnregisterEndpoints();
 
-    void onServerPortClosed(ServerEndpoint& endpoint) override {}
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
 
 private:
@@ -318,12 +327,11 @@ private:
     bool _dtlsEnabled;
     std::unique_ptr<ice::IceSession> _rtpIceSession;
 
-    typedef std::vector<Endpoint*> Endpoints;
     Endpoints _rtpEndpoints;
     Endpoints _rtcpEndpoints;
-    std::vector<ServerEndpoint*> _tcpServerEndpoints;
+    ServerEndpoints _tcpServerEndpoints;
     TcpEndpointFactory* _tcpEndpointFactory;
-    std::atomic_int _callbackRefCount;
+
     std::atomic_uint32_t _jobCounter;
     utils::SsrcGenerator _randomGenerator;
 

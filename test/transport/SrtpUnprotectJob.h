@@ -11,9 +11,7 @@ class RtcTransport;
 class DecryptedPacketReceiver
 {
 public:
-    virtual void onRtpPacketDecrypted(transport::RtcTransport* sender,
-        memory::UniquePacket packet,
-        std::atomic_uint32_t& ownerCount) = 0;
+    virtual void onRtpPacketDecrypted(transport::RtcTransport* sender, memory::UniquePacket packet) = 0;
 };
 
 class SrtpUnprotectJob : public jobmanager::CountedJob

@@ -147,21 +147,25 @@ TEST_F(RecordingTransportTest, protectAndSend)
     StrictMock<fakenet::EndpointListenerMock> listener;
 
     ON_CALL(listener, onRtpReceived)
-        .WillByDefault(
-            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet) {
-            });
+        .WillByDefault([](Endpoint& endpoint,
+                           const SocketAddress& source,
+                           const SocketAddress& target,
+                           memory::UniquePacket packet) {});
     EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
+    EXPECT_CALL(listener, onRegistered(_)).Times(1);
 
-    UdpEndpoint udpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
-    udpEndpoint.registerListener(sourceAddress, &listener);
-    udpEndpoint.start();
+    auto udpEndpoint =
+        std::make_shared<UdpEndpoint>(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
+    udpEndpoint->registerListener(sourceAddress, &listener);
+    udpEndpoint->start();
 
-    RecordingEndpoint recordingEndpoint(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
-    recordingEndpoint.start();
+    auto recordingEndpoint =
+        std::make_shared<RecordingEndpoint>(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
+    recordingEndpoint->start();
 
     auto transport = make_unique<RecordingTransport>(*_jobManager,
         *_config,
-        &recordingEndpoint,
+        recordingEndpoint,
         hash<string>{}("test"),
         hash<string>{}("sTest"),
         targetAddress,
@@ -196,22 +200,23 @@ TEST_F(RecordingTransportTest, protectAndSend)
     }
 
     const auto waitForClose = [](auto& endpoint) {
-        for (auto i = 0; i < 10 && endpoint.getState() != Endpoint::State::CLOSED; ++i)
+        for (auto i = 0; i < 10 && endpoint.getState() == Endpoint::State::STOPPING; ++i)
         {
             this_thread::sleep_for(chrono::seconds(1));
         }
 
-        if (endpoint.getState() != Endpoint::State::CLOSED)
+        if (endpoint.getState() == Endpoint::State::STOPPING)
         {
             FAIL() << "Endpoint has not closed after 10 seconds";
         }
     };
 
-    udpEndpoint.closePort();
-    recordingEndpoint.closePort();
+    udpEndpoint->registerDefaultListener(&listener);
+    udpEndpoint->stop(nullptr);
+    recordingEndpoint->stop(nullptr);
 
-    waitForClose(udpEndpoint);
-    waitForClose(recordingEndpoint);
+    waitForClose(*udpEndpoint);
+    waitForClose(*recordingEndpoint);
 }
 
 TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
@@ -232,28 +237,32 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     StrictMock<fakenet::EndpointListenerMock> listener;
 
     ON_CALL(listener, onRtpReceived)
-        .WillByDefault(
-            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet) {
-            });
+        .WillByDefault([](Endpoint& endpoint,
+                           const SocketAddress& source,
+                           const SocketAddress& target,
+                           memory::UniquePacket packet) {});
 
     ON_CALL(listener, onRtcpReceived)
-        .WillByDefault(
-            [](Endpoint& endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet) {
-            });
+        .WillByDefault([](Endpoint& endpoint,
+                           const SocketAddress& source,
+                           const SocketAddress& target,
+                           memory::UniquePacket packet) {});
 
     EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
     EXPECT_CALL(listener, onRtcpReceived(_, _, _, _)).Times(AtLeast(1));
+    EXPECT_CALL(listener, onRegistered(_)).Times(1);
 
     UdpEndpoint udpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
     udpEndpoint.registerListener(sourceAddress, &listener);
     udpEndpoint.start();
 
-    RecordingEndpoint recordingEndpoint(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
-    recordingEndpoint.start();
+    auto recordingEndpoint =
+        std::make_shared<RecordingEndpoint>(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
+    recordingEndpoint->start();
 
     auto transport = make_unique<RecordingTransport>(*_jobManager,
         *_config,
-        &recordingEndpoint,
+        recordingEndpoint,
         hash<string>{}("test"),
         hash<string>{}("sTest"),
         targetAddress,
@@ -292,20 +301,21 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     }
 
     const auto waitForClose = [](auto& endpoint) {
-        for (auto i = 0; i < 10 && endpoint.getState() != Endpoint::State::CLOSED; ++i)
+        for (auto i = 0; i < 10 && endpoint.getState() == Endpoint::State::STOPPING; ++i)
         {
             this_thread::sleep_for(chrono::seconds(1));
         }
 
-        if (endpoint.getState() != Endpoint::State::CLOSED)
+        if (endpoint.getState() != Endpoint::State::CREATED)
         {
             FAIL() << "Endpoint has not closed after 10 seconds";
         }
     };
 
-    udpEndpoint.closePort();
-    recordingEndpoint.closePort();
+    udpEndpoint.registerDefaultListener(&listener);
+    udpEndpoint.stop(nullptr);
+    recordingEndpoint->stop(nullptr);
 
     waitForClose(udpEndpoint);
-    waitForClose(recordingEndpoint);
+    waitForClose(*recordingEndpoint);
 }

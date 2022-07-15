@@ -56,16 +56,15 @@ private:
     int _fd;
 };
 
-class ClosePendingSocketJob : public jobmanager::Job
+class CloseSocketJob : public jobmanager::Job
 {
 public:
-    ClosePendingSocketJob(TcpServerEndpoint& endPoint, int fd) : _fd(fd), _endPoint(endPoint) {}
+    CloseSocketJob(int fd) : _fd(fd) {}
 
-    void run() override { _endPoint.internalClosePendingSocket(_fd); }
+    void run() override { ::close(_fd); }
 
 private:
     int _fd;
-    TcpServerEndpoint& _endPoint;
 };
 
 class MaintenanceJob : public jobmanager::Job
@@ -99,7 +98,7 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
     RtcePoll& rtcePoll,
     size_t maxSessions,
-    IEvents* listener,
+    TcpEndpointFactory& tcpEndpointFactory,
     const SocketAddress& localPort,
     const config::Config& config)
     : _state(Endpoint::State::CLOSED),
@@ -112,9 +111,9 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
       _pendingConnectCounters(maxSessions / 4),
       _iceListeners(maxSessions),
       _epoll(rtcePoll),
-      _listener(listener),
       _config(config),
-      _lastMaintenance(0)
+      _lastMaintenance(0),
+      _tcpEndpointFactory(tcpEndpointFactory)
 {
     int rc = _socket.open(localPort, localPort.getPort(), SOCK_STREAM);
     if (rc)
@@ -132,7 +131,6 @@ TcpServerEndpoint::TcpServerEndpoint(jobmanager::JobManager& jobManager,
 
 TcpServerEndpoint::~TcpServerEndpoint()
 {
-    assert(!_socket.isGood()); // must close first
     logger::info("removed", _name.c_str());
 }
 
@@ -145,17 +143,25 @@ void TcpServerEndpoint::start()
         int rc = _socket.listen(16);
         if (rc != 0)
         {
-            close();
+            stop(nullptr);
         }
     }
 }
 
-void TcpServerEndpoint::close()
+void TcpServerEndpoint::stop(ServerEndpoint::IStopEvents* listener)
 {
-    if (_state != Endpoint::State::CLOSING && _state != Endpoint::State::CLOSED)
+    if (_state != Endpoint::State::STOPPING)
     {
-        _state = Endpoint::State::CLOSING;
+        _stopListener = listener;
+        _state = Endpoint::State::STOPPING;
         _epoll.remove(_socket.fd(), this);
+    }
+    else
+    {
+        if (listener)
+        {
+            listener->onEndpointStopped(this);
+        }
     }
 }
 
@@ -164,9 +170,14 @@ void TcpServerEndpoint::maintenance(uint64_t timestamp)
     _receiveJobs.addJob<MaintenanceJob>(*this, timestamp);
 }
 
-void TcpServerEndpoint::registerListener(const std::string& stunUserName, Endpoint::IEvents* listener)
+void TcpServerEndpoint::registerListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
 {
+    if (_iceListeners.contains(stunUserName))
+    {
+        return;
+    }
     _iceListeners.emplace(stunUserName, listener);
+    listener->onServerPortRegistered(*this);
 }
 
 void TcpServerEndpoint::unregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
@@ -176,6 +187,11 @@ void TcpServerEndpoint::unregisterListener(const std::string& stunUserName, Serv
 
 void TcpServerEndpoint::internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
 {
+    if (!_iceListeners.contains(stunUserName))
+    {
+        return;
+    }
+
     _iceListeners.erase(stunUserName);
     listener->onServerPortUnregistered(*this);
 }
@@ -196,12 +212,13 @@ void TcpServerEndpoint::onSocketPollStopped(int fd)
 {
     if (fd == _socket.fd())
     {
+        _epollCountdown = 1;
         logger::info("server events stopped on %s", _name.c_str(), _socket.getBoundPort().toString().c_str());
-        _receiveJobs.addJob<tcp::ClosePortJob<TcpServerEndpoint>>(*this, 1);
+        _receiveJobs.addJob<tcp::PortStoppedJob<TcpServerEndpoint>>(*this, _epollCountdown);
     }
     else
     {
-        _receiveJobs.addJob<ClosePendingSocketJob>(*this, fd);
+        _receiveJobs.addJob<CloseSocketJob>(fd);
     }
 }
 
@@ -356,17 +373,16 @@ void TcpServerEndpoint::internalReceive(int fd)
                     auto listenIt = _iceListeners.find(names.first);
                     if (listenIt != _iceListeners.end())
                     {
-                        auto* endpoint = new TcpEndpoint(_receiveJobs.getJobManager(),
-                            _allocator,
-                            _epoll,
-                            fd,
-                            pendingTcp.localPort,
-                            pendingTcp.peerPort);
+                        auto endpoint =
+                            _tcpEndpointFactory.createTcpEndpoint(fd, pendingTcp.localPort, pendingTcp.peerPort);
+
                         _pendingConnections.erase(fd);
 
-                        // if read event is fired now we may miss it and it is edge triggered.
-                        // everything relies on that the ice session will want to respond to the request
-                        _epoll.add(fd, endpoint);
+                        listenIt->second->onIceTcpConnect(endpoint,
+                            pendingTcp.peerPort,
+                            endpoint->getLocalPort(),
+                            std::move(packet));
+
                         --_pendingEpollRegistrations; // it is not ours anymore
 
                         logger::debug("ICE request for %s from %s",
@@ -374,12 +390,8 @@ void TcpServerEndpoint::internalReceive(int fd)
                             users->getNames().first.c_str(),
                             endpoint->getLocalPort().toString().c_str());
 
-                        listenIt->second->onIceReceived(*endpoint,
-                            pendingTcp.peerPort,
-                            endpoint->getLocalPort(),
-                            std::move(packet));
-
                         _iceListeners.erase(listenIt->first);
+                        listenIt->second->onServerPortUnregistered(*this);
                         return;
                     }
 
@@ -420,6 +432,9 @@ void TcpServerEndpoint::internalReceive(int fd)
     }
 }
 
+/**
+ * a recently accepted client socket is disconnected from far side before we received anything
+ */
 void TcpServerEndpoint::onSocketShutdown(int fd)
 {
     if (_pendingConnections.contains(fd))
@@ -442,34 +457,13 @@ void TcpServerEndpoint::internalShutdown(int fd)
     }
 }
 
-void TcpServerEndpoint::internalClosePort(int countDown)
+void TcpServerEndpoint::internalStopped()
 {
-    if (countDown > 0)
+    assert(_epollCountdown == 0);
+    _state = Endpoint::State::CREATED;
+    if (_stopListener)
     {
-        for (auto& it : _pendingConnections)
-        {
-            _epoll.remove(it.second.packetizer.fd, this);
-        }
-        _pendingConnections.clear();
-        if (_pendingEpollRegistrations == 0 && _state == Endpoint::State::CLOSING)
-        {
-            _receiveJobs.addJob<tcp::ClosePortJob<TcpServerEndpoint>>(*this, 0);
-        }
-    }
-    else
-    {
-        _state = Endpoint::State::CLOSED;
-        _socket.close();
-        _listener->onServerPortClosed(*this);
-    }
-}
-
-void TcpServerEndpoint::internalClosePendingSocket(int fd)
-{
-    ::close(fd);
-    if (--_pendingEpollRegistrations == 0 && _state == Endpoint::State::CLOSING)
-    {
-        _receiveJobs.addJob<tcp::ClosePortJob<TcpServerEndpoint>>(*this, 0);
+        _stopListener->onEndpointStopped(this);
     }
 }
 

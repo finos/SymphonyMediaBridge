@@ -10,6 +10,7 @@ class Config;
 
 namespace transport
 {
+
 // "passive" ICE end point
 // Used as TCP candidate for remote side to attempt connection to
 // On connection attempt:
@@ -23,19 +24,19 @@ public:
         memory::PacketPoolAllocator& allocator,
         RtcePoll& rtcePoll,
         size_t maxPengingSessions,
-        TcpServerEndpoint::IEvents* defaultListener,
+        TcpEndpointFactory& tcpEndpointFactory,
         const SocketAddress& localPort,
         const config::Config& config);
 
     virtual ~TcpServerEndpoint();
 
     void start();
-    void close() override;
+    void stop(ServerEndpoint::IStopEvents* listener) override;
     bool isGood() const { return _socket.isGood(); }
 
     const SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
 
-    void registerListener(const std::string& stunUserName, Endpoint::IEvents* listener) override;
+    void registerListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener) override;
     void unregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener) override;
 
     virtual const char* getName() const override { return _name.c_str(); }
@@ -46,7 +47,7 @@ public:
 
 public: // internal job methods
     void internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener);
-    void internalClosePort(int countDown);
+    void internalStopped();
     void internalReceive(int fd);
     void internalAccept();
     void internalShutdown(int fd);
@@ -90,10 +91,12 @@ private:
     uint32_t _pendingEpollRegistrations;
     concurrency::MpmcHashmap32<transport::SocketAddress, uint64_t> _blackList;
     concurrency::MpmcHashmap32<transport::SocketAddress, uint32_t> _pendingConnectCounters;
-    concurrency::MpmcHashmap32<std::string, Endpoint::IEvents*> _iceListeners;
+    concurrency::MpmcHashmap32<std::string, ServerEndpoint::IEvents*> _iceListeners;
     RtcePoll& _epoll;
-    TcpServerEndpoint::IEvents* _listener;
+    std::atomic_uint32_t _epollCountdown;
+    ServerEndpoint::IStopEvents* _stopListener;
     const config::Config& _config;
     uint64_t _lastMaintenance;
+    TcpEndpointFactory& _tcpEndpointFactory;
 };
 } // namespace transport

@@ -33,16 +33,23 @@ private:
 namespace tcp
 {
 template <typename T>
-class ClosePortJob : public jobmanager::Job
+class PortStoppedJob : public jobmanager::Job
 {
 public:
-    ClosePortJob(T& endpoint, int countDown) : _endpoint(endpoint), _countDown(countDown) {}
+    PortStoppedJob(T& endpoint, std::atomic_uint32_t& countDown) : _endpoint(endpoint), _countDown(countDown) {}
 
-    void run() override { _endpoint.internalClosePort(_countDown); }
+    void run() override
+    {
+        auto value = --_countDown;
+        if (value == 0)
+        {
+            _endpoint.internalStopped();
+        }
+    }
 
 private:
     T& _endpoint;
-    int _countDown;
+    std::atomic_uint32_t& _countDown;
 };
 
 template <typename T>
@@ -92,10 +99,9 @@ public:
     void unregisterListener(IEvents* listener) override;
 
     void start() override;
+    void stop(Endpoint::IStopEvents* listener) override;
 
     void connect(const SocketAddress& remotePort);
-
-    void closePort() override;
 
     SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
     void cancelStunTransaction(__uint128_t transactionId) override{};
@@ -121,8 +127,8 @@ public:
     // called on sendJobs threads
     void internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet);
     void continueSend();
-    void internalUnregisterListener(IEvents* listener);
-    void internalClosePort(int countDown);
+
+    void internalStopped();
 
 private:
     std::atomic<Endpoint::State> _state;
@@ -149,6 +155,8 @@ private:
     std::string _localUser;
 
     RtcePoll& _epoll;
+    std::atomic_uint32_t _epollCountdown;
+    Endpoint::IStopEvents* _stopListener;
     memory::UniquePacket _pendingStunRequest;
     memory::Packet _remainder;
 };

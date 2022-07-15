@@ -44,15 +44,15 @@ private:
 class UnRegisterListenerJob : public jobmanager::Job
 {
 public:
-    UnRegisterListenerJob(TcpEndpoint& endpoint, Endpoint::IEvents* listener) : _endpoint(endpoint), _listener(listener)
+    UnRegisterListenerJob(TcpEndpoint& endpoint, Endpoint::IEvents& listener) : _endpoint(endpoint), _listener(listener)
     {
     }
 
-    void run() override { _endpoint.internalUnregisterListener(_listener); }
+    void run() override { _listener.onUnregistered(_endpoint); }
 
 private:
     TcpEndpoint& _endpoint;
-    Endpoint::IEvents* _listener;
+    Endpoint::IEvents& _listener;
 };
 
 } // namespace
@@ -142,7 +142,9 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager, 512),
       _allocator(allocator),
       _defaultListener(nullptr),
-      _epoll(epoll)
+      _epoll(epoll),
+      _epollCountdown(2),
+      _stopListener(nullptr)
 {
     logger::info("accepted %s-%s", _name.c_str(), localPort.toString().c_str(), peerPort.toString().c_str());
 }
@@ -330,35 +332,32 @@ void TcpEndpoint::sendPacket(const memory::Packet& packet)
 // - unregister from rtcepoll incoming data
 // - await pending receive jobs to complete
 // - await pending send jobs to complete
-// - close socket
-// - report on IEvents that port has closed
-void TcpEndpoint::closePort()
+void TcpEndpoint::stop(Endpoint::IStopEvents* listener)
 {
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
-        _state = State::CLOSING;
+        _stopListener = listener;
+        _state = State::STOPPING;
         _epoll.remove(_socket.fd(), this);
     }
     else if (_state == State::CREATED)
     {
-        _socket.close();
-        _state = State::CLOSED;
-        if (_defaultListener)
+        if (listener)
         {
-            _defaultListener->onPortClosed(*this);
+            listener->onEndpointStopped(this);
         }
     }
 }
 
-// closed form remote side
+// closed from remote side
 // read pending data
 // then start close port procedure
 void TcpEndpoint::onSocketShutdown(int fd)
 {
     if (_depacketizer.fd == fd && (_state == State::CONNECTING || _state == State::CONNECTED))
     {
-        logger::debug("peer shut down socket ", _name.c_str());
-        _state = State::CLOSING;
+        logger::debug("peer shut down socket STOPPING", _name.c_str());
+        _state = State::STOPPING;
         if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
         {
             logger::warn("failed to add ReceiveJob", _name.c_str());
@@ -385,23 +384,17 @@ void TcpEndpoint::onSocketPollStarted(int fd)
 
 void TcpEndpoint::onSocketPollStopped(int fd)
 {
-    _receiveJobs.addJob<tcp::ClosePortJob<TcpEndpoint>>(*this, 1);
+    _epollCountdown = 2;
+    _receiveJobs.addJob<tcp::PortStoppedJob<TcpEndpoint>>(*this, _epollCountdown);
+    _sendJobs.addJob<tcp::PortStoppedJob<TcpEndpoint>>(*this, _epollCountdown);
 }
 
-void TcpEndpoint::internalClosePort(int countDown)
+void TcpEndpoint::internalStopped()
 {
-    if (countDown > 0)
+    _state = State::CREATED;
+    if (_stopListener)
     {
-        _sendJobs.addJob<tcp::ClosePortJob<TcpEndpoint>>(*this, 0);
-    }
-    else
-    {
-        _socket.close();
-        _state = State::CLOSED;
-        if (_defaultListener)
-        {
-            _defaultListener->onPortClosed(*this);
-        }
+        _stopListener->onEndpointStopped(this);
     }
 }
 
@@ -434,14 +427,11 @@ void TcpEndpoint::onSocketWriteable(int fd)
 
 void TcpEndpoint::unregisterListener(IEvents* listener)
 {
-    _receiveJobs.addJob<UnRegisterListenerJob>(*this, listener);
-}
-
-void TcpEndpoint::internalUnregisterListener(IEvents* listener)
-{
-    _defaultListener = nullptr;
-
-    listener->onUnregistered(*this);
+    if (listener == _defaultListener)
+    {
+        _defaultListener = nullptr;
+        _receiveJobs.addJob<UnRegisterListenerJob>(*this, *listener);
+    }
 }
 
 void TcpEndpoint::internalReceive(int fd)
@@ -499,18 +489,28 @@ void TcpEndpoint::internalReceive(int fd)
 // used when routing is not possible and there is a single owner of the endpoint
 void TcpEndpoint::registerDefaultListener(IEvents* listener)
 {
+    if (_defaultListener == listener)
+    {
+        return;
+    }
+
+    if (_defaultListener != nullptr)
+    {
+        unregisterListener(_defaultListener);
+    }
     _defaultListener = listener;
+    listener->onRegistered(*this);
 }
 
 void TcpEndpoint::registerListener(const std::string& stunUserName, IEvents* listener)
 {
-    _defaultListener = listener;
+    registerDefaultListener(listener);
 }
 
 // registration of DTLS listener is automatic when ICE is used
 void TcpEndpoint::registerListener(const SocketAddress& srcAddress, IEvents* listener)
 {
-    _defaultListener = listener;
+    registerDefaultListener(listener);
 }
 
 // already added to epoll in constructor or on accept

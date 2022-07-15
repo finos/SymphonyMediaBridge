@@ -1,28 +1,36 @@
 #include "RtcePoll.h"
+#include "concurrency/MpmcQueue.h"
+#include "concurrency/ThreadUtils.h"
+#include "logger/Logger.h"
+#include "utils/Time.h"
 #include <cassert>
 #include <fcntl.h>
+#include <ifaddrs.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <stdio.h>
+#include <sys/socket.h>
+#include <thread>
 #include <unistd.h>
+#include <unordered_map>
+#include <vector>
 #ifdef __APPLE__
 #include <sys/event.h>
 #else
 #include <sys/epoll.h>
 #endif
-#include "concurrency/SafeQueue.h"
-#include "concurrency/ThreadUtils.h"
-#include "logger/Logger.h"
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <sys/socket.h>
-#include <thread>
-#include <unordered_map>
 
 namespace transport
 {
 
 class RtcePollImpl : public RtcePoll
 {
+    enum Operation
+    {
+        REGISTER = 1,
+        UNREGISTER
+    };
+
 public:
     RtcePollImpl();
     ~RtcePollImpl();
@@ -48,28 +56,33 @@ private:
 
     struct SocketRegistration
     {
-        SocketRegistration() : registration(true), listener(nullptr), fd(-1) {}
+        SocketRegistration() : operation(REGISTER), listener(nullptr), fd(-1) {}
 
-        SocketRegistration(bool registration, RtcePoll::IEventListener* listener, int fd)
-            : registration(registration),
+        SocketRegistration(Operation op, RtcePoll::IEventListener* listener, int fd)
+            : operation(op),
               listener(listener),
               fd(fd)
         {
         }
 
-        bool registration;
+        Operation operation;
         RtcePoll::IEventListener* listener;
         int fd;
     };
 
-    concurrency::LockFullQueue<SocketRegistration, 2500> _pendingRegistrations;
+    concurrency::MpmcQueue<SocketRegistration> _pendingRegistrations;
     std::unordered_map<int, SocketRegistration> _monitoredSockets;
 
     std::atomic_bool _running;
     std::unique_ptr<std::thread> _networkThread;
 };
 
-RtcePollImpl::RtcePollImpl() : _kernel_fd(-1), _firedEvents(100), _running(false), _networkThread(nullptr)
+RtcePollImpl::RtcePollImpl()
+    : _kernel_fd(-1),
+      _firedEvents(100),
+      _pendingRegistrations(2048),
+      _running(false),
+      _networkThread(nullptr)
 {
     _monitoredSockets.reserve(1000);
 #ifdef __APPLE__
@@ -117,7 +130,7 @@ bool RtcePollImpl::listenSocketEvents(RtcePoll::IEventListener* listener, int fd
         unlistenSocketEvents(fd);
     }
 
-    auto itpair = _monitoredSockets.emplace(std::make_pair(fd, SocketRegistration{true, listener, fd}));
+    auto itpair = _monitoredSockets.emplace(std::make_pair(fd, SocketRegistration{REGISTER, listener, fd}));
     if (!itpair.second)
     {
         assert(false);
@@ -208,21 +221,17 @@ void RtcePollImpl::run()
 
     while (_running)
     {
-        if (_monitoredSockets.empty())
-        {
-            _pendingRegistrations.waitForItems(5000);
-        }
         SocketRegistration message;
         while (_pendingRegistrations.pop(message))
         {
-            if (message.registration)
+            if (message.operation == Operation::REGISTER)
             {
                 if (listenSocketEvents(message.listener, message.fd))
                 {
                     message.listener->onSocketPollStarted(message.fd);
                 }
             }
-            else
+            else if (message.operation == Operation::UNREGISTER)
             {
                 unlistenSocketEvents(message.fd);
                 message.listener->onSocketPollStopped(message.fd);
@@ -312,13 +321,13 @@ void RtcePollImpl::awaitSocketEvents(int64_t timeoutMs)
 
 bool RtcePollImpl::add(int fd, RtcePoll::IEventListener* listener)
 {
-    return _pendingRegistrations.push(SocketRegistration{true, listener, fd});
+    return _pendingRegistrations.push(SocketRegistration{REGISTER, listener, fd});
 }
 
 // You must await the notifyClosed callback after this
 bool RtcePollImpl::remove(int fd, RtcePoll::IEventListener* listener)
 {
-    return _pendingRegistrations.push(SocketRegistration{false, listener, fd});
+    return _pendingRegistrations.push(SocketRegistration{UNREGISTER, listener, fd});
 }
 
 std::unique_ptr<RtcePoll> createRtcePoll()
