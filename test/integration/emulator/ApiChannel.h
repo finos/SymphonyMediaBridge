@@ -128,12 +128,13 @@ class Barbell
 public:
     Barbell();
 
-    std::string allocate(std::string baseUrl, std::string conferenceId, bool controlling);
+    std::string allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling);
 
-    void configure(std::string body);
-    std::string _id;
+    void configure(const std::string& body);
+    const std::string& getId() const { return _id; }
 
 private:
+    std::string _id;
     nlohmann::json _offer;
     std::string _baseUrl;
     std::string _conferenceId;

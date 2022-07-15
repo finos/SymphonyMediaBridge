@@ -518,7 +518,7 @@ std::unordered_set<uint32_t> ColibriChannel::getOfferedVideoSsrcs() const
 
 Barbell::Barbell() : _id(newIdString()) {}
 
-std::string Barbell::allocate(std::string baseUrl, std::string conferenceId, bool controlling)
+std::string Barbell::allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling)
 {
     _baseUrl = baseUrl;
     _conferenceId = conferenceId;
@@ -545,7 +545,7 @@ std::string Barbell::allocate(std::string baseUrl, std::string conferenceId, boo
     return _offer.dump();
 }
 
-void Barbell::configure(std::string body)
+void Barbell::configure(const std::string& body)
 {
     auto requestBody = nlohmann::json::parse(body);
     requestBody["action"] = "configure";

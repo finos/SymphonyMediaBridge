@@ -245,7 +245,7 @@ public:
         if (rtpEndpoint->isGood())
         {
             rtpPorts.emplace_back(rtpEndpoint);
-            logger::info("opened rtp port %s", "TransportFactory", rtpEndpoint->getLocalPort().toString().c_str());
+            logger::info("opened rtp port %s", _name, rtpEndpoint->getLocalPort().toString().c_str());
         }
         else
         {
@@ -499,14 +499,14 @@ private:
 
     void onEndpointStopped(ServerEndpoint* endpoint) override
     {
-        logger::info("TCP server %s stopped.", _name, endpoint->getName());
+        logger::info("%s stopped.", _name, endpoint->getName());
         _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }
 
     void onEndpointStopped(Endpoint* endpoint) override
     {
-        logger::info("Endpoint %s stopped.", _name, endpoint->getName());
+        logger::info("%s stopped.", _name, endpoint->getName());
         _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }
