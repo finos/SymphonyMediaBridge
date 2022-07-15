@@ -2,6 +2,7 @@
 #include "concurrency/MpmcQueue.h"
 #include "concurrency/ThreadUtils.h"
 #include "logger/Logger.h"
+#include "utils/Time.h"
 #include <cassert>
 #include <fcntl.h>
 #include <ifaddrs.h>
@@ -220,6 +221,11 @@ void RtcePollImpl::run()
 
     while (_running)
     {
+        if (_monitoredSockets.empty())
+        {
+            utils::Time::nanoSleep(utils::Time::ms * 100);
+        }
+
         SocketRegistration message;
         while (_pendingRegistrations.pop(message))
         {
