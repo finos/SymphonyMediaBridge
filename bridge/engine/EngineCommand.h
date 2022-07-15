@@ -25,153 +25,155 @@ class PacketCache;
 namespace EngineCommand
 {
 
-constexpr size_t endpointMessageMaxSize = 1024;
-
 // Command definitions
 
 struct AddMixer
 {
-    EngineMixer* _mixer;
+    EngineMixer* mixer;
 };
 
 struct RemoveMixer
 {
-    EngineMixer* _mixer;
+    EngineMixer* mixer;
 };
 
 struct AddRemoveAudioStream
 {
-    EngineMixer* _mixer;
-    EngineAudioStream* _engineStream;
+    EngineMixer* mixer;
+    EngineAudioStream* engineStream;
 };
 
 struct AddRemoveVideoStream
 {
-    EngineMixer* _mixer;
-    EngineVideoStream* _engineStream;
+    EngineMixer* mixer;
+    EngineVideoStream* engineStream;
 };
 
 struct ReconfigureAudioStream
 {
-    EngineMixer* _mixer;
-    transport::RtcTransport* _transport;
-    uint32_t _remoteSsrc;
+    EngineMixer* mixer;
+    transport::RtcTransport* transport;
+    uint32_t remoteSsrc;
 };
 
 struct ReconfigureVideoStream
 {
-    EngineMixer* _mixer;
-    transport::RtcTransport* _transport;
-    SimulcastStream _simulcastStream;
-    SsrcWhitelist _ssrcWhitelist;
+    EngineMixer* mixer;
+    transport::RtcTransport* transport;
+    SimulcastStream simulcastStream;
+    SsrcWhitelist ssrcWhitelist;
 };
 
 struct ReconfigureVideoStreamSecondary
 {
-    EngineMixer* _mixer;
-    transport::RtcTransport* _transport;
-    SimulcastStream _simulcastStream;
-    SimulcastStream _secondarySimulcastStream;
-    SsrcWhitelist _ssrcWhitelist;
+    EngineMixer* mixer;
+    transport::RtcTransport* transport;
+    SimulcastStream simulcastStream;
+    SimulcastStream secondarySimulcastStream;
+    SsrcWhitelist ssrcWhitelist;
 };
 
 struct AddRemoveDataStream
 {
-    EngineMixer* _mixer;
-    EngineDataStream* _engineStream;
+    EngineMixer* mixer;
+    EngineDataStream* engineStream;
 };
 
 struct AddAudioBuffer
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    EngineMixer::AudioBuffer* _audioBuffer;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    EngineMixer::AudioBuffer* audioBuffer;
 };
 
 struct StartTransport
 {
-    EngineMixer* _mixer;
-    transport::RtcTransport* _transport;
+    EngineMixer* mixer;
+    transport::RtcTransport* transport;
 };
 
 struct StartRecordingTransport
 {
-    EngineMixer* _mixer;
-    transport::RecordingTransport* _transport;
+    EngineMixer* mixer;
+    transport::RecordingTransport* transport;
 };
 
 struct AddVideoPacketCache
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    size_t _endpointIdHash;
-    PacketCache* _videoPacketCache;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    size_t endpointIdHash;
+    PacketCache* videoPacketCache;
 };
 
 struct SctpControl
 {
-    EngineMixer* _mixer;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    size_t endpointIdHash;
 };
 
 struct PinEndpoint
 {
-    EngineMixer* _mixer;
-    size_t _endpointIdHash;
-    size_t _pinnedEndpointIdHash;
+    EngineMixer* mixer;
+    size_t endpointIdHash;
+    size_t pinnedEndpointIdHash;
 };
 
 struct EndpointMessage
 {
-    EngineMixer* _mixer;
-    size_t _toEndpointIdHash;
-    size_t _fromEndpointIdHash;
-    char _message[endpointMessageMaxSize];
+    enum : size_t
+    {
+        MESSAGE_MAX_SIZE = 1024
+    };
+    EngineMixer* mixer;
+    size_t toEndpointIdHash;
+    size_t fromEndpointIdHash;
+    char message[MESSAGE_MAX_SIZE];
 };
 
 struct AddRemoveRecordingStream
 {
-    EngineMixer* _mixer;
-    EngineRecordingStream* _recordingStream;
+    EngineMixer* mixer;
+    EngineRecordingStream* recordingStream;
 };
 
 struct UpdateRecordingStreamModalities
 {
-    EngineMixer* _mixer;
-    EngineRecordingStream* _recordingStream;
-    bool _isAudioEnabled;
-    bool _isVideoEnabled;
-    bool _isScreenSharingEnabled;
+    EngineMixer* mixer;
+    EngineRecordingStream* recordingStream;
+    bool audioEnabled;
+    bool videoEnabled;
+    bool screenSharingEnabled;
 };
 
 struct StartStopRecording
 {
-    EngineMixer* _mixer;
-    EngineRecordingStream* _recordingStream;
-    RecordingDescription* _recordingDesc;
+    EngineMixer* mixer;
+    EngineRecordingStream* recordingStream;
+    RecordingDescription* recordingDesc;
 };
 
 struct AddRecordingRtpPacketCache
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    size_t _endpointIdHash;
-    PacketCache* _packetCache;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    size_t endpointIdHash;
+    PacketCache* packetCache;
 };
 
 struct AddTransportToRecordingStream
 {
-    EngineMixer* _mixer;
-    size_t _streamIdHash;
-    transport::RecordingTransport* _transport;
-    UnackedPacketsTracker* _recUnackedPacketsTracker;
+    EngineMixer* mixer;
+    size_t streamIdHash;
+    transport::RecordingTransport* transport;
+    UnackedPacketsTracker* recUnackedPacketsTracker;
 };
 
 struct RemoveTransportFromRecordingStream
 {
-    EngineMixer* _mixer;
-    size_t _streamIdHash;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    size_t streamIdHash;
+    size_t endpointIdHash;
 };
 
 struct AddBarbell
@@ -259,27 +261,27 @@ struct Command
 {
     Command() = default;
     Command(const Command&) = delete;
-    Command(Type t) : _type(t) {}
+    Command(Type t) : type(t) {}
     Command(Command&& rhs)
     {
-        _type = rhs._type;
-        _command = rhs._command;
-        _packet = std::move(rhs._packet);
+        type = rhs.type;
+        command = rhs.command;
+        packet = std::move(rhs.packet);
     }
 
     Command& operator=(const Command&) = delete;
 
     Command& operator=(Command&& rhs)
     {
-        _type = rhs._type;
-        _command = rhs._command;
-        _packet = std::move(rhs._packet);
+        type = rhs.type;
+        command = rhs.command;
+        packet = std::move(rhs.packet);
         return *this;
     }
 
-    Type _type;
-    CommandUnion _command;
-    memory::UniquePacket _packet;
+    Type type;
+    CommandUnion command;
+    memory::UniquePacket packet;
 };
 
 } // namespace EngineCommand

@@ -70,7 +70,7 @@ void Engine::run()
                 break;
             }
 
-            switch (nextCommand._type)
+            switch (nextCommand.type)
             {
             case EngineCommand::Type::AddMixer:
                 addMixer(nextCommand);
@@ -175,7 +175,7 @@ void Engine::run()
                 addBarbell(nextCommand);
                 break;
             case EngineCommand::Type::RemoveBarbell:
-                nextCommand._command.removeBarbell.mixer->removeBarbell(nextCommand._command.removeBarbell.idHash);
+                nextCommand.command.removeBarbell.mixer->removeBarbell(nextCommand.command.removeBarbell.idHash);
                 break;
             default:
                 assert(false);
@@ -240,18 +240,18 @@ void Engine::pushCommand(EngineCommand::Command&& command)
 
 void Engine::addMixer(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddMixer);
-    assert(nextCommand._command.addMixer._mixer);
+    assert(nextCommand.type == EngineCommand::Type::AddMixer);
+    assert(nextCommand.command.addMixer.mixer);
 
-    logger::debug("Adding mixer %s", "Engine", nextCommand._command.addMixer._mixer->getLoggableId().c_str());
-    if (!_mixers.pushToTail(nextCommand._command.addMixer._mixer))
+    logger::debug("Adding mixer %s", "Engine", nextCommand.command.addMixer.mixer->getLoggableId().c_str());
+    if (!_mixers.pushToTail(nextCommand.command.addMixer.mixer))
     {
         logger::error("Unable to add EngineMixer %s to Engine",
             "Engine",
-            nextCommand._command.addMixer._mixer->getLoggableId().c_str());
+            nextCommand.command.addMixer.mixer->getLoggableId().c_str());
 
         EngineMessage::Message message = {EngineMessage::Type::MixerRemoved};
-        message._command.mixerRemoved._mixer = nextCommand._command.addMixer._mixer;
+        message.command.mixerRemoved.mixer = nextCommand.command.addMixer.mixer;
         _messageListener->onMessage(std::move(message));
 
         return;
@@ -260,260 +260,260 @@ void Engine::addMixer(EngineCommand::Command& nextCommand)
 
 void Engine::removeMixer(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::RemoveMixer);
-    auto& command = nextCommand._command.removeMixer;
-    assert(command._mixer);
+    assert(nextCommand.type == EngineCommand::Type::RemoveMixer);
+    auto& command = nextCommand.command.removeMixer;
+    assert(command.mixer);
 
-    logger::debug("Removing mixer %s", "Engine", command._mixer->getLoggableId().c_str());
-    command._mixer->clear();
-    if (!_mixers.remove(command._mixer))
+    logger::debug("Removing mixer %s", "Engine", command.mixer->getLoggableId().c_str());
+    command.mixer->clear();
+    if (!_mixers.remove(command.mixer))
     {
-        logger::error("Unable to remove EngineMixer %s from Engine", "Engine", command._mixer->getLoggableId().c_str());
+        logger::error("Unable to remove EngineMixer %s from Engine", "Engine", command.mixer->getLoggableId().c_str());
     }
 
     EngineMessage::Message message = {EngineMessage::Type::MixerRemoved};
-    message._command.mixerRemoved._mixer = command._mixer;
+    message.command.mixerRemoved.mixer = command.mixer;
     _messageListener->onMessage(std::move(message));
 }
 
 void Engine::addAudioStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddAudioStream);
-    assert(nextCommand._command.addAudioStream._mixer);
-    assert(nextCommand._command.addAudioStream._engineStream);
+    assert(nextCommand.type == EngineCommand::Type::AddAudioStream);
+    assert(nextCommand.command.addAudioStream.mixer);
+    assert(nextCommand.command.addAudioStream.engineStream);
 
-    auto mixer = nextCommand._command.addAudioStream._mixer;
-    mixer->addAudioStream(nextCommand._command.addAudioStream._engineStream);
+    auto mixer = nextCommand.command.addAudioStream.mixer;
+    mixer->addAudioStream(nextCommand.command.addAudioStream.engineStream);
 }
 
 void Engine::removeAudioStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::RemoveAudioStream);
-    assert(nextCommand._command.removeAudioStream._mixer);
-    assert(nextCommand._command.removeAudioStream._engineStream);
+    assert(nextCommand.type == EngineCommand::Type::RemoveAudioStream);
+    assert(nextCommand.command.removeAudioStream.mixer);
+    assert(nextCommand.command.removeAudioStream.engineStream);
 
     logger::debug("Remove audioStream, mixer %s, transport id %s",
         "Engine",
-        nextCommand._command.removeAudioStream._mixer->getLoggableId().c_str(),
-        nextCommand._command.removeAudioStream._engineStream->_transport.getLoggableId().c_str());
+        nextCommand.command.removeAudioStream.mixer->getLoggableId().c_str(),
+        nextCommand.command.removeAudioStream.engineStream->_transport.getLoggableId().c_str());
 
-    auto mixer = nextCommand._command.removeAudioStream._mixer;
-    mixer->removeAudioStream(nextCommand._command.removeAudioStream._engineStream);
+    auto mixer = nextCommand.command.removeAudioStream.mixer;
+    mixer->removeAudioStream(nextCommand.command.removeAudioStream.engineStream);
 }
 
 void Engine::addAudioBuffer(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddAudioBuffer);
-    assert(nextCommand._command.addAudioBuffer._mixer);
-    assert(nextCommand._command.addAudioBuffer._audioBuffer);
+    assert(nextCommand.type == EngineCommand::Type::AddAudioBuffer);
+    assert(nextCommand.command.addAudioBuffer.mixer);
+    assert(nextCommand.command.addAudioBuffer.audioBuffer);
 
     logger::debug("Add ssrc audio buffer mixer %s, ssrc %u",
         "Engine",
-        nextCommand._command.addAudioBuffer._mixer->getLoggableId().c_str(),
-        nextCommand._command.addAudioBuffer._ssrc);
-    nextCommand._command.addAudioBuffer._mixer->addAudioBuffer(nextCommand._command.addAudioBuffer._ssrc,
-        nextCommand._command.addAudioBuffer._audioBuffer);
+        nextCommand.command.addAudioBuffer.mixer->getLoggableId().c_str(),
+        nextCommand.command.addAudioBuffer.ssrc);
+    nextCommand.command.addAudioBuffer.mixer->addAudioBuffer(nextCommand.command.addAudioBuffer.ssrc,
+        nextCommand.command.addAudioBuffer.audioBuffer);
 }
 
 void Engine::addVideoStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddVideoStream);
-    assert(nextCommand._command.addVideoStream._mixer);
-    assert(nextCommand._command.addVideoStream._engineStream);
+    assert(nextCommand.type == EngineCommand::Type::AddVideoStream);
+    assert(nextCommand.command.addVideoStream.mixer);
+    assert(nextCommand.command.addVideoStream.engineStream);
 
-    auto mixer = nextCommand._command.addVideoStream._mixer;
-    mixer->addVideoStream(nextCommand._command.addVideoStream._engineStream);
+    auto mixer = nextCommand.command.addVideoStream.mixer;
+    mixer->addVideoStream(nextCommand.command.addVideoStream.engineStream);
 }
 
 void Engine::removeVideoStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::RemoveVideoStream);
-    assert(nextCommand._command.removeVideoStream._mixer);
-    assert(nextCommand._command.removeVideoStream._engineStream);
+    assert(nextCommand.type == EngineCommand::Type::RemoveVideoStream);
+    assert(nextCommand.command.removeVideoStream.mixer);
+    assert(nextCommand.command.removeVideoStream.engineStream);
 
     logger::debug("Remove videoStream, mixer %s, transport id %s",
         "Engine",
-        nextCommand._command.removeVideoStream._mixer->getLoggableId().c_str(),
-        nextCommand._command.removeVideoStream._engineStream->_transport.getLoggableId().c_str());
+        nextCommand.command.removeVideoStream.mixer->getLoggableId().c_str(),
+        nextCommand.command.removeVideoStream.engineStream->_transport.getLoggableId().c_str());
 
-    auto mixer = nextCommand._command.removeVideoStream._mixer;
-    mixer->removeVideoStream(nextCommand._command.removeVideoStream._engineStream);
+    auto mixer = nextCommand.command.removeVideoStream.mixer;
+    mixer->removeVideoStream(nextCommand.command.removeVideoStream.engineStream);
 }
 
 void Engine::addRecordingStream(EngineCommand::Command& command)
 {
-    assert(command._type == EngineCommand::Type::AddRecordingStream);
-    assert(command._command.removeRecordingStream._mixer);
-    assert(command._command.removeRecordingStream._recordingStream);
+    assert(command.type == EngineCommand::Type::AddRecordingStream);
+    assert(command.command.removeRecordingStream.mixer);
+    assert(command.command.removeRecordingStream.recordingStream);
 
-    auto mixer = command._command.addRecordingStream._mixer;
-    mixer->addRecordingStream(command._command.addRecordingStream._recordingStream);
+    auto mixer = command.command.addRecordingStream.mixer;
+    mixer->addRecordingStream(command.command.addRecordingStream.recordingStream);
 }
 
 void Engine::removeRecordingStream(EngineCommand::Command& command)
 {
-    assert(command._type == EngineCommand::Type::RemoveRecordingStream);
-    assert(command._command.removeRecordingStream._mixer);
-    assert(command._command.removeRecordingStream._recordingStream);
+    assert(command.type == EngineCommand::Type::RemoveRecordingStream);
+    assert(command.command.removeRecordingStream.mixer);
+    assert(command.command.removeRecordingStream.recordingStream);
 
     logger::debug("Remove recordingStream, mixer %s",
         "Engine",
-        command._command.removeRecordingStream._mixer->getLoggableId().c_str());
+        command.command.removeRecordingStream.mixer->getLoggableId().c_str());
 
-    auto mixer = command._command.addRecordingStream._mixer;
-    mixer->removeRecordingStream(command._command.addRecordingStream._recordingStream);
+    auto mixer = command.command.addRecordingStream.mixer;
+    mixer->removeRecordingStream(command.command.addRecordingStream.recordingStream);
 
     EngineMessage::Message message = {EngineMessage::Type::RecordingStreamRemoved};
-    message._command.recordingStreamRemoved._mixer = command._command.removeRecordingStream._mixer;
-    message._command.recordingStreamRemoved._engineStream = command._command.removeRecordingStream._recordingStream;
+    message.command.recordingStreamRemoved.mixer = command.command.removeRecordingStream.mixer;
+    message.command.recordingStreamRemoved.engineStream = command.command.removeRecordingStream.recordingStream;
 
     _messageListener->onMessage(std::move(message));
 }
 
 void Engine::updateRecordingStreamModalities(EngineCommand::Command& command)
 {
-    assert(command._type == EngineCommand::Type::UpdateRecordingStreamModalities);
-    assert(command._command.updateRecordingStreamModalities._mixer);
-    assert(command._command.updateRecordingStreamModalities._recordingStream);
+    assert(command.type == EngineCommand::Type::UpdateRecordingStreamModalities);
+    assert(command.command.updateRecordingStreamModalities.mixer);
+    assert(command.command.updateRecordingStreamModalities.recordingStream);
 
-    auto& updateModalitiesCommand = command._command.updateRecordingStreamModalities;
+    auto& updateModalitiesCommand = command.command.updateRecordingStreamModalities;
 
     logger::debug("Update recordingStream modalities, mixer %s, stream: %s audio: %s, video: %s",
         "Engine",
-        updateModalitiesCommand._mixer->getLoggableId().c_str(),
-        updateModalitiesCommand._recordingStream->_id.c_str(),
-        updateModalitiesCommand._isAudioEnabled ? "enabled" : "disabled",
-        updateModalitiesCommand._isVideoEnabled ? "enabled" : "disabled");
+        updateModalitiesCommand.mixer->getLoggableId().c_str(),
+        updateModalitiesCommand.recordingStream->_id.c_str(),
+        updateModalitiesCommand.audioEnabled ? "enabled" : "disabled",
+        updateModalitiesCommand.videoEnabled ? "enabled" : "disabled");
 
-    auto mixer = updateModalitiesCommand._mixer;
-    mixer->updateRecordingStreamModalities(updateModalitiesCommand._recordingStream,
-        updateModalitiesCommand._isAudioEnabled,
-        updateModalitiesCommand._isVideoEnabled,
-        updateModalitiesCommand._isScreenSharingEnabled);
+    auto mixer = updateModalitiesCommand.mixer;
+    mixer->updateRecordingStreamModalities(updateModalitiesCommand.recordingStream,
+        updateModalitiesCommand.audioEnabled,
+        updateModalitiesCommand.videoEnabled,
+        updateModalitiesCommand.screenSharingEnabled);
 }
 
 void Engine::addDataStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddDataStream);
-    assert(nextCommand._command.addDataStream._mixer);
-    assert(nextCommand._command.addDataStream._engineStream);
+    assert(nextCommand.type == EngineCommand::Type::AddDataStream);
+    assert(nextCommand.command.addDataStream.mixer);
+    assert(nextCommand.command.addDataStream.engineStream);
 
-    auto mixer = nextCommand._command.addDataStream._mixer;
-    mixer->addDataSteam(nextCommand._command.addDataStream._engineStream);
+    auto mixer = nextCommand.command.addDataStream.mixer;
+    mixer->addDataSteam(nextCommand.command.addDataStream.engineStream);
 }
 
 void Engine::removeDataStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::RemoveDataStream);
-    assert(nextCommand._command.removeDataStream._mixer);
-    assert(nextCommand._command.removeDataStream._engineStream);
+    assert(nextCommand.type == EngineCommand::Type::RemoveDataStream);
+    assert(nextCommand.command.removeDataStream.mixer);
+    assert(nextCommand.command.removeDataStream.engineStream);
 
     logger::debug("Remove dataStream, mixer %s, transport id %s",
         "Engine",
-        nextCommand._command.removeDataStream._mixer->getLoggableId().c_str(),
-        nextCommand._command.removeDataStream._engineStream->_transport.getLoggableId().c_str());
+        nextCommand.command.removeDataStream.mixer->getLoggableId().c_str(),
+        nextCommand.command.removeDataStream.engineStream->_transport.getLoggableId().c_str());
 
-    auto mixer = nextCommand._command.removeDataStream._mixer;
-    mixer->removeDataStream(nextCommand._command.removeDataStream._engineStream);
+    auto mixer = nextCommand.command.removeDataStream.mixer;
+    mixer->removeDataStream(nextCommand.command.removeDataStream.engineStream);
 
     EngineMessage::Message message = {EngineMessage::Type::DataStreamRemoved};
-    message._command.dataStreamRemoved._mixer = nextCommand._command.removeDataStream._mixer;
-    message._command.dataStreamRemoved._engineStream = nextCommand._command.removeDataStream._engineStream;
+    message.command.dataStreamRemoved.mixer = nextCommand.command.removeDataStream.mixer;
+    message.command.dataStreamRemoved.engineStream = nextCommand.command.removeDataStream.engineStream;
 
     _messageListener->onMessage(std::move(message));
 }
 
 void Engine::startTransport(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::StartTransport);
-    assert(nextCommand._command.startTransport._mixer);
-    assert(nextCommand._command.startTransport._transport);
+    assert(nextCommand.type == EngineCommand::Type::StartTransport);
+    assert(nextCommand.command.startTransport.mixer);
+    assert(nextCommand.command.startTransport.transport);
 
     logger::debug("Start transport, mixer %s, transport id %s",
         "Engine",
-        nextCommand._command.startTransport._mixer->getLoggableId().c_str(),
-        nextCommand._command.startTransport._transport->getLoggableId().c_str());
+        nextCommand.command.startTransport.mixer->getLoggableId().c_str(),
+        nextCommand.command.startTransport.transport->getLoggableId().c_str());
 
-    auto mixer = nextCommand._command.startTransport._mixer;
-    mixer->startTransport(nextCommand._command.startTransport._transport);
+    auto mixer = nextCommand.command.startTransport.mixer;
+    mixer->startTransport(nextCommand.command.startTransport.transport);
 }
 
 void Engine::startRecordingTransport(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::StartRecordingTransport);
-    assert(nextCommand._command.startRecordingTransport._mixer);
-    assert(nextCommand._command.startRecordingTransport._transport);
+    assert(nextCommand.type == EngineCommand::Type::StartRecordingTransport);
+    assert(nextCommand.command.startRecordingTransport.mixer);
+    assert(nextCommand.command.startRecordingTransport.transport);
 
     logger::debug("Start recording transport, mixer %s, transport id %s",
         "Engine",
-        nextCommand._command.startRecordingTransport._mixer->getLoggableId().c_str(),
-        nextCommand._command.startRecordingTransport._transport->getLoggableId().c_str());
+        nextCommand.command.startRecordingTransport.mixer->getLoggableId().c_str(),
+        nextCommand.command.startRecordingTransport.transport->getLoggableId().c_str());
 
-    auto mixer = nextCommand._command.startRecordingTransport._mixer;
-    mixer->startRecordingTransport(nextCommand._command.startRecordingTransport._transport);
+    auto mixer = nextCommand.command.startRecordingTransport.mixer;
+    mixer->startRecordingTransport(nextCommand.command.startRecordingTransport.transport);
 }
 
 void Engine::reconfigureAudioStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::ReconfigureAudioStream);
-    assert(nextCommand._command.reconfigureAudioStream._mixer);
-    assert(nextCommand._command.reconfigureAudioStream._transport);
+    assert(nextCommand.type == EngineCommand::Type::ReconfigureAudioStream);
+    assert(nextCommand.command.reconfigureAudioStream.mixer);
+    assert(nextCommand.command.reconfigureAudioStream.transport);
 
     logger::debug("Reconfigure audio stream, mixer %s, transport id %s",
         "Engine",
-        nextCommand._command.reconfigureAudioStream._mixer->getLoggableId().c_str(),
-        nextCommand._command.reconfigureAudioStream._transport->getLoggableId().c_str());
+        nextCommand.command.reconfigureAudioStream.mixer->getLoggableId().c_str(),
+        nextCommand.command.reconfigureAudioStream.transport->getLoggableId().c_str());
 
-    auto mixer = nextCommand._command.reconfigureAudioStream._mixer;
-    mixer->reconfigureAudioStream(nextCommand._command.reconfigureAudioStream._transport,
-        nextCommand._command.reconfigureAudioStream._remoteSsrc);
+    auto mixer = nextCommand.command.reconfigureAudioStream.mixer;
+    mixer->reconfigureAudioStream(nextCommand.command.reconfigureAudioStream.transport,
+        nextCommand.command.reconfigureAudioStream.remoteSsrc);
 }
 
 void Engine::reconfigureVideoStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::ReconfigureVideoStream ||
-        nextCommand._type == EngineCommand::Type::ReconfigureVideoStreamSecondary);
+    assert(nextCommand.type == EngineCommand::Type::ReconfigureVideoStream ||
+        nextCommand.type == EngineCommand::Type::ReconfigureVideoStreamSecondary);
 
-    if (nextCommand._type == EngineCommand::Type::ReconfigureVideoStream)
+    if (nextCommand.type == EngineCommand::Type::ReconfigureVideoStream)
     {
-        const auto& reconfigureVideoStream = nextCommand._command.reconfigureVideoStream;
-        assert(reconfigureVideoStream._mixer);
-        assert(reconfigureVideoStream._transport);
+        const auto& reconfigureVideoStream = nextCommand.command.reconfigureVideoStream;
+        assert(reconfigureVideoStream.mixer);
+        assert(reconfigureVideoStream.transport);
 
         logger::debug("Reconfigure video stream, mixer %s, endpointIdHash %lu, whitelist %c %u %u %u",
             "Engine",
-            reconfigureVideoStream._mixer->getLoggableId().c_str(),
-            reconfigureVideoStream._transport->getEndpointIdHash(),
-            reconfigureVideoStream._ssrcWhitelist._enabled ? 't' : 'f',
-            reconfigureVideoStream._ssrcWhitelist._numSsrcs,
-            reconfigureVideoStream._ssrcWhitelist._ssrcs[0],
-            reconfigureVideoStream._ssrcWhitelist._ssrcs[1]);
+            reconfigureVideoStream.mixer->getLoggableId().c_str(),
+            reconfigureVideoStream.transport->getEndpointIdHash(),
+            reconfigureVideoStream.ssrcWhitelist._enabled ? 't' : 'f',
+            reconfigureVideoStream.ssrcWhitelist._numSsrcs,
+            reconfigureVideoStream.ssrcWhitelist._ssrcs[0],
+            reconfigureVideoStream.ssrcWhitelist._ssrcs[1]);
 
-        auto mixer = reconfigureVideoStream._mixer;
-        mixer->reconfigureVideoStream(reconfigureVideoStream._transport,
-            reconfigureVideoStream._ssrcWhitelist,
-            reconfigureVideoStream._simulcastStream);
+        auto mixer = reconfigureVideoStream.mixer;
+        mixer->reconfigureVideoStream(reconfigureVideoStream.transport,
+            reconfigureVideoStream.ssrcWhitelist,
+            reconfigureVideoStream.simulcastStream);
     }
-    else if (nextCommand._type == EngineCommand::Type::ReconfigureVideoStreamSecondary)
+    else if (nextCommand.type == EngineCommand::Type::ReconfigureVideoStreamSecondary)
     {
-        const auto& reconfigureVideoStreamSecondary = nextCommand._command.reconfigureVideoStreamSecondary;
-        assert(reconfigureVideoStreamSecondary._mixer);
-        assert(reconfigureVideoStreamSecondary._transport);
+        const auto& reconfigureVideoStreamSecondary = nextCommand.command.reconfigureVideoStreamSecondary;
+        assert(reconfigureVideoStreamSecondary.mixer);
+        assert(reconfigureVideoStreamSecondary.transport);
 
         logger::debug("Reconfigure video stream with secondary, mixer %s, endpointIdHash %lu, whitelist %c %u %u %u",
             "Engine",
-            reconfigureVideoStreamSecondary._mixer->getLoggableId().c_str(),
-            reconfigureVideoStreamSecondary._transport->getEndpointIdHash(),
-            reconfigureVideoStreamSecondary._ssrcWhitelist._enabled ? 't' : 'f',
-            reconfigureVideoStreamSecondary._ssrcWhitelist._numSsrcs,
-            reconfigureVideoStreamSecondary._ssrcWhitelist._ssrcs[0],
-            reconfigureVideoStreamSecondary._ssrcWhitelist._ssrcs[1]);
+            reconfigureVideoStreamSecondary.mixer->getLoggableId().c_str(),
+            reconfigureVideoStreamSecondary.transport->getEndpointIdHash(),
+            reconfigureVideoStreamSecondary.ssrcWhitelist._enabled ? 't' : 'f',
+            reconfigureVideoStreamSecondary.ssrcWhitelist._numSsrcs,
+            reconfigureVideoStreamSecondary.ssrcWhitelist._ssrcs[0],
+            reconfigureVideoStreamSecondary.ssrcWhitelist._ssrcs[1]);
 
-        auto mixer = reconfigureVideoStreamSecondary._mixer;
-        mixer->reconfigureVideoStream(nextCommand._command.reconfigureVideoStreamSecondary._transport,
-            reconfigureVideoStreamSecondary._ssrcWhitelist,
-            reconfigureVideoStreamSecondary._simulcastStream,
-            &reconfigureVideoStreamSecondary._secondarySimulcastStream);
+        auto mixer = reconfigureVideoStreamSecondary.mixer;
+        mixer->reconfigureVideoStream(nextCommand.command.reconfigureVideoStreamSecondary.transport,
+            reconfigureVideoStreamSecondary.ssrcWhitelist,
+            reconfigureVideoStreamSecondary.simulcastStream,
+            &reconfigureVideoStreamSecondary.secondarySimulcastStream);
     }
     else
     {
@@ -523,104 +523,104 @@ void Engine::reconfigureVideoStream(EngineCommand::Command& nextCommand)
 
 void Engine::addVideoPacketCache(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddVideoPacketCache);
-    assert(nextCommand._command.addVideoPacketCache._mixer);
-    assert(nextCommand._command.addVideoPacketCache._videoPacketCache);
+    assert(nextCommand.type == EngineCommand::Type::AddVideoPacketCache);
+    assert(nextCommand.command.addVideoPacketCache.mixer);
+    assert(nextCommand.command.addVideoPacketCache.videoPacketCache);
 
     logger::debug("Add videoPacketCache, mixer %s, ssrc %u, endpointIdHash %lu",
         "Engine",
-        nextCommand._command.addVideoPacketCache._mixer->getLoggableId().c_str(),
-        nextCommand._command.addVideoPacketCache._ssrc,
-        nextCommand._command.addVideoPacketCache._endpointIdHash);
+        nextCommand.command.addVideoPacketCache.mixer->getLoggableId().c_str(),
+        nextCommand.command.addVideoPacketCache.ssrc,
+        nextCommand.command.addVideoPacketCache.endpointIdHash);
 
-    auto mixer = nextCommand._command.addVideoPacketCache._mixer;
-    mixer->addVideoPacketCache(nextCommand._command.addVideoPacketCache._ssrc,
-        nextCommand._command.addVideoPacketCache._endpointIdHash,
-        nextCommand._command.addVideoPacketCache._videoPacketCache);
+    auto mixer = nextCommand.command.addVideoPacketCache.mixer;
+    mixer->addVideoPacketCache(nextCommand.command.addVideoPacketCache.ssrc,
+        nextCommand.command.addVideoPacketCache.endpointIdHash,
+        nextCommand.command.addVideoPacketCache.videoPacketCache);
 }
 
 void Engine::processSctpControl(EngineCommand::Command& command)
 {
-    auto& sctpCommand = command._command.sctpControl;
-    sctpCommand._mixer->handleSctpControl(sctpCommand._endpointIdHash, *command._packet);
+    auto& sctpCommand = command.command.sctpControl;
+    sctpCommand.mixer->handleSctpControl(sctpCommand.endpointIdHash, *command.packet);
 }
 
 void Engine::pinEndpoint(EngineCommand::Command& command)
 {
-    auto& pinCommand = command._command.pinEndpoint;
-    pinCommand._mixer->pinEndpoint(pinCommand._endpointIdHash, pinCommand._pinnedEndpointIdHash);
+    auto& pinCommand = command.command.pinEndpoint;
+    pinCommand.mixer->pinEndpoint(pinCommand.endpointIdHash, pinCommand.pinnedEndpointIdHash);
 }
 
 void Engine::startRecording(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::StartRecording);
-    assert(nextCommand._command.startRecording._mixer);
-    assert(nextCommand._command.startRecording._recordingDesc);
-    assert(nextCommand._command.startRecording._recordingStream);
+    assert(nextCommand.type == EngineCommand::Type::StartRecording);
+    assert(nextCommand.command.startRecording.mixer);
+    assert(nextCommand.command.startRecording.recordingDesc);
+    assert(nextCommand.command.startRecording.recordingStream);
 
-    auto mixer = nextCommand._command.startRecording._mixer;
-    mixer->recordingStart(nextCommand._command.startRecording._recordingStream,
-        nextCommand._command.startRecording._recordingDesc);
+    auto mixer = nextCommand.command.startRecording.mixer;
+    mixer->recordingStart(nextCommand.command.startRecording.recordingStream,
+        nextCommand.command.startRecording.recordingDesc);
 }
 
 void Engine::stopRecording(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::StopRecording);
-    assert(nextCommand._command.stopRecording._mixer);
-    assert(nextCommand._command.stopRecording._recordingDesc);
-    assert(nextCommand._command.stopRecording._recordingStream);
+    assert(nextCommand.type == EngineCommand::Type::StopRecording);
+    assert(nextCommand.command.stopRecording.mixer);
+    assert(nextCommand.command.stopRecording.recordingDesc);
+    assert(nextCommand.command.stopRecording.recordingStream);
 
-    auto mixer = nextCommand._command.stopRecording._mixer;
-    mixer->recordingStop(nextCommand._command.stopRecording._recordingStream,
-        nextCommand._command.stopRecording._recordingDesc);
+    auto mixer = nextCommand.command.stopRecording.mixer;
+    mixer->recordingStop(nextCommand.command.stopRecording.recordingStream,
+        nextCommand.command.stopRecording.recordingDesc);
 
     EngineMessage::Message message = {EngineMessage::Type::RecordingStopped};
-    message._command.recordingStopped._mixer = nextCommand._command.removeDataStream._mixer;
-    message._command.recordingStopped._recordingDesc = nextCommand._command.stopRecording._recordingDesc;
+    message.command.recordingStopped.mixer = nextCommand.command.removeDataStream.mixer;
+    message.command.recordingStopped.recordingDesc = nextCommand.command.stopRecording.recordingDesc;
 
     _messageListener->onMessage(std::move(message));
 }
 
 void Engine::addRecordingRtpPacketCache(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddRecordingRtpPacketCache);
-    assert(nextCommand._command.addRecordingRtpPacketCache._mixer);
-    assert(nextCommand._command.addRecordingRtpPacketCache._packetCache);
+    assert(nextCommand.type == EngineCommand::Type::AddRecordingRtpPacketCache);
+    assert(nextCommand.command.addRecordingRtpPacketCache.mixer);
+    assert(nextCommand.command.addRecordingRtpPacketCache.packetCache);
 
     logger::debug("Add RecordingRtpPacketCache, mixer %s, ssrc %u",
         "Engine",
-        nextCommand._command.addRecordingRtpPacketCache._mixer->getLoggableId().c_str(),
-        nextCommand._command.addRecordingRtpPacketCache._ssrc);
+        nextCommand.command.addRecordingRtpPacketCache.mixer->getLoggableId().c_str(),
+        nextCommand.command.addRecordingRtpPacketCache.ssrc);
 
-    auto mixer = nextCommand._command.addRecordingRtpPacketCache._mixer;
-    mixer->addRecordingRtpPacketCache(nextCommand._command.addRecordingRtpPacketCache._ssrc,
-        nextCommand._command.addRecordingRtpPacketCache._endpointIdHash,
-        nextCommand._command.addRecordingRtpPacketCache._packetCache);
+    auto mixer = nextCommand.command.addRecordingRtpPacketCache.mixer;
+    mixer->addRecordingRtpPacketCache(nextCommand.command.addRecordingRtpPacketCache.ssrc,
+        nextCommand.command.addRecordingRtpPacketCache.endpointIdHash,
+        nextCommand.command.addRecordingRtpPacketCache.packetCache);
 }
 
 void Engine::addTransportToRecordingStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddTransportToRecordingStream);
-    assert(nextCommand._command.addTransportToRecordingStream._mixer);
-    assert(nextCommand._command.addTransportToRecordingStream._transport);
-    assert(nextCommand._command.addTransportToRecordingStream._recUnackedPacketsTracker);
+    assert(nextCommand.type == EngineCommand::Type::AddTransportToRecordingStream);
+    assert(nextCommand.command.addTransportToRecordingStream.mixer);
+    assert(nextCommand.command.addTransportToRecordingStream.transport);
+    assert(nextCommand.command.addTransportToRecordingStream.recUnackedPacketsTracker);
 
-    auto mixer = nextCommand._command.addTransportToRecordingStream._mixer;
-    mixer->addTransportToRecordingStream(nextCommand._command.addTransportToRecordingStream._streamIdHash,
-        nextCommand._command.addTransportToRecordingStream._transport,
-        nextCommand._command.addTransportToRecordingStream._recUnackedPacketsTracker);
+    auto mixer = nextCommand.command.addTransportToRecordingStream.mixer;
+    mixer->addTransportToRecordingStream(nextCommand.command.addTransportToRecordingStream.streamIdHash,
+        nextCommand.command.addTransportToRecordingStream.transport,
+        nextCommand.command.addTransportToRecordingStream.recUnackedPacketsTracker);
 }
 
 void Engine::removeTransportFromRecordingStream(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::RemoveTransportFromRecordingStream);
-    assert(nextCommand._command.removeTransportFromRecordingStream._mixer);
-    assert(nextCommand._command.removeTransportFromRecordingStream._streamIdHash);
-    assert(nextCommand._command.removeTransportFromRecordingStream._endpointIdHash);
+    assert(nextCommand.type == EngineCommand::Type::RemoveTransportFromRecordingStream);
+    assert(nextCommand.command.removeTransportFromRecordingStream.mixer);
+    assert(nextCommand.command.removeTransportFromRecordingStream.streamIdHash);
+    assert(nextCommand.command.removeTransportFromRecordingStream.endpointIdHash);
 
-    auto mixer = nextCommand._command.removeTransportFromRecordingStream._mixer;
-    mixer->removeTransportFromRecordingStream(nextCommand._command.removeTransportFromRecordingStream._streamIdHash,
-        nextCommand._command.removeTransportFromRecordingStream._endpointIdHash);
+    auto mixer = nextCommand.command.removeTransportFromRecordingStream.mixer;
+    mixer->removeTransportFromRecordingStream(nextCommand.command.removeTransportFromRecordingStream.streamIdHash,
+        nextCommand.command.removeTransportFromRecordingStream.endpointIdHash);
 }
 
 EngineStats::EngineStats Engine::getStats()
@@ -632,20 +632,20 @@ EngineStats::EngineStats Engine::getStats()
 
 void Engine::sendEndpointMessage(EngineCommand::Command& command)
 {
-    auto& endpointMessageCommand = command._command.endpointMessage;
-    endpointMessageCommand._mixer->sendEndpointMessage(endpointMessageCommand._toEndpointIdHash,
-        endpointMessageCommand._fromEndpointIdHash,
-        endpointMessageCommand._message);
+    auto& endpointMessageCommand = command.command.endpointMessage;
+    endpointMessageCommand.mixer->sendEndpointMessage(endpointMessageCommand.toEndpointIdHash,
+        endpointMessageCommand.fromEndpointIdHash,
+        endpointMessageCommand.message);
 }
 
 void Engine::addBarbell(EngineCommand::Command& nextCommand)
 {
-    assert(nextCommand._type == EngineCommand::Type::AddBarbell);
-    assert(nextCommand._command.addBarbell.mixer);
-    assert(nextCommand._command.addBarbell.engineBarbell);
+    assert(nextCommand.type == EngineCommand::Type::AddBarbell);
+    assert(nextCommand.command.addBarbell.mixer);
+    assert(nextCommand.command.addBarbell.engineBarbell);
 
-    auto mixer = nextCommand._command.addBarbell.mixer;
-    mixer->addBarbell(nextCommand._command.addBarbell.engineBarbell);
+    auto mixer = nextCommand.command.addBarbell.mixer;
+    mixer->addBarbell(nextCommand.command.addBarbell.engineBarbell);
 }
 
 } // namespace bridge
