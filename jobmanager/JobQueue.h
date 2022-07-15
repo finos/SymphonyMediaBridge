@@ -22,7 +22,7 @@ public:
           _jobQueue(poolSize),
           _jobPool(poolSize, "SerialJobPool")
     {
-        _recover.test_and_set();
+        _needToRecover.test_and_set();
     }
 
     template <typename JOB_TYPE, typename... U>
@@ -38,9 +38,9 @@ public:
         auto job = new (jobArea) JOB_TYPE(std::forward<U>(args)...);
         if (!_jobQueue.push(job))
         {
-            if (!_recover.test_and_set() && !_jobManager.addJob<RunJob>(this))
+            if (!_needToRecover.test_and_set())
             {
-                _recover.clear();
+                startProcessing();
             }
             job->~Job();
             _jobPool.free(job);
@@ -48,12 +48,9 @@ public:
         }
 
         auto count = _jobCount.fetch_add(1);
-        if (count == 0 || !_recover.test_and_set())
+        if (count == 0 || !_needToRecover.test_and_set())
         {
-            if (!_jobManager.addJob<RunJob>(this))
-            {
-                _recover.clear();
-            }
+            startProcessing();
         }
         return true;
     }
@@ -69,6 +66,14 @@ public:
     size_t getCount() const { return _jobQueue.size(); }
 
 private:
+    void startProcessing()
+    {
+        if (!_jobManager.addJob<RunJob>(this))
+        {
+            _needToRecover.clear();
+        }
+    }
+
     struct RunJob : public jobmanager::Job
     {
         explicit RunJob(JobQueue* owner) : _owner(owner) {}
@@ -112,10 +117,7 @@ private:
         auto count = _jobCount.fetch_sub(processedCount);
         if (count > processedCount)
         {
-            if (!_jobManager.addJob<RunJob>(this))
-            {
-                _recover.clear();
-            }
+            startProcessing();
         }
     }
 
@@ -124,7 +126,7 @@ private:
 
     JobManager& _jobManager;
 
-    std::atomic_flag _recover = ATOMIC_FLAG_INIT;
+    std::atomic_flag _needToRecover = ATOMIC_FLAG_INIT;
     std::atomic_uint32_t _jobCount;
     bool _running;
 
