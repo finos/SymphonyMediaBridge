@@ -91,27 +91,27 @@ void logTransportPacketLoss(const std::string& endpointId, transport::RtcTranspo
 void makeSsrcWhitelistLog(const bridge::SsrcWhitelist& ssrcWhitelist, utils::StringBuilder<256>& outLogString)
 {
     outLogString.append("ssrcWhitelist: ");
-    if (!ssrcWhitelist._enabled)
+    if (!ssrcWhitelist.enabled)
     {
         outLogString.append("disabled");
         return;
     }
 
     outLogString.append("enabled ");
-    outLogString.append(ssrcWhitelist._numSsrcs);
+    outLogString.append(ssrcWhitelist.numSsrcs);
 
-    switch (ssrcWhitelist._numSsrcs)
+    switch (ssrcWhitelist.numSsrcs)
     {
     case 1:
         outLogString.append(" ");
-        outLogString.append(ssrcWhitelist._ssrcs[0]);
+        outLogString.append(ssrcWhitelist.ssrcs[0]);
         break;
 
     case 2:
         outLogString.append(" ");
-        outLogString.append(ssrcWhitelist._ssrcs[0]);
+        outLogString.append(ssrcWhitelist.ssrcs[0]);
         outLogString.append(" ");
-        outLogString.append(ssrcWhitelist._ssrcs[1]);
+        outLogString.append(ssrcWhitelist.ssrcs[1]);
         break;
 
     default:

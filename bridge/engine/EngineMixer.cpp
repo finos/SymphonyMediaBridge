@@ -120,19 +120,19 @@ private:
  */
 inline bool shouldSkipBecauseOfWhitelist(const bridge::EngineVideoStream& videoStream, const uint32_t ssrc)
 {
-    if (!videoStream._ssrcWhitelist._enabled)
+    if (!videoStream._ssrcWhitelist.enabled)
     {
         return false;
     }
 
-    switch (videoStream._ssrcWhitelist._numSsrcs)
+    switch (videoStream._ssrcWhitelist.numSsrcs)
     {
     case 0:
         return true;
     case 1:
-        return videoStream._ssrcWhitelist._ssrcs[0] != ssrc;
+        return videoStream._ssrcWhitelist.ssrcs[0] != ssrc;
     case 2:
-        return videoStream._ssrcWhitelist._ssrcs[0] != ssrc && videoStream._ssrcWhitelist._ssrcs[1] != ssrc;
+        return videoStream._ssrcWhitelist.ssrcs[0] != ssrc && videoStream._ssrcWhitelist.ssrcs[1] != ssrc;
     default:
         return false;
     }

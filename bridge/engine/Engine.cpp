@@ -484,10 +484,10 @@ void Engine::reconfigureVideoStream(EngineCommand::Command& nextCommand)
             "Engine",
             reconfigureVideoStream.mixer->getLoggableId().c_str(),
             reconfigureVideoStream.transport->getEndpointIdHash(),
-            reconfigureVideoStream.ssrcWhitelist._enabled ? 't' : 'f',
-            reconfigureVideoStream.ssrcWhitelist._numSsrcs,
-            reconfigureVideoStream.ssrcWhitelist._ssrcs[0],
-            reconfigureVideoStream.ssrcWhitelist._ssrcs[1]);
+            reconfigureVideoStream.ssrcWhitelist.enabled ? 't' : 'f',
+            reconfigureVideoStream.ssrcWhitelist.numSsrcs,
+            reconfigureVideoStream.ssrcWhitelist.ssrcs[0],
+            reconfigureVideoStream.ssrcWhitelist.ssrcs[1]);
 
         auto mixer = reconfigureVideoStream.mixer;
         mixer->reconfigureVideoStream(reconfigureVideoStream.transport,
@@ -504,10 +504,10 @@ void Engine::reconfigureVideoStream(EngineCommand::Command& nextCommand)
             "Engine",
             reconfigureVideoStreamSecondary.mixer->getLoggableId().c_str(),
             reconfigureVideoStreamSecondary.transport->getEndpointIdHash(),
-            reconfigureVideoStreamSecondary.ssrcWhitelist._enabled ? 't' : 'f',
-            reconfigureVideoStreamSecondary.ssrcWhitelist._numSsrcs,
-            reconfigureVideoStreamSecondary.ssrcWhitelist._ssrcs[0],
-            reconfigureVideoStreamSecondary.ssrcWhitelist._ssrcs[1]);
+            reconfigureVideoStreamSecondary.ssrcWhitelist.enabled ? 't' : 'f',
+            reconfigureVideoStreamSecondary.ssrcWhitelist.numSsrcs,
+            reconfigureVideoStreamSecondary.ssrcWhitelist.ssrcs[0],
+            reconfigureVideoStreamSecondary.ssrcWhitelist.ssrcs[1]);
 
         auto mixer = reconfigureVideoStreamSecondary.mixer;
         mixer->reconfigureVideoStream(nextCommand.command.reconfigureVideoStreamSecondary.transport,
