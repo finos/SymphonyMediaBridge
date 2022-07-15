@@ -25,96 +25,96 @@ namespace EngineMessage
 
 struct MixerRemoved
 {
-    EngineMixer* _mixer;
+    EngineMixer* mixer;
 };
 
 struct AllocateAudioBuffer
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
+    EngineMixer* mixer;
+    uint32_t ssrc;
 };
 
 struct AudioStreamRemoved
 {
-    EngineMixer* _mixer;
-    EngineAudioStream* _engineStream;
+    EngineMixer* mixer;
+    EngineAudioStream* engineStream;
 };
 
 struct VideoStreamRemoved
 {
-    EngineMixer* _mixer;
-    EngineVideoStream* _engineStream;
+    EngineMixer* mixer;
+    EngineVideoStream* engineStream;
 };
 
 struct RecordingStreamRemoved
 {
-    EngineMixer* _mixer;
-    EngineRecordingStream* _engineStream;
+    EngineMixer* mixer;
+    EngineRecordingStream* engineStream;
 };
 
 struct DataStreamRemoved
 {
-    EngineMixer* _mixer;
-    EngineDataStream* _engineStream;
+    EngineMixer* mixer;
+    EngineDataStream* engineStream;
 };
 
 struct MixerTimedOut
 {
-    EngineMixer* _mixer;
+    EngineMixer* mixer;
 };
 
 struct SsrcInboundRemoved
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    codec::OpusDecoder* _opusDecoder;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    codec::OpusDecoder* opusDecoder;
 };
 
 struct AllocateVideoPacketCache
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    size_t endpointIdHash;
 };
 
 struct FreeVideoPacketCache
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    size_t endpointIdHash;
 };
 
 struct SctpMessage
 {
-    EngineMixer* _mixer;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    size_t endpointIdHash;
 };
 
 struct RecordingStopperMessage
 {
-    EngineMixer* _mixer;
-    RecordingDescription* _recordingDesc;
+    EngineMixer* mixer;
+    RecordingDescription* recordingDesc;
 };
 
 struct AllocateRecordingRtpPacketCache
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    size_t endpointIdHash;
 };
 
 struct FreeRecordingRtpPacketCache
 {
-    EngineMixer* _mixer;
-    uint32_t _ssrc;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    uint32_t ssrc;
+    size_t endpointIdHash;
 };
 
 struct RemoveRecordingTransport
 {
-    EngineMixer* _mixer;
-    const char* _streamId;
-    size_t _endpointIdHash;
+    EngineMixer* mixer;
+    const char* streamId;
+    size_t endpointIdHash;
 };
 
 struct EngineBarbellRemoved
@@ -167,27 +167,27 @@ struct Message
 {
     Message() = default;
     Message(const Message&) = delete;
-    Message(Type t) : _type(t) {}
+    Message(Type t) : type(t) {}
     Message(Message&& rhs)
     {
-        _type = rhs._type;
-        _command = rhs._command;
-        _packet = std::move(rhs._packet);
+        type = rhs.type;
+        command = rhs.command;
+        packet = std::move(rhs.packet);
     }
 
     Message& operator=(const Message&) = delete;
 
     Message& operator=(Message&& rhs)
     {
-        _type = rhs._type;
-        _command = rhs._command;
-        _packet = std::move(rhs._packet);
+        type = rhs.type;
+        command = rhs.command;
+        packet = std::move(rhs.packet);
         return *this;
     }
 
-    Type _type;
-    MessageUnion _command;
-    memory::UniquePacket _packet;
+    Type type;
+    MessageUnion command;
+    memory::UniquePacket packet;
 }; // namespace bridge
 
 } // namespace EngineMessage
