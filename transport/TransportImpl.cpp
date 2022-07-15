@@ -91,12 +91,12 @@ private:
     memory::UniquePacket _packet;
 };
 
-class Unregister : public jobmanager::CountedJob
+class UnregisterEndpointsJob : public jobmanager::CountedJob
 {
 public:
-    Unregister(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
+    UnregisterEndpointsJob(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
 
-    void run() override { _transport.internalUnregister(); }
+    void run() override { _transport.internalUnregisterEndpoints(); }
 
 private:
     TransportImpl& _transport;
@@ -360,10 +360,10 @@ private:
 
 // Placed last in queue during shutdown to reduce ref count when all jobs are complete.
 // This means other jobs in the transport job queue do not have to have counters
-class UnregisterJob : public jobmanager::CountedJob
+class UnregisteredJob : public jobmanager::CountedJob
 {
 public:
-    explicit UnregisterJob(std::atomic_uint32_t& counter) : CountedJob(counter), _counter(counter) {}
+    explicit UnregisteredJob(std::atomic_uint32_t& counter) : CountedJob(counter), _counter(counter) {}
 
     void run() override
     {
@@ -711,12 +711,12 @@ void TransportImpl::stop()
     }
     _isInitialized = false;
 
-    _jobQueue.addJob<Unregister>(*this);
+    _jobQueue.addJob<UnregisterEndpointsJob>(*this);
 }
 
-void TransportImpl::internalUnregister()
+void TransportImpl::internalUnregisterEndpoints()
 {
-    logger::debug("unreg from rtpendpoints jobcount %u, endpoints %zu",
+    logger::debug("Unregister from rtp endpoints jobcount %u, endpoints %zu",
         _loggableId.c_str(),
         _jobCounter.load(),
         _rtpEndpoints.size());
@@ -747,13 +747,13 @@ void TransportImpl::onRegistered(Endpoint& endpoint)
 void TransportImpl::onUnregistered(Endpoint& endpoint)
 {
     logger::debug("unregistered %s, %d", _loggableId.c_str(), endpoint.getName(), _jobCounter.load());
-    _jobQueue.addJob<UnregisterJob>(_jobCounter);
+    _jobQueue.addJob<UnregisteredJob>(_jobCounter);
 }
 
 void TransportImpl::onServerPortUnregistered(ServerEndpoint& endpoint)
 {
     logger::debug("unregistered %s, %d", _loggableId.c_str(), endpoint.getName(), _jobCounter.load());
-    _jobQueue.addJob<UnregisterJob>(_jobCounter);
+    _jobQueue.addJob<UnregisteredJob>(_jobCounter);
 }
 
 void TransportImpl::onServerPortRegistered(ServerEndpoint& endpoint)

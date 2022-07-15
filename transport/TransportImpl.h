@@ -262,7 +262,7 @@ public: // end point callbacks
     void internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
         const SocketAddress& source,
         memory::UniquePacket packet);
-    void internalUnregister();
+    void internalUnregisterEndpoints();
 
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
 
