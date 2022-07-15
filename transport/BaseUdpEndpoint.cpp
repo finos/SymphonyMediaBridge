@@ -73,9 +73,7 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
       _epoll(epoll),
       _epollCountdown(2),
       _isShared(isShared),
-      _defaultListener(nullptr),
-      _receiveTracker(utils::Time::ms * 100),
-      _sendTracker(utils::Time::ms * 100)
+      _defaultListener(nullptr)
 {
     _pendingRead.clear();
     _pendingSend.clear();
@@ -179,7 +177,7 @@ void BaseUdpEndpoint::internalSend()
             }
         }
 
-        _sendTracker.update(byteCount, sendTimestamp);
+        _rateMetrics.sendTracker.update(byteCount, sendTimestamp);
     }
     if (packetCounter > 10200)
     {
@@ -256,9 +254,7 @@ void BaseUdpEndpoint::onSocketReadable(int fd)
 
 EndpointMetrics BaseUdpEndpoint::getMetrics(uint64_t timestamp) const
 {
-    return EndpointMetrics(_sendQueue.size(),
-        _receiveTracker.get(timestamp, utils::Time::sec) * 8 * utils::Time::ms,
-        _sendTracker.get(timestamp, utils::Time::sec) * 8 * utils::Time::ms);
+    return _rateMetrics.toEndpointMetrics(_sendQueue.size());
 }
 
 namespace
@@ -331,7 +327,7 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
         if (packetCount == 1)
         {
             ssize_t byteCount = ::recvmsg(fd, &messageHeader[0].msg_hdr, flags);
-            _receiveTracker.update(byteCount, utils::Time::getAbsoluteTime());
+            _rateMetrics.receiveTracker.update(byteCount, utils::Time::getAbsoluteTime());
             if (byteCount <= 0)
             {
                 break;
@@ -363,7 +359,7 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
             const auto receiveTime = utils::Time::getAbsoluteTime();
             for (int i = 0; i < count; ++i)
             {
-                _receiveTracker.update(messageHeader[i].msg_len, receiveTime);
+                _rateMetrics.receiveTracker.update(messageHeader[i].msg_len, receiveTime);
                 if (messageHeader[i].msg_len < memory::Packet::size)
                 {
                     receiveMessage[i].packet->setLength(messageHeader[i].msg_len);

@@ -133,6 +133,26 @@ private:
     uint64_t _prevTimestamp;
 };
 
+template <size_t NUM_BUCKETS, uint64_t BUCKET_SIZE_MS, uint64_t SNAPSHOT_DELTA_MS>
+struct TrackerWithSnapshot
+{
+    TrackerWithSnapshot() : tracker(BUCKET_SIZE_MS), _lastSnapshotUpdatedAt(0) { snapshot.store(0.0); }
+    utils::RateTracker<NUM_BUCKETS> tracker;
+    std::atomic<double> snapshot;
+    void update(double itemSize, uint64_t timestamp)
+    {
+        tracker.update(itemSize, timestamp);
+        if (timestamp - _lastSnapshotUpdatedAt > (SNAPSHOT_DELTA_MS >> 1))
+        {
+            snapshot.store(tracker.get(timestamp, SNAPSHOT_DELTA_MS * utils::Time::ms));
+            _lastSnapshotUpdatedAt = timestamp;
+        }
+    }
+
+private:
+    uint64_t _lastSnapshotUpdatedAt;
+};
+
 class TimeGuard
 {
 public:

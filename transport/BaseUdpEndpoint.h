@@ -71,6 +71,18 @@ protected:
         memory::UniquePacket packet;
     };
 
+    struct RateMetrics
+    {
+        utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> receiveTracker;
+        utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> sendTracker;
+        EndpointMetrics toEndpointMetrics(size_t size) const
+        {
+            return EndpointMetrics(size,
+                receiveTracker.snapshot.load() * 8 * utils::Time::ms,
+                sendTracker.snapshot.load() * 8 * utils::Time::ms);
+        }
+    } _rateMetrics;
+
     jobmanager::JobQueue _receiveJobs;
     jobmanager::JobQueue _sendJobs;
     memory::PacketPoolAllocator& _allocator;
@@ -85,7 +97,5 @@ protected:
     std::atomic_flag _isFull = ATOMIC_FLAG_INIT;
 
     std::atomic<IEvents*> _defaultListener;
-    utils::RateTracker<10> _receiveTracker;
-    utils::RateTracker<10> _sendTracker;
 };
 } // namespace transport
