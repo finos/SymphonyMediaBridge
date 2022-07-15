@@ -221,11 +221,6 @@ void RtcePollImpl::run()
 
     while (_running)
     {
-        if (_monitoredSockets.empty())
-        {
-            utils::Time::nanoSleep(utils::Time::ms * 100);
-        }
-
         SocketRegistration message;
         while (_pendingRegistrations.pop(message))
         {
