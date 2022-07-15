@@ -316,11 +316,11 @@ bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::EndpointDescription::
 
     if (video._ssrcWhitelist.isSet())
     {
-        ssrcWhitelist._enabled = true;
-        ssrcWhitelist._numSsrcs = std::min(video._ssrcWhitelist.get().size(), ssrcWhitelist._ssrcs.size());
-        for (size_t i = 0; i < ssrcWhitelist._numSsrcs; ++i)
+        ssrcWhitelist.enabled = true;
+        ssrcWhitelist.numSsrcs = std::min(video._ssrcWhitelist.get().size(), ssrcWhitelist.ssrcs.size());
+        for (size_t i = 0; i < ssrcWhitelist.numSsrcs; ++i)
         {
-            ssrcWhitelist._ssrcs[i] = video._ssrcWhitelist.get()[i];
+            ssrcWhitelist.ssrcs[i] = video._ssrcWhitelist.get()[i];
         }
     }
 
