@@ -90,7 +90,7 @@ bool getIceCandidates(const legacyapi::Transport& transport,
                 ice::IceCandidate::Type::HOST);
         }
         else if ((candidate._type.compare("srflx") == 0 || candidate._type.compare("relay") == 0) &&
-                candidate._relAddr.isSet() && candidate._relPort.isSet())
+            candidate._relAddr.isSet() && candidate._relPort.isSet())
         {
             iceCandidates.emplace_back(candidate._foundation.c_str(),
                 candidate._component == 1 ? ice::IceComponent::RTP : ice::IceComponent::RTCP,
@@ -98,7 +98,8 @@ bool getIceCandidates(const legacyapi::Transport& transport,
                 candidate._priority,
                 transport::SocketAddress::parse(candidate._ip, candidate._port),
                 transport::SocketAddress::parse(candidate._relAddr.get(), candidate._relPort.get()),
-                candidate._type.compare("srflx") == 0 ? ice::IceCandidate::Type::SRFLX : ice::IceCandidate::Type::RELAY);
+                candidate._type.compare("srflx") == 0 ? ice::IceCandidate::Type::SRFLX
+                                                      : ice::IceCandidate::Type::RELAY);
         }
     }
 
@@ -165,11 +166,11 @@ bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const legacyapi::Channel& channe
 
     if (channel._ssrcWhitelist.isSet())
     {
-        ssrcWhitelist._enabled = true;
-        ssrcWhitelist._numSsrcs = std::min(channel._ssrcWhitelist.get().size(), ssrcWhitelist._ssrcs.size());
-        for (size_t i = 0; i < ssrcWhitelist._numSsrcs; ++i)
+        ssrcWhitelist.enabled = true;
+        ssrcWhitelist.numSsrcs = std::min(channel._ssrcWhitelist.get().size(), ssrcWhitelist.ssrcs.size());
+        for (size_t i = 0; i < ssrcWhitelist.numSsrcs; ++i)
         {
-            ssrcWhitelist._ssrcs[i] = channel._ssrcWhitelist.get()[i];
+            ssrcWhitelist.ssrcs[i] = channel._ssrcWhitelist.get()[i];
         }
     }
 

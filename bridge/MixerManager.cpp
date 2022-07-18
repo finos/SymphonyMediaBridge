@@ -138,7 +138,7 @@ Mixer* MixerManager::create(uint32_t lastN)
 
     {
         EngineCommand::Command addMixerCommand = {EngineCommand::Type::AddMixer};
-        addMixerCommand._command.addMixer._mixer = engineMixerEmplaceResult.first->second.get();
+        addMixerCommand.command.addMixer.mixer = engineMixerEmplaceResult.first->second.get();
         _engine.pushCommand(std::move(addMixerCommand));
     }
 
@@ -157,7 +157,7 @@ void MixerManager::remove(const std::string& id)
     findResult->second->markForDeletion();
 
     EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
-    command._command.removeMixer._mixer = _engineMixers[id].get();
+    command.command.removeMixer.mixer = _engineMixers[id].get();
     _engine.pushCommand(std::move(command));
 }
 
@@ -205,7 +205,7 @@ void MixerManager::stop()
             {
                 it->second->markForDeletion();
                 EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
-                command._command.removeMixer._mixer = _engineMixers[it->first].get();
+                command.command.removeMixer.mixer = _engineMixers[it->first].get();
                 _engine.pushCommand(std::move(command));
             }
         }
@@ -239,7 +239,7 @@ void MixerManager::run()
 
             for (EngineMessage::Message nextMessage; _engineMessages.pop(nextMessage);)
             {
-                switch (nextMessage._type)
+                switch (nextMessage.type)
                 {
                 case EngineMessage::Type::MixerRemoved:
                     engineMessageMixerRemoved(nextMessage);
@@ -299,7 +299,7 @@ void MixerManager::run()
                     break;
 
                 case EngineMessage::Type::BarbellRemoved:
-                    engineBarbellRemoved(nextMessage._command.barbellRemoved);
+                    engineBarbellRemoved(nextMessage.command.barbellRemoved);
                     break;
                 default:
                     assert(false);
@@ -342,9 +342,9 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
 
-        auto& command = message._command.mixerRemoved;
+        auto& command = message.command.mixerRemoved;
 
-        std::string mixerId(command._mixer->getId()); // copy id string to have it after EngineMixer is deleted
+        std::string mixerId(command.mixer->getId()); // copy id string to have it after EngineMixer is deleted
         auto findResult = _mixers.find(mixerId);
         if (findResult != _mixers.end())
         {
@@ -362,7 +362,7 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
             logger::debug("did not find mixer to stop %s", "MixerManager", mixerId.c_str());
         }
 
-        logger::info("Removing EngineMixer %s", "MixerManager", command._mixer->getLoggableId().c_str());
+        logger::info("Removing EngineMixer %s", "MixerManager", command.mixer->getLoggableId().c_str());
         // This will sweep the PacketPoolAllocator. Any pending jobs may crash or corrupt memory.
         _engineMixers.erase(mixerId);
 
@@ -389,8 +389,8 @@ void MixerManager::engineMessageAllocateAudioBuffer(const EngineMessage::Message
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    auto& mixerAudioBuffers = _audioBuffers[message._command.allocateAudioBuffer._mixer->getId()];
-    auto findResult = mixerAudioBuffers.find(message._command.allocateAudioBuffer._ssrc);
+    auto& mixerAudioBuffers = _audioBuffers[message.command.allocateAudioBuffer.mixer->getId()];
+    auto findResult = mixerAudioBuffers.find(message.command.allocateAudioBuffer.ssrc);
     if (findResult != mixerAudioBuffers.cend())
     {
         return;
@@ -398,198 +398,198 @@ void MixerManager::engineMessageAllocateAudioBuffer(const EngineMessage::Message
 
     logger::info("Allocating audio buffer for EngineMixer %s, ssrc %u",
         "MixerManager",
-        message._command.allocateAudioBuffer._mixer->getLoggableId().c_str(),
-        message._command.allocateAudioBuffer._ssrc);
+        message.command.allocateAudioBuffer.mixer->getLoggableId().c_str(),
+        message.command.allocateAudioBuffer.ssrc);
 
     auto audioBuffer = std::make_unique<EngineMixer::AudioBuffer>();
     {
         EngineCommand::Command command(EngineCommand::Type::AddAudioBuffer);
-        command._command.addAudioBuffer._mixer = message._command.allocateAudioBuffer._mixer;
-        command._command.addAudioBuffer._ssrc = message._command.allocateAudioBuffer._ssrc;
-        command._command.addAudioBuffer._audioBuffer = audioBuffer.get();
+        command.command.addAudioBuffer.mixer = message.command.allocateAudioBuffer.mixer;
+        command.command.addAudioBuffer.ssrc = message.command.allocateAudioBuffer.ssrc;
+        command.command.addAudioBuffer.audioBuffer = audioBuffer.get();
         _engine.pushCommand(std::move(command));
     }
-    mixerAudioBuffers.emplace(message._command.allocateAudioBuffer._ssrc, std::move(audioBuffer));
+    mixerAudioBuffers.emplace(message.command.allocateAudioBuffer.ssrc, std::move(audioBuffer));
 }
 
 void MixerManager::engineMessageAudioStreamRemoved(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.audioStreamRemoved;
+    const auto& command = message.command.audioStreamRemoved;
     logger::info("Removing audioStream endpointId %s from mixer %s",
         "MixerManager",
-        command._engineStream->_endpointId.c_str(),
-        command._mixer->getLoggableId().c_str());
+        command.engineStream->_endpointId.c_str(),
+        command.mixer->getLoggableId().c_str());
 
-    const auto mixerIter = _mixers.find(command._mixer->getId());
+    const auto mixerIter = _mixers.find(command.mixer->getId());
     if (mixerIter == _mixers.cend())
     {
         logger::info("Mixer %s (id=%s) does not exist",
             "MixerManager",
-            command._mixer->getLoggableId().c_str(),
-            command._mixer->getId().c_str());
+            command.mixer->getLoggableId().c_str(),
+            command.mixer->getId().c_str());
         return;
     }
 
-    mixerIter->second->engineAudioStreamRemoved(command._engineStream);
+    mixerIter->second->engineAudioStreamRemoved(command.engineStream);
 }
 
 void MixerManager::engineMessageVideoStreamRemoved(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.videoStreamRemoved;
+    const auto& command = message.command.videoStreamRemoved;
     logger::info("Removing videoStream endpointId %s from mixer %s",
         "MixerManager",
-        command._engineStream->_endpointId.c_str(),
-        command._mixer->getLoggableId().c_str());
+        command.engineStream->_endpointId.c_str(),
+        command.mixer->getLoggableId().c_str());
 
-    const auto mixerIter = _mixers.find(command._mixer->getId());
+    const auto mixerIter = _mixers.find(command.mixer->getId());
     if (mixerIter == _mixers.cend())
     {
         logger::info("Mixer %s (id=%s) does not exist",
             "MixerManager",
-            command._mixer->getLoggableId().c_str(),
-            command._mixer->getId().c_str());
+            command.mixer->getLoggableId().c_str(),
+            command.mixer->getId().c_str());
         return;
     }
 
-    mixerIter->second->engineVideoStreamRemoved(command._engineStream);
+    mixerIter->second->engineVideoStreamRemoved(command.engineStream);
 }
 
 void MixerManager::engineMessageRecordingStreamRemoved(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.recordingStreamRemoved;
+    const auto& command = message.command.recordingStreamRemoved;
     logger::info("Removing recordingStream  %s from mixer %s",
         "MixerManager",
-        command._engineStream->_id.c_str(),
-        command._mixer->getLoggableId().c_str());
+        command.engineStream->_id.c_str(),
+        command.mixer->getLoggableId().c_str());
 
-    const auto mixerIter = _mixers.find(command._mixer->getId());
+    const auto mixerIter = _mixers.find(command.mixer->getId());
     if (mixerIter == _mixers.cend())
     {
         logger::info("Mixer %s (id=%s) does not exist",
             "MixerManager",
-            command._mixer->getLoggableId().c_str(),
-            command._mixer->getId().c_str());
+            command.mixer->getLoggableId().c_str(),
+            command.mixer->getId().c_str());
         return;
     }
 
-    mixerIter->second->engineRecordingStreamRemoved(command._engineStream);
+    mixerIter->second->engineRecordingStreamRemoved(command.engineStream);
 }
 
 void MixerManager::engineMessageDataStreamRemoved(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.dataStreamRemoved;
+    const auto& command = message.command.dataStreamRemoved;
     logger::info("Removing dataStream endpointId %s from mixer %s",
         "MixerManager",
-        command._engineStream->_endpointId.c_str(),
-        command._mixer->getLoggableId().c_str());
+        command.engineStream->_endpointId.c_str(),
+        command.mixer->getLoggableId().c_str());
 
-    const auto mixerIter = _mixers.find(command._mixer->getId());
+    const auto mixerIter = _mixers.find(command.mixer->getId());
     if (mixerIter == _mixers.cend())
     {
         logger::info("Mixer %s (id=%s) does not exist",
             "MixerManager",
-            command._mixer->getLoggableId().c_str(),
-            command._mixer->getId().c_str());
+            command.mixer->getLoggableId().c_str(),
+            command.mixer->getId().c_str());
         return;
     }
 
-    mixerIter->second->engineDataStreamRemoved(command._engineStream);
+    mixerIter->second->engineDataStreamRemoved(command.engineStream);
 }
 
 void MixerManager::engineMessageMixerTimedOut(const EngineMessage::Message& message)
 {
-    const auto& command = message._command.mixerTimedOut;
-    logger::info("Mixer %s inactivity time out. Deleting it.", "MixerManager", command._mixer->getLoggableId().c_str());
-    remove(command._mixer->getId());
+    const auto& command = message.command.mixerTimedOut;
+    logger::info("Mixer %s inactivity time out. Deleting it.", "MixerManager", command.mixer->getLoggableId().c_str());
+    remove(command.mixer->getId());
 }
 
 void MixerManager::engineMessageInboundSsrcRemoved(const EngineMessage::Message& message)
 {
-    const auto& command = message._command.ssrcInboundRemoved;
-    logger::info("Mixer %s removed ssrc %u", "MixerManager", command._mixer->getLoggableId().c_str(), command._ssrc);
-    delete command._opusDecoder;
+    const auto& command = message.command.ssrcInboundRemoved;
+    logger::info("Mixer %s removed ssrc %u", "MixerManager", command.mixer->getLoggableId().c_str(), command.ssrc);
+    delete command.opusDecoder;
 }
 
 void MixerManager::engineMessageAllocateVideoPacketCache(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.allocateVideoPacketCache;
-    const auto mixerItr = _mixers.find(command._mixer->getId());
+    const auto& command = message.command.allocateVideoPacketCache;
+    const auto mixerItr = _mixers.find(command.mixer->getId());
     if (mixerItr == _mixers.cend())
     {
         return;
     }
 
-    mixerItr->second->allocateVideoPacketCache(command._ssrc, command._endpointIdHash);
+    mixerItr->second->allocateVideoPacketCache(command.ssrc, command.endpointIdHash);
 }
 
 void MixerManager::engineMessageFreeVideoPacketCache(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.freeVideoPacketCache;
-    const auto mixerItr = _mixers.find(command._mixer->getId());
+    const auto& command = message.command.freeVideoPacketCache;
+    const auto mixerItr = _mixers.find(command.mixer->getId());
     if (mixerItr == _mixers.cend())
     {
         return;
     }
 
-    mixerItr->second->freeVideoPacketCache(command._ssrc, command._endpointIdHash);
+    mixerItr->second->freeVideoPacketCache(command.ssrc, command.endpointIdHash);
 }
 
 void MixerManager::engineMessageSctp(EngineMessage::Message&& message)
 {
-    const auto& sctpMessage = message._command.sctpMessage;
-    auto& sctpHeader = webrtc::streamMessageHeader(*message._packet);
+    const auto& sctpMessage = message.command.sctpMessage;
+    auto& sctpHeader = webrtc::streamMessageHeader(*message.packet);
 
     if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
     {
         // create command with this packet to send the binary data -> engine -> WebRtcDataStream belonging to this
         // transport
         EngineCommand::Command command{EngineCommand::Type::SctpControl};
-        auto& sctpControl = command._command.sctpControl;
-        command._packet.swap(message._packet);
-        sctpControl._mixer = sctpMessage._mixer;
-        sctpControl._endpointIdHash = sctpMessage._endpointIdHash;
+        auto& sctpControl = command.command.sctpControl;
+        command.packet.swap(message.packet);
+        sctpControl.mixer = sctpMessage.mixer;
+        sctpControl.endpointIdHash = sctpMessage.endpointIdHash;
         _engine.pushCommand(std::move(command));
         return; // do not free packet as we passed it on
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
     {
         std::string body(reinterpret_cast<const char*>(sctpHeader.data()),
-            message._packet->getLength() - sizeof(sctpHeader));
+            message.packet->getLength() - sizeof(sctpHeader));
 
         try
         {
             auto json = nlohmann::json::parse(body);
             if (api::DataChannelMessageParser::isPinnedEndpointsChanged(json))
             {
-                auto mixerIt = _mixers.find(sctpMessage._mixer->getId());
+                auto mixerIt = _mixers.find(sctpMessage.mixer->getId());
                 if (mixerIt != _mixers.end())
                 {
                     const auto& pinnedEndpoints = api::DataChannelMessageParser::getPinnedEndpoint(json);
                     if (pinnedEndpoints.empty())
                     {
-                        mixerIt->second->unpinEndpoint(sctpMessage._endpointIdHash);
+                        mixerIt->second->unpinEndpoint(sctpMessage.endpointIdHash);
                     }
                     else
                     {
-                        mixerIt->second->pinEndpoint(sctpMessage._endpointIdHash, pinnedEndpoints[0]);
+                        mixerIt->second->pinEndpoint(sctpMessage.endpointIdHash, pinnedEndpoints[0]);
                     }
                 }
             }
             else if (api::DataChannelMessageParser::isEndpointMessage(json))
             {
-                auto mixerIt = _mixers.find(sctpMessage._mixer->getId());
+                auto mixerIt = _mixers.find(sctpMessage.mixer->getId());
                 if (mixerIt == _mixers.end())
                 {
                     return;
@@ -603,7 +603,7 @@ void MixerManager::engineMessageSctp(EngineMessage::Message&& message)
                 }
 
                 mixerIt->second->sendEndpointMessage(toItr->get<std::string>(),
-                    sctpMessage._endpointIdHash,
+                    sctpMessage.endpointIdHash,
                     payloadItr->dump());
             }
         }
@@ -626,65 +626,65 @@ void MixerManager::engineRecordingStopped(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.recordingStopped;
+    const auto& command = message.command.recordingStopped;
     logger::info("Stopping recording %s from mixer %s",
         "MixerManager",
-        command._recordingDesc->_recordingId.c_str(),
-        command._mixer->getLoggableId().c_str());
+        command.recordingDesc->_recordingId.c_str(),
+        command.mixer->getLoggableId().c_str());
 
-    const auto mixerIter = _mixers.find(command._mixer->getId());
+    const auto mixerIter = _mixers.find(command.mixer->getId());
     if (mixerIter == _mixers.cend())
     {
         logger::info("Mixer %s (id=%s) does not exist",
             "MixerManager",
-            command._mixer->getLoggableId().c_str(),
-            command._mixer->getId().c_str());
+            command.mixer->getLoggableId().c_str(),
+            command.mixer->getId().c_str());
         return;
     }
 
-    mixerIter->second->engineRecordingDescStopped(*command._recordingDesc);
+    mixerIter->second->engineRecordingDescStopped(*command.recordingDesc);
 }
 
 void MixerManager::engineMessageAllocateRecordingRtpPacketCache(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.allocateRecordingRtpPacketCache;
-    const auto mixerItr = _mixers.find(command._mixer->getId());
+    const auto& command = message.command.allocateRecordingRtpPacketCache;
+    const auto mixerItr = _mixers.find(command.mixer->getId());
     if (mixerItr == _mixers.cend())
     {
         return;
     }
 
-    mixerItr->second->allocateRecordingRtpPacketCache(command._ssrc, command._endpointIdHash);
+    mixerItr->second->allocateRecordingRtpPacketCache(command.ssrc, command.endpointIdHash);
 }
 
 void MixerManager::engineMessageFreeRecordingRtpPacketCache(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.freeRecordingRtpPacketCache;
-    const auto mixerItr = _mixers.find(command._mixer->getId());
+    const auto& command = message.command.freeRecordingRtpPacketCache;
+    const auto mixerItr = _mixers.find(command.mixer->getId());
     if (mixerItr == _mixers.cend())
     {
         return;
     }
 
-    mixerItr->second->freeRecordingRtpPacketCache(command._ssrc, command._endpointIdHash);
+    mixerItr->second->freeRecordingRtpPacketCache(command.ssrc, command.endpointIdHash);
 }
 
 void MixerManager::engineMessageRemoveRecordingTransport(const EngineMessage::Message& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto& command = message._command.removeRecordingTransport;
-    const auto mixerItr = _mixers.find(command._mixer->getId());
+    const auto& command = message.command.removeRecordingTransport;
+    const auto mixerItr = _mixers.find(command.mixer->getId());
     if (mixerItr == _mixers.cend())
     {
         return;
     }
 
-    mixerItr->second->removeRecordingTransport(command._streamId, command._endpointIdHash);
+    mixerItr->second->removeRecordingTransport(command.streamId, command.endpointIdHash);
 }
 
 void MixerManager::engineBarbellRemoved(const EngineMessage::EngineBarbellRemoved& message)
