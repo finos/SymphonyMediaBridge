@@ -202,7 +202,7 @@ EngineMixer::~EngineMixer() {}
 
 void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
 {
-    const auto endpointIdHash = engineAudioStream->_transport.getEndpointIdHash();
+    const auto endpointIdHash = engineAudioStream->transport.getEndpointIdHash();
     if (_engineAudioStreams.find(endpointIdHash) != _engineAudioStreams.end())
     {
         return;
@@ -210,12 +210,12 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
 
     logger::debug("Add engineAudioStream, transport %s, endpointIdHash %lu, audioMixed %c",
         _loggableId.c_str(),
-        engineAudioStream->_transport.getLoggableId().c_str(),
+        engineAudioStream->transport.getLoggableId().c_str(),
         endpointIdHash,
-        engineAudioStream->_audioMixed ? 't' : 'f');
+        engineAudioStream->audioMixed ? 't' : 'f');
 
     _engineAudioStreams.emplace(endpointIdHash, engineAudioStream);
-    if (engineAudioStream->_audioMixed)
+    if (engineAudioStream->audioMixed)
     {
         _numMixedAudioStreams++;
     }
@@ -231,7 +231,7 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
 
 void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
 {
-    const auto endpointIdHash = engineAudioStream->_endpointIdHash;
+    const auto endpointIdHash = engineAudioStream->endpointIdHash;
 
     if (_activeMediaList->removeAudioParticipant(endpointIdHash))
     {
@@ -239,34 +239,34 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
     }
     updateBandwidthFloor();
 
-    if (engineAudioStream->_transport.isConnected())
+    if (engineAudioStream->transport.isConnected())
     {
         // Job count will increase delaying the deletion of transport by Mixer.
-        auto* context = obtainOutboundSsrcContext(*engineAudioStream, engineAudioStream->_localSsrc);
+        auto* context = obtainOutboundSsrcContext(*engineAudioStream, engineAudioStream->localSsrc);
         if (context)
         {
             auto goodByePacket = createGoodBye(context->_ssrc, context->_allocator);
             if (goodByePacket)
             {
-                engineAudioStream->_transport.getJobQueue().addJob<SendRtcpJob>(std::move(goodByePacket),
-                    engineAudioStream->_transport);
+                engineAudioStream->transport.getJobQueue().addJob<SendRtcpJob>(std::move(goodByePacket),
+                    engineAudioStream->transport);
             }
         }
     }
 
-    if (engineAudioStream->_audioMixed)
+    if (engineAudioStream->audioMixed)
     {
         _numMixedAudioStreams--;
     }
 
     logger::debug("Remove engineAudioStream, transport %s",
         _loggableId.c_str(),
-        engineAudioStream->_transport.getLoggableId().c_str());
+        engineAudioStream->transport.getLoggableId().c_str());
 
-    if (engineAudioStream->_remoteSsrc.isSet())
+    if (engineAudioStream->remoteSsrc.isSet())
     {
-        markInboundContextForDeletion(engineAudioStream->_remoteSsrc.get());
-        _mixerSsrcAudioBuffers.erase(engineAudioStream->_remoteSsrc.get());
+        markInboundContextForDeletion(engineAudioStream->remoteSsrc.get());
+        _mixerSsrcAudioBuffers.erase(engineAudioStream->remoteSsrc.get());
 
         sendAudioStreamToRecording(*engineAudioStream, false);
     }
@@ -276,7 +276,7 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
     EngineMessage::Message message(EngineMessage::Type::AudioStreamRemoved);
     message.command.audioStreamRemoved.mixer = this;
     message.command.audioStreamRemoved.engineStream = engineAudioStream;
-    engineAudioStream->_transport.getJobQueue().addJob<SendEngineMessageJob>(engineAudioStream->_transport,
+    engineAudioStream->transport.getJobQueue().addJob<SendEngineMessageJob>(engineAudioStream->transport,
         _messageListener,
         std::move(message));
 }
@@ -509,20 +509,20 @@ void EngineMixer::reconfigureAudioStream(const transport::RtcTransport* transpor
     }
     auto engineAudioStream = audioStreamItr->second;
 
-    if (engineAudioStream->_remoteSsrc.isSet() && engineAudioStream->_remoteSsrc.get() != remoteSsrc)
+    if (engineAudioStream->remoteSsrc.isSet() && engineAudioStream->remoteSsrc.get() != remoteSsrc)
     {
-        markInboundContextForDeletion(engineAudioStream->_remoteSsrc.get());
+        markInboundContextForDeletion(engineAudioStream->remoteSsrc.get());
         sendAudioStreamToRecording(*engineAudioStream, false);
     }
 
     if (remoteSsrc != 0)
     {
-        engineAudioStream->_remoteSsrc.set(remoteSsrc);
+        engineAudioStream->remoteSsrc.set(remoteSsrc);
         sendAudioStreamToRecording(*engineAudioStream, true);
     }
     else
     {
-        engineAudioStream->_remoteSsrc = utils::Optional<uint32_t>();
+        engineAudioStream->remoteSsrc = utils::Optional<uint32_t>();
     }
     updateBandwidthFloor();
 }
@@ -776,7 +776,7 @@ void EngineMixer::clear()
 {
     for (auto& engineAudioStream : _engineAudioStreams)
     {
-        engineAudioStream.second->_transport.setDataReceiver(nullptr);
+        engineAudioStream.second->transport.setDataReceiver(nullptr);
     }
     _engineAudioStreams.clear();
 }
@@ -1123,19 +1123,19 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
 
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
-        const auto audioRecvCounters = audioStreamEntry.second->_transport.getAudioReceiveCounters(idleTimestamp);
-        const auto audioSendCounters = audioStreamEntry.second->_transport.getAudioSendCounters(idleTimestamp);
-        const auto videoRecvCounters = audioStreamEntry.second->_transport.getVideoReceiveCounters(idleTimestamp);
-        const auto videoSendCounters = audioStreamEntry.second->_transport.getVideoSendCounters(idleTimestamp);
-        const auto pacingQueueCount = audioStreamEntry.second->_transport.getPacingQueueCount();
-        const auto rtxPacingQueueCount = audioStreamEntry.second->_transport.getRtxPacingQueueCount();
+        const auto audioRecvCounters = audioStreamEntry.second->transport.getAudioReceiveCounters(idleTimestamp);
+        const auto audioSendCounters = audioStreamEntry.second->transport.getAudioSendCounters(idleTimestamp);
+        const auto videoRecvCounters = audioStreamEntry.second->transport.getVideoReceiveCounters(idleTimestamp);
+        const auto videoSendCounters = audioStreamEntry.second->transport.getVideoSendCounters(idleTimestamp);
+        const auto pacingQueueCount = audioStreamEntry.second->transport.getPacingQueueCount();
+        const auto rtxPacingQueueCount = audioStreamEntry.second->transport.getRtxPacingQueueCount();
 
         stats.inbound.audio += audioRecvCounters;
         stats.outbound.audio += audioSendCounters;
         stats.inbound.video += videoRecvCounters;
         stats.outbound.video += videoSendCounters;
-        stats.inbound.transport.addBandwidthGroup(audioStreamEntry.second->_transport.getDownlinkEstimateKbps());
-        stats.inbound.transport.addRttGroup(audioStreamEntry.second->_transport.getRtt() / utils::Time::ms);
+        stats.inbound.transport.addBandwidthGroup(audioStreamEntry.second->transport.getDownlinkEstimateKbps());
+        stats.inbound.transport.addRttGroup(audioStreamEntry.second->transport.getRtt() / utils::Time::ms);
         stats.inbound.transport.addLossGroup((audioRecvCounters + videoRecvCounters).getReceiveLossRatio());
         stats.outbound.transport.addLossGroup((audioSendCounters + videoSendCounters).getSendLossRatio());
         stats.pacingQueue += pacingQueueCount;
@@ -1640,26 +1640,26 @@ void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
 
 SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(EngineAudioStream& audioStream, const uint32_t ssrc)
 {
-    auto ssrcOutboundContextItr = audioStream._ssrcOutboundContexts.find(ssrc);
-    if (ssrcOutboundContextItr != audioStream._ssrcOutboundContexts.cend())
+    auto ssrcOutboundContextItr = audioStream.ssrcOutboundContexts.find(ssrc);
+    if (ssrcOutboundContextItr != audioStream.ssrcOutboundContexts.cend())
     {
         return &ssrcOutboundContextItr->second;
     }
 
-    auto emplaceResult = audioStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream._rtpMap);
+    auto emplaceResult = audioStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream.rtpMap);
 
-    if (!emplaceResult.second && emplaceResult.first == audioStream._ssrcOutboundContexts.end())
+    if (!emplaceResult.second && emplaceResult.first == audioStream.ssrcOutboundContexts.end())
     {
         logger::error("Failed to create outbound context for audio ssrc %u, endpointIdHash %lu",
             _loggableId.c_str(),
             ssrc,
-            audioStream._endpointIdHash);
+            audioStream.endpointIdHash);
         return nullptr;
     }
 
     logger::info("Created new outbound context for audio stream, endpointIdHash %lu, ssrc %u",
         _loggableId.c_str(),
-        audioStream._endpointIdHash,
+        audioStream.endpointIdHash,
         ssrc);
     return &emplaceResult.first->second;
 }
@@ -1726,15 +1726,15 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     const auto endpointIdHash = sender->getEndpointIdHash();
     auto audioStreamItr = _engineAudioStreams.find(endpointIdHash);
 
-    if (audioStreamItr != _engineAudioStreams.end() && audioStreamItr->second->_rtpMap._payloadType == payloadType)
+    if (audioStreamItr != _engineAudioStreams.end() && audioStreamItr->second->rtpMap._payloadType == payloadType)
     {
         auto audioStream = audioStreamItr->second;
-        if (!audioStream->_remoteSsrc.isSet() || audioStream->_remoteSsrc.get() != ssrc)
+        if (!audioStream->remoteSsrc.isSet() || audioStream->remoteSsrc.get() != ssrc)
         {
             return nullptr;
         }
 
-        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, audioStream->_rtpMap, sender, timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, audioStream->rtpMap, sender, timestamp);
 
         if (!emplaceResult.second && emplaceResult.first == _ssrcInboundContexts.end())
         {
@@ -1746,9 +1746,9 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
                      "absSendTimeExtId %d, %s",
             _loggableId.c_str(),
             ssrc,
-            audioStream->_endpointIdHash,
-            audioStream->_rtpMap._audioLevelExtId.isSet() ? audioStream->_rtpMap._audioLevelExtId.get() : -1,
-            audioStream->_rtpMap._absSendTimeExtId.isSet() ? audioStream->_rtpMap._absSendTimeExtId.get() : -1,
+            audioStream->endpointIdHash,
+            audioStream->rtpMap._audioLevelExtId.isSet() ? audioStream->rtpMap._audioLevelExtId.get() : -1,
+            audioStream->rtpMap._absSendTimeExtId.isSet() ? audioStream->rtpMap._absSendTimeExtId.get() : -1,
             sender->getLoggableId().c_str());
         return &emplaceResult.first->second;
     }
@@ -1870,15 +1870,15 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         for (auto& audioStreamEntry : _engineAudioStreams)
         {
             auto audioStream = audioStreamEntry.second;
-            if (!audioStream || &audioStream->_transport == packetInfo.transport() || audioStream->_audioMixed)
+            if (!audioStream || &audioStream->transport == packetInfo.transport() || audioStream->audioMixed)
             {
                 continue;
             }
 
-            if (audioStream->_transport.isConnected())
+            if (audioStream->transport.isConnected())
             {
                 auto ssrc = packetInfo.inboundContext()->_ssrc;
-                if (audioStream->_ssrcRewrite)
+                if (audioStream->ssrcRewrite)
                 {
                     const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
                     const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.transport()->getEndpointIdHash());
@@ -1898,11 +1898,11 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                 auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
                 if (packet)
                 {
-                    audioStream->_transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                    audioStream->transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                         *(packetInfo.inboundContext()),
                         std::move(packet),
                         packetInfo.extendedSequenceNumber(),
-                        audioStream->_transport);
+                        audioStream->transport);
                 }
                 else
                 {
@@ -2364,9 +2364,9 @@ inline void EngineMixer::processAudioStreams()
         auto isContributingToMix = false;
         AudioBuffer* audioBuffer = nullptr;
 
-        if (audioStream->_remoteSsrc.isSet())
+        if (audioStream->remoteSsrc.isSet())
         {
-            auto mixerAudioBufferItr = _mixerSsrcAudioBuffers.find(audioStream->_remoteSsrc.get());
+            auto mixerAudioBufferItr = _mixerSsrcAudioBuffers.find(audioStream->remoteSsrc.get());
             if (mixerAudioBufferItr != _mixerSsrcAudioBuffers.end())
             {
                 audioBuffer = mixerAudioBufferItr->second;
@@ -2374,7 +2374,7 @@ inline void EngineMixer::processAudioStreams()
 
             isContributingToMix = audioBuffer && !audioBuffer->isPreBuffering();
 
-            if (!audioStream->_audioMixed || !audioStream->_transport.isConnected())
+            if (!audioStream->audioMixed || !audioStream->transport.isConnected())
             {
                 if (isContributingToMix)
                 {
@@ -2384,7 +2384,7 @@ inline void EngineMixer::processAudioStreams()
             }
         }
 
-        if (!audioStream->_audioMixed)
+        if (!audioStream->audioMixed)
         {
             continue;
         }
@@ -2396,7 +2396,7 @@ inline void EngineMixer::processAudioStreams()
         }
 
         auto rtpHeader = rtp::RtpHeader::create(*audioPacket);
-        rtpHeader->ssrc = audioStream->_localSsrc;
+        rtpHeader->ssrc = audioStream->localSsrc;
 
         auto payloadStart = rtpHeader->getPayload();
         const auto headerLength = rtpHeader->headerLength();
@@ -2411,12 +2411,12 @@ inline void EngineMixer::processAudioStreams()
             audioBuffer->drop(samplesPerIteration);
         }
 
-        auto* ssrcContext = obtainOutboundSsrcContext(*audioStream, audioStream->_localSsrc);
+        auto* ssrcContext = obtainOutboundSsrcContext(*audioStream, audioStream->localSsrc);
         if (ssrcContext)
         {
-            audioStream->_transport.getJobQueue().addJob<EncodeJob>(std::move(audioPacket),
+            audioStream->transport.getJobQueue().addJob<EncodeJob>(std::move(audioPacket),
                 *ssrcContext,
-                audioStream->_transport,
+                audioStream->transport,
                 _rtpTimestampSource);
         }
     }
@@ -2602,7 +2602,7 @@ void EngineMixer::updateBandwidthFloor()
     auto audioStreams = 0;
     for (const auto& audioStreamEntry : _engineAudioStreams)
     {
-        if (audioStreamEntry.second->_remoteSsrc.isSet())
+        if (audioStreamEntry.second->remoteSsrc.isSet())
         {
             ++audioStreams;
         }
@@ -2753,7 +2753,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
     auto audioStreamsItr = _engineAudioStreams.find(dominantSpeaker);
     if (audioStreamsItr != _engineAudioStreams.end())
     {
-        sendDominantSpeakerToRecordingStream(recordingStream, dominantSpeaker, audioStreamsItr->second->_endpointId);
+        sendDominantSpeakerToRecordingStream(recordingStream, dominantSpeaker, audioStreamsItr->second->endpointId);
     }
 }
 
@@ -2847,7 +2847,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
     bool isAdded)
 {
     const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
-    const auto ssrc = audioStream._remoteSsrc.isSet() ? audioStream._remoteSsrc.get() : 0;
+    const auto ssrc = audioStream.remoteSsrc.isSet() ? audioStream.remoteSsrc.get() : 0;
 
     for (const auto& transportEntry : targetStream._transports)
     {
@@ -2881,14 +2881,14 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
                          .setSequenceNumber(targetStream._recordingEventsOutboundContext._sequenceNumber++)
                          .setTimestamp(timestamp)
                          .setSsrc(ssrc)
-                         .setRtpPayloadType(static_cast<uint8_t>(audioStream._rtpMap._payloadType))
-                         .setPayloadFormat(audioStream._rtpMap._format)
-                         .setEndpoint(audioStream._endpointId)
+                         .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap._payloadType))
+                         .setPayloadFormat(audioStream.rtpMap._format)
+                         .setEndpoint(audioStream.endpointId)
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
 
             auto emplaceResult =
-                targetStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream._rtpMap);
+                targetStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream.rtpMap);
 
             if (!emplaceResult.second && emplaceResult.first == targetStream._ssrcOutboundContexts.end())
             {

@@ -419,7 +419,7 @@ void MixerManager::engineMessageAudioStreamRemoved(const EngineMessage::Message&
     const auto& command = message.command.audioStreamRemoved;
     logger::info("Removing audioStream endpointId %s from mixer %s",
         "MixerManager",
-        command.engineStream->_endpointId.c_str(),
+        command.engineStream->endpointId.c_str(),
         command.mixer->getLoggableId().c_str());
 
     const auto mixerIter = _mixers.find(command.mixer->getId());

@@ -22,29 +22,29 @@ struct EngineAudioStream
         const bool audioMixed,
         const bridge::RtpMap& rtpMap,
         bool ssrcRewrite)
-        : _endpointId(endpointId),
-          _endpointIdHash(endpointIdHash),
-          _localSsrc(localSsrc),
-          _remoteSsrc(remoteSsrc),
-          _ssrcOutboundContexts(256),
-          _transport(transport),
-          _audioMixed(audioMixed),
-          _rtpMap(rtpMap),
-          _ssrcRewrite(ssrcRewrite)
+        : endpointId(endpointId),
+          endpointIdHash(endpointIdHash),
+          localSsrc(localSsrc),
+          remoteSsrc(remoteSsrc),
+          ssrcOutboundContexts(256),
+          transport(transport),
+          audioMixed(audioMixed),
+          rtpMap(rtpMap),
+          ssrcRewrite(ssrcRewrite)
     {
     }
 
-    std::string _endpointId;
-    size_t _endpointIdHash;
-    uint32_t _localSsrc;
-    utils::Optional<uint32_t> _remoteSsrc;
-    concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> _ssrcOutboundContexts;
+    std::string endpointId;
+    size_t endpointIdHash;
+    uint32_t localSsrc;
+    utils::Optional<uint32_t> remoteSsrc;
+    concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
-    transport::RtcTransport& _transport;
-    bool _audioMixed;
+    transport::RtcTransport& transport;
+    bool audioMixed;
 
-    bridge::RtpMap _rtpMap;
-    bool _ssrcRewrite;
+    bridge::RtpMap rtpMap;
+    bool ssrcRewrite;
 };
 
 } // namespace bridge
