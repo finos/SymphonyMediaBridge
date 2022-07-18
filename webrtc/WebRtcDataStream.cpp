@@ -27,6 +27,7 @@ uint16_t WebRtcDataStream::open(const std::string& label)
     _streamId = _transport.allocateOutboundSctpStream();
     char data[label.size() + sizeof(DataChannelOpenMessage)];
     auto& message = DataChannelOpenMessage::create(data, label);
+    _state = State::OPENING;
 
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_ESTABLISH, data, message.size());
 

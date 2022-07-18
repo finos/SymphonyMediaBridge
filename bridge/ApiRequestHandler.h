@@ -96,6 +96,26 @@ private:
     httpd::Response expireEndpoint(RequestLogger& requestLogger,
         const std::string& conferenceId,
         const std::string& endpointId);
+
+    httpd::Response allocateBarbell(RequestLogger& requestLogger,
+        bool iceControlling,
+        const std::string& conferenceId,
+        const std::string& barbellId);
+
+    httpd::Response configureBarbell(RequestLogger& requestLogger,
+        const std::string& conferenceId,
+        const std::string& barbellId,
+        const api::EndpointDescription& barbellDescription);
+
+    httpd::Response deleteBarbell(RequestLogger& requestLogger,
+        const std::string& conferenceId,
+        const std::string& barbellId);
+
+    httpd::Response generateBarbellResponse(RequestLogger& requestLogger,
+        Mixer& mixer,
+        const std::string& conferenceId,
+        const std::string& barbellId,
+        bool dtlsClient);
 };
 
 } // namespace bridge

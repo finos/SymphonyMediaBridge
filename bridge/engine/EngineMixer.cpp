@@ -6,6 +6,7 @@
 #include "bridge/engine/AudioForwarderRewriteAndSendJob.h"
 #include "bridge/engine/EncodeJob.h"
 #include "bridge/engine/EngineAudioStream.h"
+#include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineDataStream.h"
 #include "bridge/engine/EngineMessage.h"
 #include "bridge/engine/EngineMessageListener.h"
@@ -168,6 +169,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _engineVideoStreams(maxStreamsPerModality),
       _engineDataStreams(maxStreamsPerModality),
       _engineRecordingStreams(maxRecordingStreams),
+      _engineBarbells(16),
       _ssrcInboundContexts(maxSsrcs),
       _localVideoSsrc(localVideoSsrc),
       _rtpTimestampSource(1000),
@@ -1301,6 +1303,12 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
 
         sendPliForUsedSsrcs(*videoStream);
     }
+
+    auto barbellIt = _engineBarbells.find(sender->getEndpointIdHash());
+    if (barbellIt != _engineBarbells.cend() && barbellIt->second->transport.isDtlsClient())
+    {
+        barbellIt->second->transport.connectSctp();
+    }
 }
 
 void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::Packet& packet)
@@ -1318,6 +1326,19 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::P
             header.payloadProtocol,
             header.data(),
             packet.getLength() - sizeof(header));
+    }
+    else
+    {
+        auto barbellIt = _engineBarbells.find(endpointIdHash);
+        if (barbellIt != _engineBarbells.cend())
+        {
+            barbellIt->second->dataChannel.onSctpMessage(&barbellIt->second->transport,
+                header.id,
+                header.sequenceNumber,
+                header.payloadProtocol,
+                header.data(),
+                packet.getLength() - sizeof(header));
+        }
     }
 }
 
@@ -1449,6 +1470,12 @@ bool EngineMixer::onSctpConnectionRequest(transport::RtcTransport* sender, uint1
 void EngineMixer::onSctpEstablished(transport::RtcTransport* sender)
 {
     logger::debug("SCTP association established", sender->getLoggableId().c_str());
+
+    auto barbellIt = _engineBarbells.find(sender->getEndpointIdHash());
+    if (barbellIt != _engineBarbells.cend() && sender->isDtlsClient())
+    {
+        barbellIt->second->dataChannel.open("barbell");
+    }
 }
 
 void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
@@ -3268,6 +3295,32 @@ void EngineMixer::runTransportTicks(const uint64_t timestamp)
         auto& videoStream = *videoIt.second;
         videoStream._transport.runTick(timestamp);
     }
+}
+
+void EngineMixer::addBarbell(EngineBarbell* barbell)
+{
+    const auto idHash = barbell->transport.getEndpointIdHash();
+    if (_engineBarbells.find(idHash) != _engineBarbells.end())
+    {
+        return;
+    }
+
+    logger::debug("Add engine barbell, transport %s, idHash %lu",
+        _loggableId.c_str(),
+        barbell->transport.getLoggableId().c_str(),
+        idHash);
+
+    _engineBarbells.emplace(idHash, barbell);
+}
+
+void EngineMixer::removeBarbell(size_t idHash)
+{
+    if (_engineBarbells.find(idHash) != _engineBarbells.end())
+    {
+        return;
+    }
+
+    _engineBarbells.erase(idHash);
 }
 
 } // namespace bridge

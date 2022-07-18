@@ -19,6 +19,7 @@ namespace bridge
 struct EngineAudioStream;
 struct EngineVideoStream;
 struct EngineDataStream;
+struct EngineBarbell;
 class PacketCache;
 
 namespace EngineCommand
@@ -173,6 +174,18 @@ struct RemoveTransportFromRecordingStream
     size_t _endpointIdHash;
 };
 
+struct AddBarbell
+{
+    EngineMixer* mixer;
+    EngineBarbell* engineBarbell;
+};
+
+struct RemoveBarbell
+{
+    EngineMixer* mixer;
+    size_t idHash;
+};
+
 // Add entry with same name as data struct here
 
 enum class Type
@@ -203,7 +216,9 @@ enum class Type
     AddRecordingRtpPacketCache,
     AddTransportToRecordingStream,
     RemoveTransportFromRecordingStream,
-    AddRecordingUnackedPacketsTracker
+    AddRecordingUnackedPacketsTracker,
+    AddBarbell,
+    RemoveBarbell
 };
 
 // Add the data struct here
@@ -236,6 +251,8 @@ union CommandUnion
     AddRecordingRtpPacketCache addRecordingRtpPacketCache;
     AddTransportToRecordingStream addTransportToRecordingStream;
     RemoveTransportFromRecordingStream removeTransportFromRecordingStream;
+    AddBarbell addBarbell;
+    RemoveBarbell removeBarbell;
 };
 
 struct Command

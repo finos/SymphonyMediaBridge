@@ -1,11 +1,13 @@
 #include "bridge/Mixer.h"
 #include "api/RecordingChannel.h"
 #include "bridge/AudioStream.h"
+#include "bridge/Barbell.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/engine/Engine.h"
 #include "bridge/engine/EngineAudioStream.h"
+#include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineDataStream.h"
 #include "bridge/engine/EngineRecordingStream.h"
 #include "bridge/engine/EngineVideoStream.h"
@@ -231,6 +233,21 @@ void Mixer::stopTransports()
                 videoStreamEntry.second->_endpointId.c_str());
         }
     }
+
+    for (auto& barbell : _barbells)
+    {
+        logTransportPacketLoss(barbell.second->id, *barbell.second->transport, _loggableId.c_str());
+        barbell.second->transport->stop();
+        if (!waitForPendingJobs(700, 5, *barbell.second->transport))
+        {
+            logger::error("Transport for barbell %s did not finish pending jobs in time. Continuing "
+                          "deletion anyway.",
+                _loggableId.c_str(),
+                barbell.second->id.c_str());
+        }
+    }
+
+    _barbellPorts.clear();
 }
 
 bool Mixer::waitForAllPendingJobs(const uint32_t timeoutMs)
@@ -756,6 +773,15 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescr
     return true;
 }
 
+void Mixer::getAudioStreamDescription(StreamDescription& outDescription)
+{
+    outDescription = StreamDescription();
+    for (auto ssrc : _audioSsrcs)
+    {
+        outDescription._localSsrcs.push_back(ssrc);
+    }
+}
+
 bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -780,6 +806,24 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescr
         }
     }
     return true;
+}
+
+void Mixer::getVideoStreamDescription(StreamDescription& outDescription)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+
+    outDescription = StreamDescription();
+
+    for (auto ssrcPair : _videoSsrcs)
+    {
+        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
+        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+    }
+    for (auto ssrcPair : _videoPinSsrcs)
+    {
+        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
+        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+    }
 }
 
 bool Mixer::getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription)
@@ -839,6 +883,26 @@ bool Mixer::getTransportBundleDescription(const std::string& endpointId, Transpo
     }
     auto bundleTransport = bundleTransportItr->second._transport.get();
     assert(bundleTransport);
+
+    outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
+        bundleTransport->getLocalCredentials(),
+        bundleTransport->isDtlsClient());
+
+    return true;
+}
+
+bool Mixer::getBarbellTransportDescription(const std::string& barbellId, TransportDescription& outTransportDescription)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+
+    auto barbellIt = _barbells.find(barbellId);
+    if (barbellIt == _barbells.end())
+    {
+        return false;
+    }
+
+    assert(barbellIt->second->transport);
+    auto& bundleTransport = barbellIt->second->transport;
 
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
         bundleTransport->getLocalCredentials(),
@@ -2099,6 +2163,155 @@ void Mixer::removeRecordingTransport(const std::string& streamId, const size_t e
 
     stream->_recEventUnackedPacketsTracker.erase(endpointIdHash);
     stream->_transports.erase(endpointIdHash);
+}
+
+bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto barbellIt = _barbells.find(barbellId);
+    if (barbellIt != _barbells.end())
+    {
+        logger::warn("Barbell with id %s already exists", _loggableId.c_str(), barbellId.c_str());
+        return false;
+    }
+
+    std::shared_ptr<transport::RtcTransport> transport;
+    if (_barbellPorts.empty())
+    {
+        _transportFactory.openRtpMuxPorts(_barbellPorts);
+        if (_barbellPorts.empty())
+        {
+            logger::error("Failed to open UDP ports for barbell", _loggableId.c_str());
+            return false;
+        }
+    }
+
+    transport = _transportFactory.createOnPorts(iceRole, 64, std::hash<std::string>{}(barbellId), _barbellPorts);
+    if (!transport)
+    {
+        logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());
+        return false;
+    }
+
+    const auto streamItr = _barbells.emplace(barbellId, std::make_unique<Barbell>(barbellId, transport));
+    if (!streamItr.second)
+    {
+        logger::error("Failed to create barbell %s", _loggableId.c_str(), barbellId.c_str());
+        return false;
+    }
+
+    logger::info("Created barbell id %s, hash %zu transport %s",
+        _loggableId.c_str(),
+        barbellId.c_str(),
+        transport->getEndpointIdHash(),
+        streamItr.first->second->transport->getLoggableId().c_str());
+
+    return streamItr.first->second->transport->isInitialized();
+}
+
+bool Mixer::addBarbellToEngine(const std::string& barbellId)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto barbellIt = _barbells.find(barbellId);
+    if (barbellIt == _barbells.end())
+    {
+        return false;
+    }
+
+    logger::debug("Adding barbell to engine, id %s", getLoggableId().c_str(), barbellId.c_str());
+
+    auto& barbell = *barbellIt->second;
+    barbell.isConfigured = true;
+    auto emplaceResult = _engineBarbells.emplace(barbell.id,
+        std::make_unique<EngineBarbell>(barbell.id, *barbell.transport, _engineMixer.getSendAllocator()));
+
+    EngineCommand::Command command;
+    command._type = EngineCommand::Type::AddBarbell;
+    command._command.addBarbell.mixer = &_engineMixer;
+    command._command.addBarbell.engineBarbell = emplaceResult.first->second.get();
+    _engine.pushCommand(std::move(command));
+
+    return true;
+}
+
+bool Mixer::configureBarbellTransport(const std::string& barbellId,
+    const std::pair<std::string, std::string>& credentials,
+    const ice::IceCandidates& candidates,
+    const std::string& fingerprintType,
+    const std::string& fingerprintHash,
+    const bool isDtlsClient)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto barbellItr = _barbells.find(barbellId);
+    if (barbellItr == _barbells.end())
+    {
+        return false;
+    }
+
+    barbellItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
+    barbellItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    barbellItr->second->transport->setSctp(5000, 5000);
+    return true;
+}
+
+bool Mixer::startBarbellTransport(const std::string& barbellId)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto barbellIt = _barbells.find(barbellId);
+    if (barbellIt == _barbells.end())
+    {
+        return false;
+    }
+
+    EngineCommand::Command command;
+    command._type = EngineCommand::Type::StartTransport;
+    command._command.startTransport._mixer = &_engineMixer;
+    command._command.startTransport._transport = barbellIt->second->transport.get();
+    _engine.pushCommand(std::move(command));
+
+    return true;
+}
+
+void Mixer::removeBarbell(const std::string& barbellId)
+{
+    auto barbellIt = _barbells.find(barbellId);
+    if (barbellIt != _barbells.cend())
+    {
+        barbellIt->second->markedForDeletion = true;
+
+        EngineCommand::Command command;
+        command._type = EngineCommand::Type::RemoveBarbell;
+        command._command.removeBarbell.mixer = &_engineMixer;
+        command._command.removeBarbell.idHash = barbellIt->second->transport->getEndpointIdHash();
+        _engine.pushCommand(std::move(command));
+    }
+}
+
+void Mixer::engineBarbellRemoved(EngineBarbell* engineBarbell)
+{
+    std::unique_ptr<Barbell> barbell;
+    {
+        std::lock_guard<std::mutex> locker(_configurationLock);
+        auto it = _barbells.find(engineBarbell->id);
+        if (it == _barbells.cend())
+        {
+            return;
+        }
+
+        barbell = std::move(it->second);
+        _barbells.erase(it);
+        _engineBarbells.erase(barbell->id);
+    }
+
+    logTransportPacketLoss(barbell->id, *barbell->transport, _loggableId.c_str());
+    barbell->transport->stop();
+    if (!waitForPendingJobs(700, 5, *barbell->transport))
+    {
+        logger::error("Transport for barbell %s did not finish pending jobs in time. Continuing "
+                      "deletion anyway.",
+            _loggableId.c_str(),
+            barbell->id.c_str());
+    }
 }
 
 } // namespace bridge

@@ -6,19 +6,17 @@ namespace emulator
 {
 
 HttpPostRequest::HttpPostRequest(const char* url, const char* body)
-    : _request(nullptr),
-      _status(HTTP_STATUS_PENDING),
-      _prevSize(0)
 {
     _request = http_post(url, body, body ? std::strlen(body) : 0, nullptr);
+    assert(_request);
 }
 
-HttpPostRequest::~HttpPostRequest()
+HttpRequest::~HttpRequest()
 {
     http_release(_request);
 }
 
-void HttpPostRequest::awaitResponse(uint64_t timeout)
+void HttpRequest::awaitResponse(uint64_t timeout)
 {
     const auto startTime = utils::Time::getAbsoluteTime();
 
@@ -40,7 +38,7 @@ void HttpPostRequest::awaitResponse(uint64_t timeout)
     }
 }
 
-std::string HttpPostRequest::getResponse() const
+std::string HttpRequest::getResponse() const
 {
     if (isSuccess())
     {
@@ -49,7 +47,7 @@ std::string HttpPostRequest::getResponse() const
     return "";
 }
 
-nlohmann::json HttpPostRequest::getJsonBody() const
+nlohmann::json HttpRequest::getJsonBody() const
 {
     if (isSuccess())
     {

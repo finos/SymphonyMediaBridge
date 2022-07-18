@@ -515,4 +515,51 @@ std::unordered_set<uint32_t> ColibriChannel::getOfferedVideoSsrcs() const
     }
     return ssrcs;
 }
+
+Barbell::Barbell() : _id(newIdString()) {}
+
+std::string Barbell::allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling)
+{
+    _baseUrl = baseUrl;
+    _conferenceId = conferenceId;
+    using namespace nlohmann;
+    json body = {{"action", "allocate"},
+        {"bundle-transport",
+            {
+                {"ice-controlling", controlling},
+            }}};
+
+    logger::debug("allocate barbell with %s", "", body.dump().c_str());
+    HttpPostRequest request((baseUrl + "/barbell/" + conferenceId + "/" + _id).c_str(), body.dump().c_str());
+    request.awaitResponse(9000 * utils::Time::ms);
+
+    if (request.isSuccess())
+    {
+        _offer = request.getJsonBody();
+    }
+    else
+    {
+        logger::error("failed to allocate barbell %d", "Test", request.getCode());
+    }
+
+    return _offer.dump();
+}
+
+void Barbell::configure(const std::string& body)
+{
+    auto requestBody = nlohmann::json::parse(body);
+    requestBody["action"] = "configure";
+    HttpPostRequest request((_baseUrl + "/barbell/" + _conferenceId + "/" + _id).c_str(), requestBody.dump().c_str());
+    request.awaitResponse(9000 * utils::Time::ms);
+
+    if (request.isSuccess())
+    {
+        _offer = request.getJsonBody();
+    }
+    else
+    {
+        logger::error("failed to configure barbell %d", "Test", request.getCode());
+    }
+}
+
 } // namespace emulator

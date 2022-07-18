@@ -50,9 +50,9 @@ nlohmann::json generateTransport(const api::EndpointDescription::Transport& tran
     {
         const auto& dtls = transport._dtls.get();
         nlohmann::json dtlsJson;
-        dtlsJson["type"] = dtls._type;
-        dtlsJson["hash"] = dtls._hash;
-        dtlsJson["setup"] = dtls._setup;
+        dtlsJson["type"] = dtls.type;
+        dtlsJson["hash"] = dtls.hash;
+        dtlsJson["setup"] = dtls.setup;
         transportJson["dtls"] = dtlsJson;
     }
 

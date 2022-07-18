@@ -171,7 +171,12 @@ void Engine::run()
             case EngineCommand::Type::RemoveTransportFromRecordingStream:
                 removeTransportFromRecordingStream(nextCommand);
                 break;
-
+            case EngineCommand::Type::AddBarbell:
+                addBarbell(nextCommand);
+                break;
+            case EngineCommand::Type::RemoveBarbell:
+                nextCommand._command.removeBarbell.mixer->removeBarbell(nextCommand._command.removeBarbell.idHash);
+                break;
             default:
                 assert(false);
                 break;
@@ -631,6 +636,16 @@ void Engine::sendEndpointMessage(EngineCommand::Command& command)
     endpointMessageCommand._mixer->sendEndpointMessage(endpointMessageCommand._toEndpointIdHash,
         endpointMessageCommand._fromEndpointIdHash,
         endpointMessageCommand._message);
+}
+
+void Engine::addBarbell(EngineCommand::Command& nextCommand)
+{
+    assert(nextCommand._type == EngineCommand::Type::AddBarbell);
+    assert(nextCommand._command.addBarbell.mixer);
+    assert(nextCommand._command.addBarbell.engineBarbell);
+
+    auto mixer = nextCommand._command.addBarbell.mixer;
+    mixer->addBarbell(nextCommand._command.addBarbell.engineBarbell);
 }
 
 } // namespace bridge

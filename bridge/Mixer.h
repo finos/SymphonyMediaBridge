@@ -1,8 +1,10 @@
 #pragma once
 
+#include "bridge/Barbell.h"
 #include "bridge/RecordingStream.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "logger/Logger.h"
+#include "transport/Endpoint.h"
 #include "transport/ice/IceSession.h"
 #include <cstdint>
 #include <memory>
@@ -54,6 +56,8 @@ struct RtpMap;
 struct SimulcastStream;
 struct SsrcWhitelist;
 struct VideoStream;
+struct Barbell;
+struct EngineBarbell;
 
 class Mixer
 {
@@ -79,7 +83,7 @@ public:
         const std::vector<SimulcastLevel>& videoSsrcs,
         const std::vector<SimulcastLevel>& videoPinSsrcs);
 
-    ~Mixer() = default;
+    virtual ~Mixer() = default;
 
     void markForDeletion();
     bool isMarkedForDeletion() const { return _markedForDeletion; }
@@ -104,6 +108,8 @@ public:
     bool addBundledVideoStream(std::string& outId, const std::string& endpointId, const bool ssrcRewrite);
     bool addBundledDataStream(std::string& outId, const std::string& endpointId);
 
+    bool addBarbell(const std::string& barbellId, ice::IceRole iceRole);
+
     bool removeAudioStream(const std::string& endpointId);
     bool removeAudioStreamId(const std::string& id);
 
@@ -116,6 +122,7 @@ public:
     void engineAudioStreamRemoved(EngineAudioStream* engineStream);
     void engineVideoStreamRemoved(EngineVideoStream* engineStream);
     void engineDataStreamRemoved(EngineDataStream* engineStream);
+    void engineBarbellRemoved(EngineBarbell* engineBarbell);
 
     bool configureAudioStream(const std::string& endpointId,
         const RtpMap& rtpMap,
@@ -173,6 +180,16 @@ public:
         const std::string& fingerprintHash,
         const bool isDtlsClient);
 
+    bool configureBarbellTransport(const std::string& barbellId,
+        const std::pair<std::string, std::string>& credentials,
+        const ice::IceCandidates& candidates,
+        const std::string& fingerprintType,
+        const std::string& fingerprintHash,
+        const bool isDtlsClient);
+    bool addBarbellToEngine(const std::string& barbellId);
+    bool startBarbellTransport(const std::string& barbellId);
+    void removeBarbell(const std::string& barbellId);
+
     bool pinEndpoint(const size_t endpointIdHash, const std::string& pinnedEndpointId);
     bool unpinEndpoint(const size_t endpointIdHash);
 
@@ -197,12 +214,16 @@ public:
     bool isAudioStreamConfigured(const std::string& endpointId);
     bool isVideoStreamConfigured(const std::string& endpointId);
     bool isDataStreamConfigured(const std::string& endpointId);
+    void getAudioStreamDescription(StreamDescription& outDescription);
+    void getVideoStreamDescription(StreamDescription& outDescription);
 
     bool getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription);
     bool getAudioStreamTransportDescription(const std::string& endpointId,
         TransportDescription& outTransportDescription);
     bool getVideoStreamTransportDescription(const std::string& endpointId,
         TransportDescription& outTransportDescription);
+
+    bool getBarbellTransportDescription(const std::string& barbellId, TransportDescription& outTransportDescription);
 
     void allocateVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash);
     void freeVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash);
@@ -266,6 +287,10 @@ private:
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _videoPacketCaches;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _recordingRtpPacketCaches;
     std::unordered_map<size_t, std::unique_ptr<PacketCache>> _recordingEventPacketCache;
+
+    std::unordered_map<std::string, std::unique_ptr<Barbell>> _barbells;
+    std::unordered_map<std::string, std::unique_ptr<EngineBarbell>> _engineBarbells;
+    transport::Endpoints _barbellPorts;
 
     std::mutex _configurationLock;
 

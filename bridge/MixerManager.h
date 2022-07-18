@@ -119,6 +119,7 @@ private:
     void engineMessageAllocateRecordingRtpPacketCache(const EngineMessage::Message& message);
     void engineMessageFreeRecordingRtpPacketCache(const EngineMessage::Message& message);
     void engineMessageRemoveRecordingTransport(const EngineMessage::Message& message);
+    void engineBarbellRemoved(const EngineMessage::EngineBarbellRemoved& message);
 
     void updateStats();
 };

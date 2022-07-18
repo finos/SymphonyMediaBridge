@@ -79,7 +79,6 @@ void IntegrationTest::initBridge(config::Config& config)
 void IntegrationTest::TearDown()
 {
     _bridge.reset();
-
     _transportFactory.reset();
     _jobManager->stop();
     for (auto& worker : _workerThreads)
@@ -156,8 +155,12 @@ TEST_F(IntegrationTest, plain)
     return;
 #endif
 
-    _config.readFromString("{\"ip\":\"127.0.0.1\", "
-                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
     initBridge(_config);
 
     const std::string baseUrl = "http://127.0.0.1:8080";
@@ -582,8 +585,12 @@ TEST_F(IntegrationTest, plainNewApi)
     return;
 #endif
 
-    _config.readFromString("{\"ip\":\"127.0.0.1\", "
-                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
     initBridge(_config);
 
     const auto baseUrl = "http://127.0.0.1:8080";
@@ -769,8 +776,12 @@ TEST_F(IntegrationTest, ptime10)
     return;
 #endif
 
-    _config.readFromString("{\"ip\":\"127.0.0.1\", "
-                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
     initBridge(_config);
 
     const auto baseUrl = "http://127.0.0.1:8080";
@@ -949,4 +960,98 @@ TEST_F(IntegrationTest, ptime10)
 
         EXPECT_EQ(audioSsrcCount, 1);
     }
+}
+
+TEST_F(IntegrationTest, simpleBarbell)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+    initBridge(_config);
+
+    config::Config config2;
+    config2.readFromString(
+        R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "ice.singlePort":12000,
+        "port":8090,
+        "recording.singlePort":12500
+        })");
+
+    auto bridge2 = std::make_unique<bridge::Bridge>(config2);
+    bridge2->initialize();
+
+    const auto baseUrl = "http://127.0.0.1:8080";
+    const auto baseUrl2 = "http://127.0.0.1:8090";
+
+    Conference conf;
+    conf.create(baseUrl);
+    EXPECT_TRUE(conf.isSuccess());
+
+    Conference conf2;
+    conf2.create(baseUrl2);
+    EXPECT_TRUE(conf2.isSuccess());
+
+    utils::Time::nanoSleep(1 * utils::Time::sec);
+
+    Barbell bb1;
+    Barbell bb2;
+
+    auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
+    auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
+
+    bb1.configure(sdp2);
+    bb2.configure(sdp1);
+
+    utils::Time::nanoSleep(5 * utils::Time::sec);
+
+    SfuClient<Channel> client1(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient<Channel> client2(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+
+    GroupCall<SfuClient<Channel>> groupCall({&client1, &client2});
+
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+
+    if (!groupCall.connect(utils::Time::sec * 8))
+    {
+        EXPECT_TRUE(false);
+        return;
+    }
+
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+
+    groupCall.run(utils::Time::ms * 5000);
+
+    client2.stopRecording();
+    client1.stopRecording();
+
+    HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
+    statsRequest.awaitResponse(1500 * utils::Time::ms);
+    EXPECT_TRUE(statsRequest.isSuccess());
+    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+    confRequest.awaitResponse(500 * utils::Time::ms);
+    EXPECT_TRUE(confRequest.isSuccess());
+
+    client1._transport->stop();
+    client2._transport->stop();
+
+    groupCall.awaitPendingJobs(utils::Time::sec * 4);
 }

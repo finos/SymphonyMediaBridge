@@ -40,9 +40,11 @@ struct EndpointDescription
 
     struct Dtls
     {
-        std::string _setup;
-        std::string _type;
-        std::string _hash;
+        std::string setup;
+        std::string type;
+        std::string hash;
+
+        bool isClient() const { return setup.compare("active") == 0; }
     };
 
     struct Transport

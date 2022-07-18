@@ -51,7 +51,7 @@ public:
         memory::PacketPoolAllocator& mainAllocator)
         : _deleter(this),
           _jobManager(jobManager),
-          _garbageQueue(_jobManager),
+          _garbageQueue(jobManager),
           _srtpClientFactory(srtpClientFactory),
           _config(config),
           _sctpConfig(sctpConfig),
@@ -245,6 +245,7 @@ public:
         if (rtpEndpoint->isGood())
         {
             rtpPorts.emplace_back(rtpEndpoint);
+            logger::info("opened rtp port %s", _name, rtpEndpoint->getLocalPort().toString().c_str());
         }
         else
         {
@@ -258,6 +259,18 @@ public:
             return false;
         }
 
+        return true;
+    }
+
+    bool openRtpMuxPorts(Endpoints& rtpPorts) const override
+    {
+        for (auto nic : _interfaces)
+        {
+            if (!openPorts(nic, rtpPorts))
+            {
+                return false;
+            }
+        }
         return true;
     }
 
@@ -306,7 +319,7 @@ public:
         return createOnPrivatePort(iceRole, sendPoolSize, endpointId);
     }
 
-    virtual std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole,
+    std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole,
         const size_t sendPoolSize,
         const size_t endpointId) override
     {
@@ -486,14 +499,14 @@ private:
 
     void onEndpointStopped(ServerEndpoint* endpoint) override
     {
-        logger::info("TCP server %s stopped.", _name, endpoint->getName());
+        logger::info("%s stopped.", _name, endpoint->getName());
         _garbageQueue.addJob<DeleteJob<ServerEndpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }
 
     void onEndpointStopped(Endpoint* endpoint) override
     {
-        logger::info("Endpoint %s stopped.", _name, endpoint->getName());
+        logger::info("%s stopped.", _name, endpoint->getName());
         _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }
