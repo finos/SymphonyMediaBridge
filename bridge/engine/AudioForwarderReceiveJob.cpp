@@ -17,7 +17,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 {
     if (decodedFrames > 0)
     {
-        auto pcmPacket = memory::makeUniquePacket(_audioPacketAllocator, *_packet);
+        auto pcmPacket = memory::makeUniquePacket(_engineMixer.getAudioAllocator(), *_packet);
         if (!pcmPacket)
         {
             return;
@@ -100,7 +100,6 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 }
 
 AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
-    memory::AudioPacketPoolAllocator& audioPacketAllocator,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& ssrcContext,
@@ -110,7 +109,6 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber)
     : CountedJob(sender->getJobCounter()),
       _packet(std::move(packet)),
-      _audioPacketAllocator(audioPacketAllocator),
       _engineMixer(engineMixer),
       _sender(sender),
       _ssrcContext(ssrcContext),

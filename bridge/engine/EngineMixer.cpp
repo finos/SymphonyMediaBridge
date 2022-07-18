@@ -1564,7 +1564,6 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         if (_engineAudioStreams.size() > 0)
         {
             sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(std::move(packet),
-                _audioAllocator,
                 sender,
                 *this,
                 *ssrcContext,
@@ -1948,7 +1947,12 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         }
     }
 
-    numRtpPackets += processIncomingVideoRtpPackets(timestamp);
+    for (IncomingPacketInfo packetInfo; _incomingForwarderVideoRtp.pop(packetInfo);)
+    {
+        ++numRtpPackets;
+        forwardVideoRtpPacket(packetInfo, timestamp);
+    }
+
     bool overrunLogSpamGuard = false;
 
     for (IncomingAudioPacketInfo packetInfo; _incomingMixerAudioRtp.pop(packetInfo);)
@@ -2020,163 +2024,154 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     }
 }
 
-uint32_t EngineMixer::processIncomingVideoRtpPackets(const uint64_t timestamp)
+void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
 {
-    auto numRtpPackets = 0;
-
-    for (IncomingPacketInfo packetInfo; _incomingForwarderVideoRtp.pop(packetInfo);)
+    auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
+    if (!rtpHeader)
     {
-        ++numRtpPackets;
-        auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
-        if (!rtpHeader)
+        return;
+    }
+    const auto senderEndpointIdHash = packetInfo.transport()->getEndpointIdHash();
+
+    _lastVideoPacketProcessed = timestamp;
+
+    for (auto& videoStreamEntry : _engineVideoStreams)
+    {
+        const auto endpointIdHash = videoStreamEntry.first;
+        auto videoStream = videoStreamEntry.second;
+        if (!videoStream)
         {
             continue;
         }
-        const auto senderEndpointIdHash = packetInfo.transport()->getEndpointIdHash();
 
-        _lastVideoPacketProcessed = timestamp;
-
-        for (auto& videoStreamEntry : _engineVideoStreams)
+        if (!_engineStreamDirector->shouldForwardSsrc(endpointIdHash, packetInfo.inboundContext()->_ssrc))
         {
-            const auto endpointIdHash = videoStreamEntry.first;
-            auto videoStream = videoStreamEntry.second;
-            if (!videoStream)
-            {
-                continue;
-            }
+            continue;
+        }
 
-            if (!_engineStreamDirector->shouldForwardSsrc(endpointIdHash, packetInfo.inboundContext()->_ssrc))
-            {
-                continue;
-            }
+        if (shouldSkipBecauseOfWhitelist(*videoStream, packetInfo.inboundContext()->_ssrc))
+        {
+            continue;
+        }
 
-            if (shouldSkipBecauseOfWhitelist(*videoStream, packetInfo.inboundContext()->_ssrc))
+        auto ssrc = packetInfo.inboundContext()->_rewriteSsrc;
+        if (videoStream->_ssrcRewrite)
+        {
+            const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
+            if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
+                screenShareSsrcMapping.get().second._ssrc == ssrc)
             {
-                continue;
+                ssrc = screenShareSsrcMapping.get().second._rewriteSsrc;
             }
-
-            auto ssrc = packetInfo.inboundContext()->_rewriteSsrc;
-            if (videoStream->_ssrcRewrite)
+            else if (_engineStreamDirector->getPinTarget(endpointIdHash) == senderEndpointIdHash &&
+                !_activeMediaList->isInUserActiveVideoList(senderEndpointIdHash))
             {
-                const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
-                if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
-                    screenShareSsrcMapping.get().second._ssrc == ssrc)
+                if (videoStream->_pinSsrc.isSet())
                 {
-                    ssrc = screenShareSsrcMapping.get().second._rewriteSsrc;
-                }
-                else if (_engineStreamDirector->getPinTarget(endpointIdHash) == senderEndpointIdHash &&
-                    !_activeMediaList->isInUserActiveVideoList(senderEndpointIdHash))
-                {
-                    if (videoStream->_pinSsrc.isSet())
-                    {
-                        ssrc = videoStream->_pinSsrc.get()._ssrc;
-                    }
-                    else
-                    {
-                        assert(false);
-                        continue;
-                    }
+                    ssrc = videoStream->_pinSsrc.get()._ssrc;
                 }
                 else
                 {
-                    const auto& videoSsrcRewriteMap = _activeMediaList->getVideoSsrcRewriteMap();
-                    const auto rewriteMapItr = videoSsrcRewriteMap.find(senderEndpointIdHash);
-                    if (rewriteMapItr == videoSsrcRewriteMap.end())
-                    {
-                        continue;
-                    }
-                    ssrc = rewriteMapItr->second._ssrc;
+                    assert(false);
+                    continue;
                 }
             }
             else
             {
-                uint32_t fbSsrc = 0;
-                _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
-            }
-
-            auto* ssrcOutboundContext = obtainOutboundSsrcContext(*videoStream, ssrc, videoStream->_rtpMap);
-            if (!ssrcOutboundContext)
-            {
-                continue;
-            }
-
-            if (!ssrcOutboundContext->_packetCache.isSet())
-            {
-                logger::debug("New ssrc %u seen, sending request to add videoPacketCache", _loggableId.c_str(), ssrc);
-
-                ssrcOutboundContext->_packetCache.set(nullptr);
+                const auto& videoSsrcRewriteMap = _activeMediaList->getVideoSsrcRewriteMap();
+                const auto rewriteMapItr = videoSsrcRewriteMap.find(senderEndpointIdHash);
+                if (rewriteMapItr == videoSsrcRewriteMap.end())
                 {
-                    EngineMessage::Message message(EngineMessage::Type::AllocateVideoPacketCache);
-                    message.command.allocateVideoPacketCache.mixer = this;
-                    message.command.allocateVideoPacketCache.ssrc = ssrc;
-                    message.command.allocateVideoPacketCache.endpointIdHash = endpointIdHash;
-                    _messageListener.onMessage(std::move(message));
+                    continue;
                 }
+                ssrc = rewriteMapItr->second._ssrc;
             }
+        }
+        else
+        {
+            uint32_t fbSsrc = 0;
+            _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
+        }
 
-            if (videoStream->_transport.isConnected())
+        auto* ssrcOutboundContext = obtainOutboundSsrcContext(*videoStream, ssrc, videoStream->_rtpMap);
+        if (!ssrcOutboundContext)
+        {
+            continue;
+        }
+
+        if (!ssrcOutboundContext->_packetCache.isSet())
+        {
+            logger::debug("New ssrc %u seen, sending request to add videoPacketCache", _loggableId.c_str(), ssrc);
+
+            ssrcOutboundContext->_packetCache.set(nullptr);
             {
-                ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
-                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-                if (packet)
-                {
-                    videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                        *(packetInfo.inboundContext()),
-                        std::move(packet),
-                        videoStream->_transport,
-                        packetInfo.extendedSequenceNumber());
-                }
-                else
-                {
-                    logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
-                }
+                EngineMessage::Message message(EngineMessage::Type::AllocateVideoPacketCache);
+                message.command.allocateVideoPacketCache.mixer = this;
+                message.command.allocateVideoPacketCache.ssrc = ssrc;
+                message.command.allocateVideoPacketCache.endpointIdHash = endpointIdHash;
+                _messageListener.onMessage(std::move(message));
             }
         }
 
-        for (auto& recordingStreams : _engineRecordingStreams)
+        if (videoStream->_transport.isConnected())
         {
-            auto* recordingStream = recordingStreams.second;
-            if (!(recordingStream && (recordingStream->_isVideoEnabled || recordingStream->_isScreenSharingEnabled)))
+            ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
+            auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
+            if (packet)
             {
-                continue;
+                videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                    *(packetInfo.inboundContext()),
+                    std::move(packet),
+                    videoStream->_transport,
+                    packetInfo.extendedSequenceNumber());
             }
-
-            if (!_engineStreamDirector->shouldForwardSsrc(recordingStream->_endpointIdHash,
-                    packetInfo.inboundContext()->_ssrc))
+            else
             {
-                continue;
-            }
-
-            auto* ssrcOutboundContext =
-                getOutboundSsrcContext(*recordingStream, packetInfo.inboundContext()->_rewriteSsrc);
-            if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
-            {
-                continue;
-            }
-
-            allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
-
-            for (const auto& transportEntry : recordingStream->_transports)
-            {
-                ssrcOutboundContext->onRtpSent(timestamp); // active jobs on this ssrc context
-                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-                if (packet)
-                {
-                    transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                        *(packetInfo.inboundContext()),
-                        std::move(packet),
-                        transportEntry.second,
-                        packetInfo.extendedSequenceNumber());
-                }
-                else
-                {
-                    logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
-                }
+                logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
             }
         }
     }
 
-    return numRtpPackets;
+    for (auto& recordingStreams : _engineRecordingStreams)
+    {
+        auto* recordingStream = recordingStreams.second;
+        if (!(recordingStream && (recordingStream->_isVideoEnabled || recordingStream->_isScreenSharingEnabled)))
+        {
+            continue;
+        }
+
+        if (!_engineStreamDirector->shouldForwardSsrc(recordingStream->_endpointIdHash,
+                packetInfo.inboundContext()->_ssrc))
+        {
+            continue;
+        }
+
+        auto* ssrcOutboundContext = getOutboundSsrcContext(*recordingStream, packetInfo.inboundContext()->_rewriteSsrc);
+        if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
+        {
+            continue;
+        }
+
+        allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
+
+        for (const auto& transportEntry : recordingStream->_transports)
+        {
+            ssrcOutboundContext->onRtpSent(timestamp); // active jobs on this ssrc context
+            auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
+            if (packet)
+            {
+                transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                    *(packetInfo.inboundContext()),
+                    std::move(packet),
+                    transportEntry.second,
+                    packetInfo.extendedSequenceNumber());
+            }
+            else
+            {
+                logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
+            }
+        }
+    }
 }
 
 void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
