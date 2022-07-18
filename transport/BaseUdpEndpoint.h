@@ -75,9 +75,9 @@ protected:
     {
         utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> receiveTracker;
         utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> sendTracker;
-        EndpointMetrics toEndpointMetrics(size_t size) const
+        EndpointMetrics toEndpointMetrics(size_t queueSize) const
         {
-            return EndpointMetrics(size,
+            return EndpointMetrics(queueSize,
                 receiveTracker.snapshot.load() * 8 * utils::Time::ms,
                 sendTracker.snapshot.load() * 8 * utils::Time::ms);
         }
