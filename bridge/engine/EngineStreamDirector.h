@@ -20,8 +20,6 @@
 namespace bridge
 {
 
-struct EngineAudioStream;
-
 class EngineStreamDirector
 {
 public:

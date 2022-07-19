@@ -198,20 +198,20 @@ void Mixer::stopTransports()
 
     for (auto& audioStreamEntry : _audioStreams)
     {
-        assert(audioStreamEntry.second->_transport);
-        if (_bundleTransports.find(audioStreamEntry.second->_endpointId) != _bundleTransports.end())
+        assert(audioStreamEntry.second->transport);
+        if (_bundleTransports.find(audioStreamEntry.second->endpointId) != _bundleTransports.end())
         {
             continue;
         }
 
-        logTransportPacketLoss("", *audioStreamEntry.second->_transport, _loggableId.c_str());
-        audioStreamEntry.second->_transport->stop();
-        if (!waitForPendingJobs(700, 5, *audioStreamEntry.second->_transport))
+        logTransportPacketLoss("", *audioStreamEntry.second->transport, _loggableId.c_str());
+        audioStreamEntry.second->transport->stop();
+        if (!waitForPendingJobs(700, 5, *audioStreamEntry.second->transport))
         {
             logger::error("Transport for endpointId %s did not finish pending jobs in time. Continuing "
                           "deletion anyway.",
                 _loggableId.c_str(),
-                audioStreamEntry.second->_endpointId.c_str());
+                audioStreamEntry.second->endpointId.c_str());
         }
     }
 
@@ -262,7 +262,7 @@ bool Mixer::waitForAllPendingJobs(const uint32_t timeoutMs)
 
         for (auto& audioStream : _audioStreams)
         {
-            if (audioStream.second->_transport && audioStream.second->_transport->hasPendingJobs())
+            if (audioStream.second->transport && audioStream.second->transport->hasPendingJobs())
             {
                 pendingJobs = true;
                 break;
@@ -346,9 +346,9 @@ bool Mixer::addAudioStream(std::string& outId,
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
-        streamItr.first->second->_transport->getLoggableId().c_str());
+        streamItr.first->second->transport->getLoggableId().c_str());
 
-    return streamItr.first->second->_transport->isInitialized();
+    return streamItr.first->second->transport->isInitialized();
 }
 
 bool Mixer::addVideoStream(std::string& outId,
@@ -422,9 +422,9 @@ bool Mixer::addBundledAudioStream(std::string& outId,
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
-        streamItr.first->second->_transport->getLoggableId().c_str());
+        streamItr.first->second->transport->getLoggableId().c_str());
 
-    return streamItr.first->second->_transport->isInitialized();
+    return streamItr.first->second->transport->isInitialized();
 }
 
 bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpointId, const bool ssrcRewrite)
@@ -519,13 +519,13 @@ bool Mixer::removeAudioStream(const std::string& endpointId)
     }
     auto audioStream = audioStreamItr->second.get();
 
-    if (audioStream->_markedForDeletion)
+    if (audioStream->markedForDeletion)
     {
         return true;
     }
 
-    audioStream->_markedForDeletion = true;
-    auto engineStreamItr = _audioEngineStreams.find(audioStream->_endpointId);
+    audioStream->markedForDeletion = true;
+    auto engineStreamItr = _audioEngineStreams.find(audioStream->endpointId);
     if (engineStreamItr == _audioEngineStreams.end())
     {
         return true;
@@ -545,7 +545,7 @@ bool Mixer::removeAudioStreamId(const std::string& id)
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
         auto audioStreamItr = std::find_if(_audioStreams.begin(), _audioStreams.end(), [&](const auto& element) {
-            return element.second->_id.compare(id) == 0;
+            return element.second->id.compare(id) == 0;
         });
 
         if (audioStreamItr == _audioStreams.end())
@@ -553,7 +553,7 @@ bool Mixer::removeAudioStreamId(const std::string& id)
             return false;
         }
 
-        endpointId = audioStreamItr->second->_endpointId;
+        endpointId = audioStreamItr->second->endpointId;
     }
 
     return removeAudioStream(endpointId);
@@ -665,11 +665,11 @@ void Mixer::engineAudioStreamRemoved(EngineAudioStream* engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto endpointId = engineStream->_endpointId;
+    const auto endpointId = engineStream->endpointId;
     auto streamItr = _audioStreams.find(endpointId);
     if (streamItr == _audioStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->_transport, endpointId);
+        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _audioEngineStreams.erase(endpointId);
 
         logger::warn("EngineAudioStream endpointId %s removed, no matching audioStream found",
@@ -681,10 +681,10 @@ void Mixer::engineAudioStreamRemoved(EngineAudioStream* engineStream)
     auto& stream = streamItr->second;
     logger::info("AudioStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->_id.c_str(),
+        stream->id.c_str(),
         endpointId.c_str());
 
-    auto streamTransport = stream->_transport;
+    auto streamTransport = stream->transport;
 
     _audioStreams.erase(endpointId);
 
@@ -763,7 +763,7 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescr
     }
 
     outDescription = StreamDescription(*streamItr->second);
-    if (streamItr->second->_ssrcRewrite)
+    if (streamItr->second->ssrcRewrite)
     {
         for (auto ssrc : _audioSsrcs)
         {
@@ -847,7 +847,7 @@ bool Mixer::isAudioStreamConfigured(const std::string& endpointId)
     {
         return false;
     }
-    return streamItr->second->_isConfigured;
+    return streamItr->second->isConfigured;
 }
 
 bool Mixer::isVideoStreamConfigured(const std::string& endpointId)
@@ -921,7 +921,7 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
         return false;
     }
 
-    auto transport = audioStreamItr->second->_transport.get();
+    auto transport = audioStreamItr->second->transport.get();
     if (!transport)
     {
         return false;
@@ -1062,14 +1062,14 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
             rtpMap._payloadType);
     }
 
-    audioStream->_rtpMap = rtpMap;
-    audioStream->_remoteSsrc = remoteSsrc;
-    audioStream->_rtpMap._audioLevelExtId = audioLevelExtensionId;
-    audioStream->_transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
-    audioStream->_rtpMap._absSendTimeExtId = absSendTimeExtensionId;
-    if (audioStream->_rtpMap._absSendTimeExtId.isSet())
+    audioStream->rtpMap = rtpMap;
+    audioStream->remoteSsrc = remoteSsrc;
+    audioStream->rtpMap._audioLevelExtId = audioLevelExtensionId;
+    audioStream->transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
+    audioStream->rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+    if (audioStream->rtpMap._absSendTimeExtId.isSet())
     {
-        audioStream->_transport->setAbsSendTimeExtensionId(audioStream->_rtpMap._absSendTimeExtId.get());
+        audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap._absSendTimeExtId.get());
     }
     return true;
 }
@@ -1078,7 +1078,7 @@ bool Mixer::reconfigureAudioStream(const std::string& endpointId, const utils::O
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
-    if (audioStreamItr == _audioStreams.end() || !audioStreamItr->second->_isConfigured)
+    if (audioStreamItr == _audioStreams.end() || !audioStreamItr->second->isConfigured)
     {
         logger::warn("Reconfigure audio stream, endpoint id %s, %s",
             _loggableId.c_str(),
@@ -1099,13 +1099,13 @@ bool Mixer::reconfigureAudioStream(const std::string& endpointId, const utils::O
     {
         logger::info("Reconfigure audio stream, endpoint id %s, ssrc not set", _loggableId.c_str(), endpointId.c_str());
     }
-    audioStream->_remoteSsrc = remoteSsrc;
+    audioStream->remoteSsrc = remoteSsrc;
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::ReconfigureAudioStream;
     command.command.reconfigureAudioStream.mixer = &_engineMixer;
     command.command.reconfigureAudioStream.remoteSsrc = remoteSsrc.isSet() ? remoteSsrc.get() : 0;
-    command.command.reconfigureAudioStream.transport = audioStream->_transport.get();
+    command.command.reconfigureAudioStream.transport = audioStream->transport.get();
     _engine.pushCommand(std::move(command));
     return true;
 }
@@ -1288,7 +1288,7 @@ bool Mixer::configureAudioStreamTransportIce(const std::string& endpointId,
         return false;
     }
 
-    audioStreamItr->second->_transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
+    audioStreamItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
     return true;
 }
 
@@ -1315,7 +1315,7 @@ bool Mixer::configureAudioStreamTransportConnection(const std::string& endpointI
         return false;
     }
 
-    return audioStreamItr->second->_transport->setRemotePeer(peer);
+    return audioStreamItr->second->transport->setRemotePeer(peer);
 }
 
 bool Mixer::configureVideoStreamTransportConnection(const std::string& endpointId, const transport::SocketAddress& peer)
@@ -1340,7 +1340,7 @@ bool Mixer::configureAudioStreamTransportDtls(const std::string& endpointId,
     {
         return false;
     }
-    audioStreamItr->second->_transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    audioStreamItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     return true;
 }
 
@@ -1367,7 +1367,7 @@ bool Mixer::configureAudioStreamTransportDisableDtls(const std::string& endpoint
     {
         return false;
     }
-    audioStreamItr->second->_transport->disableDtls();
+    audioStreamItr->second->transport->disableDtls();
     return true;
 }
 
@@ -1445,7 +1445,7 @@ bool Mixer::startAudioStreamTransport(const std::string& endpointId)
     EngineCommand::Command command;
     command.type = EngineCommand::Type::StartTransport;
     command.command.startTransport.mixer = &_engineMixer;
-    command.command.startTransport.transport = audioStream->_transport.get();
+    command.command.startTransport.transport = audioStream->transport.get();
     _engine.pushCommand(std::move(command));
 
     return true;
@@ -1481,19 +1481,19 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
 
     logger::debug("Adding audioStream to engine, endpointId %s",
         getLoggableId().c_str(),
-        audioStream->_endpointId.c_str());
+        audioStream->endpointId.c_str());
 
-    audioStream->_isConfigured = true;
+    audioStream->isConfigured = true;
 
-    auto emplaceResult = _audioEngineStreams.emplace(audioStream->_endpointId,
-        std::make_unique<EngineAudioStream>(audioStream->_endpointId,
-            audioStream->_endpointIdHash,
-            audioStream->_localSsrc,
-            audioStream->_remoteSsrc,
-            *(audioStream->_transport.get()),
-            audioStream->_audioMixed,
-            audioStream->_rtpMap,
-            audioStream->_ssrcRewrite));
+    auto emplaceResult = _audioEngineStreams.emplace(audioStream->endpointId,
+        std::make_unique<EngineAudioStream>(audioStream->endpointId,
+            audioStream->endpointIdHash,
+            audioStream->localSsrc,
+            audioStream->remoteSsrc,
+            *(audioStream->transport.get()),
+            audioStream->audioMixed,
+            audioStream->rtpMap,
+            audioStream->ssrcRewrite));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddAudioStream;
@@ -1614,7 +1614,7 @@ bool Mixer::isAudioStreamGatheringComplete(const std::string& endpointId)
     {
         return false;
     }
-    return audioStreamItr->second->_transport->isGatheringComplete();
+    return audioStreamItr->second->transport->isGatheringComplete();
 }
 
 bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId)

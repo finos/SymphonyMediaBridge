@@ -25,7 +25,6 @@ class AudioForwarderReceiveJob : public jobmanager::CountedJob
 {
 public:
     AudioForwarderReceiveJob(memory::UniquePacket packet,
-        memory::AudioPacketPoolAllocator& audioPacketAllocator,
         transport::RtcTransport* sender,
         EngineMixer& engineMixer,
         SsrcInboundContext& ssrcContext,
@@ -41,7 +40,6 @@ private:
     void onPacketDecoded(const int32_t decodedFrames, const uint8_t* decodedData);
 
     memory::UniquePacket _packet;
-    memory::AudioPacketPoolAllocator& _audioPacketAllocator;
     EngineMixer& _engineMixer;
     transport::RtcTransport* _sender;
     SsrcInboundContext& _ssrcContext;

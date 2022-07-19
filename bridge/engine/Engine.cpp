@@ -295,7 +295,7 @@ void Engine::removeAudioStream(EngineCommand::Command& nextCommand)
     logger::debug("Remove audioStream, mixer %s, transport id %s",
         "Engine",
         nextCommand.command.removeAudioStream.mixer->getLoggableId().c_str(),
-        nextCommand.command.removeAudioStream.engineStream->_transport.getLoggableId().c_str());
+        nextCommand.command.removeAudioStream.engineStream->transport.getLoggableId().c_str());
 
     auto mixer = nextCommand.command.removeAudioStream.mixer;
     mixer->removeAudioStream(nextCommand.command.removeAudioStream.engineStream);

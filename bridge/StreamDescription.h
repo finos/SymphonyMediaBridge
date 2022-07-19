@@ -11,9 +11,9 @@ struct StreamDescription
 {
     StreamDescription() = default;
 
-    explicit StreamDescription(const AudioStream& stream) : _id(stream._id), _endpointId(stream._endpointId)
+    explicit StreamDescription(const AudioStream& stream) : _id(stream.id), _endpointId(stream.endpointId)
     {
-        _localSsrcs.push_back(stream._localSsrc);
+        _localSsrcs.push_back(stream.localSsrc);
     }
 
     explicit StreamDescription(const VideoStream& stream) : _id(stream._id), _endpointId(stream._endpointId)

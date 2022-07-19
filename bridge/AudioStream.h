@@ -18,32 +18,32 @@ struct AudioStream
         std::shared_ptr<transport::RtcTransport>& transport,
         const bool audioMixed,
         bool ssrcRewrite)
-        : _id(id),
-          _endpointId(endpointId),
-          _endpointIdHash(std::hash<std::string>{}(_endpointId)),
-          _localSsrc(localSsrc),
-          _transport(transport),
-          _audioMixed(audioMixed),
-          _markedForDeletion(false),
-          _ssrcRewrite(ssrcRewrite),
-          _isConfigured(false)
+        : id(id),
+          endpointId(endpointId),
+          endpointIdHash(std::hash<std::string>{}(endpointId)),
+          localSsrc(localSsrc),
+          transport(transport),
+          audioMixed(audioMixed),
+          markedForDeletion(false),
+          ssrcRewrite(ssrcRewrite),
+          isConfigured(false)
     {
     }
 
-    std::string _id;
-    std::string _endpointId;
-    size_t _endpointIdHash;
-    uint32_t _localSsrc;
-    utils::Optional<uint32_t> _remoteSsrc;
+    std::string id;
+    std::string endpointId;
+    size_t endpointIdHash;
+    uint32_t localSsrc;
+    utils::Optional<uint32_t> remoteSsrc;
 
-    std::shared_ptr<transport::RtcTransport> _transport;
-    bool _audioMixed;
+    std::shared_ptr<transport::RtcTransport> transport;
+    bool audioMixed;
 
-    bridge::RtpMap _rtpMap;
+    bridge::RtpMap rtpMap;
 
-    bool _markedForDeletion;
-    bool _ssrcRewrite;
-    bool _isConfigured;
+    bool markedForDeletion;
+    bool ssrcRewrite;
+    bool isConfigured;
 };
 
 } // namespace bridge

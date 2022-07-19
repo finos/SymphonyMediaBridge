@@ -330,7 +330,7 @@ private:
     bool _probingVideoStreams;
 
     void processIncomingRtpPackets(const uint64_t timestamp);
-    uint32_t processIncomingVideoRtpPackets(const uint64_t timestamp);
+    void forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket);
