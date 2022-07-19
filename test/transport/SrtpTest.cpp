@@ -1,3 +1,4 @@
+#include "api/utils.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
 #include "transport/dtls/DtlsMessageListener.h"
@@ -92,7 +93,7 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
     }
     void onDtlsStateChange(transport::SrtpClient* srtpClient, transport::SrtpClient::State state) override
     {
-        logger::info("DTLS state change %s", srtpClient->getLoggableId().c_str(), transport::toString(state));
+        logger::info("DTLS state change %s", srtpClient->getLoggableId().c_str(), api::utils::toString(state));
     }
 
     bool isDataValid(uint8_t* data) const

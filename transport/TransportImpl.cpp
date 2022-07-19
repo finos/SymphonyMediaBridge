@@ -1,4 +1,5 @@
 #include "TransportImpl.h"
+#include "api/utils.h"
 #include "bwe/BandwidthEstimator.h"
 #include "config/Config.h"
 #include "dtls/SrtpClient.h"
@@ -476,7 +477,9 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
       _rtxProbeSsrc(0),
       _rtxProbeSequenceCounter(nullptr),
-      _pacingInUse(false)
+      _pacingInUse(false),
+      _iceState(ice::IceSession::State::IDLE),
+      _dtlsState(SrtpClient::State::IDLE)
 {
     assert(endpointIdHash != 0);
 
@@ -2017,6 +2020,7 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
+    _iceState = state;
     switch (state)
     {
     case ice::IceSession::State::CONNECTED:
@@ -2113,28 +2117,10 @@ void TransportImpl::setDataReceiver(DataReceiver* dataReceiver)
     _dataReceiver.store(dataReceiver);
 }
 
-const char* dtlsStateToString(const SrtpClient::State state)
-{
-    switch (state)
-    {
-    case SrtpClient::State::IDLE:
-        return "IDLE";
-    case SrtpClient::State::READY:
-        return "READY";
-    case SrtpClient::State::CONNECTED:
-        return "CONNECTED";
-    case SrtpClient::State::CONNECTING:
-        return "CONNECTING";
-    case SrtpClient::State::FAILED:
-        return "FAILED";
-    default:
-        return "unknown";
-    }
-}
-
 void TransportImpl::onDtlsStateChange(SrtpClient*, const SrtpClient::State state)
 {
-    logger::info("DTLS %s", getLoggableId().c_str(), dtlsStateToString(state));
+    _dtlsState = state;
+    logger::info("DTLS %s", getLoggableId().c_str(), api::utils::toString(state));
     if (state == SrtpClient::State::CONNECTED && isConnected())
     {
         onTransportConnected();

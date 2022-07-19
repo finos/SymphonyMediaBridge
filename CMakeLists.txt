@@ -81,6 +81,7 @@ list(APPEND THIRD_PARTY_LIBS
 set(FILES
         api/AllocateConference.h
         api/AllocateEndpoint.h
+        api/ConferenceEndpoint.h
         api/DataChannelMessage.h
         api/DataChannelMessageParser.cpp
         api/DataChannelMessageParser.h
@@ -92,6 +93,8 @@ set(FILES
         api/Parser.h
         api/Recording.h
         api/RecordingChannel.h
+        api/utils.h
+        api/utils.cpp
         aws/AwsHarvester.cpp
         aws/AwsHarvester.h
         bridge/ApiRequestHandler.cpp
@@ -484,6 +487,7 @@ set(TEST_FILES
     test/utils/StringBuilderTest.cpp
     test/utils/RandGeneratorTest.cpp
     test/utils/TimeSourceTest.cpp
+    test/utils/ApiUtils.cpp
     test/legacyapi/ParserTest.cpp
     test/legacyapi/GeneratorTest.cpp
     test/bridge/EngineStreamDirectorTest.cpp

@@ -1,4 +1,6 @@
 #include "api/Parser.h"
+#include "api/ConferenceEndpoint.h"
+#include "api/utils.h"
 #include "utils/Base64.h"
 
 namespace
@@ -17,14 +19,27 @@ const nlohmann::json& requiredJsonArray(const nlohmann::json& data, const char* 
     const auto it = data.find(arrayProperty);
     if (it == data.end())
     {
-        const auto sb = std::string()
-            .append("Missing required array property: ")
-            .append(arrayProperty);
+        const auto sb = std::string().append("Missing required array property: ").append(arrayProperty);
 
         throw nlohmann::detail::other_error::create(-1, sb);
     }
 
     return *it;
+}
+
+template <typename T>
+void setIfExistsOrThrow(T& target, const nlohmann::json& data, const char* name)
+{
+    const auto& it = data.find(name);
+    if (it != data.end())
+    {
+        target = it->get<T>();
+    }
+    else
+    {
+        const auto sb = std::string().append("Missing required property: ").append(name);
+        throw nlohmann::detail::other_error::create(-1, sb);
+    }
 }
 
 template <typename T>
@@ -314,8 +329,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
 
         for (const auto& ssrcJson : optionalJsonArray(audioJson, "ssrcs"))
         {
-            const auto ssrc =
-                ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+            const auto ssrc = ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
             audioChannel._ssrcs.push_back(ssrc);
         }
 
@@ -434,31 +448,76 @@ Recording parseRecording(const nlohmann::json& data)
     setIfExistsOrDefault<>(recording._isScreenshareEnabled, modalities, "screenshare", false);
 
     for (const auto& channelJson : optionalJsonArray(recordingJson, "channels"))
+    {
+        api::RecordingChannel recordingChannel;
+        setIfExists<>(recordingChannel._id, channelJson, "id");
+        setIfExists<>(recordingChannel._host, channelJson, "host");
+        setIfExistsOrDefault<>(recordingChannel._port, channelJson, "port", uint16_t(0));
+
+        std::string aesKeyEnc;
+        std::string saltEnc;
+        setIfExists<>(aesKeyEnc, channelJson, "aes-key");
+        setIfExists<>(saltEnc, channelJson, "aes-salt");
+
+        if (!aesKeyEnc.empty())
         {
-            api::RecordingChannel recordingChannel;
-            setIfExists<>(recordingChannel._id, channelJson, "id");
-            setIfExists<>(recordingChannel._host, channelJson, "host");
-            setIfExistsOrDefault<>(recordingChannel._port, channelJson, "port", uint16_t(0));
-
-            std::string aesKeyEnc;
-            std::string saltEnc;
-            setIfExists<>(aesKeyEnc, channelJson, "aes-key");
-            setIfExists<>(saltEnc, channelJson, "aes-salt");
-
-            if (!aesKeyEnc.empty())
-            {
-                utils::Base64::decode(aesKeyEnc, recordingChannel._aesKey, 32);
-            }
-
-            if (!saltEnc.empty())
-            {
-                utils::Base64::decode(saltEnc, recordingChannel._aesSalt, 12);
-            }
-
-            recording._channels.emplace_back(recordingChannel);
+            ::utils::Base64::decode(aesKeyEnc, recordingChannel._aesKey, 32);
         }
 
+        if (!saltEnc.empty())
+        {
+            ::utils::Base64::decode(saltEnc, recordingChannel._aesSalt, 12);
+        }
+
+        recording._channels.emplace_back(recordingChannel);
+    }
+
     return recording;
+}
+
+ConferenceEndpoint parseConferenceEndpoint(const nlohmann::json& data)
+{
+    ConferenceEndpoint endpoint;
+    setIfExistsOrThrow<>(endpoint.id, data, "id");
+    setIfExistsOrThrow<>(endpoint.hasAudio, data, "hasAudio");
+    setIfExistsOrThrow<>(endpoint.hasVideo, data, "hasVideo");
+    setIfExistsOrThrow<>(endpoint.isActiveSpeaker, data, "isActiveSpeaker");
+    setIfExistsOrThrow<>(endpoint.isRecording, data, "isRecording");
+    setIfExistsOrThrow<>(endpoint.isBundled, data, "isBundled");
+    std::string iceStateStr;
+    std::string dtlsStateStr;
+    setIfExistsOrThrow<>(iceStateStr, data, "iceState");
+    setIfExistsOrThrow<>(dtlsStateStr, data, "dtlsState");
+
+    ice::IceSession::State iceState = utils::stringToIceState(iceStateStr);
+    if (iceState != ice::IceSession::State::LAST)
+    {
+        endpoint.iceState = iceState;
+    }
+    transport::SrtpClient::State dtlsState = utils::stringToDtlsState(dtlsStateStr);
+    if (dtlsState != transport::SrtpClient::State::LAST)
+    {
+        endpoint.dtlsState = dtlsState;
+    }
+    return endpoint;
+}
+
+std::vector<ConferenceEndpoint> parseConferenceEndpoints(const nlohmann::json& responseBody)
+{
+    std::vector<ConferenceEndpoint> endpoints;
+    assert(responseBody.is_array());
+    for (const auto& elem : responseBody)
+    {
+        try
+        {
+            endpoints.push_back(Parser::parseConferenceEndpoint(elem));
+        }
+        catch (...)
+        {
+            // do nothng
+        }
+    }
+    return endpoints;
 }
 
 } // namespace Parser

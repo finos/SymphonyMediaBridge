@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <string>
 
 #if ENABLE_LEGACY_API
@@ -116,6 +117,13 @@ private:
         const std::string& conferenceId,
         const std::string& barbellId,
         bool dtlsClient);
+
+    httpd::Response getConferenceInfo(RequestLogger& requestLogger, const std::string& conferenceId);
+    httpd::Response getEndpointInfo(RequestLogger& requestLogger,
+        const std::string& conferenceId,
+        const std::string& endpointId);
+
+    std::unique_lock<std::mutex> getConferenceMixer(const std::string& conferenceId, Mixer*&);
 };
 
 } // namespace bridge

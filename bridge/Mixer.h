@@ -5,17 +5,20 @@
 #include "bridge/engine/SimulcastLevel.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
+#include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
 #include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace api
 {
 struct RecordingChannel;
+struct ConferenceEndpoint;
 } // namespace api
 
 namespace transport
@@ -208,6 +211,7 @@ public:
 
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
+    bool getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoint&);
     bool getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
     bool getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
     bool getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription);
@@ -251,6 +255,8 @@ public:
     void sendEndpointMessage(const std::string& toEndpointId,
         const size_t fromEndpointIdHash,
         const std::string& message);
+
+    std::unordered_set<std::string> getEndpoints() const;
 
 private:
     struct BundleTransport
