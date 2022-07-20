@@ -1,4 +1,5 @@
 #pragma once
+#include "bridge/BarbellStreamGroupDescription.h"
 #include "bridge/RtpMap.h"
 #include "bridge/engine/PacketCache.h"
 #include "transport/RtcTransport.h"
@@ -25,6 +26,8 @@ struct Barbell
 
     std::shared_ptr<transport::RtcTransport> transport;
     std::unordered_map<uint32_t, std::unique_ptr<PacketCache>> videoPacketCaches;
+    std::vector<BarbellStreamGroupDescription> videoSsrcs;
+    std::vector<uint32_t> audioSsrcs;
 
     bool markedForDeletion;
     bool isConfigured;

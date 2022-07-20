@@ -74,7 +74,7 @@ public:
         memory::PacketPoolAllocator& sendAllocator,
         memory::AudioPacketPoolAllocator& audioAllocator,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastLevel>& videoSsrcs,
+        const std::vector<SimulcastGroup>& videoSsrcs,
         const uint32_t lastN);
     ~EngineMixer() override;
 
@@ -381,6 +381,7 @@ private:
     void sendDominantSpeakerMessageToAll(const size_t dominantSpeaker);
     void sendUserMediaMapMessage(const size_t endpointIdHash);
     void sendUserMediaMapMessageToAll();
+    void sendUserMediaMapMessageOverBarbells();
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream,
         const size_t dominantSpeaker,
         const std::string& dominantSpeakerEndpoint);

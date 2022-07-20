@@ -323,6 +323,7 @@ public:
 
     size_t capacity() const { return _capacity; }
     size_t size() const { return _capacity - _freeItems.size(); }
+    bool empty() const { return _capacity == _freeItems.size(); }
 
     const_iterator cbegin() const
     {

@@ -28,12 +28,13 @@ struct RecHeader
     {
         assert((intptr_t)pointer % alignof(RecHeader) == 0);
         assert(len >= REC_HEADER_SIZE);
+        assert(sizeof(RecHeader) == REC_HEADER_SIZE);
         return reinterpret_cast<RecHeader*>(pointer);
     }
 
     static RecHeader* fromPacket(memory::Packet& packet) { return fromPtr(packet.get(), packet.getLength()); }
 
-    uint8_t* getPayload() { return reinterpret_cast<uint8_t*>(this) + REC_HEADER_SIZE; }
+    uint8_t* getPayload() { return reinterpret_cast<uint8_t*>(&timestamp + 1); }
 };
 
 constexpr bool isRecPacket(const void* buffer, const uint32_t length)
@@ -41,7 +42,8 @@ constexpr bool isRecPacket(const void* buffer, const uint32_t length)
     return length >= REC_HEADER_SIZE && reinterpret_cast<const uint8_t*>(buffer)[0] == 0x00;
 }
 
-inline bool isRecPacket(const memory::Packet& packet) {
+inline bool isRecPacket(const memory::Packet& packet)
+{
     return isRecPacket(packet.get(), packet.getLength());
 }
 
