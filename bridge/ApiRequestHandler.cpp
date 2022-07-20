@@ -445,9 +445,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             {
                 if (request._method == httpd::Method::GET)
                 {
-                    token = utils::StringTokenizer::tokenize(token, '/');
-                    const auto conferenceId = token.str();
-                    return getConferenceInfo(requestLogger, conferenceId);
+                    return getConferenceInfo(requestLogger, token);
                 }
 
                 if (request._method != httpd::Method::POST)
@@ -456,97 +454,11 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                         utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
                 }
 
-                token = utils::StringTokenizer::tokenize(token, '/');
-                const auto conferenceId = token.str();
-                if (!token.next)
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, "Endpoint not found");
-                }
-                token = utils::StringTokenizer::tokenize(token, '/');
-                const auto endpointId = token.str();
-
-                const auto requestBody = request._body.build();
-                const auto requestBodyJson = nlohmann::json::parse(requestBody);
-                const auto actionJsonItr = requestBodyJson.find("action");
-                if (actionJsonItr == requestBodyJson.end())
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-                        "Missing required json property: action");
-                }
-                const auto& action = actionJsonItr->get<std::string>();
-
-                if (action.compare("allocate") == 0)
-                {
-                    const auto allocateChannel = api::Parser::parseAllocateEndpoint(requestBodyJson);
-                    return allocateEndpoint(requestLogger, allocateChannel, conferenceId, endpointId);
-                }
-                else if (action.compare("configure") == 0)
-                {
-                    const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
-                    return configureEndpoint(requestLogger, endpointDescription, conferenceId, endpointId);
-                }
-                else if (action.compare("reconfigure") == 0)
-                {
-                    const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
-                    return reconfigureEndpoint(requestLogger, endpointDescription, conferenceId, endpointId);
-                }
-                else if (action.compare("record") == 0)
-                {
-                    const auto recording = api::Parser::parseRecording(requestBodyJson);
-                    return recordEndpoint(requestLogger, recording, conferenceId);
-                }
-                else if (action.compare("expire") == 0)
-                {
-                    return expireEndpoint(requestLogger, conferenceId, endpointId);
-                }
-                else
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-                        utils::format("Action '%s' is not supported", action.c_str()));
-                }
+                return processConferenceAction(requestLogger, request, token);
             }
             else if (utils::StringTokenizer::isEqual(token, "barbell") && token.next)
             {
-                if (request._method != httpd::Method::POST && request._method != httpd::Method::DELETE)
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-                        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
-                }
-
-                token = utils::StringTokenizer::tokenize(token, '/');
-                const auto conferenceId = token.str();
-                if (!token.next)
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, "Endpoint not found");
-                }
-                token = utils::StringTokenizer::tokenize(token, '/');
-                const auto barbellId = token.str();
-
-                if (request._method == httpd::Method::DELETE)
-                {
-                    return deleteBarbell(requestLogger, conferenceId, barbellId);
-                }
-
-                const auto requestBody = request._body.build();
-                const auto requestBodyJson = nlohmann::json::parse(requestBody);
-                const auto actionJsonItr = requestBodyJson.find("action");
-                if (actionJsonItr == requestBodyJson.end())
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-                        "Missing required json property: action");
-                }
-                const auto& action = actionJsonItr->get<std::string>();
-
-                if (action.compare("allocate") == 0)
-                {
-                    bool iceControlling = requestBodyJson["bundle-transport"]["ice-controlling"];
-                    return allocateBarbell(requestLogger, iceControlling, conferenceId, barbellId);
-                }
-                else if (action.compare("configure") == 0)
-                {
-                    const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, barbellId);
-                    return configureBarbell(requestLogger, conferenceId, barbellId, endpointDescription);
-                }
+                return processBarbellRequest(requestLogger, request, token);
             }
         }
         catch (httpd::RequestErrorException e)
@@ -594,6 +506,54 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
         logger::error("Uncaught exception in onRequest", "ApiRequestHandler");
         return httpd::Response(httpd::StatusCode::INTERNAL_SERVER_ERROR);
     }
+}
+
+httpd::Response ApiRequestHandler::processBarbellRequest(RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const utils::StringTokenizer::Token& incomingToken)
+{
+    if (request._method != httpd::Method::POST && request._method != httpd::Method::DELETE)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+            utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
+    }
+
+    auto token = utils::StringTokenizer::tokenize(incomingToken, '/');
+    const auto conferenceId = token.str();
+    if (!token.next)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, "Endpoint not found");
+    }
+    token = utils::StringTokenizer::tokenize(token, '/');
+    const auto barbellId = token.str();
+
+    if (request._method == httpd::Method::DELETE)
+    {
+        return deleteBarbell(requestLogger, conferenceId, barbellId);
+    }
+
+    const auto requestBody = request._body.build();
+    const auto requestBodyJson = nlohmann::json::parse(requestBody);
+    const auto actionJsonItr = requestBodyJson.find("action");
+    if (actionJsonItr == requestBodyJson.end())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Missing required json property: action");
+    }
+    const auto& action = actionJsonItr->get<std::string>();
+
+    if (action.compare("allocate") == 0)
+    {
+        bool iceControlling = requestBodyJson["bundle-transport"]["ice-controlling"];
+        return allocateBarbell(requestLogger, iceControlling, conferenceId, barbellId);
+    }
+    else if (action.compare("configure") == 0)
+    {
+        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, barbellId);
+        return configureBarbell(requestLogger, conferenceId, barbellId, endpointDescription);
+    }
+
+    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+        utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
 }
 
 httpd::Response ApiRequestHandler::handleStats(const httpd::Request& request)
@@ -689,6 +649,59 @@ httpd::Response ApiRequestHandler::allocateConference(RequestLogger& requestLogg
     response._headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
+}
+
+httpd::Response ApiRequestHandler::processConferenceAction(RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const utils::StringTokenizer::Token& incomingToken)
+{
+    auto token = utils::StringTokenizer::tokenize(incomingToken, '/');
+    const auto conferenceId = token.str();
+    if (!token.next)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, "Endpoint not found");
+    }
+    token = utils::StringTokenizer::tokenize(token, '/');
+    const auto endpointId = token.str();
+
+    const auto requestBody = request._body.build();
+    const auto requestBodyJson = nlohmann::json::parse(requestBody);
+    const auto actionJsonItr = requestBodyJson.find("action");
+    if (actionJsonItr == requestBodyJson.end())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Missing required json property: action");
+    }
+    const auto& action = actionJsonItr->get<std::string>();
+
+    if (action.compare("allocate") == 0)
+    {
+        const auto allocateChannel = api::Parser::parseAllocateEndpoint(requestBodyJson);
+        return allocateEndpoint(requestLogger, allocateChannel, conferenceId, endpointId);
+    }
+    else if (action.compare("configure") == 0)
+    {
+        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
+        return configureEndpoint(requestLogger, endpointDescription, conferenceId, endpointId);
+    }
+    else if (action.compare("reconfigure") == 0)
+    {
+        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
+        return reconfigureEndpoint(requestLogger, endpointDescription, conferenceId, endpointId);
+    }
+    else if (action.compare("record") == 0)
+    {
+        const auto recording = api::Parser::parseRecording(requestBodyJson);
+        return recordEndpoint(requestLogger, recording, conferenceId);
+    }
+    else if (action.compare("expire") == 0)
+    {
+        return expireEndpoint(requestLogger, conferenceId, endpointId);
+    }
+    else
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Action '%s' is not supported", action.c_str()));
+    }
 }
 
 httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger,
@@ -1713,8 +1726,11 @@ httpd::Response ApiRequestHandler::deleteBarbell(RequestLogger& requestLogger,
     return response;
 }
 
-httpd::Response ApiRequestHandler::getConferenceInfo(RequestLogger& requestLogger, const std::string& conferenceId)
+httpd::Response ApiRequestHandler::getConferenceInfo(RequestLogger& requestLogger,
+    const utils::StringTokenizer::Token& token)
 {
+    auto nextToken = utils::StringTokenizer::tokenize(token, '/');
+    const auto conferenceId = nextToken.str();
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
     nlohmann::json responseBodyJson = nlohmann::json::array();

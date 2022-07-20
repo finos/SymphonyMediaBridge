@@ -62,6 +62,10 @@ private:
         const api::AllocateEndpoint&,
         const std::string& conferenceId,
         const std::string& endpointId);
+    httpd::Response processConferenceAction(RequestLogger&,
+        const httpd::Request&,
+        const utils::StringTokenizer::Token&);
+    httpd::Response processBarbellRequest(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
 
     httpd::Response generateAllocateEndpointResponse(RequestLogger&,
         const api::AllocateEndpoint&,
@@ -107,7 +111,7 @@ private:
         const std::string& barbellId,
         bool dtlsClient);
 
-    httpd::Response getConferenceInfo(RequestLogger&, const std::string& conferenceId);
+    httpd::Response getConferenceInfo(RequestLogger&, const utils::StringTokenizer::Token&);
     httpd::Response getEndpointInfo(RequestLogger&, const std::string& conferenceId, const std::string& endpointId);
 
     std::unique_lock<std::mutex> getConferenceMixer(const std::string& conferenceId, Mixer*&);
