@@ -1,6 +1,5 @@
 #pragma once
 #include "ActionContext.h"
-
 #include "httpd/Request.h"
 #include "httpd/Response.h"
 #include "utils/StringTokenizer.h"
@@ -9,6 +8,7 @@
 
 namespace bridge
 {
+class Mixer;
 class RequestLogger;
 std::unique_lock<std::mutex> getConferenceMixer(ActionContext*, const std::string&, Mixer*&);
 

@@ -31,6 +31,7 @@ public:
     {
         std::memcpy(dst.get(), get(), getLength());
         dst.setLength(getLength());
+        dst.endpointIdHash = endpointIdHash;
     }
 
     void append(const void* data, size_t length)
@@ -43,6 +44,8 @@ public:
     }
 
     void clear() { std::memset(_data, 0, size); }
+
+    size_t endpointIdHash = 0;
 
 private:
     unsigned char _data[size];

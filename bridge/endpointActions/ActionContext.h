@@ -3,10 +3,7 @@
 namespace bridge
 {
 
-class Mixer;
 class MixerManager;
-struct StreamDescription;
-class RequestLogger;
 } // namespace bridge
 
 namespace transport

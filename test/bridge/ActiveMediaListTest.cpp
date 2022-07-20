@@ -67,7 +67,11 @@ private:
 
         for (uint32_t i = 10; i < 20; ++i)
         {
-            _videoSsrcs.push_back(bridge::SimulcastLevel({i, i + 100}));
+            bridge::SimulcastLevel levels[3] = {{i * 3, i * 3 + 100},
+                {i * 3 + 1, i * 3 + 101},
+                {i * 3 + 2, i * 3 + 102}};
+
+            _videoSsrcs.push_back(bridge::SimulcastGroup(levels));
         }
 
         for (uint32_t i = 20; i < 24; ++i)
@@ -105,8 +109,9 @@ private:
     }
 
 protected:
+    bool _audioMapChanged = false;
     std::vector<uint32_t> _audioSsrcs;
-    std::vector<bridge::SimulcastLevel> _videoSsrcs;
+    std::vector<bridge::SimulcastGroup> _videoSsrcs;
     std::vector<bridge::SimulcastLevel> _videoPinSsrcs;
 
     std::unique_ptr<jobmanager::JobManager> _jobManager;
@@ -167,8 +172,11 @@ protected:
 
             newTimestamp += 1000;
             bool dominantSpeakerChanged = false;
-            bool userMediaMapChanged = false;
-            _activeMediaList->process(newTimestamp, dominantSpeakerChanged, userMediaMapChanged);
+            bool videoMapChanged = false;
+            _activeMediaList->process(newTimestamp * utils::Time::ms,
+                dominantSpeakerChanged,
+                videoMapChanged,
+                _audioMapChanged);
             if (dominantSpeakerChanged)
             {
                 return newTimestamp;
@@ -200,16 +208,16 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
     _activeMediaList->addAudioParticipant(participant2);
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
+    bool videoMapChanged = false;
 
-    _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     for (auto i = 0; i < 30; ++i)
     {
         _activeMediaList->onNewAudioLevel(participant1, 64 + (i % 40));
         _activeMediaList->onNewAudioLevel(participant2, 96 + (i % 5));
     }
     timestamp += 200;
-    _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     EXPECT_TRUE(dominantSpeakerChanged);
 
     for (auto i = 0; i < 199; ++i)
@@ -217,14 +225,17 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
         _activeMediaList->onNewAudioLevel(participant1, 96 + (i % 5));
         _activeMediaList->onNewAudioLevel(participant2, 64 + (i % 40));
         timestamp += 10;
-        _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+        _activeMediaList->process(timestamp * utils::Time::ms,
+            dominantSpeakerChanged,
+            videoMapChanged,
+            _audioMapChanged);
         EXPECT_FALSE(dominantSpeakerChanged);
     }
 
     _activeMediaList->onNewAudioLevel(participant1, 96);
     _activeMediaList->onNewAudioLevel(participant2, 64);
     timestamp += 11;
-    _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     EXPECT_TRUE(dominantSpeakerChanged);
 
     _activeMediaList->removeAudioParticipant(participant1);
@@ -275,8 +286,9 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
     _activeMediaList->onNewAudioLevel(6, 10);
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+
+    _activeMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
     EXPECT_EQ(5, audioRewriteMap.size());
@@ -298,8 +310,9 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+
+    _activeMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     for (const auto element : ActiveMediaListTestLevels::longUtterance)
     {
@@ -316,7 +329,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
         _activeMediaList->onNewAudioLevel(6, element);
     }
 
-    _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(2000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
     EXPECT_EQ(5, audioRewriteMap.size());
@@ -335,8 +348,9 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     }
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+
+    _activeMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     for (const auto element : ActiveMediaListTestLevels::longUtterance)
     {
@@ -348,7 +362,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
         _activeMediaList->onNewAudioLevel(2, element);
     }
 
-    _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(2000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(2));
@@ -385,8 +399,8 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     }
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    smallActiveMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+    smallActiveMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     const auto& audioRewriteMap = smallActiveMediaList->getAudioSsrcRewriteMap();
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
@@ -550,8 +564,12 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
         _activeMediaList->onNewAudioLevel(7, 0x7F);
         _activeMediaList->onNewAudioLevel(8, 0x7F);
         bool dominantSpeakerChanged = false;
-        bool userMediaMapChanged = false;
-        _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+        bool videoMapChanged = false;
+        bool audioMapChanged = false;
+        _activeMediaList->process(timestamp * utils::Time::ms,
+            dominantSpeakerChanged,
+            videoMapChanged,
+            audioMapChanged);
     }
 
     for (int i = 1 + audioLastN + 2; i < memberCount; ++i)

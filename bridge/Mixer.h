@@ -61,6 +61,7 @@ struct SsrcWhitelist;
 struct VideoStream;
 struct Barbell;
 struct EngineBarbell;
+struct BarbellStreamGroupDescription;
 
 class Mixer
 {
@@ -83,7 +84,7 @@ public:
         utils::SsrcGenerator& ssrcGenerator,
         const config::Config& config,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastLevel>& videoSsrcs,
+        const std::vector<SimulcastGroup>& videoSsrcs,
         const std::vector<SimulcastLevel>& videoPinSsrcs);
 
     virtual ~Mixer() = default;
@@ -189,6 +190,10 @@ public:
         const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool isDtlsClient);
+    bool configureBarbellSsrcs(const std::string& barbellId,
+        const std::vector<BarbellStreamGroupDescription>& videoSsrcs,
+        const std::vector<uint32_t>& audioSsrcs);
+
     bool addBarbellToEngine(const std::string& barbellId);
     bool startBarbellTransport(const std::string& barbellId);
     void removeBarbell(const std::string& barbellId);
@@ -219,7 +224,7 @@ public:
     bool isVideoStreamConfigured(const std::string& endpointId);
     bool isDataStreamConfigured(const std::string& endpointId);
     void getAudioStreamDescription(StreamDescription& outDescription);
-    void getVideoStreamDescription(StreamDescription& outDescription);
+    void getBarbellVideoStreamDescription(std::vector<BarbellStreamGroupDescription>& outDescription);
 
     bool getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription);
     bool getAudioStreamTransportDescription(const std::string& endpointId,
@@ -271,7 +276,7 @@ private:
     bool _markedForDeletion;
 
     const std::vector<uint32_t> _audioSsrcs;
-    const std::vector<SimulcastLevel> _videoSsrcs;
+    const std::vector<SimulcastGroup> _videoSsrcs;
     const std::vector<SimulcastLevel> _videoPinSsrcs;
 
     transport::TransportFactory& _transportFactory;

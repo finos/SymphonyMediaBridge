@@ -1,3 +1,4 @@
+#pragma once
 #include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
 

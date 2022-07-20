@@ -91,6 +91,7 @@ struct EndpointDescription
 
     struct Video
     {
+        static const size_t MAX_SSRCS = 3;
         utils::Optional<Transport> _transport;
 
         std::vector<uint32_t> _ssrcs;

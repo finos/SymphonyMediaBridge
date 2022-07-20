@@ -3,6 +3,7 @@
 #include "api/RecordingChannel.h"
 #include "bridge/AudioStream.h"
 #include "bridge/Barbell.h"
+#include "bridge/BarbellStreamGroupDescription.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
@@ -145,7 +146,7 @@ Mixer::Mixer(std::string id,
     utils::SsrcGenerator& ssrcGenerator,
     const config::Config& config,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastLevel>& videoSsrcs,
+    const std::vector<SimulcastGroup>& videoSsrcs,
     const std::vector<SimulcastLevel>& videoPinSsrcs)
     : _config(config),
       _id(std::move(id)),
@@ -819,10 +820,7 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescr
 void Mixer::getAudioStreamDescription(StreamDescription& outDescription)
 {
     outDescription = StreamDescription();
-    for (auto ssrc : _audioSsrcs)
-    {
-        outDescription._localSsrcs.push_back(ssrc);
-    }
+    utils::append(outDescription._localSsrcs, _audioSsrcs);
 }
 
 bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
@@ -839,8 +837,8 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescr
     {
         for (auto ssrcPair : _videoSsrcs)
         {
-            outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-            outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+            outDescription._localSsrcs.push_back(ssrcPair.levels[0]._ssrc);
+            outDescription._localSsrcs.push_back(ssrcPair.levels[0]._feedbackSsrc);
         }
         for (auto ssrcPair : _videoPinSsrcs)
         {
@@ -851,21 +849,20 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescr
     return true;
 }
 
-void Mixer::getVideoStreamDescription(StreamDescription& outDescription)
+void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellStreamGroupDescription>& outDescriptions)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    outDescription = StreamDescription();
-
-    for (auto ssrcPair : _videoSsrcs)
+    for (auto ssrcGroup : _videoSsrcs)
     {
-        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
-    }
-    for (auto ssrcPair : _videoPinSsrcs)
-    {
-        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+        bridge::BarbellStreamGroupDescription description;
+        for (size_t i = 0; i < ssrcGroup.count; ++i)
+        {
+            description.ssrcs.push_back(ssrcGroup.levels[i]._ssrc);
+            description.feedbackSsrcs.push_back(ssrcGroup.levels[i]._feedbackSsrc);
+        }
+        description.slides = description.ssrcs.size() == 1;
+        outDescriptions.push_back(description);
     }
 }
 
@@ -2266,7 +2263,11 @@ bool Mixer::addBarbellToEngine(const std::string& barbellId)
     auto& barbell = *barbellIt->second;
     barbell.isConfigured = true;
     auto emplaceResult = _engineBarbells.emplace(barbell.id,
-        std::make_unique<EngineBarbell>(barbell.id, *barbell.transport, _engineMixer.getSendAllocator()));
+        std::make_unique<EngineBarbell>(barbell.id,
+            *barbell.transport,
+            _engineMixer.getSendAllocator(),
+            barbell.videoSsrcs,
+            barbell.audioSsrcs));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddBarbell;
@@ -2294,6 +2295,23 @@ bool Mixer::configureBarbellTransport(const std::string& barbellId,
     barbellItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
     barbellItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     barbellItr->second->transport->setSctp(5000, 5000);
+    return true;
+}
+
+bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
+    const std::vector<BarbellStreamGroupDescription>& videoSsrcs,
+    const std::vector<uint32_t>& audioSsrcs)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto barbellItr = _barbells.find(barbellId);
+    if (barbellItr == _barbells.end())
+    {
+        return false;
+    }
+
+    auto& barbell = barbellItr->second;
+    barbell->audioSsrcs = audioSsrcs;
+    barbell->videoSsrcs = videoSsrcs;
     return true;
 }
 
