@@ -170,6 +170,8 @@ public: // Transport
     void setSctp(uint16_t localPort, uint16_t remotePort) override;
     void connectSctp() override;
     void runTick(uint64_t timestamp) override;
+    ice::IceSession::State getIceState() const override { return _iceState; };
+    SrtpClient::State getDtlsState() const override { return _dtlsState; };
 
 public: // SslWriteBioListener
     // Called from Transport serial thread
@@ -409,6 +411,8 @@ private:
     std::atomic_bool _pacingInUse;
 
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
+    std::atomic<ice::IceSession::State> _iceState;
+    std::atomic<SrtpClient::State> _dtlsState;
 #ifdef DEBUG
 public:
     concurrency::MutexGuard _singleThreadMutex;

@@ -3318,4 +3318,9 @@ void EngineMixer::removeBarbell(size_t idHash)
     _engineBarbells.erase(idHash);
 }
 
+size_t EngineMixer::getDominantSpeakerId() const
+{
+    return _activeMediaList->getDominantSpeaker();
+}
+
 } // namespace bridge

@@ -1,4 +1,8 @@
 #include "test/integration/IntegrationTest.h"
+#include "api/ConferenceEndpoint.h"
+#include "api/Parser.h"
+#include "api/utils.h"
+#include "bridge/Mixer.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "codec/Opus.h"
 #include "codec/OpusDecoder.h"
@@ -142,7 +146,6 @@ void analyzeRecording(const std::vector<int16_t>& recording,
     }
 }
 } // namespace
-
 using namespace emulator;
 
 TEST_F(IntegrationTest, plain)
@@ -221,6 +224,33 @@ TEST_F(IntegrationTest, plain)
     HttpGetRequest confRequest((std::string(baseUrl) + "/colibri/conferences").c_str());
     confRequest.awaitResponse(500 * utils::Time::ms);
     EXPECT_TRUE(confRequest.isSuccess());
+
+    EXPECT_TRUE(confRequest.getJsonBody().is_array());
+    std::vector<std::string> confIds;
+    confRequest.getJsonBody().get_to(confIds);
+
+    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0]).c_str());
+    endpointRequest.awaitResponse(50000 * utils::Time::ms);
+    EXPECT_TRUE(endpointRequest.isSuccess());
+    EXPECT_TRUE(endpointRequest.getJsonBody().is_array());
+
+    auto endpoints = api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
+    EXPECT_EQ(3, endpoints.size());
+    size_t dominantSpeakerCount = 0;
+    for (const auto& endpoint : endpoints)
+    {
+        if (endpoint.isActiveSpeaker)
+        {
+            dominantSpeakerCount++;
+        }
+        EXPECT_TRUE(endpoint.hasAudio);
+        EXPECT_TRUE(endpoint.hasVideo);
+        EXPECT_TRUE(endpoint.isBundled);
+        EXPECT_FALSE(endpoint.isRecording);
+        EXPECT_TRUE(endpoint.dtlsState == transport::SrtpClient::State::CONNECTED);
+        EXPECT_TRUE(endpoint.iceState == ice::IceSession::State::CONNECTED);
+    }
+    EXPECT_EQ(1, dominantSpeakerCount);
 
     client1._transport->stop();
     client2._transport->stop();

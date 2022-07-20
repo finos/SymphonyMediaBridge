@@ -25,7 +25,8 @@ public:
         READY,
         CONNECTING,
         CONNECTED,
-        FAILED
+        FAILED,
+        LAST
     };
 
     class IEvents
@@ -94,6 +95,4 @@ private:
     bool createSrtp();
     static const char* getErrorMessage(int sslErrorCode);
 };
-
-const char* toString(const SrtpClient::State state);
 } // namespace transport

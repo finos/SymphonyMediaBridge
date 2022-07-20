@@ -38,25 +38,6 @@ constexpr size_t keyingMaterialSize = srtpMasterKeyLength * 2 + srtpSaltLength *
 namespace transport
 {
 
-const char* toString(const SrtpClient::State state)
-{
-    switch (state)
-    {
-    case SrtpClient::State::IDLE:
-        return "IDLE";
-    case SrtpClient::State::READY:
-        return "READY";
-    case SrtpClient::State::CONNECTED:
-        return "CONNECTED";
-    case SrtpClient::State::CONNECTING:
-        return "CONNECTING";
-    case SrtpClient::State::FAILED:
-        return "FAILED";
-    default:
-        return "unknown";
-    }
-}
-
 SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     : _isInitialized(false),
       _state(State::IDLE),
@@ -254,7 +235,10 @@ int64_t SrtpClient::processTimeout()
         const auto err = SSL_get_error(_ssl, rc);
         const bool isFatalError = (err != SSL_ERROR_WANT_WRITE);
 
-        logger::error("DTLS timeout error %s ,isFatal: %s", _loggableId.c_str(), getErrorMessage(err), isFatalError ? "t" : "f");
+        logger::error("DTLS timeout error %s ,isFatal: %s",
+            _loggableId.c_str(),
+            getErrorMessage(err),
+            isFatalError ? "t" : "f");
         if (isFatalError)
         {
             _state = State::FAILED;
@@ -265,7 +249,6 @@ int64_t SrtpClient::processTimeout()
 
             return -1;
         }
-
     }
     return nextTimeout();
 }

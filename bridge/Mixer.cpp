@@ -1,4 +1,5 @@
 #include "bridge/Mixer.h"
+#include "api/ConferenceEndpoint.h"
 #include "api/RecordingChannel.h"
 #include "bridge/AudioStream.h"
 #include "bridge/Barbell.h"
@@ -751,6 +752,48 @@ void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
 
     stopTransportIfNeeded(streamTransport.get(), endpointId);
     _dataEngineStreams.erase(endpointId);
+}
+
+std::unordered_set<std::string> Mixer::getEndpoints() const
+{
+    std::unordered_set<std::string> endpoints;
+    for (const auto& it : _audioStreams)
+    {
+        endpoints.insert(it.first);
+    }
+    for (const auto& it : _videoStreams)
+    {
+        endpoints.insert(it.first);
+    }
+    return endpoints;
+}
+
+bool Mixer::getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoint& endpoint)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    const auto audio = _audioStreams.find(endpointId);
+    endpoint.id = endpointId;
+    endpoint.hasAudio = false;
+    endpoint.isActiveSpeaker = false;
+    if (audio != _audioStreams.cend())
+    {
+        endpoint.hasAudio = true;
+        if (audio->second)
+        {
+            endpoint.isActiveSpeaker =
+                (audio->second) && audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
+
+            auto transport = audio->second->transport;
+            endpoint.iceState = transport->getIceState();
+            endpoint.dtlsState = transport->getDtlsState();
+        }
+    }
+
+    endpoint.hasVideo = _videoStreams.find(endpointId) != _videoStreams.cend() ? true : false;
+    endpoint.isBundled = _bundleTransports.find(endpointId) != _bundleTransports.cend() ? true : false;
+    endpoint.isRecording = _recordingStreams.find(endpointId) != _recordingStreams.cend() ? true : false;
+
+    return endpoint.hasAudio || endpoint.hasVideo || endpoint.isBundled || endpoint.isRecording;
 }
 
 bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription)

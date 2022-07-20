@@ -386,7 +386,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     {
         logger::info("process dominant speaker switch %lu (score %f) -> %lu (score %f)",
             _logId.c_str(),
-            _dominantSpeakerId,
+            _dominantSpeakerId.load(),
             currentDominantSpeakerScore,
             dominantSpeaker.participant,
             dominantSpeaker.score);

@@ -89,6 +89,10 @@ public:
 
     void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) override {}
 
+    ice::IceSession::State getIceState() const override { return ice::IceSession::State::CONNECTED; };
+
+    transport::SrtpClient::State getDtlsState() const override { return transport::SrtpClient::State::CONNECTED; }
+
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
     jobmanager::JobQueue& _jobQueue;

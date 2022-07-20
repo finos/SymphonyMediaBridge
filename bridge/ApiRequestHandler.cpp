@@ -1,7 +1,9 @@
 #include "bridge/ApiRequestHandler.h"
+#include "api/ConferenceEndpoint.h"
 #include "api/EndpointDescription.h"
 #include "api/Generator.h"
 #include "api/Parser.h"
+#include "api/utils.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
@@ -20,6 +22,7 @@
 #include "utils/CheckedCast.h"
 #include "utils/Format.h"
 #include "utils/StringTokenizer.h"
+#include <list>
 
 namespace
 {
@@ -449,6 +452,13 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             }
             else if (utils::StringTokenizer::isEqual(token, "conferences") && token.next)
             {
+                if (request._method == httpd::Method::GET)
+                {
+                    token = utils::StringTokenizer::tokenize(token, '/');
+                    const auto conferenceId = token.str();
+                    return getConferenceInfo(requestLogger, conferenceId);
+                }
+
                 if (request._method != httpd::Method::POST)
                 {
                     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
@@ -682,13 +692,7 @@ httpd::Response ApiRequestHandler::allocateEndpoint(RequestLogger& requestLogger
     const std::string& endpointId)
 {
     Mixer* mixer;
-    auto scopedMixerLock = _mixerManager.getMixer(conferenceId, mixer);
-    assert(scopedMixerLock.owns_lock());
-    if (!mixer)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Conference '%s' not found", conferenceId.c_str()));
-    }
+    auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
 
     utils::Optional<std::string> audioChannelId;
     utils::Optional<std::string> videoChannelId;
@@ -1102,13 +1106,7 @@ httpd::Response ApiRequestHandler::configureEndpoint(RequestLogger& requestLogge
     const std::string& endpointId)
 {
     Mixer* mixer;
-    auto scopedMixerLock = _mixerManager.getMixer(conferenceId, mixer);
-    assert(scopedMixerLock.owns_lock());
-    if (!mixer)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Conference '%s' not found", conferenceId.c_str()));
-    }
+    auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
 
     if (endpointDescription._audio.isSet())
     {
@@ -1396,13 +1394,7 @@ httpd::Response ApiRequestHandler::reconfigureEndpoint(RequestLogger& requestLog
     const std::string& endpointId)
 {
     Mixer* mixer;
-    auto scopedMixerLock = _mixerManager.getMixer(conferenceId, mixer);
-    assert(scopedMixerLock.owns_lock());
-    if (!mixer)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Conference '%s' not found", conferenceId.c_str()));
-    }
+    auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
 
     if (!mixer->isAudioStreamConfigured(endpointId))
     {
@@ -1474,13 +1466,7 @@ httpd::Response ApiRequestHandler::recordEndpoint(RequestLogger& requestLogger,
     const std::string& conferenceId)
 {
     Mixer* mixer;
-    auto scopedMixerLock = _mixerManager.getMixer(conferenceId, mixer);
-    assert(scopedMixerLock.owns_lock());
-    if (!mixer)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Conference '%s' not found", conferenceId.c_str()));
-    }
+    auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
 
     const bool isRecordingStart =
         recording._isAudioEnabled || recording._isVideoEnabled || recording._isScreenshareEnabled;
@@ -1529,13 +1515,7 @@ httpd::Response ApiRequestHandler::expireEndpoint(RequestLogger& requestLogger,
     const std::string& endpointId)
 {
     Mixer* mixer;
-    auto scopedMixerLock = _mixerManager.getMixer(conferenceId, mixer);
-    assert(scopedMixerLock.owns_lock());
-    if (!mixer)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Conference '%s' not found", conferenceId.c_str()));
-    }
+    auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
 
     mixer->removeAudioStream(endpointId);
     mixer->removeVideoStream(endpointId);
@@ -1721,14 +1701,52 @@ httpd::Response ApiRequestHandler::deleteBarbell(RequestLogger& requestLogger,
     auto scopedMixerLock = _mixerManager.getMixer(conferenceId, mixer);
     assert(scopedMixerLock.owns_lock());
     if (!mixer)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Conference '%s' not found", conferenceId.c_str()));
-    }
 
-    mixer->removeBarbell(barbellId);
+        mixer->removeBarbell(barbellId);
 
     auto response = httpd::Response(httpd::StatusCode::OK, "");
     return response;
 }
+
+httpd::Response ApiRequestHandler::getConferenceInfo(RequestLogger& requestLogger, const std::string& conferenceId)
+{
+    Mixer* mixer;
+    auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
+    nlohmann::json responseBodyJson = nlohmann::json::array();
+    for (const auto& id : mixer->getEndpoints())
+    {
+        api::ConferenceEndpoint endpoint;
+        if (mixer->getEndpointInfo(id, endpoint))
+        {
+            responseBodyJson.push_back(api::Generator::generateConferenceEndpoint(endpoint));
+        }
+    }
+
+    httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
+    response._headers["Content-type"] = "text/json";
+    requestLogger.setResponse(response);
+    return response;
+}
+
+httpd::Response ApiRequestHandler::getEndpointInfo(RequestLogger& requestLogger,
+    const std::string& conferenceId,
+    const std::string& endpointId)
+{
+    Mixer* mixer;
+    auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
+    return httpd::Response(httpd::StatusCode::OK);
+}
+
+std::unique_lock<std::mutex> ApiRequestHandler::getConferenceMixer(const std::string& conferenceId, Mixer*& outMixer)
+{
+    auto scopedMixerLock = _mixerManager.getMixer(conferenceId, outMixer);
+    assert(scopedMixerLock.owns_lock());
+    if (!outMixer)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
+            utils::format("Conference '%s' not found", conferenceId.c_str()));
+    }
+    return scopedMixerLock;
+}
+
 } // namespace bridge

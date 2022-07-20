@@ -8,6 +8,7 @@
 #include "transport/RtpReceiveState.h"
 #include "transport/RtpSenderState.h"
 #include "transport/Transport.h"
+#include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
 #include "webrtc/DataStreamTransport.h"
 #include <unordered_map>
@@ -94,6 +95,8 @@ public:
     virtual void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) = 0;
 
     virtual void runTick(uint64_t timestamp) = 0;
+    virtual ice::IceSession::State getIceState() const = 0;
+    virtual SrtpClient::State getDtlsState() const = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,

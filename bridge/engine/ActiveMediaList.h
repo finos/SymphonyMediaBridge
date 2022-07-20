@@ -197,7 +197,7 @@ private:
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
     memory::List<size_t, 32> _activeAudioList;
 
-    size_t _dominantSpeakerId;
+    std::atomic_size_t _dominantSpeakerId;
     size_t _prevWinningDominantSpeaker;
     std::array<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
     int32_t _consecutiveDominantSpeakerWins;
