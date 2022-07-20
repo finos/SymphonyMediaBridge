@@ -54,74 +54,61 @@ private:
     std::unique_ptr<LegacyApiRequestHandler> _legacyApiRequestHandler;
 #endif
 
-    httpd::Response handleStats(const httpd::Request& request);
-    httpd::Response handleAbout(const httpd::Request& request, const utils::StringTokenizer::Token& token);
-    httpd::Response allocateConference(RequestLogger& requestLogger, const httpd::Request& request);
-    httpd::Response allocateEndpoint(RequestLogger& requestLogger,
-        const api::AllocateEndpoint& allocateChannel,
+    httpd::Response handleStats(const httpd::Request&);
+    httpd::Response handleAbout(const httpd::Request&, const utils::StringTokenizer::Token&);
+    httpd::Response getConferences(RequestLogger&);
+    httpd::Response allocateConference(RequestLogger&, const httpd::Request&);
+    httpd::Response allocateEndpoint(RequestLogger&,
+        const api::AllocateEndpoint&,
         const std::string& conferenceId,
         const std::string& endpointId);
 
-    httpd::Response generateAllocateEndpointResponse(RequestLogger& requestLogger,
-        const api::AllocateEndpoint& allocateChannel,
-        Mixer& mixer,
+    httpd::Response generateAllocateEndpointResponse(RequestLogger&,
+        const api::AllocateEndpoint&,
+        Mixer&,
         const std::string& conferenceId,
         const std::string& endpointId);
 
-    httpd::Response configureEndpoint(RequestLogger& requestLogger,
-        const api::EndpointDescription& endpointDescription,
+    httpd::Response configureEndpoint(RequestLogger&,
+        const api::EndpointDescription&,
         const std::string& conferenceId,
         const std::string& endpointId);
 
-    void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
-        Mixer& mixer,
-        const std::string& endpointId);
+    void configureAudioEndpoint(const api::EndpointDescription&, Mixer&, const std::string& endpointId);
 
-    void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
-        Mixer& mixer,
-        const std::string& endpointId);
+    void configureVideoEndpoint(const api::EndpointDescription&, Mixer&, const std::string& endpointId);
 
-    void configureDataEndpoint(const api::EndpointDescription& endpointDescription,
-        Mixer& mixer,
-        const std::string& endpointId);
+    void configureDataEndpoint(const api::EndpointDescription&, Mixer&, const std::string& endpointId);
 
-    httpd::Response reconfigureEndpoint(RequestLogger& requestLogger,
-        const api::EndpointDescription& endpointDescription,
+    httpd::Response reconfigureEndpoint(RequestLogger&,
+        const api::EndpointDescription&,
         const std::string& conferenceId,
         const std::string& endpointId);
 
-    httpd::Response recordEndpoint(RequestLogger& requestLogger,
-        const api::Recording& recording,
-        const std::string& conferenceId);
+    httpd::Response recordEndpoint(RequestLogger&, const api::Recording& recording, const std::string& conferenceId);
 
-    httpd::Response expireEndpoint(RequestLogger& requestLogger,
-        const std::string& conferenceId,
-        const std::string& endpointId);
+    httpd::Response expireEndpoint(RequestLogger&, const std::string& conferenceId, const std::string& endpointId);
 
-    httpd::Response allocateBarbell(RequestLogger& requestLogger,
+    httpd::Response allocateBarbell(RequestLogger&,
         bool iceControlling,
         const std::string& conferenceId,
         const std::string& barbellId);
 
-    httpd::Response configureBarbell(RequestLogger& requestLogger,
+    httpd::Response configureBarbell(RequestLogger&,
         const std::string& conferenceId,
         const std::string& barbellId,
         const api::EndpointDescription& barbellDescription);
 
-    httpd::Response deleteBarbell(RequestLogger& requestLogger,
-        const std::string& conferenceId,
-        const std::string& barbellId);
+    httpd::Response deleteBarbell(RequestLogger&, const std::string& conferenceId, const std::string& barbellId);
 
-    httpd::Response generateBarbellResponse(RequestLogger& requestLogger,
-        Mixer& mixer,
+    httpd::Response generateBarbellResponse(RequestLogger&,
+        Mixer&,
         const std::string& conferenceId,
         const std::string& barbellId,
         bool dtlsClient);
 
-    httpd::Response getConferenceInfo(RequestLogger& requestLogger, const std::string& conferenceId);
-    httpd::Response getEndpointInfo(RequestLogger& requestLogger,
-        const std::string& conferenceId,
-        const std::string& endpointId);
+    httpd::Response getConferenceInfo(RequestLogger&, const std::string& conferenceId);
+    httpd::Response getEndpointInfo(RequestLogger&, const std::string& conferenceId, const std::string& endpointId);
 
     std::unique_lock<std::mutex> getConferenceMixer(const std::string& conferenceId, Mixer*&);
 };

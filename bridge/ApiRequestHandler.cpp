@@ -429,16 +429,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             {
                 if (request._method == httpd::Method::GET)
                 {
-                    nlohmann::json responseBodyJson = nlohmann::json::array();
-                    for (const auto& mixerId : _mixerManager.getMixerIds())
-                    {
-                        responseBodyJson.push_back(mixerId);
-                    }
-
-                    httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
-                    response._headers["Content-type"] = "text/json";
-                    requestLogger.setResponse(response);
-                    return response;
+                    return getConferences(requestLogger);
                 }
                 else if (request._method == httpd::Method::POST)
                 {
@@ -650,6 +641,20 @@ httpd::Response ApiRequestHandler::handleAbout(const httpd::Request& request,
     {
         return httpd::Response(httpd::StatusCode::NOT_FOUND);
     }
+}
+
+httpd::Response ApiRequestHandler::getConferences(RequestLogger& requestLogger)
+{
+    nlohmann::json responseBodyJson = nlohmann::json::array();
+    for (const auto& mixerId : _mixerManager.getMixerIds())
+    {
+        responseBodyJson.push_back(mixerId);
+    }
+
+    httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
+    response._headers["Content-type"] = "text/json";
+    requestLogger.setResponse(response);
+    return response;
 }
 
 httpd::Response ApiRequestHandler::allocateConference(RequestLogger& requestLogger, const httpd::Request& request)
