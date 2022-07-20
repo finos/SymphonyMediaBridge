@@ -3,6 +3,8 @@
 #include "httpd/HttpRequestHandler.h"
 #include <atomic>
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -54,10 +56,29 @@ private:
     std::unique_ptr<LegacyApiRequestHandler> _legacyApiRequestHandler;
 #endif
 
-    httpd::Response handleStats(const httpd::Request&);
-    httpd::Response handleAbout(const httpd::Request&, const utils::StringTokenizer::Token&);
-    httpd::Response getConferences(RequestLogger&);
-    httpd::Response allocateConference(RequestLogger&, const httpd::Request&);
+    enum class ApiActions
+    {
+        ABOUT,
+        STATS,
+        GET_CONFERENCES,
+        ALLOCATE_CONFERENCE,
+        GET_CONFERENCE_INFO,
+        PROCESS_CONFERENCE_ACTION,
+        PROCESS_BARBELL_ACTION,
+        LAST
+    };
+
+    ApiActions getAction(const httpd::Request&, utils::StringTokenizer::Token& outToken);
+
+    using RequestAction = std::function<httpd::
+            Response(ApiRequestHandler&, RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&)>;
+
+    std::map<ApiActions, RequestAction> _actionMap;
+
+    httpd::Response handleStats(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
+    httpd::Response handleAbout(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
+    httpd::Response getConferences(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
+    httpd::Response allocateConference(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
     httpd::Response allocateEndpoint(RequestLogger&,
         const api::AllocateEndpoint&,
         const std::string& conferenceId,
@@ -65,7 +86,7 @@ private:
     httpd::Response processConferenceAction(RequestLogger&,
         const httpd::Request&,
         const utils::StringTokenizer::Token&);
-    httpd::Response processBarbellRequest(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
+    httpd::Response processBarbellAction(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
 
     httpd::Response generateAllocateEndpointResponse(RequestLogger&,
         const api::AllocateEndpoint&,
@@ -111,7 +132,7 @@ private:
         const std::string& barbellId,
         bool dtlsClient);
 
-    httpd::Response getConferenceInfo(RequestLogger&, const utils::StringTokenizer::Token&);
+    httpd::Response getConferenceInfo(RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&);
     httpd::Response getEndpointInfo(RequestLogger&, const std::string& conferenceId, const std::string& endpointId);
 
     std::unique_lock<std::mutex> getConferenceMixer(const std::string& conferenceId, Mixer*&);

@@ -22,6 +22,7 @@
 #include "utils/CheckedCast.h"
 #include "utils/Format.h"
 #include "utils/StringTokenizer.h"
+#include <iostream>
 #include <list>
 
 namespace
@@ -392,6 +393,48 @@ ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager, transpo
       _legacyApiRequestHandler(std::make_unique<LegacyApiRequestHandler>(mixerManager, sslDtls))
 #endif
 {
+    _actionMap.emplace(ApiActions::ABOUT, std::mem_fn(&ApiRequestHandler::handleAbout));
+    _actionMap.emplace(ApiActions::STATS, std::mem_fn(&ApiRequestHandler::handleStats));
+    _actionMap.emplace(ApiActions::GET_CONFERENCES, std::mem_fn(&ApiRequestHandler::getConferences));
+    _actionMap.emplace(ApiActions::ALLOCATE_CONFERENCE, std::mem_fn(&ApiRequestHandler::allocateConference));
+    _actionMap.emplace(ApiActions::GET_CONFERENCE_INFO, std::mem_fn(&ApiRequestHandler::getConferenceInfo));
+    _actionMap.emplace(ApiActions::PROCESS_CONFERENCE_ACTION, std::mem_fn(&ApiRequestHandler::processConferenceAction));
+    _actionMap.emplace(ApiActions::PROCESS_BARBELL_ACTION, std::mem_fn(&ApiRequestHandler::processBarbellAction));
+}
+
+ApiRequestHandler::ApiActions ApiRequestHandler::getAction(const httpd::Request& request,
+    utils::StringTokenizer::Token& outToken)
+{
+    outToken = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
+    if (utils::StringTokenizer::isEqual(outToken, "about"))
+        return ApiActions::ABOUT;
+
+    if (utils::StringTokenizer::isEqual(outToken, "stats"))
+        return ApiActions::STATS;
+
+    if (utils::StringTokenizer::isEqual(outToken, "conferences"))
+    {
+        if (outToken.next)
+        {
+            if (request._method == httpd::Method::GET)
+                return ApiActions::GET_CONFERENCE_INFO;
+            if (request._method == httpd::Method::POST)
+                return ApiActions::PROCESS_CONFERENCE_ACTION;
+        }
+        else
+        {
+            if (request._method == httpd::Method::GET)
+                return ApiActions::GET_CONFERENCES;
+            else if (request._method == httpd::Method::POST)
+                return ApiActions::ALLOCATE_CONFERENCE;
+        }
+    }
+
+    if (utils::StringTokenizer::isEqual(outToken, "barbell") && outToken.next)
+        return ApiActions::PROCESS_BARBELL_ACTION;
+
+    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
 }
 
 httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
@@ -412,54 +455,13 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
         }
 #endif
 
-        if (utils::StringTokenizer::isEqual(token, "about"))
-        {
-            return handleAbout(request, token);
-        }
-
-        if (utils::StringTokenizer::isEqual(token, "stats"))
-        {
-            return handleStats(request);
-        }
-
         RequestLogger requestLogger(request, _lastAutoRequestId);
+        auto action = getAction(request, token);
+        assert(action != ApiActions::LAST);
+        assert(_actionMap.find(action) != _actionMap.end());
         try
         {
-            if (utils::StringTokenizer::isEqual(token, "conferences") && !token.next)
-            {
-                if (request._method == httpd::Method::GET)
-                {
-                    return getConferences(requestLogger);
-                }
-                else if (request._method == httpd::Method::POST)
-                {
-                    return allocateConference(requestLogger, request);
-                }
-                else
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-                        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
-                }
-            }
-            else if (utils::StringTokenizer::isEqual(token, "conferences") && token.next)
-            {
-                if (request._method == httpd::Method::GET)
-                {
-                    return getConferenceInfo(requestLogger, token);
-                }
-
-                if (request._method != httpd::Method::POST)
-                {
-                    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-                        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
-                }
-
-                return processConferenceAction(requestLogger, request, token);
-            }
-            else if (utils::StringTokenizer::isEqual(token, "barbell") && token.next)
-            {
-                return processBarbellRequest(requestLogger, request, token);
-            }
+            return _actionMap[action](*this, requestLogger, request, token);
         }
         catch (httpd::RequestErrorException e)
         {
@@ -508,7 +510,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
     }
 }
 
-httpd::Response ApiRequestHandler::processBarbellRequest(RequestLogger& requestLogger,
+httpd::Response ApiRequestHandler::processBarbellAction(RequestLogger& requestLogger,
     const httpd::Request& request,
     const utils::StringTokenizer::Token& incomingToken)
 {
@@ -556,7 +558,9 @@ httpd::Response ApiRequestHandler::processBarbellRequest(RequestLogger& requestL
         utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
 }
 
-httpd::Response ApiRequestHandler::handleStats(const httpd::Request& request)
+httpd::Response ApiRequestHandler::handleStats(RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const utils::StringTokenizer::Token& incomingToken)
 {
     if (request._method != httpd::Method::GET)
     {
@@ -570,7 +574,8 @@ httpd::Response ApiRequestHandler::handleStats(const httpd::Request& request)
     return response;
 }
 
-httpd::Response ApiRequestHandler::handleAbout(const httpd::Request& request,
+httpd::Response ApiRequestHandler::handleAbout(RequestLogger& requestLogger,
+    const httpd::Request& request,
     const utils::StringTokenizer::Token& token)
 {
     if (request._method != httpd::Method::GET)
@@ -603,7 +608,9 @@ httpd::Response ApiRequestHandler::handleAbout(const httpd::Request& request,
     }
 }
 
-httpd::Response ApiRequestHandler::getConferences(RequestLogger& requestLogger)
+httpd::Response ApiRequestHandler::getConferences(RequestLogger& requestLogger,
+    const httpd::Request&,
+    const utils::StringTokenizer::Token&)
 {
     nlohmann::json responseBodyJson = nlohmann::json::array();
     for (const auto& mixerId : _mixerManager.getMixerIds())
@@ -617,7 +624,9 @@ httpd::Response ApiRequestHandler::getConferences(RequestLogger& requestLogger)
     return response;
 }
 
-httpd::Response ApiRequestHandler::allocateConference(RequestLogger& requestLogger, const httpd::Request& request)
+httpd::Response ApiRequestHandler::allocateConference(RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const utils::StringTokenizer::Token&)
 {
     const auto requestBody = request._body.build();
     const auto requestBodyJson = nlohmann::json::parse(requestBody);
@@ -1727,10 +1736,11 @@ httpd::Response ApiRequestHandler::deleteBarbell(RequestLogger& requestLogger,
 }
 
 httpd::Response ApiRequestHandler::getConferenceInfo(RequestLogger& requestLogger,
-    const utils::StringTokenizer::Token& token)
+    const httpd::Request&,
+    const utils::StringTokenizer::Token& incomingToken)
 {
-    auto nextToken = utils::StringTokenizer::tokenize(token, '/');
-    const auto conferenceId = nextToken.str();
+    auto token = utils::StringTokenizer::tokenize(incomingToken, '/');
+    const auto conferenceId = token.str();
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(conferenceId, mixer);
     nlohmann::json responseBodyJson = nlohmann::json::array();
