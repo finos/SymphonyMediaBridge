@@ -18,7 +18,8 @@ ActiveMediaList::AudioParticipant::AudioParticipant()
       _totalLevelShortWindow(0),
       _nonZeroLevelsShortWindow(0),
       _maxRecentLevel(0.0),
-      _noiseLevel(50.0)
+      _noiseLevel(50.0),
+      _is_ptt(false)
 {
     memset(_levels.data(), 0, _levels.size());
 }
@@ -50,7 +51,8 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _reentrancyCounter(0),
 #endif
       _lastRunTimestampMs(0),
-      _lastChangeTimestampMs(0)
+      _lastChangeTimestampMs(0),
+      _c9_conference(false)
 {
     assert(videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -305,6 +307,19 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
     }
 
     return speakerCount;
+}
+
+void ActiveMediaList::onNewPtt(const size_t endpointIdHash, utils::Optional<bool> is_ptt)
+{
+    if (is_ptt.isSet())
+    {
+        // Never reset to false again if we ever get C9's is_ptt flag - we're in the C9's conference.
+        _c9_conference = true;
+        auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
+        if (audioParticipantsItr == _audioParticipants.end())
+            return;
+        audioParticipantsItr->second._is_ptt = is_ptt.get();
+    }
 }
 
 // Algorithm for video switching:

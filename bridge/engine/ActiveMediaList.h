@@ -6,6 +6,7 @@
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <vector>
@@ -57,6 +58,8 @@ public:
             _incomingAudioLevels.push({endpointIdHash, (uint8_t)(127 - level)});
         }
     }
+
+    void onNewPtt(const size_t endpointIdHash, utils::Optional<bool> is_ptt);
 
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
@@ -160,6 +163,7 @@ private:
         int32_t _nonZeroLevelsShortWindow;
         float _maxRecentLevel;
         float _noiseLevel;
+        bool _is_ptt;
     };
 
     struct AudioLevelEntry
@@ -223,6 +227,7 @@ private:
     void updateLevels(const uint64_t timestampMs);
     void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
+    std::atomic_bool _c9_conference;
 };
 
 } // namespace bridge

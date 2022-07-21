@@ -1076,7 +1076,8 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     const RtpMap& rtpMap,
     const utils::Optional<uint32_t>& remoteSsrc,
     const utils::Optional<uint8_t>& audioLevelExtensionId,
-    const utils::Optional<uint8_t>& absSendTimeExtensionId)
+    const utils::Optional<uint8_t>& absSendTimeExtensionId,
+    const utils::Optional<uint8_t>& c9infoExtensionId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1109,6 +1110,7 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     audioStream->rtpMap._audioLevelExtId = audioLevelExtensionId;
     audioStream->transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
     audioStream->rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+    audioStream->rtpMap._c9infoExtId = c9infoExtensionId;
     if (audioStream->rtpMap._absSendTimeExtId.isSet())
     {
         audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap._absSendTimeExtId.get());

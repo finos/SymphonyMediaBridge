@@ -208,17 +208,34 @@ bridge::RtpMap makeRtpMap(const api::EndpointDescription::PayloadType& payloadTy
     return rtpMap;
 }
 
-utils::Optional<uint8_t> findAbsSendTimeExtensionId(
+utils::Optional<uint8_t> findExtensionId(const std::string& extName,
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
 {
     for (const auto& rtpHeaderExtension : rtpHeaderExtensions)
     {
-        if (rtpHeaderExtension.second.compare("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time") == 0)
+        if (rtpHeaderExtension.second.compare(extName) == 0)
         {
             return utils::Optional<uint8_t>((::utils::checkedCast<uint8_t>(rtpHeaderExtension.first)));
         }
     }
     return utils::Optional<uint8_t>();
+}
+
+utils::Optional<uint8_t> findAudioLevelExtensionId(
+    const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
+{
+    return findExtensionId("urn:ietf:params:rtp-hdrext:ssrc-audio-level", rtpHeaderExtensions);
+}
+
+utils::Optional<uint8_t> findAbsSendTimeExtensionId(
+    const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
+{
+    return findExtensionId("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time", rtpHeaderExtensions);
+}
+
+utils::Optional<uint8_t> findC9InfoExtensionId(const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
+{
+    return findExtensionId("c9:params:rtp-hdrext:info", rtpHeaderExtensions);
 }
 
 const api::EndpointDescription::SsrcGroup* findFeedbackGroup(const api::EndpointDescription::Video& video,

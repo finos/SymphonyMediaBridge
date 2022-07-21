@@ -131,7 +131,8 @@ public:
         const RtpMap& rtpMap,
         const utils::Optional<uint32_t>& remoteSsrc,
         const utils::Optional<uint8_t>& audioLevelExtensionId,
-        const utils::Optional<uint8_t>& absSendTimeExtensionId);
+        const utils::Optional<uint8_t>& absSendTimeExtensionId,
+        const utils::Optional<uint8_t>& c9infoExtensionId);
 
     bool reconfigureAudioStream(const std::string& endpointId, const utils::Optional<uint32_t>& remoteSsrc);
 
