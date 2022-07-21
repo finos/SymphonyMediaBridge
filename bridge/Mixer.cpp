@@ -773,27 +773,26 @@ bool Mixer::getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoi
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
     endpoint.id = endpointId;
-    endpoint.hasAudio = false;
-    endpoint.isActiveSpeaker = false;
+    endpoint.isDominantSpeaker = false;
+    endpoint.isActiveTalker = false;
+    bool foundAudio = false;
     if (audio != _audioStreams.cend())
     {
-        endpoint.hasAudio = true;
         if (audio->second)
         {
-            endpoint.isActiveSpeaker =
+            foundAudio = true;
+            endpoint.isDominantSpeaker =
                 (audio->second) && audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
-
+            endpoint.isActiveTalker = endpoint.isDominantSpeaker;
             auto transport = audio->second->transport;
             endpoint.iceState = transport->getIceState();
             endpoint.dtlsState = transport->getDtlsState();
         }
     }
 
-    endpoint.hasVideo = _videoStreams.find(endpointId) != _videoStreams.cend() ? true : false;
-    endpoint.isBundled = _bundleTransports.find(endpointId) != _bundleTransports.cend() ? true : false;
-    endpoint.isRecording = _recordingStreams.find(endpointId) != _recordingStreams.cend() ? true : false;
+    bool foundVideo = _videoStreams.find(endpointId) != _videoStreams.cend() ? true : false;
 
-    return endpoint.hasAudio || endpoint.hasVideo || endpoint.isBundled || endpoint.isRecording;
+    return foundAudio || foundVideo;
 }
 
 bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription)

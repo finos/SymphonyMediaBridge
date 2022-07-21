@@ -234,19 +234,17 @@ TEST_F(IntegrationTest, plain)
     EXPECT_TRUE(endpointRequest.isSuccess());
     EXPECT_TRUE(endpointRequest.getJsonBody().is_array());
 
+    logger::debug("!!! %s", "###", endpointRequest.getResponse().c_str());
+
     auto endpoints = api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
     EXPECT_EQ(3, endpoints.size());
     size_t dominantSpeakerCount = 0;
     for (const auto& endpoint : endpoints)
     {
-        if (endpoint.isActiveSpeaker)
+        if (endpoint.isDominantSpeaker)
         {
             dominantSpeakerCount++;
         }
-        EXPECT_TRUE(endpoint.hasAudio);
-        EXPECT_TRUE(endpoint.hasVideo);
-        EXPECT_TRUE(endpoint.isBundled);
-        EXPECT_FALSE(endpoint.isRecording);
         EXPECT_TRUE(endpoint.dtlsState == transport::SrtpClient::State::CONNECTED);
         EXPECT_TRUE(endpoint.iceState == ice::IceSession::State::CONNECTED);
     }
