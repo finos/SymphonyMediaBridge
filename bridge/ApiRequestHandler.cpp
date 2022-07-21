@@ -43,7 +43,7 @@ ApiRequestHandler::ApiActions ApiRequestHandler::getAction(const httpd::Request&
     utils::StringTokenizer::Token& outToken)
 {
     outToken = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
-    if (utils::StringTokenizer::isEqual(outToken, "about") && request._method == httpd::Method::GET)
+    if (utils::StringTokenizer::isEqual(outToken, "about") && outToken.next && request._method == httpd::Method::GET)
         return ApiActions::ABOUT;
 
     if (utils::StringTokenizer::isEqual(outToken, "stats") && request._method == httpd::Method::GET)
