@@ -795,7 +795,7 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
             }
             else
             {
-                endpoint.isActiveTalker = endpoint.isDominantSpeaker;
+                endpoint.isActiveTalker = false; // endpoint.isDominantSpeaker;
             }
 
             auto transport = audio->second->transport;

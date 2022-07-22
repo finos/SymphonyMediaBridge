@@ -80,7 +80,7 @@ private:
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
         _activeMediaList =
-            std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, defaultLastN, audioLastN);
+            std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, defaultLastN, audioLastN, 18);
 
         _engineAudioStreams.clear();
         _engineVideoStreams.clear();
@@ -357,7 +357,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDominantSmallLastN)
 {
-    auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, 1, 3);
+    auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, 1, 3, 18);
 
     smallActiveMediaList->addAudioParticipant(1);
     smallActiveMediaList->addAudioParticipant(2);

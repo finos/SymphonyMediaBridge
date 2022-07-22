@@ -28,11 +28,13 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
     const std::vector<uint32_t>& audioSsrcs,
     const std::vector<SimulcastLevel>& videoSsrcs,
     const uint32_t defaultLastN,
-    uint32_t audioLastN)
+    uint32_t audioLastN,
+    uint32_t activeTalkerDbDiff)
     : _logId("ActiveMediaList", instanceId),
       _defaultLastN(defaultLastN),
       _maxActiveListSize(defaultLastN + 1),
       _audioLastN(audioLastN),
+      _activeTalkerDbDiff(std::min(std::max(activeTalkerDbDiff, (uint32_t)6), (uint32_t)60)),
       _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
       _incomingAudioLevels(32768),
@@ -393,7 +395,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
         updateActiveAudioList(top.participant);
         if (!_c9_conference)
         {
-            if (top.score - top.noiseLevel > 6)
+            if (top.score - top.noiseLevel > _activeTalkerDbDiff)
             {
                 if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
                 {
