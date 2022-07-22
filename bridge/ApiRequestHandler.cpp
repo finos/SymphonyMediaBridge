@@ -1,5 +1,5 @@
 #include "bridge/ApiRequestHandler.h"
-#include "actions/utils.h"
+#include "actions/ApiHelpers.h"
 #include "bridge/RequestLogger.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"

@@ -129,8 +129,8 @@ set(FILES
         bridge/actions/GetConferences.cpp
         bridge/actions/About.cpp
         bridge/actions/GetStats.cpp
-        bridge/actions/utils.cpp
-        bridge/actions/utils.h
+        bridge/actions/ApiHelpers.cpp
+        bridge/actions/ApiHelpers.h
         bridge/actions/BarbellActions.cpp
         bridge/engine/ActiveMediaList.cpp
         bridge/engine/ActiveMediaList.h

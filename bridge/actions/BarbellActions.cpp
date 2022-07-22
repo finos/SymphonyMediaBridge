@@ -1,4 +1,5 @@
 #include "ApiActions.h"
+#include "ApiHelpers.h"
 #include "api/EndpointDescription.h"
 #include "api/Generator.h"
 #include "api/Parser.h"
@@ -10,7 +11,6 @@
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "transport/dtls/SslDtls.h"
-#include "utils.h"
 #include "utils/Format.h"
 
 namespace bridge
