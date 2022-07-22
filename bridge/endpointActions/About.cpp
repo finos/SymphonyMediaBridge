@@ -6,7 +6,7 @@ namespace bridge
 {
 httpd::Response handleAbout(ActionContext* context,
     RequestLogger&,
-    const httpd::Request& request,
+    const httpd::Request&,
     const utils::StringTokenizer::Token& token)
 {
     const auto nextToken = ::utils::StringTokenizer::tokenize(token.next, token.remainingLength, '/');

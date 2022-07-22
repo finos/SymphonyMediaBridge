@@ -32,52 +32,44 @@ ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager, transpo
       _legacyApiRequestHandler(std::make_unique<LegacyApiRequestHandler>(mixerManager, sslDtls))
 #endif
 {
-    _actionMap.emplace(ApiActions::ABOUT, ::bridge::handleAbout);
-    _actionMap.emplace(ApiActions::STATS, ::bridge::handleStats);
-    _actionMap.emplace(ApiActions::GET_CONFERENCES, ::bridge::getConferences);
-    _actionMap.emplace(ApiActions::ALLOCATE_CONFERENCE, ::bridge::allocateConference);
-    _actionMap.emplace(ApiActions::GET_CONFERENCE_INFO, ::bridge::getConferenceInfo);
-    _actionMap.emplace(ApiActions::PROCESS_CONFERENCE_ACTION, ::bridge::processConferenceAction);
-    _actionMap.emplace(ApiActions::PROCESS_BARBELL_ACTION, ::bridge::processBarbellAction);
 }
 
-ApiRequestHandler::ApiActions ApiRequestHandler::getAction(const httpd::Request& request,
-    utils::StringTokenizer::Token& outToken)
+httpd::Response ApiRequestHandler::callEndpointAction(RequestLogger& requestLogger, const httpd::Request& request)
 {
-    outToken = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
-    if (utils::StringTokenizer::isEqual(outToken, "about") && outToken.next && request._method == httpd::Method::GET)
-        return ApiActions::ABOUT;
+    auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
+    if (utils::StringTokenizer::isEqual(token, "about") && token.next && request._method == httpd::Method::GET)
+        return handleAbout(this, requestLogger, request, token);
 
-    if (utils::StringTokenizer::isEqual(outToken, "stats") && request._method == httpd::Method::GET)
-        return ApiActions::STATS;
+    if (utils::StringTokenizer::isEqual(token, "stats") && request._method == httpd::Method::GET)
+        return handleStats(this, requestLogger, request, token);
 
-    if (utils::StringTokenizer::isEqual(outToken, "conferences"))
+    if (utils::StringTokenizer::isEqual(token, "conferences"))
     {
-        if (outToken.next)
+        if (token.next)
         {
             if (request._method == httpd::Method::GET)
             {
-                auto nextToken = utils::StringTokenizer::tokenize(outToken, '/');
+                auto nextToken = utils::StringTokenizer::tokenize(token, '/');
                 if (nextToken.next)
-                    return ApiActions::GET_ENDPOINT_INFO;
+                    return getEndpointInfo(this, requestLogger, request, token);
                 else
-                    return ApiActions::GET_CONFERENCE_INFO;
+                    return getConferenceInfo(this, requestLogger, request, token);
             }
             if (request._method == httpd::Method::POST)
-                return ApiActions::PROCESS_CONFERENCE_ACTION;
+                return processConferenceAction(this, requestLogger, request, token);
         }
         else
         {
             if (request._method == httpd::Method::GET)
-                return ApiActions::GET_CONFERENCES;
+                return getConferences(this, requestLogger, request, token);
             else if (request._method == httpd::Method::POST)
-                return ApiActions::ALLOCATE_CONFERENCE;
+                return allocateConference(this, requestLogger, request, token);
         }
     }
 
-    if (utils::StringTokenizer::isEqual(outToken, "barbell") && outToken.next &&
+    if (utils::StringTokenizer::isEqual(token, "barbell") && token.next &&
         (request._method == httpd::Method::POST || request._method == httpd::Method::DELETE))
-        return ApiActions::PROCESS_BARBELL_ACTION;
+        return processBarbellAction(this, requestLogger, request, token);
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
         utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
@@ -92,9 +84,8 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             return httpd::Response(httpd::StatusCode::NO_CONTENT);
         }
 
-        auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
-
 #if ENABLE_LEGACY_API
+        auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
         if (utils::StringTokenizer::isEqual(token, "colibri"))
         {
             return _legacyApiRequestHandler->onRequest(request);
@@ -102,12 +93,9 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
 #endif
 
         RequestLogger requestLogger(request, _lastAutoRequestId);
-        auto action = getAction(request, token);
-        assert(action != ApiActions::LAST);
-        assert(_actionMap.find(action) != _actionMap.end());
         try
         {
-            return _actionMap[action](this, requestLogger, request, token);
+            return callEndpointAction(requestLogger, request);
         }
         catch (httpd::RequestErrorException e)
         {

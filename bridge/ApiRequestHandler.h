@@ -50,24 +50,10 @@ private:
     std::unique_ptr<LegacyApiRequestHandler> _legacyApiRequestHandler;
 #endif
 
-    enum class ApiActions
-    {
-        ABOUT,
-        STATS,
-        GET_CONFERENCES,
-        ALLOCATE_CONFERENCE,
-        GET_CONFERENCE_INFO,
-        GET_ENDPOINT_INFO,
-        PROCESS_CONFERENCE_ACTION,
-        PROCESS_BARBELL_ACTION,
-        LAST
-    };
-
-    ApiActions getAction(const httpd::Request&, utils::StringTokenizer::Token& outToken);
+    httpd::Response callEndpointAction(RequestLogger&, const httpd::Request&);
 
     using RequestAction = std::function<
         httpd::Response(ActionContext*, RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&)>;
-    std::map<ApiActions, RequestAction> _actionMap;
 };
 
 } // namespace bridge
