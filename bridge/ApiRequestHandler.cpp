@@ -1,6 +1,6 @@
 #include "bridge/ApiRequestHandler.h"
-#include "actions/ApiHelpers.h"
 #include "bridge/RequestLogger.h"
+#include "endpointActions/ApiHelpers.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "utils/Format.h"

@@ -7,7 +7,7 @@
 #include "bridge/RequestLogger.h"
 #include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
-#include "bridge/actions/ApiHelpers.h"
+#include "bridge/endpointActions/ApiHelpers.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "transport/dtls/SslDtls.h"
