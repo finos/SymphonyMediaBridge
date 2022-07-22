@@ -74,6 +74,7 @@ struct RtpMap
     std::vector<std::pair<std::string, utils::Optional<std::string>>> _rtcpFeedbacks;
     utils::Optional<uint8_t> _audioLevelExtId;
     utils::Optional<uint8_t> _absSendTimeExtId;
+    utils::Optional<uint8_t> _c9infoExtId;
 };
 
 } // namespace bridge

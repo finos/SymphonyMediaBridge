@@ -131,7 +131,8 @@ public:
         const RtpMap& rtpMap,
         const utils::Optional<uint32_t>& remoteSsrc,
         const utils::Optional<uint8_t>& audioLevelExtensionId,
-        const utils::Optional<uint8_t>& absSendTimeExtensionId);
+        const utils::Optional<uint8_t>& absSendTimeExtensionId,
+        const utils::Optional<uint8_t>& c9infoExtensionId);
 
     bool reconfigureAudioStream(const std::string& endpointId, const utils::Optional<uint32_t>& remoteSsrc);
 
@@ -211,7 +212,10 @@ public:
 
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
-    bool getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoint&);
+    bool getEndpointInfo(const std::string& endpointId,
+        api::ConferenceEndpoint&,
+        const std::unordered_set<size_t>& activeTalkers);
+    std::unordered_set<size_t> getActiveTalkers();
     bool getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
     bool getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
     bool getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription);

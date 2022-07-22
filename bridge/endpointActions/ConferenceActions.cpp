@@ -453,6 +453,8 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
 
     const auto rtpMap = makeRtpMap(audio._payloadType.get());
     const auto absSendTimeExtensionId = findAbsSendTimeExtensionId(audio._rtpHeaderExtensions);
+    const auto c9infoExtensionId = findC9InfoExtensionId(audio._rtpHeaderExtensions);
+    const auto audioLevelExtensionId = findAudioLevelExtensionId(audio._rtpHeaderExtensions);
 
     utils::Optional<uint32_t> remoteSsrc;
     if (!audio._ssrcs.empty())
@@ -460,16 +462,12 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         remoteSsrc.set(audio._ssrcs.front());
     }
 
-    utils::Optional<uint8_t> audioLevelExtensionId;
-    for (const auto& rtpHeaderExtension : audio._rtpHeaderExtensions)
-    {
-        if (rtpHeaderExtension.second.compare("urn:ietf:params:rtp-hdrext:ssrc-audio-level") == 0)
-        {
-            audioLevelExtensionId.set(utils::checkedCast<uint8_t>(rtpHeaderExtension.first));
-        }
-    }
-
-    if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, audioLevelExtensionId, absSendTimeExtensionId))
+    if (!mixer.configureAudioStream(endpointId,
+            rtpMap,
+            remoteSsrc,
+            audioLevelExtensionId,
+            absSendTimeExtensionId,
+            c9infoExtensionId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Audio stream not found for endpoint '%s'", endpointId.c_str()));

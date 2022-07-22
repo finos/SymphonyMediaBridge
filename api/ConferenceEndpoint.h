@@ -8,11 +8,8 @@ namespace api
 struct ConferenceEndpoint
 {
     std::string id;
-    bool isBundled;
-    bool hasAudio;
-    bool hasVideo;
-    bool isActiveSpeaker;
-    bool isRecording;
+    bool isDominantSpeaker;
+    bool isActiveTalker;
     ice::IceSession::State iceState;
     transport::SrtpClient::State dtlsState;
 };

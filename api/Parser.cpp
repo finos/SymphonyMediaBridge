@@ -479,11 +479,8 @@ ConferenceEndpoint parseConferenceEndpoint(const nlohmann::json& data)
 {
     ConferenceEndpoint endpoint;
     setIfExistsOrThrow<>(endpoint.id, data, "id");
-    setIfExistsOrThrow<>(endpoint.hasAudio, data, "hasAudio");
-    setIfExistsOrThrow<>(endpoint.hasVideo, data, "hasVideo");
-    setIfExistsOrThrow<>(endpoint.isActiveSpeaker, data, "isActiveSpeaker");
-    setIfExistsOrThrow<>(endpoint.isRecording, data, "isRecording");
-    setIfExistsOrThrow<>(endpoint.isBundled, data, "isBundled");
+    setIfExistsOrThrow<>(endpoint.isDominantSpeaker, data, "isDominantSpeaker");
+    setIfExistsOrThrow<>(endpoint.isActiveTalker, data, "isActiveTalker");
     std::string iceStateStr;
     std::string dtlsStateStr;
     setIfExistsOrThrow<>(iceStateStr, data, "iceState");

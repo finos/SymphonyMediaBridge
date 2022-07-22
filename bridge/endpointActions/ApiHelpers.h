@@ -26,6 +26,10 @@ void addDefaultVideoProperties(api::EndpointDescription::Video&);
 bridge::RtpMap makeRtpMap(const api::EndpointDescription::PayloadType&);
 utils::Optional<uint8_t> findAbsSendTimeExtensionId(
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions);
+utils::Optional<uint8_t> findC9InfoExtensionId(
+    const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions);
+utils::Optional<uint8_t> findAudioLevelExtensionId(
+    const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions);
 std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDescription::Video&,
     const std::string& endpointId);
 bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::EndpointDescription::Video&);

@@ -768,20 +768,35 @@ std::unordered_set<std::string> Mixer::getEndpoints() const
     return endpoints;
 }
 
-bool Mixer::getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoint& endpoint)
+std::unordered_set<size_t> Mixer::getActiveTalkers()
+{
+    return _engineMixer.getActiveTalkers();
+}
+
+bool Mixer::getEndpointInfo(const std::string& endpointId,
+    api::ConferenceEndpoint& endpoint,
+    const std::unordered_set<size_t>& activeTalkers)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
     endpoint.id = endpointId;
-    endpoint.hasAudio = false;
-    endpoint.isActiveSpeaker = false;
+    endpoint.isDominantSpeaker = false;
+    endpoint.isActiveTalker = false;
+    bool foundAudio = false;
     if (audio != _audioStreams.cend())
     {
-        endpoint.hasAudio = true;
         if (audio->second)
         {
-            endpoint.isActiveSpeaker =
-                (audio->second) && audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
+            foundAudio = true;
+            endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
+            if (activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end())
+            {
+                endpoint.isActiveTalker = true;
+            }
+            else
+            {
+                endpoint.isActiveTalker = false; // endpoint.isDominantSpeaker;
+            }
 
             auto transport = audio->second->transport;
             endpoint.iceState = transport->getIceState();
@@ -789,11 +804,9 @@ bool Mixer::getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoi
         }
     }
 
-    endpoint.hasVideo = _videoStreams.find(endpointId) != _videoStreams.cend() ? true : false;
-    endpoint.isBundled = _bundleTransports.find(endpointId) != _bundleTransports.cend() ? true : false;
-    endpoint.isRecording = _recordingStreams.find(endpointId) != _recordingStreams.cend() ? true : false;
+    bool foundVideo = _videoStreams.find(endpointId) != _videoStreams.cend() ? true : false;
 
-    return endpoint.hasAudio || endpoint.hasVideo || endpoint.isBundled || endpoint.isRecording;
+    return foundAudio || foundVideo;
 }
 
 bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
@@ -1077,7 +1090,8 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     const RtpMap& rtpMap,
     const utils::Optional<uint32_t>& remoteSsrc,
     const utils::Optional<uint8_t>& audioLevelExtensionId,
-    const utils::Optional<uint8_t>& absSendTimeExtensionId)
+    const utils::Optional<uint8_t>& absSendTimeExtensionId,
+    const utils::Optional<uint8_t>& c9infoExtensionId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1110,6 +1124,7 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     audioStream->rtpMap._audioLevelExtId = audioLevelExtensionId;
     audioStream->transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
     audioStream->rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+    audioStream->rtpMap._c9infoExtId = c9infoExtensionId;
     if (audioStream->rtpMap._absSendTimeExtId.isSet())
     {
         audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap._absSendTimeExtId.get());

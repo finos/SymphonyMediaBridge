@@ -1141,7 +1141,8 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                     rtpMaps.front(),
                     remoteSsrc,
                     audioLevelExtensionId,
-                    absSendTimeExtensionId))
+                    absSendTimeExtensionId,
+                    utils::Optional<uint8_t>()))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
