@@ -19,13 +19,11 @@ namespace bridge
 struct ActionContext
 {
     ActionContext(bridge::MixerManager& mixerManager, transport::SslDtls& sslDtls)
-        : _mixerManager(mixerManager),
-          _sslDtls(sslDtls),
-          _lastAutoRequestId(0)
+        : mixerManager(mixerManager),
+          sslDtls(sslDtls)
     {
     }
-    bridge::MixerManager& _mixerManager;
-    transport::SslDtls& _sslDtls;
-    std::atomic<uint32_t> _lastAutoRequestId;
+    bridge::MixerManager& mixerManager;
+    transport::SslDtls& sslDtls;
 };
 } // namespace bridge

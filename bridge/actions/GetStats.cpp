@@ -9,7 +9,7 @@ httpd::Response handleStats(ActionContext* context,
     const httpd::Request& request,
     const utils::StringTokenizer::Token& token)
 {
-    auto stats = context->_mixerManager.getStats();
+    auto stats = context->mixerManager.getStats();
     const auto statsDescription = stats.describe();
     httpd::Response response(httpd::StatusCode::OK, statsDescription);
     response._headers["Content-type"] = "text/json";

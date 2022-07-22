@@ -45,6 +45,7 @@ public:
     httpd::Response onRequest(const httpd::Request& request) override;
 
 private:
+    std::atomic<uint32_t> _lastAutoRequestId;
 #if ENABLE_LEGACY_API
     std::unique_ptr<LegacyApiRequestHandler> _legacyApiRequestHandler;
 #endif

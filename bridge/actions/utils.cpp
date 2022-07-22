@@ -15,7 +15,7 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext* context,
     const std::string& conferenceId,
     Mixer*& outMixer)
 {
-    auto scopedMixerLock = context->_mixerManager.getMixer(conferenceId, outMixer);
+    auto scopedMixerLock = context->mixerManager.getMixer(conferenceId, outMixer);
     assert(scopedMixerLock.owns_lock());
     if (!outMixer)
     {

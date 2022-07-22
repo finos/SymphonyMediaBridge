@@ -24,8 +24,8 @@ httpd::Response allocateConference(ActionContext* context,
 
     const auto allocateConference = api::Parser::parseAllocateConference(requestBodyJson);
 
-    auto mixer = allocateConference._lastN.isSet() ? context->_mixerManager.create(allocateConference._lastN.get())
-                                                   : context->_mixerManager.create();
+    auto mixer = allocateConference._lastN.isSet() ? context->mixerManager.create(allocateConference._lastN.get())
+                                                   : context->mixerManager.create();
     if (!mixer)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Conference creation has failed");

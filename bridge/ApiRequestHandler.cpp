@@ -24,7 +24,9 @@ namespace bridge
 {
 
 ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager, transport::SslDtls& sslDtls)
-    : ActionContext(mixerManager, sslDtls)
+    : ActionContext(mixerManager, sslDtls),
+      _lastAutoRequestId(0)
+
 #if ENABLE_LEGACY_API
       ,
       _legacyApiRequestHandler(std::make_unique<LegacyApiRequestHandler>(mixerManager, sslDtls))

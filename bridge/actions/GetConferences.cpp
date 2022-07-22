@@ -13,7 +13,7 @@ httpd::Response getConferences(ActionContext* context,
     const utils::StringTokenizer::Token&)
 {
     nlohmann::json responseBodyJson = nlohmann::json::array();
-    for (const auto& mixerId : context->_mixerManager.getMixerIds())
+    for (const auto& mixerId : context->mixerManager.getMixerIds())
     {
         responseBodyJson.push_back(mixerId);
     }

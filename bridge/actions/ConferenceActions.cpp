@@ -64,7 +64,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
 
         api::EndpointDescription::Dtls responseDtls;
         responseDtls.type = "sha-256";
-        responseDtls.hash = context->_sslDtls.getLocalFingerprint();
+        responseDtls.hash = context->sslDtls.getLocalFingerprint();
         responseDtls.setup = "actpass";
         responseBundleTransport._dtls.set(responseDtls);
 
@@ -129,7 +129,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 api::EndpointDescription::Dtls responseDtls;
                 responseDtls.setup = "active";
                 responseDtls.type = "sha-256";
-                responseDtls.hash = context->_sslDtls.getLocalFingerprint();
+                responseDtls.hash = context->sslDtls.getLocalFingerprint();
                 responseTransport._dtls.set(responseDtls);
             }
 
@@ -212,7 +212,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 api::EndpointDescription::Dtls responseDtls;
                 responseDtls.setup = "active";
                 responseDtls.type = "sha-256";
-                responseDtls.hash = context->_sslDtls.getLocalFingerprint();
+                responseDtls.hash = context->sslDtls.getLocalFingerprint();
                 responseTransport._dtls.set(responseDtls);
             }
 

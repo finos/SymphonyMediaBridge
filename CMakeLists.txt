@@ -128,7 +128,7 @@ set(FILES
         bridge/actions/ConferenceActions.cpp
         bridge/actions/GetConferences.cpp
         bridge/actions/About.cpp
-        bridge/actions/Stats.cpp
+        bridge/actions/GetStats.cpp
         bridge/actions/utils.cpp
         bridge/actions/utils.h
         bridge/actions/BarbellActions.cpp

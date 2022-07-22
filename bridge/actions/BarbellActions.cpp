@@ -51,7 +51,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
 
     api::EndpointDescription::Dtls responseDtls;
     responseDtls.type = "sha-256";
-    responseDtls.hash = context->_sslDtls.getLocalFingerprint();
+    responseDtls.hash = context->sslDtls.getLocalFingerprint();
 
     responseDtls.setup = dtlsClient ? "active" : "actpass";
 
