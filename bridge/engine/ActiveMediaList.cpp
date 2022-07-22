@@ -407,6 +407,12 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
         heap.pop();
     }
 
+    _activeTalkersSnapshot.clear();
+    for (const auto& talker : _activeTalkers)
+    {
+        _activeTalkersSnapshot.insert(talker.first);
+    }
+
     if (timestampMs - _lastChangeTimestampMs + 10 * (requiredConsecutiveWins - 1) < maxSwitchDominantSpeakerEveryMs)
     {
         return;

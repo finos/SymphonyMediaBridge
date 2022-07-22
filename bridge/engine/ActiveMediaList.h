@@ -9,6 +9,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <unordered_set>
 #include <vector>
 
 namespace utils
@@ -65,7 +66,7 @@ public:
 
     inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
 
-    const concurrency::MpmcHashmap32<size_t, size_t>& getActiveTalkers() const { return _activeTalkers; }
+    const std::unordered_set<size_t>& getActiveTalkers() const { return _activeTalkersSnapshot; }
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
@@ -200,6 +201,7 @@ private:
 
     concurrency::MpmcHashmap32<size_t, AudioParticipant> _audioParticipants;
     concurrency::MpmcHashmap32<size_t, size_t> _activeTalkers;
+    std::unordered_set<size_t> _activeTalkersSnapshot;
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
     concurrency::MpmcQueue<uint32_t> _audioSsrcs;
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;

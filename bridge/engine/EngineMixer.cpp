@@ -3325,11 +3325,6 @@ size_t EngineMixer::getDominantSpeakerId() const
 
 std::unordered_set<size_t> EngineMixer::getActiveTalkers() const
 {
-    std::unordered_set<size_t> activeTalkers;
-    for (const auto& talker : _activeMediaList->getActiveTalkers())
-    {
-        activeTalkers.insert(talker.first);
-    }
-    return activeTalkers;
+    return _activeMediaList->getActiveTalkers();
 }
 } // namespace bridge
