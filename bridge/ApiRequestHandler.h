@@ -1,10 +1,9 @@
 #pragma once
 
+#include "bridge/endpointActions/ActionContext.h"
 #include "httpd/HttpRequestHandler.h"
-#include <atomic>
-#include <cstdint>
-#include <memory>
-#include <mutex>
+#include <functional>
+#include <map>
 #include <string>
 
 #if ENABLE_LEGACY_API
@@ -39,91 +38,22 @@ class MixerManager;
 struct StreamDescription;
 class RequestLogger;
 
-class ApiRequestHandler : public httpd::HttpRequestHandler
+class ApiRequestHandler : public httpd::HttpRequestHandler, public ActionContext
 {
 public:
     ApiRequestHandler(bridge::MixerManager& mixerManager, transport::SslDtls& sslDtls);
     httpd::Response onRequest(const httpd::Request& request) override;
 
 private:
-    bridge::MixerManager& _mixerManager;
-    transport::SslDtls& _sslDtls;
     std::atomic<uint32_t> _lastAutoRequestId;
-
 #if ENABLE_LEGACY_API
     std::unique_ptr<LegacyApiRequestHandler> _legacyApiRequestHandler;
 #endif
 
-    httpd::Response handleStats(const httpd::Request& request);
-    httpd::Response handleAbout(const httpd::Request& request, const utils::StringTokenizer::Token& token);
-    httpd::Response allocateConference(RequestLogger& requestLogger, const httpd::Request& request);
-    httpd::Response allocateEndpoint(RequestLogger& requestLogger,
-        const api::AllocateEndpoint& allocateChannel,
-        const std::string& conferenceId,
-        const std::string& endpointId);
+    httpd::Response callEndpointAction(RequestLogger&, const httpd::Request&);
 
-    httpd::Response generateAllocateEndpointResponse(RequestLogger& requestLogger,
-        const api::AllocateEndpoint& allocateChannel,
-        Mixer& mixer,
-        const std::string& conferenceId,
-        const std::string& endpointId);
-
-    httpd::Response configureEndpoint(RequestLogger& requestLogger,
-        const api::EndpointDescription& endpointDescription,
-        const std::string& conferenceId,
-        const std::string& endpointId);
-
-    void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
-        Mixer& mixer,
-        const std::string& endpointId);
-
-    void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
-        Mixer& mixer,
-        const std::string& endpointId);
-
-    void configureDataEndpoint(const api::EndpointDescription& endpointDescription,
-        Mixer& mixer,
-        const std::string& endpointId);
-
-    httpd::Response reconfigureEndpoint(RequestLogger& requestLogger,
-        const api::EndpointDescription& endpointDescription,
-        const std::string& conferenceId,
-        const std::string& endpointId);
-
-    httpd::Response recordEndpoint(RequestLogger& requestLogger,
-        const api::Recording& recording,
-        const std::string& conferenceId);
-
-    httpd::Response expireEndpoint(RequestLogger& requestLogger,
-        const std::string& conferenceId,
-        const std::string& endpointId);
-
-    httpd::Response allocateBarbell(RequestLogger& requestLogger,
-        bool iceControlling,
-        const std::string& conferenceId,
-        const std::string& barbellId);
-
-    httpd::Response configureBarbell(RequestLogger& requestLogger,
-        const std::string& conferenceId,
-        const std::string& barbellId,
-        const api::EndpointDescription& barbellDescription);
-
-    httpd::Response deleteBarbell(RequestLogger& requestLogger,
-        const std::string& conferenceId,
-        const std::string& barbellId);
-
-    httpd::Response generateBarbellResponse(RequestLogger& requestLogger,
-        Mixer& mixer,
-        const std::string& conferenceId,
-        const std::string& barbellId,
-        bool dtlsClient);
-
-    httpd::Response getConferenceInfo(RequestLogger& requestLogger, const std::string& conferenceId);
-    httpd::Response getEndpointInfo(RequestLogger& requestLogger,
-        const std::string& conferenceId,
-        const std::string& endpointId);
-
-    std::unique_lock<std::mutex> getConferenceMixer(const std::string& conferenceId, Mixer*&);
+    using RequestAction = std::function<
+        httpd::Response(ActionContext*, RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&)>;
 };
 
 } // namespace bridge

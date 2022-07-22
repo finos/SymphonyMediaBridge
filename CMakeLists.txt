@@ -120,6 +120,18 @@ set(FILES
         bridge/StreamDescription.h
         bridge/TransportDescription.h
         bridge/VideoStream.h
+        bridge/endpointActions/ActionContext.h
+        bridge/endpointActions/ApiActions.h
+        bridge/endpointActions/GetConferenceInfo.cpp
+        bridge/endpointActions/GetEndpointInfo.cpp
+        bridge/endpointActions/AllocateConference.cpp
+        bridge/endpointActions/ConferenceActions.cpp
+        bridge/endpointActions/GetConferences.cpp
+        bridge/endpointActions/About.cpp
+        bridge/endpointActions/GetStats.cpp
+        bridge/endpointActions/ApiHelpers.cpp
+        bridge/endpointActions/ApiHelpers.h
+        bridge/endpointActions/BarbellActions.cpp
         bridge/engine/ActiveMediaList.cpp
         bridge/engine/ActiveMediaList.h
         bridge/engine/AudioForwarderReceiveJob.cpp
