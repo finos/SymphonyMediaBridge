@@ -35,7 +35,6 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _audioLastN(audioLastN),
       _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
-      _activeTalkers(maxParticipants),
       _incomingAudioLevels(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
@@ -283,7 +282,8 @@ void ActiveMediaList::updateLevels(const uint64_t timestampMs)
 
 // recently unmuted participants have some advantage because the score is higher as the
 // noise level is likely lower than unmuted.
-size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
+size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore,
+    TActiveTalkersSnapshot& outActiveTalkersSnapshot)
 {
     currentDominantSpeakerScore = 0;
 
@@ -294,11 +294,11 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
         {
             if (participantLevelEntry.second._isPtt)
             {
-                _activeTalkers.emplace(participantLevelEntry.first, 0);
-            }
-            else
-            {
-                _activeTalkers.erase(participantLevelEntry.first);
+                if (outActiveTalkersSnapshot.count < outActiveTalkersSnapshot.maxSize)
+                {
+                    outActiveTalkersSnapshot.endpointHashIds[outActiveTalkersSnapshot.count++] =
+                        participantLevelEntry.first;
+                }
             }
         }
         const auto& participantLevels = participantLevelEntry.second;
@@ -317,7 +317,7 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
 
         _highestScoringSpeakers[speakerCount++] = AudioParticipantScore{participantLevelEntry.first,
             participantScore,
-            std::max(0.0f, 1.2f * participantLevels._noiseLevel)};
+            std::max(0.0f, participantLevels._noiseLevel)};
     }
 
     return speakerCount;
@@ -372,8 +372,9 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
         return;
     }
 
+    TActiveTalkersSnapshot activeTalkersSnapshot;
     float currentDominantSpeakerScore = 0.0;
-    size_t speakerCount = rankSpeakers(currentDominantSpeakerScore);
+    size_t speakerCount = rankSpeakers(currentDominantSpeakerScore, activeTalkersSnapshot);
     if (speakerCount == 0)
     {
         return;
@@ -384,10 +385,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
 
     auto dominantSpeaker = heap.top();
 
-    if (!_c9_conference)
-    {
-        _activeTalkers.clear();
-    }
+    assert(_c9_conference || 0 == activeTalkersSnapshot.count);
 
     for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
@@ -395,23 +393,17 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
         updateActiveAudioList(top.participant);
         if (!_c9_conference)
         {
-            if (top.score > top.noisePlus20percent)
+            if (top.score - top.noiseLevel > 6)
             {
-                _activeTalkers.emplace(top.participant, top.score);
-            }
-            else
-            {
-                _activeTalkers.erase(top.participant);
+                if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
+                {
+                    activeTalkersSnapshot.endpointHashIds[activeTalkersSnapshot.count++] = top.participant;
+                }
             }
         }
         heap.pop();
     }
-
-    _activeTalkersSnapshot.clear();
-    for (const auto& talker : _activeTalkers)
-    {
-        _activeTalkersSnapshot.insert(talker.first);
-    }
+    _activeTalkerSnapshot.write(activeTalkersSnapshot);
 
     if (timestampMs - _lastChangeTimestampMs + 10 * (requiredConsecutiveWins - 1) < maxSwitchDominantSpeakerEveryMs)
     {
@@ -714,6 +706,18 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
 
     api::DataChannelMessage::addUserMediaMapEnd(outMessage);
     return true;
+}
+
+const std::unordered_set<size_t> ActiveMediaList::getActiveTalkers() const
+{
+    std::unordered_set<size_t> result;
+    ActiveTalkersSnapshot<maxParticipants / 2> snapshot;
+    _activeTalkerSnapshot.read(snapshot);
+    for (size_t i = 0; i < snapshot.count && i < snapshot.maxSize; i++)
+    {
+        result.insert(snapshot.endpointHashIds[i]);
+    }
+    return result;
 }
 
 #if DEBUG
