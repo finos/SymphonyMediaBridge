@@ -59,11 +59,13 @@ public:
         }
     }
 
-    void onNewPtt(const size_t endpointIdHash, utils::Optional<bool> is_ptt);
+    void onNewPtt(const size_t endpointIdHash, bool isPtt);
 
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
     inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
+
+    const concurrency::MpmcHashmap32<size_t, size_t>& getActiveTalkers() const { return _activeTalkers; }
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
@@ -163,7 +165,7 @@ private:
         int32_t _nonZeroLevelsShortWindow;
         float _maxRecentLevel;
         float _noiseLevel;
-        bool _is_ptt;
+        bool _isPtt;
     };
 
     struct AudioLevelEntry
@@ -182,6 +184,7 @@ private:
     {
         size_t participant;
         float score;
+        float noisePlus20percent;
 
         bool operator<(const AudioParticipantScore& rhs) const { return score < rhs.score; }
         bool operator>(const AudioParticipantScore& rhs) const { return score > rhs.score; }
@@ -196,6 +199,7 @@ private:
     const size_t _maxSpeakers;
 
     concurrency::MpmcHashmap32<size_t, AudioParticipant> _audioParticipants;
+    concurrency::MpmcHashmap32<size_t, size_t> _activeTalkers;
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
     concurrency::MpmcQueue<uint32_t> _audioSsrcs;
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;

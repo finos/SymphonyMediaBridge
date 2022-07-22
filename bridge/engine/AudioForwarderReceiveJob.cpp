@@ -135,18 +135,14 @@ void AudioForwarderReceiveJob::run()
         auto c9infoExtId = _ssrcContext._rtpMap._c9infoExtId.isSet() ? _ssrcContext._rtpMap._c9infoExtId.get() : 0;
 
         int32_t audioLevel = -1;
-        utils::Optional<bool> is_ptt;
+        utils::Optional<bool> isPtt;
 
-        // Use one loop to check both extensions for speed up.
-        // Alternative is to use nice get..Extension methods in the RtpHeader, but that would be slower.
         for (const auto& rtpHeaderExtension : rtpHeaderExtensions->extensions())
         {
-            // Check for the "c9:params:rtp-hdrext:info" and is_ptt flag:
             if (0 != c9infoExtId && rtpHeaderExtension.getId() == c9infoExtId)
             {
-                is_ptt.set(rtpHeaderExtension.data[3] & 0x80);
+                isPtt.set(rtpHeaderExtension.data[3] & 0x80);
             }
-            // Now check for audio level extension.
             if (!_ssrcContext._rtpMap._audioLevelExtId.isSet() ||
                 rtpHeaderExtension.getId() != _ssrcContext._rtpMap._audioLevelExtId.get())
             {
@@ -158,7 +154,10 @@ void AudioForwarderReceiveJob::run()
         }
 
         _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel);
-        _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), is_ptt);
+        if (isPtt.isSet())
+        {
+            _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
+        }
 
         if (audioLevel >= _silenceThresholdLevel)
         {

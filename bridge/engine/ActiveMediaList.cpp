@@ -19,7 +19,7 @@ ActiveMediaList::AudioParticipant::AudioParticipant()
       _nonZeroLevelsShortWindow(0),
       _maxRecentLevel(0.0),
       _noiseLevel(50.0),
-      _is_ptt(false)
+      _isPtt(false)
 {
     memset(_levels.data(), 0, _levels.size());
 }
@@ -35,6 +35,7 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _audioLastN(audioLastN),
       _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
+      _activeTalkers(maxParticipants),
       _incomingAudioLevels(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
@@ -289,6 +290,17 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
     size_t speakerCount = 0;
     for (auto& participantLevelEntry : _audioParticipants)
     {
+        if (_c9_conference)
+        {
+            if (participantLevelEntry.second._isPtt)
+            {
+                _activeTalkers.emplace(participantLevelEntry.first, 0);
+            }
+            else
+            {
+                _activeTalkers.erase(participantLevelEntry.first);
+            }
+        }
         const auto& participantLevels = participantLevelEntry.second;
         if (participantLevels._maxRecentLevel == 0)
         {
@@ -303,23 +315,22 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
             currentDominantSpeakerScore = participantScore;
         }
 
-        _highestScoringSpeakers[speakerCount++] = AudioParticipantScore{participantLevelEntry.first, participantScore};
+        _highestScoringSpeakers[speakerCount++] = AudioParticipantScore{participantLevelEntry.first,
+            participantScore,
+            std::max(0.0f, 1.2f * participantLevels._noiseLevel)};
     }
 
     return speakerCount;
 }
 
-void ActiveMediaList::onNewPtt(const size_t endpointIdHash, utils::Optional<bool> is_ptt)
+void ActiveMediaList::onNewPtt(const size_t endpointIdHash, bool isPtt)
 {
-    if (is_ptt.isSet())
-    {
-        // Never reset to false again if we ever get C9's is_ptt flag - we're in the C9's conference.
-        _c9_conference = true;
-        auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
-        if (audioParticipantsItr == _audioParticipants.end())
-            return;
-        audioParticipantsItr->second._is_ptt = is_ptt.get();
-    }
+    // Never reset to false again if we ever get C9's is_ptt flag - we're in the C9's conference.
+    _c9_conference = true;
+    auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
+    if (audioParticipantsItr == _audioParticipants.end())
+        return;
+    audioParticipantsItr->second._isPtt = isPtt;
 }
 
 // Algorithm for video switching:
@@ -336,6 +347,9 @@ void ActiveMediaList::onNewPtt(const size_t endpointIdHash, utils::Optional<bool
 // To take over the dominant speaker position a participant has to have the highest score
 // three times in a row. Current dominant speaker score must also be < 75% of new dominant speaker score. That is 33%
 // louder over the entire measurement window. The time passed since last speaker switch must be > 2s.
+//
+// Active talkers are updated either via 'isPtt' flag (C9 conference case), or by processing highest ranking
+// participants and checking against noise-level-based threshold.
 void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged)
 {
 #if DEBUG
@@ -370,9 +384,26 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
 
     auto dominantSpeaker = heap.top();
 
+    if (!_c9_conference)
+    {
+        _activeTalkers.clear();
+    }
+
     for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
-        updateActiveAudioList(heap.top().participant);
+        auto top = heap.top();
+        updateActiveAudioList(top.participant);
+        if (!_c9_conference)
+        {
+            if (top.score > top.noisePlus20percent)
+            {
+                _activeTalkers.emplace(top.participant, top.score);
+            }
+            else
+            {
+                _activeTalkers.erase(top.participant);
+            }
+        }
         heap.pop();
     }
 

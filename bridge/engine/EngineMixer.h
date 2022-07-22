@@ -11,6 +11,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -119,6 +120,7 @@ public:
     memory::PacketPoolAllocator& getSendAllocator() { return _sendAllocator; }
     memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
     size_t getDominantSpeakerId() const;
+    std::unordered_set<size_t> getActiveTalkers() const;
 
     /**
      * Discard incoming packets in queues when engine no longer serves this mixer to ensure decrement of ref counts.

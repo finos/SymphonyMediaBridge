@@ -768,7 +768,14 @@ std::unordered_set<std::string> Mixer::getEndpoints() const
     return endpoints;
 }
 
-bool Mixer::getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoint& endpoint)
+std::unordered_set<size_t> Mixer::getActiveTalkers()
+{
+    return _engineMixer.getActiveTalkers();
+}
+
+bool Mixer::getEndpointInfo(const std::string& endpointId,
+    api::ConferenceEndpoint& endpoint,
+    const std::unordered_set<size_t>& activeTalkers)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
@@ -781,9 +788,16 @@ bool Mixer::getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoi
         if (audio->second)
         {
             foundAudio = true;
-            endpoint.isDominantSpeaker =
-                (audio->second) && audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
-            endpoint.isActiveTalker = endpoint.isDominantSpeaker;
+            endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
+            if (activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end())
+            {
+                endpoint.isActiveTalker = true;
+            }
+            else
+            {
+                endpoint.isActiveTalker = endpoint.isDominantSpeaker;
+            }
+
             auto transport = audio->second->transport;
             endpoint.iceState = transport->getIceState();
             endpoint.dtlsState = transport->getDtlsState();

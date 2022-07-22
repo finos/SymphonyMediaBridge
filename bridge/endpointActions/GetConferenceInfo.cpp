@@ -17,10 +17,12 @@ httpd::Response getConferenceInfo(ActionContext* context,
     bridge::Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
     nlohmann::json responseBodyJson = nlohmann::json::array();
+
+    const auto activeTalkers = mixer->getActiveTalkers();
     for (const auto& id : mixer->getEndpoints())
     {
         api::ConferenceEndpoint endpoint;
-        if (mixer->getEndpointInfo(id, endpoint))
+        if (mixer->getEndpointInfo(id, endpoint, activeTalkers))
         {
             responseBodyJson.push_back(api::Generator::generateConferenceEndpoint(endpoint));
         }
