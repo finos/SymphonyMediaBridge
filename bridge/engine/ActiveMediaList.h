@@ -41,7 +41,7 @@ public:
         const std::vector<SimulcastLevel>& videoSsrcs,
         const uint32_t defaultLastN,
         uint32_t audioLastN,
-        uint32_t activeTalkerDbDiff);
+        uint32_t activeTalkerSilenceThresholdDb);
 
     bool addAudioParticipant(const size_t endpointIdHash);
     bool removeAudioParticipant(const size_t endpointIdHash);
@@ -199,7 +199,7 @@ private:
     const uint32_t _defaultLastN;
     const size_t _maxActiveListSize;
     const size_t _audioLastN;
-    const uint32_t _activeTalkerDbDiff;
+    const uint32_t _activeTalkerSilenceThresholdDb;
     const size_t _maxSpeakers;
 
     concurrency::MpmcHashmap32<size_t, AudioParticipant> _audioParticipants;

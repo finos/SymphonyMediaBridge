@@ -3,6 +3,7 @@
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
 #include "logger/Logger.h"
+#include "math/helpers.h"
 #include "memory/PartialSortExtractor.h"
 #include "utils/ScopedInvariantChecker.h"
 #include "utils/ScopedReentrancyBlocker.h"
@@ -29,12 +30,12 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
     const std::vector<SimulcastLevel>& videoSsrcs,
     const uint32_t defaultLastN,
     uint32_t audioLastN,
-    uint32_t activeTalkerDbDiff)
+    uint32_t activeTalkerSilenceThresholdDb)
     : _logId("ActiveMediaList", instanceId),
       _defaultLastN(defaultLastN),
       _maxActiveListSize(defaultLastN + 1),
       _audioLastN(audioLastN),
-      _activeTalkerDbDiff(std::min(std::max(activeTalkerDbDiff, (uint32_t)6), (uint32_t)60)),
+      _activeTalkerSilenceThresholdDb(math::clamp<uint32_t>(activeTalkerSilenceThresholdDb, 6, 60)),
       _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
       _incomingAudioLevels(32768),
@@ -393,14 +394,11 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     {
         const auto& top = heap.top();
         updateActiveAudioList(top.participant);
-        if (!_c9_conference)
+        if (_c9_conference && top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
         {
-            if (top.score - top.noiseLevel > _activeTalkerDbDiff)
+            if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
             {
-                if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
-                {
-                    activeTalkersSnapshot.endpointHashIds[activeTalkersSnapshot.count++] = top.participant;
-                }
+                activeTalkersSnapshot.endpointHashIds[activeTalkersSnapshot.count++] = top.participant;
             }
         }
         heap.pop();

@@ -29,7 +29,7 @@ public:
     CFG_PROP(int32_t, silenceThresholdLevel, 127);
     CFG_PROP(uint32_t, lastN, 3);
     CFG_PROP(uint32_t, lastNextra, 2);
-    CFG_PROP(uint32_t, activeTalkerDbDiff, 18);
+    CFG_PROP(uint32_t, activeTalkerSilenceThresholdDb, 18);
     CFG_GROUP_END(audio);
 
     CFG_GROUP()

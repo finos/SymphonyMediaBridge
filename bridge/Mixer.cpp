@@ -789,24 +789,14 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
         {
             foundAudio = true;
             endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
-            if (activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end())
-            {
-                endpoint.isActiveTalker = true;
-            }
-            else
-            {
-                endpoint.isActiveTalker = false; // endpoint.isDominantSpeaker;
-            }
-
+            endpoint.isActiveTalker = activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end();
             auto transport = audio->second->transport;
             endpoint.iceState = transport->getIceState();
             endpoint.dtlsState = transport->getDtlsState();
         }
     }
 
-    bool foundVideo = _videoStreams.find(endpointId) != _videoStreams.cend() ? true : false;
-
-    return foundAudio || foundVideo;
+    return foundAudio || _videoStreams.find(endpointId) != _videoStreams.cend();
 }
 
 bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription)

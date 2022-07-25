@@ -234,8 +234,6 @@ TEST_F(IntegrationTest, plain)
     EXPECT_TRUE(endpointRequest.isSuccess());
     EXPECT_TRUE(endpointRequest.getJsonBody().is_array());
 
-    logger::debug("!!! %s", "###", endpointRequest.getResponse().c_str());
-
     auto endpoints = api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
     EXPECT_EQ(3, endpoints.size());
     size_t dominantSpeakerCount = 0;
