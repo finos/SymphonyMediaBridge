@@ -38,6 +38,7 @@ void addDefaultAudioProperties(api::EndpointDescription::Audio& audioChannel)
     audioChannel._payloadType.set(opus);
     audioChannel._rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
     audioChannel._rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
+    audioChannel._rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
 }
 
 void addDefaultVideoProperties(api::EndpointDescription::Video& videoChannel)
