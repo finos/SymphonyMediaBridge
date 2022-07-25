@@ -246,7 +246,6 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
         }
 
         auto& participantLevels = participantLevelItr->second;
-        participantLevels.lastPacketReceived = timestamp;
 
         // Update the energy history
 

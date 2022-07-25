@@ -169,8 +169,6 @@ private:
         int32_t nonZeroLevelsShortWindow;
         float maxRecentLevel;
         float noiseLevel;
-
-        uint64_t lastPacketReceived;
     };
 
     struct AudioLevelEntry
