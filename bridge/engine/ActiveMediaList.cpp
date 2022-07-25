@@ -333,6 +333,7 @@ void ActiveMediaList::onNewPtt(const size_t endpointIdHash, bool isPtt)
     auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
     if (audioParticipantsItr == _audioParticipants.end())
         return;
+    logger::info("!!! onNewPtt(%d) for endpointhash %zu", "###", isPtt, endpointIdHash);
     audioParticipantsItr->second._isPtt = isPtt;
 }
 

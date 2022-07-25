@@ -13,4 +13,15 @@ struct ConferenceEndpoint
     ice::IceSession::State iceState;
     transport::SrtpClient::State dtlsState;
 };
+
+struct ConferenceEndpointExtendedInfo : public ConferenceEndpoint
+{
+    std::string ssrc;
+    std::string msid;
+    std::string localIp;
+    std::string localPort;
+    std::string protocol;
+    std::string remoteIP;
+    std::string remotePort;
+};
 } // namespace api

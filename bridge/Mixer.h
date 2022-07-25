@@ -19,6 +19,7 @@ namespace api
 {
 struct RecordingChannel;
 struct ConferenceEndpoint;
+struct ConferenceEndpointExtendedInfo;
 } // namespace api
 
 namespace transport
@@ -214,6 +215,9 @@ public:
 
     bool getEndpointInfo(const std::string& endpointId,
         api::ConferenceEndpoint&,
+        const std::unordered_set<size_t>& activeTalkers);
+    bool getEndpointExtendedInfo(const std::string& endpointId,
+        api::ConferenceEndpointExtendedInfo&,
         const std::unordered_set<size_t>& activeTalkers);
     std::unordered_set<size_t> getActiveTalkers();
     bool getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription);

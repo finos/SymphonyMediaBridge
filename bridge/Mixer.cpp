@@ -799,6 +799,19 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
     return foundAudio || _videoStreams.find(endpointId) != _videoStreams.cend();
 }
 
+bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
+    api::ConferenceEndpointExtendedInfo& endpoint,
+    const std::unordered_set<size_t>& activeTalkers)
+{
+    if (!getEndpointInfo(endpointId, endpoint, activeTalkers))
+        return false;
+
+    const auto audio = _audioStreams.find(endpointId);
+    const auto transport = audio->second->transport;
+    // transport->getRemotePeer().
+    return true;
+}
+
 bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
