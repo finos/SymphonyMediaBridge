@@ -11,7 +11,7 @@ template <size_t PacketSize>
 class FixedPacket
 {
 public:
-    FixedPacket() : _length(0) { _data[0] = 0; }
+    FixedPacket() : endpointIdHash(0), _length(0) { _data[0] = 0; }
 
     static const size_t size = PacketSize;
     static_assert(PacketSize % 8 == 0, "packet size must be 8B aligned");
