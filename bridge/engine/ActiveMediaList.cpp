@@ -391,7 +391,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
 
     for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
-        auto top = heap.top();
+        const auto& top = heap.top();
         updateActiveAudioList(top.participant);
         if (!_c9_conference)
         {
