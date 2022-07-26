@@ -151,24 +151,21 @@ void AudioForwarderReceiveJob::run()
         }
 
         bool silence = false;
+        if (audioLevel.isSet())
+        {
+            silence = audioLevel.get() > _silenceThresholdLevel;
+        }
         if (isPtt.isSet())
         {
             silence = !isPtt.get();
+            if (!audioLevel.isSet())
+            {
+                audioLevel.set(silence ? 127 : 0);
+            }
             _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
-            _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), silence ? 127 : 0);
         }
-        else
-        {
-            if (audioLevel.isSet())
-            {
-                silence = audioLevel.get() > _silenceThresholdLevel;
-                _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel.get());
-            }
-            else
-            {
-                // Should not happen!
-            }
-        }
+
+        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), silence ? 127 : 0);
 
         if (silence)
         {
