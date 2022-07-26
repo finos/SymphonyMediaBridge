@@ -676,62 +676,61 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(const size_t lastN,
         return false;
     }
 
+    JsonObject umm(outMessage);
+    umm.addProperty("type", "user-media-map");
+
+    size_t addedElements = 0;
+
+    auto videoListEntry = _activeVideoList.tail();
+    if (videoListEntry)
     {
-        JsonObject umm(outMessage);
-        umm.addProperty("type", "user-media-map");
-
-        size_t addedElements = 0;
-
-        auto videoListEntry = _activeVideoList.tail();
-        if (videoListEntry)
+        JsonArray videoArray(outMessage, "video-endpoints");
+        while (videoListEntry && addedElements < lastN)
         {
-            JsonArray videoArray(outMessage, "video-endpoints");
-            while (videoListEntry && addedElements < lastN)
+            const auto videoStreamItr = engineVideoStreams.find(videoListEntry->_data);
+            if (videoStreamItr == engineVideoStreams.end())
             {
-                const auto videoStreamItr = engineVideoStreams.find(videoListEntry->_data);
-                if (videoStreamItr == engineVideoStreams.end())
-                {
-                    videoListEntry = videoListEntry->_previous;
-                    continue;
-                }
-                const auto videoStream = videoStreamItr->second;
-                JsonObject videoEp(outMessage);
-                videoEp.addProperty("endpoint-id", videoStream->_endpointId);
-
-                JsonArray videoSsrcs(outMessage, "ssrcs");
-                const auto rewriteMapItr = _videoSsrcRewriteMap.find(videoListEntry->_data);
-                if (rewriteMapItr != _videoSsrcRewriteMap.end())
-                {
-                    videoSsrcs.addElement(rewriteMapItr->second.levels[0]._ssrc);
-                }
-
-                if (_videoScreenShareSsrcMapping.isSet() &&
-                    _videoScreenShareSsrcMapping.get().first == videoListEntry->_data)
-                {
-                    videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second._rewriteSsrc);
-                }
-
-                ++addedElements;
                 videoListEntry = videoListEntry->_previous;
+                continue;
             }
-        }
-        if (_audioSsrcRewriteMap.size() > 0)
-        {
-            JsonArray audioArray(outMessage, "audio-endpoints");
+            const auto videoStream = videoStreamItr->second;
+            JsonObject videoEp(outMessage);
+            videoEp.addProperty("endpoint-id", videoStream->_endpointId);
 
-            for (auto& item : _audioSsrcRewriteMap)
+            JsonArray videoSsrcs(outMessage, "ssrcs");
+            const auto rewriteMapItr = _videoSsrcRewriteMap.find(videoListEntry->_data);
+            if (rewriteMapItr != _videoSsrcRewriteMap.end())
             {
-                auto audioIt = engineAudioStreams.find(item.first);
-                if (audioIt != engineAudioStreams.end())
-                {
-                    JsonObject audioEndpoint(outMessage);
-                    audioEndpoint.addProperty("endpoint-id", audioIt->second->endpointId);
-                    JsonArray audioSsrcs(outMessage, "ssrcs");
-                    audioSsrcs.addElement(item.second);
-                }
+                videoSsrcs.addElement(rewriteMapItr->second.levels[0]._ssrc);
+            }
+
+            if (_videoScreenShareSsrcMapping.isSet() &&
+                _videoScreenShareSsrcMapping.get().first == videoListEntry->_data)
+            {
+                videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+            }
+
+            ++addedElements;
+            videoListEntry = videoListEntry->_previous;
+        }
+    }
+    if (_audioSsrcRewriteMap.size() > 0)
+    {
+        JsonArray audioArray(outMessage, "audio-endpoints");
+
+        for (auto& item : _audioSsrcRewriteMap)
+        {
+            auto audioIt = engineAudioStreams.find(item.first);
+            if (audioIt != engineAudioStreams.end())
+            {
+                JsonObject audioEndpoint(outMessage);
+                audioEndpoint.addProperty("endpoint-id", audioIt->second->endpointId);
+                JsonArray audioSsrcs(outMessage, "ssrcs");
+                audioSsrcs.addElement(item.second);
             }
         }
     }
+
     return true;
 }
 
