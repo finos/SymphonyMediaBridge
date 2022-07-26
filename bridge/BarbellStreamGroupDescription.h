@@ -21,7 +21,7 @@ struct BarbellStreamGroupDescription
 
     std::vector<uint32_t> ssrcs;
     std::vector<uint32_t> feedbackSsrcs;
-    bool slides;
+    bool slides; // a.k.a screen share
 };
 
 } // namespace bridge
