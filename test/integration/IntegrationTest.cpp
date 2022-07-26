@@ -1051,7 +1051,7 @@ TEST_F(IntegrationTest, simpleBarbell)
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 }
 
-TEST_F(IntegrationTest, DetectIsPtt)
+TEST_F(IntegrationTest, detectIsPtt)
 {
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
