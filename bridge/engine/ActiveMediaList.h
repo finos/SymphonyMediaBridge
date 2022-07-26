@@ -131,7 +131,7 @@ public:
         const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
         utils::StringBuilder<1024>& outMessage);
 
-    bool makeBarbellUserMediaMapMessage(const size_t lastN,
+    bool makeBarbellUserMediaMapMessage(
         const concurrency::MpmcHashmap32<size_t, EngineAudioStream*>& engineAudioStreams,
         const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
         utils::StringBuilder<1024>& outMessage);

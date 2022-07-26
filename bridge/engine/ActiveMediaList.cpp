@@ -664,57 +664,38 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
     return true;
 }
 
-bool ActiveMediaList::makeBarbellUserMediaMapMessage(const size_t lastN,
+bool ActiveMediaList::makeBarbellUserMediaMapMessage(
     const concurrency::MpmcHashmap32<size_t, EngineAudioStream*>& engineAudioStreams,
     const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
     utils::StringBuilder<1024>& outMessage)
 {
-
-    if (lastN > _defaultLastN || lastN == 0)
-    {
-        assert(false);
-        return false;
-    }
-
     JsonObject umm(outMessage);
     umm.addProperty("type", "user-media-map");
 
-    size_t addedElements = 0;
-
-    auto videoListEntry = _activeVideoList.tail();
-    if (videoListEntry)
+    if (!_videoSsrcRewriteMap.empty())
     {
         JsonArray videoArray(outMessage, "video-endpoints");
-        while (videoListEntry && addedElements < lastN)
+        for (auto& item : _videoSsrcRewriteMap)
         {
-            const auto videoStreamItr = engineVideoStreams.find(videoListEntry->_data);
-            if (videoStreamItr == engineVideoStreams.end())
+            const auto videoStreamItr = engineVideoStreams.find(item.first);
+            if (videoStreamItr != engineVideoStreams.end())
             {
-                videoListEntry = videoListEntry->_previous;
-                continue;
-            }
-            const auto videoStream = videoStreamItr->second;
-            JsonObject videoEp(outMessage);
-            videoEp.addProperty("endpoint-id", videoStream->_endpointId);
+                const auto videoStream = videoStreamItr->second;
+                JsonObject videoEp(outMessage);
+                videoEp.addProperty("endpoint-id", videoStream->_endpointId);
 
-            JsonArray videoSsrcs(outMessage, "ssrcs");
-            const auto rewriteMapItr = _videoSsrcRewriteMap.find(videoListEntry->_data);
-            if (rewriteMapItr != _videoSsrcRewriteMap.end())
-            {
-                videoSsrcs.addElement(rewriteMapItr->second.levels[0]._ssrc);
-            }
+                JsonArray videoSsrcs(outMessage, "ssrcs");
+                videoSsrcs.addElement(item.second.levels[0]._ssrc);
 
-            if (_videoScreenShareSsrcMapping.isSet() &&
-                _videoScreenShareSsrcMapping.get().first == videoListEntry->_data)
-            {
-                videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == item.first)
+                {
+                    videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                }
             }
-
-            ++addedElements;
-            videoListEntry = videoListEntry->_previous;
         }
     }
-    if (_audioSsrcRewriteMap.size() > 0)
+
+    if (!_audioSsrcRewriteMap.empty())
     {
         JsonArray audioArray(outMessage, "audio-endpoints");
 

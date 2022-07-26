@@ -2693,10 +2693,7 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     }
 
     utils::StringBuilder<1024> userMediaMapMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(_lastN,
-        _engineAudioStreams,
-        _engineVideoStreams,
-        userMediaMapMessage);
+    _activeMediaList->makeBarbellUserMediaMapMessage(_engineAudioStreams, _engineVideoStreams, userMediaMapMessage);
 
     for (auto& barbell : _engineBarbells)
     {
