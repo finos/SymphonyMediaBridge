@@ -165,7 +165,7 @@ void AudioForwarderReceiveJob::run()
             _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
         }
 
-        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel.get());
+        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel.valueOr(127));
 
         if (silence)
         {
