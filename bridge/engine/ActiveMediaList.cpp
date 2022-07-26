@@ -293,15 +293,12 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore,
     size_t speakerCount = 0;
     for (auto& participantLevelEntry : _audioParticipants)
     {
-        if (_c9_conference)
+        if (_c9_conference && participantLevelEntry.second._isPtt)
         {
-            if (participantLevelEntry.second._isPtt)
+            if (outActiveTalkersSnapshot.count < outActiveTalkersSnapshot.maxSize)
             {
-                if (outActiveTalkersSnapshot.count < outActiveTalkersSnapshot.maxSize)
-                {
-                    outActiveTalkersSnapshot.endpointHashIds[outActiveTalkersSnapshot.count++] =
-                        participantLevelEntry.first;
-                }
+                outActiveTalkersSnapshot.endpointHashIds[outActiveTalkersSnapshot.count++] =
+                    participantLevelEntry.first;
             }
         }
         const auto& participantLevels = participantLevelEntry.second;
