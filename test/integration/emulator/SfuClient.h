@@ -241,6 +241,7 @@ public:
         {
             bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
             rtpMap._audioLevelExtId.set(1);
+            rtpMap._c9infoExtId.set(8);
             _receivedData.emplace(rtpHeader->ssrc.get(),
                 new RtpReceiver(_loggableId.getInstanceId(), rtpHeader->ssrc.get(), rtpMap, sender, timestamp));
             it = _receivedData.find(rtpHeader->ssrc.get());

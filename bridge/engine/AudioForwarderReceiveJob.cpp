@@ -145,14 +145,11 @@ void AudioForwarderReceiveJob::run()
                 logger::info("!!! rtpHeaderExtension.data = %X", "###", *(int*)(&rtpHeaderExtension.data[0]));
                 isPtt.set(rtpHeaderExtension.data[3] & 0x80);
             }
-            if (!_ssrcContext._rtpMap._audioLevelExtId.isSet() ||
-                rtpHeaderExtension.getId() != _ssrcContext._rtpMap._audioLevelExtId.get())
+            else if (_ssrcContext._rtpMap._audioLevelExtId.isSet() &&
+                rtpHeaderExtension.getId() == _ssrcContext._rtpMap._audioLevelExtId.get())
             {
-                continue;
+                audioLevel = rtpHeaderExtension.data[0] & 0x7F;
             }
-
-            audioLevel = rtpHeaderExtension.data[0] & 0x7F;
-            break;
         }
 
         _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel);

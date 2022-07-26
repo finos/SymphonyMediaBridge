@@ -31,6 +31,27 @@
 #include <sstream>
 #include <unordered_set>
 
+#define DEFINE_3_CLIENT_CONFERENCE(TChannel, BASE_URL)                                                                 \
+    Conference conf;                                                                                                   \
+    conf.create(BASE_URL);                                                                                             \
+    EXPECT_TRUE(conf.isSuccess());                                                                                     \
+    utils::Time::nanoSleep(1 * utils::Time::sec);                                                                      \
+    SfuClient<TChannel> client1(++_instanceCounter,                                                                    \
+        *_mainPoolAllocator,                                                                                           \
+        _audioAllocator,                                                                                               \
+        *_transportFactory,                                                                                            \
+        *_sslDtls);                                                                                                    \
+    SfuClient<TChannel> client2(++_instanceCounter,                                                                    \
+        *_mainPoolAllocator,                                                                                           \
+        _audioAllocator,                                                                                               \
+        *_transportFactory,                                                                                            \
+        *_sslDtls);                                                                                                    \
+    SfuClient<TChannel> client3(++_instanceCounter,                                                                    \
+        *_mainPoolAllocator,                                                                                           \
+        _audioAllocator,                                                                                               \
+        *_transportFactory,                                                                                            \
+        *_sslDtls);
+
 IntegrationTest::IntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
       _audioAllocator(memory::packetPoolSize, "IntegrationTestAudio"),
@@ -148,53 +169,12 @@ void analyzeRecording(const std::vector<int16_t>& recording,
 } // namespace
 using namespace emulator;
 
-TEST_F(IntegrationTest, plain)
+template <typename TChannel>
+void make5secCallWithDefaultAudioProfileAndStopClient3(SfuClient<TChannel>& client1,
+    SfuClient<TChannel>& client2,
+    SfuClient<TChannel>& client3,
+    GroupCall<SfuClient<TChannel>>& groupCall)
 {
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-    {
-        return;
-    }
-#if !ENABLE_LEGACY_API
-    return;
-#endif
-
-    _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
-
-    initBridge(_config);
-
-    const std::string baseUrl = "http://127.0.0.1:8080";
-
-    Conference conf;
-    conf.create(baseUrl + "/colibri");
-    EXPECT_TRUE(conf.isSuccess());
-    utils::Time::nanoSleep(1 * utils::Time::sec);
-
-    SfuClient<ColibriChannel> client1(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
-    SfuClient<ColibriChannel> client2(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
-    SfuClient<ColibriChannel> client3(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
-
-    GroupCall<SfuClient<ColibriChannel>> groupCall = {&client1, &client2, &client3};
-
-    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
-    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
-    client3.initiateCall(baseUrl, conf.getId(), false, true, true, false);
-
     auto connectResult = groupCall.connect(utils::Time::sec * 5);
     ASSERT_TRUE(connectResult);
     if (!connectResult)
@@ -217,11 +197,11 @@ TEST_F(IntegrationTest, plain)
     client3.stopRecording();
     client2.stopRecording();
     client1.stopRecording();
+}
 
-    HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
-    statsRequest.awaitResponse(1500 * utils::Time::ms);
-    EXPECT_TRUE(statsRequest.isSuccess());
-    HttpGetRequest confRequest((std::string(baseUrl) + "/colibri/conferences").c_str());
+std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(const char* baseUrl)
+{
+    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
     confRequest.awaitResponse(500 * utils::Time::ms);
     EXPECT_TRUE(confRequest.isSuccess());
 
@@ -234,7 +214,53 @@ TEST_F(IntegrationTest, plain)
     EXPECT_TRUE(endpointRequest.isSuccess());
     EXPECT_TRUE(endpointRequest.getJsonBody().is_array());
 
-    auto endpoints = api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
+    return api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
+}
+
+bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint)
+{
+    auto it = std::find_if(endpoints.cbegin(), endpoints.cend(), [&endpoint](const api::ConferenceEndpoint& e) {
+        return e.id == endpoint;
+    });
+    assert(it != endpoints.cend());
+    return it->isActiveTalker;
+}
+
+TEST_F(IntegrationTest, plain)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+    initBridge(_config);
+
+    const std::string baseUrl = "http://127.0.0.1:8080";
+
+    DEFINE_3_CLIENT_CONFERENCE(ColibriChannel, baseUrl + "/colibri")
+
+    GroupCall<SfuClient<ColibriChannel>> groupCall = {&client1, &client2, &client3};
+
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+    client3.initiateCall(baseUrl, conf.getId(), false, true, true, false);
+
+    make5secCallWithDefaultAudioProfileAndStopClient3(client1, client2, client3, groupCall);
+
+    HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
+    statsRequest.awaitResponse(1500 * utils::Time::ms);
+    EXPECT_TRUE(statsRequest.isSuccess());
+
+    auto endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
     EXPECT_EQ(3, endpoints.size());
     size_t dominantSpeakerCount = 0;
     for (const auto& endpoint : endpoints)
@@ -388,26 +414,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
     const std::string baseUrl = "http://127.0.0.1:8080";
 
-    Conference conf;
-    conf.create(baseUrl + "/colibri");
-    EXPECT_TRUE(conf.isSuccess());
-    utils::Time::nanoSleep(1 * utils::Time::sec);
-
-    SfuClient<ColibriChannel> client1(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
-    SfuClient<ColibriChannel> client2(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
-    SfuClient<ColibriChannel> client3(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
+    DEFINE_3_CLIENT_CONFERENCE(ColibriChannel, baseUrl + "/colibri")
 
     GroupCall<SfuClient<ColibriChannel>> groupCall({&client1, &client2, &client3});
 
@@ -459,7 +466,8 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
     const auto& rData1 = client1.getReceiveStats();
     const auto& rData2 = client2.getReceiveStats();
     const auto& rData3 = client3.getReceiveStats();
-    // We expect only one ssrc (audio), since padding (that comes on video ssrc) is disabled for audio only calls).
+    // We expect only one ssrc (audio), since padding (that comes on video ssrc) is disabled for audio only
+    // calls).
     EXPECT_EQ(rData1.size(), 1);
     EXPECT_EQ(rData2.size(), 1);
     EXPECT_EQ(rData3.size(), 1);
@@ -468,8 +476,8 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 TEST_F(IntegrationTest, videoOffPaddingOff)
 {
     /*
-       Test checks that after video is off and cooldown interval passed, no padding will be sent for the call that
-       became audio-only.
+       Test checks that after video is off and cooldown interval passed, no padding will be sent for the
+       call that became audio-only.
     */
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
@@ -486,26 +494,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
     const std::string baseUrl = "http://127.0.0.1:8080";
 
-    Conference conf;
-    conf.create(baseUrl + "/colibri");
-    EXPECT_TRUE(conf.isSuccess());
-    utils::Time::nanoSleep(1 * utils::Time::sec);
-
-    SfuClient<ColibriChannel> client1(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
-    SfuClient<ColibriChannel> client2(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
-    SfuClient<ColibriChannel> client3(++_instanceCounter,
-        *_mainPoolAllocator,
-        _audioAllocator,
-        *_transportFactory,
-        *_sslDtls);
+    DEFINE_3_CLIENT_CONFERENCE(ColibriChannel, baseUrl + "/colibri")
 
     GroupCall<SfuClient<ColibriChannel>> groupCall = {&client1, &client2};
 
@@ -832,27 +821,7 @@ TEST_F(IntegrationTest, ptime10)
     client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
     client3.initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-    if (!groupCall.connect(utils::Time::sec * 4))
-    {
-        EXPECT_TRUE(false);
-        return;
-    }
-
-    client1._audioSource->setFrequency(600);
-    client2._audioSource->setFrequency(1300);
-    client3._audioSource->setFrequency(2100);
-
-    client1._audioSource->setVolume(0.6);
-    client2._audioSource->setVolume(0.6);
-    client3._audioSource->setVolume(0.6);
-
-    groupCall.run(utils::Time::sec * 5);
-
-    client3._transport->stop();
-
-    client3.stopRecording();
-    client2.stopRecording();
-    client1.stopRecording();
+    make5secCallWithDefaultAudioProfileAndStopClient3(client1, client2, client3, groupCall);
 
     HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
     statsRequest.awaitResponse(1500 * utils::Time::ms);
@@ -1081,3 +1050,119 @@ TEST_F(IntegrationTest, simpleBarbell)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 }
+
+TEST_F(IntegrationTest, DetectIsPtt)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+    initBridge(_config);
+
+    const auto baseUrl = "http://127.0.0.1:8080";
+
+    DEFINE_3_CLIENT_CONFERENCE(Channel, baseUrl)
+
+    GroupCall<SfuClient<Channel>> groupCall = {&client1, &client2, &client3};
+
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+    client3.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+
+    auto connectResult = groupCall.connect(utils::Time::sec * 5);
+    ASSERT_TRUE(connectResult);
+    if (!connectResult)
+    {
+        return;
+    }
+
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+    client3._audioSource->setFrequency(2100);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+    client3._audioSource->setVolume(0.6);
+
+    // =============================== PART 1: #1 & #2 talking ====================
+
+    client1._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
+    client2._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
+    client3._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+
+    groupCall.run(utils::Time::sec * 2);
+
+    auto endpoints = getConferenceEndpointsInfo(baseUrl);
+    EXPECT_EQ(3, endpoints.size());
+
+    EXPECT_TRUE(isActiveTalker(endpoints, client1._channel.getEndpointId()));
+    EXPECT_TRUE(isActiveTalker(endpoints, client2._channel.getEndpointId()));
+    EXPECT_FALSE(isActiveTalker(endpoints, client3._channel.getEndpointId()));
+
+    // =============================== PART 2: #2 talking =========================
+
+    client1._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+    client2._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
+    client3._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+
+    groupCall.run(utils::Time::sec * 2);
+
+    endpoints = getConferenceEndpointsInfo(baseUrl);
+    EXPECT_EQ(3, endpoints.size());
+
+    EXPECT_FALSE(isActiveTalker(endpoints, client1._channel.getEndpointId()));
+    EXPECT_TRUE(isActiveTalker(endpoints, client2._channel.getEndpointId()));
+    EXPECT_FALSE(isActiveTalker(endpoints, client3._channel.getEndpointId()));
+
+    // =============================== PART 3: #3 talking =========================
+
+    client1._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+    client2._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+    client3._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
+
+    groupCall.run(utils::Time::sec * 2);
+
+    endpoints = getConferenceEndpointsInfo(baseUrl);
+    EXPECT_EQ(3, endpoints.size());
+
+    EXPECT_FALSE(isActiveTalker(endpoints, client1._channel.getEndpointId()));
+    EXPECT_FALSE(isActiveTalker(endpoints, client2._channel.getEndpointId()));
+    EXPECT_TRUE(isActiveTalker(endpoints, client3._channel.getEndpointId()));
+
+    // =============================== PART 4: nobody talking =====================
+
+    client1._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+    client2._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+    client3._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+
+    groupCall.run(utils::Time::sec * 2);
+
+    endpoints = getConferenceEndpointsInfo(baseUrl);
+    EXPECT_EQ(3, endpoints.size());
+
+    EXPECT_FALSE(isActiveTalker(endpoints, client1._channel.getEndpointId()));
+    EXPECT_FALSE(isActiveTalker(endpoints, client2._channel.getEndpointId()));
+    EXPECT_FALSE(isActiveTalker(endpoints, client3._channel.getEndpointId()));
+
+    client3.stopRecording();
+    client2.stopRecording();
+    client1.stopRecording();
+
+    client1._transport->stop();
+    client2._transport->stop();
+    client3._transport->stop();
+
+    groupCall.awaitPendingJobs(utils::Time::sec * 4);
+}
+
+#undef DEFINE_3_CLIENT_CONFERENCE
