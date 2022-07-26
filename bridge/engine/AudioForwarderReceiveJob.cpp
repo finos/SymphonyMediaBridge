@@ -132,21 +132,19 @@ void AudioForwarderReceiveJob::run()
     const auto rtpHeaderExtensions = rtpHeader->getExtensionHeader();
     if (rtpHeaderExtensions)
     {
-        auto c9infoExtId = _ssrcContext._rtpMap._c9infoExtId.isSet() ? _ssrcContext._rtpMap._c9infoExtId.get() : 0;
+        auto c9infoExtId = _ssrcContext._rtpMap._c9infoExtId.valueOr(0);
+        auto audioLevelExtId = _ssrcContext._rtpMap._audioLevelExtId.valueOr(0);
 
         utils::Optional<uint8_t> audioLevel;
         utils::Optional<bool> isPtt;
-        logger::info("!!! c9infoExtId = %d", "###", c9infoExtId);
 
         for (const auto& rtpHeaderExtension : rtpHeaderExtensions->extensions())
         {
             if (0 != c9infoExtId && rtpHeaderExtension.getId() == c9infoExtId)
             {
-                logger::info("!!! rtpHeaderExtension.data = %X", "###", *(int*)(&rtpHeaderExtension.data[0]));
                 isPtt.set(rtpHeaderExtension.data[3] & 0x80);
             }
-            else if (_ssrcContext._rtpMap._audioLevelExtId.isSet() &&
-                rtpHeaderExtension.getId() == _ssrcContext._rtpMap._audioLevelExtId.get())
+            else if (0 != audioLevelExtId && rtpHeaderExtension.getId() == audioLevelExtId)
             {
                 audioLevel.set(rtpHeaderExtension.data[0] & 0x7F);
             }
@@ -156,7 +154,6 @@ void AudioForwarderReceiveJob::run()
         if (isPtt.isSet())
         {
             silence = !isPtt.get();
-            logger::info("!!! isPtt = %d", "###", isPtt.get());
             _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
             _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), silence ? 127 : 0);
         }
