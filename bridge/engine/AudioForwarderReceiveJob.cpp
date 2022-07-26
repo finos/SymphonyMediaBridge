@@ -104,7 +104,7 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& ssrcContext,
     ActiveMediaList& activeMediaList,
-    const int32_t silenceThresholdLevel,
+    const uint8_t silenceThresholdLevel,
     const bool hasMixedAudioStreams,
     const uint32_t extendedSequenceNumber)
     : CountedJob(sender->getJobCounter()),
@@ -134,7 +134,7 @@ void AudioForwarderReceiveJob::run()
     {
         auto c9infoExtId = _ssrcContext._rtpMap._c9infoExtId.isSet() ? _ssrcContext._rtpMap._c9infoExtId.get() : 0;
 
-        int32_t audioLevel = -1;
+        utils::Optional<uint8_t> audioLevel;
         utils::Optional<bool> isPtt;
         logger::info("!!! c9infoExtId = %d", "###", c9infoExtId);
 
@@ -148,18 +148,32 @@ void AudioForwarderReceiveJob::run()
             else if (_ssrcContext._rtpMap._audioLevelExtId.isSet() &&
                 rtpHeaderExtension.getId() == _ssrcContext._rtpMap._audioLevelExtId.get())
             {
-                audioLevel = rtpHeaderExtension.data[0] & 0x7F;
+                audioLevel.set(rtpHeaderExtension.data[0] & 0x7F);
             }
         }
 
-        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel);
+        bool silence = false;
         if (isPtt.isSet())
         {
+            silence = !isPtt.get();
             logger::info("!!! isPtt = %d", "###", isPtt.get());
             _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
+            _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), silence ? 127 : 0);
+        }
+        else
+        {
+            if (audioLevel.isSet())
+            {
+                silence = audioLevel.get() > _silenceThresholdLevel;
+                _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel.get());
+            }
+            else
+            {
+                // Should not happen!
+            }
         }
 
-        if (audioLevel >= _silenceThresholdLevel)
+        if (silence)
         {
             _ssrcContext._markNextPacket = true;
             return;

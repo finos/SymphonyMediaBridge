@@ -366,6 +366,8 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     }
     _lastRunTimestampMs = timestampMs;
 
+    // addd processing for isPtt here
+
     bool newLevelsAvailable = !_incomingAudioLevels.empty();
     updateLevels(timestampMs);
     if (!newLevelsAvailable)

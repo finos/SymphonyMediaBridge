@@ -66,9 +66,9 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     rtp::GeneralExtension1Byteheader absSendTime(3, 3);
     extensionHead.addExtension(cursor, absSendTime);
 
-    rtp::GeneralExtension1Byteheader audioLevel(1, 1);
-    audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
-    extensionHead.addExtension(cursor, audioLevel);
+    // rtp::GeneralExtension1Byteheader audioLevel(1, 1);
+    // audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
+    // extensionHead.addExtension(cursor, audioLevel);
 
     if (IsPttState::NotSpecified != _isPtt)
     {
@@ -80,14 +80,14 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     }
 
     rtpHeader->setExtensions(extensionHead);
-    if (IsPttState::NotSpecified == _isPtt)
-    {
-        assert(rtpHeader->headerLength() == 24);
-    }
-    else
-    {
-        assert(rtpHeader->headerLength() == 28);
-    }
+    // if (IsPttState::NotSpecified == _isPtt)
+    // {
+    //     assert(rtpHeader->headerLength() == 24);
+    // }
+    // else
+    // {
+    //     assert(rtpHeader->headerLength() == 28);
+    // }
 
     const auto bytesEncoded = _encoder.encode(audio,
         samplesPerPacket,
