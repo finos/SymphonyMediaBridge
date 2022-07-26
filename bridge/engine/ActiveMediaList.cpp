@@ -678,7 +678,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(const size_t lastN,
 
     {
         JsonObject umm(outMessage);
-        JsonBuilder::addProperty(outMessage, "type", "user-media-map");
+        umm.addProperty("type", "user-media-map");
 
         size_t addedElements = 0;
 
@@ -696,19 +696,19 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(const size_t lastN,
                 }
                 const auto videoStream = videoStreamItr->second;
                 JsonObject videoEp(outMessage);
-                JsonBuilder::addProperty(outMessage, "endpoint-id", videoStream->_endpointId);
+                videoEp.addProperty("endpoint-id", videoStream->_endpointId);
 
                 JsonArray videoSsrcs(outMessage, "ssrcs");
                 const auto rewriteMapItr = _videoSsrcRewriteMap.find(videoListEntry->_data);
                 if (rewriteMapItr != _videoSsrcRewriteMap.end())
                 {
-                    JsonBuilder::addArrayValue(outMessage, rewriteMapItr->second.levels[0]._ssrc);
+                    videoSsrcs.addElement(rewriteMapItr->second.levels[0]._ssrc);
                 }
 
                 if (_videoScreenShareSsrcMapping.isSet() &&
                     _videoScreenShareSsrcMapping.get().first == videoListEntry->_data)
                 {
-                    JsonBuilder::addArrayValue(outMessage, _videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                    videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second._rewriteSsrc);
                 }
 
                 ++addedElements;
@@ -725,10 +725,9 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(const size_t lastN,
                 if (audioIt != engineAudioStreams.end())
                 {
                     JsonObject audioEndpoint(outMessage);
-                    JsonBuilder::addProperty(outMessage, "endpoint-id", audioIt->second->endpointId);
-
+                    audioEndpoint.addProperty("endpoint-id", audioIt->second->endpointId);
                     JsonArray audioSsrcs(outMessage, "ssrcs");
-                    JsonBuilder::addArrayValue(outMessage, item.second);
+                    audioSsrcs.addElement(item.second);
                 }
             }
         }
