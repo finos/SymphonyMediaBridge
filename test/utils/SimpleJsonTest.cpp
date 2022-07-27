@@ -1,6 +1,7 @@
 #include "utils/SimpleJson.h"
 #include <gtest/gtest.h>
 #include <string>
+#include <vector>
 
 namespace utils
 {
@@ -42,7 +43,15 @@ TEST(SimpleJson, ParseValidJson)
         auto prop = simpleJson.find("objName");
         EXPECT_EQ(SimpleJson::Type::Object, prop.getType());
     }
-
+    {
+        auto prop = simpleJson.find("objName");
+        EXPECT_EQ(SimpleJson::Type::Object, prop.getType());
+        prop = prop.find("innerName");
+        EXPECT_EQ(SimpleJson::Type::String, prop.getType());
+        std::string out = "value to overwrite";
+        EXPECT_TRUE(prop.getValue(out));
+        EXPECT_EQ(out, "innerValue");
+    }
     {
         auto prop = simpleJson.find("objName.innerName");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
@@ -91,6 +100,38 @@ TEST(SimpleJson, ParseValidJson)
         EXPECT_EQ(SimpleJson::Type::Integer, prop.getType());
         auto val = prop.valueOr((int64_t)42);
         EXPECT_EQ(val, 9223372036854775807);
+    }
+}
+
+TEST(SimpleJson, ParseArray)
+{
+    const std::string json = "{"
+                             "\"Fibonacci\": {"
+                             "\"numbers\": ["
+                             "1,"
+                             "1,"
+                             "2,"
+                             "3,"
+                             "5,"
+                             "8,"
+                             "13,"
+                             "21"
+                             "]"
+                             "}"
+                             "}";
+    auto simpleJson = SimpleJson::create(json.c_str(), json.length());
+    auto propArray = simpleJson.find("Fibonacci.numbers");
+    EXPECT_EQ(SimpleJson::Type::Array, propArray.getType());
+
+    std::vector<SimpleJson> jsonArray;
+    EXPECT_TRUE(propArray.getValue(jsonArray));
+    EXPECT_EQ(jsonArray.size(), 8);
+    int64_t expected[] = {1, 1, 2, 3, 5, 8, 13, 21};
+    int count = 0;
+    for (auto& it : jsonArray)
+    {
+        auto value = it.valueOr((int64_t)-1);
+        EXPECT_EQ(value, expected[count++]);
     }
 }
 } // namespace utils

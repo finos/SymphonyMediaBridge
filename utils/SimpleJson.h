@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <string>
+#include <vector>
 
 namespace utils
 {
@@ -44,6 +45,7 @@ public:
     bool getValue(double& out);
     bool getValue(std::string& out);
     bool getValue(bool& out);
+    bool getValue(std::vector<SimpleJson>& out);
 
     template <typename T>
     T valueOr(const T&& defaultValue)
@@ -76,6 +78,7 @@ private:
     const char* eatDigits(const char* start) const;
     const char* eatWhiteSpaces(const char* start) const;
     const char* findPropertyEnd(const char* start) const;
+    const char* findValueEnd(const char* start) const;
     const char* findStringEnd(const char* start) const;
     const char* findBooleanEnd(const char* start) const;
     const char* findNumberEnd(const char* start) const;

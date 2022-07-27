@@ -18,7 +18,7 @@ SimpleJson SimpleJson::create(const char* cursorIn, size_t length)
 
 SimpleJson SimpleJson::create(const char* cursorIn, const char* cursorOut)
 {
-    if (!cursorIn || !cursorOut || cursorIn >= cursorOut)
+    if (!cursorIn || !cursorOut || cursorIn > cursorOut)
         return SimpleJsonNone;
     else
         return SimpleJson(cursorIn, cursorOut - cursorIn + 1);
@@ -26,6 +26,11 @@ SimpleJson SimpleJson::create(const char* cursorIn, const char* cursorOut)
 
 void SimpleJson::validateFast()
 {
+    if (!_cursorIn || !_cursorOut)
+    {
+        _type = Type::None;
+        return;
+    }
     while (_cursorIn != _cursorOut && std::isspace(*_cursorIn))
         _cursorIn++;
     while (_cursorOut != _cursorIn && std::isspace(*_cursorOut))
@@ -37,10 +42,6 @@ void SimpleJson::validateFast()
     else if (*_cursorIn == '[' && *_cursorOut == ']')
     {
         _type = Type::Array;
-    }
-    else if (_cursorIn == _cursorOut)
-    {
-        _type = Type::None;
     }
     else
     {
@@ -225,12 +226,20 @@ const char* SimpleJson::eatWhiteSpaces(const char* start) const
 // Returns position of the closing one of ,]} character.
 const char* SimpleJson::findPropertyEnd(const char* start) const
 {
-    const char* end = nullptr;
     auto cursor = start;
     if (!start || ':' != *start)
-        return end;
+        return nullptr;
 
-    cursor = eatWhiteSpaces(cursor + 1);
+    return findValueEnd(cursor + 1);
+}
+
+const char* SimpleJson::findValueEnd(const char* start) const
+{
+    auto cursor = start;
+    if (!start)
+        return nullptr;
+
+    cursor = eatWhiteSpaces(cursor);
     if (!cursor)
         return nullptr;
     switch (*cursor)
@@ -353,6 +362,31 @@ bool SimpleJson::getValue(bool& out)
         return true;
     }
     return false;
+}
+
+bool SimpleJson::getValue(std::vector<SimpleJson>& out)
+{
+    if (Type::Array != _type || '[' != *_cursorIn)
+        return false;
+    out.clear();
+    auto cursor = _cursorIn + 1;
+    auto end = cursor;
+    while (cursor < _cursorOut)
+    {
+        end = findValueEnd(cursor);
+        if (end)
+        {
+            out.push_back(SimpleJson::create(cursor, end));
+        }
+        // Go for the next one
+        cursor = eatWhiteSpaces(cursor + 1);
+        if (cursor && ',' != *cursor)
+        {
+            cursor++;
+        }
+        cursor++;
+    }
+    return true;
 }
 
 } // namespace utils
