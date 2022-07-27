@@ -67,6 +67,7 @@ SimpleJson::Type SimpleJson::acquirePrimitiveType()
         return Type::Boolean;
     }
     cursor = findNumberEnd(_cursorIn);
+    char _buffer[33];
     if (cursor == _cursorOut && size() < sizeof(_buffer))
     {
         strncpy(_buffer, _cursorIn, size());
@@ -323,23 +324,25 @@ SimpleJson SimpleJson::find(const std::string& path) const
         return (property.getType() == SimpleJson::Type::Object) ? property.find(token.next) : SimpleJsonNone;
 }
 
-bool SimpleJson::getValue(int64_t& out)
+bool SimpleJson::getValue(int64_t& out) const
 {
     if (Type::Integer != _type)
         return false;
+    char _buffer[33];
     strncpy(_buffer, _cursorIn, size());
     return 1 == sscanf(_buffer, "%" SCNd64, &out);
 }
 
-bool SimpleJson::getValue(double& out)
+bool SimpleJson::getValue(double& out) const
 {
     if (Type::Float != _type)
         return false;
+    char _buffer[33];
     strncpy(_buffer, _cursorIn, size());
     return 1 == sscanf(_buffer, "%lf", &out);
 }
 
-bool SimpleJson::getValue(std::string& out)
+bool SimpleJson::getValue(std::string& out) const
 {
     if (Type::String != _type || size() < 2)
         return false;
@@ -347,7 +350,7 @@ bool SimpleJson::getValue(std::string& out)
     return true;
 }
 
-bool SimpleJson::getValue(bool& out)
+bool SimpleJson::getValue(bool& out) const
 {
     if (Type::Boolean != _type)
         return false;
@@ -364,7 +367,7 @@ bool SimpleJson::getValue(bool& out)
     return false;
 }
 
-bool SimpleJson::getValue(std::vector<SimpleJson>& out)
+bool SimpleJson::getValue(std::vector<SimpleJson>& out) const
 {
     if (Type::Array != _type || '[' != *_cursorIn)
         return false;

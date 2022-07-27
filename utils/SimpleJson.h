@@ -41,14 +41,14 @@ public:
     Type getType() const { return _type; }
     SimpleJson find(const std::string& path) const;
 
-    bool getValue(int64_t& out);
-    bool getValue(double& out);
-    bool getValue(std::string& out);
-    bool getValue(bool& out);
-    bool getValue(std::vector<SimpleJson>& out);
+    bool getValue(int64_t& out) const;
+    bool getValue(double& out) const;
+    bool getValue(std::string& out) const;
+    bool getValue(bool& out) const;
+    bool getValue(std::vector<SimpleJson>& out) const;
 
     template <typename T>
-    T valueOr(const T&& defaultValue)
+    T valueOr(const T&& defaultValue) const
     {
         T outVal;
         return getValue(outVal) ? outVal : defaultValue;
@@ -94,7 +94,6 @@ private:
     const char* _cursorIn;
     const char* _cursorOut;
     Type _type;
-    char _buffer[33];
 };
 
 }; // namespace utils
