@@ -7,45 +7,90 @@ namespace utils
 TEST(SimpleJson, ParseValidJson)
 {
     const std::string json = "{"
-                             "\"name\" : \"value\","
+                             "\"name\" : \"some value\","
                              "\"objName\": {"
                              "    \"innerName\" : \"innerValue\","
+                             "    \"innerEmpty\" : \"\","
                              "    \"innerInteger\" : -3,"
                              "    \"innerDouble\" : -3.1415926,"
                              "    \"innerNull\" : null,"
                              "    \"innerTrue\" : true,"
                              "    \"innerObj\" : {  "
-                             "    \"bigInteger\" : 18446744073709551615,"
+                             "    \"bigInteger\" : 9223372036854775807,"
                              "    },"
                              "    \"innerFalse\" : false,"
                              "}"
                              "}";
     auto simpleJson = SimpleJson::create(json.c_str(), json.length());
-    auto value = simpleJson.find("name");
-    EXPECT_EQ(SimpleJson::Type::String, value.getType());
+    {
+        auto prop = simpleJson.find("name");
+        EXPECT_EQ(SimpleJson::Type::String, prop.getType());
+        auto val = prop.valueOr(std::string("default"));
+        EXPECT_EQ(val, "some value");
+        auto wrongVal = prop.valueOr((int64_t)42);
+        EXPECT_EQ(wrongVal, 42);
+    }
+    {
+        auto prop = simpleJson.find("objName.innerEmpty");
+        EXPECT_EQ(SimpleJson::Type::String, prop.getType());
+        auto val = prop.valueOr(std::string("default"));
+        EXPECT_EQ(val, "");
+        auto wrongVal = prop.valueOr((int64_t)43);
+        EXPECT_EQ(wrongVal, 43);
+    }
+    {
+        auto prop = simpleJson.find("objName");
+        EXPECT_EQ(SimpleJson::Type::Object, prop.getType());
+    }
 
-    value = simpleJson.find("objName");
-    EXPECT_EQ(SimpleJson::Type::Object, value.getType());
+    {
+        auto prop = simpleJson.find("objName.innerName");
+        EXPECT_EQ(SimpleJson::Type::String, prop.getType());
+        std::string out = "value to overwrite";
+        EXPECT_TRUE(prop.getValue(out));
+        EXPECT_EQ(out, "innerValue");
+    }
 
-    value = simpleJson.find("objName.innerName");
-    EXPECT_EQ(SimpleJson::Type::String, value.getType());
+    {
+        auto prop = simpleJson.find("objName.innerInteger");
+        EXPECT_EQ(SimpleJson::Type::Integer, prop.getType());
+        auto val = prop.valueOr((int64_t)42);
+        EXPECT_EQ(val, -3);
+    }
 
-    value = simpleJson.find("objName.innerInteger");
-    EXPECT_EQ(SimpleJson::Type::Integer, value.getType());
+    {
+        auto prop = simpleJson.find("objName.innerDouble");
+        EXPECT_EQ(SimpleJson::Type::Float, prop.getType());
+        auto val = prop.valueOr(42.0);
+        EXPECT_EQ(val, -3.1415926);
+    }
 
-    value = simpleJson.find("objName.innerDouble");
-    EXPECT_EQ(SimpleJson::Type::Float, value.getType());
+    {
+        auto prop = simpleJson.find("objName.innerNull");
+        EXPECT_EQ(SimpleJson::Type::Null, prop.getType());
+    }
 
-    value = simpleJson.find("objName.innerNull");
-    EXPECT_EQ(SimpleJson::Type::Null, value.getType());
+    {
+        auto prop = simpleJson.find("objName.innerTrue");
+        EXPECT_EQ(SimpleJson::Type::Boolean, prop.getType());
+        bool out;
+        EXPECT_TRUE(prop.getValue(out));
+        EXPECT_TRUE(out);
+    }
 
-    value = simpleJson.find("objName.innerTrue");
-    EXPECT_EQ(SimpleJson::Type::Boolean, value.getType());
+    {
+        auto prop = simpleJson.find("objName.innerFalse");
+        EXPECT_EQ(SimpleJson::Type::Boolean, prop.getType());
+        bool out;
+        EXPECT_TRUE(prop.getValue(out));
+        EXPECT_FALSE(out);
+    }
 
-    value = simpleJson.find("objName.innerFalse");
-    EXPECT_EQ(SimpleJson::Type::Boolean, value.getType());
-
-    value = simpleJson.find("objName.innerObj.bigInteger");
-    EXPECT_EQ(SimpleJson::Type::Integer, value.getType());
+    {
+        auto prop = simpleJson.find("objName.innerObj.bigInteger");
+        EXPECT_EQ(SimpleJson::Type::Integer, prop.getType());
+        auto val = prop.valueOr((int64_t)42);
+        EXPECT_EQ(val, 9223372036854775807);
+    }
 }
 } // namespace utils

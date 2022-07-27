@@ -40,6 +40,18 @@ public:
     Type getType() const { return _type; }
     SimpleJson find(const std::string& path) const;
 
+    bool getValue(int64_t& out);
+    bool getValue(double& out);
+    bool getValue(std::string& out);
+    bool getValue(bool& out);
+
+    template <typename T>
+    T valueOr(const T&& defaultValue)
+    {
+        T outVal;
+        return getValue(outVal) ? outVal : defaultValue;
+    }
+
 private:
     static SimpleJson create(const char* cursorIn, const char* cursorOut);
     static SimpleJson createJsonNone() { return SimpleJson(nullptr, 0); }

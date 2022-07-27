@@ -314,4 +314,45 @@ SimpleJson SimpleJson::find(const std::string& path) const
         return (property.getType() == SimpleJson::Type::Object) ? property.find(token.next) : SimpleJsonNone;
 }
 
+bool SimpleJson::getValue(int64_t& out)
+{
+    if (Type::Integer != _type)
+        return false;
+    strncpy(_buffer, _cursorIn, size());
+    return 1 == sscanf(_buffer, "%" SCNd64, &out);
+}
+
+bool SimpleJson::getValue(double& out)
+{
+    if (Type::Float != _type)
+        return false;
+    strncpy(_buffer, _cursorIn, size());
+    return 1 == sscanf(_buffer, "%lf", &out);
+}
+
+bool SimpleJson::getValue(std::string& out)
+{
+    if (Type::String != _type || size() < 2)
+        return false;
+    out = std::string(_cursorIn + 1, size() - 2);
+    return true;
+}
+
+bool SimpleJson::getValue(bool& out)
+{
+    if (Type::Boolean != _type)
+        return false;
+    if (size() == 4 && !strncmp(_cursorIn, "true", 4))
+    {
+        out = true;
+        return true;
+    }
+    if (size() == 5 && !strncmp(_cursorIn, "false", 5))
+    {
+        out = false;
+        return true;
+    }
+    return false;
+}
+
 } // namespace utils
