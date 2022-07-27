@@ -1,5 +1,7 @@
 #include "SimpleJson.h"
 #include "StringTokenizer.h"
+#include <inttypes.h>
+#include <math.h>
 
 namespace utils
 {
@@ -42,8 +44,46 @@ void SimpleJson::validateFast()
     }
     else
     {
-        _type = Type::Value;
+        _type = acquirePrimitiveType();
     }
+}
+
+SimpleJson::Type SimpleJson::acquirePrimitiveType()
+{
+    auto cursor = findStringEnd(_cursorIn);
+    if (cursor == _cursorOut)
+    {
+        return Type::String;
+    }
+    cursor = findNullEnd(_cursorIn);
+    if (cursor == _cursorOut)
+    {
+        return Type::Null;
+    }
+    cursor = findBooleanEnd(_cursorIn);
+    if (cursor == _cursorOut)
+    {
+        return Type::Boolean;
+    }
+    cursor = findNumberEnd(_cursorIn);
+    if (cursor == _cursorOut && size() < sizeof(_buffer))
+    {
+        strncpy(_buffer, _cursorIn, size());
+        int64_t intVal;
+        double floatVal, intPart;
+        auto readInt = sscanf(_buffer, "%" SCNd64, &intVal);
+        auto readFloat = sscanf(_buffer, "%lf", &floatVal);
+        if (readInt && readFloat)
+        {
+            // Return Float if we have fractional part. Otherwise Integer should suffice.
+            return modf(floatVal, &intPart) != 0 ? Type::Float : Type::Integer;
+        }
+        if (readInt && !readFloat)
+            return Type::Integer;
+        if (!readInt && readFloat)
+            return Type::Float;
+    }
+    return Type::None;
 }
 
 // Finds the end of the string.
@@ -56,7 +96,7 @@ const char* SimpleJson::findStringEnd(const char* start) const
         return end;
 
     auto cursor = start;
-    while (++cursor < _cursorOut)
+    while (++cursor <= _cursorOut)
     {
         if ('\\' == *cursor)
         {
@@ -109,9 +149,9 @@ const char* SimpleJson::findEnd(const char* start) const
 
 const char* SimpleJson::findMatchEnd(const char* start, const std::string& match) const
 {
-    if (start + match.length() > _cursorOut)
+    if (start + match.length() - 1 > _cursorOut)
         return nullptr;
-    return strncmp(start, match.c_str(), match.length()) ? nullptr : start + match.length();
+    return strncmp(start, match.c_str(), match.length()) ? nullptr : start + match.length() - 1;
 }
 const char* SimpleJson::findBooleanEnd(const char* start) const
 {
@@ -145,7 +185,7 @@ const char* SimpleJson::findNumberEnd(const char* start) const
             continue;
         default:
             if (!std::isdigit(*cursor))
-                break;
+                return cursor - 1;
         }
     }
 

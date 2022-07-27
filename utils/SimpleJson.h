@@ -12,7 +12,11 @@ public:
     enum Type
     {
         None,
-        Value,
+        Boolean,
+        Null,
+        String,
+        Integer,
+        Float,
         Object,
         Array
     };
@@ -68,12 +72,14 @@ private:
     const char* findArrayEnd(const char* start) const { return findEnd<'[', ']'>(start); };
 
     void validateFast();
-    size_t size() const { return _cursorOut - _cursorIn; }
+    Type acquirePrimitiveType();
+    size_t size() const { return _cursorOut - _cursorIn + 1; }
 
-protected:
+private:
     const char* _cursorIn;
     const char* _cursorOut;
     Type _type;
+    char _buffer[33];
 };
 
 }; // namespace utils
