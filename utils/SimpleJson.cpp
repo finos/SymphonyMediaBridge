@@ -3,8 +3,24 @@
 #include <inttypes.h>
 #include <math.h>
 
+#define SIMPLE_JSON_CACHE_DIAG 0
+
 namespace utils
 {
+template <size_t SIZE>
+int32_t TJsonPathCache<SIZE>::fnvHash(const char* str, size_t len)
+{
+    static constexpr int32_t FNV1_32_INIT = 0x811c9dc5;
+    unsigned char* s = (unsigned char*)str;
+    int32_t hval = FNV1_32_INIT;
+
+    while (len--)
+    {
+        hval += (hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
+        hval ^= (int32_t)*s++;
+    }
+    return hval;
+}
 
 const SimpleJson SimpleJson::SimpleJsonNone = SimpleJson::createJsonNone();
 
@@ -78,6 +94,7 @@ SimpleJson::Type SimpleJson::acquirePrimitiveType()
     if (cursor == _cursorOut && size() < sizeof(_buffer))
     {
         strncpy(_buffer, _cursorIn, size());
+        _buffer[size()] = 0;
         int64_t intVal;
         double floatVal, intPart;
         auto readInt = sscanf(_buffer, "%" SCNd64, &intVal);
@@ -164,24 +181,24 @@ const char* SimpleJson::findEnd(const char* start) const
     return end;
 }
 
-const char* SimpleJson::findMatchEnd(const char* start, const std::string& match) const
+const char* SimpleJson::findMatchEnd(const char* start, const char* const match, size_t matchLen) const
 {
-    if (start + match.length() - 1 > _cursorOut)
+    if (start + matchLen - 1 > _cursorOut)
     {
         return nullptr;
     }
-    return strncmp(start, match.c_str(), match.length()) ? nullptr : start + match.length() - 1;
+    return strncmp(start, match, matchLen) ? nullptr : start + matchLen - 1;
 }
 
 const char* SimpleJson::findBooleanEnd(const char* start) const
 {
-    auto result = findMatchEnd(start, "true");
-    return result ? result : findMatchEnd(start, "false");
+    auto result = findMatchEnd(start, "true", 4);
+    return result ? result : findMatchEnd(start, "false", 5);
 }
 
 const char* SimpleJson::findNullEnd(const char* start) const
 {
-    return findMatchEnd(start, "null");
+    return findMatchEnd(start, "null", 4);
 }
 
 // Finds the end of the number.
@@ -285,10 +302,10 @@ const char* SimpleJson::findValueEnd(const char* start) const
 // Finds the property on the current level.
 // start should point at the " or whitespace character.
 // Returns SimpleJson object of the property's value
-SimpleJson SimpleJson::findProperty(const char* start, const std::string& name) const
+SimpleJson SimpleJson::findProperty(const char* start, const char* const name, const size_t nameLen) const
 {
     auto cursor = start;
-    if (name.empty() || !start || ('"' != *start && !std::isspace(*start)))
+    if (!nameLen || !start || ('"' != *start && !std::isspace(*start)))
     {
         return SimpleJsonNone;
     }
@@ -332,7 +349,7 @@ SimpleJson SimpleJson::findProperty(const char* start, const std::string& name) 
             return SimpleJsonNone;
         }
         // Check whether it is our property.
-        if (!strncmp(propName + 1, name.c_str(), name.length()))
+        if (!strncmp(propName + 1, name, nameLen))
         {
             return SimpleJson::create(valueStart, valueEnd);
         }
@@ -352,44 +369,76 @@ SimpleJson SimpleJson::findProperty(const char* start, const std::string& name) 
     return SimpleJsonNone;
 }
 
-SimpleJson SimpleJson::find(const std::string& path)
+SimpleJson SimpleJson::findInCache(const char* const path, const size_t pathLength, const JsonPathCache& cache)
 {
-    auto node = _nodeCache.find(path);
-    if (node != _nodeCache.end())
+    const char* in;
+    const char* out;
+    if (cache.get(path, pathLength, in, out))
     {
-        return node->second;
+        return SimpleJson::create(in, out);
     }
-    std::string cachedPath = "";
-    return findInternal(path, cachedPath, _nodeCache);
+    return SimpleJsonNone;
 }
 
-SimpleJson SimpleJson::findInternal(const std::string& path,
-    std::string& cachedPath,
-    std::map<std::string, SimpleJson>& nodeCache)
+SimpleJson SimpleJson::find(const char* const path)
 {
-    auto token = StringTokenizer::tokenize(path.c_str(), path.length(), '.');
+    auto node = findInCache(path, strlen(path), _cache);
+    if (node.getType() != Type::None)
+    {
+#if SIMPLE_JSON_CACHE_DIAG
+        printf("\n Found in cache for path %s\n", path);
+#endif
+        return node;
+    }
+    char cachedPath[1024];
+    cachedPath[0] = 0;
+    return findInternal(path, cachedPath, 0, _cache);
+}
+
+SimpleJson SimpleJson::findInternal(const char* const path,
+    char* const cachedPath,
+    size_t cachedPathSize,
+    JsonPathCache& cache)
+{
+    auto token = StringTokenizer::tokenize(path, strlen(path), '.');
     if (token.empty() || Type::Object != _type)
     {
         return SimpleJsonNone;
     }
 
-    if (!cachedPath.empty())
+    if (cachedPathSize)
     {
-        cachedPath += '.';
+        strcat(cachedPath, ".");
+        cachedPathSize++;
     }
-    cachedPath += token.str();
+    strncpy(cachedPath + cachedPathSize, token.start, token.length);
+    cachedPathSize += token.length;
+    cachedPath[cachedPathSize] = 0;
 
-    auto propIt = nodeCache.find(cachedPath);
-    auto property = propIt == nodeCache.end() ? findProperty(_cursorIn + 1, token.str()) : propIt->second;
-    nodeCache.emplace(cachedPath, property);
+    auto property = findInCache(cachedPath, cachedPathSize, cache);
+    if (property.getType() == Type::None)
+    {
+        property = findProperty(_cursorIn + 1, token.start, token.length);
+        cache.put(cachedPath, cachedPathSize, property._cursorIn, property._cursorOut);
+#if SIMPLE_JSON_CACHE_DIAG
+        printf("\n Put in cache path %s\n", cachedPath);
+#endif
+    }
+#if SIMPLE_JSON_CACHE_DIAG
+    else
+    {
+        printf("\n Found in cache for path %s\n", cachedPath);
+    }
+#endif
 
     if (property.getType() == SimpleJson::Type::None || !token.next)
     {
         return property;
     }
 
-    return (property.getType() == SimpleJson::Type::Object) ? property.findInternal(token.next, cachedPath, nodeCache)
-                                                            : SimpleJsonNone;
+    return (property.getType() == SimpleJson::Type::Object)
+        ? property.findInternal(token.next, cachedPath, cachedPathSize, cache)
+        : SimpleJsonNone;
 }
 
 bool SimpleJson::getValue(int64_t& out) const
@@ -414,13 +463,14 @@ bool SimpleJson::getValue(double& out) const
     return 1 == sscanf(_buffer, "%lf", &out);
 }
 
-bool SimpleJson::getValue(std::string& out) const
+bool SimpleJson::getStringValue(const char*& out, size_t& outLen) const
 {
     if (Type::String != _type || size() < 2)
     {
         return false;
     }
-    out = std::string(_cursorIn + 1, size() - 2);
+    out = _cursorIn + 1;
+    outLen = size() - 2;
     return true;
 }
 

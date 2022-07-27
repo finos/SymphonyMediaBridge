@@ -5,6 +5,14 @@
 
 namespace utils
 {
+
+std::string getStringValue(const SimpleJson& json)
+{
+    const char* str;
+    size_t len;
+    EXPECT_TRUE(json.getStringValue(str, len));
+    return std::string(str, len);
+}
 TEST(SimpleJson, ParseValidJson)
 {
     const std::string json = "{"
@@ -27,7 +35,7 @@ TEST(SimpleJson, ParseValidJson)
     {
         auto prop = simpleJson.find("name");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        auto val = prop.valueOr(std::string("default"));
+        auto val = getStringValue(prop);
         EXPECT_EQ(val, "some value");
         auto wrongVal = prop.valueOr((int64_t)42);
         EXPECT_EQ(wrongVal, 42);
@@ -35,7 +43,7 @@ TEST(SimpleJson, ParseValidJson)
     {
         auto prop = simpleJson.find("objName.innerEmpty");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        auto val = prop.valueOr(std::string("default"));
+        auto val = getStringValue(prop);
         EXPECT_EQ(val, "");
         auto wrongVal = prop.valueOr((int64_t)43);
         EXPECT_EQ(wrongVal, 43);
@@ -49,15 +57,13 @@ TEST(SimpleJson, ParseValidJson)
         EXPECT_EQ(SimpleJson::Type::Object, prop.getType());
         prop = prop.find("innerName");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        std::string out = "value to overwrite";
-        EXPECT_TRUE(prop.getValue(out));
+        std::string out = getStringValue(prop);
         EXPECT_EQ(out, "innerValue");
     }
     {
         auto prop = simpleJson.find("objName.innerName");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        std::string out = "value to overwrite";
-        EXPECT_TRUE(prop.getValue(out));
+        std::string out = getStringValue(prop);
         EXPECT_EQ(out, "innerValue");
     }
     {
@@ -144,7 +150,7 @@ TEST(SimpleJson, ParseUMM)
 
     auto simpleJson = SimpleJson::create(json.c_str(), json.length());
     auto value = simpleJson.find("type");
-    EXPECT_EQ(value.valueOr(std::string("")), "user-media-map");
+    EXPECT_EQ(getStringValue(value), "user-media-map");
 
     std::vector<SimpleJson> endpoints, ssrc;
     {
@@ -152,7 +158,7 @@ TEST(SimpleJson, ParseUMM)
         value.getValue(endpoints);
         EXPECT_EQ(endpoints.size(), 1);
         value = endpoints[0].find("endpoint-id");
-        EXPECT_EQ(value.valueOr(std::string("")), "b469945f-856b-38c4-cf1b-0000fb452938");
+        EXPECT_EQ(getStringValue(value), "b469945f-856b-38c4-cf1b-0000fb452938");
         value = endpoints[0].find("ssrc");
         value.getValue(ssrc);
         EXPECT_EQ(ssrc.size(), 1);
@@ -164,11 +170,34 @@ TEST(SimpleJson, ParseUMM)
         value.getValue(endpoints);
         EXPECT_EQ(endpoints.size(), 1);
         value = endpoints[0].find("endpoint-id");
-        EXPECT_EQ(value.valueOr(std::string("")), "b469945f-856b-38c4-cf1b-0000fb452938");
+        EXPECT_EQ(getStringValue(value), "b469945f-856b-38c4-cf1b-0000fb452938");
         value = endpoints[0].find("ssrc");
         value.getValue(ssrc);
         EXPECT_EQ(ssrc.size(), 1);
         EXPECT_EQ(ssrc[0].valueOr(int64_t(42)), 919268345);
     }
+}
+
+TEST(SimpleJson, CacheTest)
+{
+    const std::string json = "{"
+                             "\"name\" : \"some value\","
+                             "\"objName\": {"
+                             "    \"innerName\" : \"innerValue\","
+                             "    \"innerEmpty\" : \"\","
+                             "    \"innerInteger\" : -3,"
+                             "    \"innerDouble\" : -3.1415926,"
+                             "    \"innerNull\" : null,"
+                             "    \"innerTrue\" : true,"
+                             "    \"innerObj\" : {  "
+                             "    \"bigInteger\" : 9223372036854775807,"
+                             "    \"someDouble\" : 0.154e-10"
+                             "    },"
+                             "    \"innerFalse\" : false,"
+                             "}"
+                             "}";
+    auto simpleJson = SimpleJson::create(json.c_str(), json.length());
+    auto value = simpleJson.find("objName");
+    value = simpleJson.find("objName");
 }
 } // namespace utils
