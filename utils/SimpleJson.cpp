@@ -491,7 +491,7 @@ bool SimpleJson::getValue(bool& out) const
     return false;
 }
 
-bool SimpleJson::getValue(std::vector<SimpleJson>& out) const
+bool SimpleJson::getArrayValue(SimpleJsonArray& out) const
 {
     if (Type::Array != _type || '[' != *_cursorIn)
     {
@@ -505,7 +505,7 @@ bool SimpleJson::getValue(std::vector<SimpleJson>& out) const
         end = findValueEnd(cursor);
         if (end)
         {
-            out.push_back(SimpleJson::create(cursor, end));
+            out.push_back(cursor, end);
         }
         // Go for the next one
         cursor = eatWhiteSpaces(end + 1);

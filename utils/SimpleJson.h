@@ -1,12 +1,11 @@
 #pragma once
 
 #include <assert.h>
-#include <vector>
+#include <cstdint>
+#include <memory>
+#include <stdio.h>
 
 #define SIMPLE_JSON_CACHE_DIAG 0
-#if SIMPLE_JSON_CACHE_DIAG
-#include <stdio.h>
-#endif
 
 namespace utils
 {
@@ -51,8 +50,15 @@ private:
 
 using JsonPathCache = TJsonPathCache<64>;
 
+template <size_t MAX_SIZE>
+class TSimpleJsonArray;
+
+using SimpleJsonArray = TSimpleJsonArray<100>;
+
 class SimpleJson
 {
+    friend SimpleJsonArray;
+
 public:
     enum Type
     {
@@ -90,7 +96,7 @@ public:
     bool getValue(double& out) const;
     bool getStringValue(const char*& out, size_t& outLen) const;
     bool getValue(bool& out) const;
-    bool getValue(std::vector<SimpleJson>& out) const;
+    bool getArrayValue(SimpleJsonArray& out) const;
 
     template <typename T>
     T valueOr(const T&& defaultValue) const
@@ -144,6 +150,89 @@ private:
     const char* _cursorOut;
     Type _type;
     JsonPathCache _cache;
+};
+
+template <size_t MAX_SIZE>
+class TSimpleJsonArray
+{
+public:
+    struct ArrayEntry
+    {
+        const char* cursorIn;
+        const char* cursorOut;
+        SimpleJson toJson() const { return SimpleJson::create(cursorIn, cursorOut); }
+    };
+    class IterBase
+    {
+    public:
+        IterBase(ArrayEntry* entries, size_t pos, size_t endPos) : _elements(entries), _pos(pos), _end(endPos) {}
+        IterBase(const IterBase& it) : _elements(it._elements), _pos(it._pos), _end(it._end) {}
+
+        IterBase& operator++()
+        {
+            if (_pos == _end)
+            {
+                return *this; // cannot advance a logical end iterator
+            }
+            ++_pos;
+            return *this;
+        }
+
+        ArrayEntry& operator*() { return _elements[_pos]; }
+        ArrayEntry* operator->() { return &_elements[_pos]; }
+        const ArrayEntry& operator*() const { return _elements[_pos]; }
+        const ArrayEntry* operator->() const { return &_elements[_pos]; }
+        bool operator==(const IterBase& it) const { return _pos == it._pos || (isEnd() && it.isEnd()); }
+
+        bool operator!=(const IterBase& it) const
+        {
+            if (!isEnd() && !it.isEnd())
+            {
+                return _pos != it._pos;
+            }
+            return isEnd() != it.isEnd();
+        }
+
+    private:
+        bool isEnd() const { return _pos == _end; }
+        ArrayEntry* _elements;
+        size_t _pos;
+        size_t _end;
+    };
+
+    typedef const IterBase const_iterator;
+    typedef IterBase iterator;
+
+    void clear() { _size = 0; }
+    size_t capacity() const { return MAX_SIZE; }
+    size_t size() const { return _size; }
+
+    const_iterator cbegin() const { return const_iterator(const_cast<ArrayEntry*>(&_entries[0]), 0, _size); }
+    const_iterator cend() const { return const_iterator(const_cast<ArrayEntry*>(&_entries[0]), _size + 1, _size + 1); }
+    const_iterator begin() const { return cbegin(); }
+    const_iterator end() const { return cend(); }
+    iterator cbegin() { return iterator(_entries, 0, _size); }
+    iterator cend() { return iterator(_entries, _size + 1, _size + 1); }
+
+    void push_back(const char* cursorIn, const char* cursorOut)
+    {
+        if (_size + 1 < MAX_SIZE)
+        {
+            _size++;
+            _entries[_size - 1].cursorIn = cursorIn;
+            _entries[_size - 1].cursorOut = cursorOut;
+        }
+    }
+
+    ArrayEntry& operator[](size_t i)
+    {
+        assert(i < _size);
+        return _entries[i];
+    }
+
+private:
+    ArrayEntry _entries[MAX_SIZE];
+    size_t _size = 0;
 };
 
 }; // namespace utils

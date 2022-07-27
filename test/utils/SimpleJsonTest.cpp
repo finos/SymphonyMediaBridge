@@ -127,18 +127,17 @@ TEST(SimpleJson, ParseArray)
                              "}"
                              "}";
     auto simpleJson = SimpleJson::create(json.c_str(), json.length());
-    auto propArray = simpleJson.find("Fibonacci.numbers");
-    EXPECT_EQ(SimpleJson::Type::Array, propArray.getType());
-
-    std::vector<SimpleJson> jsonArray;
-    EXPECT_TRUE(propArray.getValue(jsonArray));
-    EXPECT_EQ(jsonArray.size(), 8);
     int64_t expected[] = {1, 1, 2, 3, 5, 8, 13, 21};
+
+    SimpleJsonArray array;
+    EXPECT_TRUE(simpleJson.find("Fibonacci.numbers").getArrayValue(array));
+    EXPECT_EQ(8, array.size());
     int count = 0;
-    for (auto& it : jsonArray)
+    for (const auto& it : array)
     {
-        auto value = it.valueOr((int64_t)-1);
-        EXPECT_EQ(value, expected[count++]);
+        int64_t val;
+        EXPECT_TRUE(it.toJson().getValue(val));
+        EXPECT_EQ(val, expected[count++]);
     }
 }
 
@@ -151,30 +150,26 @@ TEST(SimpleJson, ParseUMM)
     auto simpleJson = SimpleJson::create(json.c_str(), json.length());
     auto value = simpleJson.find("type");
     EXPECT_EQ(getStringValue(value), "user-media-map");
+    SimpleJsonArray array, ssrc;
 
-    std::vector<SimpleJson> endpoints, ssrc;
     {
-        value = simpleJson.find("video-endpoints");
-        value.getValue(endpoints);
-        EXPECT_EQ(endpoints.size(), 1);
-        value = endpoints[0].find("endpoint-id");
+        EXPECT_TRUE(simpleJson.find("video-endpoints").getArrayValue(array));
+        EXPECT_EQ(array.size(), 1);
+        value = array[0].toJson().find("endpoint-id");
         EXPECT_EQ(getStringValue(value), "b469945f-856b-38c4-cf1b-0000fb452938");
-        value = endpoints[0].find("ssrc");
-        value.getValue(ssrc);
+        EXPECT_TRUE(array[0].toJson().find("ssrcs").getArrayValue(ssrc));
         EXPECT_EQ(ssrc.size(), 1);
-        EXPECT_EQ(ssrc[0].valueOr(int64_t(42)), 4215270161);
+        EXPECT_EQ(ssrc[0].toJson().valueOr(int64_t(42)), 4215270161);
     }
 
     {
-        value = simpleJson.find("audio-endpoints");
-        value.getValue(endpoints);
-        EXPECT_EQ(endpoints.size(), 1);
-        value = endpoints[0].find("endpoint-id");
+        EXPECT_TRUE(simpleJson.find("audio-endpoints").getArrayValue(array));
+        EXPECT_EQ(array.size(), 1);
+        value = array[0].toJson().find("endpoint-id");
         EXPECT_EQ(getStringValue(value), "b469945f-856b-38c4-cf1b-0000fb452938");
-        value = endpoints[0].find("ssrc");
-        value.getValue(ssrc);
+        EXPECT_TRUE(array[0].toJson().find("ssrcs").getArrayValue(ssrc));
         EXPECT_EQ(ssrc.size(), 1);
-        EXPECT_EQ(ssrc[0].valueOr(int64_t(42)), 919268345);
+        EXPECT_EQ(ssrc[0].toJson().valueOr(int64_t(42)), 919268345);
     }
 }
 } // namespace utils
