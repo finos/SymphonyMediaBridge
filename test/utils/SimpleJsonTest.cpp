@@ -18,6 +18,7 @@ TEST(SimpleJson, ParseValidJson)
                              "    \"innerTrue\" : true,"
                              "    \"innerObj\" : {  "
                              "    \"bigInteger\" : 9223372036854775807,"
+                             "    \"someDouble\" : 0.154e-10"
                              "    },"
                              "    \"innerFalse\" : false,"
                              "}"
@@ -59,26 +60,22 @@ TEST(SimpleJson, ParseValidJson)
         EXPECT_TRUE(prop.getValue(out));
         EXPECT_EQ(out, "innerValue");
     }
-
     {
         auto prop = simpleJson.find("objName.innerInteger");
         EXPECT_EQ(SimpleJson::Type::Integer, prop.getType());
         auto val = prop.valueOr((int64_t)42);
         EXPECT_EQ(val, -3);
     }
-
     {
         auto prop = simpleJson.find("objName.innerDouble");
         EXPECT_EQ(SimpleJson::Type::Float, prop.getType());
         auto val = prop.valueOr(42.0);
         EXPECT_EQ(val, -3.1415926);
     }
-
     {
         auto prop = simpleJson.find("objName.innerNull");
         EXPECT_EQ(SimpleJson::Type::Null, prop.getType());
     }
-
     {
         auto prop = simpleJson.find("objName.innerTrue");
         EXPECT_EQ(SimpleJson::Type::Boolean, prop.getType());
@@ -86,7 +83,6 @@ TEST(SimpleJson, ParseValidJson)
         EXPECT_TRUE(prop.getValue(out));
         EXPECT_TRUE(out);
     }
-
     {
         auto prop = simpleJson.find("objName.innerFalse");
         EXPECT_EQ(SimpleJson::Type::Boolean, prop.getType());
@@ -94,12 +90,17 @@ TEST(SimpleJson, ParseValidJson)
         EXPECT_TRUE(prop.getValue(out));
         EXPECT_FALSE(out);
     }
-
     {
         auto prop = simpleJson.find("objName.innerObj.bigInteger");
         EXPECT_EQ(SimpleJson::Type::Integer, prop.getType());
         auto val = prop.valueOr((int64_t)42);
         EXPECT_EQ(val, 9223372036854775807);
+    }
+    {
+        auto prop = simpleJson.find("objName.innerObj.someDouble");
+        EXPECT_EQ(SimpleJson::Type::Float, prop.getType());
+        auto val = prop.valueOr(42.0);
+        EXPECT_EQ(val, 0.154e-10);
     }
 }
 

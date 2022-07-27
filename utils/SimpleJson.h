@@ -1,6 +1,7 @@
 #pragma once
 
 #include <assert.h>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,7 @@ public:
     static SimpleJson create(const char* cursorIn, size_t length);
     static const SimpleJson SimpleJsonNone;
 
+    SimpleJson() : _cursorIn(nullptr), _cursorOut(nullptr), _type(Type::None) {}
     SimpleJson(const SimpleJson& ref)
     {
         _cursorIn = ref._cursorIn;
@@ -39,7 +41,7 @@ public:
     }
 
     Type getType() const { return _type; }
-    SimpleJson find(const std::string& path) const;
+    SimpleJson find(const std::string& path);
 
     bool getValue(int64_t& out) const;
     bool getValue(double& out) const;
@@ -72,6 +74,9 @@ private:
     template <char OPEN_CHAR, char CLOSE_CHAR>
     const char* findEnd(const char* start) const;
 
+    SimpleJson findInternal(const std::string& path,
+        std::string& cachedPath,
+        std::map<std::string, SimpleJson>& nodeCache);
     const char* findMatchEnd(const char* start, const std::string& match) const;
     SimpleJson findProperty(const char* start, const std::string& name) const;
 
@@ -93,6 +98,7 @@ private:
     const char* _cursorIn;
     const char* _cursorOut;
     Type _type;
+    std::map<std::string, SimpleJson> _nodeCache;
 };
 
 }; // namespace utils

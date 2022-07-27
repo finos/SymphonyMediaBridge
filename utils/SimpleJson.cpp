@@ -303,17 +303,40 @@ SimpleJson SimpleJson::findProperty(const char* start, const std::string& name) 
     return SimpleJsonNone;
 }
 
-SimpleJson SimpleJson::find(const std::string& path) const
+SimpleJson SimpleJson::find(const std::string& path)
+{
+    auto node = _nodeCache.find(path);
+    if (node != _nodeCache.end())
+    {
+        return node->second;
+    }
+    std::string cachedPath = "";
+    return findInternal(path, cachedPath, _nodeCache);
+}
+
+SimpleJson SimpleJson::findInternal(const std::string& path,
+    std::string& cachedPath,
+    std::map<std::string, SimpleJson>& nodeCache)
 {
     auto token = StringTokenizer::tokenize(path.c_str(), path.length(), '.');
     if (token.empty() || Type::Object != _type)
         return SimpleJsonNone;
 
-    auto property = findProperty(_cursorIn + 1, token.str());
+    if (!cachedPath.empty())
+    {
+        cachedPath += '.';
+    }
+    cachedPath += token.str();
+
+    auto propIt = nodeCache.find(cachedPath);
+    auto property = propIt == nodeCache.end() ? findProperty(_cursorIn + 1, token.str()) : propIt->second;
+    nodeCache.emplace(cachedPath, property);
+
     if (property.getType() == SimpleJson::Type::None || !token.next)
         return property;
-    else
-        return (property.getType() == SimpleJson::Type::Object) ? property.find(token.next) : SimpleJsonNone;
+
+    return (property.getType() == SimpleJson::Type::Object) ? property.findInternal(token.next, cachedPath, nodeCache)
+                                                            : SimpleJsonNone;
 }
 
 bool SimpleJson::getValue(int64_t& out) const
