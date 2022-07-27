@@ -3,6 +3,11 @@
 #include <assert.h>
 #include <vector>
 
+#define SIMPLE_JSON_CACHE_DIAG 0
+#if SIMPLE_JSON_CACHE_DIAG
+#include <stdio.h>
+#endif
+
 namespace utils
 {
 
@@ -17,6 +22,12 @@ struct TJsonPathCache
     {
         auto hash = fnvHash(path, pathLength);
         size_t bin = hash % SIZE;
+#if SIMPLE_JSON_CACHE_DIAG
+        if (key[bin] != 0 && key[bin] != hash)
+        {
+            printf("\n Cache collision!\n");
+        }
+#endif
         key[bin] = hash;
         cursorIn[bin] = in;
         cursorOut[bin] = out;
@@ -38,7 +49,7 @@ private:
     static int32_t fnvHash(const char* str, size_t len);
 };
 
-using JsonPathCache = TJsonPathCache<100>;
+using JsonPathCache = TJsonPathCache<64>;
 
 class SimpleJson
 {

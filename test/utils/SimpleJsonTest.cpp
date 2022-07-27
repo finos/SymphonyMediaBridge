@@ -177,27 +177,4 @@ TEST(SimpleJson, ParseUMM)
         EXPECT_EQ(ssrc[0].valueOr(int64_t(42)), 919268345);
     }
 }
-
-TEST(SimpleJson, CacheTest)
-{
-    const std::string json = "{"
-                             "\"name\" : \"some value\","
-                             "\"objName\": {"
-                             "    \"innerName\" : \"innerValue\","
-                             "    \"innerEmpty\" : \"\","
-                             "    \"innerInteger\" : -3,"
-                             "    \"innerDouble\" : -3.1415926,"
-                             "    \"innerNull\" : null,"
-                             "    \"innerTrue\" : true,"
-                             "    \"innerObj\" : {  "
-                             "    \"bigInteger\" : 9223372036854775807,"
-                             "    \"someDouble\" : 0.154e-10"
-                             "    },"
-                             "    \"innerFalse\" : false,"
-                             "}"
-                             "}";
-    auto simpleJson = SimpleJson::create(json.c_str(), json.length());
-    auto value = simpleJson.find("objName");
-    value = simpleJson.find("objName");
-}
 } // namespace utils

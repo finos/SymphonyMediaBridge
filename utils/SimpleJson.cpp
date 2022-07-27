@@ -3,8 +3,6 @@
 #include <inttypes.h>
 #include <math.h>
 
-#define SIMPLE_JSON_CACHE_DIAG 0
-
 namespace utils
 {
 template <size_t SIZE>
