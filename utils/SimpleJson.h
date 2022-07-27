@@ -77,7 +77,6 @@ private:
 
     const char* eatDigits(const char* start) const;
     const char* eatWhiteSpaces(const char* start) const;
-    const char* findPropertyEnd(const char* start) const;
     const char* findValueEnd(const char* start) const;
     const char* findStringEnd(const char* start) const;
     const char* findBooleanEnd(const char* start) const;

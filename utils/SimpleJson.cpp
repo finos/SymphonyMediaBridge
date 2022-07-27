@@ -223,17 +223,9 @@ const char* SimpleJson::eatWhiteSpaces(const char* start) const
 }
 
 // Finds the end of the property.
-// start should point at the : character.
-// Returns position of the closing one of ,]} character.
-const char* SimpleJson::findPropertyEnd(const char* start) const
-{
-    auto cursor = start;
-    if (!start || ':' != *start)
-        return nullptr;
-
-    return findValueEnd(cursor + 1);
-}
-
+// start should point at the the first char after :.
+// Returns position of the last char beloning to the value.
+// including " or }.
 const char* SimpleJson::findValueEnd(const char* start) const
 {
     auto cursor = start;
@@ -277,7 +269,7 @@ SimpleJson SimpleJson::findProperty(const char* start, const std::string& name) 
             return SimpleJsonNone;
         if ('"' != *cursor)
             return SimpleJsonNone;
-        // Read property name
+        // Read property name.
         auto propName = cursor;
         auto propNameEnd = findStringEnd(cursor);
         if (!propNameEnd)
@@ -287,19 +279,19 @@ SimpleJson SimpleJson::findProperty(const char* start, const std::string& name) 
             return SimpleJsonNone;
         if (':' != *cursor)
             return SimpleJsonNone;
-        // Read property value
+        // Read property value.
         auto valueStart = cursor + 1;
         if (valueStart >= _cursorOut)
             return SimpleJsonNone;
-        auto valueEnd = findPropertyEnd(cursor);
+        auto valueEnd = findValueEnd(cursor + 1);
         if (!valueEnd)
             return SimpleJsonNone;
-        // Check whether it is our property
+        // Check whether it is our property.
         if (!strncmp(propName + 1, name.c_str(), name.length()))
         {
             return SimpleJson::create(valueStart, valueEnd);
         }
-        // Go for the next one
+        // Go for the next one.
         cursor = eatWhiteSpaces(valueEnd + 1);
         if (!cursor)
             return SimpleJsonNone;
