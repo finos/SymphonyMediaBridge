@@ -1,5 +1,6 @@
 #pragma once
 
+#include "utils/Optional.h"
 #include <assert.h>
 #include <cstdint>
 #include <memory>
@@ -92,18 +93,11 @@ public:
     Type getType() const { return _type; }
     SimpleJson find(const char* const path);
 
-    bool getValue(int64_t& out) const;
-    bool getValue(double& out) const;
+    Optional<int64_t> getIntValue() const;
+    Optional<double> getFloatValue() const;
     bool getStringValue(const char*& out, size_t& outLen) const;
-    bool getValue(bool& out) const;
-    bool getArrayValue(SimpleJsonArray& out) const;
-
-    template <typename T>
-    T valueOr(const T&& defaultValue) const
-    {
-        T outVal;
-        return getValue(outVal) ? outVal : defaultValue;
-    }
+    Optional<bool> getBoolValue() const;
+    Optional<SimpleJsonArray> getArrayValue() const;
 
 private:
     static SimpleJson create(const char* cursorIn, const char* cursorOut);

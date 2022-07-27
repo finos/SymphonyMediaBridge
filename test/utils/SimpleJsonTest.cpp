@@ -37,16 +37,16 @@ TEST(SimpleJson, ParseValidJson)
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
         auto val = getStringValue(prop);
         EXPECT_EQ(val, "some value");
-        auto wrongVal = prop.valueOr((int64_t)42);
-        EXPECT_EQ(wrongVal, 42);
+        auto wrongVal = prop.getIntValue();
+        EXPECT_FALSE(wrongVal.isSet());
     }
     {
         auto prop = simpleJson.find("objName.innerEmpty");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
         auto val = getStringValue(prop);
         EXPECT_EQ(val, "");
-        auto wrongVal = prop.valueOr((int64_t)43);
-        EXPECT_EQ(wrongVal, 43);
+        auto wrongVal = prop.getIntValue();
+        EXPECT_FALSE(wrongVal.isSet());
     }
     {
         auto prop = simpleJson.find("objName");
@@ -69,14 +69,16 @@ TEST(SimpleJson, ParseValidJson)
     {
         auto prop = simpleJson.find("objName.innerInteger");
         EXPECT_EQ(SimpleJson::Type::Integer, prop.getType());
-        auto val = prop.valueOr((int64_t)42);
-        EXPECT_EQ(val, -3);
+        auto val = prop.getIntValue();
+        EXPECT_TRUE(val.isSet());
+        EXPECT_EQ(val.get(), -3);
     }
     {
         auto prop = simpleJson.find("objName.innerDouble");
         EXPECT_EQ(SimpleJson::Type::Float, prop.getType());
-        auto val = prop.valueOr(42.0);
-        EXPECT_EQ(val, -3.1415926);
+        auto val = prop.getFloatValue();
+        EXPECT_TRUE(val.isSet());
+        EXPECT_EQ(val.get(), -3.1415926);
     }
     {
         auto prop = simpleJson.find("objName.innerNull");
@@ -85,28 +87,30 @@ TEST(SimpleJson, ParseValidJson)
     {
         auto prop = simpleJson.find("objName.innerTrue");
         EXPECT_EQ(SimpleJson::Type::Boolean, prop.getType());
-        bool out;
-        EXPECT_TRUE(prop.getValue(out));
-        EXPECT_TRUE(out);
+        auto val = prop.getBoolValue();
+        EXPECT_TRUE(val.isSet());
+        EXPECT_TRUE(val.get());
     }
     {
         auto prop = simpleJson.find("objName.innerFalse");
         EXPECT_EQ(SimpleJson::Type::Boolean, prop.getType());
-        bool out;
-        EXPECT_TRUE(prop.getValue(out));
-        EXPECT_FALSE(out);
+        auto val = prop.getBoolValue();
+        EXPECT_TRUE(val.isSet());
+        EXPECT_FALSE(val.get());
     }
     {
         auto prop = simpleJson.find("objName.innerObj.bigInteger");
         EXPECT_EQ(SimpleJson::Type::Integer, prop.getType());
-        auto val = prop.valueOr((int64_t)42);
-        EXPECT_EQ(val, 9223372036854775807);
+        auto val = prop.getIntValue();
+        EXPECT_TRUE(val.isSet());
+        EXPECT_EQ(val.get(), 9223372036854775807);
     }
     {
         auto prop = simpleJson.find("objName.innerObj.someDouble");
         EXPECT_EQ(SimpleJson::Type::Float, prop.getType());
-        auto val = prop.valueOr(42.0);
-        EXPECT_EQ(val, 0.154e-10);
+        auto val = prop.getFloatValue();
+        EXPECT_TRUE(val.isSet());
+        EXPECT_EQ(val.get(), 0.154e-10);
     }
 }
 
@@ -129,15 +133,15 @@ TEST(SimpleJson, ParseArray)
     auto simpleJson = SimpleJson::create(json.c_str(), json.length());
     int64_t expected[] = {1, 1, 2, 3, 5, 8, 13, 21};
 
-    SimpleJsonArray array;
-    EXPECT_TRUE(simpleJson.find("Fibonacci.numbers").getArrayValue(array));
-    EXPECT_EQ(8, array.size());
+    auto array = simpleJson.find("Fibonacci.numbers").getArrayValue();
+    EXPECT_TRUE(array.isSet());
+    EXPECT_EQ(8, array.get().size());
     int count = 0;
-    for (const auto& it : array)
+    for (const auto& it : array.get())
     {
-        int64_t val;
-        EXPECT_TRUE(it.toJson().getValue(val));
-        EXPECT_EQ(val, expected[count++]);
+        auto val = it.toJson().getIntValue();
+        EXPECT_TRUE(val.isSet());
+        EXPECT_EQ(val.get(), expected[count++]);
     }
 }
 
@@ -150,26 +154,38 @@ TEST(SimpleJson, ParseUMM)
     auto simpleJson = SimpleJson::create(json.c_str(), json.length());
     auto value = simpleJson.find("type");
     EXPECT_EQ(getStringValue(value), "user-media-map");
-    SimpleJsonArray array, ssrc;
 
     {
-        EXPECT_TRUE(simpleJson.find("video-endpoints").getArrayValue(array));
+        auto array = simpleJson.find("video-endpoints").getArrayValue().get();
         EXPECT_EQ(array.size(), 1);
         value = array[0].toJson().find("endpoint-id");
         EXPECT_EQ(getStringValue(value), "b469945f-856b-38c4-cf1b-0000fb452938");
-        EXPECT_TRUE(array[0].toJson().find("ssrcs").getArrayValue(ssrc));
+        auto ssrc = array[0].toJson().find("ssrcs").getArrayValue().get();
         EXPECT_EQ(ssrc.size(), 1);
-        EXPECT_EQ(ssrc[0].toJson().valueOr(int64_t(42)), 4215270161);
+        EXPECT_EQ(ssrc[0].toJson().getIntValue().get(), 4215270161);
     }
-
     {
-        EXPECT_TRUE(simpleJson.find("audio-endpoints").getArrayValue(array));
+        auto array = simpleJson.find("audio-endpoints").getArrayValue().get();
         EXPECT_EQ(array.size(), 1);
         value = array[0].toJson().find("endpoint-id");
         EXPECT_EQ(getStringValue(value), "b469945f-856b-38c4-cf1b-0000fb452938");
-        EXPECT_TRUE(array[0].toJson().find("ssrcs").getArrayValue(ssrc));
+        auto ssrc = array[0].toJson().find("ssrcs").getArrayValue().get();
         EXPECT_EQ(ssrc.size(), 1);
-        EXPECT_EQ(ssrc[0].toJson().valueOr(int64_t(42)), 919268345);
+        EXPECT_EQ(ssrc[0].toJson().getIntValue().get(), 919268345);
+    }
+    {
+        // Check chaining:
+        auto firstVideoSsrc = simpleJson.find("video-endpoints")
+                                  .getArrayValue()
+                                  .get()[0]
+                                  .toJson()
+                                  .find("ssrcs")
+                                  .getArrayValue()
+                                  .get()[0]
+                                  .toJson()
+                                  .getIntValue()
+                                  .get();
+        EXPECT_EQ(firstVideoSsrc, 4215270161);
     }
 }
 } // namespace utils

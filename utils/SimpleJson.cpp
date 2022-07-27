@@ -439,26 +439,28 @@ SimpleJson SimpleJson::findInternal(const char* const path,
         : SimpleJsonNone;
 }
 
-bool SimpleJson::getValue(int64_t& out) const
+Optional<int64_t> SimpleJson::getIntValue() const
 {
     if (Type::Integer != _type)
     {
-        return false;
+        return Optional<int64_t>();
     }
     char _buffer[33];
     strncpy(_buffer, _cursorIn, size());
-    return 1 == sscanf(_buffer, "%" SCNd64, &out);
+    int64_t out;
+    return (1 == sscanf(_buffer, "%" SCNd64, &out)) ? Optional<int64_t>(out) : Optional<int64_t>();
 }
 
-bool SimpleJson::getValue(double& out) const
+Optional<double> SimpleJson::getFloatValue() const
 {
     if (Type::Float != _type)
     {
-        return false;
+        return Optional<double>();
     }
     char _buffer[33];
     strncpy(_buffer, _cursorIn, size());
-    return 1 == sscanf(_buffer, "%lf", &out);
+    double out;
+    return (1 == sscanf(_buffer, "%lf", &out)) ? Optional<double>(out) : Optional<double>();
 }
 
 bool SimpleJson::getStringValue(const char*& out, size_t& outLen) const
@@ -472,31 +474,30 @@ bool SimpleJson::getStringValue(const char*& out, size_t& outLen) const
     return true;
 }
 
-bool SimpleJson::getValue(bool& out) const
+Optional<bool> SimpleJson::getBoolValue() const
 {
     if (Type::Boolean != _type)
     {
-        return false;
+        return Optional<bool>();
     }
     if (size() == 4 && !strncmp(_cursorIn, "true", 4))
     {
-        out = true;
-        return true;
+        return Optional<bool>(true);
     }
     if (size() == 5 && !strncmp(_cursorIn, "false", 5))
     {
-        out = false;
-        return true;
+        return Optional<bool>(false);
     }
-    return false;
+    return Optional<bool>();
 }
 
-bool SimpleJson::getArrayValue(SimpleJsonArray& out) const
+Optional<SimpleJsonArray> SimpleJson::getArrayValue() const
 {
     if (Type::Array != _type || '[' != *_cursorIn)
     {
-        return false;
+        return Optional<SimpleJsonArray>();
     }
+    SimpleJsonArray out;
     out.clear();
     auto cursor = _cursorIn + 1;
     auto end = cursor;
@@ -515,7 +516,7 @@ bool SimpleJson::getArrayValue(SimpleJsonArray& out) const
         }
         cursor++;
     }
-    return true;
+    return Optional<SimpleJsonArray>(out);
 }
 
 } // namespace utils
