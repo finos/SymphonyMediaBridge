@@ -20,7 +20,7 @@ struct AudioStream
         bool ssrcRewrite)
         : id(id),
           endpointId(endpointId),
-          endpointIdHash(std::hash<std::string>{}(endpointId)),
+          endpointIdHash(utils::hash<std::string>{}(endpointId)),
           localSsrc(localSsrc),
           transport(transport),
           audioMixed(audioMixed),

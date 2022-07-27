@@ -19,6 +19,7 @@ namespace bridge
 
 const uint32_t gatheringCompleteMaxWaitMs = 5000;
 const uint32_t gatheringCompleteWaitMs = 100;
+const uint32_t GUUID_LENGTH = 36;
 
 httpd::Response generateAllocateEndpointResponse(ActionContext* context,
     RequestLogger& requestLogger,
@@ -253,6 +254,12 @@ httpd::Response allocateEndpoint(ActionContext* context,
     const std::string& endpointId)
 {
     Mixer* mixer;
+    if (endpointId.size() > GUUID_LENGTH)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            "Endpoint id must be less in length than a GUUID excluding curly braces");
+    }
+
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
     utils::Optional<std::string> audioChannelId;

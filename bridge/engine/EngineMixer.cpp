@@ -30,6 +30,7 @@
 #include "codec/Opus.h"
 #include "config/Config.h"
 #include "logger/Logger.h"
+#include "memory/StackMap.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtcpHeader.h"
 #include "rtp/RtpHeader.h"
@@ -161,6 +162,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _jobManager(jobManager),
       _messageListener(messageListener),
       _mixerSsrcAudioBuffers(maxSsrcs),
+      _incomingBarbellSctp(128),
       _incomingForwarderAudioRtp(maxPendingPackets),
       _incomingMixerAudioRtp(maxPendingPackets),
       _incomingRtcp(maxPendingRtcpPackets),
@@ -170,6 +172,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _engineDataStreams(maxStreamsPerModality),
       _engineRecordingStreams(maxRecordingStreams),
       _engineBarbells(16),
+      _barbellEndpoints(128),
       _ssrcInboundContexts(maxSsrcs),
       _localVideoSsrc(localVideoSsrc),
       _rtpTimestampSource(1000),
@@ -805,6 +808,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     _rtpTimestampSource += framesPerIteration1kHz;
 
     // 1. Process all incoming packets
+    processBarbellSctp(engineIterationStartTimestamp);
     forwardPackets(engineIterationStartTimestamp);
     processIncomingRtcpPackets(engineIterationStartTimestamp);
 
@@ -1496,6 +1500,24 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     const void* data,
     size_t length)
 {
+    // TODO  parse this with wonderful json parser and figure out if this is a barbell UMM
+    // if it is we should handle it locally in onBarbellUserMediaMap
+    if (_engineBarbells.contains(sender->getEndpointIdHash()))
+    {
+        if (length == 0)
+        {
+            return;
+        }
+        auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
+        auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packet->get());
+        auto s = reinterpret_cast<char*>(header->data());
+        if (std::strstr(s, "user-media-map") != nullptr)
+        {
+            _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
+            return;
+        }
+    }
+
     EngineMessage::Message message(EngineMessage::Type::SctpMessage);
     auto& sctpMessage = message.command.sctpMessage;
     sctpMessage.mixer = this;
@@ -1862,6 +1884,15 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     }
 
     return nullptr;
+}
+
+void EngineMixer::processBarbellSctp(const uint64_t timestamp)
+{
+    for (IncomingPacketInfo packetInfo; _incomingBarbellSctp.pop(packetInfo);)
+    {
+        onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(),
+            reinterpret_cast<const char*>(packetInfo.packet()->get()));
+    }
 }
 
 void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
@@ -2575,6 +2606,7 @@ void EngineMixer::sendMessagesToNewDataStreams()
                     pinTarget,
                     _engineAudioStreams,
                     _engineVideoStreams,
+                    _barbellEndpoints,
                     userMediaMapMessage))
             {
                 dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
@@ -2650,6 +2682,7 @@ void EngineMixer::sendUserMediaMapMessage(const size_t endpointIdHash)
         pinTarget,
         _engineAudioStreams,
         _engineVideoStreams,
+        _barbellEndpoints,
         userMediaMapMessage);
 
     dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
@@ -2680,6 +2713,7 @@ void EngineMixer::sendUserMediaMapMessageToAll()
             pinTarget,
             _engineAudioStreams,
             _engineVideoStreams,
+            _barbellEndpoints,
             userMediaMapMessage);
 
         dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
@@ -3355,4 +3389,161 @@ std::unordered_set<size_t> EngineMixer::getActiveTalkers() const
 {
     return _activeMediaList->getActiveTalkers();
 }
+
+// This method must be executed on engine thread. UMM requests could go in another queue and processed
+// at start of tick.
+// There are three phases to update the endpoints and ssrc mappings in active media list
+// phase 1: Identify all endpoints that are registered but no longer in UMM, and remove them from AML
+// phase 2: Identify all streams that have been remapped to other ssrcs, and remove them from AML
+// phase 3: All ssrcs in UMM that lacks existing mapping in EngineBarbell, ust be new or changed. Add them to AML
+void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* message)
+{
+    auto it = _engineBarbells.find(barbellIdHash);
+    if (it == _engineBarbells.end())
+    {
+        return;
+    }
+
+    EngineBarbell& barbell = *(it->second);
+
+    // use fixed in mem json parser to extract the endpoint to ssrc mapping.
+    // We can add them to fixed arrays on stack
+    // Issue: in UMM we have endpointIds and we need to compute the IdHash for them to lookup in EngineBarbell.
+    // currently this can only be done from std::hash<std::string> and we do not have std::strings.
+    // We need to use our own hasing function for endpoints that we can apply on both st::string and C string.
+
+    std::vector<BarbellMapItem> videoSsrcs;
+    std::vector<BarbellMapItem> audioSsrcs;
+
+    memory::StackMap<size_t, size_t, 32> fwdVideoEndpoints;
+    for (auto& item : videoSsrcs)
+    {
+        fwdVideoEndpoints.add(item.endpointIdHash, item.endpointIdHash);
+    }
+
+    memory::StackMap<size_t, size_t, 32> fwdAudioEndpoints;
+    for (auto& item : audioSsrcs)
+    {
+        fwdAudioEndpoints.add(item.endpointIdHash, item.endpointIdHash);
+    }
+
+    // clear out removed streams
+    for (auto& videoStream : barbell.videoStreams)
+    {
+        if (videoStream.endpointIdHash.isSet() && !fwdVideoEndpoints.contains(videoStream.endpointIdHash.get()))
+        {
+            _activeMediaList->removeVideoParticipant(videoStream.endpointIdHash.get());
+            videoStream.endpointIdHash.clear();
+            videoStream.endpointId.clear();
+        }
+    }
+
+    for (auto& audioStream : barbell.audioStreams)
+    {
+        if (audioStream.endpointIdHash.isSet() && !fwdAudioEndpoints.contains(audioStream.endpointIdHash.get()))
+        {
+            _activeMediaList->removeAudioParticipant(audioStream.endpointIdHash.get());
+            audioStream.endpointIdHash.clear();
+            audioStream.endpointId.clear();
+        }
+    }
+
+    // remove remapped ones
+    for (auto& item : videoSsrcs)
+    {
+        for (size_t i = 0; i < item.count; ++i)
+        {
+            const auto ssrc = item.ssrcs[i];
+            auto videoStreamIt = barbell.videoSsrcMap.find(ssrc);
+            if (videoStreamIt == barbell.videoSsrcMap.end())
+            {
+                logger::error("video ssrc in barbell UMM does not exist %u", _loggableId.c_str(), ssrc);
+            }
+            else if (videoStreamIt->second->endpointIdHash.isSet() &&
+                videoStreamIt->second->endpointIdHash.get() != item.endpointIdHash)
+            {
+                // must remove as this ssrc has been remapped
+                _activeMediaList->removeVideoParticipant(videoStreamIt->second->endpointIdHash.get());
+                videoStreamIt->second->endpointIdHash.clear();
+                videoStreamIt->second->endpointId.clear();
+            }
+        }
+    }
+
+    for (auto& item : audioSsrcs)
+    {
+        for (size_t i = 0; i < item.count; ++i)
+        {
+            const auto ssrc = item.ssrcs[i];
+            auto audioStreamIt = barbell.audioSsrcMap.find(ssrc);
+            if (audioStreamIt == barbell.audioSsrcMap.end())
+            {
+                logger::error("audio ssrc in barbell UMM does not exist %u", _loggableId.c_str(), ssrc);
+            }
+            else if (audioStreamIt->second->endpointIdHash.isSet() &&
+                audioStreamIt->second->endpointIdHash.get() != item.endpointIdHash)
+            {
+                // must remove as this ssrc has been remapped
+                _activeMediaList->removeAudioParticipant(audioStreamIt->second->endpointIdHash.get());
+                audioStreamIt->second->endpointIdHash.clear();
+                audioStreamIt->second->endpointId.clear();
+            }
+        }
+    }
+
+    // add video sources
+    for (auto& item : videoSsrcs)
+    {
+        if (item.count == 0)
+        {
+            continue;
+        }
+
+        SimulcastStream stream0;
+        auto videoStreamIt = barbell.videoSsrcMap.find(item.ssrcs[0]);
+        if (videoStreamIt == barbell.videoSsrcMap.end() || videoStreamIt->second->endpointIdHash.isSet())
+        {
+            // if it is set it must already be set to this endpointId
+            continue;
+        }
+        videoStreamIt->second->endpointIdHash.set(item.endpointIdHash);
+        videoStreamIt->second->endpointId.set(item.endpointId);
+
+        utils::Optional<SimulcastStream> stream1;
+        if (item.count > 1)
+        {
+            auto videoStreamIt = barbell.videoSsrcMap.find(item.ssrcs[1]);
+            if (videoStreamIt != barbell.videoSsrcMap.end() && !videoStreamIt->second->endpointIdHash.isSet())
+            {
+                videoStreamIt->second->endpointIdHash.set(item.endpointIdHash);
+                videoStreamIt->second->endpointId.set(item.endpointId);
+
+                stream1.set(videoStreamIt->second->stream);
+            }
+        }
+
+        _activeMediaList->addVideoParticipant(item.endpointIdHash, stream0, stream1);
+    }
+
+    // add audio sources
+    for (auto& item : audioSsrcs)
+    {
+        if (item.count == 0)
+        {
+            continue;
+        }
+
+        auto audioStreamIt = barbell.audioSsrcMap.find(item.ssrcs[0]);
+        if (audioStreamIt == barbell.audioSsrcMap.end() || audioStreamIt->second->endpointIdHash.isSet())
+        {
+            // if it is set it must already be set to this endpointId
+            continue;
+        }
+
+        audioStreamIt->second->endpointIdHash.set(item.endpointIdHash);
+        audioStreamIt->second->endpointId.set(item.endpointId);
+        _activeMediaList->addAudioParticipant(item.endpointIdHash);
+    }
+}
+
 } // namespace bridge

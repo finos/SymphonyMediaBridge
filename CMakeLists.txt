@@ -280,6 +280,7 @@ set(FILES
         memory/RingBuffer.h
         memory/MemoryFile.h
         memory/MemoryFile.cpp
+        memory/StackMap.h
         rtp/RtcpFeedback.cpp
         rtp/RtcpFeedback.h
         rtp/RtcpHeader.cpp
@@ -523,6 +524,7 @@ set(TEST_FILES
     test/bridge/UnackedPacketsTrackerTest.cpp
     test/memory/PriorityQueueTest.cpp
     test/memory/BacklogTest.cpp
+    test/memory/StackMapTest.cpp
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/VideoNackReceiveJobTest.cpp
     test/bridge/DummyRtcTransport.h)

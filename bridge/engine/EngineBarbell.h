@@ -1,6 +1,7 @@
 #pragma once
 #include "bridge/BarbellStreamGroupDescription.h"
 #include "bridge/RtpMap.h"
+#include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "concurrency/MpmcHashmap.h"
 #include "webrtc/WebRtcDataStream.h"
@@ -34,12 +35,14 @@ struct EngineBarbell
         }
         for (auto& videoGroup : videoDescriptions)
         {
-            SsrcGroup videoStream;
-            videoStream.count = videoGroup.ssrcs.size();
-            std::memcpy(videoStream.ssrcs, videoGroup.ssrcs.data(), videoStream.count * sizeof(uint32_t));
-            std::memcpy(videoStream.feedbackSsrcs,
-                videoGroup.feedbackSsrcs.data(),
-                videoStream.count * sizeof(uint32_t));
+            VideoStream videoStream;
+            videoStream.stream._numLevels = videoGroup.ssrcs.size();
+
+            for (size_t i = 0; i < videoStream.stream._numLevels; ++i)
+            {
+                videoStream.stream._levels[i]._ssrc = videoGroup.ssrcs[i];
+                videoStream.stream._levels[i]._feedbackSsrc = videoGroup.feedbackSsrcs[i];
+            }
 
             videoStreams.push_back(videoStream);
         }
@@ -51,32 +54,30 @@ struct EngineBarbell
     transport::RtcTransport& transport;
 
     webrtc::WebRtcDataStream dataChannel;
-    // some map for ssrc to user id endpointIdHash to be used in activemediaList, that we update from data channel
-    // messages
 
-    struct SsrcGroup
+    // map for ssrc to user id endpointIdHash to be used in activemediaList, that we update from data channel
+    // messages
+    struct VideoStream
     {
-        uint32_t ssrcs[3];
-        uint32_t feedbackSsrcs[3];
-        uint32_t count = 3;
+        SimulcastStream stream;
 
         utils::Optional<size_t> endpointIdHash;
-        utils::Optional<std::string> endpointId;
+        utils::Optional<EndpointIdString> endpointId;
     };
 
     struct AudioStream
     {
         uint32_t ssrc;
         utils::Optional<size_t> endpointIdHash;
-        utils::Optional<std::string> endpointId;
+        utils::Optional<EndpointIdString> endpointId;
     };
 
     // inbound ssrcs over barbell and how they group together and map currently to remote endpointId
-    std::vector<SsrcGroup> videoStreams;
+    std::vector<VideoStream> videoStreams;
     std::vector<AudioStream> audioStreams;
-    SsrcGroup slideStream;
+    VideoStream slideStream;
 
-    concurrency::MpmcHashmap32<uint32_t, SsrcGroup*> videoSsrcMap;
+    concurrency::MpmcHashmap32<uint32_t, VideoStream*> videoSsrcMap;
     concurrency::MpmcHashmap32<uint32_t, AudioStream*> audioSsrcMap;
 };
 

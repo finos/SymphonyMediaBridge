@@ -21,6 +21,7 @@
 #include "utils/IdGenerator.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
+#include "utils/StdExtensions.h"
 #include "utils/StringBuilder.h"
 #include <unistd.h>
 #include <utility>
@@ -300,7 +301,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return true;
     }
 
-    const auto endpointIdHash = std::hash<std::string>{}(endpointId);
+    const auto endpointIdHash = utils::hash<std::string>{}(endpointId);
     const auto emplaceResult =
         _bundleTransports.emplace(endpointId, _transportFactory.create(iceRole, 512, endpointIdHash));
     if (!emplaceResult.second)
@@ -334,8 +335,9 @@ bool Mixer::addAudioStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
+        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
 
     const auto streamItr = _audioStreams.emplace(endpointId,
         std::make_unique<AudioStream>(outId, endpointId, _ssrcGenerator.next(), transport, audioMixed, rewriteSsrcs));
@@ -366,8 +368,9 @@ bool Mixer::addVideoStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
+        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
 
     const auto emplaceResult = _videoStreams.emplace(endpointId,
         std::make_unique<VideoStream>(outId, endpointId, _ssrcGenerator.next(), transport, rewriteSsrcs));
@@ -1955,7 +1958,7 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
 {
     for (const auto& channel : channels)
     {
-        auto endpointIdHash = std::hash<std::string>{}(channel._id);
+        auto endpointIdHash = utils::hash<std::string>{}(channel._id);
         const auto transportEntry = recordingStream->_transports.find(endpointIdHash);
         if (transportEntry == recordingStream->_transports.end())
         {
@@ -2010,7 +2013,7 @@ bool Mixer::removeRecordingTransports(const std::string& conferenceId,
 
         for (const auto& channel : channels)
         {
-            auto endpointIdHash = std::hash<std::string>{}(channel._id);
+            auto endpointIdHash = utils::hash<std::string>{}(channel._id);
             auto transportItr = stream->_transports.find(endpointIdHash);
             if (transportItr == stream->_transports.end())
             {
@@ -2244,7 +2247,7 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
         }
     }
 
-    transport = _transportFactory.createOnPorts(iceRole, 64, std::hash<std::string>{}(barbellId), _barbellPorts);
+    transport = _transportFactory.createOnPorts(iceRole, 64, utils::hash<std::string>{}(barbellId), _barbellPorts);
     if (!transport)
     {
         logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "concurrency/MpmcHashmap.h"
@@ -137,6 +138,7 @@ public:
         const size_t pinTargetEndpointIdHash,
         const concurrency::MpmcHashmap32<size_t, EngineAudioStream*>& engineAudioStreams,
         const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
+        const bridge::BarbellEndpointIdMap& barbellStreams,
         utils::StringBuilder<1024>& outMessage);
 
     bool makeBarbellUserMediaMapMessage(

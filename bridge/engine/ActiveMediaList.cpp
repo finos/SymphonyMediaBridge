@@ -618,6 +618,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
     const size_t pinTargetEndpointIdHash,
     const concurrency::MpmcHashmap32<size_t, EngineAudioStream*>& engineAudioStreams,
     const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
+    const BarbellEndpointIdMap& barbellStreams,
     utils::StringBuilder<1024>& outMessage)
 {
     if (lastN > _defaultLastN || lastN == 0)
@@ -663,33 +664,40 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
         }
     }
 
-    auto videoListEntry = _activeVideoList.tail();
-    while (videoListEntry && addedElements < lastN)
+    for (auto videoListEntry = _activeVideoList.tail(); videoListEntry && addedElements < lastN;
+         videoListEntry = videoListEntry->_previous)
     {
         if (videoListEntry->_data == endpointIdHash ||
             (videoListEntry->_data == pinTargetEndpointIdHash && !isPinTargetInActiveVideoList))
         {
-            videoListEntry = videoListEntry->_previous;
             continue;
         }
 
-        const auto videoStreamItr = engineVideoStreams.find(videoListEntry->_data);
-        if (videoStreamItr == engineVideoStreams.end())
+        const auto videoEndpointIdhash = videoListEntry->_data;
+        const auto videoStreamItr = engineVideoStreams.find(videoEndpointIdhash);
+        const char* endpointId = nullptr;
+        if (videoStreamItr != engineVideoStreams.end())
         {
-            videoListEntry = videoListEntry->_previous;
-            continue;
+            endpointId = videoStreamItr->second->_endpointId.c_str();
         }
-        const auto videoStream = videoStreamItr->second;
+        else
+        {
+            auto endpointIt = barbellStreams.find(videoEndpointIdhash);
+            if (endpointIt != barbellStreams.end())
+            {
+                endpointId = endpointIt->second.c_str();
+            }
+        }
 
-        api::DataChannelMessage::addUserMediaEndpointStart(outMessage, videoStream->_endpointId.c_str());
+        api::DataChannelMessage::addUserMediaEndpointStart(outMessage, endpointId);
 
-        const auto rewriteMapItr = _videoSsrcRewriteMap.find(videoListEntry->_data);
+        const auto rewriteMapItr = _videoSsrcRewriteMap.find(videoEndpointIdhash);
         if (rewriteMapItr != _videoSsrcRewriteMap.end())
         {
             api::DataChannelMessage::addUserMediaSsrc(outMessage, rewriteMapItr->second.levels[0]._ssrc);
         }
 
-        if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == videoListEntry->_data)
+        if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == videoEndpointIdhash)
         {
             api::DataChannelMessage::addUserMediaSsrc(outMessage,
                 _videoScreenShareSsrcMapping.get().second._rewriteSsrc);
@@ -697,7 +705,6 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
 
         api::DataChannelMessage::addUserMediaEndpointEnd(outMessage);
         ++addedElements;
-        videoListEntry = videoListEntry->_previous;
     }
 
     api::DataChannelMessage::addUserMediaMapEnd(outMessage);

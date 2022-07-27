@@ -1,5 +1,6 @@
 #pragma once
 #include "LockFreeList.h"
+#include "utils/StdExtensions.h"
 #include <algorithm>
 #include <atomic>
 #include <functional>
@@ -14,6 +15,8 @@ namespace concurrency
 // No value may be zero !!
 // key is 40bits and will be truncated to 40 bits.
 // elementCount must be power of two and <= 16777216
+// Since key is prehashed and not stored in the index, there is a risk of hash collection and you will only notice by
+// add returning false. You cannot then add the item.
 class MurmurHashIndex
 {
 public:
@@ -31,28 +34,16 @@ public:
     void reInitialize();
 
 private:
-    // produce hash key
-    static uint64_t hash(uint64_t key)
-    {
-        key ^= key >> 16;
-        key *= 0x85ebca6b;
-        key ^= key >> 13;
-        key *= 0xc2b2ae35;
-        key ^= key >> 16;
-        key *= 0x85ebca6b;
-        key ^= key >> 16;
-        return key;
-    }
-
     uint32_t position(uint64_t hashValue, uint32_t offset) const { return (hashValue + offset) & (_index.size() - 1); }
 
     // Key and value will be stored atomically and is therefore exactly 64 bits.
     // A value of zero means empty slot
 
+    static const uint64_t KEY_MASK = (uint64_t(1) << 40) - 1;
     struct KeyValue
     {
         KeyValue() : key(0), value(0) {}
-        KeyValue(uint64_t key_, uint32_t value_) : key(key_ & 0xFFFFFFFFF), value(value_) {}
+        KeyValue(uint64_t key_, uint32_t value_) : key(key_ & KEY_MASK), value(value_) {}
 
         uint64_t key : 40;
         uint64_t value : 24;
@@ -227,7 +218,7 @@ public:
         const uint32_t pos = std::distance(_elements, reinterpret_cast<Entry*>(entry));
         new (entry) Entry(key, std::forward<Args>(args)...);
         entry->state.store(State::committed);
-        if (!_index.add(preHash(key), pos + 1))
+        if (!_index.add(utils::hash<KeyT>{}(key), pos + 1))
         {
             // index must be full or duplicate key
             entry->state.store(State::tombstone);
@@ -242,7 +233,7 @@ public:
 
     void erase(const KeyT& key)
     {
-        const uint64_t key64 = preHash(key);
+        const uint64_t key64 = utils::hash<KeyT>{}(key);
         uint32_t pos = 0;
         if (!_index.get(key64, pos))
         {
@@ -258,12 +249,12 @@ public:
         }
     }
 
-    bool contains(const KeyT& key) const { return _index.containsKey(preHash(key)); }
+    bool contains(const KeyT& key) const { return _index.containsKey(utils::hash<KeyT>{}(key)); }
 
     iterator find(const KeyT& key)
     {
         uint32_t pos = 0;
-        if (_index.get(preHash(key), pos))
+        if (_index.get(utils::hash<KeyT>{}(key), pos))
         {
             --pos;
             if (_elements[pos].state.load() == State::committed)
@@ -372,10 +363,6 @@ private:
         }
         return used;
     }
-
-    static uint64_t preHash(const KeyT& key) { return preHash(key, std::is_integral<KeyT>()); }
-    static uint64_t preHash(const KeyT& key, std::true_type) { return key; }
-    static uint64_t preHash(const KeyT& key, std::false_type) { return static_cast<uint64_t>(std::hash<KeyT>{}(key)); }
 
     Entry* _elements;
     std::atomic_uint32_t _end;

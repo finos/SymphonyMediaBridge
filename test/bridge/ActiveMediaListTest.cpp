@@ -1,4 +1,5 @@
 #include "bridge/engine/ActiveMediaList.h"
+#include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SimulcastStream.h"
@@ -69,7 +70,7 @@ bool endpointsContainsId(const nlohmann::json& messageJson, const std::string& m
 class ActiveMediaListTest : public ::testing::Test
 {
 public:
-    ActiveMediaListTest() : _engineAudioStreams(16), _engineVideoStreams(16) {}
+    ActiveMediaListTest() : _engineAudioStreams(16), _engineVideoStreams(16), _barbellEndpoints(16) {}
 
     const uint32_t AUDIO_REWRITE_COUNT = 5;
     const uint32_t VIDEO_REWRITE_COUNT = 10;
@@ -142,6 +143,7 @@ protected:
     std::unique_ptr<DummyRtcTransport> _transport;
     concurrency::MpmcHashmap32<size_t, bridge::EngineAudioStream*> _engineAudioStreams;
     concurrency::MpmcHashmap32<size_t, bridge::EngineVideoStream*> _engineVideoStreams;
+    bridge::BarbellEndpointIdMap _barbellEndpoints;
 
     std::unique_ptr<bridge::ActiveMediaList> _activeMediaList;
 
@@ -480,7 +482,13 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsAllStreamsExcludingSelf)
     _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 0, _engineAudioStreams, _engineVideoStreams, message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
+        2,
+        0,
+        _engineAudioStreams,
+        _engineVideoStreams,
+        _barbellEndpoints,
+        message);
 
     const auto messageJson = nlohmann::json::parse(message.build());
     EXPECT_TRUE(endpointsContainsId(messageJson, "1"));
@@ -501,7 +509,13 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsOnlyLastNItems)
     _activeMediaList->addVideoParticipant(4, videoStream4->_simulcastStream, videoStream4->_secondarySimulcastStream);
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 0, _engineAudioStreams, _engineVideoStreams, message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
+        2,
+        0,
+        _engineAudioStreams,
+        _engineVideoStreams,
+        _barbellEndpoints,
+        message);
 
     const auto messageJson = nlohmann::json::parse(message.build());
     EXPECT_TRUE(endpointsContainsId(messageJson, "1"));
@@ -536,7 +550,13 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsPinnedItem)
     videoStream2->_pinSsrc.set(simulcastLevel);
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 4, _engineAudioStreams, _engineVideoStreams, message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
+        2,
+        4,
+        _engineAudioStreams,
+        _engineVideoStreams,
+        _barbellEndpoints,
+        message);
 
     const auto messageJson = nlohmann::json::parse(message.build());
     EXPECT_TRUE(endpointsContainsId(messageJson, "1"));
@@ -575,7 +595,13 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     switchDominantSpeaker(timestamp, 4);
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 0, _engineAudioStreams, _engineVideoStreams, message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
+        2,
+        0,
+        _engineAudioStreams,
+        _engineVideoStreams,
+        _barbellEndpoints,
+        message);
     printf("%s\n", message.get());
 
     const auto messageJson = nlohmann::json::parse(message.build());

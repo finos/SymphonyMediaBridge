@@ -21,9 +21,9 @@ void MurmurHashIndex::reInitialize()
 bool MurmurHashIndex::add(uint64_t key, uint32_t value)
 {
     assert(value != 0);
-    key &= 0xFFFFFFFFFu;
+    key &= KEY_MASK;
 
-    const uint64_t start = hash(key);
+    const uint64_t start = key;
     const auto spread = _maxSpread.load(std::memory_order::memory_order_acquire);
     for (uint32_t i = 0; i < spread; ++i)
     {
@@ -51,14 +51,6 @@ bool MurmurHashIndex::add(uint64_t key, uint32_t value)
         }
     }
 
-    int emptySlots = 0;
-    for (auto& entry : _index)
-    {
-        if (entry.keyValue.load().key == 0 && entry.keyValue.load().value == 0)
-        {
-            ++emptySlots;
-        }
-    }
     return false; // full
 }
 
@@ -82,8 +74,8 @@ inline void MurmurHashIndex::updateSpread(uint32_t i)
 // return value used to sync erase in hashmap
 bool MurmurHashIndex::remove(uint64_t key)
 {
-    key &= 0xFFFFFFFFFu;
-    const auto start = hash(key);
+    key &= KEY_MASK;
+    const auto start = key;
     const auto spread = _maxSpread.load(std::memory_order::memory_order_acquire);
     for (uint32_t i = 0; i < spread; ++i)
     {
@@ -130,8 +122,8 @@ uint32_t MurmurHashIndex::removeNext(uint32_t index, uint32_t& position)
 
 bool MurmurHashIndex::get(uint64_t key, uint32_t& value) const
 {
-    key &= 0xFFFFFFFFFu;
-    const auto start = hash(key);
+    key &= KEY_MASK;
+    const auto start = key;
     const auto spread = _maxSpread.load(std::memory_order::memory_order_acquire);
     for (uint32_t i = 0; i < spread; ++i)
     {
@@ -149,8 +141,8 @@ bool MurmurHashIndex::get(uint64_t key, uint32_t& value) const
 
 bool MurmurHashIndex::containsKey(uint64_t key) const
 {
-    key &= 0xFFFFFFFFFu;
-    const auto start = hash(key);
+    key &= KEY_MASK;
+    const auto start = key;
     const auto spread = _maxSpread.load(std::memory_order::memory_order_acquire);
     for (uint32_t i = 0; i < spread; ++i)
     {

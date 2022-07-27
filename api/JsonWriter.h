@@ -1,5 +1,5 @@
 #pragma once
-#include <cstring>
+#include <string>
 
 /**
  * Helper objects used to format a json body. Use code blocks to manage life time of Array and Object to set the

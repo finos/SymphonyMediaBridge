@@ -2,6 +2,7 @@
 #include "memory/AudioPacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
 #include "transport/RtcTransport.h"
+#include "utils/StdExtensions.h"
 #include <string>
 #include <unordered_set>
 
@@ -52,7 +53,7 @@ public:
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
-    uint32_t getEndpointIdHash() const { return std::hash<std::string>{}(_id); }
+    uint32_t getEndpointIdHash() const { return utils::hash<std::string>{}(_id); }
     std::string raw;
 
 protected:
