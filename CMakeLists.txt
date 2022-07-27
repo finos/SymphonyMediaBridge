@@ -387,6 +387,8 @@ set(FILES
         utils/Time.h
         utils/Trackers.cpp
         utils/Trackers.h
+        utils/SimpleJson.cpp
+        utils/SimpleJson.h
         webrtc/DataChannel.cpp
         webrtc/DataChannel.h
         webrtc/WebRtcDataStream.cpp
@@ -501,6 +503,7 @@ set(TEST_FILES
     test/utils/RandGeneratorTest.cpp
     test/utils/TimeSourceTest.cpp
     test/utils/ApiUtils.cpp
+    test/utils/SimpleJsonTest.cpp
     test/legacyapi/ParserTest.cpp
     test/legacyapi/GeneratorTest.cpp
     test/bridge/EngineStreamDirectorTest.cpp
