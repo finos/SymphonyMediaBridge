@@ -23,6 +23,7 @@
 #include "utils/IdGenerator.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
+#include "utils/StdExtensions.h"
 #include "utils/StringBuilder.h"
 #include <unistd.h>
 #include <utility>
@@ -302,7 +303,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return true;
     }
 
-    const auto endpointIdHash = std::hash<std::string>{}(endpointId);
+    const auto endpointIdHash = utils::hash<std::string>{}(endpointId);
     const auto emplaceResult =
         _bundleTransports.emplace(endpointId, _transportFactory.create(iceRole, 512, endpointIdHash));
     if (!emplaceResult.second)
@@ -311,7 +312,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return false;
     }
 
-    logger::info("Created bundle transport, endpointId %s, endpointIdHash %lu, transport %s (%p), ice controlling %c",
+    logger::info("Created bundle transport, endpointId %s, endpointIdHash %zu, transport %s (%p), ice controlling %c",
         _loggableId.c_str(),
         endpointId.c_str(),
         endpointIdHash,
@@ -336,8 +337,9 @@ bool Mixer::addAudioStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
+        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {
@@ -354,10 +356,11 @@ bool Mixer::addAudioStream(std::string& outId,
         return false;
     }
 
-    logger::info("Created audioStream id %s, endpointId %s, transport %s",
+    logger::info("Created audioStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        streamItr.first->second->endpointIdHash,
         streamItr.first->second->transport->getLoggableId().c_str());
 
     return streamItr.first->second->transport->isInitialized();
@@ -376,8 +379,9 @@ bool Mixer::addVideoStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
+        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {
@@ -394,10 +398,11 @@ bool Mixer::addVideoStream(std::string& outId,
         return false;
     }
 
-    logger::info("Created videoStream id %s, endpointId %s, transport %s",
+    logger::info("Created videoStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        emplaceResult.first->second->_endpointIdHash,
         emplaceResult.first->second->_transport->getLoggableId().c_str());
 
     return emplaceResult.first->second->_transport->isInitialized();
@@ -438,10 +443,11 @@ bool Mixer::addBundledAudioStream(std::string& outId,
         return false;
     }
 
-    logger::info("Created bundled audioStream id %s, endpointId %s, transport %s",
+    logger::info("Created bundled audioStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        streamItr.first->second->endpointIdHash,
         streamItr.first->second->transport->getLoggableId().c_str());
 
     return streamItr.first->second->transport->isInitialized();
@@ -478,10 +484,11 @@ bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpoin
         return false;
     }
 
-    logger::info("Created bundled videoStream id %s, endpointId %s, transport %s",
+    logger::info("Created bundled videoStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        streamItr.first->second->_endpointIdHash,
         streamItr.first->second->_transport->getLoggableId().c_str());
 
     return streamItr.first->second->_transport->isInitialized();
@@ -921,10 +928,9 @@ void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellStreamGroupDescr
         bridge::BarbellStreamGroupDescription description;
         for (size_t i = 0; i < ssrcGroup.count; ++i)
         {
-            description.ssrcs.push_back(ssrcGroup.levels[i]._ssrc);
-            description.feedbackSsrcs.push_back(ssrcGroup.levels[i]._feedbackSsrc);
+            description.ssrcLevels.push_back({ssrcGroup.levels[i]._ssrc, ssrcGroup.levels[i]._feedbackSsrc});
         }
-        description.slides = description.ssrcs.size() == 1;
+        description.slides = description.ssrcLevels.size() == 1;
         outDescriptions.push_back(description);
     }
 }
@@ -1135,10 +1141,7 @@ Mixer::Stats Mixer::getStats()
 
 bool Mixer::configureAudioStream(const std::string& endpointId,
     const RtpMap& rtpMap,
-    const utils::Optional<uint32_t>& remoteSsrc,
-    const utils::Optional<uint8_t>& audioLevelExtensionId,
-    const utils::Optional<uint8_t>& absSendTimeExtensionId,
-    const utils::Optional<uint8_t>& c9infoExtensionId)
+    const utils::Optional<uint32_t>& remoteSsrc)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1168,10 +1171,8 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
 
     audioStream->rtpMap = rtpMap;
     audioStream->remoteSsrc = remoteSsrc;
-    audioStream->rtpMap._audioLevelExtId = audioLevelExtensionId;
     audioStream->transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
-    audioStream->rtpMap._absSendTimeExtId = absSendTimeExtensionId;
-    audioStream->rtpMap._c9infoExtId = c9infoExtensionId;
+
     if (audioStream->rtpMap._absSendTimeExtId.isSet())
     {
         audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap._absSendTimeExtId.get());
@@ -1220,7 +1221,6 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     const RtpMap& feedbackRtpMap,
     const SimulcastStream& simulcastStream,
     const utils::Optional<SimulcastStream>& secondarySimulcastStream,
-    const utils::Optional<uint8_t>& absSendTimeExtensionId,
     const SsrcWhitelist& ssrcWhitelist)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -1277,7 +1277,6 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
         videoStream->_secondarySimulcastStream = secondarySimulcastStream;
     }
 
-    videoStream->_rtpMap._absSendTimeExtId = absSendTimeExtensionId;
     if (videoStream->_rtpMap._absSendTimeExtId.isSet())
     {
         videoStream->_transport->setAbsSendTimeExtensionId(videoStream->_rtpMap._absSendTimeExtId.get());
@@ -1667,8 +1666,7 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
     auto emplaceResult = _dataEngineStreams.emplace(dataStream->_endpointId,
         std::make_unique<EngineDataStream>(dataStream->_endpointId,
             dataStream->_endpointIdHash,
-            *(dataStream->_transport.get()),
-            _engineMixer.getSendAllocator()));
+            *(dataStream->_transport.get())));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddDataStream;
@@ -2002,7 +2000,7 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
 {
     for (const auto& channel : channels)
     {
-        auto endpointIdHash = std::hash<std::string>{}(channel._id);
+        auto endpointIdHash = utils::hash<std::string>{}(channel._id);
         const auto transportEntry = recordingStream->_transports.find(endpointIdHash);
         if (transportEntry == recordingStream->_transports.end())
         {
@@ -2057,7 +2055,7 @@ bool Mixer::removeRecordingTransports(const std::string& conferenceId,
 
         for (const auto& channel : channels)
         {
-            auto endpointIdHash = std::hash<std::string>{}(channel._id);
+            auto endpointIdHash = utils::hash<std::string>{}(channel._id);
             auto transportItr = stream->_transports.find(endpointIdHash);
             if (transportItr == stream->_transports.end())
             {
@@ -2291,12 +2289,13 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
         }
     }
 
-    transport = _transportFactory.createOnPorts(iceRole, 64, std::hash<std::string>{}(barbellId), _barbellPorts);
+    transport = _transportFactory.createOnPorts(iceRole, 64, utils::hash<std::string>{}(barbellId), _barbellPorts);
     if (!transport)
     {
         logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());
         return false;
     }
+    transport->setTag(EngineBarbell::barbellTag); // allow quick assessment that packet arrive on barbell
 
     const auto streamItr = _barbells.emplace(barbellId, std::make_unique<Barbell>(barbellId, transport));
     if (!streamItr.second)
@@ -2327,12 +2326,15 @@ bool Mixer::addBarbellToEngine(const std::string& barbellId)
 
     auto& barbell = *barbellIt->second;
     barbell.isConfigured = true;
+    assert(_engineBarbells.find(barbell.id) == _engineBarbells.end());
     auto emplaceResult = _engineBarbells.emplace(barbell.id,
         std::make_unique<EngineBarbell>(barbell.id,
             *barbell.transport,
-            _engineMixer.getSendAllocator(),
             barbell.videoSsrcs,
-            barbell.audioSsrcs));
+            barbell.audioSsrcs,
+            barbell.audioRtpMap,
+            barbell.videoRtpMap,
+            barbell.videoFeedbackRtpMap));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddBarbell;
@@ -2365,7 +2367,10 @@ bool Mixer::configureBarbellTransport(const std::string& barbellId,
 
 bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     const std::vector<BarbellStreamGroupDescription>& videoSsrcs,
-    const std::vector<uint32_t>& audioSsrcs)
+    const std::vector<uint32_t>& audioSsrcs,
+    const bridge::RtpMap& audioRtpMap,
+    const bridge::RtpMap& videoRtpMap,
+    const bridge::RtpMap& videoFeedbackRtpMap)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto barbellItr = _barbells.find(barbellId);
@@ -2377,6 +2382,10 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     auto& barbell = barbellItr->second;
     barbell->audioSsrcs = audioSsrcs;
     barbell->videoSsrcs = videoSsrcs;
+
+    barbell->audioRtpMap = audioRtpMap;
+    barbell->videoRtpMap = videoRtpMap;
+    barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;
     return true;
 }
 

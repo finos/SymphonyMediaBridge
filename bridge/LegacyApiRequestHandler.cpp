@@ -1117,15 +1117,6 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
             return false;
         }
 
-        utils::Optional<uint8_t> absSendTimeExtensionId;
-        for (const auto& rtpHeaderExtension : channel._rtpHeaderHdrExts)
-        {
-            if (rtpHeaderExtension._uri.compare("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time") == 0)
-            {
-                absSendTimeExtensionId.set(utils::checkedCast<uint8_t>(rtpHeaderExtension._id));
-            }
-        }
-
         if (contentType == ContentType::Audio)
         {
             utils::Optional<uint32_t> remoteSsrc;
@@ -1134,21 +1125,7 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                 remoteSsrc.set(channel._sources.front());
             }
 
-            utils::Optional<uint8_t> audioLevelExtensionId;
-            for (const auto& rtpHeaderExtension : channel._rtpHeaderHdrExts)
-            {
-                if (rtpHeaderExtension._uri.compare("urn:ietf:params:rtp-hdrext:ssrc-audio-level") == 0)
-                {
-                    audioLevelExtensionId.set(utils::checkedCast<uint32_t>(rtpHeaderExtension._id));
-                }
-            }
-
-            if (!mixer.configureAudioStream(endpointId,
-                    rtpMaps.front(),
-                    remoteSsrc,
-                    audioLevelExtensionId,
-                    absSendTimeExtensionId,
-                    utils::Optional<uint8_t>()))
+            if (!mixer.configureAudioStream(endpointId, rtpMaps.front(), remoteSsrc))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
@@ -1183,7 +1160,6 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                     feedbackRtpMap,
                     simulcastStreams[0],
                     secondarySimulcastStream,
-                    absSendTimeExtensionId,
                     ssrcWhitelist))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;

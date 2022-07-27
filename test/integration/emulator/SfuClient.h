@@ -1,18 +1,21 @@
 #pragma once
 
 #include "AudioSource.h"
+#include "memory/Array.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
+#include "rtp/RtcpFeedback.h"
+#include "rtp/RtcpHeader.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
 #include "utils/StringBuilder.h"
+#include "webrtc/WebRtcDataStream.h"
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
-
 namespace emulator
 {
 class MediaSendJob : public jobmanager::Job
@@ -45,7 +48,8 @@ public:
           _audioAllocator(audioAllocator),
           _transportFactory(transportFactory),
           _sslDtls(sslDtls),
-          _receivedData(256),
+          _audioReceivers(256),
+          _videoSsrcMap(128),
           _loggableId("client", id),
           _recordingActive(true),
           _ptime(ptime)
@@ -63,7 +67,7 @@ public:
             utils::Time::nanoSleep(utils::Time::sec * 1);
         }
 
-        for (auto& item : _receivedData)
+        for (auto& item : _audioReceivers)
         {
             delete item.second;
         }
@@ -77,6 +81,7 @@ public:
         bool forwardMedia)
     {
         _channel.create(baseUrl, conferenceId, initiator, audio, video, forwardMedia);
+        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
     void processOffer()
@@ -122,6 +127,7 @@ public:
             _audioSource->getSsrc(),
             _channel.isVideoEnabled() ? videoSsrcs : nullptr);
 
+        _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();
         _transport->connect();
     }
@@ -159,10 +165,10 @@ public:
 
     ChannelType _channel;
 
-    class RtpReceiver
+    class RtpAudioReceiver
     {
     public:
-        RtpReceiver(size_t instanceId,
+        RtpAudioReceiver(size_t instanceId,
             uint32_t ssrc,
             const bridge::RtpMap& rtpMap,
             transport::RtcTransport* transport,
@@ -228,6 +234,59 @@ public:
         std::vector<int16_t> _recording;
     };
 
+    class RtpVideoReceiver
+    {
+    public:
+        RtpVideoReceiver(size_t instanceId,
+            uint32_t ssrc,
+            const bridge::RtpMap& rtpMap,
+            const bridge::RtpMap& rtpMapFeedback,
+            transport::RtcTransport* transport,
+            uint64_t timestamp)
+            : _rtpMap(rtpMap),
+              _rtpMapFeedback(rtpMapFeedback),
+              _context(ssrc, _rtpMap, transport, timestamp),
+              _loggableId("rtprcv", instanceId)
+        {
+            _recording.reserve(256 * 1024);
+        }
+
+        void onRtpPacketReceived(transport::RtcTransport* sender,
+            memory::Packet& packet,
+            uint32_t extendedSequenceNumber,
+            uint64_t timestamp)
+        {
+            _context.onRtpPacket(timestamp);
+            if (!sender->unprotect(packet))
+            {
+                return;
+            }
+
+            auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
+            if (rtpHeader->payloadType == _rtpMap._payloadType)
+            {
+                ++videoPacketCount;
+            }
+            else
+            {
+                ++rtxPacketCount;
+            }
+        }
+
+        const logger::LoggableId& getLoggableId() const { return _loggableId; }
+
+        size_t videoPacketCount = 0;
+        size_t rtxPacketCount = 0;
+
+    private:
+        bridge::RtpMap _rtpMap;
+        bridge::RtpMap _rtpMapFeedback;
+        bridge::SsrcInboundContext _context;
+        codec::OpusDecoder _decoder;
+        logger::LoggableId _loggableId;
+        std::vector<int16_t> _recording;
+    };
+
 public:
     void onRtpPacketReceived(transport::RtcTransport* sender,
         const memory::UniquePacket packet,
@@ -236,47 +295,112 @@ public:
     {
         auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
 
-        auto it = _receivedData.find(rtpHeader->ssrc.get());
-        if (it == _receivedData.end())
+        if (rtpHeader->payloadType == 111)
         {
-            bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
-            rtpMap._audioLevelExtId.set(1);
-            rtpMap._c9infoExtId.set(8);
-            _receivedData.emplace(rtpHeader->ssrc.get(),
-                new RtpReceiver(_loggableId.getInstanceId(), rtpHeader->ssrc.get(), rtpMap, sender, timestamp));
-            it = _receivedData.find(rtpHeader->ssrc.get());
-        }
-
-        if (it != _receivedData.end())
-        {
-            if (rtpHeader->payloadType == 111 && _recordingActive.load())
+            auto it = _audioReceivers.find(rtpHeader->ssrc.get());
+            if (it == _audioReceivers.end())
             {
-                it->second->onRtpPacketReceived(sender, *packet, extendedSequenceNumber, timestamp);
+                bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
+                rtpMap._audioLevelExtId.set(1);
+                rtpMap._c9infoExtId.set(8);
+                _audioReceivers.emplace(rtpHeader->ssrc.get(),
+                    new RtpAudioReceiver(_loggableId.getInstanceId(),
+                        rtpHeader->ssrc.get(),
+                        rtpMap,
+                        sender,
+                        timestamp));
+                it = _audioReceivers.find(rtpHeader->ssrc.get());
+            }
+            if (it != _audioReceivers.end())
+            {
+                if (_recordingActive.load())
+                {
+                    it->second->onRtpPacketReceived(sender, *packet, extendedSequenceNumber, timestamp);
+                }
             }
         }
-
-        if ((extendedSequenceNumber % 100) == 0)
+        else
         {
-            logger::debug("%s ssrc %u received seq %u, ssrc count %zu",
-                _loggableId.c_str(),
-                _channel.getEndpointId().c_str(),
-                rtpHeader->ssrc.get(),
-                extendedSequenceNumber,
-                _receivedData.size());
+            bridge::RtpMap rtpMap(bridge::RtpMap::Format::VP8);
+            bridge::RtpMap fbMap(bridge::RtpMap::Format::VP8RTX);
+
+            auto it = _videoSsrcMap.find(rtpHeader->ssrc.get());
+            if (it == _videoSsrcMap.end())
+            {
+                return;
+            }
+
+            it->second->onRtpPacketReceived(sender, *packet, extendedSequenceNumber, timestamp);
+            /*
+            _videoReceivers.emplace(rtpHeader->ssrc.get(),
+                new RtpVideoReceiver(_loggableId.getInstanceId(),
+                    rtpHeader->ssrc.get(),
+                    rtpMap,
+                    fbMap,
+                    sender,
+                    timestamp));
+            it = _videoReceivers.find(rtpHeader->ssrc.get());
+        }
+*/
+            if ((extendedSequenceNumber % 100) == 0)
+            {
+                logger::debug("%s ssrc %u received seq %u, audio receiver count %zu",
+                    _loggableId.c_str(),
+                    _channel.getEndpointId().c_str(),
+                    rtpHeader->ssrc.get(),
+                    extendedSequenceNumber,
+                    _audioReceivers.size());
+            }
         }
     }
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override
     {
+        rtp::CompoundRtcpPacket compoundPacket(packet->get(), packet->getLength());
+        for (const auto& rtcpPacket : compoundPacket)
+        {
+            auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
+            if (rtcpPacket.packetType == rtp::RtcpPacketType::PAYLOADSPECIFIC_FB &&
+                rtcpFeedback->_header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
+            {
+                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->_mediaSsrc.get());
+                auto it = _videoSources.find(rtcpFeedback->_mediaSsrc.get());
+                if (it != _videoSources.end())
+                {
+                    auto& videoSource = it->second;
+                    if (videoSource->getSsrc() == rtcpFeedback->_mediaSsrc.get())
+                    {
+                        videoSource->requestKeyFrame();
+                    }
+                }
+                else
+                {
+                    logger::warn("cannot find video ssrc for PLI %u",
+                        _loggableId.c_str(),
+                        rtcpFeedback->_mediaSsrc.get());
+                    for (auto& it : _videoSources)
+                    {
+                        logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
+                    }
+                }
+            }
+        }
     }
 
     void onConnected(transport::RtcTransport* sender) override
     {
         logger::debug("client connected", _loggableId.c_str());
+        _transport->setSctp(5000, 5000);
+        _transport->connectSctp();
     }
 
     bool onSctpConnectionRequest(transport::RtcTransport* sender, uint16_t remotePort) override { return false; }
-    void onSctpEstablished(transport::RtcTransport* sender) override {}
+    void onSctpEstablished(transport::RtcTransport* sender) override
+    {
+        auto streamId = _dataStream->open(_loggableId.c_str());
+        assert(streamId != 0xFFFFu);
+    }
+
     void onSctpMessage(transport::RtcTransport* sender,
         uint16_t streamId,
         uint16_t streamSequenceNumber,
@@ -284,7 +408,7 @@ public:
         const void* data,
         size_t length) override
     {
-        logger::debug("sctp message", "");
+        _dataStream->onSctpMessage(sender, streamId, streamSequenceNumber, payloadProtocol, data, length);
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,
@@ -303,7 +427,7 @@ public:
     // Video source that produces fake VP8
     std::unordered_map<uint32_t, std::unique_ptr<fakenet::FakeVideoSource>> _videoSources;
 
-    const concurrency::MpmcHashmap32<uint32_t, RtpReceiver*>& getReceiveStats() const { return _receivedData; }
+    const concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*>& getReceiveStats() const { return _audioReceivers; }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
 private:
@@ -312,11 +436,14 @@ private:
     memory::AudioPacketPoolAllocator& _audioAllocator;
     transport::TransportFactory& _transportFactory;
     transport::SslDtls& _sslDtls;
-    concurrency::MpmcHashmap32<uint32_t, RtpReceiver*> _receivedData;
+    concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*> _audioReceivers;
+    memory::Array<std::unique_ptr<RtpVideoReceiver>, 32> _videoReceivers;
+    concurrency::MpmcHashmap32<uint32_t, RtpVideoReceiver*> _videoSsrcMap;
     logger::LoggableId _loggableId;
     std::atomic_bool _recordingActive;
     std::unordered_set<uint32_t> _remoteVideoSsrc;
     uint32_t _ptime;
+    std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
 };
 
 template <typename T>

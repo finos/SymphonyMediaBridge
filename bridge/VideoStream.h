@@ -21,7 +21,7 @@ struct VideoStream
         bool ssrcRewrite)
         : _id(id),
           _endpointId(endpointId),
-          _endpointIdHash(std::hash<std::string>{}(_endpointId)),
+          _endpointIdHash(utils::hash<std::string>{}(_endpointId)),
           _localSsrc(localSsrc),
           _simulcastStream{0},
           _transport(transport),

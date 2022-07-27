@@ -169,7 +169,6 @@ void AudioForwarderReceiveJob::run()
                 // We need to 'fake' reasonable audio levels for the reasons.
                 audioLevel.set(silence ? 90 : 25);
             }
-
             _engineMixer.mapSsrc2UserId(_ssrcContext._ssrc, c9UserId);
         }
 

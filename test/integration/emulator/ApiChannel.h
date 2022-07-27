@@ -2,6 +2,7 @@
 #include "memory/AudioPacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
 #include "transport/RtcTransport.h"
+#include "utils/StdExtensions.h"
 #include <string>
 #include <unordered_set>
 
@@ -19,6 +20,20 @@ public:
 private:
     std::string _id;
     bool _success = false;
+};
+
+struct SimulcastStream
+{
+    struct Level
+    {
+        uint32_t ssrc = 0;
+        uint32_t feedbackSsrc = 0;
+
+        bool empty() const { return !ssrc && !feedbackSsrc; }
+    };
+
+    Level levels[3];
+    bool slides = false;
 };
 
 class BaseChannel
@@ -45,6 +60,7 @@ public:
     virtual bool isAudioOffered() const = 0;
 
     virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const = 0;
+    virtual std::vector<SimulcastStream> getOfferedVideoStreams() const = 0;
 
 public:
     bool isSuccess() const { return !raw.empty(); }
@@ -52,7 +68,7 @@ public:
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
-    uint32_t getEndpointIdHash() const { return std::hash<std::string>{}(_id); }
+    uint32_t getEndpointIdHash() const { return utils::hash<std::string>{}(_id); }
     std::string raw;
 
 protected:
@@ -98,6 +114,7 @@ public:
     bool isAudioOffered() const override { return _offer.find("audio") != _offer.end(); }
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
+    std::vector<SimulcastStream> getOfferedVideoStreams() const override;
 };
 
 class ColibriChannel : public BaseChannel
@@ -121,6 +138,7 @@ public:
     bool isAudioOffered() const override;
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
+    std::vector<SimulcastStream> getOfferedVideoStreams() const override;
 };
 
 class Barbell

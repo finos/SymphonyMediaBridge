@@ -370,8 +370,8 @@ TEST_F(IntegrationTest, plain)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client3.getReceiveStats();
-        // We expect one audio ssrc, three video and one padding
-        EXPECT_EQ(rData1.size(), 4);
+        // We expect one audio ssrc
+        EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -548,8 +548,6 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
     client2.stopRecording();
     client2._transport->stop();
 
-    const auto numSsrcClient1Received = client1.getReceiveStats().size();
-
     // Video producer (client2) stopped, waiting 1.5s for rctl.cooldownInterval timeout to take effect
     // (configured for 1 s for this test).
 
@@ -600,11 +598,10 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
     const auto& rData2 = client2.getReceiveStats();
     const auto& rData3 = client3.getReceiveStats();
 
-    EXPECT_EQ(numSsrcClient1Received, 3); // s2's audio, s2's video + padding
-    EXPECT_EQ(rData1.size(), 4); // s2's audio, s3's audio, s2's video + padding
-    EXPECT_EQ(rData2.size(), 2); // s1's aidio, + padding
-    EXPECT_EQ(rData3.size(),
-        1); // s1's aidio, no padding, since it joined the call whith no video.  !!!TODO config timeout
+    EXPECT_EQ(rData1.size(), 2); // s2's audio, s3's audio
+    EXPECT_EQ(rData2.size(), 1); // s1's audio, + padding
+                                 // s1's audio, no padding, since it joined the call whith no video.
+    EXPECT_EQ(rData3.size(), 1);
 }
 
 TEST_F(IntegrationTest, plainNewApi)
@@ -750,8 +747,8 @@ TEST_F(IntegrationTest, plainNewApi)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client3.getReceiveStats();
-        // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 4);
+        // We expect one audio ssrc
+        EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -928,8 +925,8 @@ TEST_F(IntegrationTest, ptime10)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client3.getReceiveStats();
-        // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 4);
+        // We expect one audio ssrc
+        EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -1030,15 +1027,17 @@ TEST_F(IntegrationTest, simpleBarbell)
     bb1.configure(sdp2);
     bb2.configure(sdp1);
 
-    utils::Time::nanoSleep(5 * utils::Time::sec);
+    utils::Time::nanoSleep(2 * utils::Time::sec);
 
     SfuClient<Channel> client1(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
     SfuClient<Channel> client2(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
+    SfuClient<Channel> client3(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
 
-    GroupCall<SfuClient<Channel>> groupCall({&client1, &client2});
+    GroupCall<SfuClient<Channel>> groupCall({&client1, &client2, &client3});
 
     client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
     client2.initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+    client3.initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
     if (!groupCall.connect(utils::Time::sec * 8))
     {
@@ -1048,14 +1047,17 @@ TEST_F(IntegrationTest, simpleBarbell)
 
     client1._audioSource->setFrequency(600);
     client2._audioSource->setFrequency(1300);
+    client3._audioSource->setFrequency(2100);
 
     client1._audioSource->setVolume(0.6);
     client2._audioSource->setVolume(0.6);
+    client3._audioSource->setVolume(0.6);
 
     groupCall.run(utils::Time::ms * 5000);
 
     client2.stopRecording();
     client1.stopRecording();
+    client3.stopRecording();
 
     HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
     statsRequest.awaitResponse(1500 * utils::Time::ms);
@@ -1066,8 +1068,74 @@ TEST_F(IntegrationTest, simpleBarbell)
 
     client1._transport->stop();
     client2._transport->stop();
+    client3._transport->stop();
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
+
+    const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+    {
+        auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+        const auto& rData1 = client1.getReceiveStats();
+        std::vector<double> allFreq;
+        EXPECT_EQ(rData1.size(), 2);
+
+        for (const auto& item : rData1)
+        {
+            if (client1.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+            allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+            EXPECT_EQ(amplitudeProfile.size(), 2);
+            if (amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+            }
+
+            // item.second->dumpPcmData();
+        }
+
+        std::sort(allFreq.begin(), allFreq.end());
+        EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
+        EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
+    }
+    {
+        auto audioCounters = client2._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        const auto& rData1 = client2.getReceiveStats();
+        std::vector<double> allFreq;
+        for (const auto& item : rData1)
+        {
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+            EXPECT_EQ(freqVector.size(), 1);
+            allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+            EXPECT_EQ(amplitudeProfile.size(), 2);
+            if (amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+            }
+
+            // item.second->dumpPcmData();
+        }
+
+        std::sort(allFreq.begin(), allFreq.end());
+        EXPECT_NEAR(allFreq[0], 600.0, 25.0);
+        EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
+    }
 }
 
 TEST_F(IntegrationTest, detectIsPtt)

@@ -97,6 +97,9 @@ public:
         return utils::Optional<ice::TransportType>();
     }
 
+    void setTag(const char* tag) override{};
+    const char* getTag() const override { return nullptr; };
+
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
     jobmanager::JobQueue& _jobQueue;

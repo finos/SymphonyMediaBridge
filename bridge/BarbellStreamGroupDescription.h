@@ -9,18 +9,27 @@ namespace bridge
 
 struct BarbellStreamGroupDescription
 {
+    struct Level
+    {
+        uint32_t ssrc = 0;
+        uint32_t feedbackSsrc = 0;
+    };
+
     BarbellStreamGroupDescription() : slides(false){};
 
     std::vector<uint32_t> getSsrcs() const
     {
         std::vector<uint32_t> v;
-        utils::append(v, ssrcs);
-        utils::append(v, feedbackSsrcs);
+        v.reserve(ssrcLevels.size());
+        for (auto& level : ssrcLevels)
+        {
+            v.push_back(level.ssrc);
+            v.push_back(level.feedbackSsrc);
+        }
         return v;
     }
 
-    std::vector<uint32_t> ssrcs;
-    std::vector<uint32_t> feedbackSsrcs;
+    std::vector<Level> ssrcLevels;
     bool slides; // a.k.a screen share
 };
 

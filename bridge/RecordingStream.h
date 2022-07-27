@@ -3,6 +3,7 @@
 #include "bridge/RecordingDescription.h"
 #include "bridge/engine/UnackedPacketsTracker.h"
 #include "transport/RecordingTransport.h"
+#include "utils/StdExtensions.h"
 #include <atomic>
 #include <cstdint>
 #include <map>
@@ -16,7 +17,7 @@ struct RecordingStream
 {
     RecordingStream(const std::string& id)
         : _id(id),
-          _endpointIdHash(std::hash<std::string>{}(id)),
+          _endpointIdHash(utils::hash<std::string>{}(id)),
           _audioActiveRecCount(0),
           _videoActiveRecCount(0),
           _screenSharingActiveRecCount(0),

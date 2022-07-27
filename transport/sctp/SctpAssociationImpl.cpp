@@ -3,7 +3,7 @@
 #include "SctpServerPort.h"
 #include "Sctprotocol.h"
 #include "logger/Logger.h"
-#include "memory/StackArray.h"
+#include "memory/Array.h"
 #include "utils/MersienneRandom.h"
 #include "utils/Time.h"
 
@@ -1346,7 +1346,7 @@ void SctpAssociationImpl::reportFragment(InboundChunkList::iterator chunkHeadIt,
     const size_t fragmentSize,
     const uint64_t timestamp)
 {
-    memory::StackArray<uint8_t, 512> buffer(fragmentSize);
+    memory::Array<uint8_t, 512> buffer(fragmentSize);
 
     ReceivedDataChunk chunkHead = *chunkHeadIt->second;
     if (_streams.find(chunkHead.streamId) == _streams.cend())
@@ -1359,7 +1359,7 @@ void SctpAssociationImpl::reportFragment(InboundChunkList::iterator chunkHeadIt,
     for (auto it = chunkHeadIt; it != _inboundDataChunks.end(); ++it)
     {
         const bool isFragmentEnd = it->second->fragmentEnd;
-        std::memcpy(target, it->second->data(), it->second->size);
+        buffer.append(it->second->data(), it->second->size);
         target += it->second->size;
         _inboundBuffer.free(it->second);
         if (isFragmentEnd)

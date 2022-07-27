@@ -29,6 +29,10 @@ struct Barbell
     std::vector<BarbellStreamGroupDescription> videoSsrcs;
     std::vector<uint32_t> audioSsrcs;
 
+    RtpMap audioRtpMap;
+    RtpMap videoRtpMap;
+    RtpMap videoFeedbackRtpMap;
+
     bool markedForDeletion;
     bool isConfigured;
 };

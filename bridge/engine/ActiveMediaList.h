@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bridge/engine/ActiveTalker.h"
+#include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "concurrency/MpmcHashmap.h"
@@ -45,11 +46,17 @@ public:
         uint32_t audioLastN,
         uint32_t activeTalkerSilenceThresholdDb);
 
-    bool addAudioParticipant(const size_t endpointIdHash);
+    bool addAudioParticipant(const size_t endpointIdHash, const char* endpointId);
+    bool addBarbellAudioParticipant(const size_t endpointIdHash, const char* endpointId);
     bool removeAudioParticipant(const size_t endpointIdHash);
     bool addVideoParticipant(const size_t endpointIdHash,
         const SimulcastStream& simulcastStream,
-        const utils::Optional<SimulcastStream>& secondarySimulcastStream);
+        const utils::Optional<SimulcastStream>& secondarySimulcastStream,
+        const char* endpointId);
+    bool addBarbellVideoParticipant(const size_t endpointIdHash,
+        const SimulcastStream& simulcastStream,
+        const utils::Optional<SimulcastStream>& secondarySimulcastStream,
+        const char* endpointId);
     bool removeVideoParticipant(const size_t endpointIdHash);
 
     /**
@@ -128,21 +135,17 @@ public:
     bool makeLastNListMessage(const size_t lastN,
         const size_t endpointIdHash,
         const size_t pinTargetEndpointIdHash,
-        const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
         utils::StringBuilder<1024>& outMessage);
 
     bool makeUserMediaMapMessage(const size_t lastN,
         const size_t endpointIdHash,
         const size_t pinTargetEndpointIdHash,
-        const concurrency::MpmcHashmap32<size_t, EngineAudioStream*>& engineAudioStreams,
         const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
         utils::StringBuilder<1024>& outMessage);
 
-    bool makeBarbellUserMediaMapMessage(
-        const concurrency::MpmcHashmap32<size_t, EngineAudioStream*>& engineAudioStreams,
-        const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
-        utils::StringBuilder<1024>& outMessage);
+    bool makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage);
 
+    uint32_t getMapRevision() const { return _ssrcMapRevision; }
 #if DEBUG
     void checkInvariant();
 #endif
@@ -159,7 +162,7 @@ private:
 
     struct AudioParticipant
     {
-        AudioParticipant();
+        explicit AudioParticipant(const char* id, bool isLocal);
 
         static constexpr float MAX_LEVEL_DECAY = 0.006f;
         // Ramp up last seen noise level by 1 every second if no new minimum
@@ -178,6 +181,8 @@ private:
         float maxRecentLevel;
         float noiseLevel;
         bool ptt;
+        EndpointIdString endpointId;
+        bool isLocal;
     };
 
     struct AudioLevelEntry
@@ -189,6 +194,19 @@ private:
 
     struct VideoParticipant
     {
+        VideoParticipant(const char* id,
+            const SimulcastStream& primaryStream,
+            const utils::Optional<SimulcastStream>& secondaryStream,
+            bool isLocal)
+            : isLocal(isLocal),
+              endpointId(id),
+              simulcastStream(primaryStream),
+              secondarySimulcastStream(secondaryStream)
+        {
+        }
+
+        bool isLocal;
+        EndpointIdString endpointId;
         SimulcastStream simulcastStream;
         utils::Optional<SimulcastStream> secondarySimulcastStream;
     };
@@ -253,6 +271,7 @@ private:
     uint64_t _lastRunTimestamp;
     uint64_t _lastChangeTimestamp;
     std::atomic_bool _c9_conference;
+    uint32_t _ssrcMapRevision;
 
     size_t rankSpeakers(float& currentDominantSpeakerScore);
     void updateLevels(const uint64_t timestampMs);
@@ -260,6 +279,12 @@ private:
     bool updateActiveVideoList(const size_t endpointIdHash);
     void addToRewriteMap(size_t endpointIdHash, SimulcastGroup simulcastGroup);
     void removeFromRewriteMap(size_t endpointIdHash);
+
+    bool onAudioParticipantAdded(const size_t endpointIdHash, const char* endpointId);
+    bool onVideoParticipantAdded(const size_t endpointIdHash,
+        const SimulcastStream& simulcastStream,
+        const utils::Optional<SimulcastStream>& secondarySimulcastStream,
+        const char* endpointId);
 };
 
 } // namespace bridge

@@ -1,8 +1,11 @@
 #pragma once
 #include "bridge/BarbellStreamGroupDescription.h"
 #include "bridge/RtpMap.h"
+#include "bridge/engine/BarbellEndpointMap.h"
+#include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "concurrency/MpmcHashmap.h"
+#include "memory/Map.h"
 #include "webrtc/WebRtcDataStream.h"
 #include <cstdint>
 
@@ -18,66 +21,51 @@ struct EngineBarbell
 {
     EngineBarbell(const std::string& barbellId,
         transport::RtcTransport& rtcTransport,
-        memory::PacketPoolAllocator& poolAllocator,
         const std::vector<BarbellStreamGroupDescription>& videoDescriptions,
-        const std::vector<uint32_t>& audio)
-        : id(barbellId),
-          ssrcOutboundContexts(128),
-          transport(rtcTransport),
-          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator),
-          videoSsrcMap(16 * 8),
-          audioSsrcMap(16)
-    {
-        for (auto& ssrc : audio)
-        {
-            audioStreams.push_back(AudioStream{ssrc, utils::Optional<size_t>()});
-        }
-        for (auto& videoGroup : videoDescriptions)
-        {
-            SsrcGroup videoStream;
-            videoStream.count = videoGroup.ssrcs.size();
-            std::memcpy(videoStream.ssrcs, videoGroup.ssrcs.data(), videoStream.count * sizeof(uint32_t));
-            std::memcpy(videoStream.feedbackSsrcs,
-                videoGroup.feedbackSsrcs.data(),
-                videoStream.count * sizeof(uint32_t));
+        const std::vector<uint32_t>& audioSsrcs,
+        RtpMap& audioRtpMap,
+        RtpMap& videoRtpMap,
+        RtpMap& videoFeedbackRtpMap);
 
-            videoStreams.push_back(videoStream);
-        }
-    }
+    utils::Optional<uint32_t> getMainSsrcFor(uint32_t feedbackSsrc);
+    utils::Optional<uint32_t> getFeedbackSsrcFor(uint32_t ssrc);
 
     std::string id;
+    size_t idHash;
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
     transport::RtcTransport& transport;
-
     webrtc::WebRtcDataStream dataChannel;
-    // some map for ssrc to user id endpointIdHash to be used in activemediaList, that we update from data channel
+
+    // map for ssrc to user id endpointIdHash to be used in activemediaList, that we update from data channel
     // messages
-
-    struct SsrcGroup
+    struct VideoStream
     {
-        uint32_t ssrcs[3];
-        uint32_t feedbackSsrcs[3];
-        uint32_t count = 3;
-
+        SimulcastStream stream;
         utils::Optional<size_t> endpointIdHash;
-        utils::Optional<std::string> endpointId;
+        utils::Optional<EndpointIdString> endpointId;
     };
 
     struct AudioStream
     {
         uint32_t ssrc;
         utils::Optional<size_t> endpointIdHash;
-        utils::Optional<std::string> endpointId;
+        utils::Optional<EndpointIdString> endpointId;
     };
 
-    // inbound ssrcs over barbell and how they group together and map currently to remote endpointId
-    std::vector<SsrcGroup> videoStreams;
+    // inbound ssrcs over barbell and map to endpointId. Static set of streams prepared in constructor
+    std::vector<VideoStream> videoStreams;
     std::vector<AudioStream> audioStreams;
-    SsrcGroup slideStream;
+    VideoStream slideStream;
 
-    concurrency::MpmcHashmap32<uint32_t, SsrcGroup*> videoSsrcMap;
-    concurrency::MpmcHashmap32<uint32_t, AudioStream*> audioSsrcMap;
+    memory::Map<uint32_t, VideoStream*, 32> videoSsrcMap;
+    memory::Map<uint32_t, AudioStream*, 16> audioSsrcMap;
+
+    bridge::RtpMap audioRtpMap;
+    bridge::RtpMap videoRtpMap;
+    bridge::RtpMap videoFeedbackRtpMap;
+
+    static const char* barbellTag;
 };
 
 } // namespace bridge
