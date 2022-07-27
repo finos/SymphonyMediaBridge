@@ -183,7 +183,8 @@ EngineMixer::EngineMixer(const std::string& id,
           audioSsrcs,
           videoSsrcs,
           lastN,
-          config.audio.lastN)),
+          config.audio.lastN,
+          config.audio.activeTalkerSilenceThresholdDb)),
       _lastUplinkEstimateUpdate(0),
       _config(config),
       _lastN(lastN),
@@ -3323,4 +3324,8 @@ size_t EngineMixer::getDominantSpeakerId() const
     return _activeMediaList->getDominantSpeaker();
 }
 
+std::unordered_set<size_t> EngineMixer::getActiveTalkers() const
+{
+    return _activeMediaList->getActiveTalkers();
+}
 } // namespace bridge

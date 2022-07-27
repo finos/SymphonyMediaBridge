@@ -3,11 +3,14 @@
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "concurrency/MpmcHashmap.h"
+#include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <unordered_set>
 #include <vector>
 
 namespace utils
@@ -25,7 +28,7 @@ struct EngineAudioStream;
 class ActiveMediaList
 {
 public:
-    static const size_t maxParticipants = 1024;
+    static constexpr size_t maxParticipants = 1024;
 
     struct VideoScreenShareSsrcMapping
     {
@@ -37,7 +40,8 @@ public:
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<SimulcastLevel>& videoSsrcs,
         const uint32_t defaultLastN,
-        uint32_t audioLastN);
+        uint32_t audioLastN,
+        uint32_t activeTalkerSilenceThresholdDb);
 
     bool addAudioParticipant(const size_t endpointIdHash);
     bool removeAudioParticipant(const size_t endpointIdHash);
@@ -58,9 +62,13 @@ public:
         }
     }
 
+    void onNewPtt(const size_t endpointIdHash, bool isPtt);
+
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
     inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
+
+    const std::unordered_set<size_t> getActiveTalkers() const;
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
@@ -160,6 +168,7 @@ private:
         int32_t _nonZeroLevelsShortWindow;
         float _maxRecentLevel;
         float _noiseLevel;
+        bool _isPtt;
     };
 
     struct AudioLevelEntry
@@ -178,6 +187,7 @@ private:
     {
         size_t participant;
         float score;
+        float noiseLevel;
 
         bool operator<(const AudioParticipantScore& rhs) const { return score < rhs.score; }
         bool operator>(const AudioParticipantScore& rhs) const { return score > rhs.score; }
@@ -189,9 +199,23 @@ private:
     const uint32_t _defaultLastN;
     const size_t _maxActiveListSize;
     const size_t _audioLastN;
+    const uint32_t _activeTalkerSilenceThresholdDb;
     const size_t _maxSpeakers;
 
     concurrency::MpmcHashmap32<size_t, AudioParticipant> _audioParticipants;
+
+    template <size_t MAX_SIZE>
+    struct ActiveTalkersSnapshot
+    {
+        std::array<size_t, MAX_SIZE> endpointHashIds;
+        static const size_t maxSize = MAX_SIZE;
+        size_t count = 0;
+    };
+    using TActiveTalkersSnapshot = ActiveTalkersSnapshot<maxParticipants / 2>;
+
+    // Use 6 to accomodate 1 writing thread for "process" and up to 5 http threads.
+    concurrency::MpmcPublish<TActiveTalkersSnapshot, 6> _activeTalkerSnapshot;
+
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
     concurrency::MpmcQueue<uint32_t> _audioSsrcs;
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
@@ -219,10 +243,11 @@ private:
     uint64_t _lastRunTimestampMs;
     uint64_t _lastChangeTimestampMs;
 
-    size_t rankSpeakers(float& currentDominantSpeakerScore);
+    size_t rankSpeakers(float& currentDominantSpeakerScore, TActiveTalkersSnapshot& out);
     void updateLevels(const uint64_t timestampMs);
     void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
+    std::atomic_bool _c9_conference;
 };
 
 } // namespace bridge

@@ -218,13 +218,35 @@ nlohmann::json generateConferenceEndpoint(const ConferenceEndpoint& endpoint)
 {
     nlohmann::json jsonEndpoint = nlohmann::json::object();
     jsonEndpoint.emplace("id", endpoint.id);
-    jsonEndpoint.emplace("isBundled", endpoint.isBundled);
-    jsonEndpoint.emplace("hasAudio", endpoint.hasAudio);
-    jsonEndpoint.emplace("hasVideo", endpoint.hasVideo);
-    jsonEndpoint.emplace("isActiveSpeaker", endpoint.isActiveSpeaker);
-    jsonEndpoint.emplace("isRecording", endpoint.isRecording);
+    jsonEndpoint.emplace("isDominantSpeaker", endpoint.isDominantSpeaker);
+    jsonEndpoint.emplace("isActiveTalker", endpoint.isActiveTalker);
     jsonEndpoint.emplace("iceState", api::utils::toString(endpoint.iceState));
     jsonEndpoint.emplace("dtlsState", api::utils::toString(endpoint.dtlsState));
+    return jsonEndpoint;
+}
+
+nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtendedInfo& endpoint)
+{
+    nlohmann::json jsonEndpoint = generateConferenceEndpoint(endpoint);
+    {
+        nlohmann::json fiveTuple = nlohmann::json::object();
+        fiveTuple.emplace("localIP", endpoint.localIp);
+        fiveTuple.emplace("localPort", endpoint.localPort);
+        fiveTuple.emplace("protocol", endpoint.protocol);
+        fiveTuple.emplace("remoteIP", endpoint.remoteIP);
+        fiveTuple.emplace("remotePort", endpoint.remotePort);
+        jsonEndpoint.emplace("iceSelectedTuple", fiveTuple);
+    }
+    {
+        nlohmann::json ssrcMap = nlohmann::json::array();
+        {
+            nlohmann::json ssrcMsid = nlohmann::json::object();
+            assert(endpoint.ssrc.length() > 0);
+            ssrcMsid.emplace(endpoint.ssrc, endpoint.msid);
+            ssrcMap.push_back(ssrcMsid);
+        }
+        jsonEndpoint.emplace("audioSsrcMap", ssrcMap);
+    }
     return jsonEndpoint;
 }
 

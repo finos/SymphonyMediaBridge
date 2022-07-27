@@ -29,7 +29,7 @@ public:
         EngineMixer& engineMixer,
         SsrcInboundContext& ssrcContext,
         ActiveMediaList& activeMediaList,
-        const int32_t silenceThresholdLevel,
+        const uint8_t silenceThresholdLevel,
         const bool hasMixedAudioStreams,
         const uint32_t extendedSequenceNumber);
 
@@ -44,9 +44,9 @@ private:
     transport::RtcTransport* _sender;
     SsrcInboundContext& _ssrcContext;
     ActiveMediaList& _activeMediaList;
-    int32_t _silenceThresholdLevel;
-    bool _hasMixedAudioStreams;
-    uint32_t _extendedSequenceNumber;
+    const uint8_t _silenceThresholdLevel;
+    const bool _hasMixedAudioStreams;
+    const uint32_t _extendedSequenceNumber;
 };
 
 } // namespace bridge

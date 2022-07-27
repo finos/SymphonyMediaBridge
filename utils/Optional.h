@@ -32,6 +32,8 @@ public:
         return _data;
     }
 
+    constexpr T valueOr(const T&& defaultValue) const { return _isSet ? _data : defaultValue; }
+
     template <typename... U>
     T& set(U&&... args)
     {
