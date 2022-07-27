@@ -36,7 +36,6 @@ struct TJsonPathCache
 
 private:
     static int32_t fnvHash(const char* str, size_t len);
-    size_t index = 0;
 };
 
 using JsonPathCache = TJsonPathCache<100>;
