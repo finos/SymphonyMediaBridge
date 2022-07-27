@@ -135,4 +135,40 @@ TEST(SimpleJson, ParseArray)
         EXPECT_EQ(value, expected[count++]);
     }
 }
+
+TEST(SimpleJson, ParseUMM)
+{
+    const std::string json = "{\"type\":\"user-media-map\",\"video-endpoints\":[{\"endpoint-id\":\"b469945f-856b-38c4-"
+                             "cf1b-0000fb452938\",\"ssrcs\":[4215270161]}],\"audio-endpoints\":[{\"endpoint-id\":"
+                             "\"b469945f-856b-38c4-cf1b-0000fb452938\",\"ssrcs\":[919268345]}]}";
+
+    auto simpleJson = SimpleJson::create(json.c_str(), json.length());
+    auto value = simpleJson.find("type");
+    EXPECT_EQ(value.valueOr(std::string("")), "user-media-map");
+
+    std::vector<SimpleJson> endpoints, ssrc;
+    {
+        value = simpleJson.find("video-endpoints");
+        value.getValue(endpoints);
+        EXPECT_EQ(endpoints.size(), 1);
+        value = endpoints[0].find("endpoint-id");
+        EXPECT_EQ(value.valueOr(std::string("")), "b469945f-856b-38c4-cf1b-0000fb452938");
+        value = endpoints[0].find("ssrc");
+        value.getValue(ssrc);
+        EXPECT_EQ(ssrc.size(), 1);
+        EXPECT_EQ(ssrc[0].valueOr(int64_t(42)), 4215270161);
+    }
+
+    {
+        value = simpleJson.find("audio-endpoints");
+        value.getValue(endpoints);
+        EXPECT_EQ(endpoints.size(), 1);
+        value = endpoints[0].find("endpoint-id");
+        EXPECT_EQ(value.valueOr(std::string("")), "b469945f-856b-38c4-cf1b-0000fb452938");
+        value = endpoints[0].find("ssrc");
+        value.getValue(ssrc);
+        EXPECT_EQ(ssrc.size(), 1);
+        EXPECT_EQ(ssrc[0].valueOr(int64_t(42)), 919268345);
+    }
+}
 } // namespace utils
