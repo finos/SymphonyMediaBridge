@@ -1,8 +1,10 @@
 #pragma once
 
 #include "utils/Optional.h"
+#include "utils/StdExtensions.h"
 #include <assert.h>
 #include <cstdint>
+#include <inttypes.h>
 #include <memory>
 #include <stdio.h>
 
@@ -16,12 +18,13 @@ struct TJsonPathCache
 {
     const char* cursorIn[SIZE];
     const char* cursorOut[SIZE];
-    int32_t key[SIZE];
+    uint32_t key[SIZE];
+
     TJsonPathCache() { memset(key, 0, sizeof(key)); }
     void put(const char* path, size_t pathLength, const char* in, const char* out)
     {
-        auto hash = fnvHash(path, pathLength);
-        size_t bin = hash % SIZE;
+        const auto hash = utils::hash<char*>{}(path, pathLength);
+        const size_t bin = hash % SIZE;
 #if SIMPLE_JSON_CACHE_DIAG
         if (key[bin] != 0 && key[bin] != hash)
         {
@@ -32,10 +35,11 @@ struct TJsonPathCache
         cursorIn[bin] = in;
         cursorOut[bin] = out;
     }
+
     bool get(const char* path, size_t pathLength, const char*& outCursorIn, const char*& outCursorOut) const
     {
-        auto hash = fnvHash(path, pathLength);
-        size_t bin = hash % SIZE;
+        const auto hash = utils::hash<char*>{}(path, pathLength);
+        const size_t bin = hash % SIZE;
         if (key[bin] == hash)
         {
             outCursorIn = cursorIn[bin];
@@ -44,17 +48,40 @@ struct TJsonPathCache
         }
         return false;
     }
-
-private:
-    static int32_t fnvHash(const char* str, size_t len);
 };
 
 using JsonPathCache = TJsonPathCache<64>;
 
-template <size_t MAX_SIZE>
-class TSimpleJsonArray;
+class SimpleJsonArray;
 
-using SimpleJsonArray = TSimpleJsonArray<100>;
+struct JsonToken
+{
+    JsonToken() {}
+    explicit JsonToken(const char* start) : begin(start), end(nullptr) {}
+    JsonToken(const char* start, const char* end) : begin(start), end(end) {}
+
+    const char* begin = nullptr;
+    const char* end = nullptr;
+
+    bool isValid() const { return begin && end && end > begin; }
+    size_t size() const { return isValid() ? static_cast<size_t>(end - begin) : 0; }
+
+    void trim();
+
+    bool isColon() const { return size() > 0 && *begin == ':'; }
+    bool isComma() const { return size() > 0 && *begin == ','; }
+    bool isString() const { return size() > 1 && *begin == '"'; }
+    bool isObject() const { return size() > 1 && *begin == '{'; }
+    bool isArray() const { return size() > 1 && *begin == '['; }
+    bool isBoolean() const
+    {
+        return (size() >= 4 && 0 == std::strncmp("true", begin, 4)) ||
+            (size() >= 5 && 0 == std::strncmp("false", begin, 5));
+    }
+
+    bool isNull() const { return size() >= 4 && 0 == std::strncmp("null", begin, 4); }
+    bool isNumber() const { return size() > 0 && (*begin == '-' || std::isdigit(*begin)); }
+};
 
 class SimpleJson
 {
@@ -72,110 +99,112 @@ public:
         Object,
         Array
     };
-    static SimpleJson create(const char* cursorIn, size_t length);
-    static const SimpleJson SimpleJsonNone;
+    static SimpleJson create(const char* begin, size_t length) { return create(begin, begin + length); }
+    static SimpleJson create(const char* begin, const char* end);
 
-    SimpleJson() : _cursorIn(nullptr), _cursorOut(nullptr), _type(Type::None) {}
+    SimpleJson() : _type(Type::None) {}
     SimpleJson(const SimpleJson& ref)
     {
-        _cursorIn = ref._cursorIn;
-        _cursorOut = ref._cursorOut;
+        _item = ref._item;
         _type = ref._type;
     }
+
     SimpleJson& operator=(const SimpleJson& ref)
     {
-        _cursorIn = ref._cursorIn;
-        _cursorOut = ref._cursorOut;
+        _item = ref._item;
         _type = ref._type;
         return *this;
     }
 
     Type getType() const { return _type; }
-    SimpleJson find(const char* const path);
+    SimpleJson find(const char* const path) const;
+    SimpleJson operator[](const char* const path) const { return find(path); }
+    bool exists(const char* path) const { return !find(path).isNone(); };
 
-    Optional<int64_t> getIntValue() const;
-    Optional<double> getFloatValue() const;
-    bool getStringValue(const char*& out, size_t& outLen) const;
-    Optional<bool> getBoolValue() const;
-    Optional<SimpleJsonArray> getArrayValue() const;
+    Optional<int64_t> getInt() const;
 
-private:
-    static SimpleJson create(const char* cursorIn, const char* cursorOut);
-    static SimpleJson createJsonNone() { return SimpleJson(nullptr, 0); }
-    static SimpleJson findInCache(const char* const path, const size_t pathLength, const JsonPathCache& cache);
-    SimpleJson(const char* json, size_t length) : _cursorIn(json), _cursorOut(_cursorIn + length - 1)
+    template <typename T>
+    T getInt(T defaultValue) const
     {
-        if (json)
+        if (Type::Integer != _type)
         {
-            validateFast();
+            return defaultValue;
+        }
+        char _buffer[33];
+        std::strncpy(_buffer, _item.begin, size());
+        _buffer[size()] = 0;
+        if (_buffer[0] == '-')
+        {
+            __int64_t out;
+            return (1 == sscanf(_buffer, "%" SCNd64, &out)) ? static_cast<T>(out) : defaultValue;
         }
         else
         {
-            _type = Type::None;
+            uint64_t out;
+            return (1 == sscanf(_buffer, "%" SCNu64, &out)) ? static_cast<T>(out) : defaultValue;
         }
     }
 
-    template <char OPEN_CHAR, char CLOSE_CHAR>
-    const char* findEnd(const char* start) const;
+    Optional<double> getFloat() const;
+    double getFloat(double defaultValue) const;
+
+    bool getString(const char*& out, size_t& outLen) const;
+
+    template <size_t N>
+    bool getString(char (&target)[N]) const
+    {
+        const char* s;
+        size_t len;
+        if (getString(s, len) && len < N)
+        {
+            std::strncpy(target, s, len);
+            target[len] = 0;
+            return true;
+        }
+        target[0] = 0;
+        return false;
+    }
+
+    Optional<bool> getBool() const;
+    SimpleJsonArray getArray() const;
+
+    bool isNone() const { return _type == Type::None; }
+    size_t size() const { return _item.size(); }
+
+    static const SimpleJson SimpleJsonNone;
+
+private:
+    static SimpleJson findInCache(const char* const path, const size_t pathLength, const JsonPathCache& cache);
+    SimpleJson(const char* begin, const char* end);
 
     SimpleJson findInternal(const char* const path,
         char* const cachedPath,
         size_t cachedPathSize,
-        JsonPathCache& cache);
-    const char* findMatchEnd(const char* start, const char* const match, size_t matchLen) const;
+        JsonPathCache& cache) const;
+
     SimpleJson findProperty(const char* start, const char* const name, const size_t nameLen) const;
 
-    const char* eatDigits(const char* start) const;
-    const char* eatWhiteSpaces(const char* start) const;
-    const char* findValueEnd(const char* start) const;
-    const char* findStringEnd(const char* start) const;
-    const char* findBooleanEnd(const char* start) const;
-    const char* findNumberEnd(const char* start) const;
-    const char* findNullEnd(const char* start) const;
-    const char* findObjectEnd(const char* start) const { return findEnd<'{', '}'>(start); };
-    const char* findArrayEnd(const char* start) const { return findEnd<'[', ']'>(start); };
+    void assessType();
 
-    void validateFast();
-    Type acquirePrimitiveType();
-    size_t size() const { return _cursorOut - _cursorIn + 1; }
-
-private:
-    const char* _cursorIn;
-    const char* _cursorOut;
+    JsonToken _item;
     Type _type;
-    JsonPathCache _cache;
+    mutable JsonPathCache _cache;
 };
 
-template <size_t MAX_SIZE>
-class TSimpleJsonArray
+class SimpleJsonArray
 {
 public:
-    struct ArrayEntry
-    {
-        const char* cursorIn;
-        const char* cursorOut;
-        SimpleJson toJson() const { return SimpleJson::create(cursorIn, cursorOut); }
-    };
     class IterBase
     {
     public:
-        IterBase(ArrayEntry* entries, size_t pos, size_t endPos) : _elements(entries), _pos(pos), _end(endPos) {}
-        IterBase(const IterBase& it) : _elements(it._elements), _pos(it._pos), _end(it._end) {}
+        IterBase(const char* start, const char* arrayEnd);
+        IterBase(const IterBase& it);
 
-        IterBase& operator++()
-        {
-            if (_pos == _end)
-            {
-                return *this; // cannot advance a logical end iterator
-            }
-            ++_pos;
-            return *this;
-        }
-
-        ArrayEntry& operator*() { return _elements[_pos]; }
-        ArrayEntry* operator->() { return &_elements[_pos]; }
-        const ArrayEntry& operator*() const { return _elements[_pos]; }
-        const ArrayEntry* operator->() const { return &_elements[_pos]; }
+        IterBase& operator++();
+        SimpleJson& operator*() { return _element; }
+        SimpleJson* operator->() { return &_element; }
+        const SimpleJson& operator*() const { return _element; }
+        const SimpleJson* operator->() const { return &_element; }
         bool operator==(const IterBase& it) const { return _pos == it._pos || (isEnd() && it.isEnd()); }
 
         bool operator!=(const IterBase& it) const
@@ -188,45 +217,32 @@ public:
         }
 
     private:
-        bool isEnd() const { return _pos == _end; }
-        ArrayEntry* _elements;
-        size_t _pos;
-        size_t _end;
+        bool isEnd() const { return _pos == _arrayEnd; }
+        const char* _pos;
+        const char* _arrayEnd;
+        mutable SimpleJson _element;
     };
 
     typedef const IterBase const_iterator;
     typedef IterBase iterator;
 
-    void clear() { _size = 0; }
-    size_t capacity() const { return MAX_SIZE; }
-    size_t size() const { return _size; }
+    SimpleJsonArray(const char* start, const char* end) : _item(start, end) { _item.trim(); }
 
-    const_iterator cbegin() const { return const_iterator(const_cast<ArrayEntry*>(&_entries[0]), 0, _size); }
-    const_iterator cend() const { return const_iterator(const_cast<ArrayEntry*>(&_entries[0]), _size + 1, _size + 1); }
+    size_t size() const { return _item.size(); }
+    size_t count() const;
+
+    const_iterator cbegin() const { return const_iterator(_item.begin, _item.end); }
+    const_iterator cend() const { return const_iterator(_item.end, _item.end); }
     const_iterator begin() const { return cbegin(); }
     const_iterator end() const { return cend(); }
-    iterator cbegin() { return iterator(_entries, 0, _size); }
-    iterator cend() { return iterator(_entries, _size + 1, _size + 1); }
 
-    void push_back(const char* cursorIn, const char* cursorOut)
-    {
-        if (_size + 1 < MAX_SIZE)
-        {
-            _size++;
-            _entries[_size - 1].cursorIn = cursorIn;
-            _entries[_size - 1].cursorOut = cursorOut;
-        }
-    }
+    SimpleJson front() { return *begin(); }
+    SimpleJson front() const { return *begin(); }
 
-    ArrayEntry& operator[](size_t i)
-    {
-        assert(i < _size);
-        return _entries[i];
-    }
+    bool empty() const { return _item.begin == _item.end; }
+    bool isNull() const { return _item.begin == nullptr; }
 
 private:
-    ArrayEntry _entries[MAX_SIZE];
-    size_t _size = 0;
+    JsonToken _item;
 };
-
 }; // namespace utils

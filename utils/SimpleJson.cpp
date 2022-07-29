@@ -5,214 +5,99 @@
 
 namespace utils
 {
-template <size_t SIZE>
-int32_t TJsonPathCache<SIZE>::fnvHash(const char* str, size_t len)
+namespace Json
 {
-    static constexpr int32_t FNV1_32_INIT = 0x811c9dc5;
-    unsigned char* s = (unsigned char*)str;
-    int32_t hval = FNV1_32_INIT;
-
-    while (len--)
-    {
-        hval += (hval << 1) + (hval << 4) + (hval << 7) + (hval << 8) + (hval << 24);
-        hval ^= (int32_t)*s++;
-    }
-    return hval;
-}
-
-const SimpleJson SimpleJson::SimpleJsonNone = SimpleJson::createJsonNone();
-
-SimpleJson SimpleJson::create(const char* cursorIn, size_t length)
-{
-    if (!cursorIn || 0 == length)
-    {
-        return SimpleJsonNone;
-    }
-    return SimpleJson(cursorIn, length);
-}
-
-SimpleJson SimpleJson::create(const char* cursorIn, const char* cursorOut)
-{
-    if (!cursorIn || !cursorOut || cursorIn > cursorOut)
-    {
-        return SimpleJsonNone;
-    }
-
-    return SimpleJson(cursorIn, cursorOut - cursorIn + 1);
-}
-
-void SimpleJson::validateFast()
-{
-    if (!_cursorIn || !_cursorOut)
-    {
-        _type = Type::None;
-        return;
-    }
-    while (_cursorIn != _cursorOut && std::isspace(*_cursorIn))
-    {
-        _cursorIn++;
-    }
-    while (_cursorOut != _cursorIn && std::isspace(*_cursorOut))
-    {
-        _cursorOut--;
-    }
-    if (*_cursorIn == '{' && *_cursorOut == '}')
-    {
-        _type = Type::Object;
-    }
-    else if (*_cursorIn == '[' && *_cursorOut == ']')
-    {
-        _type = Type::Array;
-    }
-    else
-    {
-        _type = acquirePrimitiveType();
-    }
-}
-
-SimpleJson::Type SimpleJson::acquirePrimitiveType()
-{
-    auto cursor = findStringEnd(_cursorIn);
-    if (cursor == _cursorOut)
-    {
-        return Type::String;
-    }
-    cursor = findNullEnd(_cursorIn);
-    if (cursor == _cursorOut)
-    {
-        return Type::Null;
-    }
-    cursor = findBooleanEnd(_cursorIn);
-    if (cursor == _cursorOut)
-    {
-        return Type::Boolean;
-    }
-    cursor = findNumberEnd(_cursorIn);
-    char _buffer[33];
-    if (cursor == _cursorOut && size() < sizeof(_buffer))
-    {
-        strncpy(_buffer, _cursorIn, size());
-        _buffer[size()] = 0;
-        int64_t intVal;
-        double floatVal, intPart;
-        auto readInt = sscanf(_buffer, "%" SCNd64, &intVal);
-        auto readFloat = sscanf(_buffer, "%lf", &floatVal);
-        if (readInt && readFloat)
-        {
-            // Return Float if we have fractional part. Otherwise Integer should suffice.
-            return modf(floatVal, &intPart) != 0 ? Type::Float : Type::Integer;
-        }
-        if (readInt && !readFloat)
-        {
-            return Type::Integer;
-        }
-        if (!readInt && readFloat)
-        {
-            return Type::Float;
-        }
-    }
-    return Type::None;
-}
-
 // Finds the end of the string.
 // start should point at opening " character.
-// Returns position of the closing " character.
-const char* SimpleJson::findStringEnd(const char* start) const
+// Returns position after the closing " character.
+JsonToken extractString(const JsonToken& item)
 {
-    const char* end = nullptr;
-    if (!start || '"' != *start)
+    if (!item.begin || '"' != *item.begin)
     {
-        return end;
+        return JsonToken();
     }
 
-    auto cursor = start;
-    while (++cursor <= _cursorOut)
+    for (auto cursor = item.begin + 1; cursor != item.end; ++cursor)
     {
         if ('\\' == *cursor)
         {
-            cursor++;
             continue;
         }
-        if ('"' == *cursor)
+        else if ('"' == *cursor)
         {
-            end = cursor;
-            break;
+            return JsonToken(item.begin, cursor + 1);
         }
     }
-    return end;
+
+    return JsonToken();
 }
 
 // Finds the end of the object.
 // start should point at opening { character.
 // Returns position of the closing } character.
 template <char OPEN_CHAR, char CLOSE_CHAR>
-const char* SimpleJson::findEnd(const char* start) const
+JsonToken extractItem(const JsonToken& item)
 {
-    const char* end = nullptr;
-    auto cursor = start;
-    if (!start || OPEN_CHAR != *start)
+    if (!item.begin || OPEN_CHAR != *item.begin)
     {
-        return end;
+        return JsonToken();
     }
 
-    int level = 1;
-    while (++cursor < _cursorOut)
+    int level = 0;
+    for (auto cursor = item.begin; cursor != item.end;)
     {
         switch (*cursor)
         {
         case OPEN_CHAR:
-            level++;
-            continue;
+            ++level;
+            break;
         case CLOSE_CHAR:
-            level--;
+            if (--level == 0)
+            {
+                return JsonToken(item.begin, cursor + 1);
+            }
             break;
         case '"':
-            cursor = findStringEnd(cursor);
+            auto stringItem = extractString(JsonToken(cursor, item.end));
+            if (!stringItem.isValid())
+            {
+                return JsonToken();
+            }
+            cursor = stringItem.end;
             continue;
         }
-        if (level == 0)
+        ++cursor;
+    }
+
+    return JsonToken();
+}
+
+JsonToken extractWord(const JsonToken& item)
+{
+    JsonToken result = item;
+    for (auto cursor = item.begin; cursor != item.end; ++cursor)
+    {
+        if (*cursor == ',' || *cursor == '}' || std::isspace(*cursor))
         {
-            end = cursor;
-            break;
+            result.end = cursor;
+            return result;
         }
     }
-    return end;
-}
-
-const char* SimpleJson::findMatchEnd(const char* start, const char* const match, size_t matchLen) const
-{
-    if (start + matchLen - 1 > _cursorOut)
-    {
-        return nullptr;
-    }
-    return strncmp(start, match, matchLen) ? nullptr : start + matchLen - 1;
-}
-
-const char* SimpleJson::findBooleanEnd(const char* start) const
-{
-    auto result = findMatchEnd(start, "true", 4);
-    return result ? result : findMatchEnd(start, "false", 5);
-}
-
-const char* SimpleJson::findNullEnd(const char* start) const
-{
-    return findMatchEnd(start, "null", 4);
+    return item;
 }
 
 // Finds the end of the number.
 // start should point at opening - or digit character.
 // Returns position of last number-belonging character;
 // NOTE: naive implementation!
-const char* SimpleJson::findNumberEnd(const char* start) const
+JsonToken extractNumber(const JsonToken& item)
 {
-    if (!start || ('-' != *start && !std::isdigit(*start)))
+    if (!item.begin || ('-' != *item.begin && !std::isdigit(*item.begin)))
     {
-        return nullptr;
+        return JsonToken();
     }
 
-    auto cursor = start - 1;
-
-    while (++cursor <= _cursorOut)
+    for (auto cursor = item.begin; cursor != item.end; ++cursor)
     {
         switch (*cursor)
         {
@@ -223,78 +108,146 @@ const char* SimpleJson::findNumberEnd(const char* start) const
             continue;
         default:
             if (!std::isdigit(*cursor))
-                return cursor - 1;
+                return JsonToken(item.begin, cursor);
         }
     }
 
-    return cursor - 1;
+    return item;
 }
 
-const char* SimpleJson::eatDigits(const char* start) const
+JsonToken nextToken(const JsonToken& item)
 {
-    if (!start)
+    if (!item.begin)
     {
-        return nullptr;
+        return JsonToken();
     }
 
-    auto cursor = start - 1;
-    while (++cursor <= _cursorOut)
+    auto cursor = item.begin;
+    while (cursor != item.end && std::isspace(*cursor))
     {
-        if (!std::isdigit(*cursor))
-            return cursor;
-    }
-    return nullptr;
-}
-
-const char* SimpleJson::eatWhiteSpaces(const char* start) const
-{
-    if (!start)
-    {
-        return nullptr;
+        ++cursor;
     }
 
-    auto cursor = start - 1;
-    while (++cursor <= _cursorOut)
+    if (cursor == item.end)
     {
-        if (!std::isspace(*cursor))
-            return cursor;
-    }
-    return nullptr;
-}
-
-// Finds the end of the property.
-// start should point at the the first char after :.
-// Returns position of the last char beloning to the value.
-// including " or }.
-const char* SimpleJson::findValueEnd(const char* start) const
-{
-    auto cursor = start;
-    if (!start)
-    {
-        return nullptr;
+        return JsonToken();
     }
 
-    cursor = eatWhiteSpaces(cursor);
-    if (!cursor)
-    {
-        return nullptr;
-    }
     switch (*cursor)
     {
     case '{':
-        return findObjectEnd(cursor);
+        return extractItem<'{', '}'>(JsonToken(cursor, item.end));
     case '[':
-        return findArrayEnd(cursor);
+        return extractItem<'[', ']'>(JsonToken(cursor, item.end));
     case '"':
-        return findStringEnd(cursor);
+        return extractString(JsonToken(cursor, item.end));
     case 't':
     case 'f':
-        return findBooleanEnd(cursor);
+        return extractWord(JsonToken(cursor, item.end));
     case 'n':
-        return findNullEnd(cursor);
+        return extractWord(JsonToken(cursor, item.end));
+    case ':':
+        return JsonToken(cursor, cursor + 1);
+    case ',':
+        return JsonToken(cursor, cursor + 1);
+    default:
+        return extractNumber(JsonToken(cursor, item.end));
     }
 
-    return findNumberEnd(cursor);
+    return JsonToken();
+}
+} // namespace Json
+
+const SimpleJson SimpleJson::SimpleJsonNone = SimpleJson(nullptr, nullptr);
+
+void JsonToken::trim()
+{
+    if (!begin || !end)
+    {
+        return;
+    }
+
+    while (begin != end && std::isspace(*begin))
+    {
+        ++begin;
+    }
+    while (end > begin && std::isspace(*(end - 1)))
+    {
+        --end;
+    }
+}
+
+SimpleJson SimpleJson::create(const char* cursorIn, const char* cursorOut)
+{
+    if (!cursorIn || !cursorOut || cursorIn > cursorOut)
+    {
+        return SimpleJsonNone;
+    }
+
+    return SimpleJson(cursorIn, cursorOut);
+}
+
+SimpleJson::SimpleJson(const char* begin, const char* end) : _item(begin, end)
+{
+    if (begin)
+    {
+        assessType();
+    }
+    else
+    {
+        _type = Type::None;
+    }
+}
+
+void SimpleJson::assessType()
+{
+    _type = Type::None;
+    if (_item.isValid())
+    {
+        _item.trim();
+    }
+
+    if (!_item.isValid() || _item.size() == 0)
+    {
+        return;
+    }
+
+    if (_item.isObject())
+    {
+        _type = Type::Object;
+    }
+    else if (_item.isArray())
+    {
+        _type = Type::Array;
+    }
+    else if (_item.isString())
+    {
+        _type = Type::String;
+    }
+    else if (_item.isBoolean())
+    {
+        _type = Type::Boolean;
+    }
+    else if (_item.isNull())
+    {
+        _type = Type::Null;
+    }
+    else if (_item.isNumber())
+    {
+        for (auto c = _item.begin; c != _item.end; ++c)
+        {
+            if (*c == '.')
+            {
+                _type = Type::Float;
+                return;
+            }
+            else if (*c == ',' || std::isspace(*c))
+            {
+                break;
+            }
+        }
+        _type = Type::Integer;
+    }
 }
 
 // Finds the property on the current level.
@@ -302,66 +255,43 @@ const char* SimpleJson::findValueEnd(const char* start) const
 // Returns SimpleJson object of the property's value
 SimpleJson SimpleJson::findProperty(const char* start, const char* const name, const size_t nameLen) const
 {
-    auto cursor = start;
     if (!nameLen || !start || ('"' != *start && !std::isspace(*start)))
     {
         return SimpleJsonNone;
     }
 
-    while (cursor <= _cursorOut)
+    for (auto cursor = start; cursor < _item.end;)
     {
-        cursor = eatWhiteSpaces(cursor);
-        if (!cursor)
+        auto propertyName = Json::nextToken(JsonToken(cursor, _item.end));
+        if (!propertyName.isString())
         {
             return SimpleJsonNone;
         }
-        if ('"' != *cursor)
+
+        cursor = propertyName.end;
+        ++propertyName.begin;
+        --propertyName.end;
+
+        auto colon = Json::nextToken(JsonToken(cursor, _item.end));
+        if (!colon.isColon())
         {
             return SimpleJsonNone;
         }
-        // Read property name.
-        auto propName = cursor;
-        auto propNameEnd = findStringEnd(cursor);
-        if (!propNameEnd)
+
+        auto value = Json::nextToken(JsonToken(colon.end, _item.end));
+
+        if (propertyName.size() == nameLen && 0 == std::strncmp(propertyName.begin, name, nameLen))
+        {
+            return SimpleJson::create(value.begin, value.end);
+        }
+
+        auto delimiter = Json::nextToken(JsonToken(value.end, _item.end));
+        if (!delimiter.isComma())
         {
             return SimpleJsonNone;
         }
-        cursor = eatWhiteSpaces(propNameEnd + 1);
-        if (!cursor)
-        {
-            return SimpleJsonNone;
-        }
-        if (':' != *cursor)
-        {
-            return SimpleJsonNone;
-        }
-        // Read property value.
-        auto valueStart = cursor + 1;
-        if (valueStart >= _cursorOut)
-        {
-            return SimpleJsonNone;
-        }
-        auto valueEnd = findValueEnd(cursor + 1);
-        if (!valueEnd)
-        {
-            return SimpleJsonNone;
-        }
-        // Check whether it is our property.
-        if (!strncmp(propName + 1, name, nameLen))
-        {
-            return SimpleJson::create(valueStart, valueEnd);
-        }
-        // Go for the next one.
-        cursor = eatWhiteSpaces(valueEnd + 1);
-        if (!cursor)
-        {
-            return SimpleJsonNone;
-        }
-        if (',' != *cursor)
-        {
-            return SimpleJsonNone;
-        }
-        cursor++;
+
+        cursor = delimiter.end;
     }
 
     return SimpleJsonNone;
@@ -378,10 +308,10 @@ SimpleJson SimpleJson::findInCache(const char* const path, const size_t pathLeng
     return SimpleJsonNone;
 }
 
-SimpleJson SimpleJson::find(const char* const path)
+SimpleJson SimpleJson::find(const char* const path) const
 {
-    auto node = findInCache(path, strlen(path), _cache);
-    if (node.getType() != Type::None)
+    auto node = findInCache(path, std::strlen(path), _cache);
+    if (!node.isNone())
     {
 #if SIMPLE_JSON_CACHE_DIAG
         printf("\n Found in cache for path %s\n", path);
@@ -396,9 +326,9 @@ SimpleJson SimpleJson::find(const char* const path)
 SimpleJson SimpleJson::findInternal(const char* const path,
     char* const cachedPath,
     size_t cachedPathSize,
-    JsonPathCache& cache)
+    JsonPathCache& cache) const
 {
-    auto token = StringTokenizer::tokenize(path, strlen(path), '.');
+    auto token = StringTokenizer::tokenize(path, std::strlen(path), '.');
     if (token.empty() || Type::Object != _type)
     {
         return SimpleJsonNone;
@@ -406,18 +336,18 @@ SimpleJson SimpleJson::findInternal(const char* const path,
 
     if (cachedPathSize)
     {
-        strcat(cachedPath, ".");
+        std::strcat(cachedPath, ".");
         cachedPathSize++;
     }
-    strncpy(cachedPath + cachedPathSize, token.start, token.length);
+    std::strncpy(cachedPath + cachedPathSize, token.start, token.length);
     cachedPathSize += token.length;
     cachedPath[cachedPathSize] = 0;
 
     auto property = findInCache(cachedPath, cachedPathSize, cache);
-    if (property.getType() == Type::None)
+    if (property.isNone())
     {
-        property = findProperty(_cursorIn + 1, token.start, token.length);
-        cache.put(cachedPath, cachedPathSize, property._cursorIn, property._cursorOut);
+        property = findProperty(_item.begin + 1, token.start, token.length);
+        cache.put(cachedPath, cachedPathSize, property._item.begin, property._item.end);
 #if SIMPLE_JSON_CACHE_DIAG
         printf("\n Put in cache path %s\n", cachedPath);
 #endif
@@ -429,7 +359,7 @@ SimpleJson SimpleJson::findInternal(const char* const path,
     }
 #endif
 
-    if (property.getType() == SimpleJson::Type::None || !token.next)
+    if (property.isNone() || !token.next)
     {
         return property;
     }
@@ -439,84 +369,150 @@ SimpleJson SimpleJson::findInternal(const char* const path,
         : SimpleJsonNone;
 }
 
-Optional<int64_t> SimpleJson::getIntValue() const
+Optional<int64_t> SimpleJson::getInt() const
 {
     if (Type::Integer != _type)
     {
         return Optional<int64_t>();
     }
     char _buffer[33];
-    strncpy(_buffer, _cursorIn, size());
+    std::strncpy(_buffer, _item.begin, size());
+    _buffer[size()] = 0;
     int64_t out;
     return (1 == sscanf(_buffer, "%" SCNd64, &out)) ? Optional<int64_t>(out) : Optional<int64_t>();
 }
 
-Optional<double> SimpleJson::getFloatValue() const
+Optional<double> SimpleJson::getFloat() const
 {
     if (Type::Float != _type)
     {
         return Optional<double>();
     }
     char _buffer[33];
-    strncpy(_buffer, _cursorIn, size());
+    std::strncpy(_buffer, _item.begin, size());
+    _buffer[size()] = 0;
     double out;
     return (1 == sscanf(_buffer, "%lf", &out)) ? Optional<double>(out) : Optional<double>();
 }
 
-bool SimpleJson::getStringValue(const char*& out, size_t& outLen) const
+double SimpleJson::getFloat(double defaultValue) const
+{
+    auto optionalValue = getFloat();
+    return (optionalValue.isSet() ? optionalValue.get() : defaultValue);
+}
+
+bool SimpleJson::getString(const char*& out, size_t& outLen) const
 {
     if (Type::String != _type || size() < 2)
     {
         return false;
     }
-    out = _cursorIn + 1;
+    out = _item.begin + 1;
     outLen = size() - 2;
     return true;
 }
 
-Optional<bool> SimpleJson::getBoolValue() const
+Optional<bool> SimpleJson::getBool() const
 {
     if (Type::Boolean != _type)
     {
         return Optional<bool>();
     }
-    if (size() == 4 && !strncmp(_cursorIn, "true", 4))
+    if (size() == 4 && !std::strncmp(_item.begin, "true", 4))
     {
         return Optional<bool>(true);
     }
-    if (size() == 5 && !strncmp(_cursorIn, "false", 5))
+    if (size() == 5 && !std::strncmp(_item.begin, "false", 5))
     {
         return Optional<bool>(false);
     }
     return Optional<bool>();
 }
 
-Optional<SimpleJsonArray> SimpleJson::getArrayValue() const
+SimpleJsonArray SimpleJson::getArray() const
 {
-    if (Type::Array != _type || '[' != *_cursorIn)
+    if (Type::Array != _type || '[' != *_item.begin)
     {
-        return Optional<SimpleJsonArray>();
+        return SimpleJsonArray(nullptr, nullptr);
     }
-    SimpleJsonArray out;
-    out.clear();
-    auto cursor = _cursorIn + 1;
-    auto end = cursor;
-    while (cursor < _cursorOut)
+
+    auto arrayItem = Json::extractItem<'[', ']'>(_item);
+    if (arrayItem.size() >= 2)
     {
-        end = findValueEnd(cursor);
-        if (end)
-        {
-            out.push_back(cursor, end);
-        }
-        // Go for the next one
-        cursor = eatWhiteSpaces(end + 1);
-        if (cursor && ',' != *cursor)
-        {
-            cursor++;
-        }
-        cursor++;
+        return SimpleJsonArray(arrayItem.begin + 1, arrayItem.end - 1);
     }
-    return Optional<SimpleJsonArray>(out);
+    else
+    {
+        return SimpleJsonArray(nullptr, nullptr);
+    }
 }
 
+SimpleJsonArray::IterBase::IterBase(const char* start, const char* arrayEnd) : _pos(start), _arrayEnd(arrayEnd)
+{
+    if (_pos && _arrayEnd && _pos != _arrayEnd)
+    {
+        auto token = Json::nextToken(JsonToken(_pos, _arrayEnd));
+        _element = SimpleJson::create(token.begin, token.end);
+        if (_element.isNone())
+        {
+            _pos = _arrayEnd;
+        }
+        else
+        {
+            _pos = token.begin;
+        }
+    }
+}
+
+SimpleJsonArray::IterBase::IterBase(const SimpleJsonArray::IterBase& it) : _pos(it._pos), _arrayEnd(it._arrayEnd)
+{
+    if (_pos && _arrayEnd && _pos != _arrayEnd)
+    {
+        auto token = Json::nextToken(JsonToken(_pos, _arrayEnd));
+        _element = SimpleJson::create(token.begin, token.end);
+        if (_element.isNone())
+        {
+            _pos = _arrayEnd;
+        }
+        else
+        {
+            _pos = token.begin;
+        }
+    }
+}
+
+SimpleJsonArray::IterBase& SimpleJsonArray::IterBase::operator++()
+{
+    if (_pos == _arrayEnd)
+    {
+        return *this; // cannot advance a logical end iterator
+    }
+    _pos += _element.size();
+
+    auto token = Json::nextToken(JsonToken(_pos, _arrayEnd));
+    if (token.isComma())
+    {
+        token = Json::nextToken(JsonToken(token.end, _arrayEnd));
+    }
+
+    token.trim();
+    _pos = token.begin;
+    _element = SimpleJson::create(token.begin, token.end);
+    if (_element.isNone())
+    {
+        _pos = _arrayEnd;
+    }
+
+    return *this;
+}
+
+size_t SimpleJsonArray::count() const
+{
+    size_t count = 0;
+    for (auto item : *this)
+    {
+        ++count;
+    }
+    return count;
+}
 } // namespace utils

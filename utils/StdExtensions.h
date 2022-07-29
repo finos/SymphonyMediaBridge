@@ -72,6 +72,7 @@ struct hash<char*>
     }
 
     uint64_t operator()(const char* s) const { return hashBuffer(s, strlen(s)); }
+    uint64_t operator()(const char* s, size_t len) const { return hashBuffer(s, len); }
 };
 
 template <>
