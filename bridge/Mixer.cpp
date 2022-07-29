@@ -774,9 +774,10 @@ std::unordered_set<size_t> Mixer::getActiveTalkers()
     return _engineMixer.getActiveTalkers();
 }
 
-bool Mixer::getEndpointInfo(const std::string& endpointId,
+bool Mixer::getEndpointInfoInternal(const std::string& endpointId,
     api::ConferenceEndpoint& endpoint,
-    const std::unordered_set<size_t>& activeTalkers)
+    const std::unordered_set<size_t>& activeTalkers,
+    utils::Optional<uint32_t>& ssrc)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
@@ -789,6 +790,10 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
         if (audio->second)
         {
             foundAudio = true;
+            if (audio->second->remoteSsrc.isSet())
+            {
+                ssrc.set(audio->second->remoteSsrc.get());
+            }
             endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
             endpoint.isActiveTalker = activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end();
             auto transport = audio->second->transport;
@@ -800,12 +805,31 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
     return foundAudio || _videoStreams.find(endpointId) != _videoStreams.cend();
 }
 
+bool Mixer::getEndpointInfo(const std::string& endpointId,
+    api::ConferenceEndpoint& endpoint,
+    const std::unordered_set<size_t>& activeTalkers)
+{
+    utils::Optional<uint32_t> ssrc;
+    return getEndpointInfoInternal(endpointId, endpoint, activeTalkers, ssrc);
+}
+
 bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     api::ConferenceEndpointExtendedInfo& endpoint,
     const std::unordered_set<size_t>& activeTalkers)
 {
-    if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
+    utils::Optional<uint32_t> ssrc;
+    if (!getEndpointInfoInternal(endpointId, endpoint.basicEndpointInfo, activeTalkers, ssrc))
         return false;
+
+    if (ssrc.isSet())
+    {
+        auto usid = _engineMixer.getUsid(ssrc.get());
+        if (usid.isSet())
+        {
+            endpoint.ssrc = ssrc.get();
+            endpoint.usid = usid.get();
+        }
+    }
 
     const auto audio = _audioStreams.find(endpointId);
     const auto transport = audio->second->transport;

@@ -522,15 +522,25 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     ConferenceEndpointExtendedInfo endpoint;
     endpoint.basicEndpointInfo = parseConferenceEndpoint(data);
     nlohmann::json iceSelectedTuple = nlohmann::json::object();
+
+    setIfExistsOrThrow<>(iceSelectedTuple, data, "iceSelectedTuple");
+    setIfExistsOrThrow<>(endpoint.localIP, iceSelectedTuple, "localIP");
+    setIfExistsOrThrow<>(endpoint.remoteIP, iceSelectedTuple, "remoteIP");
+    setIfExistsOrThrow<>(endpoint.localPort, iceSelectedTuple, "localPort");
+    setIfExistsOrThrow<>(endpoint.remotePort, iceSelectedTuple, "remotePort");
+    setIfExistsOrThrow<>(endpoint.protocol, iceSelectedTuple, "protocol");
+
+    for (const auto& it : requiredJsonArray(data, "audioUsidToSsrcMap"))
     {
-        setIfExistsOrThrow<>(iceSelectedTuple, data, "iceSelectedTuple");
-        setIfExistsOrThrow<>(endpoint.localIP, iceSelectedTuple, "localIP");
-        setIfExistsOrThrow<>(endpoint.remoteIP, iceSelectedTuple, "remoteIP");
-        setIfExistsOrThrow<>(endpoint.localPort, iceSelectedTuple, "localPort");
-        setIfExistsOrThrow<>(endpoint.remotePort, iceSelectedTuple, "remotePort");
-        setIfExistsOrThrow<>(endpoint.protocol, iceSelectedTuple, "protocol");
-        return endpoint;
+        for (const auto& inner : it.items())
+        {
+            auto usid = inner.key();
+            assert(inner.value().is_string());
+            endpoint.usid = std::stoul(usid);
+            endpoint.ssrc = std::stoul(inner.value().get<std::string>());
+        }
     }
+    return endpoint;
 }
 
 } // namespace Parser

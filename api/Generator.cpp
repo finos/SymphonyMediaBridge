@@ -246,7 +246,7 @@ nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtend
             ssrcMsid.emplace(std::to_string(endpoint.usid), std::to_string(endpoint.ssrc));
             ssrcMap.push_back(ssrcMsid);
         }
-        jsonEndpoint.emplace("audioSsrcMap", ssrcMap);
+        jsonEndpoint.emplace("audioUsidToSsrcMap", ssrcMap);
     }
     return jsonEndpoint;
 }
