@@ -17,6 +17,7 @@
 #include "jobmanager/JobManager.h"
 #include "logger/Logger.h"
 #include "transport/TransportFactory.h"
+#include "transport/ice/IceCandidate.h"
 #include "utils/IdGenerator.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
@@ -803,12 +804,18 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     api::ConferenceEndpointExtendedInfo& endpoint,
     const std::unordered_set<size_t>& activeTalkers)
 {
-    if (!getEndpointInfo(endpointId, endpoint, activeTalkers))
+    if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
         return false;
 
     const auto audio = _audioStreams.find(endpointId);
     const auto transport = audio->second->transport;
-    // transport->getRemotePeer().
+    auto remote = transport->getRemotePeer();
+    endpoint.remotePort = remote.getPort();
+    endpoint.remoteIP = remote.ipToString();
+    endpoint.localIP = transport->getLocalRtpPort().ipToString();
+    endpoint.localPort = transport->getLocalRtpPort().getPort();
+    auto transportType = transport->getSelectedTransportType();
+    endpoint.protocol = (transportType.isSet()) ? ice::toString(transportType.get()) : "n/a";
     return true;
 }
 

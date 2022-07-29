@@ -18,6 +18,7 @@ AllocateEndpoint parseAllocateEndpoint(const nlohmann::json&);
 EndpointDescription parsePatchEndpoint(const nlohmann::json&, const std::string& endpointId);
 Recording parseRecording(const nlohmann::json&);
 std::vector<ConferenceEndpoint> parseConferenceEndpoints(const nlohmann::json&);
+ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json&);
 } // namespace Parser
 
 } // namespace api

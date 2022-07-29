@@ -217,6 +217,23 @@ std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(const char* base
     return api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
 }
 
+api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(const char* baseUrl, const std::string& endpointId)
+{
+    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+    confRequest.awaitResponse(500 * utils::Time::ms);
+    EXPECT_TRUE(confRequest.isSuccess());
+
+    EXPECT_TRUE(confRequest.getJsonBody().is_array());
+    std::vector<std::string> confIds;
+    confRequest.getJsonBody().get_to(confIds);
+
+    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0] + "/" + endpointId).c_str());
+    endpointRequest.awaitResponse(50000 * utils::Time::ms);
+    EXPECT_TRUE(endpointRequest.isSuccess());
+
+    return api::Parser::parseEndpointExtendedInfo(endpointRequest.getJsonBody());
+}
+
 bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint)
 {
     auto it = std::find_if(endpoints.cbegin(), endpoints.cend(), [&endpoint](const api::ConferenceEndpoint& e) {
@@ -1108,6 +1125,13 @@ TEST_F(IntegrationTest, detectIsPtt)
     EXPECT_TRUE(isActiveTalker(endpoints, client1._channel.getEndpointId()));
     EXPECT_TRUE(isActiveTalker(endpoints, client2._channel.getEndpointId()));
     EXPECT_FALSE(isActiveTalker(endpoints, client3._channel.getEndpointId()));
+
+    auto endpointExtendedInfo = getEndpointExtendedInfo(baseUrl, endpoints[0].id);
+
+    EXPECT_EQ(endpoints[0], endpointExtendedInfo.basicEndpointInfo);
+    EXPECT_EQ("127.0.0.1", endpointExtendedInfo.localIP);
+    EXPECT_EQ("127.0.0.1", endpointExtendedInfo.remoteIP);
+    EXPECT_EQ(10000, endpointExtendedInfo.localPort);
 
     // =============================== PART 2: #2 talking =========================
 

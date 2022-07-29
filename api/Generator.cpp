@@ -228,10 +228,10 @@ nlohmann::json generateConferenceEndpoint(const ConferenceEndpoint& endpoint)
 
 nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtendedInfo& endpoint)
 {
-    nlohmann::json jsonEndpoint = generateConferenceEndpoint(endpoint);
+    nlohmann::json jsonEndpoint = generateConferenceEndpoint(endpoint.basicEndpointInfo);
     {
         nlohmann::json fiveTuple = nlohmann::json::object();
-        fiveTuple.emplace("localIP", endpoint.localIp);
+        fiveTuple.emplace("localIP", endpoint.localIP);
         fiveTuple.emplace("localPort", endpoint.localPort);
         fiveTuple.emplace("protocol", endpoint.protocol);
         fiveTuple.emplace("remoteIP", endpoint.remoteIP);
@@ -242,8 +242,8 @@ nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtend
         nlohmann::json ssrcMap = nlohmann::json::array();
         {
             nlohmann::json ssrcMsid = nlohmann::json::object();
-            assert(endpoint.ssrc.length() > 0);
-            ssrcMsid.emplace(endpoint.ssrc, endpoint.msid);
+
+            ssrcMsid.emplace(std::to_string(endpoint.usid), std::to_string(endpoint.ssrc));
             ssrcMap.push_back(ssrcMsid);
         }
         jsonEndpoint.emplace("audioSsrcMap", ssrcMap);

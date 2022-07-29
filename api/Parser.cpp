@@ -517,6 +517,22 @@ std::vector<ConferenceEndpoint> parseConferenceEndpoints(const nlohmann::json& r
     return endpoints;
 }
 
+ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& data)
+{
+    ConferenceEndpointExtendedInfo endpoint;
+    endpoint.basicEndpointInfo = parseConferenceEndpoint(data);
+    nlohmann::json iceSelectedTuple = nlohmann::json::object();
+    {
+        setIfExistsOrThrow<>(iceSelectedTuple, data, "iceSelectedTuple");
+        setIfExistsOrThrow<>(endpoint.localIP, iceSelectedTuple, "localIP");
+        setIfExistsOrThrow<>(endpoint.remoteIP, iceSelectedTuple, "remoteIP");
+        setIfExistsOrThrow<>(endpoint.localPort, iceSelectedTuple, "localPort");
+        setIfExistsOrThrow<>(endpoint.remotePort, iceSelectedTuple, "remotePort");
+        setIfExistsOrThrow<>(endpoint.protocol, iceSelectedTuple, "protocol");
+        return endpoint;
+    }
+}
+
 } // namespace Parser
 
 } // namespace api

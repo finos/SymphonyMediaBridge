@@ -10,6 +10,7 @@
 #include "transport/Transport.h"
 #include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
+#include "utils/Optional.h"
 #include "webrtc/DataStreamTransport.h"
 #include <unordered_map>
 #include <vector>
@@ -97,6 +98,7 @@ public:
     virtual void runTick(uint64_t timestamp) = 0;
     virtual ice::IceSession::State getIceState() const = 0;
     virtual SrtpClient::State getDtlsState() const = 0;
+    virtual utils::Optional<ice::TransportType> getSelectedTransportType() const = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
