@@ -522,6 +522,7 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     ConferenceEndpointExtendedInfo endpoint;
     endpoint.basicEndpointInfo = parseConferenceEndpoint(data);
     nlohmann::json iceSelectedTuple = nlohmann::json::object();
+    logger::debug("!!! %s", "###", data.dump(4).c_str());
 
     setIfExistsOrThrow<>(iceSelectedTuple, data, "iceSelectedTuple");
     setIfExistsOrThrow<>(endpoint.localIP, iceSelectedTuple, "localIP");
@@ -530,7 +531,7 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     setIfExistsOrThrow<>(endpoint.remotePort, iceSelectedTuple, "remotePort");
     setIfExistsOrThrow<>(endpoint.protocol, iceSelectedTuple, "protocol");
 
-    for (const auto& it : requiredJsonArray(data, "audioUsidToSsrcMap"))
+    for (const auto& it : requiredJsonArray(data, "audioUserIdToSsrcMap"))
     {
         for (const auto& inner : it.items())
         {

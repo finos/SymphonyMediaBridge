@@ -63,7 +63,7 @@ public:
     }
 
     void onNewPtt(const size_t endpointIdHash, bool isPtt);
-    void mapSsrc2Usid(uint32_t ssrc, uint32_t usid);
+    void mapSsrc2UserId(uint32_t ssrc, uint32_t userId);
 
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
@@ -71,7 +71,7 @@ public:
 
     const std::unordered_set<size_t> getActiveTalkers() const;
 
-    utils::Optional<uint32_t> getUsid(const uint32_t ssrc);
+    utils::Optional<uint32_t> getUserId(const uint32_t ssrc);
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
@@ -222,7 +222,7 @@ private:
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
     concurrency::MpmcQueue<uint32_t> _audioSsrcs;
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
-    concurrency::MpmcHashmap32<uint32_t, uint32_t> _audioSsrcUsidMap;
+    concurrency::MpmcHashmap32<uint32_t, uint32_t> _audioSsrcToUserIdMap;
     memory::List<size_t, 32> _activeAudioList;
 
     std::atomic_size_t _dominantSpeakerId;

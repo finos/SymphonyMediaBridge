@@ -137,18 +137,18 @@ void AudioForwarderReceiveJob::run()
 
         utils::Optional<uint8_t> audioLevel;
         utils::Optional<bool> isPtt;
-        uint32_t usid = 0;
+        uint32_t c9UserId = 0;
 
         for (const auto& rtpHeaderExtension : rtpHeaderExtensions->extensions())
         {
             if (0 != c9infoExtId && rtpHeaderExtension.getId() == c9infoExtId)
             {
                 isPtt.set(rtpHeaderExtension.data[3] & 0x80);
-                usid = rtpHeaderExtension.data[0];
-                usid <<= 8;
-                usid |= rtpHeaderExtension.data[1];
-                usid <<= 8;
-                usid |= rtpHeaderExtension.data[2];
+                c9UserId = rtpHeaderExtension.data[0];
+                c9UserId <<= 8;
+                c9UserId |= rtpHeaderExtension.data[1];
+                c9UserId <<= 8;
+                c9UserId |= rtpHeaderExtension.data[2];
             }
             else if (0 != audioLevelExtId && rtpHeaderExtension.getId() == audioLevelExtId)
             {
@@ -169,7 +169,7 @@ void AudioForwarderReceiveJob::run()
                 audioLevel.set(silence ? 127 : 0);
             }
             _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
-            _activeMediaList.mapSsrc2Usid(_ssrcContext._ssrc, usid);
+            _activeMediaList.mapSsrc2UserId(_ssrcContext._ssrc, c9UserId);
         }
 
         _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel.valueOr(127));

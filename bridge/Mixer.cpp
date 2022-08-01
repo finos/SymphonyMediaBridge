@@ -823,7 +823,7 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
 
     if (ssrc.isSet())
     {
-        auto usid = _engineMixer.getUsid(ssrc.get());
+        auto usid = _engineMixer.getUserId(ssrc.get());
         if (usid.isSet())
         {
             endpoint.ssrc = ssrc.get();

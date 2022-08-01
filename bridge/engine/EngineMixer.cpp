@@ -3329,8 +3329,8 @@ std::unordered_set<size_t> EngineMixer::getActiveTalkers() const
     return _activeMediaList->getActiveTalkers();
 }
 
-utils::Optional<uint32_t> EngineMixer::getUsid(const size_t ssrc) const
+utils::Optional<uint32_t> EngineMixer::getUserId(const size_t ssrc) const
 {
-    return _activeMediaList->getUsid(ssrc);
+    return _activeMediaList->getUserId(ssrc);
 }
 } // namespace bridge

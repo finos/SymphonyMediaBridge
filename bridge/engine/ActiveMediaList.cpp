@@ -41,7 +41,7 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _incomingAudioLevels(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
-      _audioSsrcUsidMap(maxParticipants),
+      _audioSsrcToUserIdMap(maxParticipants),
       _dominantSpeakerId(0),
       _prevWinningDominantSpeaker(0),
       _consecutiveDominantSpeakerWins(0),
@@ -334,9 +334,9 @@ void ActiveMediaList::onNewPtt(const size_t endpointIdHash, bool isPtt)
     audioParticipantsItr->second._isPtt = isPtt;
 }
 
-void ActiveMediaList::mapSsrc2Usid(uint32_t ssrc, uint32_t usid)
+void ActiveMediaList::mapSsrc2UserId(uint32_t ssrc, uint32_t usid)
 {
-    _audioSsrcUsidMap.emplace(ssrc, usid);
+    _audioSsrcToUserIdMap.emplace(ssrc, usid);
 }
 
 // Algorithm for video switching:
@@ -723,10 +723,10 @@ const std::unordered_set<size_t> ActiveMediaList::getActiveTalkers() const
     return result;
 }
 
-utils::Optional<uint32_t> ActiveMediaList::getUsid(const uint32_t ssrc)
+utils::Optional<uint32_t> ActiveMediaList::getUserId(const uint32_t ssrc)
 {
-    const auto it = _audioSsrcUsidMap.find(ssrc);
-    if (it != _audioSsrcUsidMap.end())
+    const auto it = _audioSsrcToUserIdMap.find(ssrc);
+    if (it != _audioSsrcToUserIdMap.end())
     {
         return utils::Optional<uint32_t>(it->second);
     }

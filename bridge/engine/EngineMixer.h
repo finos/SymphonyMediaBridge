@@ -121,7 +121,7 @@ public:
     memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
     size_t getDominantSpeakerId() const;
     std::unordered_set<size_t> getActiveTalkers() const;
-    utils::Optional<uint32_t> getUsid(const size_t ssrc) const;
+    utils::Optional<uint32_t> getUserId(const size_t ssrc) const;
 
     /**
      * Discard incoming packets in queues when engine no longer serves this mixer to ensure decrement of ref counts.

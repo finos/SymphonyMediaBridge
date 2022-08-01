@@ -479,9 +479,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _rtxProbeSequenceCounter(nullptr),
       _pacingInUse(false),
       _iceState(ice::IceSession::State::IDLE),
-      _dtlsState(SrtpClient::State::IDLE),
-      _transportType(ice::TransportType::UDP),
-      _transportTypeIsSet(false)
+      _dtlsState(SrtpClient::State::IDLE)
 {
     assert(endpointIdHash != 0);
 
@@ -2013,12 +2011,6 @@ void TransportImpl::onIcePreliminary(ice::IceSession* session,
     }
 }
 
-utils::Optional<ice::TransportType> TransportImpl::getSelectedTransportType() const
-{
-    return _transportTypeIsSet ? utils::Optional<ice::TransportType>(_transportType)
-                               : utils::Optional<ice::TransportType>();
-}
-
 void TransportImpl::onIceCompleted(ice::IceSession* session)
 {
     logger::debug("ice completed %s",
@@ -2055,8 +2047,7 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                 _peerRtpPort = candidatePair.second.address;
                 _peerRtcpPort = candidatePair.second.address;
 
-                _transportType = endpoint->getTransportType();
-                _transportTypeIsSet = true;
+                _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
 
                 logger::info("candidate selected %s %s, %s",
                     _loggableId.c_str(),
