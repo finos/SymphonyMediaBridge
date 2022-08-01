@@ -1,6 +1,7 @@
 #pragma once
 #include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
+#include "utils/Optional.h"
 #include <string>
 
 namespace api
@@ -22,8 +23,9 @@ struct ConferenceEndpoint
 
 struct ConferenceEndpointExtendedInfo
 {
-    uint32_t ssrc;
-    uint32_t usid;
+    uint32_t ssrcOriginal;
+    uint32_t ssrcRewritten;
+    utils::Optional<uint32_t> userId;
     std::string localIP;
     uint16_t localPort;
     std::string protocol;

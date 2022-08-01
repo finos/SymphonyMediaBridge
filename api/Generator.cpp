@@ -242,8 +242,13 @@ nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtend
         nlohmann::json ssrcMap = nlohmann::json::array();
         {
             nlohmann::json ssrcMsid = nlohmann::json::object();
-
-            ssrcMsid.emplace(std::to_string(endpoint.usid), std::to_string(endpoint.ssrc));
+            if (endpoint.userId.isSet())
+            {
+                nlohmann::json ssrcs = nlohmann::json::object();
+                ssrcs.emplace("ssrcOriginal", endpoint.ssrcOriginal);
+                ssrcs.emplace("ssrcRewritten", endpoint.ssrcRewritten);
+                ssrcMsid.emplace(std::to_string(endpoint.userId.get()), ssrcs);
+            }
             ssrcMap.push_back(ssrcMsid);
         }
         jsonEndpoint.emplace("audioUserIdToSsrcMap", ssrcMap);

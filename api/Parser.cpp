@@ -522,6 +522,7 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     ConferenceEndpointExtendedInfo endpoint;
     endpoint.basicEndpointInfo = parseConferenceEndpoint(data);
     nlohmann::json iceSelectedTuple = nlohmann::json::object();
+    logger::debug("!!! %s", "###", data.dump(4).c_str());
 
     setIfExistsOrThrow<>(iceSelectedTuple, data, "iceSelectedTuple");
     setIfExistsOrThrow<>(endpoint.localIP, iceSelectedTuple, "localIP");
@@ -534,10 +535,13 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     {
         for (const auto& inner : it.items())
         {
-            const auto& usid = inner.key();
-            assert(inner.value().is_string());
-            endpoint.usid = std::stoul(usid);
-            endpoint.ssrc = std::stoul(inner.value().get<std::string>());
+            const auto& userId = inner.key();
+            assert(inner.value().is_object());
+
+            setIfExistsOrThrow(endpoint.ssrcOriginal, inner.value(), "ssrcOriginal");
+            setIfExistsOrThrow(endpoint.ssrcRewritten, inner.value(), "ssrcRewritten");
+            endpoint.userId.set(std::stoul(userId));
+            break;
         }
     }
     return endpoint;

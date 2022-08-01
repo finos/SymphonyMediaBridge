@@ -774,10 +774,9 @@ std::unordered_set<size_t> Mixer::getActiveTalkers()
     return _engineMixer.getActiveTalkers();
 }
 
-bool Mixer::getEndpointInfoInternal(const std::string& endpointId,
+bool Mixer::getEndpointInfo(const std::string& endpointId,
     api::ConferenceEndpoint& endpoint,
-    const std::unordered_set<size_t>& activeTalkers,
-    utils::Optional<uint32_t>& ssrc)
+    const std::unordered_set<size_t>& activeTalkers)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
@@ -790,7 +789,6 @@ bool Mixer::getEndpointInfoInternal(const std::string& endpointId,
         if (audio->second)
         {
             foundAudio = true;
-            ssrc = audio->second->remoteSsrc;
             endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
             endpoint.isActiveTalker = activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end();
             auto transport = audio->second->transport;
@@ -802,34 +800,25 @@ bool Mixer::getEndpointInfoInternal(const std::string& endpointId,
     return foundAudio || _videoStreams.find(endpointId) != _videoStreams.cend();
 }
 
-bool Mixer::getEndpointInfo(const std::string& endpointId,
-    api::ConferenceEndpoint& endpoint,
-    const std::unordered_set<size_t>& activeTalkers)
-{
-    utils::Optional<uint32_t> ssrc;
-    return getEndpointInfoInternal(endpointId, endpoint, activeTalkers, ssrc);
-}
-
 bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     api::ConferenceEndpointExtendedInfo& endpoint,
     const std::unordered_set<size_t>& activeTalkers)
 {
-    utils::Optional<uint32_t> ssrc;
-    if (!getEndpointInfoInternal(endpointId, endpoint.basicEndpointInfo, activeTalkers, ssrc))
-        return false;
-
-    if (ssrc.isSet())
+    if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
     {
-        auto usid = _engineMixer.getUserId(ssrc.get());
-        if (usid.isSet())
-        {
-            endpoint.ssrc = ssrc.get();
-            endpoint.usid = usid.get();
-        }
+        return false;
     }
 
     const auto audio = _audioStreams.find(endpointId);
     const auto transport = audio->second->transport;
+    const auto& remoteSsrc = audio->second->remoteSsrc;
+    if (remoteSsrc.isSet())
+    {
+        endpoint.userId = _engineMixer.getUserId(remoteSsrc.get());
+        endpoint.ssrcOriginal = remoteSsrc.get();
+        endpoint.ssrcRewritten = audio->second->localSsrc;
+    }
+
     auto remote = transport->getRemotePeer();
     endpoint.remotePort = remote.getPort();
     endpoint.remoteIP = remote.ipToString();
@@ -837,6 +826,7 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     endpoint.localPort = transport->getLocalRtpPort().getPort();
     auto transportType = transport->getSelectedTransportType();
     endpoint.protocol = (transportType.isSet()) ? ice::toString(transportType.get()) : "n/a";
+
     return true;
 }
 

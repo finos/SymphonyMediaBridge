@@ -1132,10 +1132,12 @@ TEST_F(IntegrationTest, detectIsPtt)
     EXPECT_EQ(10000, endpointExtendedInfo.localPort);
 
     // We construct pseudo-usid from ssrc, so we can check it here.
-    auto expectedUsid = __builtin_bswap32(endpointExtendedInfo.ssrc << 8);
-    EXPECT_TRUE(1 << 24 > endpointExtendedInfo.usid);
-    EXPECT_EQ(expectedUsid, endpointExtendedInfo.usid);
-    EXPECT_EQ(endpointExtendedInfo.ssrc, client1._audioSource->getSsrc());
+    auto expectedUsid = __builtin_bswap32(endpointExtendedInfo.ssrcOriginal << 8);
+    EXPECT_TRUE(1 << 24 > endpointExtendedInfo.userId.get());
+    EXPECT_EQ(expectedUsid, endpointExtendedInfo.userId.get());
+    EXPECT_EQ(endpointExtendedInfo.ssrcOriginal, client1._audioSource->getSsrc());
+    EXPECT_NE(endpointExtendedInfo.ssrcOriginal, endpointExtendedInfo.ssrcRewritten);
+    EXPECT_TRUE(endpointExtendedInfo.ssrcRewritten != 0);
 
     // =============================== PART 2: #2 talking =========================
 

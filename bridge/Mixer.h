@@ -311,10 +311,6 @@ private:
     RecordingStream* findRecordingStream(const std::string& recordingId);
 
     void stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId);
-    bool getEndpointInfoInternal(const std::string& endpointId,
-        api::ConferenceEndpoint&,
-        const std::unordered_set<size_t>& activeTalkers,
-        utils::Optional<uint32_t>& ssrc);
 };
 
 } // namespace bridge
