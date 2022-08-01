@@ -8,6 +8,7 @@
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "memory/RingBuffer.h"
+#include "memory/StackMap.h"
 #include "transport/RtcTransport.h"
 #include <atomic>
 #include <cstddef>
@@ -429,6 +430,9 @@ private:
     void stopProbingVideoStream(const EngineVideoStream&);
 
     void onBarbellUserMediaMap(size_t barbellIdHash, const char* message);
+
+    bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
+    utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);
 };
 
 } // namespace bridge

@@ -4,6 +4,7 @@
 #include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "concurrency/MpmcHashmap.h"
+#include "memory/StackMap.h"
 #include "webrtc/WebRtcDataStream.h"
 #include <cstdint>
 
@@ -25,14 +26,14 @@ struct EngineBarbell
         : id(barbellId),
           ssrcOutboundContexts(128),
           transport(rtcTransport),
-          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator),
-          videoSsrcMap(16 * 8),
-          audioSsrcMap(16)
+          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator)
     {
         for (auto& ssrc : audio)
         {
             audioStreams.push_back(AudioStream{ssrc, utils::Optional<size_t>()});
+            audioSsrcMap.emplace(ssrc, &audioStreams.back());
         }
+
         for (auto& videoGroup : videoDescriptions)
         {
             VideoStream videoStream;
@@ -45,6 +46,12 @@ struct EngineBarbell
             }
 
             videoStreams.push_back(videoStream);
+
+            for (size_t i = 0; i < videoStream.stream._numLevels; ++i)
+            {
+                videoSsrcMap.emplace(videoStream.stream._levels[i]._ssrc, &videoStreams.back());
+                videoSsrcMap.emplace(videoStream.stream._levels[i]._feedbackSsrc, &videoStreams.back());
+            }
         }
     }
 
@@ -52,7 +59,6 @@ struct EngineBarbell
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
     transport::RtcTransport& transport;
-
     webrtc::WebRtcDataStream dataChannel;
 
     // map for ssrc to user id endpointIdHash to be used in activemediaList, that we update from data channel
@@ -60,7 +66,6 @@ struct EngineBarbell
     struct VideoStream
     {
         SimulcastStream stream;
-
         utils::Optional<size_t> endpointIdHash;
         utils::Optional<EndpointIdString> endpointId;
     };
@@ -77,8 +82,8 @@ struct EngineBarbell
     std::vector<AudioStream> audioStreams;
     VideoStream slideStream;
 
-    concurrency::MpmcHashmap32<uint32_t, VideoStream*> videoSsrcMap;
-    concurrency::MpmcHashmap32<uint32_t, AudioStream*> audioSsrcMap;
+    memory::StackMap<uint32_t, VideoStream*, 32> videoSsrcMap;
+    memory::StackMap<uint32_t, AudioStream*, 16> audioSsrcMap;
 };
 
 } // namespace bridge

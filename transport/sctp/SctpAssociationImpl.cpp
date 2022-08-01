@@ -1359,7 +1359,7 @@ void SctpAssociationImpl::reportFragment(InboundChunkList::iterator chunkHeadIt,
     for (auto it = chunkHeadIt; it != _inboundDataChunks.end(); ++it)
     {
         const bool isFragmentEnd = it->second->fragmentEnd;
-        std::memcpy(target, it->second->data(), it->second->size);
+        buffer.append(it->second->data(), it->second->size);
         target += it->second->size;
         _inboundBuffer.free(it->second);
         if (isFragmentEnd)

@@ -93,6 +93,9 @@ public:
 
     transport::SrtpClient::State getDtlsState() const override { return transport::SrtpClient::State::CONNECTED; }
 
+    void setTag(const char* tag) override{};
+    const char* getTag() const override { return nullptr; };
+
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
     jobmanager::JobQueue& _jobQueue;

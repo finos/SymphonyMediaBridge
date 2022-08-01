@@ -44,10 +44,31 @@ using BarbellEndpointIdMap = concurrency::MpmcHashmap32<size_t, EndpointIdString
 
 struct BarbellMapItem
 {
-    EndpointIdString endpointId;
+    BarbellMapItem() { endpointId[0] = 0; }
+    BarbellMapItem(const BarbellMapItem& rhs) : endpointIdHash(rhs.endpointIdHash)
+    {
+        std::strncpy(endpointId, rhs.endpointId, sizeof(endpointId));
+        for (auto ssrc : rhs.ssrcs)
+        {
+            ssrcs.push_back(ssrc);
+        }
+    }
+
+    BarbellMapItem& operator=(const BarbellMapItem& rhs)
+    {
+        endpointIdHash = rhs.endpointIdHash;
+        std::strncpy(endpointId, rhs.endpointId, sizeof(endpointId));
+        ssrcs.clear();
+        for (auto ssrc : rhs.ssrcs)
+        {
+            ssrcs.push_back(ssrc);
+        }
+        return *this;
+    }
+
+    char endpointId[42];
     size_t endpointIdHash = 0;
-    std::array<uint32_t, 2> ssrcs;
-    uint32_t count = 0;
+    memory::StackArray<uint32_t, 2> ssrcs;
 };
 
 } // namespace bridge

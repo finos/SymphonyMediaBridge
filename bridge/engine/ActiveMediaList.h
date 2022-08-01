@@ -146,6 +146,7 @@ public:
         const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
         utils::StringBuilder<1024>& outMessage);
 
+    uint32_t getMapRevision() const { return _ssrcMapRevision; }
 #if DEBUG
     void checkInvariant();
 #endif
@@ -254,6 +255,7 @@ private:
     uint64_t _lastRunTimestamp;
     uint64_t _lastChangeTimestamp;
     std::atomic_bool _c9_conference;
+    uint32_t _ssrcMapRevision;
 
     size_t rankSpeakers(float& currentDominantSpeakerScore, TActiveTalkersSnapshot& out);
     void updateLevels(const uint64_t timestampMs);

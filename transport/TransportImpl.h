@@ -173,6 +173,9 @@ public: // Transport
     ice::IceSession::State getIceState() const override { return _iceState; };
     SrtpClient::State getDtlsState() const override { return _dtlsState; };
 
+    void setTag(const char* tag) override;
+    const char* getTag() const override { return _tag; };
+
 public: // SslWriteBioListener
     // Called from Transport serial thread
     int32_t sendDtls(const char* buffer, uint32_t length) override;
@@ -417,6 +420,8 @@ private:
 public:
     concurrency::MutexGuard _singleThreadMutex;
 #endif
+
+    char _tag[16];
 };
 
 } // namespace transport

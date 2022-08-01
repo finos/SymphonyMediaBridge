@@ -75,10 +75,7 @@ public:
     typedef IterBase iterator;
     typedef std::pair<KeyT, T> value_type;
 
-    explicit StackMap() : _end(SIZE), _maxSpread(1), _count(0)
-    {
-        static_assert((SIZE & (SIZE - 1)) == 0, "StackMap size must be power of 2"); // must be power of two
-    }
+    explicit StackMap() : _end(SIZE), _maxSpread(1), _count(0) {}
 
     std::pair<iterator, bool> add(const KeyT& key, const T& value)
     {
@@ -120,6 +117,8 @@ public:
 
         return std::make_pair(end(), false); // full
     }
+
+    std::pair<iterator, bool> emplace(const KeyT& key, const T& value) { return add(key, value); }
 
     bool erase(const KeyT& key)
     {
@@ -230,10 +229,7 @@ public:
     iterator end() { return iterator(_elements.data(), _end, _end); }
 
 private:
-    uint32_t indexPosition(uint64_t hashValue, uint32_t offset) const
-    {
-        return (hashValue + offset) & (_index.size() - 1);
-    }
+    uint32_t indexPosition(uint64_t hashValue, uint32_t offset) const { return (hashValue + offset) % _index.size(); }
 
     void updateSpread(uint32_t i)
     {

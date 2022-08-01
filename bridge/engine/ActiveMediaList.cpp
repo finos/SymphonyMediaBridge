@@ -58,7 +58,8 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
 
       _lastRunTimestamp(0),
       _lastChangeTimestamp(0),
-      _c9_conference(false)
+      _c9_conference(false),
+      _ssrcMapRevision(0)
 {
     assert(videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -111,14 +112,16 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash)
     uint32_t ssrc;
     if (!_audioSsrcs.pop(ssrc))
     {
+        logger::info("new endpoint %zu, added to active audio list", _logId.c_str(), endpointIdHash);
         return false;
     }
 
-    logger::info("new endpoint %zu, ssrc %u added to active audio list", _logId.c_str(), endpointIdHash, ssrc);
+    logger::info("new endpoint %zu, mapped ssrc %u added to active audio list", _logId.c_str(), endpointIdHash, ssrc);
 
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
     const bool pushResult = _activeAudioList.pushToHead(endpointIdHash);
     assert(pushResult);
+    ++_ssrcMapRevision;
     return true;
 }
 
@@ -137,6 +140,7 @@ bool ActiveMediaList::removeAudioParticipant(const size_t endpointIdHash)
         _audioSsrcRewriteMap.erase(endpointIdHash);
         _audioSsrcs.push(ssrc);
         _activeAudioList.remove(endpointIdHash);
+        ++_ssrcMapRevision;
         return true;
     }
 
@@ -187,10 +191,14 @@ bool ActiveMediaList::addVideoParticipant(const size_t endpointIdHash,
         }
 
         addToRewriteMap(endpointIdHash, simulcastGroup);
+        logger::debug("%zu video mapped to %u", _logId.c_str(), endpointIdHash, simulcastGroup.levels[0]._ssrc);
     }
 
     const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
-    logger::info("new endpoint %zu added to active video list", _logId.c_str(), endpointIdHash);
+    logger::info("new endpoint %zu, ssrc %u added to active video list.",
+        _logId.c_str(),
+        endpointIdHash,
+        simulcastStream._levels[0]._ssrc);
     _activeVideoListLookupMap.emplace(endpointIdHash, _activeVideoList.head());
     assert(pushResult);
     return endpointIdHash != _dominantSpeakerId || updateActiveVideoList(_dominantSpeakerId);
@@ -781,6 +789,7 @@ void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, SimulcastGroup simu
     {
         _reverseVideoSsrcRewriteMap.emplace(simulcastGroup.levels[i]._ssrc, endpointIdHash);
     }
+    ++_ssrcMapRevision;
 }
 
 void ActiveMediaList::removeFromRewriteMap(size_t endpointIdHash)
@@ -796,6 +805,7 @@ void ActiveMediaList::removeFromRewriteMap(size_t endpointIdHash)
         }
         _videoSsrcs.push(simulcastGroup);
     }
+    ++_ssrcMapRevision;
 }
 
 #if DEBUG
