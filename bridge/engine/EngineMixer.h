@@ -122,6 +122,7 @@ public:
     size_t getDominantSpeakerId() const;
     std::unordered_set<size_t> getActiveTalkers() const;
     utils::Optional<uint32_t> getUserId(const size_t ssrc) const;
+    void mapSsrc2UserId(uint32_t ssrc, uint32_t usid);
 
     /**
      * Discard incoming packets in queues when engine no longer serves this mixer to ensure decrement of ref counts.
@@ -308,6 +309,7 @@ private:
     concurrency::MpmcHashmap32<size_t, EngineBarbell*> _engineBarbells;
 
     concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext> _ssrcInboundContexts;
+    concurrency::MpmcHashmap32<uint32_t, uint32_t> _audioSsrcToUserIdMap;
 
     uint32_t _localVideoSsrc;
 

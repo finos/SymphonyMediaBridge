@@ -63,7 +63,6 @@ public:
     }
 
     void onNewPtt(const size_t endpointIdHash, bool isPtt);
-    void mapSsrc2UserId(uint32_t ssrc, uint32_t userId);
 
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
@@ -222,7 +221,6 @@ private:
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
     concurrency::MpmcQueue<uint32_t> _audioSsrcs;
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
-    concurrency::MpmcHashmap32<uint32_t, uint32_t> _audioSsrcToUserIdMap;
     memory::List<size_t, 32> _activeAudioList;
 
     std::atomic_size_t _dominantSpeakerId;
