@@ -790,10 +790,7 @@ bool Mixer::getEndpointInfoInternal(const std::string& endpointId,
         if (audio->second)
         {
             foundAudio = true;
-            if (audio->second->remoteSsrc.isSet())
-            {
-                ssrc.set(audio->second->remoteSsrc.get());
-            }
+            ssrc = audio->second->remoteSsrc;
             endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
             endpoint.isActiveTalker = activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end();
             auto transport = audio->second->transport;
