@@ -4,6 +4,7 @@
 #include "legacyapi/Channel.h"
 #include "legacyapi/SsrcGroup.h"
 #include "logger/Logger.h"
+#include "utils/CheckedCast.h"
 #include <algorithm>
 
 namespace
@@ -72,6 +73,43 @@ std::vector<RtpMap> makeRtpMaps(const legacyapi::Channel& channel)
         for (const auto& parameter : payloadType._parameters)
         {
             rtpMaps.back()._parameters.emplace(parameter.first, parameter.second);
+        }
+    }
+
+    utils::Optional<uint8_t> absSendTimeExtensionId;
+    for (const auto& rtpHeaderExtension : channel._rtpHeaderHdrExts)
+    {
+        if (rtpHeaderExtension._uri.compare("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time") == 0)
+        {
+            absSendTimeExtensionId.set(utils::checkedCast<uint8_t>(rtpHeaderExtension._id));
+        }
+    }
+
+    utils::Optional<uint8_t> audioLevelExtensionId;
+    for (const auto& rtpHeaderExtension : channel._rtpHeaderHdrExts)
+    {
+        if (rtpHeaderExtension._uri.compare("urn:ietf:params:rtp-hdrext:ssrc-audio-level") == 0)
+        {
+            audioLevelExtensionId.set(utils::checkedCast<uint32_t>(rtpHeaderExtension._id));
+        }
+    }
+
+    if (absSendTimeExtensionId.isSet())
+    {
+        for (auto& rtpMap : rtpMaps)
+        {
+            rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+        }
+    }
+
+    if (audioLevelExtensionId.isSet())
+    {
+        for (auto& rtpMap : rtpMaps)
+        {
+            if (rtpMap._format == RtpMap::Format::OPUS)
+            {
+                rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+            }
         }
     }
 

@@ -23,7 +23,11 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext*,
 api::EndpointDescription::Candidate iceCandidateToApi(const ice::IceCandidate&);
 void addDefaultAudioProperties(api::EndpointDescription::Audio&);
 void addDefaultVideoProperties(api::EndpointDescription::Video&);
-bridge::RtpMap makeRtpMap(const api::EndpointDescription::PayloadType&);
+
+bridge::RtpMap makeRtpMap(const api::EndpointDescription::Audio& audio);
+bridge::RtpMap makeRtpMap(const api::EndpointDescription::Video& video,
+    const api::EndpointDescription::PayloadType& payloadType);
+
 utils::Optional<uint8_t> findAbsSendTimeExtensionId(
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions);
 utils::Optional<uint8_t> findC9InfoExtensionId(

@@ -113,6 +113,7 @@ void Channel::create(const std::string& baseUrl,
     if (request.isSuccess())
     {
         _offer = request.getJsonBody();
+        logger::debug("allocate offer received %s", "Test", request.getJsonBody().dump().c_str());
         raw = request.getResponse();
     }
     else
@@ -220,6 +221,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     if (request.isSuccess())
     {
+        // _offer = request.getJsonBody();
         raw = request.getResponse();
     }
     else
@@ -256,6 +258,18 @@ std::unordered_set<uint32_t> Channel::getOfferedVideoSsrcs() const
     }
 
     return ssrcs;
+}
+
+std::vector<SimulcastStream> Channel::getOfferedVideoStreams() const
+{
+    std::vector<SimulcastStream> v;
+
+    if (_offer.find("video") != _offer.end())
+    {
+        for (auto& group : _offer["video"]) {}
+    }
+
+    return v;
 }
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
@@ -516,6 +530,18 @@ std::unordered_set<uint32_t> ColibriChannel::getOfferedVideoSsrcs() const
         }
     }
     return ssrcs;
+}
+
+std::vector<SimulcastStream> ColibriChannel::getOfferedVideoStreams() const
+{
+    std::vector<SimulcastStream> v;
+
+    if (_offer.find("video") != _offer.end())
+    {
+        for (auto& group : _offer["video"]) {}
+    }
+
+    return v;
 }
 
 Barbell::Barbell() : _id(newIdString()) {}

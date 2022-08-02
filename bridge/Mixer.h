@@ -87,8 +87,8 @@ public:
         utils::SsrcGenerator& ssrcGenerator,
         const config::Config& config,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastLevel>& videoSsrcs,
-        const std::vector<SimulcastLevel>& videoPinSsrcs);
+        const std::vector<api::SimulcastGroup>& videoSsrcs,
+        const std::vector<api::SsrcPair>& videoPinSsrcs);
 
     virtual ~Mixer() = default;
 
@@ -133,10 +133,7 @@ public:
 
     bool configureAudioStream(const std::string& endpointId,
         const RtpMap& rtpMap,
-        const utils::Optional<uint32_t>& remoteSsrc,
-        const utils::Optional<uint8_t>& audioLevelExtensionId,
-        const utils::Optional<uint8_t>& absSendTimeExtensionId,
-        const utils::Optional<uint8_t>& c9infoExtensionId);
+        const utils::Optional<uint32_t>& remoteSsrc);
 
     bool reconfigureAudioStream(const std::string& endpointId, const utils::Optional<uint32_t>& remoteSsrc);
 
@@ -145,7 +142,6 @@ public:
         const RtpMap& feedbackRtpMap,
         const SimulcastStream& simulcastStream,
         const utils::Optional<SimulcastStream>& secondarySimulcastStream,
-        const utils::Optional<uint8_t>& absSendTimeExtensionId,
         const SsrcWhitelist& ssrcWhitelist);
 
     bool reconfigureVideoStream(const std::string& endpointId,
@@ -194,6 +190,13 @@ public:
         const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool isDtlsClient);
+    bool configureBarbellSsrcs(const std::string& barbellId,
+        const std::vector<BarbellVideoStreamDescription>& videoSsrcs,
+        const std::vector<uint32_t>& audioSsrcs,
+        const bridge::RtpMap& audioRtpMap,
+        const bridge::RtpMap& videoRtpMap,
+        const bridge::RtpMap& videoFeedbackRtpMap);
+
     bool addBarbellToEngine(const std::string& barbellId);
     bool startBarbellTransport(const std::string& barbellId);
     void removeBarbell(const std::string& barbellId);
@@ -229,8 +232,9 @@ public:
     bool isAudioStreamConfigured(const std::string& endpointId);
     bool isVideoStreamConfigured(const std::string& endpointId);
     bool isDataStreamConfigured(const std::string& endpointId);
+
     void getAudioStreamDescription(AudioStreamDescription& outDescription);
-    void getVideoStreamDescription(VideoStreamDescription& outDescription);
+    void getBarbellVideoStreamDescription(std::vector<BarbellVideoStreamDescription>& outDescription);
 
     bool getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription);
     bool getAudioStreamTransportDescription(const std::string& endpointId,
@@ -282,8 +286,8 @@ private:
     bool _markedForDeletion;
 
     const std::vector<uint32_t> _audioSsrcs;
-    const std::vector<SimulcastLevel> _videoSsrcs;
-    const std::vector<SimulcastLevel> _videoPinSsrcs;
+    const std::vector<api::SimulcastGroup> _videoSsrcs;
+    const std::vector<api::SsrcPair> _videoPinSsrcs;
 
     transport::TransportFactory& _transportFactory;
     Engine& _engine;

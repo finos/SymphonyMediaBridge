@@ -1,6 +1,5 @@
 #pragma once
 #include "ActionContext.h"
-
 #include "httpd/Request.h"
 #include "httpd/Response.h"
 #include "utils/StringTokenizer.h"

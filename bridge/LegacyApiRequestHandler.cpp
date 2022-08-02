@@ -834,19 +834,19 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                 channel._sources = streamDescription.getSsrcs();
                 channel._id.set(streamDescription.id);
 
-                if (!streamDescription.simulcastSsrcs.empty())
+                if (!streamDescription.sources.empty())
                 {
-                    for (auto level : streamDescription.simulcastSsrcs)
+                    for (auto level : streamDescription.sources)
                     {
                         legacyapi::SsrcGroup group;
-                        group._sources.push_back(level._ssrc);
-                        group._sources.push_back(level._feedbackSsrc);
+                        group._sources.push_back(level.main);
+                        group._sources.push_back(level.feedback);
                         group._semantics = "FID";
                         channel._ssrcGroups.push_back(group);
                     }
 
                     legacyapi::SsrcAttribute ssrcAttribute;
-                    ssrcAttribute._sources.push_back(streamDescription.simulcastSsrcs[0]._ssrc);
+                    ssrcAttribute._sources.push_back(streamDescription.sources[0].main);
                     ssrcAttribute._content = "slides";
                     channel._ssrcAttributes.push_back(ssrcAttribute);
                 }
@@ -1117,15 +1117,6 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
             return false;
         }
 
-        utils::Optional<uint8_t> absSendTimeExtensionId;
-        for (const auto& rtpHeaderExtension : channel._rtpHeaderHdrExts)
-        {
-            if (rtpHeaderExtension._uri.compare("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time") == 0)
-            {
-                absSendTimeExtensionId.set(utils::checkedCast<uint8_t>(rtpHeaderExtension._id));
-            }
-        }
-
         if (contentType == ContentType::Audio)
         {
             utils::Optional<uint32_t> remoteSsrc;
@@ -1134,21 +1125,7 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                 remoteSsrc.set(channel._sources.front());
             }
 
-            utils::Optional<uint8_t> audioLevelExtensionId;
-            for (const auto& rtpHeaderExtension : channel._rtpHeaderHdrExts)
-            {
-                if (rtpHeaderExtension._uri.compare("urn:ietf:params:rtp-hdrext:ssrc-audio-level") == 0)
-                {
-                    audioLevelExtensionId.set(utils::checkedCast<int32_t>(rtpHeaderExtension._id));
-                }
-            }
-
-            if (!mixer.configureAudioStream(endpointId,
-                    rtpMaps.front(),
-                    remoteSsrc,
-                    audioLevelExtensionId,
-                    absSendTimeExtensionId,
-                    utils::Optional<uint8_t>()))
+            if (!mixer.configureAudioStream(endpointId, rtpMaps.front(), remoteSsrc))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
@@ -1183,7 +1160,6 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                     feedbackRtpMap,
                     simulcastStreams[0],
                     secondarySimulcastStream,
-                    absSendTimeExtensionId,
                     ssrcWhitelist))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
