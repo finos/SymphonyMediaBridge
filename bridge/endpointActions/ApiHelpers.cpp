@@ -176,39 +176,6 @@ std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> g
     return std::make_pair(candidates, std::make_pair(ice._ufrag, ice._pwd));
 }
 
-bridge::RtpMap makeRtpMap(const api::EndpointDescription::PayloadType& payloadType)
-{
-    bridge::RtpMap rtpMap;
-
-    if (payloadType._name.compare("opus") == 0)
-    {
-        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::OPUS,
-            payloadType._id,
-            payloadType._clockRate,
-            payloadType._channels);
-    }
-    else if (payloadType._name.compare("VP8") == 0)
-    {
-        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8, payloadType._id, payloadType._clockRate);
-    }
-    else if (payloadType._name.compare("rtx") == 0)
-    {
-        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX, codec::Vp8::rtxPayloadType, codec::Vp8::sampleRate);
-    }
-    else
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-            utils::format("rtp payload '%s' not supported", payloadType._name.c_str()));
-    }
-
-    for (const auto& parameter : payloadType._parameters)
-    {
-        rtpMap._parameters.emplace(parameter.first, parameter.second);
-    }
-
-    return rtpMap;
-}
-
 bridge::RtpMap makeRtpMap(const api::EndpointDescription::Audio& audio)
 {
     bridge::RtpMap rtpMap;

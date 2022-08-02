@@ -24,7 +24,6 @@ api::EndpointDescription::Candidate iceCandidateToApi(const ice::IceCandidate&);
 void addDefaultAudioProperties(api::EndpointDescription::Audio&);
 void addDefaultVideoProperties(api::EndpointDescription::Video&);
 
-bridge::RtpMap makeRtpMap_(const api::EndpointDescription::PayloadType&);
 bridge::RtpMap makeRtpMap(const api::EndpointDescription::Audio& audio);
 bridge::RtpMap makeRtpMap(const api::EndpointDescription::Video& video,
     const api::EndpointDescription::PayloadType& payloadType);

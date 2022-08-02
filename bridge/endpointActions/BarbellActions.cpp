@@ -218,7 +218,7 @@ httpd::Response configureBarbell(ActionContext* context,
     bridge::RtpMap videoFeedbackRtpMap;
     for (auto& payloadDescription : barbellDescription._video.get()._payloadTypes)
     {
-        if (payloadDescription._name.compare("rtx"))
+        if (payloadDescription._name.compare("rtx") == 0)
         {
             videoFeedbackRtpMap = makeRtpMap(barbellDescription._video.get(), payloadDescription);
         }
