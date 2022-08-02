@@ -4,6 +4,7 @@
 #include "api/Generator.h"
 #include "api/Parser.h"
 #include "bridge/AudioStreamDescription.h"
+#include "bridge/BarbellStreamGroupDescription.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
@@ -74,29 +75,27 @@ httpd::Response generateBarbellResponse(ActionContext* context,
 
     api::EndpointDescription::Video responseVideo;
     {
-        VideoStreamDescription streamDescription;
-        mixer.getVideoStreamDescription(streamDescription);
-        if (streamDescription.localSsrc != 0)
-        {
-            api::EndpointDescription::VideoStream videoStream;
-            videoStream.sources.push_back({streamDescription.localSsrc, 0});
-            videoStream.content = "local";
-        }
 
-        size_t index = 0;
-        for (auto& level : streamDescription.simulcastSsrcs)
+        std::vector<BarbellStreamGroupDescription> streamDescriptions;
+        mixer.getBarbellVideoStreamDescription(streamDescriptions);
+        for (auto& group : streamDescriptions)
         {
-            api::EndpointDescription::VideoStream videoStream;
-            videoStream.sources.push_back({level._ssrc, level._feedbackSsrc});
-            if (index++ == 0)
+            utils::append(responseVideo._ssrcs, group.getSsrcs());
+            api::EndpointDescription::SsrcGroup simSsrcGroup;
+            api::EndpointDescription::SsrcGroup feedbackSsrcGroup;
+            utils::append(simSsrcGroup._ssrcs, group.ssrcs);
+            utils::append(feedbackSsrcGroup._ssrcs, group.feedbackSsrcs);
+            simSsrcGroup._semantics = "SIM";
+            feedbackSsrcGroup._semantics = "FID";
+            if (group.slides)
             {
-                videoStream.content = "slides";
+                api::EndpointDescription::SsrcAttribute responseSsrcAttribute;
+                responseSsrcAttribute._ssrcs.push_back(group.ssrcs[0]);
+                responseSsrcAttribute._content = "slides";
+                responseVideo._ssrcAttributes.push_back(responseSsrcAttribute);
             }
-            else
-            {
-                videoStream.content = "video";
-            }
-            responseVideo.streams.push_back(videoStream);
+            responseVideo._ssrcGroups.push_back(simSsrcGroup);
+            responseVideo._ssrcGroups.push_back(feedbackSsrcGroup);
         }
 
         addDefaultVideoProperties(responseVideo);
@@ -112,7 +111,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
     response._headers["Content-type"] = "text/json";
 
-    logger::debug("barbell alloc response %s", "", response._body.c_str());
+    logger::debug("barbell response %s", "", response._body.c_str());
     return response;
 }
 
@@ -150,12 +149,25 @@ httpd::Response configureBarbell(ActionContext* context,
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
     if (!barbellDescription._bundleTransport.isSet() || !barbellDescription._bundleTransport.get()._ice.isSet() ||
-        !barbellDescription._bundleTransport.get()._dtls.isSet())
+        !barbellDescription._bundleTransport.get()._dtls.isSet() || !barbellDescription._audio.isSet() ||
+        !barbellDescription._video.isSet())
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Missing barbell ice or dtls transport description %s - %s",
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Missing barbell ice/dtls transport description %s - %s",
                 conferenceId.c_str(),
                 barbellId.c_str()));
+    }
+
+    if (!barbellDescription._audio.isSet())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Missing barbell audio description %s - %s", conferenceId.c_str(), barbellId.c_str()));
+    }
+
+    if (!barbellDescription._video.isSet() || (barbellDescription._video.get()._ssrcGroups.size() % 2) != 0)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Missing barbell video description %s - %s", conferenceId.c_str(), barbellId.c_str()));
     }
 
     auto& transportDescription = barbellDescription._bundleTransport.get();
@@ -175,8 +187,35 @@ httpd::Response configureBarbell(ActionContext* context,
             utils::format("Failed to configure barbell transport %s - %s", conferenceId.c_str(), barbellId.c_str()));
     }
 
-    mixer->addBarbellToEngine(barbellId);
+    std::vector<BarbellStreamGroupDescription> videoDescriptions;
+    auto& videoDescription = barbellDescription._video.get();
+    for (size_t i = 0; i < videoDescription._ssrcGroups.size(); i += 2)
+    {
+        auto& simGroup = videoDescription._ssrcGroups[i];
+        auto& fidGroup = videoDescription._ssrcGroups[i + 1];
+        if (simGroup._semantics != "SIM" || fidGroup._semantics != "FID")
+        {
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+                utils::format("Invalid barbell video description %s - %s", conferenceId.c_str(), barbellId.c_str()));
+        }
+        if (simGroup._ssrcs.size() > api::EndpointDescription::Video::MAX_SSRCS ||
+            fidGroup._ssrcs.size() > api::EndpointDescription::Video::MAX_SSRCS)
+        {
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+                utils::format("Barbell video group must contain no more than %zu ssrcs %s - %s",
+                    api::EndpointDescription::Video::MAX_SSRCS,
+                    conferenceId.c_str(),
+                    barbellId.c_str()));
+        }
+        BarbellStreamGroupDescription barbellGroup;
+        barbellGroup.ssrcs = simGroup._ssrcs;
+        barbellGroup.feedbackSsrcs = fidGroup._ssrcs;
+        barbellGroup.slides = (simGroup._ssrcs.size() == 1); // there is a slides attribute but this is accurate too
+        videoDescriptions.push_back(barbellGroup);
+    }
 
+    mixer->configureBarbellSsrcs(barbellId, videoDescriptions, barbellDescription._audio.get()._ssrcs);
+    mixer->addBarbellToEngine(barbellId);
     mixer->startBarbellTransport(barbellId);
 
     return generateBarbellResponse(context, requestLogger, *mixer, conferenceId, barbellId, !isRemoteSideDtlsClient);

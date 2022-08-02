@@ -82,7 +82,7 @@ Mixer* MixerManager::create(uint32_t lastN)
     const auto localVideoSsrc = _ssrcGenerator.next();
 
     std::vector<uint32_t> audioSsrcs;
-    std::vector<SimulcastLevel> videoSsrcs;
+    std::vector<SimulcastGroup> videoSsrcs;
     std::vector<SimulcastLevel> videoPinSsrcs;
 
     for (uint32_t i = 0; i < _config.audio.lastN + _config.audio.lastNextra; ++i)
@@ -90,10 +90,18 @@ Mixer* MixerManager::create(uint32_t lastN)
         audioSsrcs.push_back(_ssrcGenerator.next());
     }
 
-    // Last-n + screen share, extra
-    for (uint32_t i = 0; i < lastN + 3; ++i)
+    // screen share / slides
     {
-        videoSsrcs.push_back({_ssrcGenerator.next(), _ssrcGenerator.next()});
+        SimulcastLevel a[1] = {{_ssrcGenerator.next(), _ssrcGenerator.next(), false}};
+        videoSsrcs.push_back(SimulcastGroup(a));
+    }
+    // Last-n + extra
+    for (uint32_t i = 0; i < lastN + 2; ++i)
+    {
+        SimulcastLevel a[3] = {{_ssrcGenerator.next(), _ssrcGenerator.next(), false},
+            {_ssrcGenerator.next(), _ssrcGenerator.next(), false},
+            {_ssrcGenerator.next(), _ssrcGenerator.next(), false}};
+        videoSsrcs.push_back(SimulcastGroup(a));
     }
 
     for (uint32_t i = 0; i < 4; ++i)

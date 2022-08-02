@@ -803,6 +803,8 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
         return;
     }
 
+    packet->endpointIdHash = _endpointIdHash;
+
     bool rembReady = false;
     if (_absSendTimeExtensionId)
     {
@@ -1717,7 +1719,7 @@ void TransportImpl::appendRemb(memory::Packet& rtcpPacket,
         remb.addSsrc(activeInbound[i]);
     }
     rtcpPacket.setLength(rtcpPacket.getLength() + remb.header.size());
-    assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
+    assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket));
 }
 
 void TransportImpl::sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp)

@@ -4,6 +4,7 @@
 #include "bridge/AudioStream.h"
 #include "bridge/AudioStreamDescription.h"
 #include "bridge/Barbell.h"
+#include "bridge/BarbellStreamGroupDescription.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/VideoStreamDescription.h"
@@ -147,7 +148,7 @@ Mixer::Mixer(std::string id,
     utils::SsrcGenerator& ssrcGenerator,
     const config::Config& config,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastLevel>& videoSsrcs,
+    const std::vector<SimulcastGroup>& videoSsrcs,
     const std::vector<SimulcastLevel>& videoPinSsrcs)
     : _config(config),
       _id(std::move(id)),
@@ -340,7 +341,9 @@ bool Mixer::addAudioStream(std::string& outId,
 
     if (!transport)
     {
-        logger::error("Failed to create transport for AudioStream with endpointId %s", _loggableId.c_str(), endpointId.c_str());
+        logger::error("Failed to create transport for AudioStream with endpointId %s",
+            _loggableId.c_str(),
+            endpointId.c_str());
         return false;
     }
 
@@ -378,7 +381,9 @@ bool Mixer::addVideoStream(std::string& outId,
 
     if (!transport)
     {
-        logger::error("Failed to create transport for VideoStream with endpointId %s", _loggableId.c_str(), endpointId.c_str());
+        logger::error("Failed to create transport for VideoStream with endpointId %s",
+            _loggableId.c_str(),
+            endpointId.c_str());
         return false;
     }
 
@@ -907,19 +912,20 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStream
     return true;
 }
 
-void Mixer::getVideoStreamDescription(VideoStreamDescription& outDescription)
+void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellStreamGroupDescription>& outDescriptions)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    outDescription = VideoStreamDescription();
-
-    for (auto ssrcPair : _videoSsrcs)
+    for (auto ssrcGroup : _videoSsrcs)
     {
-        outDescription.simulcastSsrcs.push_back(ssrcPair);
-    }
-    for (auto ssrcPair : _videoPinSsrcs)
-    {
-        outDescription.simulcastSsrcs.push_back(ssrcPair);
+        bridge::BarbellStreamGroupDescription description;
+        for (size_t i = 0; i < ssrcGroup.count; ++i)
+        {
+            description.ssrcs.push_back(ssrcGroup.levels[i]._ssrc);
+            description.feedbackSsrcs.push_back(ssrcGroup.levels[i]._feedbackSsrc);
+        }
+        description.slides = description.ssrcs.size() == 1;
+        outDescriptions.push_back(description);
     }
 }
 
@@ -2322,7 +2328,11 @@ bool Mixer::addBarbellToEngine(const std::string& barbellId)
     auto& barbell = *barbellIt->second;
     barbell.isConfigured = true;
     auto emplaceResult = _engineBarbells.emplace(barbell.id,
-        std::make_unique<EngineBarbell>(barbell.id, *barbell.transport, _engineMixer.getSendAllocator()));
+        std::make_unique<EngineBarbell>(barbell.id,
+            *barbell.transport,
+            _engineMixer.getSendAllocator(),
+            barbell.videoSsrcs,
+            barbell.audioSsrcs));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddBarbell;
@@ -2350,6 +2360,23 @@ bool Mixer::configureBarbellTransport(const std::string& barbellId,
     barbellItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
     barbellItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     barbellItr->second->transport->setSctp(5000, 5000);
+    return true;
+}
+
+bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
+    const std::vector<BarbellStreamGroupDescription>& videoSsrcs,
+    const std::vector<uint32_t>& audioSsrcs)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto barbellItr = _barbells.find(barbellId);
+    if (barbellItr == _barbells.end())
+    {
+        return false;
+    }
+
+    auto& barbell = barbellItr->second;
+    barbell->audioSsrcs = audioSsrcs;
+    barbell->videoSsrcs = videoSsrcs;
     return true;
 }
 

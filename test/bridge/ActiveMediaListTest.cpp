@@ -49,6 +49,21 @@ bool endpointsContainsId(const nlohmann::json& messageJson, const char* id)
     return false;
 }
 
+bool endpointsContainsId(const nlohmann::json& messageJson, const std::string& mediaModality, const char* id)
+{
+    const auto& endpoints = messageJson[(mediaModality + "-endpoints").c_str()];
+
+    for (const auto& endpoint : endpoints)
+    {
+        if (endpoint["endpoint-id"].get<std::string>().compare(id) == 0)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 } // namespace
 
 class ActiveMediaListTest : public ::testing::Test
@@ -56,18 +71,25 @@ class ActiveMediaListTest : public ::testing::Test
 public:
     ActiveMediaListTest() : _engineAudioStreams(16), _engineVideoStreams(16) {}
 
+    const uint32_t AUDIO_REWRITE_COUNT = 5;
+    const uint32_t VIDEO_REWRITE_COUNT = 10;
+
 private:
     void SetUp() override
     {
 
-        for (uint32_t i = 0; i < 5; ++i)
+        for (uint32_t i = 0; i < AUDIO_REWRITE_COUNT; ++i)
         {
             _audioSsrcs.push_back(i);
         }
 
-        for (uint32_t i = 10; i < 20; ++i)
+        for (uint32_t i = 10; i < 10 + VIDEO_REWRITE_COUNT; ++i)
         {
-            _videoSsrcs.push_back(bridge::SimulcastLevel({i, i + 100}));
+            bridge::SimulcastLevel levels[3] = {{i * 3, i * 3 + 100},
+                {i * 3 + 1, i * 3 + 101},
+                {i * 3 + 2, i * 3 + 102}};
+
+            _videoSsrcs.push_back(bridge::SimulcastGroup(levels));
         }
 
         for (uint32_t i = 20; i < 24; ++i)
@@ -94,6 +116,11 @@ private:
         {
             delete videoStreamsEntry.second;
         }
+
+        for (auto& audioStreamEntry : _engineAudioStreams)
+        {
+            delete audioStreamEntry.second;
+        }
         _engineAudioStreams.clear();
         _engineVideoStreams.clear();
 
@@ -105,8 +132,9 @@ private:
     }
 
 protected:
+    bool _audioMapChanged = false;
     std::vector<uint32_t> _audioSsrcs;
-    std::vector<bridge::SimulcastLevel> _videoSsrcs;
+    std::vector<bridge::SimulcastGroup> _videoSsrcs;
     std::vector<bridge::SimulcastLevel> _videoPinSsrcs;
 
     std::unique_ptr<jobmanager::JobManager> _jobManager;
@@ -154,7 +182,7 @@ protected:
         _engineAudioStreams.emplace(id, engineAudioStream.release());
     }
 
-    uint64_t switchDominantSpeaker(const uint64_t timestamp, const size_t endpointIdHash)
+    void switchDominantSpeaker(uint64_t& timestamp, const size_t endpointIdHash)
     {
         uint64_t newTimestamp = timestamp;
 
@@ -165,17 +193,17 @@ protected:
                 _activeMediaList->onNewAudioLevel(endpointIdHash, 1, false);
             }
 
-            newTimestamp += 1000;
+            newTimestamp += 1000 * utils::Time::ms;
             bool dominantSpeakerChanged = false;
-            bool userMediaMapChanged = false;
-            _activeMediaList->process(newTimestamp, dominantSpeakerChanged, userMediaMapChanged);
+            bool videoMapChanged = false;
+            _activeMediaList->process(newTimestamp, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
             if (dominantSpeakerChanged)
             {
-                return newTimestamp;
+                return;
             }
         }
 
-        return newTimestamp;
+        return;
     }
 
     void zeroLevels(const size_t endpointIdHash)
@@ -184,6 +212,14 @@ protected:
         {
             _activeMediaList->onNewAudioLevel(endpointIdHash, 126, false);
         }
+    }
+
+    void consumeLevels(uint64_t& timestamp)
+    {
+        timestamp += 250 * utils::Time::ms;
+        bool dominantSpeakerChanged = false;
+        bool videoMapChanged = false;
+        _activeMediaList->process(timestamp, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     }
 };
 
@@ -200,16 +236,16 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
     _activeMediaList->addAudioParticipant(participant2);
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
+    bool videoMapChanged = false;
 
-    _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     for (auto i = 0; i < 30; ++i)
     {
         _activeMediaList->onNewAudioLevel(participant1, 64 + (i % 40), false);
         _activeMediaList->onNewAudioLevel(participant2, 96 + (i % 5), false);
     }
     timestamp += 200;
-    _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     EXPECT_TRUE(dominantSpeakerChanged);
 
     for (auto i = 0; i < 199; ++i)
@@ -217,14 +253,17 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
         _activeMediaList->onNewAudioLevel(participant1, 96 + (i % 5), false);
         _activeMediaList->onNewAudioLevel(participant2, 64 + (i % 40), false);
         timestamp += 10;
-        _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+        _activeMediaList->process(timestamp * utils::Time::ms,
+            dominantSpeakerChanged,
+            videoMapChanged,
+            _audioMapChanged);
         EXPECT_FALSE(dominantSpeakerChanged);
     }
 
     _activeMediaList->onNewAudioLevel(participant1, 96, false);
     _activeMediaList->onNewAudioLevel(participant2, 64, false);
     timestamp += 11;
-    _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     EXPECT_TRUE(dominantSpeakerChanged);
 
     _activeMediaList->removeAudioParticipant(participant1);
@@ -275,8 +314,9 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
     _activeMediaList->onNewAudioLevel(6, 10, false);
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+
+    _activeMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
     EXPECT_EQ(5, audioRewriteMap.size());
@@ -298,8 +338,9 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+
+    _activeMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     for (const auto element : ActiveMediaListTestLevels::longUtterance)
     {
@@ -316,7 +357,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
         _activeMediaList->onNewAudioLevel(6, element, false);
     }
 
-    _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(2000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(6));
     EXPECT_EQ(5, audioRewriteMap.size());
@@ -335,8 +376,9 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     }
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    _activeMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+
+    _activeMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     for (const auto element : ActiveMediaListTestLevels::longUtterance)
     {
@@ -348,7 +390,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
         _activeMediaList->onNewAudioLevel(2, element, false);
     }
 
-    _activeMediaList->process(2000, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(2000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(2));
@@ -385,8 +427,8 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     }
 
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    smallActiveMediaList->process(1000, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+    smallActiveMediaList->process(1000 * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
 
     const auto& audioRewriteMap = smallActiveMediaList->getAudioSsrcRewriteMap();
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
@@ -466,6 +508,15 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsOnlyLastNItems)
     EXPECT_FALSE(endpointsContainsId(messageJson, "2"));
     EXPECT_TRUE(endpointsContainsId(messageJson, "3"));
     EXPECT_FALSE(endpointsContainsId(messageJson, "4"));
+
+    utils::StringBuilder<1024> bbMessage;
+    _activeMediaList->makeBarbellUserMediaMapMessage(_engineAudioStreams, _engineVideoStreams, bbMessage);
+    printf("%s\n", bbMessage.get());
+    const auto barbellJson = nlohmann::json::parse(bbMessage.build());
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "2"));
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "3"));
+    EXPECT_FALSE(endpointsContainsId(barbellJson, "video", "4")); // will not fit within default lastN + 1
 }
 
 TEST_F(ActiveMediaListTest, userMediaMapContainsPinnedItem)
@@ -506,6 +557,11 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     auto videoStream3 = addEngineVideoStream(3);
     auto videoStream4 = addEngineVideoStream(4);
 
+    addEngineAudioStream(1);
+    addEngineAudioStream(2);
+    addEngineAudioStream(3);
+    addEngineAudioStream(4);
+
     _activeMediaList->addVideoParticipant(1, videoStream1->_simulcastStream, videoStream1->_secondarySimulcastStream);
     _activeMediaList->addVideoParticipant(2, videoStream2->_simulcastStream, videoStream2->_secondarySimulcastStream);
     _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
@@ -515,7 +571,8 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     zeroLevels(1);
     zeroLevels(2);
     zeroLevels(3);
-    timestamp = switchDominantSpeaker(timestamp, 4);
+    consumeLevels(timestamp);
+    switchDominantSpeaker(timestamp, 4);
 
     utils::StringBuilder<1024> message;
     _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 0, _engineAudioStreams, _engineVideoStreams, message);
@@ -526,6 +583,20 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     EXPECT_FALSE(endpointsContainsId(messageJson, "2"));
     EXPECT_FALSE(endpointsContainsId(messageJson, "3"));
     EXPECT_TRUE(endpointsContainsId(messageJson, "4"));
+
+    utils::StringBuilder<1024> bbMessage;
+    _activeMediaList->makeBarbellUserMediaMapMessage(_engineAudioStreams, _engineVideoStreams, bbMessage);
+    printf("%s\n", bbMessage.get());
+    const auto barbellJson = nlohmann::json::parse(bbMessage.build());
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "2"));
+    EXPECT_FALSE(endpointsContainsId(barbellJson, "video", "3"));
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "4"));
+
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "audio", "1"));
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "audio", "2"));
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "audio", "3"));
+    EXPECT_TRUE(endpointsContainsId(barbellJson, "audio", "4"));
 }
 
 TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
@@ -550,8 +621,12 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
         _activeMediaList->onNewAudioLevel(7, 0x7F, false);
         _activeMediaList->onNewAudioLevel(8, 0x7F, false);
         bool dominantSpeakerChanged = false;
-        bool userMediaMapChanged = false;
-        _activeMediaList->process(timestamp, dominantSpeakerChanged, userMediaMapChanged);
+        bool videoMapChanged = false;
+        bool audioMapChanged = false;
+        _activeMediaList->process(timestamp * utils::Time::ms,
+            dominantSpeakerChanged,
+            videoMapChanged,
+            audioMapChanged);
     }
 
     for (int i = 1 + audioLastN + 2; i < memberCount; ++i)

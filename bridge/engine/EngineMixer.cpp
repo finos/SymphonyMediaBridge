@@ -154,7 +154,7 @@ EngineMixer::EngineMixer(const std::string& id,
     memory::PacketPoolAllocator& sendAllocator,
     memory::AudioPacketPoolAllocator& audioAllocator,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastLevel>& videoSsrcs,
+    const std::vector<SimulcastGroup>& videoSsrcs,
     const uint32_t lastN)
     : _id(id),
       _loggableId("EngineMixer"),
@@ -225,6 +225,7 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
     if (_activeMediaList->addAudioParticipant(endpointIdHash))
     {
         sendUserMediaMapMessageToAll();
+        sendUserMediaMapMessageOverBarbells();
     }
     updateBandwidthFloor();
 
@@ -238,6 +239,7 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
     if (_activeMediaList->removeAudioParticipant(endpointIdHash))
     {
         sendUserMediaMapMessageToAll();
+        sendUserMediaMapMessageOverBarbells();
     }
     updateBandwidthFloor();
 
@@ -316,6 +318,7 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     updateBandwidthFloor();
     sendLastNListMessageToAll();
     sendUserMediaMapMessageToAll();
+    sendUserMediaMapMessageOverBarbells();
 
     sendVideoStreamToRecording(*engineVideoStream, true);
 }
@@ -373,6 +376,7 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
     if (_activeMediaList->removeVideoParticipant(endpointIdHash))
     {
         sendUserMediaMapMessageToAll();
+        sendUserMediaMapMessageOverBarbells();
     }
 
     _engineStreamDirector->removeParticipant(endpointIdHash);
@@ -599,6 +603,7 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     updateBandwidthFloor();
     sendLastNListMessageToAll();
     sendUserMediaMapMessageToAll();
+    sendUserMediaMapMessageOverBarbells();
     sendVideoStreamToRecording(*engineVideoStream, true);
 
     memcpy(&engineVideoStream->_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
@@ -858,8 +863,9 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
 void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTimestamp)
 {
     bool dominantSpeakerChanged = false;
-    bool userMediaMapChanged = false;
-    _activeMediaList->process(engineIterationStartTimestamp / 1000000ULL, dominantSpeakerChanged, userMediaMapChanged);
+    bool videoMapChanged = false;
+    bool audioMapChanged = false;
+    _activeMediaList->process(engineIterationStartTimestamp, dominantSpeakerChanged, videoMapChanged, audioMapChanged);
 
     if (dominantSpeakerChanged)
     {
@@ -868,9 +874,13 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
         sendLastNListMessageToAll();
     }
 
-    if (userMediaMapChanged)
+    if (videoMapChanged)
     {
         sendUserMediaMapMessageToAll();
+    }
+    if (audioMapChanged || videoMapChanged)
+    {
+        sendUserMediaMapMessageOverBarbells();
     }
 }
 
@@ -2086,7 +2096,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
                 {
                     continue;
                 }
-                ssrc = rewriteMapItr->second._ssrc;
+                ssrc = rewriteMapItr->second.levels[0]._ssrc;
             }
         }
         else
@@ -2674,6 +2684,23 @@ void EngineMixer::sendUserMediaMapMessageToAll()
             userMediaMapMessage);
 
         dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
+    }
+}
+
+void EngineMixer::sendUserMediaMapMessageOverBarbells()
+{
+    if (_engineBarbells.size() == 0)
+    {
+        return;
+    }
+
+    utils::StringBuilder<1024> userMediaMapMessage;
+    _activeMediaList->makeBarbellUserMediaMapMessage(_engineAudioStreams, _engineVideoStreams, userMediaMapMessage);
+
+    for (auto& barbell : _engineBarbells)
+    {
+        logger::debug("send BB msg %s", _loggableId.c_str(), userMediaMapMessage.get());
+        barbell.second->dataChannel.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
     }
 }
 
