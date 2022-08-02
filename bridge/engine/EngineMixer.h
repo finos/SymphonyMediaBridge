@@ -378,10 +378,7 @@ private:
         transport::RtcTransport* sender,
         const uint32_t payloadType,
         const uint64_t timestamp);
-    SsrcOutboundContext* obtainOutboundSsrcContext(EngineAudioStream& audioStream, const uint32_t ssrc);
-    SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream,
-        const uint32_t ssrc,
-        const RtpMap& rtpMap);
+
     SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
         concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
         const uint32_t ssrc,
