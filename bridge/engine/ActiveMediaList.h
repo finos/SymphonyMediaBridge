@@ -6,6 +6,7 @@
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
+#include "utils/Time.h"
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -38,7 +39,7 @@ public:
 
     ActiveMediaList(size_t instanceId,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastLevel>& videoSsrcs,
+        const std::vector<SimulcastGroup>& videoSsrcs,
         const uint32_t defaultLastN,
         uint32_t audioLastN,
         uint32_t activeTalkerSilenceThresholdDb);
@@ -64,7 +65,10 @@ public:
 
     void onNewPtt(const size_t endpointIdHash, bool isPtt);
 
-    void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
+    void process(const uint64_t timestamp,
+        bool& outDominantSpeakerChanged,
+        bool& outUserMediaMapChanged,
+        bool& outAudioMapChanged);
 
     inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
 
@@ -75,7 +79,7 @@ public:
         return _audioSsrcRewriteMap;
     }
 
-    inline const concurrency::MpmcHashmap32<size_t, SimulcastLevel>& getVideoSsrcRewriteMap() const
+    inline const concurrency::MpmcHashmap32<size_t, SimulcastGroup>& getVideoSsrcRewriteMap() const
     {
         return _videoSsrcRewriteMap;
     }
@@ -135,15 +139,20 @@ public:
         const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
         utils::StringBuilder<1024>& outMessage);
 
+    bool makeBarbellUserMediaMapMessage(
+        const concurrency::MpmcHashmap32<size_t, EngineAudioStream*>& engineAudioStreams,
+        const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
+        utils::StringBuilder<1024>& outMessage);
+
 #if DEBUG
     void checkInvariant();
 #endif
 
 private:
-    static const size_t intervalMs = 10;
+    static const size_t INTERVAL_MS = 10;
     static const int32_t requiredConsecutiveWins = 3;
     // Only allow a new switch after 2s
-    static const uint32_t maxSwitchDominantSpeakerEveryMs = 2000;
+    static const uint32_t maxSwitchDominantSpeakerEvery = 2000 * utils::Time::ms;
     // 100 entries corresponding to 2s for the case of 20ms packets
     static const size_t numLevels = 100;
     // Short Window (5 packets, typically 100ms) used to estimate noise level
@@ -153,34 +162,34 @@ private:
     {
         AudioParticipant();
 
-        static constexpr float decayOfMaxLevel = 0.006f;
+        static constexpr float MAX_LEVEL_DECAY = 0.006f;
         // Ramp up last seen noise level by 1 every second if no new minimum
-        static constexpr float noiseLevelRampup = 0.01f;
+        static constexpr float NOISE_RAMPUP = 0.01f;
         // Min should not be below -120 dBov
-        static const uint8_t minNoiseLevel = 7;
+        static const uint8_t MIN_NOISE = 7;
 
-        std::array<uint8_t, numLevels> _levels;
-        size_t _index;
-        size_t _indexEndShortWindow;
+        std::array<uint8_t, numLevels> levels;
+        size_t index;
+        size_t indexEndShortWindow;
 
-        int32_t _totalLevelLongWindow;
-        int32_t _totalLevelShortWindow;
-        int32_t _nonZeroLevelsShortWindow;
-        float _maxRecentLevel;
-        float _noiseLevel;
-        bool _isPtt;
+        int32_t totalLevelLongWindow;
+        int32_t totalLevelShortWindow;
+        int32_t nonZeroLevelsShortWindow;
+        float maxRecentLevel;
+        float noiseLevel;
+        bool isPtt;
     };
 
     struct AudioLevelEntry
     {
-        size_t _participant;
-        uint8_t _level;
+        size_t participant;
+        uint8_t level;
     };
 
     struct VideoParticipant
     {
-        SimulcastStream _simulcastStream;
-        utils::Optional<SimulcastStream> _secondarySimulcastStream;
+        SimulcastStream simulcastStream;
+        utils::Optional<SimulcastStream> secondarySimulcastStream;
     };
 
     struct AudioParticipantScore
@@ -227,10 +236,10 @@ private:
     int32_t _consecutiveDominantSpeakerWins;
 
     concurrency::MpmcHashmap32<size_t, VideoParticipant> _videoParticipants;
-    concurrency::MpmcQueue<SimulcastLevel> _videoSsrcs;
+    concurrency::MpmcQueue<SimulcastGroup> _videoSsrcs;
     concurrency::MpmcHashmap32<uint32_t, uint32_t> _videoFeedbackSsrcLookupMap;
     SimulcastLevel _videoScreenShareSsrc;
-    concurrency::MpmcHashmap32<size_t, SimulcastLevel> _videoSsrcRewriteMap;
+    concurrency::MpmcHashmap32<size_t, SimulcastGroup> _videoSsrcRewriteMap;
     concurrency::MpmcHashmap32<uint32_t, size_t> _reverseVideoSsrcRewriteMap;
     utils::Optional<std::pair<size_t, VideoScreenShareSsrcMapping>> _videoScreenShareSsrcMapping;
     memory::List<size_t, 32> _activeVideoList;
@@ -240,14 +249,16 @@ private:
     std::atomic_uint32_t _reentrancyCounter;
 #endif
 
-    uint64_t _lastRunTimestampMs;
-    uint64_t _lastChangeTimestampMs;
+    uint64_t _lastRunTimestamp;
+    uint64_t _lastChangeTimestamp;
+    std::atomic_bool _c9_conference;
 
     size_t rankSpeakers(float& currentDominantSpeakerScore, TActiveTalkersSnapshot& out);
     void updateLevels(const uint64_t timestampMs);
-    void updateActiveAudioList(size_t endpointIdHash);
+    bool updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
-    std::atomic_bool _c9_conference;
+    void addToRewriteMap(size_t endpointIdHash, SimulcastGroup simulcastGroup);
+    void removeFromRewriteMap(size_t endpointIdHash);
 };
 
 } // namespace bridge

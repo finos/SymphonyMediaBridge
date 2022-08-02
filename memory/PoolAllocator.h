@@ -169,6 +169,7 @@ public:
 #endif
     }
 
+protected:
     static bool isCorrupt(void* pointer)
     {
 #ifdef DEBUG

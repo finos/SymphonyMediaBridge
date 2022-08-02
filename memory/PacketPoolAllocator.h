@@ -9,11 +9,18 @@ namespace memory
 
 const size_t packetPoolSize = 2048 * 4;
 
-using PacketPoolAllocator = PoolAllocator<sizeof(Packet)>;
+class PacketPoolAllocator : public PoolAllocator<sizeof(Packet)>
+{
+public:
+    PacketPoolAllocator(size_t elementCount, const std::string&& name) : PoolAllocator(elementCount, std::move(name)) {}
+
+    static bool isCorrupt(Packet* p) { return PoolAllocator<sizeof(Packet)>::isCorrupt(p); }
+    static bool isCorrupt(Packet& p) { return PoolAllocator<sizeof(Packet)>::isCorrupt(&p); }
+};
 
 // Be very careful with reset as the deleter is not changed if already set. You may try to deallocate
 // packet in the wrong pool.
-typedef std::unique_ptr<memory::Packet, PacketPoolAllocator::Deleter> UniquePacket;
+typedef std::unique_ptr<Packet, PacketPoolAllocator::Deleter> UniquePacket;
 
 inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator)
 {
@@ -27,15 +34,15 @@ inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator)
         return UniquePacket();
     }
 
-    new (pointer) memory::Packet();
+    new (pointer) Packet();
 
     return UniquePacket(reinterpret_cast<Packet*>(pointer), allocator.getDeleter());
 }
 
 inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator, const void* data, size_t length)
 {
-    assert(length <= memory::Packet::size);
-    if (length > memory::Packet::size)
+    assert(length <= Packet::size);
+    if (length > Packet::size)
     {
         return UniquePacket();
     }
