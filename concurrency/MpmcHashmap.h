@@ -351,6 +351,28 @@ public:
         return iterator(_elements, currentEnd, currentEnd);
     }
 
+    template <typename TypeName = T>
+    TypeName getItem(const KeyT& key, typename std::enable_if<std::is_pointer<TypeName>::value>::type* = nullptr)
+    {
+        auto it = find(key);
+        if (it != end())
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
+
+    template <typename TypeName = T>
+    TypeName* getItem(const KeyT& key, typename std::enable_if<!std::is_pointer<TypeName>::value>::type* = nullptr)
+    {
+        auto it = find(key);
+        if (it != end())
+        {
+            return &it->second;
+        }
+        return nullptr;
+    }
+
 private:
     static size_t blockSizeFor(size_t count, size_t size)
     {

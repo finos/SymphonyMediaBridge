@@ -228,6 +228,28 @@ public:
     iterator begin() { return iterator(cbegin()); }
     iterator end() { return iterator(_elements.data(), _end, _end); }
 
+    template <typename TypeName = T>
+    TypeName getItem(const KeyT& key, typename std::enable_if<std::is_pointer<TypeName>::value>::type* = nullptr)
+    {
+        auto it = find(key);
+        if (it != end())
+        {
+            return it->second;
+        }
+        return nullptr;
+    }
+
+    template <typename TypeName = T>
+    TypeName* getItem(const KeyT& key, typename std::enable_if<!std::is_pointer<TypeName>::value>::type* = nullptr)
+    {
+        auto it = find(key);
+        if (it != end())
+        {
+            return &it->second;
+        }
+        return nullptr;
+    }
+
 private:
     uint32_t indexPosition(uint64_t hashValue, uint32_t offset) const { return (hashValue + offset) % _index.size(); }
 
