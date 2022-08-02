@@ -48,7 +48,8 @@ public:
           _markedForDeletion(false),
           _idle(false),
           _shouldDropPackets(false),
-          _inactiveCount(0)
+          _inactiveCount(0),
+          _simulcastLevel(0)
     {
     }
 
@@ -87,6 +88,7 @@ public:
     std::shared_ptr<VideoMissingPacketsTracker> _videoMissingPacketsTracker;
 
     PliScheduler _pliScheduler;
+    uint32_t _simulcastLevel;
 };
 
 } // namespace bridge

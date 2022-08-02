@@ -156,6 +156,8 @@ set(FILES
         bridge/engine/EngineStreamDirector.h
         bridge/engine/EngineStreamDirector.cpp
         bridge/engine/EngineVideoStream.h
+        bridge/engine/EngineBarbell.h
+        bridge/engine/EngineBarbell.cpp
         bridge/engine/PacketCache.cpp
         bridge/engine/PacketCache.h
         bridge/engine/ProcessMissingVideoPacketsJob.cpp
@@ -284,6 +286,8 @@ set(FILES
         memory/RingBuffer.h
         memory/MemoryFile.h
         memory/MemoryFile.cpp
+        memory/Map.h
+        memory/Array.h
         rtp/RtcpFeedback.cpp
         rtp/RtcpFeedback.h
         rtp/RtcpHeader.cpp
@@ -390,6 +394,8 @@ set(FILES
         utils/Time.h
         utils/Trackers.cpp
         utils/Trackers.h
+        utils/SimpleJson.cpp
+        utils/SimpleJson.h
         webrtc/DataChannel.cpp
         webrtc/DataChannel.h
         webrtc/WebRtcDataStream.cpp
@@ -426,6 +432,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/googletest-src ${CMAKE_CURRENT_BINARY_DIR}/googletest-build EXCLUDE_FROM_ALL)
 
 set(TEST_FILES
+    test/memory/MapTest.cpp
     test/memory/PoolAllocatorTest.cpp
     test/memory/RingAllocatorTest.cpp
     test/utils/StringTokenizerTest.cpp
@@ -504,6 +511,7 @@ set(TEST_FILES
     test/utils/RandGeneratorTest.cpp
     test/utils/TimeSourceTest.cpp
     test/utils/ApiUtils.cpp
+    test/utils/SimpleJsonTest.cpp
     test/legacyapi/ParserTest.cpp
     test/legacyapi/GeneratorTest.cpp
     test/bridge/EngineStreamDirectorTest.cpp
@@ -527,6 +535,7 @@ set(TEST_FILES
     test/bridge/UnackedPacketsTrackerTest.cpp
     test/memory/PriorityQueueTest.cpp
     test/memory/BacklogTest.cpp
+    test/memory/StackMapTest.cpp
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/VideoNackReceiveJobTest.cpp
     test/bridge/DummyRtcTransport.h)

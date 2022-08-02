@@ -482,6 +482,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _dtlsState(SrtpClient::State::IDLE)
 {
     assert(endpointIdHash != 0);
+    _tag[0] = 0;
 
     logger::info("SRTP client: %s", _loggableId.c_str(), _srtpClient->getLoggableId().c_str());
     assert(_srtpClient->isInitialized());
@@ -563,6 +564,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _pacingInUse(false)
 {
     assert(endpointIdHash != 0);
+    _tag[0] = 0;
 
     logger::info("SRTP client: %s", _loggableId.c_str(), _srtpClient->getLoggableId().c_str());
     assert(_srtpClient->isInitialized());
@@ -802,6 +804,8 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     {
         return;
     }
+
+    packet->endpointIdHash = _endpointIdHash;
 
     bool rembReady = false;
     if (_absSendTimeExtensionId)
@@ -2395,6 +2399,11 @@ void TransportImpl::drainPacingBuffer(uint64_t timestamp, DrainPacingBufferMode 
         budget -= packet->getLength() + _config.ipOverhead;
         protectAndSendRtp(timestamp, std::move(packet));
     }
+}
+
+void TransportImpl::setTag(const char* tag)
+{
+    utils::strncpy(_tag, tag, sizeof(_tag));
 }
 
 } // namespace transport
