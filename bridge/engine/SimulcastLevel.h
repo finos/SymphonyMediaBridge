@@ -1,10 +1,10 @@
 #pragma once
 
-#include "utils/StdExtensions.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
+#include <cstring>
+
 namespace bridge
 {
 

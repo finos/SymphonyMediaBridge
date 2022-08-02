@@ -28,7 +28,7 @@ struct RecHeader
     {
         assert((intptr_t)pointer % alignof(RecHeader) == 0);
         assert(len >= REC_HEADER_SIZE);
-        assert(sizeof(RecHeader) == REC_HEADER_SIZE);
+        static_assert(sizeof(RecHeader) == REC_HEADER_SIZE, "RecHeader size does not match REC_HEADER_SIZE");
         return reinterpret_cast<RecHeader*>(pointer);
     }
 

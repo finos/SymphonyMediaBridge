@@ -2,19 +2,19 @@
 #include <cstring>
 
 /**
- * Helper objects used to format a json body. Use code blocks to manage life time of JsonArray and JsonObject to set the
- * braces inside the json. You have to add elements in order. You cannot add ddproperties to an object higher in
+ * Helper objects used to format a json body. Use code blocks to manage life time of Array and Object to set the
+ * braces inside the json. You have to add elements in order. You cannot add properties to an object higher in
  * hierarchy until you have closed the current object.
  * example:
  * Stringbuilder b;
  * {
- *  JsonObject json(b);
+ *  Object json(b);
  *  {
- *      JsonObject foo(b, "foo");
+ *      Object foo(b, "foo");
  *      foo.addProperty("test", 56);
  *      foo.addProperty("tar", "string");
  *      // json.addProperty("error",7); this is invalid
- *      JsonArray bar("bar");
+ *      Array bar("bar");
  *      for (int i = 0; i < 25;++i)
  *      {
  *          bar.addElement(i*7);
@@ -22,16 +22,18 @@
  *  }
  * }
  * */
-namespace JsonBuilder
+namespace json
+{
+namespace writer
 {
 
 template <typename TBuilder>
-class JsonObject
+class Object
 {
     TBuilder& _builder;
 
 public:
-    JsonObject(TBuilder& builder, const char* name) : _builder(builder)
+    Object(TBuilder& builder, const char* name) : _builder(builder)
     {
         assert(name);
         if (!(_builder.empty() || _builder.endsWidth('[') || _builder.endsWidth('{')))
@@ -46,7 +48,7 @@ public:
         _builder.append("{");
     };
 
-    JsonObject(TBuilder& builder) : _builder(builder)
+    Object(TBuilder& builder) : _builder(builder)
     {
         if (!(_builder.empty() || _builder.endsWidth('[') || _builder.endsWidth('{')))
         {
@@ -56,7 +58,7 @@ public:
         _builder.append("{");
     };
 
-    ~JsonObject() { _builder.append("}"); }
+    ~Object() { _builder.append("}"); }
 
     void addProperty(const char* name, const char* value)
     {
@@ -88,12 +90,12 @@ public:
 };
 
 template <typename TBuilder>
-class JsonArray
+class Array
 {
     TBuilder& _builder;
 
 public:
-    JsonArray(TBuilder& builder, const char* name) : _builder(builder)
+    Array(TBuilder& builder, const char* name) : _builder(builder)
     {
         if (!_builder.endsWidth('{'))
         {
@@ -104,7 +106,7 @@ public:
         _builder.append("\":[");
     };
 
-    ~JsonArray() { _builder.append("]"); }
+    ~Array() { _builder.append("]"); }
 
     void addElement(const char* value)
     {
@@ -130,4 +132,23 @@ public:
     }
 };
 
-}; // namespace JsonBuilder
+template <typename TStringBuilder>
+Object<TStringBuilder> createObjectWriter(TStringBuilder& builder)
+{
+    return Object<TStringBuilder>(builder);
+}
+
+template <typename TStringBuilder>
+Object<TStringBuilder> createObjectWriter(TStringBuilder& builder, const char* propertyName)
+{
+    return Object<TStringBuilder>(builder, propertyName);
+}
+
+template <typename TStringBuilder>
+Array<TStringBuilder> createArrayWriter(TStringBuilder& builder, const char* propertyName)
+{
+    return Array<TStringBuilder>(builder, propertyName);
+}
+
+} // namespace writer
+} // namespace json

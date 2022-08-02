@@ -1,6 +1,6 @@
 #include "bridge/engine/ActiveMediaList.h"
 #include "api/DataChannelMessage.h"
-#include "api/JsonBuilder.h"
+#include "api/JsonWriter.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
@@ -12,8 +12,6 @@
 
 namespace bridge
 {
-using JsonObject = JsonBuilder::JsonObject<utils::StringBuilder<1024>>;
-using JsonArray = JsonBuilder::JsonArray<utils::StringBuilder<1024>>;
 
 ActiveMediaList::AudioParticipant::AudioParticipant()
     : levels({0}),
@@ -723,22 +721,22 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(
     const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
     utils::StringBuilder<1024>& outMessage)
 {
-    JsonObject umm(outMessage);
+    auto umm = json::writer::createObjectWriter(outMessage);
     umm.addProperty("type", "user-media-map");
 
     if (!_videoSsrcRewriteMap.empty())
     {
-        JsonArray videoArray(outMessage, "video-endpoints");
+        auto videoArray = json::writer::createArrayWriter(outMessage, "video-endpoints");
         for (auto& item : _videoSsrcRewriteMap)
         {
             const auto videoStreamItr = engineVideoStreams.find(item.first);
             if (videoStreamItr != engineVideoStreams.end())
             {
                 const auto videoStream = videoStreamItr->second;
-                JsonObject videoEp(outMessage);
+                auto videoEp = json::writer::createObjectWriter(outMessage);
                 videoEp.addProperty("endpoint-id", videoStream->_endpointId);
 
-                JsonArray videoSsrcs(outMessage, "ssrcs");
+                auto videoSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
                 videoSsrcs.addElement(item.second.levels[0]._ssrc);
 
                 if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == item.first)
@@ -751,16 +749,16 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(
 
     if (!_audioSsrcRewriteMap.empty())
     {
-        JsonArray audioArray(outMessage, "audio-endpoints");
+        auto audioArray = json::writer::createArrayWriter(outMessage, "audio-endpoints");
 
         for (auto& item : _audioSsrcRewriteMap)
         {
             auto audioIt = engineAudioStreams.find(item.first);
             if (audioIt != engineAudioStreams.end())
             {
-                JsonObject audioEndpoint(outMessage);
+                auto audioEndpoint = json::writer::createObjectWriter(outMessage);
                 audioEndpoint.addProperty("endpoint-id", audioIt->second->endpointId);
-                JsonArray audioSsrcs(outMessage, "ssrcs");
+                auto audioSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
                 audioSsrcs.addElement(item.second);
             }
         }

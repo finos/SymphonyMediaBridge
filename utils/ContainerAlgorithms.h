@@ -15,9 +15,9 @@ void append(T& target, const T& src)
     target.insert(target.begin(), src.begin(), src.end());
 }
 
-template <typename T, size_t N>
-void append(T& target, const T (&src)[N])
+template <typename ContainerType, typename T, size_t N>
+void append(ContainerType& target, const T (&src)[N])
 {
-    target.insert(target.begin(), src.begin(), src.end());
+    target.insert(target.begin(), src, &src[N]);
 }
 } // namespace utils
