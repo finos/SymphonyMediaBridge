@@ -116,6 +116,11 @@ private:
         {
             delete videoStreamsEntry.second;
         }
+
+        for (auto& audioStreamEntry : _engineAudioStreams)
+        {
+            delete audioStreamEntry.second;
+        }
         _engineAudioStreams.clear();
         _engineVideoStreams.clear();
 
