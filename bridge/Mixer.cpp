@@ -2289,7 +2289,10 @@ bool Mixer::addBarbellToEngine(const std::string& barbellId)
             *barbell.transport,
             _engineMixer.getSendAllocator(),
             barbell.videoSsrcs,
-            barbell.audioSsrcs));
+            barbell.audioSsrcs,
+            barbell.audioRtpMap,
+            barbell.videoRtpMap,
+            barbell.videoFeedbackRtpMap));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddBarbell;
@@ -2322,7 +2325,10 @@ bool Mixer::configureBarbellTransport(const std::string& barbellId,
 
 bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     const std::vector<BarbellStreamGroupDescription>& videoSsrcs,
-    const std::vector<uint32_t>& audioSsrcs)
+    const std::vector<uint32_t>& audioSsrcs,
+    const bridge::RtpMap& audioRtpMap,
+    const bridge::RtpMap& videoRtpMap,
+    const bridge::RtpMap& videoFeedbackRtpMap)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto barbellItr = _barbells.find(barbellId);
@@ -2334,6 +2340,10 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     auto& barbell = barbellItr->second;
     barbell->audioSsrcs = audioSsrcs;
     barbell->videoSsrcs = videoSsrcs;
+
+    barbell->audioRtpMap = audioRtpMap;
+    barbell->videoRtpMap = videoRtpMap;
+    barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;
     return true;
 }
 

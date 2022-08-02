@@ -162,7 +162,8 @@ httpd::Response configureBarbell(ActionContext* context,
             utils::format("Missing barbell audio description %s - %s", conferenceId.c_str(), barbellId.c_str()));
     }
 
-    if (!barbellDescription._video.isSet() || (barbellDescription._video.get()._ssrcGroups.size() % 2) != 0)
+    if (!barbellDescription._video.isSet() || (barbellDescription._video.get()._ssrcGroups.size() % 2) != 0 ||
+        barbellDescription._video.get()._payloadTypes.size() < 2)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Missing barbell video description %s - %s", conferenceId.c_str(), barbellId.c_str()));
@@ -212,7 +213,28 @@ httpd::Response configureBarbell(ActionContext* context,
         videoDescriptions.push_back(barbellGroup);
     }
 
-    mixer->configureBarbellSsrcs(barbellId, videoDescriptions, barbellDescription._audio.get()._ssrcs);
+    const auto audioRtpMap = makeRtpMap(barbellDescription._audio.get()._payloadType.get());
+    bridge::RtpMap videoRtpMap;
+    bridge::RtpMap videoFeedbackRtpMap;
+    for (auto& payloadDescription : barbellDescription._video.get()._payloadTypes)
+    {
+        if (payloadDescription._name.compare("rtx"))
+        {
+            videoFeedbackRtpMap = makeRtpMap(payloadDescription);
+        }
+        else
+        {
+            videoRtpMap = makeRtpMap(payloadDescription);
+        }
+    }
+
+    mixer->configureBarbellSsrcs(barbellId,
+        videoDescriptions,
+        barbellDescription._audio.get()._ssrcs,
+        audioRtpMap,
+        videoRtpMap,
+        videoFeedbackRtpMap);
+
     mixer->addBarbellToEngine(barbellId);
     mixer->startBarbellTransport(barbellId);
 

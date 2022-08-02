@@ -194,7 +194,10 @@ public:
         const bool isDtlsClient);
     bool configureBarbellSsrcs(const std::string& barbellId,
         const std::vector<BarbellStreamGroupDescription>& videoSsrcs,
-        const std::vector<uint32_t>& audioSsrcs);
+        const std::vector<uint32_t>& audioSsrcs,
+        const bridge::RtpMap& audioRtpMap,
+        const bridge::RtpMap& videoRtpMap,
+        const bridge::RtpMap& videoFeedbackRtpMap);
 
     bool addBarbellToEngine(const std::string& barbellId);
     bool startBarbellTransport(const std::string& barbellId);

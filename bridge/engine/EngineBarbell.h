@@ -22,11 +22,17 @@ struct EngineBarbell
         transport::RtcTransport& rtcTransport,
         memory::PacketPoolAllocator& poolAllocator,
         const std::vector<BarbellStreamGroupDescription>& videoDescriptions,
-        const std::vector<uint32_t>& audio)
+        const std::vector<uint32_t>& audio,
+        RtpMap& audioRtpMap,
+        RtpMap& videoRtpMap,
+        RtpMap& videoFeedbackRtpMap)
         : id(barbellId),
           ssrcOutboundContexts(128),
           transport(rtcTransport),
-          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator)
+          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator),
+          audioRtpMap(audioRtpMap),
+          videoRtpMap(videoRtpMap),
+          videoFeedbackRtpMap(videoFeedbackRtpMap)
     {
         for (auto& ssrc : audio)
         {
@@ -53,6 +59,28 @@ struct EngineBarbell
                 videoSsrcMap.emplace(videoStream.stream._levels[i]._feedbackSsrc, &videoStreams.back());
             }
         }
+    }
+
+    utils::Optional<uint32_t> getMainSsrcFor(uint32_t feedbackSsrc)
+    {
+        auto videoStream = videoSsrcMap.getItem(feedbackSsrc);
+        if (!videoStream)
+        {
+            return utils::Optional<uint32_t>();
+        }
+
+        return videoStream->stream.getMainSsrcFor(feedbackSsrc);
+    }
+
+    utils::Optional<uint32_t> getFeedbackSsrcFor(uint32_t ssrc)
+    {
+        auto videoStream = videoSsrcMap.getItem(ssrc);
+        if (!videoStream)
+        {
+            return utils::Optional<uint32_t>();
+        }
+
+        return videoStream->stream.getFeedbackSsrcFor(ssrc);
     }
 
     std::string id;
@@ -84,6 +112,10 @@ struct EngineBarbell
 
     memory::StackMap<uint32_t, VideoStream*, 32> videoSsrcMap;
     memory::StackMap<uint32_t, AudioStream*, 16> audioSsrcMap;
+
+    bridge::RtpMap audioRtpMap;
+    bridge::RtpMap videoRtpMap;
+    bridge::RtpMap videoFeedbackRtpMap;
 };
 
 } // namespace bridge

@@ -341,6 +341,8 @@ private:
     void processBarbellSctp(const uint64_t timestamp);
     void processIncomingRtpPackets(const uint64_t timestamp);
     void forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
+    void forwardAudioRtpPackets(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+    void forwardAudioRtpPacketsOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket);
@@ -377,8 +379,10 @@ private:
     SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream,
         const uint32_t ssrc,
         const RtpMap& rtpMap);
-    SsrcOutboundContext* getOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
-    SsrcOutboundContext* getOutboundSsrcContext(EngineRecordingStream& recordingStream, const uint32_t ssrc);
+    SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
+        concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
+        const uint32_t ssrc,
+        const RtpMap& rtpMap);
 
     void sendPliForUsedSsrcs(EngineVideoStream& videoStream);
     void sendLastNListMessage(const size_t endpointIdHash);
