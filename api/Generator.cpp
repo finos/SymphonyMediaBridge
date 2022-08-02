@@ -198,6 +198,7 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
                 ssrcAttributeJson["ssrcs"].push_back(ssrc);
             }
             ssrcAttributeJson["content"] = ssrcAttribute._content;
+            videoJson["ssrc-attributes"].push_back(ssrcAttributeJson);
         }
 
         responseJson["video"] = videoJson;
