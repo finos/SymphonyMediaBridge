@@ -98,7 +98,11 @@ public:
     virtual void runTick(uint64_t timestamp) = 0;
     virtual ice::IceSession::State getIceState() const = 0;
     virtual SrtpClient::State getDtlsState() const = 0;
+
     virtual utils::Optional<ice::TransportType> getSelectedTransportType() const = 0;
+
+    virtual void setTag(const char* tag) = 0;
+    virtual const char* getTag() const = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,

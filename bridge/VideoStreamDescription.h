@@ -1,4 +1,5 @@
 #pragma once
+#include "api/SimulcastGroup.h"
 #include "bridge/VideoStream.h"
 #include <cstdint>
 #include <string>
@@ -16,15 +17,16 @@ struct VideoStreamDescription
     std::vector<uint32_t> getSsrcs()
     {
         std::vector<uint32_t> v;
+        v.reserve(sources.size() + 1);
         if (localSsrc != 0)
         {
             v.push_back(localSsrc);
         }
 
-        for (auto& level : simulcastSsrcs)
+        for (auto& level : sources)
         {
-            v.push_back(level._ssrc);
-            v.push_back(level._feedbackSsrc);
+            v.push_back(level.main);
+            v.push_back(level.feedback);
         }
         return v;
     }
@@ -32,7 +34,7 @@ struct VideoStreamDescription
     std::string id;
     std::string endpointId;
     uint32_t localSsrc = 0;
-    std::vector<SimulcastLevel> simulcastSsrcs;
+    std::vector<api::SsrcPair> sources;
 };
 
 } // namespace bridge

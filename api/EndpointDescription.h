@@ -1,5 +1,6 @@
 #pragma once
 
+#include "api/SimulcastGroup.h"
 #include "utils/Optional.h"
 #include <cstdint>
 #include <string>
@@ -57,15 +58,11 @@ struct EndpointDescription
 
     struct VideoStream
     {
-        struct Level
-        {
-            uint32_t main;
-            uint32_t feedback;
-        };
-
         std::string id;
-        std::vector<Level> sources;
+        api::SimulcastGroup sources;
         std::string content;
+
+        bool isSlides() const { return 0 == content.compare(slidesContent); }
     };
 
     struct PayloadType

@@ -108,7 +108,7 @@ inline void addUserMediaMapEnd(utils::StringBuilder<1024>& outMessage)
 #endif
 }
 
-inline void makeLastNAppend(utils::StringBuilder<1024>& outMessage, const std::string& endpointId, const bool isFirst)
+inline void makeLastNAppend(utils::StringBuilder<1024>& outMessage, const char* endpointId, const bool isFirst)
 {
 #if ENABLE_LEGACY_API
     legacyapi::DataChannelMessage::makeLastNEndpointsChangeAppend(outMessage, endpointId, isFirst);
