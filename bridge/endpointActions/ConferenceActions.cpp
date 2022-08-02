@@ -458,10 +458,7 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Audio payload type is required");
     }
 
-    const auto rtpMap = makeRtpMap(audio._payloadType.get());
-    const auto absSendTimeExtensionId = findAbsSendTimeExtensionId(audio._rtpHeaderExtensions);
-    const auto c9infoExtensionId = findC9InfoExtensionId(audio._rtpHeaderExtensions);
-    const auto audioLevelExtensionId = findAudioLevelExtensionId(audio._rtpHeaderExtensions);
+    const auto rtpMap = makeRtpMap(audio);
 
     utils::Optional<uint32_t> remoteSsrc;
     if (!audio._ssrcs.empty())
@@ -469,12 +466,7 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         remoteSsrc.set(audio._ssrcs.front());
     }
 
-    if (!mixer.configureAudioStream(endpointId,
-            rtpMap,
-            remoteSsrc,
-            audioLevelExtensionId,
-            absSendTimeExtensionId,
-            c9infoExtensionId))
+    if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Audio stream not found for endpoint '%s'", endpointId.c_str()));
@@ -557,9 +549,8 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
     std::vector<RtpMap> rtpMaps;
     for (const auto& payloadType : video._payloadTypes)
     {
-        rtpMaps.emplace_back(makeRtpMap(payloadType));
+        rtpMaps.emplace_back(makeRtpMap(video, payloadType));
     }
-    const auto absSendTimeExtensionId = findAbsSendTimeExtensionId(video._rtpHeaderExtensions);
 
     const auto feedbackRtpMap = rtpMaps.size() > 1 ? rtpMaps[1] : RtpMap();
     auto simulcastStreams = makeSimulcastStreams(video, endpointId);
@@ -587,7 +578,6 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
             feedbackRtpMap,
             simulcastStreams[0],
             secondarySimulcastStream,
-            absSendTimeExtensionId,
             ssrcWhitelist))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Max simulcast streams allowed is 2");

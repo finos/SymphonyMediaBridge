@@ -624,13 +624,22 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
 
 void EngineMixer::addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache)
 {
-    auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-    if (videoStreamItr == _engineVideoStreams.end())
+    bridge::SsrcOutboundContext* ssrcOutboundContext = nullptr;
+
+    auto* videoStream = _engineVideoStreams.getItem(endpointIdHash);
+    if (videoStream)
     {
-        return;
+        ssrcOutboundContext = videoStream->_ssrcOutboundContexts.getItem(ssrc);
+    }
+    else
+    {
+        auto* barbell = _engineBarbells.getItem(endpointIdHash);
+        if (barbell)
+        {
+            ssrcOutboundContext = barbell->ssrcOutboundContexts.getItem(ssrc);
+        }
     }
 
-    auto* ssrcOutboundContext = videoStreamItr->second->_ssrcOutboundContexts.getItem(ssrc);
     if (!ssrcOutboundContext || (ssrcOutboundContext->_packetCache.isSet() && ssrcOutboundContext->_packetCache.get()))
     {
         return;
@@ -2033,7 +2042,7 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
     }
 }
 
-void EngineMixer::forwardAudioRtpPackets(IncomingPacketInfo& packetInfo, uint64_t timestamp)
+void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp)
 {
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
@@ -2074,13 +2083,51 @@ void EngineMixer::forwardAudioRtpPackets(IncomingPacketInfo& packetInfo, uint64_
             }
             else
             {
-                logger::warn("send allocator depleted FwdSend", _loggableId.c_str());
+                logger::warn("send allocator depleted. forwardAudioRtpPacket", _loggableId.c_str());
             }
         }
     }
 }
 
-void EngineMixer::forwardAudioRtpPacketsOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp)
+void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp)
+{
+    for (auto& recordingStreams : _engineRecordingStreams)
+    {
+        auto* recordingStream = recordingStreams.second;
+        if (!(recordingStream && recordingStream->_isAudioEnabled))
+        {
+            continue;
+        }
+
+        const auto ssrc = packetInfo.inboundContext()->_ssrc;
+        auto* ssrcOutboundContext = recordingStream->_ssrcOutboundContexts.getItem(ssrc);
+        if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
+        {
+            continue;
+        }
+
+        allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
+
+        for (const auto& transportEntry : recordingStream->_transports)
+        {
+            ssrcOutboundContext->onRtpSent(timestamp);
+            auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
+            if (packet)
+            {
+                transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
+                    std::move(packet),
+                    transportEntry.second,
+                    packetInfo.extendedSequenceNumber());
+            }
+            else
+            {
+                logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
+            }
+        }
+    }
+}
+
+void EngineMixer::forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp)
 {
     for (auto& it : _engineBarbells)
     {
@@ -2090,15 +2137,34 @@ void EngineMixer::forwardAudioRtpPacketsOverBarbell(IncomingPacketInfo& packetIn
             continue; // not sending back over same barbell
         }
 
-        auto ssrc = packetInfo.inboundContext()->_ssrc;
-
         const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
         const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
         if (rewriteMapItr == audioSsrcRewriteMap.end())
         {
             continue;
         }
-        ssrc = rewriteMapItr->second;
+        uint32_t ssrc = rewriteMapItr->second;
+
+        auto* ssrcOutboundContext =
+            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, ssrc, barbell.audioRtpMap);
+        if (!ssrcOutboundContext)
+        {
+            continue;
+        }
+
+        auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
+        if (packet)
+        {
+            barbell.transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                *(packetInfo.inboundContext()),
+                std::move(packet),
+                packetInfo.extendedSequenceNumber(),
+                barbell.transport);
+        }
+        else
+        {
+            logger::warn("send allocator depleted. forwardAudioRtpPacketOverBarbell", _loggableId.c_str());
+        }
     }
 }
 
@@ -2116,48 +2182,16 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             continue;
         }
 
-        forwardAudioRtpPackets(packetInfo, timestamp);
-
-        for (auto& recordingStreams : _engineRecordingStreams)
-        {
-            auto* recordingStream = recordingStreams.second;
-            if (!(recordingStream && recordingStream->_isAudioEnabled))
-            {
-                continue;
-            }
-
-            const auto ssrc = packetInfo.inboundContext()->_ssrc;
-            auto* ssrcOutboundContext = recordingStream->_ssrcOutboundContexts.getItem(ssrc);
-            if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
-            {
-                continue;
-            }
-
-            allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
-
-            for (const auto& transportEntry : recordingStream->_transports)
-            {
-                ssrcOutboundContext->onRtpSent(timestamp);
-                auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-                if (packet)
-                {
-                    transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
-                        std::move(packet),
-                        transportEntry.second,
-                        packetInfo.extendedSequenceNumber());
-                }
-                else
-                {
-                    logger::warn("send allocator depleted RecFwdSend", _loggableId.c_str());
-                }
-            }
-        }
+        forwardAudioRtpPacket(packetInfo, timestamp);
+        forwardAudioRtpPacketRecording(packetInfo, timestamp);
+        forwardAudioRtpPacketOverBarbell(packetInfo, timestamp);
     }
 
     for (IncomingPacketInfo packetInfo; _incomingForwarderVideoRtp.pop(packetInfo);)
     {
         ++numRtpPackets;
         forwardVideoRtpPacket(packetInfo, timestamp);
+        forwardVideoRtpPacketRecording(packetInfo, timestamp);
     }
 
     bool overrunLogSpamGuard = false;
@@ -2231,6 +2265,73 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     }
 }
 
+void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
+{
+    const auto senderEndpointIdHash = packetInfo.packet()->endpointIdHash;
+    for (auto& it : _engineBarbells)
+    {
+        auto& barbell = *it.second;
+        if (&barbell.transport == packetInfo.transport())
+        {
+            continue; // not sending back over same barbell
+        }
+
+        auto ssrc = packetInfo.inboundContext()->_rewriteSsrc;
+        const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
+        if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
+            screenShareSsrcMapping.get().second._ssrc == ssrc)
+        {
+            ssrc = screenShareSsrcMapping.get().second._rewriteSsrc;
+        }
+        else
+        {
+            const auto& videoSsrcRewriteMap = _activeMediaList->getVideoSsrcRewriteMap();
+            const auto rewriteMapItr = videoSsrcRewriteMap.find(senderEndpointIdHash);
+            if (rewriteMapItr == videoSsrcRewriteMap.end())
+            {
+                continue;
+            }
+            ssrc = rewriteMapItr->second.levels[0]._ssrc;
+        }
+
+        auto* ssrcOutboundContext =
+            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, ssrc, barbell.videoRtpMap);
+        if (!ssrcOutboundContext)
+        {
+            continue;
+        }
+
+        if (!ssrcOutboundContext->_packetCache.isSet())
+        {
+            logger::debug("New ssrc %u seen, sending request to add videoPacketCache", _loggableId.c_str(), ssrc);
+
+            ssrcOutboundContext->_packetCache.set(nullptr);
+            {
+                EngineMessage::Message message(EngineMessage::Type::AllocateVideoPacketCache);
+                message.command.allocateVideoPacketCache.mixer = this;
+                message.command.allocateVideoPacketCache.ssrc = ssrc;
+                message.command.allocateVideoPacketCache.endpointIdHash = barbell.idHash;
+                _messageListener.onMessage(std::move(message));
+            }
+        }
+
+        ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
+        auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
+        if (packet)
+        {
+            barbell.transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                *(packetInfo.inboundContext()),
+                std::move(packet),
+                barbell.transport,
+                packetInfo.extendedSequenceNumber());
+        }
+        else
+        {
+            logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
+        }
+    }
+}
+
 void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
@@ -2238,7 +2339,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
     {
         return;
     }
-    const auto senderEndpointIdHash = packetInfo.transport()->getEndpointIdHash();
+    const auto senderEndpointIdHash = packetInfo.packet()->endpointIdHash;
 
     _lastVideoPacketProcessed = timestamp;
 
@@ -2338,7 +2439,10 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             }
         }
     }
+}
 
+void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
+{
     for (auto& recordingStreams : _engineRecordingStreams)
     {
         auto* recordingStream = recordingStreams.second;

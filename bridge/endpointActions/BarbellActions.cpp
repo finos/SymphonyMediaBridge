@@ -213,18 +213,18 @@ httpd::Response configureBarbell(ActionContext* context,
         videoDescriptions.push_back(barbellGroup);
     }
 
-    const auto audioRtpMap = makeRtpMap(barbellDescription._audio.get()._payloadType.get());
+    const auto audioRtpMap = makeRtpMap(barbellDescription._audio.get());
     bridge::RtpMap videoRtpMap;
     bridge::RtpMap videoFeedbackRtpMap;
     for (auto& payloadDescription : barbellDescription._video.get()._payloadTypes)
     {
         if (payloadDescription._name.compare("rtx"))
         {
-            videoFeedbackRtpMap = makeRtpMap(payloadDescription);
+            videoFeedbackRtpMap = makeRtpMap(barbellDescription._video.get(), payloadDescription);
         }
         else
         {
-            videoRtpMap = makeRtpMap(payloadDescription);
+            videoRtpMap = makeRtpMap(barbellDescription._video.get(), payloadDescription);
         }
     }
 

@@ -209,6 +209,65 @@ bridge::RtpMap makeRtpMap(const api::EndpointDescription::PayloadType& payloadTy
     return rtpMap;
 }
 
+bridge::RtpMap makeRtpMap(const api::EndpointDescription::Audio& audio)
+{
+    bridge::RtpMap rtpMap;
+
+    auto& payloadType = audio._payloadType.get();
+    if (payloadType._name.compare("opus") == 0)
+    {
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::OPUS,
+            payloadType._id,
+            payloadType._clockRate,
+            payloadType._channels);
+    }
+    else
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("rtp payload '%s' not supported", payloadType._name.c_str()));
+    }
+
+    for (const auto& parameter : payloadType._parameters)
+    {
+        rtpMap._parameters.emplace(parameter.first, parameter.second);
+    }
+
+    rtpMap._audioLevelExtId = findAudioLevelExtensionId(audio._rtpHeaderExtensions);
+    rtpMap._absSendTimeExtId = findAbsSendTimeExtensionId(audio._rtpHeaderExtensions);
+    rtpMap._c9infoExtId = findC9InfoExtensionId(audio._rtpHeaderExtensions);
+
+    return rtpMap;
+}
+
+bridge::RtpMap makeRtpMap(const api::EndpointDescription::Video& video,
+    const api::EndpointDescription::PayloadType& payloadType)
+{
+    bridge::RtpMap rtpMap;
+
+    if (payloadType._name.compare("VP8") == 0)
+    {
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8, payloadType._id, payloadType._clockRate);
+    }
+    else if (payloadType._name.compare("rtx") == 0)
+    {
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX, codec::Vp8::rtxPayloadType, codec::Vp8::sampleRate);
+    }
+    else
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("rtp payload '%s' not supported", payloadType._name.c_str()));
+    }
+
+    for (const auto& parameter : payloadType._parameters)
+    {
+        rtpMap._parameters.emplace(parameter.first, parameter.second);
+    }
+
+    rtpMap._absSendTimeExtId = findAbsSendTimeExtensionId(video._rtpHeaderExtensions);
+
+    return rtpMap;
+}
+
 utils::Optional<uint8_t> findExtensionId(const std::string& extName,
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
 {

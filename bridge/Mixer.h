@@ -131,10 +131,7 @@ public:
 
     bool configureAudioStream(const std::string& endpointId,
         const RtpMap& rtpMap,
-        const utils::Optional<uint32_t>& remoteSsrc,
-        const utils::Optional<uint8_t>& audioLevelExtensionId,
-        const utils::Optional<uint8_t>& absSendTimeExtensionId,
-        const utils::Optional<uint8_t>& c9infoExtensionId);
+        const utils::Optional<uint32_t>& remoteSsrc);
 
     bool reconfigureAudioStream(const std::string& endpointId, const utils::Optional<uint32_t>& remoteSsrc);
 
@@ -143,7 +140,6 @@ public:
         const RtpMap& feedbackRtpMap,
         const SimulcastStream& simulcastStream,
         const utils::Optional<SimulcastStream>& secondarySimulcastStream,
-        const utils::Optional<uint8_t>& absSendTimeExtensionId,
         const SsrcWhitelist& ssrcWhitelist);
 
     bool reconfigureVideoStream(const std::string& endpointId,

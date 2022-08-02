@@ -341,8 +341,11 @@ private:
     void processBarbellSctp(const uint64_t timestamp);
     void processIncomingRtpPackets(const uint64_t timestamp);
     void forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
-    void forwardAudioRtpPackets(IncomingPacketInfo& packetInfo, uint64_t timestamp);
-    void forwardAudioRtpPacketsOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+    void forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
+    void forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
+    void forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+    void forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+    void forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket);

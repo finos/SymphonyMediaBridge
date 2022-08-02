@@ -27,6 +27,7 @@ struct EngineBarbell
         RtpMap& videoRtpMap,
         RtpMap& videoFeedbackRtpMap)
         : id(barbellId),
+          idHash(utils::hash<std::string>{}(barbellId)),
           ssrcOutboundContexts(128),
           transport(rtcTransport),
           dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator),
@@ -84,6 +85,7 @@ struct EngineBarbell
     }
 
     std::string id;
+    size_t idHash;
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
     transport::RtcTransport& transport;
