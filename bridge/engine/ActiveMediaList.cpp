@@ -391,7 +391,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     {
         const auto& top = heap.top();
         updateActiveAudioList(top.participant);
-        if (_c9_conference && top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
+        if (!_c9_conference && top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
         {
             if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
             {

@@ -23,17 +23,21 @@ httpd::Response getEndpointInfo(ActionContext* context,
 
     const auto activeTalkers = mixer->getActiveTalkers();
 
-    for (const auto& id : mixer->getEndpoints())
+    const auto endpoints = mixer->getEndpoints();
+    const auto& endpoint = endpoints.find(endpointId);
+    if (endpoint == endpoints.end())
     {
-        api::ConferenceEndpointExtendedInfo endpoint;
-        if (mixer->getEndpointExtendedInfo(id, endpoint, activeTalkers))
-        {
-            auto responseBodyJson = api::Generator::generateExtendedConferenceEndpoint(endpoint);
-            httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
-            response._headers["Content-type"] = "text/json";
-            requestLogger.setResponse(response);
-            return response;
-        }
+        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
+            utils::format("Endpoint  '%s'/'%s' not found", conferenceId.c_str(), endpointId.c_str()));
+    }
+    api::ConferenceEndpointExtendedInfo endpointInfo;
+    if (mixer->getEndpointExtendedInfo(*endpoint, endpointInfo, activeTalkers))
+    {
+        auto responseBodyJson = api::Generator::generateExtendedConferenceEndpoint(endpointInfo);
+        httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
+        response._headers["Content-type"] = "text/json";
+        requestLogger.setResponse(response);
+        return response;
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
