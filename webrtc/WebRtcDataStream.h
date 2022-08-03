@@ -22,7 +22,7 @@ public:
         virtual void onWebRtcDataChannelStringMessage(transport::Transport& transport, const std::string&) = 0;
     };
 
-    WebRtcDataStream(size_t logId, webrtc::DataStreamTransport& transport, memory::PacketPoolAllocator& allocator);
+    WebRtcDataStream(size_t logId, webrtc::DataStreamTransport& transport);
 
     uint16_t open(const std::string& label);
     bool isOpen() const { return _state == State::OPEN; }
@@ -31,8 +31,6 @@ public:
 
     uint16_t getStreamId() const { return _streamId; };
     std::string getLabel() const { return _label; }
-
-    static std::string getStringMessage(uint32_t payloadProtocol, const void* data, size_t length);
 
     void onSctpMessage(webrtc::DataStreamTransport* sender,
         uint16_t streamId,
@@ -50,7 +48,6 @@ private:
     };
     uint16_t _streamId;
     webrtc::DataStreamTransport& _transport;
-    memory::PacketPoolAllocator& _allocator;
     State _state;
     std::string _label;
     char _loggableId[32];
@@ -64,7 +61,9 @@ struct SctpStreamMessageHeader
 
     void* data() { return &sequenceNumber + 1; }
     const void* data() const { return &sequenceNumber + 1; }
+    const char* getMessage() const { return reinterpret_cast<const char*>(data()); }
 };
+static_assert(sizeof(SctpStreamMessageHeader) == 8, "Misalignment of SctpStreamMessageHeader");
 
 inline const SctpStreamMessageHeader& streamMessageHeader(const memory::Packet& p)
 {

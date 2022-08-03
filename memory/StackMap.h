@@ -250,6 +250,20 @@ public:
         return nullptr;
     }
 
+    template <typename TypeName = T>
+    const TypeName getItem(const KeyT& key,
+        typename std::enable_if<std::is_pointer<TypeName>::value>::type* = nullptr) const
+    {
+        return const_cast<StackMap<KeyT, T, SIZE>&>(*this).getItem(key);
+    }
+
+    template <typename TypeName = T>
+    const TypeName* getItem(const KeyT& key,
+        typename std::enable_if<!std::is_pointer<TypeName>::value>::type* = nullptr) const
+    {
+        return const_cast<StackMap<KeyT, T, SIZE>&>(*this).getItem(key);
+    }
+
 private:
     uint32_t indexPosition(uint64_t hashValue, uint32_t offset) const { return (hashValue + offset) % _index.size(); }
 

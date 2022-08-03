@@ -2401,8 +2401,7 @@ void TransportImpl::drainPacingBuffer(uint64_t timestamp, DrainPacingBufferMode 
 
 void TransportImpl::setTag(const char* tag)
 {
-    std::strncpy(_tag, tag, sizeof(_tag) - 1);
-    _tag[sizeof(_tag) - 1] = 0;
+    utils::strncpy(_tag, tag, sizeof(_tag));
 }
 
 } // namespace transport

@@ -225,7 +225,9 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
         _numMixedAudioStreams++;
     }
 
-    if (_activeMediaList->addAudioParticipant(endpointIdHash))
+    const auto mapRevision = _activeMediaList->getMapRevision();
+    _activeMediaList->addAudioParticipant(endpointIdHash, engineAudioStream->endpointId.c_str());
+    if (mapRevision != _activeMediaList->getMapRevision())
     {
         sendUserMediaMapMessageToAll();
         sendUserMediaMapMessageOverBarbells();
@@ -239,11 +241,15 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
 {
     const auto endpointIdHash = engineAudioStream->endpointIdHash;
 
-    if (_activeMediaList->removeAudioParticipant(endpointIdHash))
+    const auto mapRevision = _activeMediaList->getMapRevision();
+    _activeMediaList->removeAudioParticipant(endpointIdHash);
+
+    if (mapRevision != _activeMediaList->getMapRevision())
     {
         sendUserMediaMapMessageToAll();
         sendUserMediaMapMessageOverBarbells();
     }
+
     updateBandwidthFloor();
 
     if (engineAudioStream->transport.isConnected())
@@ -308,14 +314,15 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     {
         startProbingVideoStream(*engineVideoStream);
     }
-
+    const auto mapRevision = _activeMediaList->getMapRevision();
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
     if (engineVideoStream->_simulcastStream._numLevels > 0)
     {
         _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->_simulcastStream);
         _activeMediaList->addVideoParticipant(endpointIdHash,
             engineVideoStream->_simulcastStream,
-            engineVideoStream->_secondarySimulcastStream);
+            engineVideoStream->_secondarySimulcastStream,
+            engineVideoStream->_endpointId.c_str());
     }
     else
     {
@@ -323,8 +330,11 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     }
     updateBandwidthFloor();
     sendLastNListMessageToAll();
-    sendUserMediaMapMessageToAll();
-    sendUserMediaMapMessageOverBarbells();
+    if (mapRevision != _activeMediaList->getMapRevision())
+    {
+        sendUserMediaMapMessageToAll();
+        sendUserMediaMapMessageOverBarbells();
+    }
 
     sendVideoStreamToRecording(*engineVideoStream, true);
 }
@@ -379,7 +389,10 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
 
     const auto endpointIdHash = engineVideoStream->_endpointIdHash;
 
-    if (_activeMediaList->removeVideoParticipant(endpointIdHash))
+    const auto mapRevision = _activeMediaList->getMapRevision();
+    _activeMediaList->removeVideoParticipant(endpointIdHash);
+
+    if (mapRevision != _activeMediaList->getMapRevision())
     {
         sendUserMediaMapMessageToAll();
         sendUserMediaMapMessageOverBarbells();
@@ -553,6 +566,7 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     }
     auto engineVideoStream = videoStreamItr->second;
 
+    const auto mapRevision = _activeMediaList->getMapRevision();
     if (engineVideoStream->_simulcastStream._numLevels != 0 &&
         (simulcastStream._numLevels == 0 ||
             simulcastStream._levels[0]._ssrc != engineVideoStream->_simulcastStream._levels[0]._ssrc))
@@ -594,7 +608,8 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
 
         _activeMediaList->addVideoParticipant(endpointIdHash,
             engineVideoStream->_simulcastStream,
-            engineVideoStream->_secondarySimulcastStream);
+            engineVideoStream->_secondarySimulcastStream,
+            engineVideoStream->_endpointId.c_str());
 
         updateSimulcastLevelActiveState(*engineVideoStream, engineVideoStream->_simulcastStream);
         if (secondarySimulcastStream && secondarySimulcastStream->_numLevels > 0)
@@ -608,8 +623,11 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     }
     updateBandwidthFloor();
     sendLastNListMessageToAll();
-    sendUserMediaMapMessageToAll();
-    sendUserMediaMapMessageOverBarbells();
+    if (mapRevision != _activeMediaList->getMapRevision())
+    {
+        sendUserMediaMapMessageToAll();
+        sendUserMediaMapMessageOverBarbells();
+    }
     sendVideoStreamToRecording(*engineVideoStream, true);
 
     memcpy(&engineVideoStream->_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
@@ -1392,10 +1410,10 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
         sendPliForUsedSsrcs(*videoStream);
     }
 
-    auto barbellIt = _engineBarbells.find(sender->getEndpointIdHash());
-    if (barbellIt != _engineBarbells.cend() && barbellIt->second->transport.isDtlsClient())
+    auto barbell = _engineBarbells.getItem(sender->getEndpointIdHash());
+    if (barbell && barbell->transport.isDtlsClient())
     {
-        barbellIt->second->transport.connectSctp();
+        barbell->transport.connectSctp();
     }
 }
 
@@ -2329,6 +2347,7 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
 
 void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
 {
+    bool isFromBarbell = 0 == std::strcmp("BB", packetInfo.transport()->getTag());
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
     if (!rtpHeader)
     {
@@ -2426,6 +2445,10 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
             if (packet)
             {
+                if (isFromBarbell)
+                {
+                    logger::debug("fwd video over %s", "", videoStream->_transport.getLoggableId().c_str());
+                }
                 videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                     *(packetInfo.inboundContext()),
                     std::move(packet),
@@ -2803,7 +2826,7 @@ void EngineMixer::sendLastNListMessage(const size_t endpointIdHash)
     }
 
     auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);
-    _activeMediaList->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, _engineVideoStreams, lastNListMessage);
+    _activeMediaList->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, lastNListMessage);
 
     dataStream->_stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
 }
@@ -2829,11 +2852,7 @@ void EngineMixer::sendLastNListMessageToAll()
 
         lastNListMessage.clear();
         auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);
-        _activeMediaList->makeLastNListMessage(_lastN,
-            endpointIdHash,
-            pinTarget,
-            _engineVideoStreams,
-            lastNListMessage);
+        _activeMediaList->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, lastNListMessage);
 
         dataStream->_stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
     }
@@ -2879,9 +2898,7 @@ void EngineMixer::sendMessagesToNewDataStreams()
             if (_activeMediaList->makeUserMediaMapMessage(_lastN,
                     dataStreamEntry.first,
                     pinTarget,
-                    _engineAudioStreams,
                     _engineVideoStreams,
-                    _barbellEndpoints,
                     userMediaMapMessage))
             {
                 dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
@@ -2890,8 +2907,7 @@ void EngineMixer::sendMessagesToNewDataStreams()
         else
         {
             lastNListMessage.clear();
-            if (_activeMediaList
-                    ->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, _engineVideoStreams, lastNListMessage))
+            if (_activeMediaList->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, lastNListMessage))
             {
                 dataStream->_stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
             }
@@ -2955,9 +2971,7 @@ void EngineMixer::sendUserMediaMapMessage(const size_t endpointIdHash)
     _activeMediaList->makeUserMediaMapMessage(_lastN,
         endpointIdHash,
         pinTarget,
-        _engineAudioStreams,
         _engineVideoStreams,
-        _barbellEndpoints,
         userMediaMapMessage);
 
     dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
@@ -2986,9 +3000,7 @@ void EngineMixer::sendUserMediaMapMessageToAll()
         _activeMediaList->makeUserMediaMapMessage(_lastN,
             endpointIdHash,
             pinTarget,
-            _engineAudioStreams,
             _engineVideoStreams,
-            _barbellEndpoints,
             userMediaMapMessage);
 
         dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
@@ -3003,7 +3015,7 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     }
 
     utils::StringBuilder<1024> userMediaMapMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(_engineAudioStreams, _engineVideoStreams, userMediaMapMessage);
+    _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessage);
 
     for (auto& barbell : _engineBarbells)
     {
@@ -3678,7 +3690,7 @@ void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TArray& ta
         BarbellMapItem item;
 
         endpoint["endpoint-id"].getString(item.endpointId);
-        item.endpointIdHash = std::hash<char*>{}(item.endpointId);
+        item.endpointIdHash = utils::hash<char*>{}(item.endpointId);
         for (auto ssrc : endpoint["ssrcs"].getArray())
         {
             item.ssrcs.push_back(ssrc.getInt<uint32_t>(0));
@@ -3711,7 +3723,11 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
 
     EngineBarbell& barbell = *(it->second);
 
-    logger::info("received BB msg over %s, json %s", _loggableId.c_str(), barbell.id.c_str(), message);
+    logger::info("received BB msg over barbell %s %zu, json %s",
+        _loggableId.c_str(),
+        barbell.id.c_str(),
+        barbellIdHash,
+        message);
 
     auto videoEndpointsArray = mediaMapJson["video-endpoints"].getArray();
     auto audioEnpointsArray = mediaMapJson["audio-endpoints"].getArray();
@@ -3763,18 +3779,17 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         for (size_t i = 0; i < item.ssrcs.size(); ++i)
         {
             const auto ssrc = item.ssrcs[i];
-            auto videoStreamIt = barbell.videoSsrcMap.find(ssrc);
-            if (videoStreamIt == barbell.videoSsrcMap.end())
+            auto* videoStream = barbell.videoSsrcMap.getItem(ssrc);
+            if (!videoStream)
             {
                 logger::error("video ssrc in barbell UMM does not exist %u", _loggableId.c_str(), ssrc);
             }
-            else if (videoStreamIt->second->endpointIdHash.isSet() &&
-                videoStreamIt->second->endpointIdHash.get() != item.endpointIdHash)
+            else if (videoStream->endpointIdHash.isSet() && videoStream->endpointIdHash.get() != item.endpointIdHash)
             {
                 // must remove as this ssrc has been remapped
-                _activeMediaList->removeVideoParticipant(videoStreamIt->second->endpointIdHash.get());
-                videoStreamIt->second->endpointIdHash.clear();
-                videoStreamIt->second->endpointId.clear();
+                _activeMediaList->removeVideoParticipant(videoStream->endpointIdHash.get());
+                videoStream->endpointIdHash.clear();
+                videoStream->endpointId.clear();
             }
         }
     }
@@ -3784,18 +3799,17 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         for (size_t i = 0; i < item.ssrcs.size(); ++i)
         {
             const auto ssrc = item.ssrcs[i];
-            auto audioStreamIt = barbell.audioSsrcMap.find(ssrc);
-            if (audioStreamIt == barbell.audioSsrcMap.end())
+            auto* audioStream = barbell.audioSsrcMap.getItem(ssrc);
+            if (!audioStream)
             {
                 logger::error("audio ssrc in barbell UMM does not exist %u", _loggableId.c_str(), ssrc);
             }
-            else if (audioStreamIt->second->endpointIdHash.isSet() &&
-                audioStreamIt->second->endpointIdHash.get() != item.endpointIdHash)
+            else if (audioStream->endpointIdHash.isSet() && audioStream->endpointIdHash.get() != item.endpointIdHash)
             {
                 // must remove as this ssrc has been remapped
-                _activeMediaList->removeAudioParticipant(audioStreamIt->second->endpointIdHash.get());
-                audioStreamIt->second->endpointIdHash.clear();
-                audioStreamIt->second->endpointId.clear();
+                _activeMediaList->removeAudioParticipant(audioStream->endpointIdHash.get());
+                audioStream->endpointIdHash.clear();
+                audioStream->endpointId.clear();
             }
         }
     }
@@ -3808,31 +3822,30 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
             continue;
         }
 
-        SimulcastStream stream0;
-        auto videoStreamIt = barbell.videoSsrcMap.find(item.ssrcs[0]);
-        if (videoStreamIt == barbell.videoSsrcMap.end() || videoStreamIt->second->endpointIdHash.isSet())
+        auto* videoStream = barbell.videoSsrcMap.getItem(item.ssrcs[0]);
+        if (!videoStream || videoStream->endpointIdHash.isSet())
         {
             // if it is set it must already be set to this endpointId
             continue;
         }
-        videoStreamIt->second->endpointIdHash.set(item.endpointIdHash);
-        videoStreamIt->second->endpointId.set(item.endpointId);
-        stream0 = videoStreamIt->second->stream;
+        videoStream->endpointIdHash.set(item.endpointIdHash);
+        videoStream->endpointId.set(item.endpointId);
+        SimulcastStream stream0 = videoStream->stream;
 
         utils::Optional<SimulcastStream> stream1;
         if (item.ssrcs.size() > 1)
         {
-            auto videoStreamIt = barbell.videoSsrcMap.find(item.ssrcs[1]);
-            if (videoStreamIt != barbell.videoSsrcMap.end() && !videoStreamIt->second->endpointIdHash.isSet())
+            auto* videoStream = barbell.videoSsrcMap.getItem(item.ssrcs[1]);
+            if (videoStream && videoStream->endpointIdHash.isSet())
             {
-                videoStreamIt->second->endpointIdHash.set(item.endpointIdHash);
-                videoStreamIt->second->endpointId.set(item.endpointId);
+                videoStream->endpointIdHash.set(item.endpointIdHash);
+                videoStream->endpointId.set(item.endpointId);
 
-                stream1.set(videoStreamIt->second->stream);
+                stream1.set(videoStream->stream);
             }
         }
 
-        _activeMediaList->addVideoParticipant(item.endpointIdHash, stream0, stream1);
+        _activeMediaList->addBarbellVideoParticipant(item.endpointIdHash, stream0, stream1, item.endpointId);
     }
 
     // add audio sources
@@ -3843,22 +3856,22 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
             continue;
         }
 
-        auto audioStreamIt = barbell.audioSsrcMap.find(item.ssrcs[0]);
-        if (audioStreamIt == barbell.audioSsrcMap.end() || audioStreamIt->second->endpointIdHash.isSet())
+        auto* audioStream = barbell.audioSsrcMap.getItem(item.ssrcs[0]);
+        if (!audioStream || audioStream->endpointIdHash.isSet())
         {
             // if it is set it must already be set to this endpointId
             continue;
         }
 
-        audioStreamIt->second->endpointIdHash.set(item.endpointIdHash);
-        audioStreamIt->second->endpointId.set(item.endpointId);
-        _activeMediaList->addAudioParticipant(item.endpointIdHash);
+        audioStream->endpointIdHash.set(item.endpointIdHash);
+        audioStream->endpointId.set(item.endpointId);
+        _activeMediaList->addBarbellAudioParticipant(item.endpointIdHash, item.endpointId);
     }
 
     if (mapRevision != _activeMediaList->getMapRevision())
     {
+        // only update local users
         sendUserMediaMapMessageToAll();
-        sendUserMediaMapMessageOverBarbells();
     }
 }
 

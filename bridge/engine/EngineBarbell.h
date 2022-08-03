@@ -20,7 +20,6 @@ struct EngineBarbell
 {
     EngineBarbell(const std::string& barbellId,
         transport::RtcTransport& rtcTransport,
-        memory::PacketPoolAllocator& poolAllocator,
         const std::vector<BarbellStreamGroupDescription>& videoDescriptions,
         const std::vector<uint32_t>& audio,
         RtpMap& audioRtpMap,
@@ -30,7 +29,7 @@ struct EngineBarbell
           idHash(utils::hash<std::string>{}(barbellId)),
           ssrcOutboundContexts(128),
           transport(rtcTransport),
-          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator),
+          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport),
           audioRtpMap(audioRtpMap),
           videoRtpMap(videoRtpMap),
           videoFeedbackRtpMap(videoFeedbackRtpMap)
@@ -44,20 +43,32 @@ struct EngineBarbell
         for (auto& videoGroup : videoDescriptions)
         {
             VideoStream videoStream;
-            videoStream.stream._numLevels = videoGroup.ssrcs.size();
+            videoStream.stream._contentType = (videoGroup.slides ? SimulcastStream::VideoContentType::SLIDES
+                                                                 : SimulcastStream::VideoContentType::VIDEO);
+            videoStream.stream._numLevels = videoGroup.ssrcLevels.size();
 
             for (size_t i = 0; i < videoStream.stream._numLevels; ++i)
             {
-                videoStream.stream._levels[i]._ssrc = videoGroup.ssrcs[i];
-                videoStream.stream._levels[i]._feedbackSsrc = videoGroup.feedbackSsrcs[i];
+                videoStream.stream._levels[i]._ssrc = videoGroup.ssrcLevels[i].ssrc;
+                videoStream.stream._levels[i]._feedbackSsrc = videoGroup.ssrcLevels[i].feedbackSsrc;
             }
 
-            videoStreams.push_back(videoStream);
-
-            for (size_t i = 0; i < videoStream.stream._numLevels; ++i)
+            VideoStream* addedStream = nullptr;
+            if (videoGroup.slides)
             {
-                videoSsrcMap.emplace(videoStream.stream._levels[i]._ssrc, &videoStreams.back());
-                videoSsrcMap.emplace(videoStream.stream._levels[i]._feedbackSsrc, &videoStreams.back());
+                slideStream = videoStream;
+                addedStream = &slideStream;
+            }
+            else
+            {
+                videoStreams.push_back(videoStream);
+                addedStream = &videoStreams.back();
+            }
+
+            for (size_t i = 0; addedStream && i < videoStream.stream._numLevels; ++i)
+            {
+                videoSsrcMap.emplace(videoStream.stream._levels[i]._ssrc, addedStream);
+                videoSsrcMap.emplace(videoStream.stream._levels[i]._feedbackSsrc, addedStream);
             }
         }
     }

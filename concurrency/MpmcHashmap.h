@@ -373,6 +373,20 @@ public:
         return nullptr;
     }
 
+    template <typename TypeName = T>
+    const TypeName getItem(const KeyT& key,
+        typename std::enable_if<std::is_pointer<TypeName>::value>::type* = nullptr) const
+    {
+        return const_cast<MpmcHashmap32<KeyT, T>&>(*this).getItem(key);
+    }
+
+    template <typename TypeName = T>
+    const TypeName* getItem(const KeyT& key,
+        typename std::enable_if<!std::is_pointer<TypeName>::value>::type* = nullptr) const
+    {
+        return const_cast<MpmcHashmap32<KeyT, T>&>(*this).getItem(key);
+    }
+
 private:
     static size_t blockSizeFor(size_t count, size_t size)
     {

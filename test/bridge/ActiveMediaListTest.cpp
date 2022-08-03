@@ -7,6 +7,7 @@
 #include "nlohmann/json.hpp"
 #include "test/bridge/ActiveMediaListTestLevels.h"
 #include "test/bridge/DummyRtcTransport.h"
+#include "utils/Format.h"
 #include "utils/StringBuilder.h"
 #include <gtest/gtest.h>
 #include <memory>
@@ -232,10 +233,10 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
     const auto participant2 = 2;
 
     // First added participant is set as dominant speaker, add this participant here so that switching will happen
-    _activeMediaList->addAudioParticipant(3);
+    _activeMediaList->addAudioParticipant(3, "3");
 
-    _activeMediaList->addAudioParticipant(participant1);
-    _activeMediaList->addAudioParticipant(participant2);
+    _activeMediaList->addAudioParticipant(participant1, "1");
+    _activeMediaList->addAudioParticipant(participant2, "2");
 
     bool dominantSpeakerChanged = false;
     bool videoMapChanged = false;
@@ -274,9 +275,9 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
 
 TEST_F(ActiveMediaListTest, audioParticipantsAddedToAudioRewriteMap)
 {
-    _activeMediaList->addAudioParticipant(1);
-    _activeMediaList->addAudioParticipant(2);
-    _activeMediaList->addAudioParticipant(3);
+    _activeMediaList->addAudioParticipant(1, "1");
+    _activeMediaList->addAudioParticipant(2, "2");
+    _activeMediaList->addAudioParticipant(3, "3");
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
     EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
@@ -289,7 +290,7 @@ TEST_F(ActiveMediaListTest, audioParticipantsNotAddedToFullAudioRewriteMap)
 
     for (int i = 1; i < 7; ++i)
     {
-        _activeMediaList->addAudioParticipant(i);
+        _activeMediaList->addAudioParticipant(i, std::to_string(i).c_str());
     }
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
@@ -302,12 +303,12 @@ TEST_F(ActiveMediaListTest, audioParticipantsNotAddedToFullAudioRewriteMap)
 
 TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedIn)
 {
-    _activeMediaList->addAudioParticipant(1);
-    _activeMediaList->addAudioParticipant(2);
-    _activeMediaList->addAudioParticipant(3);
-    _activeMediaList->addAudioParticipant(4);
-    _activeMediaList->addAudioParticipant(5);
-    _activeMediaList->addAudioParticipant(6);
+    _activeMediaList->addAudioParticipant(1, "1");
+    _activeMediaList->addAudioParticipant(2, "2");
+    _activeMediaList->addAudioParticipant(3, "3");
+    _activeMediaList->addAudioParticipant(4, "4");
+    _activeMediaList->addAudioParticipant(5, "5");
+    _activeMediaList->addAudioParticipant(6, "6");
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
     EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
@@ -329,7 +330,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     const size_t numParticipants = 10;
     for (size_t i = 1; i <= numParticipants; ++i)
     {
-        _activeMediaList->addAudioParticipant(i);
+        _activeMediaList->addAudioParticipant(i, std::to_string(i).c_str());
         for (const auto element : ActiveMediaListTestLevels::silence)
         {
             _activeMediaList->onNewAudioLevel(i, element);
@@ -370,7 +371,7 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
     const size_t numParticipants = 2;
     for (size_t i = 1; i <= numParticipants; ++i)
     {
-        _activeMediaList->addAudioParticipant(i);
+        _activeMediaList->addAudioParticipant(i, std::to_string(i).c_str());
         for (const auto element : ActiveMediaListTestLevels::silence)
         {
             _activeMediaList->onNewAudioLevel(i, element);
@@ -403,10 +404,10 @@ TEST_F(ActiveMediaListTest, activeAudioParticipantIsSwitchedInEvenIfNotMostDomin
 {
     auto smallActiveMediaList = std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, 1, 3, 18);
 
-    smallActiveMediaList->addAudioParticipant(1);
-    smallActiveMediaList->addAudioParticipant(2);
-    smallActiveMediaList->addAudioParticipant(3);
-    smallActiveMediaList->addAudioParticipant(4);
+    smallActiveMediaList->addAudioParticipant(1, "1");
+    smallActiveMediaList->addAudioParticipant(2, "2");
+    smallActiveMediaList->addAudioParticipant(3, "3");
+    smallActiveMediaList->addAudioParticipant(4, "4");
 
     for (const auto element : ActiveMediaListTestLevels::longUtterance)
     {
@@ -442,9 +443,18 @@ TEST_F(ActiveMediaListTest, videoParticipantsAddedToVideoRewriteMap)
     auto videoStream2 = addEngineVideoStream(2);
     auto videoStream3 = addEngineVideoStream(3);
 
-    _activeMediaList->addVideoParticipant(1, videoStream1->_simulcastStream, videoStream1->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(2, videoStream2->_simulcastStream, videoStream2->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
+    _activeMediaList->addVideoParticipant(1,
+        videoStream1->_simulcastStream,
+        videoStream1->_secondarySimulcastStream,
+        "1");
+    _activeMediaList->addVideoParticipant(2,
+        videoStream2->_simulcastStream,
+        videoStream2->_secondarySimulcastStream,
+        "2");
+    _activeMediaList->addVideoParticipant(3,
+        videoStream3->_simulcastStream,
+        videoStream3->_secondarySimulcastStream,
+        "3");
 
     const auto& videoRewriteMap = _activeMediaList->getVideoSsrcRewriteMap();
     EXPECT_NE(videoRewriteMap.end(), videoRewriteMap.find(1));
@@ -459,10 +469,22 @@ TEST_F(ActiveMediaListTest, videoParticipantsNotAddedToFullVideoRewriteMap)
     auto videoStream3 = addEngineVideoStream(3);
     auto videoStream4 = addEngineVideoStream(4);
 
-    _activeMediaList->addVideoParticipant(1, videoStream1->_simulcastStream, videoStream1->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(2, videoStream2->_simulcastStream, videoStream2->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(4, videoStream4->_simulcastStream, videoStream4->_secondarySimulcastStream);
+    _activeMediaList->addVideoParticipant(1,
+        videoStream1->_simulcastStream,
+        videoStream1->_secondarySimulcastStream,
+        "1");
+    _activeMediaList->addVideoParticipant(2,
+        videoStream2->_simulcastStream,
+        videoStream2->_secondarySimulcastStream,
+        "2");
+    _activeMediaList->addVideoParticipant(3,
+        videoStream3->_simulcastStream,
+        videoStream3->_secondarySimulcastStream,
+        "3");
+    _activeMediaList->addVideoParticipant(4,
+        videoStream4->_simulcastStream,
+        videoStream4->_secondarySimulcastStream,
+        "4");
 
     const auto& videoRewriteMap = _activeMediaList->getVideoSsrcRewriteMap();
     EXPECT_NE(videoRewriteMap.end(), videoRewriteMap.find(1));
@@ -477,18 +499,21 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsAllStreamsExcludingSelf)
     auto videoStream2 = addEngineVideoStream(2);
     auto videoStream3 = addEngineVideoStream(3);
 
-    _activeMediaList->addVideoParticipant(1, videoStream1->_simulcastStream, videoStream1->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(2, videoStream2->_simulcastStream, videoStream2->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
+    _activeMediaList->addVideoParticipant(1,
+        videoStream1->_simulcastStream,
+        videoStream1->_secondarySimulcastStream,
+        "1");
+    _activeMediaList->addVideoParticipant(2,
+        videoStream2->_simulcastStream,
+        videoStream2->_secondarySimulcastStream,
+        "2");
+    _activeMediaList->addVideoParticipant(3,
+        videoStream3->_simulcastStream,
+        videoStream3->_secondarySimulcastStream,
+        "3");
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
-        2,
-        0,
-        _engineAudioStreams,
-        _engineVideoStreams,
-        _barbellEndpoints,
-        message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 0, _engineVideoStreams, message);
 
     const auto messageJson = nlohmann::json::parse(message.build());
     EXPECT_TRUE(endpointsContainsId(messageJson, "1"));
@@ -503,19 +528,25 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsOnlyLastNItems)
     auto videoStream3 = addEngineVideoStream(3);
     auto videoStream4 = addEngineVideoStream(4);
 
-    _activeMediaList->addVideoParticipant(1, videoStream1->_simulcastStream, videoStream1->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(2, videoStream2->_simulcastStream, videoStream2->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(4, videoStream4->_simulcastStream, videoStream4->_secondarySimulcastStream);
+    _activeMediaList->addVideoParticipant(1,
+        videoStream1->_simulcastStream,
+        videoStream1->_secondarySimulcastStream,
+        "1");
+    _activeMediaList->addVideoParticipant(2,
+        videoStream2->_simulcastStream,
+        videoStream2->_secondarySimulcastStream,
+        "2");
+    _activeMediaList->addVideoParticipant(3,
+        videoStream3->_simulcastStream,
+        videoStream3->_secondarySimulcastStream,
+        "3");
+    _activeMediaList->addVideoParticipant(4,
+        videoStream4->_simulcastStream,
+        videoStream4->_secondarySimulcastStream,
+        "4");
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
-        2,
-        0,
-        _engineAudioStreams,
-        _engineVideoStreams,
-        _barbellEndpoints,
-        message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 0, _engineVideoStreams, message);
 
     const auto messageJson = nlohmann::json::parse(message.build());
     EXPECT_TRUE(endpointsContainsId(messageJson, "1"));
@@ -524,7 +555,7 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsOnlyLastNItems)
     EXPECT_FALSE(endpointsContainsId(messageJson, "4"));
 
     utils::StringBuilder<1024> bbMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(_engineAudioStreams, _engineVideoStreams, bbMessage);
+    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage);
     printf("%s\n", bbMessage.get());
     const auto barbellJson = nlohmann::json::parse(bbMessage.build());
     EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));
@@ -540,23 +571,29 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsPinnedItem)
     auto videoStream3 = addEngineVideoStream(3);
     auto videoStream4 = addEngineVideoStream(4);
 
-    _activeMediaList->addVideoParticipant(1, videoStream1->_simulcastStream, videoStream1->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(2, videoStream2->_simulcastStream, videoStream2->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(4, videoStream4->_simulcastStream, videoStream4->_secondarySimulcastStream);
+    _activeMediaList->addVideoParticipant(1,
+        videoStream1->_simulcastStream,
+        videoStream1->_secondarySimulcastStream,
+        "1");
+    _activeMediaList->addVideoParticipant(2,
+        videoStream2->_simulcastStream,
+        videoStream2->_secondarySimulcastStream,
+        "2");
+    _activeMediaList->addVideoParticipant(3,
+        videoStream3->_simulcastStream,
+        videoStream3->_secondarySimulcastStream,
+        "3");
+    _activeMediaList->addVideoParticipant(4,
+        videoStream4->_simulcastStream,
+        videoStream4->_secondarySimulcastStream,
+        "4");
 
     bridge::SimulcastLevel simulcastLevel;
     videoStream4->_videoPinSsrcs.pop(simulcastLevel);
     videoStream2->_pinSsrc.set(simulcastLevel);
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
-        2,
-        4,
-        _engineAudioStreams,
-        _engineVideoStreams,
-        _barbellEndpoints,
-        message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 4, _engineVideoStreams, message);
 
     const auto messageJson = nlohmann::json::parse(message.build());
     EXPECT_TRUE(endpointsContainsId(messageJson, "1"));
@@ -567,10 +604,10 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsPinnedItem)
 
 TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
 {
-    _activeMediaList->addAudioParticipant(1);
-    _activeMediaList->addAudioParticipant(2);
-    _activeMediaList->addAudioParticipant(3);
-    _activeMediaList->addAudioParticipant(4);
+    _activeMediaList->addAudioParticipant(1, "1");
+    _activeMediaList->addAudioParticipant(2, "2");
+    _activeMediaList->addAudioParticipant(3, "3");
+    _activeMediaList->addAudioParticipant(4, "4");
 
     auto videoStream1 = addEngineVideoStream(1);
     auto videoStream2 = addEngineVideoStream(2);
@@ -582,10 +619,22 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     addEngineAudioStream(3);
     addEngineAudioStream(4);
 
-    _activeMediaList->addVideoParticipant(1, videoStream1->_simulcastStream, videoStream1->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(2, videoStream2->_simulcastStream, videoStream2->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(3, videoStream3->_simulcastStream, videoStream3->_secondarySimulcastStream);
-    _activeMediaList->addVideoParticipant(4, videoStream4->_simulcastStream, videoStream4->_secondarySimulcastStream);
+    _activeMediaList->addVideoParticipant(1,
+        videoStream1->_simulcastStream,
+        videoStream1->_secondarySimulcastStream,
+        "1");
+    _activeMediaList->addVideoParticipant(2,
+        videoStream2->_simulcastStream,
+        videoStream2->_secondarySimulcastStream,
+        "2");
+    _activeMediaList->addVideoParticipant(3,
+        videoStream3->_simulcastStream,
+        videoStream3->_secondarySimulcastStream,
+        "3");
+    _activeMediaList->addVideoParticipant(4,
+        videoStream4->_simulcastStream,
+        videoStream4->_secondarySimulcastStream,
+        "4");
 
     uint64_t timestamp = 0;
     zeroLevels(1);
@@ -595,13 +644,7 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     switchDominantSpeaker(timestamp, 4);
 
     utils::StringBuilder<1024> message;
-    _activeMediaList->makeUserMediaMapMessage(defaultLastN,
-        2,
-        0,
-        _engineAudioStreams,
-        _engineVideoStreams,
-        _barbellEndpoints,
-        message);
+    _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 0, _engineVideoStreams, message);
     printf("%s\n", message.get());
 
     const auto messageJson = nlohmann::json::parse(message.build());
@@ -611,7 +654,7 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     EXPECT_TRUE(endpointsContainsId(messageJson, "4"));
 
     utils::StringBuilder<1024> bbMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(_engineAudioStreams, _engineVideoStreams, bbMessage);
+    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage);
     printf("%s\n", bbMessage.get());
     const auto barbellJson = nlohmann::json::parse(bbMessage.build());
     EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));
@@ -630,7 +673,7 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
     const int memberCount = 9;
     for (int i = 1; i < memberCount; ++i)
     {
-        _activeMediaList->addAudioParticipant(i);
+        _activeMediaList->addAudioParticipant(i, std::to_string(i).c_str());
     }
 
     const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();

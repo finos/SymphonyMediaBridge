@@ -81,14 +81,18 @@ httpd::Response generateBarbellResponse(ActionContext* context,
             utils::append(responseVideo._ssrcs, group.getSsrcs());
             api::EndpointDescription::SsrcGroup simSsrcGroup;
             api::EndpointDescription::SsrcGroup feedbackSsrcGroup;
-            utils::append(simSsrcGroup._ssrcs, group.ssrcs);
-            utils::append(feedbackSsrcGroup._ssrcs, group.feedbackSsrcs);
+
+            for (auto& level : group.ssrcLevels)
+            {
+                simSsrcGroup._ssrcs.push_back(level.ssrc);
+                feedbackSsrcGroup._ssrcs.push_back(level.feedbackSsrc);
+            }
             simSsrcGroup._semantics = "SIM";
             feedbackSsrcGroup._semantics = "FID";
             if (group.slides)
             {
                 api::EndpointDescription::SsrcAttribute responseSsrcAttribute;
-                responseSsrcAttribute._ssrcs.push_back(group.ssrcs[0]);
+                responseSsrcAttribute._ssrcs.push_back(group.ssrcLevels[0].ssrc);
                 responseSsrcAttribute._content = "slides";
                 responseVideo._ssrcAttributes.push_back(responseSsrcAttribute);
             }
@@ -207,9 +211,12 @@ httpd::Response configureBarbell(ActionContext* context,
                     barbellId.c_str()));
         }
         BarbellStreamGroupDescription barbellGroup;
-        barbellGroup.ssrcs = simGroup._ssrcs;
-        barbellGroup.feedbackSsrcs = fidGroup._ssrcs;
-        barbellGroup.slides = (simGroup._ssrcs.size() == 1); // there is a slides attribute but this is accurate too
+        for (size_t i = 0; i < simGroup._ssrcs.size(); ++i)
+        {
+            barbellGroup.ssrcLevels.push_back({simGroup._ssrcs[i], fidGroup._ssrcs[i]});
+        }
+        barbellGroup.slides =
+            (barbellGroup.ssrcLevels.size() == 1); // there is a slides attribute but this is accurate too
         videoDescriptions.push_back(barbellGroup);
     }
 

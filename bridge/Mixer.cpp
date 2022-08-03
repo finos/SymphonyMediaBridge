@@ -310,7 +310,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return false;
     }
 
-    logger::info("Created bundle transport, endpointId %s, endpointIdHash %lu, transport %s (%p), ice controlling %c",
+    logger::info("Created bundle transport, endpointId %s, endpointIdHash %zu, transport %s (%p), ice controlling %c",
         _loggableId.c_str(),
         endpointId.c_str(),
         endpointIdHash,
@@ -346,10 +346,11 @@ bool Mixer::addAudioStream(std::string& outId,
         return false;
     }
 
-    logger::info("Created audioStream id %s, endpointId %s, transport %s",
+    logger::info("Created audioStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        streamItr.first->second->endpointIdHash,
         streamItr.first->second->transport->getLoggableId().c_str());
 
     return streamItr.first->second->transport->isInitialized();
@@ -379,10 +380,11 @@ bool Mixer::addVideoStream(std::string& outId,
         return false;
     }
 
-    logger::info("Created videoStream id %s, endpointId %s, transport %s",
+    logger::info("Created videoStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        emplaceResult.first->second->_endpointIdHash,
         emplaceResult.first->second->_transport->getLoggableId().c_str());
 
     return emplaceResult.first->second->_transport->isInitialized();
@@ -423,10 +425,11 @@ bool Mixer::addBundledAudioStream(std::string& outId,
         return false;
     }
 
-    logger::info("Created bundled audioStream id %s, endpointId %s, transport %s",
+    logger::info("Created bundled audioStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        streamItr.first->second->endpointIdHash,
         streamItr.first->second->transport->getLoggableId().c_str());
 
     return streamItr.first->second->transport->isInitialized();
@@ -463,10 +466,11 @@ bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpoin
         return false;
     }
 
-    logger::info("Created bundled videoStream id %s, endpointId %s, transport %s",
+    logger::info("Created bundled videoStream id %s, endpointId %s, endpointIdHash %zu, transport %s",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
+        streamItr.first->second->_endpointIdHash,
         streamItr.first->second->_transport->getLoggableId().c_str());
 
     return streamItr.first->second->_transport->isInitialized();
@@ -877,10 +881,9 @@ void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellStreamGroupDescr
         bridge::BarbellStreamGroupDescription description;
         for (size_t i = 0; i < ssrcGroup.count; ++i)
         {
-            description.ssrcs.push_back(ssrcGroup.levels[i]._ssrc);
-            description.feedbackSsrcs.push_back(ssrcGroup.levels[i]._feedbackSsrc);
+            description.ssrcLevels.push_back({ssrcGroup.levels[i]._ssrc, ssrcGroup.levels[i]._feedbackSsrc});
         }
-        description.slides = description.ssrcs.size() == 1;
+        description.slides = description.ssrcLevels.size() == 1;
         outDescriptions.push_back(description);
     }
 }
@@ -1616,8 +1619,7 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
     auto emplaceResult = _dataEngineStreams.emplace(dataStream->_endpointId,
         std::make_unique<EngineDataStream>(dataStream->_endpointId,
             dataStream->_endpointIdHash,
-            *(dataStream->_transport.get()),
-            _engineMixer.getSendAllocator()));
+            *(dataStream->_transport.get())));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddDataStream;
@@ -2280,7 +2282,6 @@ bool Mixer::addBarbellToEngine(const std::string& barbellId)
     auto emplaceResult = _engineBarbells.emplace(barbell.id,
         std::make_unique<EngineBarbell>(barbell.id,
             *barbell.transport,
-            _engineMixer.getSendAllocator(),
             barbell.videoSsrcs,
             barbell.audioSsrcs,
             barbell.audioRtpMap,

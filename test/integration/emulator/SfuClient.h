@@ -3,16 +3,18 @@
 #include "AudioSource.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
+#include "rtp/RtcpFeedback.h"
+#include "rtp/RtcpHeader.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
 #include "utils/StringBuilder.h"
+#include "webrtc/WebRtcDataStream.h"
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
-
 namespace emulator
 {
 class MediaSendJob : public jobmanager::Job
@@ -77,6 +79,7 @@ public:
         bool forwardMedia)
     {
         _channel.create(baseUrl, conferenceId, initiator, audio, video, forwardMedia);
+        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
     void processOffer()
@@ -122,6 +125,7 @@ public:
             _audioSource->getSsrc(),
             _channel.isVideoEnabled() ? videoSsrcs : nullptr);
 
+        _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();
         _transport->connect();
     }
@@ -268,15 +272,51 @@ public:
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override
     {
+        rtp::CompoundRtcpPacket compoundPacket(packet->get(), packet->getLength());
+        for (const auto& rtcpPacket : compoundPacket)
+        {
+            auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
+            if (rtcpPacket.packetType == rtp::RtcpPacketType::PAYLOADSPECIFIC_FB &&
+                rtcpFeedback->_header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
+            {
+                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->_mediaSsrc.get());
+                auto it = _videoSources.find(rtcpFeedback->_mediaSsrc.get());
+                if (it != _videoSources.end())
+                {
+                    auto& videoSource = it->second;
+                    if (videoSource->getSsrc() == rtcpFeedback->_mediaSsrc.get())
+                    {
+                        videoSource->requestKeyFrame();
+                    }
+                }
+                else
+                {
+                    logger::warn("cannot find video ssrc for PLI %u",
+                        _loggableId.c_str(),
+                        rtcpFeedback->_mediaSsrc.get());
+                    for (auto& it : _videoSources)
+                    {
+                        logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
+                    }
+                }
+            }
+        }
     }
 
     void onConnected(transport::RtcTransport* sender) override
     {
         logger::debug("client connected", _loggableId.c_str());
+        _transport->setSctp(5000, 5000);
+        _transport->connectSctp();
     }
 
     bool onSctpConnectionRequest(transport::RtcTransport* sender, uint16_t remotePort) override { return false; }
-    void onSctpEstablished(transport::RtcTransport* sender) override {}
+    void onSctpEstablished(transport::RtcTransport* sender) override
+    {
+        auto streamId = _dataStream->open(_loggableId.c_str());
+        assert(streamId != 0xFFFFu);
+    }
+
     void onSctpMessage(transport::RtcTransport* sender,
         uint16_t streamId,
         uint16_t streamSequenceNumber,
@@ -284,7 +324,7 @@ public:
         const void* data,
         size_t length) override
     {
-        logger::debug("sctp message", "");
+        _dataStream->onSctpMessage(sender, streamId, streamSequenceNumber, payloadProtocol, data, length);
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,
@@ -317,6 +357,7 @@ private:
     std::atomic_bool _recordingActive;
     std::unordered_set<uint32_t> _remoteVideoSsrc;
     uint32_t _ptime;
+    std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
 };
 
 template <typename T>

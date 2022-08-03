@@ -1011,7 +1011,7 @@ TEST_F(IntegrationTest, simpleBarbell)
     bb1.configure(sdp2);
     bb2.configure(sdp1);
 
-    utils::Time::nanoSleep(5 * utils::Time::sec);
+    utils::Time::nanoSleep(2 * utils::Time::sec);
 
     SfuClient<Channel> client1(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
     SfuClient<Channel> client2(++_instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls);
