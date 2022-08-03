@@ -825,7 +825,7 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     endpoint.localIP = transport->getLocalRtpPort().ipToString();
     endpoint.localPort = transport->getLocalRtpPort().getPort();
     auto transportType = transport->getSelectedTransportType();
-    endpoint.protocol = (transportType.isSet()) ? ice::toString(transportType.get()) : "n/a";
+    endpoint.protocol = (transportType.isSet() ? ice::toString(transportType.get()) : "n/a");
 
     return true;
 }
