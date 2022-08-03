@@ -338,82 +338,86 @@ public:
 
     inline bool shouldForwardSsrc(const size_t toEndpointIdHash, const uint32_t ssrc)
     {
-        const auto pinMapItr = _pinMap.find(toEndpointIdHash);
-        if (pinMapItr != _pinMap.end())
+        size_t pinnedQuality, unpinnedQuality;
+        const auto viewedByParticipantStreamItr = _participantStreams.find(toEndpointIdHash);
+
+        if (viewedByParticipantStreamItr == _participantStreams.end())
         {
-            if (isSsrcFromParticipant(pinMapItr->second, ssrc))
-            {
-                const auto result = isParticipantHighestActiveQuality(pinMapItr->second, toEndpointIdHash, ssrc);
-                DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: %c, pin target high quality",
-                    "EngineStreamDirector",
-                    toEndpointIdHash,
-                    ssrc,
-                    result ? 't' : 'f');
-                return result;
-            }
-
-            const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
-            const auto result =
-                lowQualitySsrcsItr != _lowQualitySsrcs.end() && lowQualitySsrcsItr->second != toEndpointIdHash;
-
-            DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: %c, non pin target low quality",
-                "EngineStreamDirector",
-                toEndpointIdHash,
-                ssrc,
-                result ? 't' : 'f');
-
-            return result;
+            return false;
         }
 
-        const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
-        const auto midQualitySsrcsItr = _midQualitySsrcs.find(ssrc);
-        if (lowQualitySsrcsItr == _lowQualitySsrcs.end() && midQualitySsrcsItr == _midQualitySsrcs.end())
+        getVideoQualityLimits(viewedByParticipantStreamItr->second, pinnedQuality, unpinnedQuality);
+
+        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: max pinned quality: %d, max unpinned quality: %d",
+            "EngineStreamDirector",
+            toEndpointIdHash,
+            ssrc,
+            pinnedQuality,
+            unpinnedQuality);
+
+        if (isSsrcFromParticipant(toEndpointIdHash, ssrc))
         {
-            DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result f, in low f, in mid f, unpinned",
+            DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: f - own video packet.",
                 "EngineStreamDirector",
                 toEndpointIdHash,
                 ssrc);
             return false;
         }
 
-        bool result = false;
+        const auto pinMapItr = _pinMap.find(toEndpointIdHash);
+        const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
+        const auto maxWantedQuality = (fromPinnedEndpoint ? pinnedQuality : unpinnedQuality);
 
-        const auto viewedByParticipantStreamItr = _participantStreams.find(toEndpointIdHash);
-        if (viewedByParticipantStreamItr == _participantStreams.end())
+        size_t quality = highQuality;
+        size_t fromEndpointId = 0;
+
+        // Find current quality.
+        const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
+        const auto midQualitySsrcsItr = _midQualitySsrcs.find(ssrc);
+        if (lowQualitySsrcsItr != _lowQualitySsrcs.end())
+        {
+            fromEndpointId = lowQualitySsrcsItr->second;
+            quality = lowQuality;
+        }
+        else if (midQualitySsrcsItr != _midQualitySsrcs.end())
+        {
+            fromEndpointId = midQualitySsrcsItr->second;
+            quality = midQuality;
+        }
+        else
+        {
+            // NOTE: fromEndpointId would be 0 for HighQuality, sice we store only low and mid quality maps.
+            quality = highQuality;
+        }
+
+        // Check against max desired quality.
+        bool result = false;
+        if (quality == maxWantedQuality)
+        {
+            result = true;
+        }
+        else if (quality > maxWantedQuality)
         {
             result = false;
         }
-        const auto wantedDefaultLevelQuality = getWantedDefaultLevelQuality(viewedByParticipantStreamItr->second);
-
-        if (wantedDefaultLevelQuality == lowQuality)
+        else
         {
-            result = lowQualitySsrcsItr != _lowQualitySsrcs.end() && lowQualitySsrcsItr->second != toEndpointIdHash;
-        }
-        else if (wantedDefaultLevelQuality == midQuality)
-        {
-            if (lowQualitySsrcsItr != _lowQualitySsrcs.end())
-            {
-                const auto highestActiveQuality = getParticipantHighestActiveQuality(lowQualitySsrcsItr->second, ssrc);
-                result = highestActiveQuality == lowQuality && lowQualitySsrcsItr->second != toEndpointIdHash;
-            }
-            else if (midQualitySsrcsItr != _midQualitySsrcs.end())
-            {
-                result = midQualitySsrcsItr->second != toEndpointIdHash;
-            }
+            assert(quality != highQuality);
+            result = quality == getParticipantHighestActiveQuality(fromEndpointId, ssrc);
         }
 
         DIRECTOR_LOG(
-            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, in low %c, in mid %c, "
-            "wantedDefaultLevelQuality %lu, requiredMidLevelBandwidth %u, _defaultLevelBandwidthLimit %u, unpinned",
+            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, current quality %lu, "
+            "maxWantedLevelQuality %lu, requiredMidLevelBandwidth %u, _defaultLevelBandwidthLimit %u, pinned %c",
             "EngineStreamDirector",
             toEndpointIdHash,
             ssrc,
             result ? 't' : 'f',
-            lowQualitySsrcsItr != _lowQualitySsrcs.end() ? 't' : 'f',
-            midQualitySsrcsItr != _midQualitySsrcs.end() ? 't' : 'f',
-            wantedDefaultLevelQuality,
+            quality,
+            maxWantedQuality,
             _requiredMidLevelBandwidth,
-            viewedByParticipantStreamItr->second._defaultLevelBandwidthLimit);
+            viewedByParticipantStreamItr->second._defaultLevelBandwidthLimit,
+            fromPinnedEndpoint ? 't' : 'f');
 
         return result;
     }
@@ -548,8 +552,21 @@ public:
     }
 
 private:
-    static const size_t lowQuality = 0;
-    static const size_t midQuality = 1;
+    static constexpr size_t lowQuality = 0;
+    static constexpr size_t midQuality = 1;
+    static constexpr size_t highQuality = 2;
+    static constexpr size_t dropQuality = 3;
+
+    enum class ConfigLadderCols
+    {
+        BasicCost = 0,
+        PinnedQuality,
+        UnpinnedQuality,
+        ExtraCostPerEach,
+        MinCostSanity,
+        MaxCostSanity
+    };
+    static const size_t configLadder[8][6];
 
     /** Important: This has to be a lot bigger than the actual maximum participants per conference since we have
      * to avoid map entry reuse. Currently multiplied by 2 for that reason. */
@@ -809,9 +826,37 @@ private:
         }
     }
 
-    inline size_t getWantedDefaultLevelQuality(const ParticipantStreams& participantStreams) const
+    inline void getVideoQualityLimits(const ParticipantStreams& participantStreams,
+        size_t& outPinnedQuality,
+        size_t& outUnpinnedQuality) const
     {
-        return _requiredMidLevelBandwidth > participantStreams._defaultLevelBandwidthLimit ? lowQuality : midQuality;
+        const auto numParticipants = _participantStreams.size();
+        if (numParticipants < 1)
+        {
+            return;
+        }
+
+        int bestConfigId = 0;
+        unsigned long bestConfigCost = 0;
+        int configId = 0;
+        for (const auto& config : configLadder)
+        {
+            const auto configCost = config[(int)ConfigLadderCols::BasicCost] +
+                numParticipants * config[(int)ConfigLadderCols::ExtraCostPerEach];
+
+            assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity]);
+            assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity]);
+
+            if (configCost > bestConfigCost && configCost <= participantStreams._defaultLevelBandwidthLimit)
+            {
+                bestConfigCost = configCost;
+                bestConfigId = configId;
+            }
+            configId++;
+        }
+        assert(configId == 8);
+        outPinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::PinnedQuality];
+        outUnpinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::UnpinnedQuality];
     }
 };
 
