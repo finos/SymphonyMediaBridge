@@ -70,8 +70,6 @@ public:
 
     const std::unordered_set<size_t> getActiveTalkers() const;
 
-    utils::Optional<uint32_t> getUserId(const uint32_t ssrc);
-
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
         return _audioSsrcRewriteMap;
@@ -245,7 +243,7 @@ private:
     uint64_t _lastRunTimestampMs;
     uint64_t _lastChangeTimestampMs;
 
-    size_t rankSpeakers(float& currentDominantSpeakerScore, TActiveTalkersSnapshot& out);
+    size_t rankSpeakers(float& currentDominantSpeakerScore);
     void updateLevels(const uint64_t timestampMs);
     void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);

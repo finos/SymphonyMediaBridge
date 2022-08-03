@@ -522,7 +522,6 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     ConferenceEndpointExtendedInfo endpoint;
     endpoint.basicEndpointInfo = parseConferenceEndpoint(data);
     nlohmann::json iceSelectedTuple = nlohmann::json::object();
-    logger::debug("!!! %s", "###", data.dump(4).c_str());
 
     setIfExistsOrThrow<>(iceSelectedTuple, data, "iceSelectedTuple");
     setIfExistsOrThrow<>(endpoint.localIP, iceSelectedTuple, "localIP");

@@ -285,22 +285,13 @@ void ActiveMediaList::updateLevels(const uint64_t timestampMs)
 
 // recently unmuted participants have some advantage because the score is higher as the
 // noise level is likely lower than unmuted.
-size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore,
-    TActiveTalkersSnapshot& outActiveTalkersSnapshot)
+size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
 {
     currentDominantSpeakerScore = 0;
 
     size_t speakerCount = 0;
     for (auto& participantLevelEntry : _audioParticipants)
     {
-        if (_c9_conference && participantLevelEntry.second._isPtt)
-        {
-            if (outActiveTalkersSnapshot.count < outActiveTalkersSnapshot.maxSize)
-            {
-                outActiveTalkersSnapshot.endpointHashIds[outActiveTalkersSnapshot.count++] =
-                    participantLevelEntry.first;
-            }
-        }
         const auto& participantLevels = participantLevelEntry.second;
         if (participantLevels._maxRecentLevel == 0)
         {
@@ -372,9 +363,8 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
         return;
     }
 
-    TActiveTalkersSnapshot activeTalkersSnapshot;
     float currentDominantSpeakerScore = 0.0;
-    size_t speakerCount = rankSpeakers(currentDominantSpeakerScore, activeTalkersSnapshot);
+    size_t speakerCount = rankSpeakers(currentDominantSpeakerScore);
     if (speakerCount == 0)
     {
         return;
@@ -385,13 +375,12 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
 
     auto dominantSpeaker = heap.top();
 
-    assert(_c9_conference || 0 == activeTalkersSnapshot.count);
-
+    TActiveTalkersSnapshot activeTalkersSnapshot;
     for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
         const auto& top = heap.top();
         updateActiveAudioList(top.participant);
-        if (!_c9_conference && top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
+        if (top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
         {
             if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
             {
