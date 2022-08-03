@@ -19,7 +19,8 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, 
       _amplitude(0),
       _frequency(340.0),
       _ptime(ptime),
-      _isPtt(IsPttState::NotSpecified)
+      _isPtt(IsPttState::NotSpecified),
+      _useAudioLevel(true)
 {
 }
 
@@ -66,9 +67,12 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     rtp::GeneralExtension1Byteheader absSendTime(3, 3);
     extensionHead.addExtension(cursor, absSendTime);
 
-    rtp::GeneralExtension1Byteheader audioLevel(1, 1);
-    audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
-    extensionHead.addExtension(cursor, audioLevel);
+    if (_useAudioLevel)
+    {
+        rtp::GeneralExtension1Byteheader audioLevel(1, 1);
+        audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
+        extensionHead.addExtension(cursor, audioLevel);
+    }
 
     if (IsPttState::NotSpecified != _isPtt)
     {
@@ -80,14 +84,17 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     }
 
     rtpHeader->setExtensions(extensionHead);
-    if (IsPttState::NotSpecified == _isPtt)
+
+    size_t expectedHeaderLength = 24;
+    if (_useAudioLevel)
     {
-        assert(rtpHeader->headerLength() == 24);
+        expectedHeaderLength += 4;
     }
-    else
+    if (IsPttState::NotSpecified != _isPtt)
     {
-        assert(rtpHeader->headerLength() == 28);
+        expectedHeaderLength += 4;
     }
+    assert(rtpHeader->headerLength() == expectedHeaderLength);
 
     const auto bytesEncoded = _encoder.encode(audio,
         samplesPerPacket,
@@ -123,6 +130,11 @@ int64_t AudioSource::timeToRelease(uint64_t timestamp) const
 void AudioSource::setIsPtt(const IsPttState isPtt)
 {
     _isPtt = isPtt;
+}
+
+void AudioSource::setUseAudioLevel(const bool useAudioLevel)
+{
+    _useAudioLevel = useAudioLevel;
 }
 
 } // namespace emulator

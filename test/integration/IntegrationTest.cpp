@@ -1111,6 +1111,12 @@ TEST_F(IntegrationTest, detectIsPtt)
     client2._audioSource->setVolume(0.6);
     client3._audioSource->setVolume(0.6);
 
+    // Disable audio level extension, otherwise constant signal will lead to the 'noise leve' equal to the signal and
+    // detection would fail
+    client1._audioSource->setUseAudioLevel(false);
+    client2._audioSource->setUseAudioLevel(false);
+    client3._audioSource->setUseAudioLevel(false);
+
     // =============================== PART 1: #1 & #2 talking ====================
 
     client1._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);

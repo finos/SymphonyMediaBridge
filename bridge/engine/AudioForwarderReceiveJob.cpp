@@ -166,10 +166,11 @@ void AudioForwarderReceiveJob::run()
             silence = !isPtt.get();
             if (!audioLevel.isSet())
             {
-                // Min should not be below -120 dBov to make noise level floor registered.
-                audioLevel.set(silence ? 120 : 0);
+                // We need to 'fake' reasonable audio levels for the reasons.
+                audioLevel.set(silence ? 90 : 25);
+                _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
             }
-            _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
+
             _engineMixer.mapSsrc2UserId(_ssrcContext._ssrc, c9UserId);
         }
 

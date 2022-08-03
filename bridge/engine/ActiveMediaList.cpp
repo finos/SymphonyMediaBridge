@@ -39,6 +39,7 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
       _incomingAudioLevels(32768),
+      _incomingPttEvents(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
       _dominantSpeakerId(0),
@@ -54,8 +55,7 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _reentrancyCounter(0),
 #endif
       _lastRunTimestampMs(0),
-      _lastChangeTimestampMs(0),
-      _c9_conference(false)
+      _lastChangeTimestampMs(0)
 {
     assert(videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -281,6 +281,20 @@ void ActiveMediaList::updateLevels(const uint64_t timestampMs)
             participantLevels._nonZeroLevelsShortWindow++;
         }
     }
+
+    for (PttEventEntry pttEntry; _incomingPttEvents.pop(pttEntry);)
+    {
+        auto participantLevelItr = _audioParticipants.find(pttEntry._participant);
+        if (participantLevelItr == _audioParticipants.end())
+        {
+            continue;
+        }
+        auto& participantLevels = participantLevelItr->second;
+        if (pttEntry._isPtt)
+        {
+            participantLevels._noiseLevel = 37;
+        }
+    }
 }
 
 // recently unmuted participants have some advantage because the score is higher as the
@@ -316,12 +330,11 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
 
 void ActiveMediaList::onNewPtt(const size_t endpointIdHash, bool isPtt)
 {
-    // Never reset to false again if we ever get C9's is_ptt flag - we're in the C9's conference.
-    _c9_conference = true;
     auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
     if (audioParticipantsItr == _audioParticipants.end())
         return;
     audioParticipantsItr->second._isPtt = isPtt;
+    _incomingPttEvents.push({endpointIdHash, isPtt});
 }
 
 // Algorithm for video switching:
@@ -380,6 +393,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     {
         const auto& top = heap.top();
         updateActiveAudioList(top.participant);
+
         if (top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
         {
             if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)

@@ -177,6 +177,12 @@ private:
         uint8_t _level;
     };
 
+    struct PttEventEntry
+    {
+        size_t _participant;
+        bool _isPtt;
+    };
+
     struct VideoParticipant
     {
         SimulcastStream _simulcastStream;
@@ -217,6 +223,7 @@ private:
     concurrency::MpmcPublish<TActiveTalkersSnapshot, 6> _activeTalkerSnapshot;
 
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
+    concurrency::MpmcQueue<PttEventEntry> _incomingPttEvents;
     concurrency::MpmcQueue<uint32_t> _audioSsrcs;
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
     memory::List<size_t, 32> _activeAudioList;
@@ -247,7 +254,6 @@ private:
     void updateLevels(const uint64_t timestampMs);
     void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
-    std::atomic_bool _c9_conference;
 };
 
 } // namespace bridge
