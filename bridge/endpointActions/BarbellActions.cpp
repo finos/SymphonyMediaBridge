@@ -215,8 +215,9 @@ httpd::Response configureBarbell(ActionContext* context,
         {
             barbellGroup.ssrcLevels.push_back({simGroup._ssrcs[i], fidGroup._ssrcs[i]});
         }
-        barbellGroup.slides =
-            (barbellGroup.ssrcLevels.size() == 1); // there is a slides attribute but this is accurate too
+
+        // there is a slides attribute but this is accurate too
+        barbellGroup.slides = (barbellGroup.ssrcLevels.size() == 1);
         videoDescriptions.push_back(barbellGroup);
     }
 
