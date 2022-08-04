@@ -152,6 +152,8 @@ set(FILES
         bridge/engine/EngineStats.h
         bridge/engine/EngineStreamDirector.h
         bridge/engine/EngineVideoStream.h
+        bridge/engine/EngineBarbell.h
+        bridge/engine/EngineBarbell.cpp
         bridge/engine/PacketCache.cpp
         bridge/engine/PacketCache.h
         bridge/engine/ProcessMissingVideoPacketsJob.cpp

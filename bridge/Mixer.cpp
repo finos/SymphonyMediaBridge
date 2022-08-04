@@ -2279,6 +2279,7 @@ bool Mixer::addBarbellToEngine(const std::string& barbellId)
 
     auto& barbell = *barbellIt->second;
     barbell.isConfigured = true;
+    assert(_engineBarbells.find(barbell.id) == _engineBarbells.end());
     auto emplaceResult = _engineBarbells.emplace(barbell.id,
         std::make_unique<EngineBarbell>(barbell.id,
             *barbell.transport,
