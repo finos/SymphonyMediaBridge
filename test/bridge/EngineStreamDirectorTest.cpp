@@ -649,10 +649,26 @@ TEST_F(EngineStreamDirectorTest, lowEstimateForwardsLowQualityLevel)
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 100, 60 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(2, 100, 61 * utils::Time::sec);
+
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 1));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+}
+
+TEST_F(EngineStreamDirectorTest, lowestEstimateForwardsNoVideo)
+{
+    _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
+
+    _engineStreamDirector->addParticipant(2);
+    _engineStreamDirector->pin(2, 1);
+
     _engineStreamDirector->setUplinkEstimateKbps(2, 1, 60 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 1, 61 * utils::Time::sec);
 
-    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 1));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
 }
