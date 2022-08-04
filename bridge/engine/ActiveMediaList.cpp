@@ -19,8 +19,7 @@ ActiveMediaList::AudioParticipant::AudioParticipant()
       _totalLevelShortWindow(0),
       _nonZeroLevelsShortWindow(0),
       _maxRecentLevel(0.0),
-      _noiseLevel(50.0),
-      _isPtt(false)
+      _noiseLevel(50.0)
 {
     memset(_levels.data(), 0, _levels.size());
 }
@@ -39,7 +38,6 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _maxSpeakers(audioSsrcs.size()),
       _audioParticipants(maxParticipants),
       _incomingAudioLevels(32768),
-      _incomingPttEvents(32768),
       _audioSsrcs(SsrcRewrite::ssrcArraySize * 2),
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
       _dominantSpeakerId(0),
@@ -265,7 +263,12 @@ void ActiveMediaList::updateLevels(const uint64_t timestampMs)
 
         participantLevels._maxRecentLevel =
             std::max(participantLevels._maxRecentLevel, static_cast<float>(levelEntry._level));
-        if (levelEntry._level != 0 && participantLevels._nonZeroLevelsShortWindow == lengthShortWindow)
+
+        if (levelEntry._ptt)
+        {
+            participantLevels._noiseLevel = 37;
+        }
+        else if (levelEntry._level != 0 && participantLevels._nonZeroLevelsShortWindow == lengthShortWindow)
         {
             participantLevels._noiseLevel = std::min(participantLevels._noiseLevel,
                 static_cast<float>(participantLevels._totalLevelShortWindow) / lengthShortWindow);
@@ -279,20 +282,6 @@ void ActiveMediaList::updateLevels(const uint64_t timestampMs)
         if (levelEntry._level != 0)
         {
             participantLevels._nonZeroLevelsShortWindow++;
-        }
-    }
-
-    for (PttEventEntry pttEntry; _incomingPttEvents.pop(pttEntry);)
-    {
-        auto participantLevelItr = _audioParticipants.find(pttEntry._participant);
-        if (participantLevelItr == _audioParticipants.end())
-        {
-            continue;
-        }
-        auto& participantLevels = participantLevelItr->second;
-        if (pttEntry._isPtt)
-        {
-            participantLevels._noiseLevel = 37;
         }
     }
 }
@@ -326,15 +315,6 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
     }
 
     return speakerCount;
-}
-
-void ActiveMediaList::onNewPtt(const size_t endpointIdHash, bool isPtt)
-{
-    auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
-    if (audioParticipantsItr == _audioParticipants.end())
-        return;
-    audioParticipantsItr->second._isPtt = isPtt;
-    _incomingPttEvents.push({endpointIdHash, isPtt});
 }
 
 // Algorithm for video switching:
@@ -393,7 +373,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     {
         const auto& top = heap.top();
         updateActiveAudioList(top.participant);
-
+        logger::debug("Active talker detection: top.score = %f, top.noiseLevel = %f", "###", top.score, top.noiseLevel);
         if (top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
         {
             if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)

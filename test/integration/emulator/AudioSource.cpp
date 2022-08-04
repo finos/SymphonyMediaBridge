@@ -85,14 +85,14 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
 
     rtpHeader->setExtensions(extensionHead);
 
-    size_t expectedHeaderLength = 24;
+    size_t expectedHeaderLength = 22;
     if (_useAudioLevel)
     {
-        expectedHeaderLength += 4;
+        expectedHeaderLength += 2;
     }
     if (IsPttState::NotSpecified != _isPtt)
     {
-        expectedHeaderLength += 4;
+        expectedHeaderLength += 6;
     }
     assert(rtpHeader->headerLength() == expectedHeaderLength);
 

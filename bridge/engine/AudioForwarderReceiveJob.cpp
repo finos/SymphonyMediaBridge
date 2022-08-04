@@ -168,13 +168,14 @@ void AudioForwarderReceiveJob::run()
             {
                 // We need to 'fake' reasonable audio levels for the reasons.
                 audioLevel.set(silence ? 90 : 25);
-                _activeMediaList.onNewPtt(_sender->getEndpointIdHash(), isPtt.get());
             }
 
             _engineMixer.mapSsrc2UserId(_ssrcContext._ssrc, c9UserId);
         }
 
-        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel.valueOr(120));
+        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(),
+            audioLevel.valueOr(120),
+            isPtt.isSet() && isPtt.get());
 
         if (silence)
         {

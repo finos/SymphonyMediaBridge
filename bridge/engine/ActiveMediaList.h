@@ -54,15 +54,13 @@ public:
      * @param level dBov levels adjusted to [0 .... 127] scale with 127 representing the highest volume (0 dBov) and
      * 0 representing lowest volume (-127 dBov)
      */
-    inline void onNewAudioLevel(const size_t endpointIdHash, const uint8_t level)
+    inline void onNewAudioLevel(const size_t endpointIdHash, const uint8_t level, bool ptt)
     {
         if (level < 128)
         {
-            _incomingAudioLevels.push({endpointIdHash, (uint8_t)(127 - level)});
+            _incomingAudioLevels.push({endpointIdHash, (uint8_t)(127 - level), ptt});
         }
     }
-
-    void onNewPtt(const size_t endpointIdHash, bool isPtt);
 
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
@@ -168,19 +166,13 @@ private:
         int32_t _nonZeroLevelsShortWindow;
         float _maxRecentLevel;
         float _noiseLevel;
-        bool _isPtt;
     };
 
     struct AudioLevelEntry
     {
         size_t _participant;
         uint8_t _level;
-    };
-
-    struct PttEventEntry
-    {
-        size_t _participant;
-        bool _isPtt;
+        bool _ptt;
     };
 
     struct VideoParticipant
@@ -223,7 +215,6 @@ private:
     concurrency::MpmcPublish<TActiveTalkersSnapshot, 6> _activeTalkerSnapshot;
 
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
-    concurrency::MpmcQueue<PttEventEntry> _incomingPttEvents;
     concurrency::MpmcQueue<uint32_t> _audioSsrcs;
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
     memory::List<size_t, 32> _activeAudioList;
