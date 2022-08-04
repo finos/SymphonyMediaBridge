@@ -668,6 +668,8 @@ TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreFor
     _engineStreamDirector->pin(3, 1);
     _engineStreamDirector->addParticipant(4);
     _engineStreamDirector->pin(4, 1);
+    _engineStreamDirector->addParticipant(5);
+    _engineStreamDirector->pin(5, 1);
 
     // High estimate
     _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 60 * utils::Time::sec);
@@ -678,8 +680,17 @@ TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreFor
     _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 61 * utils::Time::sec);
 
     // Low estimate
-    _engineStreamDirector->setUplinkEstimateKbps(4, 1, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(4, 1, 61 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(4, 100, 60 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(4, 100, 61 * utils::Time::sec);
+
+    // Very low estimate
+    _engineStreamDirector->setUplinkEstimateKbps(5, 99, 60 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(5, 99, 61 * utils::Time::sec);
+
+    // Used by 5
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(5, 1));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(5, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(5, 5));
 
     // Used by 4
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(4, 1));

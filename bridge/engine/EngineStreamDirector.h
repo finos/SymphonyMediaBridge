@@ -392,7 +392,11 @@ public:
 
         // Check against max desired quality.
         bool result = false;
-        if (quality == maxWantedQuality)
+        if (maxWantedQuality == dropQuality)
+        {
+            result = false;
+        }
+        else if (quality == maxWantedQuality)
         {
             result = true;
         }
@@ -847,7 +851,7 @@ private:
             assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity]);
             assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity]);
 
-            if (configCost > bestConfigCost && configCost <= participantStreams._defaultLevelBandwidthLimit)
+            if (configCost >= bestConfigCost && configCost <= participantStreams._defaultLevelBandwidthLimit)
             {
                 bestConfigCost = configCost;
                 bestConfigId = configId;
