@@ -1049,6 +1049,74 @@ TEST_F(IntegrationTest, simpleBarbell)
     client2._transport->stop();
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
+
+    const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+    {
+        auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+        const auto& rData1 = client1.getReceiveStats();
+        std::vector<double> allFreq;
+
+        for (const auto& item : rData1)
+        {
+            if (client1.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+            EXPECT_EQ(freqVector.size(), 1);
+            allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+            EXPECT_EQ(amplitudeProfile.size(), 2);
+            if (amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+            }
+
+            // item.second->dumpPcmData();
+        }
+
+        std::sort(allFreq.begin(), allFreq.end());
+        EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
+    }
+    {
+        auto audioCounters = client2._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        const auto& rData1 = client2.getReceiveStats();
+        std::vector<double> allFreq;
+        for (const auto& item : rData1)
+        {
+            if (client2.isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+            EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+            EXPECT_EQ(freqVector.size(), 1);
+            allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+            EXPECT_EQ(amplitudeProfile.size(), 2);
+            if (amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+            }
+
+            // item.second->dumpPcmData();
+        }
+
+        std::sort(allFreq.begin(), allFreq.end());
+        EXPECT_NEAR(allFreq[0], 600.0, 25.0);
+    }
 }
 
 TEST_F(IntegrationTest, detectIsPtt)
