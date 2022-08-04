@@ -769,14 +769,14 @@ std::unordered_set<std::string> Mixer::getEndpoints() const
     return endpoints;
 }
 
-std::unordered_set<size_t> Mixer::getActiveTalkers()
+std::map<size_t, ActiveTalker> Mixer::getActiveTalkers()
 {
     return _engineMixer.getActiveTalkers();
 }
 
 bool Mixer::getEndpointInfo(const std::string& endpointId,
     api::ConferenceEndpoint& endpoint,
-    const std::unordered_set<size_t>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
@@ -790,10 +790,21 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
         {
             foundAudio = true;
             endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
-            endpoint.isActiveTalker = activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end();
             auto transport = audio->second->transport;
             endpoint.iceState = transport->getIceState();
             endpoint.dtlsState = transport->getDtlsState();
+
+            auto const& it = activeTalkers.find(audio->second->endpointIdHash);
+            endpoint.isActiveTalker = it != activeTalkers.end();
+
+            if (it != activeTalkers.end())
+            {
+                assert(endpoint.isActiveTalker == true);
+                endpoint.activeTalkerInfo.endpointHashId = it->second.endpointHashId;
+                endpoint.activeTalkerInfo.isPtt = it->second.isPtt;
+                endpoint.activeTalkerInfo.score = it->second.score;
+                endpoint.activeTalkerInfo.noiseLevel = it->second.noiseLevel;
+            }
         }
     }
 
@@ -802,7 +813,7 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
 
 bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     api::ConferenceEndpointExtendedInfo& endpoint,
-    const std::unordered_set<size_t>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers)
 {
     if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
     {

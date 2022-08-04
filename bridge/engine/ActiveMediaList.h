@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "concurrency/MpmcHashmap.h"
@@ -10,7 +11,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <unordered_set>
+#include <map>
 #include <vector>
 
 namespace utils
@@ -66,7 +67,7 @@ public:
 
     inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
 
-    const std::unordered_set<size_t> getActiveTalkers() const;
+    const std::map<size_t, ActiveTalker> getActiveTalkers() const;
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
@@ -166,6 +167,7 @@ private:
         int32_t _nonZeroLevelsShortWindow;
         float _maxRecentLevel;
         float _noiseLevel;
+        bool _ptt;
     };
 
     struct AudioLevelEntry
@@ -205,7 +207,7 @@ private:
     template <size_t MAX_SIZE>
     struct ActiveTalkersSnapshot
     {
-        std::array<size_t, MAX_SIZE> endpointHashIds;
+        std::array<ActiveTalker, MAX_SIZE> activeTalker;
         static const size_t maxSize = MAX_SIZE;
         size_t count = 0;
     };

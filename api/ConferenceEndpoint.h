@@ -1,4 +1,5 @@
 #pragma once
+#include "bridge/engine/ActiveTalker.h"
 #include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
 #include "utils/Optional.h"
@@ -13,6 +14,7 @@ struct ConferenceEndpoint
     bool isActiveTalker;
     ice::IceSession::State iceState;
     transport::SrtpClient::State dtlsState;
+    bridge::ActiveTalker activeTalkerInfo;
 
     bool operator==(const ConferenceEndpoint& rhs) const
     {

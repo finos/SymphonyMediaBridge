@@ -3325,7 +3325,7 @@ size_t EngineMixer::getDominantSpeakerId() const
     return _activeMediaList->getDominantSpeaker();
 }
 
-std::unordered_set<size_t> EngineMixer::getActiveTalkers() const
+std::map<size_t, ActiveTalker> EngineMixer::getActiveTalkers() const
 {
     return _activeMediaList->getActiveTalkers();
 }

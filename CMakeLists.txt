@@ -134,6 +134,7 @@ set(FILES
         bridge/endpointActions/BarbellActions.cpp
         bridge/engine/ActiveMediaList.cpp
         bridge/engine/ActiveMediaList.h
+        bridge/engine/ActiveTalker.h
         bridge/engine/AudioForwarderReceiveJob.cpp
         bridge/engine/AudioForwarderReceiveJob.h
         bridge/engine/AudioForwarderRewriteAndSendJob.cpp

@@ -223,6 +223,15 @@ nlohmann::json generateConferenceEndpoint(const ConferenceEndpoint& endpoint)
     jsonEndpoint.emplace("isActiveTalker", endpoint.isActiveTalker);
     jsonEndpoint.emplace("iceState", api::utils::toString(endpoint.iceState));
     jsonEndpoint.emplace("dtlsState", api::utils::toString(endpoint.dtlsState));
+
+    if (endpoint.isActiveTalker)
+    {
+        nlohmann::json activeTalkerInfo = nlohmann::json::object();
+        activeTalkerInfo.emplace("ptt", endpoint.activeTalkerInfo.isPtt);
+        activeTalkerInfo.emplace("score", endpoint.activeTalkerInfo.score);
+        activeTalkerInfo.emplace("noiseLevel", endpoint.activeTalkerInfo.noiseLevel);
+        jsonEndpoint.emplace("ActiveTalker", activeTalkerInfo);
+    }
     return jsonEndpoint;
 }
 
