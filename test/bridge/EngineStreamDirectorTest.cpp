@@ -237,8 +237,8 @@ TEST_F(EngineStreamDirectorTest, defaultQualityStreamIsForwardedForNonPinTarget)
 
     _engineStreamDirector->pin(2, 1);
 
-    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 13));
-    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 15));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 13));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 15));
 }
 
 TEST_F(EngineStreamDirectorTest, secondaryDefaultQualityStreamIsForwardedForNonPinTarget)
@@ -934,7 +934,7 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_NotInLastN_AndNotPinned_AndSome
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(17, 3, false, 0));
 }
 
-TEST_F(EngineStreamDirectorTest, lowQualitySsrc_NotPinTarget_IsForwarded)
+TEST_F(EngineStreamDirectorTest, lowQualitySsrc_NotPinTarget_IsNotForwarded)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
@@ -944,10 +944,10 @@ TEST_F(EngineStreamDirectorTest, lowQualitySsrc_NotPinTarget_IsForwarded)
     _engineStreamDirector->pin(2, 1);
     _engineStreamDirector->pin(3, 1);
 
-    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 13));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 13));
 }
 
-TEST_F(EngineStreamDirectorTest, midQualitySsrc_NotPinTarget_IsNotForwarded)
+TEST_F(EngineStreamDirectorTest, midQualitySsrc_NotPinTarget_IsForwarded)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
@@ -957,7 +957,7 @@ TEST_F(EngineStreamDirectorTest, midQualitySsrc_NotPinTarget_IsNotForwarded)
     _engineStreamDirector->pin(2, 1);
     _engineStreamDirector->pin(3, 1);
 
-    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 15));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 15));
 }
 
 TEST_F(EngineStreamDirectorTest, highQualitySsrc_NotPinTarget_IsNotForwarded)
@@ -1012,22 +1012,22 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_PinTarget_IsForwarded)
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 11));
 }
 
-TEST_F(EngineStreamDirectorTest, lowQualitySsrc_HasNoPinTarget_UnderKbpsLimit_IsForwarded)
+TEST_F(EngineStreamDirectorTest, lowQualitySsrc_HasNoPinTarget_UnderKbpsLimit_IsNotForwarded)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
     addActiveVideoSender(3, 13);
 
-    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 7));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 7));
 }
 
-TEST_F(EngineStreamDirectorTest, midQualitySsrc_HasNoPinTarget_UnderKbpsLimit_IsNotForwarded)
+TEST_F(EngineStreamDirectorTest, midQualitySsrc_HasNoPinTarget_UnderKbpsLimit_IsForwarded)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
     addActiveVideoSender(3, 13);
 
-    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 9));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 9));
 }
 
 TEST_F(EngineStreamDirectorTest, highQualitySsrc_HasNoPinTarget_UnderKbpsLimit_IsNotForwarded)
@@ -1039,7 +1039,7 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_HasNoPinTarget_UnderKbpsLimit_I
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 11));
 }
 
-TEST_F(EngineStreamDirectorTest, lowQualitySsrc_HasNoPinTarget_OverKbpsLimit_IsForwarded)
+TEST_F(EngineStreamDirectorTest, lowQualitySsrc_HasNoPinTarget_OverKbpsLimit_IsNotForwarded)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
@@ -1050,10 +1050,10 @@ TEST_F(EngineStreamDirectorTest, lowQualitySsrc_HasNoPinTarget_OverKbpsLimit_IsF
     addActiveVideoSender(7, 37);
     addActiveVideoSender(8, 43);
 
-    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 7));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 7));
 }
 
-TEST_F(EngineStreamDirectorTest, midQualitySsrc_HasNoPinTarget_OverKbpsLimit_IsNotForwarded)
+TEST_F(EngineStreamDirectorTest, midQualitySsrc_HasNoPinTarget_OverKbpsLimit_IsForwarded)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
@@ -1064,7 +1064,7 @@ TEST_F(EngineStreamDirectorTest, midQualitySsrc_HasNoPinTarget_OverKbpsLimit_IsN
     addActiveVideoSender(7, 37);
     addActiveVideoSender(8, 43);
 
-    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 9));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 9));
 }
 
 TEST_F(EngineStreamDirectorTest, highQualitySsrc_HasNoPinTarget_OverKbpsLimit_IsNotForwarded)

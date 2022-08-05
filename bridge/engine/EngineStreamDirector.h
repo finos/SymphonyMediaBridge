@@ -32,6 +32,8 @@ public:
         uint64_t _lowEstimateTimestamp;
         /** Min of incoming estimate and EngineStreamDirector::_maxDefaultLevelBandwidthKbps */
         uint32_t _defaultLevelBandwidthLimit;
+        /** Max of incoming estimate and _defaultLevelBandwidthLimit */
+        uint32_t _estimatedUplinkBandwidth;
     };
 
     EngineStreamDirector(const config::Config& config)
@@ -246,6 +248,8 @@ public:
         auto& participantStream = participantStreamsItr->second;
 
         participantStream._defaultLevelBandwidthLimit = std::min(uplinkEstimateKbps, _maxDefaultLevelBandwidthKbps);
+        participantStream._estimatedUplinkBandwidth =
+            std::max(uplinkEstimateKbps, participantStream._defaultLevelBandwidthLimit);
         participantStream._desiredHighestEstimatedPinnedLevel =
             bwe::BandwidthUtils::calcPinnedHighestSimulcastLevel(lowQuality, _bandwidthFloor, uplinkEstimateKbps);
 
@@ -570,7 +574,7 @@ private:
         MinCostSanity,
         MaxCostSanity
     };
-    static const size_t configLadder[7][6];
+    static const size_t configLadder[6][6];
 
     /** Important: This has to be a lot bigger than the actual maximum participants per conference since we have
      * to avoid map entry reuse. Currently multiplied by 2 for that reason. */
@@ -851,14 +855,14 @@ private:
             assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity]);
             assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity]);
 
-            if (configCost >= bestConfigCost && configCost <= participantStreams._defaultLevelBandwidthLimit)
+            if (configCost >= bestConfigCost && configCost <= participantStreams._estimatedUplinkBandwidth)
             {
                 bestConfigCost = configCost;
                 bestConfigId = configId;
             }
             configId++;
         }
-        assert(configId == 7);
+        assert(configId == 6);
         outPinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::PinnedQuality];
         outUnpinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::UnpinnedQuality];
     }
