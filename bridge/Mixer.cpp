@@ -2,10 +2,11 @@
 #include "api/ConferenceEndpoint.h"
 #include "api/RecordingChannel.h"
 #include "bridge/AudioStream.h"
+#include "bridge/AudioStreamDescription.h"
 #include "bridge/Barbell.h"
 #include "bridge/DataStreamDescription.h"
-#include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
+#include "bridge/VideoStreamDescription.h"
 #include "bridge/engine/Engine.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineBarbell.h"
@@ -853,7 +854,7 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     return true;
 }
 
-bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
+bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _audioStreams.find(endpointId);
@@ -862,27 +863,27 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescr
         return false;
     }
 
-    outDescription = StreamDescription(*streamItr->second);
+    outDescription = AudioStreamDescription(*streamItr->second);
     if (streamItr->second->ssrcRewrite)
     {
         for (auto ssrc : _audioSsrcs)
         {
-            outDescription._localSsrcs.push_back(ssrc);
+            outDescription.ssrcs.push_back(ssrc);
         }
     }
     return true;
 }
 
-void Mixer::getAudioStreamDescription(StreamDescription& outDescription)
+void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription)
 {
-    outDescription = StreamDescription();
+    outDescription = AudioStreamDescription();
     for (auto ssrc : _audioSsrcs)
     {
-        outDescription._localSsrcs.push_back(ssrc);
+        outDescription.ssrcs.push_back(ssrc);
     }
 }
 
-bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
+bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _videoStreams.find(endpointId);
@@ -891,38 +892,34 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescr
         return false;
     }
 
-    outDescription = StreamDescription(*streamItr->second);
+    outDescription = VideoStreamDescription(*streamItr->second);
     if (streamItr->second->_ssrcRewrite)
     {
         for (auto ssrcPair : _videoSsrcs)
         {
-            outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-            outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+            outDescription.simulcastSsrcs.push_back(ssrcPair);
         }
         for (auto ssrcPair : _videoPinSsrcs)
         {
-            outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-            outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+            outDescription.simulcastSsrcs.push_back(ssrcPair);
         }
     }
     return true;
 }
 
-void Mixer::getVideoStreamDescription(StreamDescription& outDescription)
+void Mixer::getVideoStreamDescription(VideoStreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    outDescription = StreamDescription();
+    outDescription = VideoStreamDescription();
 
     for (auto ssrcPair : _videoSsrcs)
     {
-        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+        outDescription.simulcastSsrcs.push_back(ssrcPair);
     }
     for (auto ssrcPair : _videoPinSsrcs)
     {
-        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+        outDescription.simulcastSsrcs.push_back(ssrcPair);
     }
 }
 

@@ -357,18 +357,12 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
 
         if (videoJson.find("transport") != videoJson.end())
         {
-            videoChannel._transport.set(parsePatchEndpointTransport(videoJson["transport"]));
-        }
-
-        for (const auto& ssrcJson : optionalJsonArray(videoJson, "ssrcs"))
-        {
-            const auto ssrc = ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
-            videoChannel._ssrcs.push_back(ssrc);
+            videoChannel.transport.set(parsePatchEndpointTransport(videoJson["transport"]));
         }
 
         for (const auto& payloadTypeJson : optionalJsonArray(videoJson, "payload-types"))
         {
-            videoChannel._payloadTypes.emplace_back(parsePatchEndpointPayloadType(payloadTypeJson));
+            videoChannel.payloadTypes.emplace_back(parsePatchEndpointPayloadType(payloadTypeJson));
         }
 
         for (const auto& rtpHdrExtJson : optionalJsonArray(videoJson, "rtp-hdrexts"))
@@ -376,34 +370,21 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             const auto id = rtpHdrExtJson["id"].get<uint32_t>();
             if (id > 0 && id < 15)
             {
-                videoChannel._rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
+                videoChannel.rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
             }
         }
 
-        for (const auto& ssrcGroupJson : optionalJsonArray(videoJson, "ssrc-groups"))
+        for (const auto& stream : optionalJsonArray(videoJson, "streams"))
         {
-            api::EndpointDescription::SsrcGroup ssrcGroup;
-            for (const auto& ssrcJson : requiredJsonArray(ssrcGroupJson, "ssrcs"))
+            api::EndpointDescription::VideoStream videoStream;
+            for (const auto& rtpSource : requiredJsonArray(stream, "sources"))
             {
-                const uint32_t ssrc =
-                    ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
-                ssrcGroup._ssrcs.push_back(ssrc);
+                api::EndpointDescription::VideoStream::Level level;
+                level.main = rtpSource["main"].get<uint32_t>();
+                setIfExists(level.feedback, rtpSource, "feedback");
+                videoStream.sources.push_back(level);
             }
-            ssrcGroup._semantics = ssrcGroupJson["semantics"].get<std::string>();
-            videoChannel._ssrcGroups.emplace_back(std::move(ssrcGroup));
-        }
-
-        for (const auto& ssrcAttributeJson : optionalJsonArray(videoJson, "ssrc-attributes"))
-        {
-            api::EndpointDescription::SsrcAttribute ssrcAttribute;
-            ssrcAttribute._content = ssrcAttributeJson["content"].get<std::string>();
-            for (const auto& ssrcJson : requiredJsonArray(ssrcAttributeJson, "ssrcs"))
-            {
-                const auto ssrc =
-                    ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
-                ssrcAttribute._ssrcs.push_back(ssrc);
-            }
-            videoChannel._ssrcAttributes.push_back(ssrcAttribute);
+            videoStream.content = stream["content"];
         }
 
         if (videoJson.find("ssrc-whitelist") != videoJson.end())
@@ -415,7 +396,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
                     ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
                 ssrcWhitelist.push_back(ssrc);
             }
-            videoChannel._ssrcWhitelist.set(std::move(ssrcWhitelist));
+            videoChannel.ssrcWhitelist.set(std::move(ssrcWhitelist));
         }
 
         endpointDescription._video.set(std::move(videoChannel));

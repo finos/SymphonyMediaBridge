@@ -751,7 +751,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
         const auto& rData1 = client3.getReceiveStats();
         // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 4);
+        EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {
@@ -858,6 +858,7 @@ TEST_F(IntegrationTest, ptime10)
         EXPECT_EQ(audioCounters.lostPackets, 0);
         const auto& rData1 = client1.getReceiveStats();
         std::vector<double> allFreq;
+        EXPECT_EQ(rData1.size(), 2);
 
         for (const auto& item : rData1)
         {
@@ -892,6 +893,7 @@ TEST_F(IntegrationTest, ptime10)
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client2.getReceiveStats();
+        EXPECT_EQ(rData1.size(), 2);
         std::vector<double> allFreq;
         for (const auto& item : rData1)
         {
@@ -927,7 +929,7 @@ TEST_F(IntegrationTest, ptime10)
 
         const auto& rData1 = client3.getReceiveStats();
         // We expect one audio ssrc and 1 video (where we receive padding data due to RateController)
-        EXPECT_EQ(rData1.size(), 4);
+        EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
         for (const auto& item : rData1)
         {

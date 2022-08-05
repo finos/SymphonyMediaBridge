@@ -155,51 +155,37 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
     {
         const auto& video = channelsDescription._video.get();
         nlohmann::json videoJson;
-        if (video._transport.isSet())
+        if (video.transport.isSet())
         {
-            videoJson["transport"] = generateTransport(video._transport.get());
+            videoJson["transport"] = generateTransport(video.transport.get());
         }
 
-        videoJson["ssrcs"] = nlohmann::json::array();
-        for (const auto ssrc : video._ssrcs)
+        videoJson["streams"] = nlohmann::json::array();
+        for (const auto& stream : video.streams)
         {
-            videoJson["ssrcs"].push_back(ssrc);
-        }
-
-        videoJson["ssrc-groups"] = nlohmann::json::array();
-        for (const auto& ssrcGroup : video._ssrcGroups)
-        {
-            nlohmann::json ssrcGroupJson;
-            ssrcGroupJson["ssrcs"] = nlohmann::json::array();
-            for (const auto ssrc : ssrcGroup._ssrcs)
+            nlohmann::json streamJson;
+            streamJson["sources"] = nlohmann::json::array();
+            for (const auto level : stream.sources)
             {
-                ssrcGroupJson["ssrcs"].push_back(ssrc);
+                nlohmann::json sourceJson;
+                sourceJson["main"] = level.main;
+                if (level.feedback != 0)
+                {
+                    sourceJson["feedback"] = level.feedback;
+                }
+                streamJson["sources"].push_back(sourceJson);
             }
-            ssrcGroupJson["semantics"] = ssrcGroup._semantics;
-
-            videoJson["ssrc-groups"].push_back(ssrcGroupJson);
+            streamJson["content"] = stream.content;
+            videoJson["streams"].push_back(streamJson);
         }
 
         videoJson["payload-types"] = nlohmann::json::array();
-        for (const auto& payloadType : video._payloadTypes)
+        for (const auto& payloadType : video.payloadTypes)
         {
             videoJson["payload-types"].push_back(generatePayloadType(payloadType));
         }
 
-        videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video._rtpHeaderExtensions);
-
-        videoJson["ssrc-attributes"] = nlohmann::json::array();
-        for (const auto& ssrcAttribute : video._ssrcAttributes)
-        {
-            nlohmann::json ssrcAttributeJson;
-            ssrcAttributeJson["ssrcs"] = nlohmann::json::array();
-            for (const auto ssrc : ssrcAttribute._ssrcs)
-            {
-                ssrcAttributeJson["ssrcs"].push_back(ssrc);
-            }
-            ssrcAttributeJson["content"] = ssrcAttribute._content;
-            videoJson["ssrc-attributes"].push_back(ssrcAttributeJson);
-        }
+        videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video.rtpHeaderExtensions);
 
         responseJson["video"] = videoJson;
     }
