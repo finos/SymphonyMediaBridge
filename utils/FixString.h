@@ -15,18 +15,21 @@ public:
 
     explicit FixString(const char* value) : _size(std::min(std::strlen(value), SIZE))
     {
-        utils::strncpy(_value, value, SIZE);
+        std::strncpy(_value, value, SIZE);
+        _value[SIZE] = '\0';
     }
 
     explicit FixString(const char* value, size_t length) : _size(std::min(std::strlen(value), std::min(SIZE, length)))
     {
-        utils::strncpy(_value, value, _size);
+        std::strncpy(_value, value, _size);
+        _value[SIZE] = '\0';
     }
 
     FixString& operator=(const char* value)
     {
         _size = std::min(std::strlen(value), SIZE);
-        utils::strncpy(_value, value, SIZE);
+        std::strncpy(_value, value, SIZE);
+        _value[SIZE] = '\0';
         return *this;
     }
 
@@ -34,7 +37,12 @@ public:
 
     size_t size() const { return _size; }
 
-    int compare(const char* s, size_t length) const { return std::memcmp(_value, s, std::min(_size, length)); }
+    int compare(const char* s, size_t length) const
+    {
+        auto cmp = std::memcmp(_value, s, std::min(_size, length));
+        return (cmp == 0 ? (int)(_size - length) : cmp);
+    }
+
     int compare(const char* s) const { return compare(s, std::strlen(s)); }
 
 private:

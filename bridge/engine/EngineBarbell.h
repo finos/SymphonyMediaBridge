@@ -64,6 +64,8 @@ struct EngineBarbell
     bridge::RtpMap audioRtpMap;
     bridge::RtpMap videoRtpMap;
     bridge::RtpMap videoFeedbackRtpMap;
+
+    static const char* barbellTag;
 };
 
 } // namespace bridge

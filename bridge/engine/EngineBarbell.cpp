@@ -3,6 +3,8 @@
 
 namespace bridge
 {
+const char* EngineBarbell::barbellTag = "BB";
+
 EngineBarbell::EngineBarbell(const std::string& barbellId,
     transport::RtcTransport& rtcTransport,
     const std::vector<BarbellStreamGroupDescription>& videoDescriptions,

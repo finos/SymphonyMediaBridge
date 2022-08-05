@@ -2248,7 +2248,7 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
         logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());
         return false;
     }
-    transport->setTag("BB"); // allow quick assessment that packet arrive on barbell
+    transport->setTag(EngineBarbell::barbellTag); // allow quick assessment that packet arrive on barbell
 
     const auto streamItr = _barbells.emplace(barbellId, std::make_unique<Barbell>(barbellId, transport));
     if (!streamItr.second)

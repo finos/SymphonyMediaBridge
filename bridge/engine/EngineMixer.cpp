@@ -1234,7 +1234,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
-    const bool isFromBarbell = (std::strncmp(sender->getTag(), "BB", 2) == 0);
+    const bool isFromBarbell = (std::strcmp(sender->getTag(), EngineBarbell::barbellTag) == 0);
     const auto endpointIdHash = packet->endpointIdHash;
 
     EngineVideoStream* videoStream = nullptr;
@@ -1325,7 +1325,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
-    const bool isFromBarbell = (std::strncmp(sender->getTag(), "BB", 2) == 0);
+    const bool isFromBarbell = (std::strcmp(sender->getTag(), EngineBarbell::barbellTag) == 0);
     const auto endpointIdHash = packet->endpointIdHash;
     EngineVideoStream* videoStream = nullptr;
     auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
@@ -1725,7 +1725,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         return;
     }
 
-    if (0 == std::strcmp(sender->getTag(), "BB"))
+    if (0 == std::strcmp(sender->getTag(), EngineBarbell::barbellTag))
     {
         const bool isAudio = (ssrcContext->_rtpMap._format == bridge::RtpMap::Format::OPUS);
         if (!setPacketSourceEndpointIdHash(*packet, sender->getEndpointIdHash(), ssrc, isAudio))
@@ -2347,7 +2347,7 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
 
 void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
 {
-    bool isFromBarbell = 0 == std::strcmp("BB", packetInfo.transport()->getTag());
+    bool isFromBarbell = 0 == std::strcmp(EngineBarbell::barbellTag, packetInfo.transport()->getTag());
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
     if (!rtpHeader)
     {
