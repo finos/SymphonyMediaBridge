@@ -346,15 +346,6 @@ public:
             return false;
         }
 
-        getVideoQualityLimits(viewedByParticipantStreamItr->second, pinnedQuality, unpinnedQuality);
-
-        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: max pinned quality: %d, max unpinned quality: %d",
-            "EngineStreamDirector",
-            toEndpointIdHash,
-            ssrc,
-            pinnedQuality,
-            unpinnedQuality);
-
         if (isSsrcFromParticipant(toEndpointIdHash, ssrc))
         {
             DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: f - own video packet.",
@@ -363,6 +354,15 @@ public:
                 ssrc);
             return false;
         }
+
+        getVideoQualityLimits(viewedByParticipantStreamItr->second, pinnedQuality, unpinnedQuality);
+
+        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: max pinned quality: %d, max unpinned quality: %d",
+            "EngineStreamDirector",
+            toEndpointIdHash,
+            ssrc,
+            pinnedQuality,
+            unpinnedQuality);
 
         const auto pinMapItr = _pinMap.find(toEndpointIdHash);
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
