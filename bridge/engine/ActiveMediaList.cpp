@@ -351,12 +351,7 @@ void ActiveMediaList::process(const uint64_t timestampMs, bool& outDominantSpeak
     }
     _lastRunTimestampMs = timestampMs;
 
-    bool newLevelsAvailable = !_incomingAudioLevels.empty();
     updateLevels(timestampMs);
-    if (!newLevelsAvailable)
-    {
-        return;
-    }
 
     float currentDominantSpeakerScore = 0.0;
     size_t speakerCount = rankSpeakers(currentDominantSpeakerScore);
