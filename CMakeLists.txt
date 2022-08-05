@@ -282,7 +282,8 @@ set(FILES
         memory/RingBuffer.h
         memory/MemoryFile.h
         memory/MemoryFile.cpp
-        memory/StackMap.h
+        memory/Map.h
+        memory/Array.h
         rtp/RtcpFeedback.cpp
         rtp/RtcpFeedback.h
         rtp/RtcpHeader.cpp
