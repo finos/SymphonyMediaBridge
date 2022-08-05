@@ -3,7 +3,7 @@
 #include "SctpServerPort.h"
 #include "Sctprotocol.h"
 #include "logger/Logger.h"
-#include "memory/StackArray.h"
+#include "memory/Array.h"
 #include "utils/MersienneRandom.h"
 #include "utils/Time.h"
 
@@ -1346,7 +1346,7 @@ void SctpAssociationImpl::reportFragment(InboundChunkList::iterator chunkHeadIt,
     const size_t fragmentSize,
     const uint64_t timestamp)
 {
-    memory::StackArray<uint8_t, 512> buffer(fragmentSize);
+    memory::Array<uint8_t, 512> buffer(fragmentSize);
 
     ReceivedDataChunk chunkHead = *chunkHeadIt->second;
     if (_streams.find(chunkHead.streamId) == _streams.cend())

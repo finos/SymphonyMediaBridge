@@ -7,8 +7,13 @@
 namespace memory
 {
 
+/**
+ * Heap free Map, completely stored on stack.
+ * Note that key is hashed to 64 bit and it does not handle hash collisions.
+ * If two keys hash to the same int64, only the first can be stored in the map.
+ */
 template <typename KeyT, typename T, uint32_t SIZE>
-class StackMap
+class Map
 {
     struct ElementEntry
     {
@@ -24,6 +29,8 @@ class StackMap
         uint64_t keyHash;
         uint32_t position;
     };
+
+    static constexpr size_t INDEX_SIZE = SIZE * 4;
 
 public:
     class IterBase
@@ -75,7 +82,7 @@ public:
     typedef IterBase iterator;
     typedef std::pair<KeyT, T> value_type;
 
-    explicit StackMap() : _end(SIZE), _maxSpread(1), _count(0) {}
+    explicit Map() : _end(SIZE), _maxSpread(1), _count(0) {}
 
     std::pair<iterator, bool> add(const KeyT& key, const T& value)
     {
@@ -211,6 +218,24 @@ public:
     size_t size() const { return _count; }
     bool empty() const { return _count == 0; }
 
+    void clear()
+    {
+        _nextFreeEntry = 0;
+        _count = 0;
+        _maxSpread = 1;
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            if (_elements[i].committed)
+            {
+                _elements[i] = ElementEntry();
+            }
+        }
+        for (size_t i = 0; i < INDEX_SIZE; ++i)
+        {
+            _index[i] = IndexEntry();
+        }
+    }
+
     const_iterator cbegin() const
     {
         uint32_t first = 0;
@@ -254,14 +279,14 @@ public:
     const TypeName getItem(const KeyT& key,
         typename std::enable_if<std::is_pointer<TypeName>::value>::type* = nullptr) const
     {
-        return const_cast<StackMap<KeyT, T, SIZE>&>(*this).getItem(key);
+        return const_cast<Map<KeyT, T, SIZE>&>(*this).getItem(key);
     }
 
     template <typename TypeName = T>
     const TypeName* getItem(const KeyT& key,
         typename std::enable_if<!std::is_pointer<TypeName>::value>::type* = nullptr) const
     {
-        return const_cast<StackMap<KeyT, T, SIZE>&>(*this).getItem(key);
+        return const_cast<Map<KeyT, T, SIZE>&>(*this).getItem(key);
     }
 
 private:
@@ -291,7 +316,7 @@ private:
         return 0;
     }
 
-    std::array<IndexEntry, SIZE * 4> _index;
+    std::array<IndexEntry, INDEX_SIZE> _index;
     std::array<ElementEntry, SIZE> _elements;
     const uint32_t _end;
     uint32_t _nextFreeEntry = 0;

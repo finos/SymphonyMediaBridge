@@ -20,6 +20,7 @@ struct BarbellStreamGroupDescription
     std::vector<uint32_t> getSsrcs() const
     {
         std::vector<uint32_t> v;
+        v.reserve(ssrcLevels.size());
         for (auto& level : ssrcLevels)
         {
             v.push_back(level.ssrc);

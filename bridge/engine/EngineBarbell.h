@@ -5,7 +5,7 @@
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "concurrency/MpmcHashmap.h"
-#include "memory/StackMap.h"
+#include "memory/Map.h"
 #include "webrtc/WebRtcDataStream.h"
 #include <cstdint>
 
@@ -58,8 +58,8 @@ struct EngineBarbell
     std::vector<AudioStream> audioStreams;
     VideoStream slideStream;
 
-    memory::StackMap<uint32_t, VideoStream*, 32> videoSsrcMap;
-    memory::StackMap<uint32_t, AudioStream*, 16> audioSsrcMap;
+    memory::Map<uint32_t, VideoStream*, 32> videoSsrcMap;
+    memory::Map<uint32_t, AudioStream*, 16> audioSsrcMap;
 
     bridge::RtpMap audioRtpMap;
     bridge::RtpMap videoRtpMap;

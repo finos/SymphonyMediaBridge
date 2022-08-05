@@ -4,29 +4,30 @@ namespace memory
 {
 
 template <typename T, size_t SIZE>
-class StackArray
+class Array
 {
 public:
     typedef const T* const_iterator;
     typedef T* iterator;
 
-    StackArray() : _capacity(SIZE), _size(0), _dataPtr(_data) {}
-    explicit StackArray(size_t size) : _capacity(size), _size(0), _dataPtr(_data)
+    Array() : _capacity(SIZE), _size(0), _dataPtr(reinterpret_cast<T*>(_data)) {}
+    explicit Array(size_t size) : _capacity(size), _size(0), _dataPtr(reinterpret_cast<T*>(_data))
     {
         if (size > SIZE)
         {
-            _dataPtr = new T[size];
+            _dataPtr = reinterpret_cast<T*>(malloc(size * sizeof(T)));
         }
     }
 
-    StackArray(const StackArray&) = delete;
-    StackArray& operator=(const StackArray&) = delete;
+    Array(const Array&) = delete;
+    Array& operator=(const Array&) = delete;
 
-    ~StackArray()
+    ~Array()
     {
-        if (_dataPtr != _data)
+        clear();
+        if (_dataPtr != reinterpret_cast<T*>(_data))
         {
-            delete[] _dataPtr;
+            free(_dataPtr);
         }
     }
 
@@ -41,19 +42,31 @@ public:
     const T& operator[](size_t pos) const { return _dataPtr[pos]; }
 
     const T* data() const { return _dataPtr; }
-    StackArray& append(const T* vector, size_t count)
+    Array& append(const T* vector, size_t count)
     {
         if (_size + count <= _capacity)
         {
-            std::memcpy((_dataPtr + _size), vector, count * sizeof(T));
-            _size += count;
+
+            for (size_t i = 0; i < count; ++i)
+            {
+                new (&_dataPtr[_size++]) T(vector[i]);
+            }
         }
+
         return *this;
     }
 
     size_t capacity() const { return _capacity; }
     size_t size() const { return _size; }
-    void clear() { _size = 0; }
+
+    void clear()
+    {
+        for (size_t i = 0; i < _size; ++i)
+        {
+            _dataPtr[i].~T();
+        }
+        _size = 0;
+    }
 
     void push_back(const T& value)
     {
@@ -61,13 +74,13 @@ public:
         {
             return;
         }
-        _dataPtr[_size++] = value;
+        new (&_dataPtr[_size++]) T(value);
     }
 
 private:
     const size_t _capacity;
     size_t _size;
     T* _dataPtr;
-    T _data[SIZE];
+    typename std::aligned_storage<sizeof(T), alignof(T)>::type _data[SIZE];
 };
 } // namespace memory

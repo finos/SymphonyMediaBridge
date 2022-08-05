@@ -1,6 +1,6 @@
 #include "utils/SimpleJson.h"
 #include "logger/Logger.h"
-#include "memory/StackArray.h"
+#include "memory/Array.h"
 #include <gtest/gtest.h>
 #include <string>
 #include <vector>
@@ -220,8 +220,8 @@ TEST(SimpleJson, ParseLargeUMM)
     auto videoEndpoints = simpleJson["video-endpoints"].getArray();
     auto audioEndpoints = simpleJson["audio-endpoints"].getArray();
 
-    memory::StackArray<uint32_t, 10> videoSsrc;
-    memory::StackArray<uint32_t, 10> audioSsrc;
+    memory::Array<uint32_t, 10> videoSsrc;
+    memory::Array<uint32_t, 10> audioSsrc;
     for (auto endpointMap : videoEndpoints)
     {
         char guuid[64];

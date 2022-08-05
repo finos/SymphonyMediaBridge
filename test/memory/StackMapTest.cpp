@@ -1,5 +1,5 @@
-#include "memory/StackMap.h"
 #include "logger/Logger.h"
+#include "memory/Map.h"
 #include "test/concurrency/TestValues.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
@@ -11,7 +11,7 @@
 
 TEST(StackMap, fullCondition)
 {
-    memory::StackMap<int, Simple, 64> hmap;
+    memory::Map<int, Simple, 64> hmap;
     for (int i = 0; i < 67; ++i)
     {
         if (i < 64)
@@ -27,7 +27,7 @@ TEST(StackMap, fullCondition)
 
 TEST(StackMap, emptyCondition)
 {
-    memory::StackMap<int, Simple, 64> hmap;
+    memory::Map<int, Simple, 64> hmap;
     EXPECT_TRUE(hmap.empty());
     for (int i = 0; i < 64; ++i)
     {
@@ -55,7 +55,7 @@ TEST(StackMap, emptyCondition)
 
 TEST(StackMap, iterate)
 {
-    memory::StackMap<int, Simple, 64> hmap;
+    memory::Map<int, Simple, 64> hmap;
     for (int i = 20; i < 50; ++i)
     {
         EXPECT_TRUE(hmap.add(i, Simple()).second);
@@ -81,4 +81,19 @@ TEST(StackMap, iterate)
 
     EXPECT_TRUE(hmap.add(60, Simple(555, 999)).second);
     EXPECT_EQ(hmap[60].ssrc, 555);
+}
+
+TEST(StackMap, clear)
+{
+    memory::Map<int, Simple, 64> hmap;
+    for (int i = 20; i < 50; ++i)
+    {
+        EXPECT_TRUE(hmap.add(i, Simple()).second);
+    }
+
+    hmap.clear();
+    EXPECT_FALSE(hmap.contains(20));
+    EXPECT_EQ(hmap.size(), 0);
+    EXPECT_TRUE(hmap.empty());
+    EXPECT_EQ(hmap.capacity(), 64);
 }

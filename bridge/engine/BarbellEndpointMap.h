@@ -1,6 +1,6 @@
 #pragma once
 #include "concurrency/MpmcHashmap.h"
-#include "memory/StackArray.h"
+#include "memory/Array.h"
 #include "utils/FixString.h"
 #include <array>
 
@@ -36,7 +36,7 @@ struct BarbellMapItem
 
     char endpointId[EndpointIdString::capacity];
     size_t endpointIdHash = 0;
-    memory::StackArray<uint32_t, 2> ssrcs;
+    memory::Array<uint32_t, 2> ssrcs;
 };
 
 } // namespace bridge

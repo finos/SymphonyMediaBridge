@@ -6,9 +6,9 @@
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
 #include "memory/AudioPacketPoolAllocator.h"
+#include "memory/Map.h"
 #include "memory/PacketPoolAllocator.h"
 #include "memory/RingBuffer.h"
-#include "memory/StackMap.h"
 #include "transport/RtcTransport.h"
 #include <atomic>
 #include <cstddef>

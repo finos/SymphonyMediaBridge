@@ -30,7 +30,7 @@
 #include "codec/Opus.h"
 #include "config/Config.h"
 #include "logger/Logger.h"
-#include "memory/StackMap.h"
+#include "memory/Map.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtcpHeader.h"
 #include "rtp/RtpHeader.h"
@@ -3732,19 +3732,19 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     auto videoEndpointsArray = mediaMapJson["video-endpoints"].getArray();
     auto audioEnpointsArray = mediaMapJson["audio-endpoints"].getArray();
 
-    memory::StackArray<BarbellMapItem, 12> videoSsrcs;
-    memory::StackArray<BarbellMapItem, 8> audioSsrcs;
+    memory::Array<BarbellMapItem, 12> videoSsrcs;
+    memory::Array<BarbellMapItem, 8> audioSsrcs;
 
     copyToBarbellMapItemArray(videoEndpointsArray, videoSsrcs);
     copyToBarbellMapItemArray(audioEnpointsArray, audioSsrcs);
 
-    memory::StackMap<size_t, size_t, 32> fwdVideoEndpoints;
+    memory::Map<size_t, size_t, 32> fwdVideoEndpoints;
     for (auto& item : videoSsrcs)
     {
         fwdVideoEndpoints.add(item.endpointIdHash, item.endpointIdHash);
     }
 
-    memory::StackMap<size_t, size_t, 32> fwdAudioEndpoints;
+    memory::Map<size_t, size_t, 32> fwdAudioEndpoints;
     for (auto& item : audioSsrcs)
     {
         fwdAudioEndpoints.add(item.endpointIdHash, item.endpointIdHash);

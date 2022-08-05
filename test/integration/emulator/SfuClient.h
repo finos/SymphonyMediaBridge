@@ -1,9 +1,9 @@
 #pragma once
 
 #include "AudioSource.h"
+#include "memory/Array.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
-#include "memory/StackArray.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtcpHeader.h"
 #include "transport/DataReceiver.h"
@@ -437,7 +437,7 @@ private:
     transport::TransportFactory& _transportFactory;
     transport::SslDtls& _sslDtls;
     concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*> _audioReceivers;
-    memory::StackArray<std::unique_ptr<RtpVideoReceiver>, 32> _videoReceivers;
+    memory::Array<std::unique_ptr<RtpVideoReceiver>, 32> _videoReceivers;
     concurrency::MpmcHashmap32<uint32_t, RtpVideoReceiver*> _videoSsrcMap;
     logger::LoggableId _loggableId;
     std::atomic_bool _recordingActive;
