@@ -570,7 +570,7 @@ private:
         MinCostSanity,
         MaxCostSanity
     };
-    static const size_t configLadder[8][6];
+    static const size_t configLadder[7][6];
 
     /** Important: This has to be a lot bigger than the actual maximum participants per conference since we have
      * to avoid map entry reuse. Currently multiplied by 2 for that reason. */
@@ -858,7 +858,7 @@ private:
             }
             configId++;
         }
-        assert(configId == 8);
+        assert(configId == 7);
         outPinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::PinnedQuality];
         outUnpinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::UnpinnedQuality];
     }
