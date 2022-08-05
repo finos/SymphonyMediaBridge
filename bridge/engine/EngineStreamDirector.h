@@ -36,7 +36,7 @@ public:
         uint32_t _estimatedUplinkBandwidth;
     };
 
-    EngineStreamDirector(const config::Config& config)
+    EngineStreamDirector(const config::Config& config, uint32_t lastN)
         : _participantStreams(maxParticipants),
           _pinMap(maxParticipants),
           _reversePinMap(maxParticipants),
@@ -44,7 +44,8 @@ public:
           _midQualitySsrcs(maxParticipants),
           _bandwidthFloor(0),
           _requiredMidLevelBandwidth(0),
-          _maxDefaultLevelBandwidthKbps(config.maxDefaultLevelBandwidthKbps)
+          _maxDefaultLevelBandwidthKbps(config.maxDefaultLevelBandwidthKbps),
+          _lastN(lastN)
     {
     }
 
@@ -594,6 +595,9 @@ private:
     /** Bandwidth cap for sending default levels to participants without pin targets */
     uint32_t _maxDefaultLevelBandwidthKbps;
 
+    /** Max number of the video streams forwarded to any particular endpoint. */
+    uint32_t _lastN;
+
     inline bool isParticipantHighestActiveQuality(const size_t endpointIdHash,
         const size_t viewedByEndpointIdHash,
         const uint32_t ssrc)
@@ -838,7 +842,7 @@ private:
         size_t& outPinnedQuality,
         size_t& outUnpinnedQuality) const
     {
-        const auto numParticipants = _participantStreams.size();
+        const auto numParticipants = std::max(1ul, std::min(_participantStreams.size(), (unsigned long)_lastN - 1));
         if (numParticipants < 1)
         {
             return;

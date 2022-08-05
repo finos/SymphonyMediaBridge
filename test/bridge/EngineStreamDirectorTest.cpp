@@ -50,7 +50,7 @@ class EngineStreamDirectorTest : public ::testing::Test
     void SetUp() override
     {
         const config::Config config;
-        _engineStreamDirector = std::make_unique<bridge::EngineStreamDirector>(config);
+        _engineStreamDirector = std::make_unique<bridge::EngineStreamDirector>(config, 9);
     }
     void TearDown() override { _engineStreamDirector.reset(); }
 
@@ -1123,4 +1123,53 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_HasNoPinTarget_OverEstimatedKbp
     _engineStreamDirector->setUplinkEstimateKbps(1, 500, 10 * utils::Time::sec);
 
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 11));
+}
+
+TEST_F(EngineStreamDirectorTest, highQualitySsrcAndMidQualitySsrcs_PinTarget_HighBandwidth)
+{
+    addActiveVideoSender(1, 1);
+    addActiveVideoSender(2, 7);
+    addActiveVideoSender(3, 13);
+    addActiveVideoSender(4, 19);
+    addActiveVideoSender(5, 25);
+    addActiveVideoSender(6, 31);
+    addActiveVideoSender(7, 37);
+    addActiveVideoSender(8, 43);
+    addActiveVideoSender(9, 49);
+
+    _engineStreamDirector->setUplinkEstimateKbps(1, 6000, 10 * utils::Time::sec);
+    _engineStreamDirector->pin(1, 2);
+
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 11));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 15));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 21));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 27));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 33));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 39));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 45));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 51));
+}
+
+TEST_F(EngineStreamDirectorTest, midQualitySsrcs_NoPinTarget_HighBandwidth)
+{
+    addActiveVideoSender(1, 1);
+    addActiveVideoSender(2, 7);
+    addActiveVideoSender(3, 13);
+    addActiveVideoSender(4, 19);
+    addActiveVideoSender(5, 25);
+    addActiveVideoSender(6, 31);
+    addActiveVideoSender(7, 37);
+    addActiveVideoSender(8, 43);
+    addActiveVideoSender(9, 49);
+
+    _engineStreamDirector->setUplinkEstimateKbps(1, 6000, 10 * utils::Time::sec);
+
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 9));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 15));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 21));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 27));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 33));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 39));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 45));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 51));
 }
