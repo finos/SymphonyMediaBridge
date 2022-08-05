@@ -341,6 +341,47 @@ public:
         return false;
     }
 
+    inline size_t getCurrentQualityAndEndpointId(const uint32_t ssrc, size_t& outFromEndpointId)
+    {
+        const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
+        const auto midQualitySsrcsItr = _midQualitySsrcs.find(ssrc);
+        if (lowQualitySsrcsItr != _lowQualitySsrcs.end())
+        {
+            outFromEndpointId = lowQualitySsrcsItr->second;
+            return lowQuality;
+        }
+        if (midQualitySsrcsItr != _midQualitySsrcs.end())
+        {
+            outFromEndpointId = midQualitySsrcsItr->second;
+            return midQuality;
+        }
+        // NOTE: fromEndpointId would be 0 for HighQuality, sice we store only low and mid quality maps.
+        outFromEndpointId = 0;
+        return highQuality;
+    }
+
+    inline bool shouldRecordSsrc(const size_t toEndpointIdHash, const uint32_t ssrc)
+    {
+        size_t fromEndpointId = 0;
+        const auto quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
+
+        // Dominant speaker is always pinned for the recording endpoint.
+        const bool fromPinnedEndpoint = _pinMap.end() != _pinMap.find(toEndpointIdHash);
+        const auto wantedQuality =
+            fromPinnedEndpoint ? getParticipantHighestActiveQuality(fromEndpointId, ssrc) : lowQuality;
+
+        const auto result = wantedQuality == quality;
+
+        DIRECTOR_LOG("shouldRecordSsrc toEndpointIdHash %lu ssrc %u: result %c, dominant speaker: %c, quality: %d",
+            "EngineStreamDirector",
+            toEndpointIdHash,
+            ssrc,
+            result ? 't' : 'f',
+            fromPinnedEndpoint ? 't' : 'f',
+            quality);
+        return result;
+    }
+
     inline bool shouldForwardSsrc(const size_t toEndpointIdHash, const uint32_t ssrc)
     {
         size_t pinnedQuality, unpinnedQuality;
@@ -373,27 +414,8 @@ public:
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
         const auto maxWantedQuality = (fromPinnedEndpoint ? pinnedQuality : unpinnedQuality);
 
-        size_t quality = highQuality;
         size_t fromEndpointId = 0;
-
-        // Find current quality.
-        const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
-        const auto midQualitySsrcsItr = _midQualitySsrcs.find(ssrc);
-        if (lowQualitySsrcsItr != _lowQualitySsrcs.end())
-        {
-            fromEndpointId = lowQualitySsrcsItr->second;
-            quality = lowQuality;
-        }
-        else if (midQualitySsrcsItr != _midQualitySsrcs.end())
-        {
-            fromEndpointId = midQualitySsrcsItr->second;
-            quality = midQuality;
-        }
-        else
-        {
-            // NOTE: fromEndpointId would be 0 for HighQuality, sice we store only low and mid quality maps.
-            quality = highQuality;
-        }
+        size_t quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
 
         // Check against max desired quality.
         bool result = false;

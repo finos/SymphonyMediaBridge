@@ -2142,7 +2142,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             continue;
         }
 
-        if (!_engineStreamDirector->shouldForwardSsrc(recordingStream->_endpointIdHash,
+        if (!_engineStreamDirector->shouldRecordSsrc(recordingStream->_endpointIdHash,
                 packetInfo.inboundContext()->_ssrc))
         {
             continue;
