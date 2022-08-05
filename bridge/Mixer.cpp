@@ -336,6 +336,12 @@ bool Mixer::addAudioStream(std::string& outId,
     auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
                                      : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
 
+    if (!transport)
+    {
+        logger::error("Failed to create transport for AudioStream with endpointId %s", _loggableId.c_str(), endpointId.c_str());
+        return false;
+    }
+
     const auto streamItr = _audioStreams.emplace(endpointId,
         std::make_unique<AudioStream>(outId, endpointId, _ssrcGenerator.next(), transport, audioMixed, rewriteSsrcs));
     if (!streamItr.second)
@@ -367,6 +373,12 @@ bool Mixer::addVideoStream(std::string& outId,
     outId = std::to_string(_idGenerator.next());
     auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
                                      : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
+
+    if (!transport)
+    {
+        logger::error("Failed to create transport for VideoStream with endpointId %s", _loggableId.c_str(), endpointId.c_str());
+        return false;
+    }
 
     const auto emplaceResult = _videoStreams.emplace(endpointId,
         std::make_unique<VideoStream>(outId, endpointId, _ssrcGenerator.next(), transport, rewriteSsrcs));
