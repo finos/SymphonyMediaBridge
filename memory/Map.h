@@ -6,6 +6,24 @@
 
 namespace memory
 {
+namespace detail
+{
+
+template<class T>
+std::enable_if_t<std::is_pointer<std::decay_t<T>>::value, T>
+pointer(T&& value)
+{
+    return value;
+}
+
+template<class T>
+std::enable_if_t<!std::is_pointer<std::decay_t<T>>::value, T*>
+pointer(T&& value)
+{
+    return &value;
+}
+
+} // namespace detail
 
 /**
  * Heap free Map, completely stored on stack.
@@ -15,6 +33,8 @@ namespace memory
 template <typename KeyT, typename T, uint32_t SIZE>
 class Map
 {
+    using pointer_t = std::conditional_t<std::is_pointer<T>::value, T, T*>;
+
     struct ElementEntry
     {
         std::pair<KeyT, T> keyValue;
@@ -253,24 +273,12 @@ public:
     iterator begin() { return iterator(cbegin()); }
     iterator end() { return iterator(_elements.data(), _end, _end); }
 
-    template <typename TypeName = T>
-    TypeName getItem(const KeyT& key, typename std::enable_if<std::is_pointer<TypeName>::value>::type* = nullptr)
+    pointer_t getItem(const KeyT& key)
     {
         auto it = find(key);
         if (it != end())
         {
-            return it->second;
-        }
-        return nullptr;
-    }
-
-    template <typename TypeName = T>
-    TypeName* getItem(const KeyT& key, typename std::enable_if<!std::is_pointer<TypeName>::value>::type* = nullptr)
-    {
-        auto it = find(key);
-        if (it != end())
-        {
-            return &it->second;
+            return detail::pointer(it->second);
         }
         return nullptr;
     }
