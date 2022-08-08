@@ -107,7 +107,9 @@ TEST(Map, getItemConstShouldReturnPointerToMutableType)
     const auto constMap1 = Map<int, int, 256>();
     const auto constMap2 = Map<int, int*, 256>();
 
+    ASSERT_EQ(true, std::is_pointer<decltype(constMap1.getItem(0))>::value);
     ASSERT_EQ(false, std::is_const<std::remove_pointer_t<decltype(constMap1.getItem(0))>>::value);
+    ASSERT_EQ(true, std::is_pointer<decltype(constMap2.getItem(0))>::value);
     ASSERT_EQ(false, std::is_const<std::remove_pointer_t<decltype(constMap2.getItem(0))>>::value);
 }
 
@@ -115,5 +117,6 @@ TEST(Map, getItemConstShouldReturnPointerToImmutableType)
 {
     const auto constMap = Map<int, const int*, 256>();
 
+    ASSERT_EQ(true, std::is_pointer<decltype(constMap.getItem(0))>::value);
     ASSERT_EQ(true, std::is_const<std::remove_pointer_t<decltype(constMap.getItem(0))>>::value);
 }
