@@ -428,6 +428,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/googletest-src ${CMAKE_CURRENT_BINARY_DIR}/googletest-build EXCLUDE_FROM_ALL)
 
 set(TEST_FILES
+    test/memory/MapTest.cpp
     test/memory/PoolAllocatorTest.cpp
     test/memory/RingAllocatorTest.cpp
     test/utils/StringTokenizerTest.cpp
