@@ -120,3 +120,16 @@ TEST(Map, getItemConstShouldReturnPointerToImmutableType)
     ASSERT_EQ(true, std::is_pointer<decltype(constMap.getItem(0))>::value);
     ASSERT_EQ(true, std::is_const<std::remove_pointer_t<decltype(constMap.getItem(0))>>::value);
 }
+
+TEST(Map, getItemShouldNotReturnPointerToPointer)
+{
+    auto map = Map<int, int*, 256>();
+    const auto constMap = Map<int, int*, 256>();
+
+    ASSERT_EQ(true, std::is_pointer<decltype(map.getItem(0))>::value);
+    ASSERT_EQ(true, std::is_pointer<decltype(constMap.getItem(0))>::value);
+
+    // If return pointer to pointer. is_pointer would return true after call remove_ptr.
+    ASSERT_EQ(false, std::is_pointer<std::remove_pointer_t<decltype(map.getItem(0))>>::value);
+    ASSERT_EQ(false, std::is_pointer<std::remove_pointer_t<decltype(constMap.getItem(0))>>::value);
+}
