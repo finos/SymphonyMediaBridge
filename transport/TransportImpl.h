@@ -172,6 +172,7 @@ public: // Transport
     void runTick(uint64_t timestamp) override;
     ice::IceSession::State getIceState() const override { return _iceState; };
     SrtpClient::State getDtlsState() const override { return _dtlsState; };
+    utils::Optional<ice::TransportType> getSelectedTransportType() const override { return _transportType.load(); }
 
 public: // SslWriteBioListener
     // Called from Transport serial thread
@@ -413,6 +414,7 @@ private:
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
     std::atomic<ice::IceSession::State> _iceState;
     std::atomic<SrtpClient::State> _dtlsState;
+    std::atomic<utils::Optional<ice::TransportType>> _transportType;
 #ifdef DEBUG
 public:
     concurrency::MutexGuard _singleThreadMutex;

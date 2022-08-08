@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/EngineStats.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
@@ -11,7 +12,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <unordered_set>
+#include <map>
 #include <utility>
 #include <vector>
 
@@ -120,7 +121,9 @@ public:
     memory::PacketPoolAllocator& getSendAllocator() { return _sendAllocator; }
     memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
     size_t getDominantSpeakerId() const;
-    std::unordered_set<size_t> getActiveTalkers() const;
+    std::map<size_t, ActiveTalker> getActiveTalkers() const;
+    utils::Optional<uint32_t> getUserId(const size_t ssrc) const;
+    void mapSsrc2UserId(uint32_t ssrc, uint32_t usid);
 
     /**
      * Discard incoming packets in queues when engine no longer serves this mixer to ensure decrement of ref counts.
@@ -307,6 +310,7 @@ private:
     concurrency::MpmcHashmap32<size_t, EngineBarbell*> _engineBarbells;
 
     concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext> _ssrcInboundContexts;
+    concurrency::MpmcHashmap32<uint32_t, uint32_t> _audioSsrcToUserIdMap;
 
     uint32_t _localVideoSsrc;
 

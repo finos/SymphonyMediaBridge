@@ -171,6 +171,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _engineRecordingStreams(maxRecordingStreams),
       _engineBarbells(16),
       _ssrcInboundContexts(maxSsrcs),
+      _audioSsrcToUserIdMap(ActiveMediaList::maxParticipants),
       _localVideoSsrc(localVideoSsrc),
       _rtpTimestampSource(1000),
       _sendAllocator(sendAllocator),
@@ -3324,8 +3325,24 @@ size_t EngineMixer::getDominantSpeakerId() const
     return _activeMediaList->getDominantSpeaker();
 }
 
-std::unordered_set<size_t> EngineMixer::getActiveTalkers() const
+std::map<size_t, ActiveTalker> EngineMixer::getActiveTalkers() const
 {
     return _activeMediaList->getActiveTalkers();
 }
+
+utils::Optional<uint32_t> EngineMixer::getUserId(const size_t ssrc) const
+{
+    const auto it = _audioSsrcToUserIdMap.find(ssrc);
+    if (it != _audioSsrcToUserIdMap.end())
+    {
+        return utils::Optional<uint32_t>(it->second);
+    }
+    return utils::Optional<uint32_t>();
+}
+
+void EngineMixer::mapSsrc2UserId(uint32_t ssrc, uint32_t usid)
+{
+    _audioSsrcToUserIdMap.emplace(ssrc, usid);
+}
+
 } // namespace bridge

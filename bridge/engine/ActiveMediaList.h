@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "concurrency/MpmcHashmap.h"
@@ -10,7 +11,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <unordered_set>
+#include <map>
 #include <vector>
 
 namespace utils
@@ -54,21 +55,19 @@ public:
      * @param level dBov levels adjusted to [0 .... 127] scale with 127 representing the highest volume (0 dBov) and
      * 0 representing lowest volume (-127 dBov)
      */
-    inline void onNewAudioLevel(const size_t endpointIdHash, const uint8_t level)
+    inline void onNewAudioLevel(const size_t endpointIdHash, const uint8_t level, bool ptt)
     {
         if (level < 128)
         {
-            _incomingAudioLevels.push({endpointIdHash, (uint8_t)(127 - level)});
+            _incomingAudioLevels.push({endpointIdHash, (uint8_t)(127 - level), ptt});
         }
     }
-
-    void onNewPtt(const size_t endpointIdHash, bool isPtt);
 
     void process(const uint64_t timestampMs, bool& outDominantSpeakerChanged, bool& outUserMediaMapChanged);
 
     inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
 
-    const std::unordered_set<size_t> getActiveTalkers() const;
+    const std::map<size_t, ActiveTalker> getActiveTalkers() const;
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const
     {
@@ -168,13 +167,14 @@ private:
         int32_t _nonZeroLevelsShortWindow;
         float _maxRecentLevel;
         float _noiseLevel;
-        bool _isPtt;
+        bool _ptt;
     };
 
     struct AudioLevelEntry
     {
         size_t _participant;
         uint8_t _level;
+        bool _ptt;
     };
 
     struct VideoParticipant
@@ -207,7 +207,7 @@ private:
     template <size_t MAX_SIZE>
     struct ActiveTalkersSnapshot
     {
-        std::array<size_t, MAX_SIZE> endpointHashIds;
+        std::array<ActiveTalker, MAX_SIZE> activeTalker;
         static const size_t maxSize = MAX_SIZE;
         size_t count = 0;
     };
@@ -243,11 +243,10 @@ private:
     uint64_t _lastRunTimestampMs;
     uint64_t _lastChangeTimestampMs;
 
-    size_t rankSpeakers(float& currentDominantSpeakerScore, TActiveTalkersSnapshot& out);
+    size_t rankSpeakers(float& currentDominantSpeakerScore);
     void updateLevels(const uint64_t timestampMs);
     void updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
-    std::atomic_bool _c9_conference;
 };
 
 } // namespace bridge

@@ -223,15 +223,24 @@ nlohmann::json generateConferenceEndpoint(const ConferenceEndpoint& endpoint)
     jsonEndpoint.emplace("isActiveTalker", endpoint.isActiveTalker);
     jsonEndpoint.emplace("iceState", api::utils::toString(endpoint.iceState));
     jsonEndpoint.emplace("dtlsState", api::utils::toString(endpoint.dtlsState));
+
+    if (endpoint.isActiveTalker)
+    {
+        nlohmann::json activeTalkerInfo = nlohmann::json::object();
+        activeTalkerInfo.emplace("ptt", endpoint.activeTalkerInfo.isPtt);
+        activeTalkerInfo.emplace("score", endpoint.activeTalkerInfo.score);
+        activeTalkerInfo.emplace("noiseLevel", endpoint.activeTalkerInfo.noiseLevel);
+        jsonEndpoint.emplace("ActiveTalker", activeTalkerInfo);
+    }
     return jsonEndpoint;
 }
 
 nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtendedInfo& endpoint)
 {
-    nlohmann::json jsonEndpoint = generateConferenceEndpoint(endpoint);
+    nlohmann::json jsonEndpoint = generateConferenceEndpoint(endpoint.basicEndpointInfo);
     {
         nlohmann::json fiveTuple = nlohmann::json::object();
-        fiveTuple.emplace("localIP", endpoint.localIp);
+        fiveTuple.emplace("localIP", endpoint.localIP);
         fiveTuple.emplace("localPort", endpoint.localPort);
         fiveTuple.emplace("protocol", endpoint.protocol);
         fiveTuple.emplace("remoteIP", endpoint.remoteIP);
@@ -242,11 +251,16 @@ nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtend
         nlohmann::json ssrcMap = nlohmann::json::array();
         {
             nlohmann::json ssrcMsid = nlohmann::json::object();
-            assert(endpoint.ssrc.length() > 0);
-            ssrcMsid.emplace(endpoint.ssrc, endpoint.msid);
+            if (endpoint.userId.isSet())
+            {
+                nlohmann::json ssrcs = nlohmann::json::object();
+                ssrcs.emplace("ssrcOriginal", endpoint.ssrcOriginal);
+                ssrcs.emplace("ssrcRewritten", endpoint.ssrcRewritten);
+                ssrcMsid.emplace(std::to_string(endpoint.userId.get()), ssrcs);
+            }
             ssrcMap.push_back(ssrcMsid);
         }
-        jsonEndpoint.emplace("audioSsrcMap", ssrcMap);
+        jsonEndpoint.emplace("audioUserIdToSsrcMap", ssrcMap);
     }
     return jsonEndpoint;
 }

@@ -2,12 +2,14 @@
 
 #include "bridge/Barbell.h"
 #include "bridge/RecordingStream.h"
+#include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
 #include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -215,11 +217,11 @@ public:
 
     bool getEndpointInfo(const std::string& endpointId,
         api::ConferenceEndpoint&,
-        const std::unordered_set<size_t>& activeTalkers);
+        const std::map<size_t, ActiveTalker>& activeTalkers);
     bool getEndpointExtendedInfo(const std::string& endpointId,
         api::ConferenceEndpointExtendedInfo&,
-        const std::unordered_set<size_t>& activeTalkers);
-    std::unordered_set<size_t> getActiveTalkers();
+        const std::map<size_t, ActiveTalker>& activeTalkers);
+    std::map<size_t, ActiveTalker> getActiveTalkers();
     bool getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
     bool getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
     bool getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription);

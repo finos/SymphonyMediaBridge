@@ -17,6 +17,7 @@
 #include "jobmanager/JobManager.h"
 #include "logger/Logger.h"
 #include "transport/TransportFactory.h"
+#include "transport/ice/IceCandidate.h"
 #include "utils/IdGenerator.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
@@ -768,14 +769,14 @@ std::unordered_set<std::string> Mixer::getEndpoints() const
     return endpoints;
 }
 
-std::unordered_set<size_t> Mixer::getActiveTalkers()
+std::map<size_t, ActiveTalker> Mixer::getActiveTalkers()
 {
     return _engineMixer.getActiveTalkers();
 }
 
 bool Mixer::getEndpointInfo(const std::string& endpointId,
     api::ConferenceEndpoint& endpoint,
-    const std::unordered_set<size_t>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
@@ -789,10 +790,21 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
         {
             foundAudio = true;
             endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
-            endpoint.isActiveTalker = activeTalkers.find(audio->second->endpointIdHash) != activeTalkers.end();
             auto transport = audio->second->transport;
             endpoint.iceState = transport->getIceState();
             endpoint.dtlsState = transport->getDtlsState();
+
+            auto const& it = activeTalkers.find(audio->second->endpointIdHash);
+            endpoint.isActiveTalker = it != activeTalkers.end();
+
+            if (it != activeTalkers.end())
+            {
+                assert(endpoint.isActiveTalker == true);
+                endpoint.activeTalkerInfo.endpointHashId = it->second.endpointHashId;
+                endpoint.activeTalkerInfo.isPtt = it->second.isPtt;
+                endpoint.activeTalkerInfo.score = it->second.score;
+                endpoint.activeTalkerInfo.noiseLevel = it->second.noiseLevel;
+            }
         }
     }
 
@@ -801,14 +813,31 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
 
 bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     api::ConferenceEndpointExtendedInfo& endpoint,
-    const std::unordered_set<size_t>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers)
 {
-    if (!getEndpointInfo(endpointId, endpoint, activeTalkers))
+    if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
+    {
         return false;
+    }
 
     const auto audio = _audioStreams.find(endpointId);
     const auto transport = audio->second->transport;
-    // transport->getRemotePeer().
+    const auto& remoteSsrc = audio->second->remoteSsrc;
+    if (remoteSsrc.isSet())
+    {
+        endpoint.userId = _engineMixer.getUserId(remoteSsrc.get());
+        endpoint.ssrcOriginal = remoteSsrc.get();
+        endpoint.ssrcRewritten = audio->second->localSsrc;
+    }
+
+    auto remote = transport->getRemotePeer();
+    endpoint.remotePort = remote.getPort();
+    endpoint.remoteIP = remote.ipToString();
+    endpoint.localIP = transport->getLocalRtpPort().ipToString();
+    endpoint.localPort = transport->getLocalRtpPort().getPort();
+    auto transportType = transport->getSelectedTransportType();
+    endpoint.protocol = (transportType.isSet() ? ice::toString(transportType.get()) : "n/a");
+
     return true;
 }
 

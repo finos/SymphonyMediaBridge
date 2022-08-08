@@ -2047,6 +2047,8 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                 _peerRtpPort = candidatePair.second.address;
                 _peerRtcpPort = candidatePair.second.address;
 
+                _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
+
                 logger::info("candidate selected %s %s, %s",
                     _loggableId.c_str(),
                     _peerRtpPort.getFamilyString().c_str(),

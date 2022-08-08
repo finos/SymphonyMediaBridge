@@ -517,6 +517,35 @@ std::vector<ConferenceEndpoint> parseConferenceEndpoints(const nlohmann::json& r
     return endpoints;
 }
 
+ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& data)
+{
+    ConferenceEndpointExtendedInfo endpoint;
+    endpoint.basicEndpointInfo = parseConferenceEndpoint(data);
+    nlohmann::json iceSelectedTuple = nlohmann::json::object();
+
+    setIfExistsOrThrow<>(iceSelectedTuple, data, "iceSelectedTuple");
+    setIfExistsOrThrow<>(endpoint.localIP, iceSelectedTuple, "localIP");
+    setIfExistsOrThrow<>(endpoint.remoteIP, iceSelectedTuple, "remoteIP");
+    setIfExistsOrThrow<>(endpoint.localPort, iceSelectedTuple, "localPort");
+    setIfExistsOrThrow<>(endpoint.remotePort, iceSelectedTuple, "remotePort");
+    setIfExistsOrThrow<>(endpoint.protocol, iceSelectedTuple, "protocol");
+
+    for (const auto& it : requiredJsonArray(data, "audioUserIdToSsrcMap"))
+    {
+        for (const auto& inner : it.items())
+        {
+            const auto& userId = inner.key();
+            assert(inner.value().is_object());
+
+            setIfExistsOrThrow(endpoint.ssrcOriginal, inner.value(), "ssrcOriginal");
+            setIfExistsOrThrow(endpoint.ssrcRewritten, inner.value(), "ssrcRewritten");
+            endpoint.userId.set(std::stoul(userId));
+            break;
+        }
+    }
+    return endpoint;
+}
+
 } // namespace Parser
 
 } // namespace api

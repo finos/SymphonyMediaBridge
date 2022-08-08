@@ -217,6 +217,23 @@ std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(const char* base
     return api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
 }
 
+api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(const char* baseUrl, const std::string& endpointId)
+{
+    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+    confRequest.awaitResponse(500 * utils::Time::ms);
+    EXPECT_TRUE(confRequest.isSuccess());
+
+    EXPECT_TRUE(confRequest.getJsonBody().is_array());
+    std::vector<std::string> confIds;
+    confRequest.getJsonBody().get_to(confIds);
+
+    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0] + "/" + endpointId).c_str());
+    endpointRequest.awaitResponse(50000 * utils::Time::ms);
+    EXPECT_TRUE(endpointRequest.isSuccess());
+
+    return api::Parser::parseEndpointExtendedInfo(endpointRequest.getJsonBody());
+}
+
 bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint)
 {
     auto it = std::find_if(endpoints.cbegin(), endpoints.cend(), [&endpoint](const api::ConferenceEndpoint& e) {
@@ -1094,6 +1111,12 @@ TEST_F(IntegrationTest, detectIsPtt)
     client2._audioSource->setVolume(0.6);
     client3._audioSource->setVolume(0.6);
 
+    // Disable audio level extension, otherwise constant signal will lead to the 'noise leve' equal to the signal and
+    // detection would fail
+    client1._audioSource->setUseAudioLevel(false);
+    client2._audioSource->setUseAudioLevel(false);
+    client3._audioSource->setUseAudioLevel(false);
+
     // =============================== PART 1: #1 & #2 talking ====================
 
     client1._audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
@@ -1108,6 +1131,19 @@ TEST_F(IntegrationTest, detectIsPtt)
     EXPECT_TRUE(isActiveTalker(endpoints, client1._channel.getEndpointId()));
     EXPECT_TRUE(isActiveTalker(endpoints, client2._channel.getEndpointId()));
     EXPECT_FALSE(isActiveTalker(endpoints, client3._channel.getEndpointId()));
+
+    auto endpointExtendedInfo = getEndpointExtendedInfo(baseUrl, endpoints[0].id);
+
+    EXPECT_EQ(endpoints[0], endpointExtendedInfo.basicEndpointInfo);
+    EXPECT_EQ(10000, endpointExtendedInfo.localPort);
+
+    // We construct pseudo-usid from ssrc, so we can check it here.
+    auto expectedUsid = __builtin_bswap32(endpointExtendedInfo.ssrcOriginal << 8);
+    EXPECT_TRUE(1 << 24 > endpointExtendedInfo.userId.get());
+    EXPECT_EQ(expectedUsid, endpointExtendedInfo.userId.get());
+    EXPECT_EQ(endpointExtendedInfo.ssrcOriginal, client1._audioSource->getSsrc());
+    EXPECT_NE(endpointExtendedInfo.ssrcOriginal, endpointExtendedInfo.ssrcRewritten);
+    EXPECT_TRUE(endpointExtendedInfo.ssrcRewritten != 0);
 
     // =============================== PART 2: #2 talking =========================
 
