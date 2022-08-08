@@ -11,14 +11,14 @@ namespace detail
 
 template<class T>
 std::enable_if_t<std::is_pointer<std::decay_t<T>>::value, T>
-pointer(T&& value)
+pointerOf(T&& value)
 {
     return value;
 }
 
 template<class T>
 std::enable_if_t<!std::is_pointer<std::decay_t<T>>::value, T*>
-pointer(T&& value)
+pointerOf(T&& value)
 {
     return &value;
 }
@@ -33,7 +33,7 @@ pointer(T&& value)
 template <typename KeyT, typename T, uint32_t SIZE>
 class Map
 {
-    using pointer_t = std::conditional_t<std::is_pointer<T>::value, T, T*>;
+    using PointerType = std::conditional_t<std::is_pointer<T>::value, T, T*>;
 
     struct ElementEntry
     {
@@ -273,26 +273,17 @@ public:
     iterator begin() { return iterator(cbegin()); }
     iterator end() { return iterator(_elements.data(), _end, _end); }
 
-    pointer_t getItem(const KeyT& key)
+    PointerType getItem(const KeyT& key)
     {
         auto it = find(key);
         if (it != end())
         {
-            return detail::pointer(it->second);
+            return detail::pointerOf(it->second);
         }
         return nullptr;
     }
 
-    template <typename TypeName = T>
-    const TypeName getItem(const KeyT& key,
-        typename std::enable_if<std::is_pointer<TypeName>::value>::type* = nullptr) const
-    {
-        return const_cast<Map<KeyT, T, SIZE>&>(*this).getItem(key);
-    }
-
-    template <typename TypeName = T>
-    const TypeName* getItem(const KeyT& key,
-        typename std::enable_if<!std::is_pointer<TypeName>::value>::type* = nullptr) const
+    const PointerType getItem(const KeyT& key) const
     {
         return const_cast<Map<KeyT, T, SIZE>&>(*this).getItem(key);
     }
