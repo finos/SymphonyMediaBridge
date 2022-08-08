@@ -873,6 +873,11 @@ private:
         int bestConfigId = 0;
         unsigned long bestConfigCost = 0;
         int configId = 0;
+
+        const auto estimatedUplinkBandwidth =
+            (participantStreams._estimatedUplinkBandwidth != 0 ? participantStreams._estimatedUplinkBandwidth
+                                                               : _maxDefaultLevelBandwidthKbps);
+
         for (const auto& config : configLadder)
         {
             const auto configCost = config[(int)ConfigLadderCols::BasicCost] +
@@ -881,7 +886,7 @@ private:
             assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity]);
             assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity]);
 
-            if (configCost >= bestConfigCost && configCost <= participantStreams._estimatedUplinkBandwidth)
+            if (configCost >= bestConfigCost && configCost <= estimatedUplinkBandwidth)
             {
                 bestConfigCost = configCost;
                 bestConfigId = configId;
