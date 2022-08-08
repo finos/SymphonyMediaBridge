@@ -114,6 +114,7 @@ set(FILES
         bridge/MixerManager.cpp
         bridge/MixerManager.h
         bridge/RequestLogger.h
+        bridge/RequestLogger.cpp
         bridge/RtpMap.h
         bridge/Stats.cpp
         bridge/Stats.h
