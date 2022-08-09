@@ -376,7 +376,8 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
 
         for (const auto& stream : optionalJsonArray(videoJson, "streams"))
         {
-            api::EndpointDescription::VideoStream videoStream;
+            videoChannel.streams.emplace_back();
+            auto& videoStream = videoChannel.streams.back();
             for (const auto& rtpSource : requiredJsonArray(stream, "sources"))
             {
                 api::EndpointDescription::VideoStream::Level level;
