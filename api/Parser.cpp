@@ -217,17 +217,7 @@ api::EndpointDescription::PayloadType parsePatchEndpointPayloadType(const nlohma
     payloadType._id = data["id"].get<uint32_t>();
     payloadType._name = data["name"].get<std::string>();
 
-    {
-        const auto& clockRate = data["clockrate"];
-        if (clockRate.is_string())
-        {
-            payloadType._clockRate = std::stoul(data["clockrate"].get<std::string>());
-        }
-        else
-        {
-            payloadType._clockRate = data["clockrate"].get<uint32_t>();
-        }
-    }
+    payloadType._clockRate = data["clockrate"].get<uint32_t>();
 
     setIfExists(payloadType._channels, data, "channels");
 
@@ -329,7 +319,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
 
         for (const auto& ssrcJson : optionalJsonArray(audioJson, "ssrcs"))
         {
-            const auto ssrc = ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+            const auto ssrc = ssrcJson.get<uint32_t>();
             audioChannel._ssrcs.push_back(ssrc);
         }
 
@@ -381,13 +371,8 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             for (const auto& rtpSource : requiredJsonArray(stream, "sources"))
             {
                 api::EndpointDescription::VideoStream::Level level;
-                const auto& main = rtpSource["main"];
-                level.main = (main.is_string() ? std::stoul(main.get<std::string>()) : main.get<uint32_t>());
-                const auto feedbackIt = rtpSource.find("feedback");
-                if (feedbackIt != rtpSource.end())
-                {
-                    level.feedback = (feedbackIt->is_string() ? std::stoul(feedbackIt->get<std::string>()) : feedbackIt->get<uint32_t>());
-                }
+                level.main = rtpSource["main"].get<uint32_t>();
+                setIfExists(level.feedback, rtpSource, "feedback");
                 videoStream.sources.push_back(level);
             }
             videoStream.content = stream["content"];
@@ -398,8 +383,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             std::vector<uint32_t> ssrcWhitelist;
             for (const auto& ssrcJson : videoJson["ssrc-whitelist"])
             {
-                const auto ssrc =
-                    ssrcJson.is_string() ? std::stoul(ssrcJson.get<std::string>()) : ssrcJson.get<uint32_t>();
+                const auto ssrc = ssrcJson.get<uint32_t>();
                 ssrcWhitelist.push_back(ssrc);
             }
             videoChannel.ssrcWhitelist.set(std::move(ssrcWhitelist));
@@ -413,7 +397,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
         api::EndpointDescription::Data dataChannel;
         const auto& dataJson = data["data"];
         const auto& portJson = dataJson["port"];
-        dataChannel._port = portJson.is_string() ? std::stoul(portJson.get<std::string>()) : portJson.get<uint32_t>();
+        dataChannel._port = portJson.get<uint32_t>();
         endpointDescription._data.set(dataChannel);
     }
 
