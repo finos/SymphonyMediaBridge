@@ -174,7 +174,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
         auto payloadTypes = json::array();
         payloadTypes.push_back(json::object({{"id", 100},
             {"name", "VP8"},
-            {"clockrate", "90000"},
+            {"clockrate", 90000},
             {"parameters", json::object()},
             {"rtcp-fbs",
                 json::array({{{"type", "goog-remb"}},
@@ -184,7 +184,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
         payloadTypes.push_back(json::object({{"id", 96},
             {"name", "rtx"},
-            {"clockrate", "90000"},
+            {"clockrate", 90000},
             {"rtcp-fbs", json::array()},
             {"parameters", {{"apt", "100"}}}}));
 
