@@ -262,6 +262,8 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDes
                 stream.content.c_str(),
                 endpointId.c_str());
         }
+
+        simulcastStreams.push_back(simulcastStream);
     }
 
     if (simulcastStreams.size() > 2)
