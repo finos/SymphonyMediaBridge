@@ -380,8 +380,13 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             for (const auto& rtpSource : requiredJsonArray(stream, "sources"))
             {
                 api::EndpointDescription::VideoStream::Level level;
-                level.main = rtpSource["main"].get<uint32_t>();
-                setIfExists(level.feedback, rtpSource, "feedback");
+                const auto& main = rtpSource["main"];
+                level.main = (main.is_string() ? std::stoul(main.get<std::string>()) : main.get<uint32_t>());
+                const auto feedbackIt = rtpSource.find("feedback");
+                if (feedbackIt != rtpSource.end())
+                {
+                    level.feedback = (feedbackIt->is_string() ? std::stoul(feedbackIt->get<std::string>()) : feedbackIt->get<uint32_t>());
+                }
                 videoStream.sources.push_back(level);
             }
             videoStream.content = stream["content"];
