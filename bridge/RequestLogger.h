@@ -15,8 +15,6 @@ namespace bridge
 
 class RequestLogger
 {
-    const static std::vector<std::string> kLogFilter;
-
 public:
     RequestLogger(const httpd::Request& request, std::atomic<uint32_t>& lastAutoRequestId)
         : _request(request),
@@ -68,7 +66,7 @@ public:
 private:
     bool shouldLog(const std::string& uri)
     {
-        return kLogFilter.end() == (std::find_if(kLogFilter.begin(), kLogFilter.end(),
+        return _logFilter.end() == (std::find_if(_logFilter.begin(), _logFilter.end(),
                 [&uri] (const auto& f) { return utils::startsWith(f, uri); }));
     }
 
@@ -77,6 +75,8 @@ private:
     std::string _requestId;
     std::string _errorMessages;
     uint32_t _responseStatusCode;
+
+    const static std::vector<std::string> _logFilter;
 };
 
 } // namespace bridge
