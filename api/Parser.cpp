@@ -498,7 +498,7 @@ std::vector<ConferenceEndpoint> parseConferenceEndpoints(const nlohmann::json& r
         }
         catch (...)
         {
-            // do nothng
+            // do nothing
         }
     }
     return endpoints;
