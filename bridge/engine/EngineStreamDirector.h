@@ -29,6 +29,7 @@ public:
         utils::Optional<SimulcastStream> _secondary;
         size_t _highestEstimatedPinnedLevel;
         size_t _desiredHighestEstimatedPinnedLevel;
+        size_t _desiredUnpinnedLevel;
         uint64_t _lowEstimateTimestamp;
         /** Min of incoming estimate and EngineStreamDirector::_maxDefaultLevelBandwidthKbps */
         uint32_t _defaultLevelBandwidthLimit;
@@ -251,8 +252,12 @@ public:
         participantStream._defaultLevelBandwidthLimit = std::min(uplinkEstimateKbps, _maxDefaultLevelBandwidthKbps);
         participantStream._estimatedUplinkBandwidth =
             std::max(uplinkEstimateKbps, participantStream._defaultLevelBandwidthLimit);
-        participantStream._desiredHighestEstimatedPinnedLevel =
-            bwe::BandwidthUtils::calcPinnedHighestSimulcastLevel(lowQuality, _bandwidthFloor, uplinkEstimateKbps);
+
+        size_t pinnedQuality, unpinnedQuality;
+        getVideoQualityLimits(participantStream, pinnedQuality, unpinnedQuality);
+
+        participantStream._desiredHighestEstimatedPinnedLevel = pinnedQuality;
+        participantStream._desiredUnpinnedLevel = unpinnedQuality;
 
         if (participantStream._desiredHighestEstimatedPinnedLevel == participantStream._highestEstimatedPinnedLevel)
         {
@@ -309,24 +314,48 @@ public:
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
-        if (isUnpinnedQualityUsed(ssrc, senderEndpointIdHash, isSenderInLastNList))
+        size_t quality = _lowQualitySsrcs.contains(ssrc) ? lowQuality
+            : _midQualitySsrcs.contains(ssrc)            ? midQuality
+                                                         : highQuality;
+
+        // We server low and mid for unpinned according to the ConfigLadder.
+        if (highQuality != quality && isUnpinnedQualityUsed(quality, senderEndpointIdHash, isSenderInLastNList))
         {
             DIRECTOR_LOG("isSsrcUsed, %u default", "EngineStreamDirector", ssrc);
             return true;
         }
 
+        // Pinned endpoint, cold be served in ANY quality, depending on the estimated bandwidth.
         const auto reversePinMapItr = _reversePinMap.find(senderEndpointIdHash);
         if (reversePinMapItr != _reversePinMap.end() && reversePinMapItr->second == 0)
         {
+            // This participant used to be pinned, but is no more.
             return false;
         }
 
+        // Find who pinned this sender, and which quality does it want.
         for (const auto& pinMapEntry : _pinMap)
         {
-            if (isParticipantHighestActiveQuality(pinMapEntry.second, pinMapEntry.first, ssrc))
+            auto const& pinnedBy = pinMapEntry.first;
+            auto const& sender = pinMapEntry.second;
+            if (pinnedBy == senderEndpointIdHash || sender != senderEndpointIdHash)
             {
-                DIRECTOR_LOG("isSsrcUsed, %u pinned high", "EngineStreamDirector", ssrc);
-                return true;
+                continue;
+            }
+
+            const auto& participant = _participantStreams.find(pinnedBy);
+            if (participant != _participantStreams.end())
+            {
+                if (participant->second._desiredHighestEstimatedPinnedLevel == quality)
+                {
+                    DIRECTOR_LOG("isSsrcUsed, %u pinned %s",
+                        "EngineStreamDirector",
+                        ssrc,
+                        lowQuality == quality       ? "low"
+                            : midQuality == quality ? "mid"
+                                                    : high);
+                    return true;
+                }
             }
         }
 
@@ -384,7 +413,6 @@ public:
 
     inline bool shouldForwardSsrc(const size_t toEndpointIdHash, const uint32_t ssrc)
     {
-        size_t pinnedQuality, unpinnedQuality;
         const auto viewedByParticipantStreamItr = _participantStreams.find(toEndpointIdHash);
 
         if (viewedByParticipantStreamItr == _participantStreams.end())
@@ -401,8 +429,6 @@ public:
             return false;
         }
 
-        getVideoQualityLimits(viewedByParticipantStreamItr->second, pinnedQuality, unpinnedQuality);
-
         DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: max pinned quality: %d, max unpinned quality: %d",
             "EngineStreamDirector",
             toEndpointIdHash,
@@ -412,7 +438,9 @@ public:
 
         const auto pinMapItr = _pinMap.find(toEndpointIdHash);
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
-        const auto maxWantedQuality = (fromPinnedEndpoint ? pinnedQuality : unpinnedQuality);
+        const auto maxWantedQuality =
+            (fromPinnedEndpoint ? viewedByParticipantStreamItr->second._desiredHighestEstimatedPinnedLevel
+                                : viewedByParticipantStreamItr->second._desiredUnpinnedLevel);
 
         size_t fromEndpointId = 0;
         size_t quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
@@ -436,6 +464,19 @@ public:
             assert(quality != highQuality);
             result = quality == getParticipantHighestActiveQuality(fromEndpointId, ssrc);
         }
+
+        const auto phaq = getParticipantHighestActiveQuality(fromEndpointId, ssrc);
+
+        logger::info("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
+                     "wantQ %lu, pinned %c",
+            "EngineStreamDirector",
+            toEndpointIdHash,
+            ssrc,
+            result ? 't' : 'f',
+            quality,
+            phaq,
+            maxWantedQuality,
+            fromPinnedEndpoint ? 't' : 'f');
 
         DIRECTOR_LOG(
             "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, current quality %lu, "
@@ -620,43 +661,6 @@ private:
     /** Max number of the video streams forwarded to any particular endpoint. */
     uint32_t _lastN;
 
-    inline bool isParticipantHighestActiveQuality(const size_t endpointIdHash,
-        const size_t viewedByEndpointIdHash,
-        const uint32_t ssrc)
-    {
-        const auto participantStreamsItr = _participantStreams.find(endpointIdHash);
-        const auto viewedByParticipantStreamsItr = _participantStreams.find(viewedByEndpointIdHash);
-        if (participantStreamsItr == _participantStreams.end() ||
-            viewedByParticipantStreamsItr == _participantStreams.end())
-        {
-            return false;
-        }
-
-        auto& participantStreams = participantStreamsItr->second;
-        const auto& primary = participantStreams._primary;
-        auto& secondary = participantStreams._secondary;
-        const auto& viewedByParticipantStreams = viewedByParticipantStreamsItr->second;
-
-        const auto primaryDesiredLevel =
-            std::min(viewedByParticipantStreams._highestEstimatedPinnedLevel, primary._highestActiveLevel);
-        if (primary._numLevels > 0 && ssrc == primary._levels[primaryDesiredLevel]._ssrc)
-        {
-            return true;
-        }
-
-        if (secondary.isSet())
-        {
-            const auto secondaryDesiredLevel =
-                std::min(viewedByParticipantStreams._highestEstimatedPinnedLevel, secondary.get()._highestActiveLevel);
-            if (ssrc == secondary.get()._levels[secondaryDesiredLevel]._ssrc)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     inline size_t getParticipantHighestActiveQuality(const size_t endpointIdHash, const uint32_t ssrc)
     {
         const auto participantStreamsItr = _participantStreams.find(endpointIdHash);
@@ -744,20 +748,6 @@ private:
         return oldHighestActiveIndex != simulcastStream._highestActiveLevel;
     }
 
-    inline bool isPinnedByAll(const size_t senderEndpointIdHash)
-    {
-        const auto reversePinMapItr = _reversePinMap.find(senderEndpointIdHash);
-        const auto numParticipants = _participantStreams.size();
-
-        if (reversePinMapItr == _reversePinMap.end() || numParticipants == 0)
-        {
-            return false;
-        }
-
-        const auto pinnedCount = reversePinMapItr->second;
-        return pinnedCount == numParticipants - 1;
-    }
-
     inline size_t unpinOldTarget(const size_t endpointIdHash, const size_t targetEndpointIdHash)
     {
         auto pinMapItr = _pinMap.find(endpointIdHash);
@@ -838,10 +828,9 @@ private:
     inline bool anyParticipantsWithoutPinTarget() const { return _participantStreams.size() != _pinMap.size(); }
 
     /**
-     * Checks for ssrcs belonging to a default level, either low quality when there are no participants
-     * without pin targets, or low and mid quality if there are participants without pin targets.
+     * Checks for ssrcs belonging to a default level if there are participants without pin targets.
      */
-    inline bool isUnpinnedQualityUsed(const uint32_t ssrc,
+    inline bool isUnpinnedQualityUsed(const uint32_t quality,
         const size_t senderEndpointIdHash,
         const bool isSenderInLastNList)
     {
@@ -852,20 +841,26 @@ private:
 
         if (anyParticipantsWithoutPinTarget())
         {
-            return _lowQualitySsrcs.contains(ssrc) || _midQualitySsrcs.contains(ssrc);
+            return true;
         }
-        else
+
+        // Unpinned, belogns to lastN and some of the participants needs this quality.
+        for (const auto& participant : _participantStreams)
         {
-            return _lowQualitySsrcs.contains(ssrc) && !isPinnedByAll(senderEndpointIdHash);
+            if (participant.first != senderEndpointIdHash && participant.second._desiredUnpinnedLevel == quality)
+            {
+                return true;
+            }
         }
+        return false;
     }
 
     inline void getVideoQualityLimits(const ParticipantStreams& participantStreams,
         size_t& outPinnedQuality,
         size_t& outUnpinnedQuality) const
     {
-        const auto numParticipants = std::max(1ul, std::min(_participantStreams.size(), (unsigned long)_lastN - 1));
-        if (numParticipants < 1)
+        const auto maxVideoStreams = std::min(std::max(1ul, _lowQualitySsrcs.size()), (unsigned long)_lastN - 1);
+        if (maxVideoStreams < 1)
         {
             return;
         }
@@ -881,7 +876,7 @@ private:
         for (const auto& config : configLadder)
         {
             const auto configCost = config[(int)ConfigLadderCols::BasicCost] +
-                numParticipants * config[(int)ConfigLadderCols::ExtraCostPerEach];
+                maxVideoStreams * config[(int)ConfigLadderCols::ExtraCostPerEach];
 
             assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity]);
             assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity]);
@@ -896,6 +891,13 @@ private:
         assert(configId == 6);
         outPinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::PinnedQuality];
         outUnpinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::UnpinnedQuality];
+
+        logger::info("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d",
+            "EngineStreamDirector",
+            (char)outPinnedQuality + '0',
+            (char)outUnpinnedQuality + '0',
+            maxVideoStreams,
+            estimatedUplinkBandwidth);
     }
 };
 

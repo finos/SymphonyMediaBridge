@@ -805,7 +805,8 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_NotInLastN_AndNotPinned_AndAllP
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(17, 3, false, 0));
 }
 
-TEST_F(EngineStreamDirectorTest, lowQualitySsrc_InLastN_AndNotPinned_AndAllParticipantsHavePinTargets_IsUsed)
+TEST_F(EngineStreamDirectorTest,
+    ssrc_InLastN_AndNotPinned_AndAllParticipantsHavePinTargets_AndOneParticipantHasLowBitrate)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
@@ -817,7 +818,10 @@ TEST_F(EngineStreamDirectorTest, lowQualitySsrc_InLastN_AndNotPinned_AndAllParti
     _engineStreamDirector->pin(3, 2);
     _engineStreamDirector->pin(4, 2);
 
+    _engineStreamDirector->setUplinkEstimateKbps(1, 400, 10 * utils::Time::sec);
+
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(13, 3, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(15, 3, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, midQualitySsrc_InLastN_AndNotPinned_AndAllParticipantsHavePinTargets_IsNotUsed)
@@ -832,7 +836,29 @@ TEST_F(EngineStreamDirectorTest, midQualitySsrc_InLastN_AndNotPinned_AndAllParti
     _engineStreamDirector->pin(3, 2);
     _engineStreamDirector->pin(4, 2);
 
+    _engineStreamDirector->setUplinkEstimateKbps(1, 400, 10 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(2, 400, 10 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(3, 400, 10 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(4, 400, 10 * utils::Time::sec);
+
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(13, 3, true, 0));
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(15, 3, true, 0));
+}
+
+TEST_F(EngineStreamDirectorTest, lowQualitySsrc_InLastN_AndNotPinned_AndAllParticipantsHavePinTargets_IsNotUsed)
+{
+    addActiveVideoSender(1, 1);
+    addActiveVideoSender(2, 7);
+    addActiveVideoSender(3, 13);
+    addActiveVideoSender(4, 19);
+
+    _engineStreamDirector->pin(1, 2);
+    _engineStreamDirector->pin(2, 1);
+    _engineStreamDirector->pin(3, 2);
+    _engineStreamDirector->pin(4, 2);
+
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(13, 3, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(15, 3, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, highQualitySsrc_InLastN_AndNotPinned_AndAllParticipantsHavePinTargets_IsNotUsed)
@@ -1172,4 +1198,20 @@ TEST_F(EngineStreamDirectorTest, midQualitySsrcs_NoPinTarget_HighBandwidth)
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 39));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 45));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 51));
+}
+
+TEST_F(EngineStreamDirectorTest, Simulation)
+{
+    addActiveVideoSender(1, 1);
+    addActiveVideoSender(2, 7);
+    addActiveVideoSender(3, 13);
+
+    _engineStreamDirector->setUplinkEstimateKbps(1, 2012, 10 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 10 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(3, 10000, 10 * utils::Time::sec);
+
+    _engineStreamDirector->pin(1, 3);
+
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 9));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 15));
 }
