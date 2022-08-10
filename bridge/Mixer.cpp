@@ -4,7 +4,7 @@
 #include "bridge/AudioStream.h"
 #include "bridge/AudioStreamDescription.h"
 #include "bridge/Barbell.h"
-#include "bridge/BarbellStreamGroupDescription.h"
+#include "bridge/BarbellVideoStreamDescription.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/VideoStreamDescription.h"
@@ -149,8 +149,8 @@ Mixer::Mixer(std::string id,
     utils::SsrcGenerator& ssrcGenerator,
     const config::Config& config,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastGroup>& videoSsrcs,
-    const std::vector<SimulcastLevel>& videoPinSsrcs)
+    const std::vector<api::SimulcastGroup>& videoSsrcs,
+    const std::vector<api::SsrcPair>& videoPinSsrcs)
     : _config(config),
       _id(std::move(id)),
       _loggableId("Mixer"),
@@ -907,30 +907,29 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStream
     outDescription = VideoStreamDescription(*streamItr->second);
     if (streamItr->second->_ssrcRewrite)
     {
-        for (auto ssrcPair : _videoSsrcs)
+        outDescription.sources.reserve(_videoSsrcs.size() + _videoPinSsrcs.size());
+        for (auto& ssrcGroup : _videoSsrcs)
         {
-            outDescription.simulcastSsrcs.push_back(ssrcPair);
+            outDescription.sources.push_back(ssrcGroup[0]);
         }
+
         for (auto ssrcPair : _videoPinSsrcs)
         {
-            outDescription.simulcastSsrcs.push_back(ssrcPair);
+            outDescription.sources.push_back(ssrcPair);
         }
     }
     return true;
 }
 
-void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellStreamGroupDescription>& outDescriptions)
+void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellVideoStreamDescription>& outDescriptions)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
     for (auto ssrcGroup : _videoSsrcs)
     {
-        bridge::BarbellStreamGroupDescription description;
-        for (size_t i = 0; i < ssrcGroup.count; ++i)
-        {
-            description.ssrcLevels.push_back({ssrcGroup.levels[i]._ssrc, ssrcGroup.levels[i]._feedbackSsrc});
-        }
-        description.slides = description.ssrcLevels.size() == 1;
+        bridge::BarbellVideoStreamDescription description;
+        description.ssrcLevels = ssrcGroup;
+        description.slides = (ssrcGroup.size() == 1);
         outDescriptions.push_back(description);
     }
 }
@@ -2366,7 +2365,7 @@ bool Mixer::configureBarbellTransport(const std::string& barbellId,
 }
 
 bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
-    const std::vector<BarbellStreamGroupDescription>& videoSsrcs,
+    const std::vector<BarbellVideoStreamDescription>& videoSsrcs,
     const std::vector<uint32_t>& audioSsrcs,
     const bridge::RtpMap& audioRtpMap,
     const bridge::RtpMap& videoRtpMap,

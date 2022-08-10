@@ -7,7 +7,7 @@ const char* EngineBarbell::barbellTag = "BB";
 
 EngineBarbell::EngineBarbell(const std::string& barbellId,
     transport::RtcTransport& rtcTransport,
-    const std::vector<BarbellStreamGroupDescription>& videoDescriptions,
+    const std::vector<BarbellVideoStreamDescription>& videoDescriptions,
     const std::vector<uint32_t>& audioSsrcs,
     RtpMap& audioRtpMap,
     RtpMap& videoRtpMap,
@@ -33,12 +33,10 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
         VideoStream videoStream;
         videoStream.stream._contentType =
             (videoGroup.slides ? SimulcastStream::VideoContentType::SLIDES : SimulcastStream::VideoContentType::VIDEO);
-        videoStream.stream._numLevels = videoGroup.ssrcLevels.size();
 
-        for (size_t i = 0; i < videoStream.stream._numLevels; ++i)
+        for (auto& ssrcPair : videoGroup.ssrcLevels)
         {
-            videoStream.stream._levels[i]._ssrc = videoGroup.ssrcLevels[i].ssrc;
-            videoStream.stream._levels[i]._feedbackSsrc = videoGroup.ssrcLevels[i].feedbackSsrc;
+            videoStream.stream._levels[videoStream.stream._numLevels++] = {ssrcPair.main, ssrcPair.feedback, false};
         }
 
         if (videoGroup.slides)
@@ -61,15 +59,17 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
     {
         for (size_t i = 0; i < videoStream.stream._numLevels; ++i)
         {
-            videoSsrcMap.emplace(videoStream.stream._levels[i]._ssrc, &videoStream);
-            videoSsrcMap.emplace(videoStream.stream._levels[i]._feedbackSsrc, &videoStream);
+            auto& ssrcPair = videoStream.stream._levels[i];
+            videoSsrcMap.emplace(ssrcPair._ssrc, &videoStream);
+            videoSsrcMap.emplace(ssrcPair._feedbackSsrc, &videoStream);
         }
     }
 
     for (size_t i = 0; i < slideStream.stream._numLevels; ++i)
     {
-        videoSsrcMap.emplace(slideStream.stream._levels[i]._ssrc, &slideStream);
-        videoSsrcMap.emplace(slideStream.stream._levels[i]._feedbackSsrc, &slideStream);
+        auto& ssrcPair = slideStream.stream._levels[i];
+        videoSsrcMap.emplace(ssrcPair._ssrc, &slideStream);
+        videoSsrcMap.emplace(ssrcPair._feedbackSsrc, &slideStream);
     }
 }
 

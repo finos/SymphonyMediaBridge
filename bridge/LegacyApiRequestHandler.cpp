@@ -834,19 +834,19 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                 channel._sources = streamDescription.getSsrcs();
                 channel._id.set(streamDescription.id);
 
-                if (!streamDescription.simulcastSsrcs.empty())
+                if (!streamDescription.sources.empty())
                 {
-                    for (auto level : streamDescription.simulcastSsrcs)
+                    for (auto level : streamDescription.sources)
                     {
                         legacyapi::SsrcGroup group;
-                        group._sources.push_back(level._ssrc);
-                        group._sources.push_back(level._feedbackSsrc);
+                        group._sources.push_back(level.main);
+                        group._sources.push_back(level.feedback);
                         group._semantics = "FID";
                         channel._ssrcGroups.push_back(group);
                     }
 
                     legacyapi::SsrcAttribute ssrcAttribute;
-                    ssrcAttribute._sources.push_back(streamDescription.simulcastSsrcs[0]._ssrc);
+                    ssrcAttribute._sources.push_back(streamDescription.sources[0].main);
                     ssrcAttribute._content = "slides";
                     channel._ssrcAttributes.push_back(ssrcAttribute);
                 }

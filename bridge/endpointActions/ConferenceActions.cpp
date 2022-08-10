@@ -166,10 +166,10 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         }
 
         size_t index = 0;
-        for (auto& level : streamDescription.simulcastSsrcs)
+        for (auto& level : streamDescription.sources)
         {
             api::EndpointDescription::VideoStream videoStream;
-            videoStream.sources.push_back({level._ssrc, level._feedbackSsrc});
+            videoStream.sources.push_back({level.main, level.feedback});
             if (index++ == 0)
             {
                 videoStream.content = "slides";

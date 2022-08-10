@@ -156,7 +156,7 @@ EngineMixer::EngineMixer(const std::string& id,
     memory::PacketPoolAllocator& sendAllocator,
     memory::AudioPacketPoolAllocator& audioAllocator,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastGroup>& videoSsrcs,
+    const std::vector<api::SimulcastGroup>& videoSsrcs,
     const uint32_t lastN)
     : _id(id),
       _loggableId("EngineMixer"),
@@ -1307,17 +1307,7 @@ utils::Optional<uint32_t> EngineMixer::findMainSsrc(size_t barbellIdHash, uint32
         return utils::Optional<uint32_t>();
     }
     auto* videoStream = videoStreamIt->second;
-
-    auto& simulcastStream = videoStream->stream;
-    for (size_t i = 0; i < simulcastStream._numLevels; ++i)
-    {
-        if (simulcastStream._levels[i]._feedbackSsrc == feedbackSsrc)
-        {
-            return utils::Optional<uint32_t>(simulcastStream._levels[i]._ssrc);
-        }
-    }
-
-    return utils::Optional<uint32_t>();
+    return videoStream->stream.getMainSsrcFor(feedbackSsrc);
 }
 
 void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
@@ -2303,7 +2293,7 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             {
                 continue;
             }
-            ssrc = rewriteMapItr->second.levels[0]._ssrc;
+            ssrc = rewriteMapItr->second[0].main; // TODO must select corresponding level for ssrc rewrite
         }
 
         auto* ssrcOutboundContext =
@@ -2407,7 +2397,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
                 {
                     continue;
                 }
-                ssrc = rewriteMapItr->second.levels[0]._ssrc;
+                ssrc = rewriteMapItr->second[0].main;
             }
         }
         else

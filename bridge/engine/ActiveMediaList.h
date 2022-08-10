@@ -1,5 +1,6 @@
 #pragma once
 
+#include "api/SimulcastGroup.h"
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/SimulcastLevel.h"
@@ -41,7 +42,7 @@ public:
 
     ActiveMediaList(size_t instanceId,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastGroup>& videoSsrcs,
+        const std::vector<api::SimulcastGroup>& videoSsrcs,
         const uint32_t defaultLastN,
         uint32_t audioLastN,
         uint32_t activeTalkerSilenceThresholdDb);
@@ -85,7 +86,7 @@ public:
         return _audioSsrcRewriteMap;
     }
 
-    inline const concurrency::MpmcHashmap32<size_t, SimulcastGroup>& getVideoSsrcRewriteMap() const
+    inline const concurrency::MpmcHashmap32<size_t, api::SimulcastGroup>& getVideoSsrcRewriteMap() const
     {
         return _videoSsrcRewriteMap;
     }
@@ -255,10 +256,10 @@ private:
     int32_t _consecutiveDominantSpeakerWins;
 
     concurrency::MpmcHashmap32<size_t, VideoParticipant> _videoParticipants;
-    concurrency::MpmcQueue<SimulcastGroup> _videoSsrcs;
+    concurrency::MpmcQueue<api::SimulcastGroup> _videoSsrcs;
     concurrency::MpmcHashmap32<uint32_t, uint32_t> _videoFeedbackSsrcLookupMap;
-    SimulcastLevel _videoScreenShareSsrc;
-    concurrency::MpmcHashmap32<size_t, SimulcastGroup> _videoSsrcRewriteMap;
+    api::SsrcPair _videoScreenShareSsrc;
+    concurrency::MpmcHashmap32<size_t, api::SimulcastGroup> _videoSsrcRewriteMap;
     concurrency::MpmcHashmap32<uint32_t, size_t> _reverseVideoSsrcRewriteMap;
     utils::Optional<std::pair<size_t, VideoScreenShareSsrcMapping>> _videoScreenShareSsrcMapping;
     memory::List<size_t, 32> _activeVideoList;
@@ -277,7 +278,7 @@ private:
     void updateLevels(const uint64_t timestampMs);
     bool updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
-    void addToRewriteMap(size_t endpointIdHash, SimulcastGroup simulcastGroup);
+    void addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup);
     void removeFromRewriteMap(size_t endpointIdHash);
 
     bool onAudioParticipantAdded(const size_t endpointIdHash, const char* endpointId);

@@ -2,6 +2,7 @@
 #include "bridge/RtpMap.h"
 #include "transport/RtcTransport.h"
 #include "utils/Optional.h"
+#include "utils/StdExtensions.h"
 #include <atomic>
 #include <cstdint>
 #include <memory>

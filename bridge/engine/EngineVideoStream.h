@@ -31,7 +31,7 @@ struct EngineVideoStream
         const bridge::RtpMap& feedbackRtpMap,
         const SsrcWhitelist& ssrcWhitelist,
         const bool ssrcRewrite,
-        const std::vector<SimulcastLevel>& videoPinSsrcs)
+        const std::vector<api::SsrcPair>& videoPinSsrcs)
         : _endpointId(endpointId),
           _endpointIdHash(endpointIdHash),
           _localSsrc(localSsrc),
@@ -49,7 +49,7 @@ struct EngineVideoStream
         std::memcpy(&_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
         for (const auto& videoSsrc : videoPinSsrcs)
         {
-            _videoPinSsrcs.push(videoSsrc);
+            _videoPinSsrcs.push({videoSsrc.main, videoSsrc.feedback, false});
         }
     }
 

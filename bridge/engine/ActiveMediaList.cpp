@@ -1,6 +1,7 @@
 #include "bridge/engine/ActiveMediaList.h"
 #include "api/DataChannelMessage.h"
 #include "api/JsonWriter.h"
+#include "api/SimulcastGroup.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineVideoStream.h"
 #include "bridge/engine/SsrcRewrite.h"
@@ -22,7 +23,8 @@ ActiveMediaList::AudioParticipant::AudioParticipant(const char* id, bool isLocal
       nonZeroLevelsShortWindow(0),
       maxRecentLevel(0.0),
       noiseLevel(50.0),
-      ptt(false) endpointId(id),
+      ptt(false),
+      endpointId(id),
       isLocal(isLocal)
 {
     memset(levels.data(), 0, levels.size());
@@ -30,7 +32,7 @@ ActiveMediaList::AudioParticipant::AudioParticipant(const char* id, bool isLocal
 
 ActiveMediaList::ActiveMediaList(size_t instanceId,
     const std::vector<uint32_t>& audioSsrcs,
-    const std::vector<SimulcastGroup>& videoSsrcs,
+    const std::vector<api::SimulcastGroup>& videoSsrcs,
     const uint32_t defaultLastN,
     uint32_t audioLastN,
     uint32_t activeTalkerSilenceThresholdDb)
@@ -70,21 +72,21 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
         _audioSsrcs.push(audioSsrc);
     }
 
-    _videoScreenShareSsrc = SimulcastLevel({0, 0, false});
+    _videoScreenShareSsrc = api::SsrcPair({0, 0});
 
-    for (const auto& videoSsrc : videoSsrcs)
+    for (const auto& group : videoSsrcs)
     {
-        if (videoSsrc.count == 1)
+        if (group.size() == 1)
         {
-            _videoScreenShareSsrc = videoSsrc.levels[0];
-            _videoFeedbackSsrcLookupMap.emplace(videoSsrc.levels[0]._ssrc, videoSsrc.levels[0]._feedbackSsrc);
+            _videoScreenShareSsrc = group[0];
+            _videoFeedbackSsrcLookupMap.emplace(group[0].main, group[0].feedback);
         }
         else
         {
-            _videoSsrcs.push(videoSsrc);
-            for (auto& simulcastLevel : videoSsrc.levels)
+            _videoSsrcs.push(group);
+            for (auto& simulcastLevel : group)
             {
-                _videoFeedbackSsrcLookupMap.emplace(simulcastLevel._ssrc, simulcastLevel._feedbackSsrc);
+                _videoFeedbackSsrcLookupMap.emplace(simulcastLevel.main, simulcastLevel.feedback);
             }
         }
     }
@@ -223,12 +225,12 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
     if (simulcastStream.isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
-            VideoScreenShareSsrcMapping{simulcastStream._levels[0]._ssrc, _videoScreenShareSsrc._ssrc});
+            VideoScreenShareSsrcMapping{simulcastStream._levels[0]._ssrc, _videoScreenShareSsrc.main});
     }
     else if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
-            VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc, _videoScreenShareSsrc._ssrc});
+            VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc, _videoScreenShareSsrc.main});
     }
 
     if (_activeVideoListLookupMap.size() == _maxActiveListSize)
@@ -239,7 +241,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
     if (simulcastStream.isSendingVideo() ||
         (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingVideo()))
     {
-        SimulcastGroup simulcastGroup;
+        api::SimulcastGroup simulcastGroup;
         if (!_videoSsrcs.pop(simulcastGroup))
         {
             assert(false);
@@ -247,11 +249,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
         }
 
         addToRewriteMap(endpointIdHash, simulcastGroup);
-        logger::debug("%s %zu video mapped to %u",
-            _logId.c_str(),
-            endpointId,
-            endpointIdHash,
-            simulcastGroup.levels[0]._ssrc);
+        logger::debug("%s %zu video mapped to %u", _logId.c_str(), endpointId, endpointIdHash, simulcastGroup[0].main);
     }
 
     const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
@@ -319,7 +317,7 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
         }
 
         auto& participantLevels = participantLevelItr->second;
-        participantLevels._ptt = levelEntry._ptt;
+        participantLevels.ptt = levelEntry.ptt;
 
         // Update the energy history
 
@@ -452,7 +450,7 @@ void ActiveMediaList::process(const uint64_t timestamp,
             if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
             {
                 ActiveTalker talker = {top.participant,
-                    curParticipant != _audioParticipants.end() ? false : curParticipant->second._ptt,
+                    curParticipant != _audioParticipants.end() ? false : curParticipant->second.ptt,
                     (uint8_t)top.score,
                     (uint8_t)top.noiseLevel};
                 activeTalkersSnapshot.activeTalker[activeTalkersSnapshot.count++] = talker;
@@ -603,7 +601,7 @@ bool ActiveMediaList::updateActiveVideoList(const size_t endpointIdHash)
         (videoParticipant.secondarySimulcastStream.isSet() &&
             videoParticipant.secondarySimulcastStream.get().isSendingVideo()))
     {
-        SimulcastGroup simulcastGroup;
+        api::SimulcastGroup simulcastGroup;
         if (!_videoSsrcs.pop(simulcastGroup))
         {
             assert(false);
@@ -739,7 +737,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
         const auto rewriteMapItr = _videoSsrcRewriteMap.find(videoEndpointIdhash);
         if (rewriteMapItr != _videoSsrcRewriteMap.end())
         {
-            api::DataChannelMessage::addUserMediaSsrc(outMessage, rewriteMapItr->second.levels[0]._ssrc);
+            api::DataChannelMessage::addUserMediaSsrc(outMessage, rewriteMapItr->second[0].main);
         }
         else
         {
@@ -789,7 +787,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
                 videoEp.addProperty("endpoint-id", videoStream->endpointId.c_str());
 
                 auto videoSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
-                videoSsrcs.addElement(item.second.levels[0]._ssrc);
+                videoSsrcs.addElement(item.second[0].main);
 
                 if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == item.first)
                 {
@@ -818,13 +816,13 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
     return true;
 }
 
-void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, SimulcastGroup simulcastGroup)
+void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup)
 {
     logger::debug("add to ssrcmap %zu", "", endpointIdHash);
     _videoSsrcRewriteMap.emplace(endpointIdHash, simulcastGroup);
-    for (uint32_t i = 0; i < simulcastGroup.count; ++i)
+    for (auto& ssrcPair : simulcastGroup)
     {
-        _reverseVideoSsrcRewriteMap.emplace(simulcastGroup.levels[i]._ssrc, endpointIdHash);
+        _reverseVideoSsrcRewriteMap.emplace(ssrcPair.main, endpointIdHash);
     }
     ++_ssrcMapRevision;
 }
@@ -837,9 +835,9 @@ void ActiveMediaList::removeFromRewriteMap(size_t endpointIdHash)
     {
         const auto simulcastGroup = rewriteMapItr->second;
         _videoSsrcRewriteMap.erase(endpointIdHash);
-        for (uint32_t i = 0; i < simulcastGroup.count; ++i)
+        for (auto& ssrcPair : simulcastGroup)
         {
-            _reverseVideoSsrcRewriteMap.erase(simulcastGroup.levels[i]._ssrc);
+            _reverseVideoSsrcRewriteMap.erase(ssrcPair.main);
         }
         _videoSsrcs.push(simulcastGroup);
     }

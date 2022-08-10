@@ -855,7 +855,7 @@ TEST_F(IntegrationTest, ptime10)
         EXPECT_EQ(audioCounters.lostPackets, 0);
         const auto& rData1 = client1.getReceiveStats();
         std::vector<double> allFreq;
-        EXPECT_EQ(rData1.size(), 5);
+        EXPECT_EQ(rData1.size(), 2);
 
         for (const auto& item : rData1)
         {

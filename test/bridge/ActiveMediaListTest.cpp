@@ -87,16 +87,13 @@ private:
 
         for (uint32_t i = 10; i < 10 + VIDEO_REWRITE_COUNT; ++i)
         {
-            bridge::SimulcastLevel levels[3] = {{i * 3, i * 3 + 100},
-                {i * 3 + 1, i * 3 + 101},
-                {i * 3 + 2, i * 3 + 102}};
-
-            _videoSsrcs.push_back(bridge::SimulcastGroup(levels));
+            api::SsrcPair levels[3] = {{i * 3, i * 3 + 100}, {i * 3 + 1, i * 3 + 101}, {i * 3 + 2, i * 3 + 102}};
+            _videoSsrcs.push_back(api::SimulcastGroup(levels));
         }
 
         for (uint32_t i = 20; i < 24; ++i)
         {
-            _videoPinSsrcs.push_back(bridge::SimulcastLevel({i, i + 100}));
+            _videoPinSsrcs.push_back(api::SsrcPair({i, i + 100}));
         }
 
         _jobManager = std::make_unique<jobmanager::JobManager>();
@@ -136,8 +133,8 @@ private:
 protected:
     bool _audioMapChanged = false;
     std::vector<uint32_t> _audioSsrcs;
-    std::vector<bridge::SimulcastGroup> _videoSsrcs;
-    std::vector<bridge::SimulcastLevel> _videoPinSsrcs;
+    std::vector<api::SimulcastGroup> _videoSsrcs;
+    std::vector<api::SsrcPair> _videoPinSsrcs;
 
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<jobmanager::JobQueue> _jobQueue;

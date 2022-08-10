@@ -4,7 +4,7 @@
 #include "api/Generator.h"
 #include "api/Parser.h"
 #include "bridge/AudioStreamDescription.h"
-#include "bridge/BarbellStreamGroupDescription.h"
+#include "bridge/BarbellVideoStreamDescription.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
@@ -75,31 +75,19 @@ httpd::Response generateBarbellResponse(ActionContext* context,
 
     api::EndpointDescription::Video responseVideo;
     {
-
-        std::vector<BarbellStreamGroupDescription> streamDescriptions;
+        std::vector<BarbellVideoStreamDescription> streamDescriptions;
         mixer.getBarbellVideoStreamDescription(streamDescriptions);
         for (auto& group : streamDescriptions)
         {
-            utils::append(responseVideo._ssrcs, group.getSsrcs());
-            api::EndpointDescription::SsrcGroup simSsrcGroup;
-            api::EndpointDescription::SsrcGroup feedbackSsrcGroup;
+            responseVideo.streams.emplace_back(api::EndpointDescription::VideoStream());
+            auto& stream = responseVideo.streams.back();
+            for (auto level : group.ssrcLevels)
+            {
+                stream.sources.push_back({level.main, level.feedback});
+            }
 
-            for (auto& level : group.ssrcLevels)
-            {
-                simSsrcGroup._ssrcs.push_back(level.ssrc);
-                feedbackSsrcGroup._ssrcs.push_back(level.feedbackSsrc);
-            }
-            simSsrcGroup._semantics = "SIM";
-            feedbackSsrcGroup._semantics = "FID";
-            if (group.slides)
-            {
-                api::EndpointDescription::SsrcAttribute responseSsrcAttribute;
-                responseSsrcAttribute._ssrcs.push_back(group.ssrcLevels[0].ssrc);
-                responseSsrcAttribute._content = "slides";
-                responseVideo._ssrcAttributes.push_back(responseSsrcAttribute);
-            }
-            responseVideo._ssrcGroups.push_back(simSsrcGroup);
-            responseVideo._ssrcGroups.push_back(feedbackSsrcGroup);
+            stream.content =
+                (group.slides ? api::EndpointDescription::slidesContent : api::EndpointDescription::videoContent);
         }
 
         addDefaultVideoProperties(responseVideo);
@@ -168,8 +156,7 @@ httpd::Response configureBarbell(ActionContext* context,
             utils::format("Missing barbell audio description %s - %s", conferenceId.c_str(), barbellId.c_str()));
     }
 
-    if (!barbellDescription._video.isSet() || (barbellDescription._video.get()._ssrcGroups.size() % 2) != 0 ||
-        barbellDescription._video.get()._payloadTypes.size() < 2)
+    if (!barbellDescription._video.isSet() || barbellDescription._video.get().payloadTypes.size() < 2)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Missing barbell video description %s - %s", conferenceId.c_str(), barbellId.c_str()));
@@ -192,41 +179,20 @@ httpd::Response configureBarbell(ActionContext* context,
             utils::format("Failed to configure barbell transport %s - %s", conferenceId.c_str(), barbellId.c_str()));
     }
 
-    std::vector<BarbellStreamGroupDescription> videoDescriptions;
+    std::vector<BarbellVideoStreamDescription> videoDescriptions;
     auto& videoDescription = barbellDescription._video.get();
-    for (size_t i = 0; i < videoDescription._ssrcGroups.size(); i += 2)
+    for (auto& stream : videoDescription.streams)
     {
-        auto& simGroup = videoDescription._ssrcGroups[i];
-        auto& fidGroup = videoDescription._ssrcGroups[i + 1];
-        if (simGroup._semantics != "SIM" || fidGroup._semantics != "FID")
-        {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-                utils::format("Invalid barbell video description %s - %s", conferenceId.c_str(), barbellId.c_str()));
-        }
-        if (simGroup._ssrcs.size() > api::EndpointDescription::Video::MAX_SSRCS ||
-            fidGroup._ssrcs.size() > api::EndpointDescription::Video::MAX_SSRCS)
-        {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-                utils::format("Barbell video group must contain no more than %zu ssrcs %s - %s",
-                    api::EndpointDescription::Video::MAX_SSRCS,
-                    conferenceId.c_str(),
-                    barbellId.c_str()));
-        }
-        BarbellStreamGroupDescription barbellGroup;
-        for (size_t i = 0; i < simGroup._ssrcs.size(); ++i)
-        {
-            barbellGroup.ssrcLevels.push_back({simGroup._ssrcs[i], fidGroup._ssrcs[i]});
-        }
-
-        // there is a slides attribute but this is accurate too
-        barbellGroup.slides = (barbellGroup.ssrcLevels.size() == 1);
+        BarbellVideoStreamDescription barbellGroup;
+        barbellGroup.ssrcLevels = stream.sources;
+        barbellGroup.slides = (stream.content.compare(api::EndpointDescription::slidesContent) == 0);
         videoDescriptions.push_back(barbellGroup);
     }
 
     const auto audioRtpMap = makeRtpMap(barbellDescription._audio.get());
     bridge::RtpMap videoRtpMap;
     bridge::RtpMap videoFeedbackRtpMap;
-    for (auto& payloadDescription : barbellDescription._video.get()._payloadTypes)
+    for (auto& payloadDescription : barbellDescription._video.get().payloadTypes)
     {
         if (payloadDescription._name.compare("rtx") == 0)
         {

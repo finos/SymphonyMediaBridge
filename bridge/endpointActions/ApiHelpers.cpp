@@ -230,7 +230,7 @@ bridge::RtpMap makeRtpMap(const api::EndpointDescription::Video& video,
         rtpMap._parameters.emplace(parameter.first, parameter.second);
     }
 
-    rtpMap._absSendTimeExtId = findAbsSendTimeExtensionId(video._rtpHeaderExtensions);
+    rtpMap._absSendTimeExtId = findAbsSendTimeExtensionId(video.rtpHeaderExtensions);
 
     return rtpMap;
 }

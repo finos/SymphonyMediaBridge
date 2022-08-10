@@ -1,5 +1,6 @@
 #pragma once
 
+#include "api/SimulcastGroup.h"
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/EngineStats.h"
@@ -77,7 +78,7 @@ public:
         memory::PacketPoolAllocator& sendAllocator,
         memory::AudioPacketPoolAllocator& audioAllocator,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastGroup>& videoSsrcs,
+        const std::vector<api::SimulcastGroup>& videoSsrcs,
         const uint32_t lastN);
     ~EngineMixer() override;
 

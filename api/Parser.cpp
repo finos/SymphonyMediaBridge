@@ -370,7 +370,7 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             auto& videoStream = videoChannel.streams.back();
             for (const auto& rtpSource : requiredJsonArray(stream, "sources"))
             {
-                api::EndpointDescription::VideoStream::Level level;
+                api::SsrcPair level;
                 level.main = rtpSource["main"].get<uint32_t>();
                 setIfExists(level.feedback, rtpSource, "feedback");
                 videoStream.sources.push_back(level);

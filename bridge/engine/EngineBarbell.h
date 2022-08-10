@@ -1,5 +1,5 @@
 #pragma once
-#include "bridge/BarbellStreamGroupDescription.h"
+#include "bridge/BarbellVideoStreamDescription.h"
 #include "bridge/RtpMap.h"
 #include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/SimulcastStream.h"
@@ -21,7 +21,7 @@ struct EngineBarbell
 {
     EngineBarbell(const std::string& barbellId,
         transport::RtcTransport& rtcTransport,
-        const std::vector<BarbellStreamGroupDescription>& videoDescriptions,
+        const std::vector<BarbellVideoStreamDescription>& videoDescriptions,
         const std::vector<uint32_t>& audioSsrcs,
         RtpMap& audioRtpMap,
         RtpMap& videoRtpMap,
@@ -41,6 +41,8 @@ struct EngineBarbell
     // messages
     struct VideoStream
     {
+        VideoStream() : stream{0} {}
+
         SimulcastStream stream;
         utils::Optional<size_t> endpointIdHash;
         utils::Optional<EndpointIdString> endpointId;
