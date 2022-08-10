@@ -35,6 +35,7 @@ class RtcePoll;
 class RtcTransport;
 class SocketAddress;
 class Endpoint;
+class ProbeServer;
 typedef std::vector<std::shared_ptr<Endpoint>> Endpoints;
 
 class TransportFactory
@@ -67,6 +68,12 @@ public:
     virtual bool openRtpMuxPorts(Endpoints& rtpPorts) const = 0;
 
     virtual void maintenance(uint64_t timestamp) = 0;
+
+    virtual void registerProbeServer(ProbeServer& server) = 0;
+    virtual void unregisterProbeServer(ProbeServer& server) = 0;
+    //virtual std::vector<SocketAddress> getProbingUdpEndpoints() const = 0;
+    //virtual std::vector<SocketAddress> getProbingTcpEndpoints() const = 0;
+
 };
 
 std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager& jobManager,

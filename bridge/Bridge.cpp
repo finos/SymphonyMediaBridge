@@ -8,6 +8,7 @@
 #include "jobmanager/WorkerThread.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
+#include "transport/ProbeServer.h"
 #include "transport/dtls/SrtpClientFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
@@ -151,6 +152,8 @@ void Bridge::initialize()
         logger::error("Failed to initialize transport factory", "main");
         return;
     }
+
+    _probeServer = std::make_unique<transport::ProbeServer>();
 
     _mixerManager = std::make_unique<bridge::MixerManager>(*_idGenerator,
         *_ssrcGenerator,

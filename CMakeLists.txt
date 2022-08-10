@@ -302,6 +302,8 @@ set(FILES
         transport/Endpoint.h
         transport/IceJob.cpp
         transport/IceJob.h
+        transport/ProbeServer.cpp
+        transport/ProbeServer.h
         transport/RecordingEndpoint.cpp
         transport/RecordingEndpoint.h
         transport/RecordingTransport.cpp

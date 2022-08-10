@@ -2,6 +2,7 @@
 #include "concurrency/MpmcHashmap.h"
 #include "config/Config.h"
 #include "memory/PacketPoolAllocator.h"
+#include "transport/ProbeServer.h"
 #include "transport/RecordingTransport.h"
 #include "transport/RtcTransport.h"
 #include "transport/TcpEndpoint.h"
@@ -75,6 +76,9 @@ public:
         {
             for (uint32_t portOffset = 0; portOffset < std::max(1u, config.ice.sharedPorts.get()); ++portOffset)
             {
+                // Generate ufrag pass
+                // IceSession staticIceSession(ufrag, pass)
+                // Ip:portx`
                 _sharedEndpoints.push_back(Endpoints());
                 for (SocketAddress portAddress : interfaces)
                 {
@@ -482,6 +486,36 @@ public:
         logger::debug("closing %s", _name, endpoint->getName());
         ++_pendingTasks;
         endpoint->stop(this);
+    }
+
+    void registerProbeServer(ProbeServer& server) override
+    {
+        for (auto& endpoint : _tcpServerEndpoints)
+        {
+            server.registerEndpoint(*endpoint);
+        }
+
+        auto udpProbeEndpoint = _sharedEndpoints[0]; // config.ice.singlePort
+
+        for (auto& endpoint : udpProbeEndpoint)
+        {
+            server.registerEndpoint(*endpoint);
+        }  
+    }
+
+    void unregisterProbeServer(ProbeServer& server) override
+    {
+        for (auto& endpoint : _tcpServerEndpoints)
+        {
+            server.unregisterEndpoint(*endpoint);
+        }
+
+        auto udpProbeEndpoint = _sharedEndpoints[0]; // config.ice.singlePort
+
+        for (auto& endpoint : udpProbeEndpoint)
+        {
+            server.unregisterEndpoint(*endpoint);
+        }
     }
 
 private:
