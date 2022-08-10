@@ -162,29 +162,7 @@ api::EndpointDescription::Transport parsePatchEndpointTransport(const nlohmann::
 
     if (data.find("ice") != data.end())
     {
-        const auto& iceJson = data["ice"];
-        api::EndpointDescription::Ice ice;
-        ice._ufrag = iceJson["ufrag"].get<std::string>();
-        ice._pwd = iceJson["pwd"].get<std::string>();
-
-        for (const auto& candidateJson : optionalJsonArray(iceJson, "candidates"))
-        {
-            api::EndpointDescription::Candidate candidate;
-            candidate._generation = candidateJson["generation"].get<uint32_t>();
-            candidate._component = candidateJson["component"].get<uint32_t>();
-            candidate._protocol = candidateJson["protocol"].get<std::string>();
-            candidate._port = candidateJson["port"].get<uint32_t>();
-            candidate._ip = candidateJson["ip"].get<std::string>();
-            setIfExists(candidate._relPort, candidateJson, "rel-port");
-            setIfExists(candidate._relAddr, candidateJson, "rel-addr");
-            candidate._foundation = candidateJson["foundation"].get<std::string>();
-            candidate._priority = candidateJson["priority"].get<uint32_t>();
-            candidate._type = candidateJson["type"].get<std::string>();
-            candidate._network =
-                candidateJson.find("network") != candidateJson.end() ? candidateJson["network"].get<uint32_t>() : 0;
-            ice._candidates.emplace_back(std::move(candidate));
-        }
-
+        api::EndpointDescription::Ice ice = api::Parser::parseIce(data["ice"]);
         transport._ice.set(ice);
     }
 
@@ -519,6 +497,32 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     return endpoint;
 }
 
+EndpointDescription::Ice parseIce(const nlohmann::json& iceJson)
+{
+    api::EndpointDescription::Ice ice;
+    ice._ufrag = iceJson["ufrag"].get<std::string>();
+    ice._pwd = iceJson["pwd"].get<std::string>();
+
+    for (const auto& candidateJson : optionalJsonArray(iceJson, "candidates"))
+    {
+        api::EndpointDescription::Candidate candidate;
+        candidate._generation = candidateJson["generation"].get<uint32_t>();
+        candidate._component = candidateJson["component"].get<uint32_t>();
+        candidate._protocol = candidateJson["protocol"].get<std::string>();
+        candidate._port = candidateJson["port"].get<uint32_t>();
+        candidate._ip = candidateJson["ip"].get<std::string>();
+        setIfExists(candidate._relPort, candidateJson, "rel-port");
+        setIfExists(candidate._relAddr, candidateJson, "rel-addr");
+        candidate._foundation = candidateJson["foundation"].get<std::string>();
+        candidate._priority = candidateJson["priority"].get<uint32_t>();
+        candidate._type = candidateJson["type"].get<std::string>();
+        candidate._network =
+            candidateJson.find("network") != candidateJson.end() ? candidateJson["network"].get<uint32_t>() : 0;
+        ice._candidates.emplace_back(std::move(candidate));
+    }
+
+    return ice;
+}
 } // namespace Parser
 
 } // namespace api

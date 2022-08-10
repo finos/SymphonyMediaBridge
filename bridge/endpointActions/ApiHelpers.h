@@ -17,6 +17,8 @@ namespace bridge
 
 std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> getIceCandidatesAndCredentials(
     const api::EndpointDescription::Transport&);
+std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> getIceCandidatesAndCredentials(
+    const api::EndpointDescription::Ice& ice);
 std::unique_lock<std::mutex> getConferenceMixer(ActionContext*,
     const std::string& conferenceId,
     bridge::Mixer*& outMixer);

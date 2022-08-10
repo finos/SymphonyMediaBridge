@@ -6,7 +6,9 @@
 #include "httpd/Httpd.h"
 #include "jobmanager/JobManager.h"
 #include "jobmanager/WorkerThread.h"
+#include "transport/Endpoint.h"
 #include "transport/EndpointFactoryImpl.h"
+#include "transport/ProbeServer.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SrtpClientFactory.h"
@@ -82,6 +84,11 @@ Bridge::~Bridge()
         _jobManager->stop();
     }
     logger::info("JobManager stopped", "main");
+
+    if (_probeServer)
+    {
+        _probeServer->stop();
+    }
 
     uint32_t n = 0;
     for (auto& workerThread : _workerThreads)
@@ -159,6 +166,16 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
         return;
     }
 
+    _probeServer = std::make_unique<transport::ProbeServer>(_iceConfig, _config);
+
+    const auto credentials = _probeServer->getCredentials();
+
+    _transportFactory->registerIceListener(*static_cast<transport::Endpoint::IEvents*>(_probeServer.get()),
+        credentials.first);
+
+    _transportFactory->registerIceListener(*static_cast<transport::ServerEndpoint::IEvents*>(_probeServer.get()),
+        credentials.first);
+
     _mixerManager = std::make_unique<bridge::MixerManager>(*_idGenerator,
         *_ssrcGenerator,
         *_jobManager,
@@ -169,7 +186,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
         *_sendPacketAllocator,
         *_audioPacketAllocator);
 
-    _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls);
+    _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls, *_probeServer);
 
     const auto httpAddress = transport::SocketAddress::parse(_config.address, _config.port);
     _httpd = std::make_unique<httpd::Httpd>(*_requestHandler);

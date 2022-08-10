@@ -2,6 +2,7 @@
 #include "api/Parser.h"
 #include "api/utils.h"
 #include "bridge/Mixer.h"
+#include "bridge/endpointActions/ApiHelpers.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "codec/Opus.h"
 #include "codec/OpusDecoder.h"
@@ -67,7 +68,7 @@ void IntegrationTest::SetUp()
 
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
     _jobManager = std::make_unique<jobmanager::JobManager>();
-    for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
+    for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
     }
@@ -1385,7 +1386,7 @@ TEST_F(IntegrationTest, simpleBarbell)
 
 TEST_F(IntegrationTest, barbellAfterClients)
 {
-    runTestInThread(3 * _numWorkerThreads + 10, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1718,7 +1719,7 @@ Test setup:
 */
 TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         constexpr auto PACKET_LOSS_RATE = 0.04;
 
         _config.readFromString(R"({
@@ -1872,6 +1873,68 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         EXPECT_EQ(1, endpoints.size());
 
         group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+    });
+}
+
+TEST_F(IntegrationTest, probing)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        initBridge(_config);
+
+        // Retrieve probing ICE candidates
+        const std::string baseUrl = "http://127.0.0.1:8080";
+        HttpGetRequest candidatesRequest((baseUrl + "/ice-candidates").c_str());
+        candidatesRequest.awaitResponse(5 * utils::Time::sec);
+        EXPECT_TRUE(candidatesRequest.isSuccess());
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        const auto& data = candidatesRequest.getJsonBody();
+        const auto& iceJson = data["ice"];
+
+        logger::debug("%s", "", iceJson.dump(4).c_str());
+
+        api::EndpointDescription::Ice ice = api::Parser::parseIce(iceJson);
+        auto candidatesAndCredentials = bridge::getIceCandidatesAndCredentials(ice);
+
+        // Setup transport and attempt to connect to trigger ICE probing
+        // Note: use CONTROLLING role
+        auto transport = _transportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 256 * 1024, 1);
+
+        transport->setRemoteIce(candidatesAndCredentials.second, candidatesAndCredentials.first, _audioAllocator);
+        transport->start();
+
+        ASSERT_EQ(transport->getRtt(), 0);
+
+        transport->connect();
+
+        auto timeout = utils::Time::ms * 2000;
+        auto start = utils::Time::getAbsoluteTime();
+        while (transport->hasPendingJobs() && utils::Time::getAbsoluteTime() - start < timeout)
+        {
+            utils::Time::nanoSleep(utils::Time::ms * 100);
+        }
+
+        // non-zero RTT indicates that there was a successful candidates pair, hence probing was performed
+        ASSERT_GT(transport->getRtt(), 0);
+        transport->stop();
+        while (transport->hasPendingJobs() && utils::Time::getAbsoluteTime() - start < timeout)
+        {
+            utils::Time::nanoSleep(utils::Time::ms * 100);
+        }
         finalizeSimulation();
     });
 }

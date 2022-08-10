@@ -20,7 +20,8 @@ struct Recording;
 namespace transport
 {
 class SslDtls;
-}
+class ProbeServer;
+} // namespace transport
 
 namespace utils
 {
@@ -42,7 +43,9 @@ class RequestLogger;
 class ApiRequestHandler : public httpd::HttpRequestHandler, public ActionContext
 {
 public:
-    ApiRequestHandler(bridge::MixerManager& mixerManager, transport::SslDtls& sslDtls);
+    ApiRequestHandler(bridge::MixerManager& mixerManager,
+        transport::SslDtls& sslDtls,
+        transport::ProbeServer& probeServer);
     httpd::Response onRequest(const httpd::Request& request) override;
 
 private:

@@ -26,6 +26,7 @@ class SrtpClientFactory;
 class SslDtls;
 class TransportFactory;
 class EndpointFactory;
+class ProbeServer;
 } // namespace transport
 
 namespace httpd
@@ -70,6 +71,7 @@ private:
     const std::unique_ptr<memory::PacketPoolAllocator> _sendPacketAllocator;
     const std::unique_ptr<memory::AudioPacketPoolAllocator> _audioPacketAllocator;
     std::unique_ptr<transport::TransportFactory> _transportFactory;
+    std::unique_ptr<transport::ProbeServer> _probeServer;
     const std::unique_ptr<bridge::Engine> _engine;
     std::unique_ptr<bridge::MixerManager> _mixerManager;
     std::unique_ptr<bridge::ApiRequestHandler> _requestHandler;

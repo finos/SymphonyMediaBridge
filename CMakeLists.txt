@@ -128,6 +128,7 @@ set(FILES
         bridge/endpointActions/ApiActions.h
         bridge/endpointActions/GetConferenceInfo.cpp
         bridge/endpointActions/GetEndpointInfo.cpp
+        bridge/endpointActions/GetProbingInfo.cpp
         bridge/endpointActions/AllocateConference.cpp
         bridge/endpointActions/ConferenceActions.cpp
         bridge/endpointActions/GetConferences.cpp
@@ -317,6 +318,8 @@ set(FILES
         transport/Endpoint.h
         transport/IceJob.cpp
         transport/IceJob.h
+        transport/ProbeServer.cpp
+        transport/ProbeServer.h
         transport/RecordingEndpoint.cpp
         transport/RecordingEndpoint.h
         transport/RecordingTransport.cpp

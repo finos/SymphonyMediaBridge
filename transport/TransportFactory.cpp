@@ -509,6 +509,41 @@ public:
         endpoint->stop(this);
     }
 
+    void registerIceListener(Endpoint::IEvents& listener, const std::string& ufrag) override
+    {
+        for (auto& endpoint : _sharedEndpoints[0])
+        {
+            endpoint->registerListener(ufrag, &listener);
+        }
+    }
+
+    void registerIceListener(ServerEndpoint::IEvents& listener, const std::string& ufrag) override
+    {
+        for (auto& endpoint : _tcpServerEndpoints)
+        {
+            endpoint->registerListener(ufrag, &listener);
+        }
+    }
+
+    void unregisterIceListener(Endpoint::IEvents& listener, const std::string& ufrag) override
+    {
+        for (auto& endpoints : _sharedEndpoints)
+        {
+            for (auto& endpoint : endpoints)
+            {
+                endpoint->unregisterListener(&listener);
+            }
+        }
+    }
+
+    void unregisterIceListener(ServerEndpoint::IEvents& listener, const std::string& ufrag) override
+    {
+        for (auto& endpoint : _tcpServerEndpoints)
+        {
+            endpoint->unregisterListener(ufrag, &listener);
+        }
+    }
+
 private:
     template <typename T>
     class DeleteJob : public jobmanager::CountedJob

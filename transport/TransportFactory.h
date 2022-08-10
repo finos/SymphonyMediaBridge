@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory/PacketPoolAllocator.h"
+#include "transport/Endpoint.h"
 #include "transport/EndpointFactory.h"
 #include "transport/EndpointMetrics.h"
 #include "transport/ice/IceSession.h"
@@ -35,7 +36,7 @@ class RecordingTransport;
 class RtcePoll;
 class RtcTransport;
 class SocketAddress;
-class Endpoint;
+class ProbeServer;
 typedef std::vector<std::shared_ptr<Endpoint>> Endpoints;
 
 class TransportFactory
@@ -72,6 +73,11 @@ public:
     virtual bool openRtpMuxPorts(Endpoints& rtpPorts) const = 0;
 
     virtual void maintenance(uint64_t timestamp) = 0;
+
+    virtual void registerIceListener(Endpoint::IEvents&, const std::string& ufrag) = 0;
+    virtual void registerIceListener(ServerEndpoint::IEvents&, const std::string& ufrag) = 0;
+    virtual void unregisterIceListener(Endpoint::IEvents&, const std::string& ufrag) = 0;
+    virtual void unregisterIceListener(ServerEndpoint::IEvents&, const std::string& ufrag) = 0;
 };
 
 std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager& jobManager,

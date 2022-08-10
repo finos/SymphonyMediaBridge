@@ -25,6 +25,8 @@ struct IceConfig
     uint32_t RTO = 50;
     uint32_t maxRTO = 500;
     uint32_t probeReplicates = 1;
+    uint32_t probeConnectionExpirationTimeout = 5000;
+
     std::string software = "slice"; // keep short please.
     transport::SocketAddress publicIpv4;
     transport::SocketAddress publicIpv6;
@@ -137,6 +139,7 @@ public:
     bool hasRemoteCredentials() const { return !_credentials.remote.first.empty(); }
     void probeRemoteCandidates(IceRole role, uint64_t timestamp);
     IceCandidates getRemoteCandidates() const { return _remoteCandidates; }
+    static void generateCredentialString(StunTransactionIdGenerator& idGenerator, char* targetBuffer, int length);
 
     std::pair<IceCandidate, IceCandidate> getSelectedPair() const;
     uint64_t getSelectedPairRtt() const;
@@ -256,7 +259,6 @@ private:
         const SessionCredentials& _credentials;
     };
 
-    void generateCredentialString(char* targetBuffer, int length);
     void addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate);
     void sortCheckList();
 

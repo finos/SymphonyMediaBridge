@@ -23,8 +23,10 @@ httpd::Response makeErrorResponse(httpd::StatusCode statusCode, const std::strin
 namespace bridge
 {
 
-ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager, transport::SslDtls& sslDtls)
-    : ActionContext(mixerManager, sslDtls),
+ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager,
+    transport::SslDtls& sslDtls,
+    transport::ProbeServer& probeServer)
+    : ActionContext(mixerManager, sslDtls, probeServer),
       _lastAutoRequestId(0)
 
 #if ENABLE_LEGACY_API
@@ -70,6 +72,9 @@ httpd::Response ApiRequestHandler::callEndpointAction(RequestLogger& requestLogg
     if (utils::StringTokenizer::isEqual(token, "barbell") && token.next &&
         (request._method == httpd::Method::POST || request._method == httpd::Method::DELETE))
         return processBarbellAction(this, requestLogger, request, token);
+
+    if (utils::StringTokenizer::isEqual(token, "ice-candidates") && request._method == httpd::Method::GET)
+        return getProbingInfo(this, requestLogger, request, token);
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
         utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
