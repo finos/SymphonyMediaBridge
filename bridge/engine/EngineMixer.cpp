@@ -859,7 +859,7 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
 {
     bool dominantSpeakerChanged = false;
     bool userMediaMapChanged = false;
-    _activeMediaList->process(engineIterationStartTimestamp / 1000000ULL, dominantSpeakerChanged, userMediaMapChanged);
+    _activeMediaList->process(engineIterationStartTimestamp, dominantSpeakerChanged, userMediaMapChanged);
 
     if (dominantSpeakerChanged)
     {

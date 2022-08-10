@@ -41,8 +41,8 @@ struct ClientPair : public TransportClientPair
               sslDtls,
               jobManager,
               blockUdp),
-          _stream1(_transport1->getId(), *_transport1, _sendAllocator),
-          _stream2(_transport2->getId(), *_transport2, _sendAllocator)
+          _stream1(_transport1->getId(), *_transport1),
+          _stream2(_transport2->getId(), *_transport2)
     {
         _messagesReceived[0] = 0;
         _messagesReceived[1] = 0;
@@ -138,7 +138,7 @@ TEST_F(SctpIntegrationTest, connectUdp)
     }
     ASSERT_EQ(clients._sctpEstablished, 2);
 
-    webrtc::WebRtcDataStream stream1(clients._transport1->getId(), *clients._transport1, clients._sendAllocator);
+    webrtc::WebRtcDataStream stream1(clients._transport1->getId(), *clients._transport1);
     stream1.open("fastone");
 
     while (clients._sctpEstablished < 2 && utils::Time::getAbsoluteTime() - startTime < 2 * utils::Time::sec)

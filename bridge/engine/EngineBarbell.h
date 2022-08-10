@@ -15,13 +15,11 @@ namespace bridge
 
 struct EngineBarbell
 {
-    EngineBarbell(const std::string& barbellId,
-        transport::RtcTransport& rtcTransport,
-        memory::PacketPoolAllocator& poolAllocator)
+    EngineBarbell(const std::string& barbellId, transport::RtcTransport& rtcTransport)
         : id(barbellId),
           ssrcOutboundContexts(128),
           transport(rtcTransport),
-          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport, poolAllocator)
+          dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport)
     {
     }
 

@@ -91,6 +91,7 @@ public:
     }
 
     bool endsWidth(char c) const { return _offset > 0 && _data[_offset - 1] == c; }
+    bool empty() const { return _offset == 0; }
 
 private:
     char _data[S];

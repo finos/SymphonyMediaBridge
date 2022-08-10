@@ -9,7 +9,7 @@ namespace
 RecStreamAddedEvent* castPacket(memory::Packet* packet)
 {
     // The ssrc is place right after the header
-    return reinterpret_cast<RecStreamAddedEvent*>(packet);
+    return reinterpret_cast<RecStreamAddedEvent*>(packet->get());
 }
 
 uint8_t* getEndpointBuffRef(memory::Packet& packet)

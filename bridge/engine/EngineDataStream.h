@@ -12,14 +12,11 @@ namespace bridge
 
 struct EngineDataStream
 {
-    EngineDataStream(const std::string& endpointId,
-        const size_t endpointIdHash,
-        transport::RtcTransport& transport,
-        memory::PacketPoolAllocator& allocator)
+    EngineDataStream(const std::string& endpointId, const size_t endpointIdHash, transport::RtcTransport& transport)
         : _endpointId(endpointId),
           _endpointIdHash(endpointIdHash),
           _transport(transport),
-          _stream(transport.getId(), transport, allocator),
+          _stream(transport.getId(), transport),
           _hasSeenInitialSpeakerList(false)
     {
     }

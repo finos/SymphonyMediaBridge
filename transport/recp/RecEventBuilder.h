@@ -35,7 +35,7 @@ protected:
 
 private:
     void allocateIfNeed();
-    RecHeader* header() { return reinterpret_cast<RecHeader*>(_packet.get()); }
+    RecHeader* header() { return RecHeader::fromPtr(_packet->get(), _packet->size); }
 
 protected:
     memory::PacketPoolAllocator& _allocator;
