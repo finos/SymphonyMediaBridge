@@ -55,10 +55,17 @@ struct EndpointDescription
         utils::Optional<Connection> _connection;
     };
 
-    struct SsrcGroup
+    struct VideoStream
     {
-        std::vector<uint32_t> _ssrcs;
-        std::string _semantics;
+        struct Level
+        {
+            uint32_t main;
+            uint32_t feedback;
+        };
+
+        std::string id;
+        std::vector<Level> sources;
+        std::string content;
     };
 
     struct PayloadType
@@ -69,15 +76,6 @@ struct EndpointDescription
         utils::Optional<uint32_t> _channels;
         std::vector<std::pair<std::string, std::string>> _parameters;
         std::vector<std::pair<std::string, utils::Optional<std::string>>> _rtcpFeedbacks;
-    };
-
-    struct SsrcAttribute
-    {
-        static const char* slidesContent;
-        static const char* videoContent;
-
-        std::vector<uint32_t> _ssrcs;
-        std::string _content;
     };
 
     struct Audio
@@ -91,14 +89,26 @@ struct EndpointDescription
 
     struct Video
     {
-        utils::Optional<Transport> _transport;
+        utils::Optional<Transport> transport;
 
-        std::vector<uint32_t> _ssrcs;
-        std::vector<SsrcGroup> _ssrcGroups;
-        std::vector<PayloadType> _payloadTypes;
-        std::vector<std::pair<uint32_t, std::string>> _rtpHeaderExtensions;
-        utils::Optional<std::vector<uint32_t>> _ssrcWhitelist;
-        std::vector<SsrcAttribute> _ssrcAttributes;
+        std::vector<uint32_t> getSsrcs() const
+        {
+            std::vector<uint32_t> ssrcs;
+            for (auto& stream : streams)
+            {
+                for (auto& level : stream.sources)
+                {
+                    ssrcs.push_back(level.main);
+                    ssrcs.push_back(level.feedback);
+                }
+            }
+            return ssrcs;
+        }
+
+        std::vector<VideoStream> streams;
+        std::vector<PayloadType> payloadTypes;
+        std::vector<std::pair<uint32_t, std::string>> rtpHeaderExtensions;
+        utils::Optional<std::vector<uint32_t>> ssrcWhitelist;
     };
 
     struct Data
@@ -113,6 +123,9 @@ struct EndpointDescription
     utils::Optional<Audio> _audio;
     utils::Optional<Video> _video;
     utils::Optional<Data> _data;
+
+    static const char* slidesContent;
+    static const char* videoContent;
 };
 
 } // namespace api

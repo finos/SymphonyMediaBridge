@@ -117,7 +117,8 @@ set(FILES
         bridge/RtpMap.h
         bridge/Stats.cpp
         bridge/Stats.h
-        bridge/StreamDescription.h
+        bridge/AudioStreamDescription.h
+        bridge/VideoStreamDescription.h
         bridge/TransportDescription.h
         bridge/VideoStream.h
         bridge/endpointActions/ActionContext.h

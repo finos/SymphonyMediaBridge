@@ -49,7 +49,8 @@ class Engine;
 class EngineMixer;
 struct EngineAudioStream;
 struct EngineVideoStream;
-struct StreamDescription;
+struct AudioStreamDescription;
+struct VideoStreamDescription;
 struct DataStreamDescription;
 struct TransportDescription;
 struct EngineDataStream;
@@ -222,14 +223,14 @@ public:
         api::ConferenceEndpointExtendedInfo&,
         const std::map<size_t, ActiveTalker>& activeTalkers);
     std::map<size_t, ActiveTalker> getActiveTalkers();
-    bool getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
-    bool getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
+    bool getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription);
+    bool getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription);
     bool getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription);
     bool isAudioStreamConfigured(const std::string& endpointId);
     bool isVideoStreamConfigured(const std::string& endpointId);
     bool isDataStreamConfigured(const std::string& endpointId);
-    void getAudioStreamDescription(StreamDescription& outDescription);
-    void getVideoStreamDescription(StreamDescription& outDescription);
+    void getAudioStreamDescription(AudioStreamDescription& outDescription);
+    void getVideoStreamDescription(VideoStreamDescription& outDescription);
 
     bool getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription);
     bool getAudioStreamTransportDescription(const std::string& endpointId,

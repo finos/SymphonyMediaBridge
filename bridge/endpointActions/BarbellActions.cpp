@@ -3,11 +3,12 @@
 #include "api/EndpointDescription.h"
 #include "api/Generator.h"
 #include "api/Parser.h"
+#include "bridge/AudioStreamDescription.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
-#include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
+#include "bridge/VideoStreamDescription.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "transport/dtls/SslDtls.h"
@@ -63,9 +64,9 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     // Describe audio, video and data streams
     api::EndpointDescription::Audio responseAudio;
     {
-        StreamDescription streamDescription;
+        AudioStreamDescription streamDescription;
         mixer.getAudioStreamDescription(streamDescription);
-        responseAudio._ssrcs = streamDescription._localSsrcs;
+        responseAudio._ssrcs = streamDescription.ssrcs;
 
         addDefaultAudioProperties(responseAudio);
         channelsDescription._audio.set(responseAudio);
@@ -73,25 +74,29 @@ httpd::Response generateBarbellResponse(ActionContext* context,
 
     api::EndpointDescription::Video responseVideo;
     {
-        StreamDescription streamDescription;
+        VideoStreamDescription streamDescription;
         mixer.getVideoStreamDescription(streamDescription);
-        responseVideo._ssrcs = streamDescription._localSsrcs;
-
-        if (responseVideo._ssrcs.size() > 1)
+        if (streamDescription.localSsrc != 0)
         {
-            for (size_t i = 1; i < responseVideo._ssrcs.size() - 1; i += 2)
-            {
-                api::EndpointDescription::SsrcGroup responseSsrcGroup;
-                responseSsrcGroup._ssrcs.push_back(responseVideo._ssrcs[i]);
-                responseSsrcGroup._ssrcs.push_back(responseVideo._ssrcs[i + 1]);
-                responseSsrcGroup._semantics = "FID";
-                responseVideo._ssrcGroups.push_back(responseSsrcGroup);
-            }
+            api::EndpointDescription::VideoStream videoStream;
+            videoStream.sources.push_back({streamDescription.localSsrc, 0});
+            videoStream.content = "local";
+        }
 
-            api::EndpointDescription::SsrcAttribute responseSsrcAttribute;
-            responseSsrcAttribute._ssrcs.push_back(responseVideo._ssrcs[1]);
-            responseSsrcAttribute._content = "slides";
-            responseVideo._ssrcAttributes.push_back(responseSsrcAttribute);
+        size_t index = 0;
+        for (auto& level : streamDescription.simulcastSsrcs)
+        {
+            api::EndpointDescription::VideoStream videoStream;
+            videoStream.sources.push_back({level._ssrc, level._feedbackSsrc});
+            if (index++ == 0)
+            {
+                videoStream.content = "slides";
+            }
+            else
+            {
+                videoStream.content = "video";
+            }
+            responseVideo.streams.push_back(videoStream);
         }
 
         addDefaultVideoProperties(responseVideo);
