@@ -12,13 +12,13 @@ struct TransportDescription
 {
     struct Ice
     {
-        std::vector<ice::IceCandidate> _iceCandidates;
-        std::pair<std::string, std::string> _iceCredentials;
+        std::vector<ice::IceCandidate> iceCandidates;
+        std::pair<std::string, std::string> iceCredentials;
     };
 
     struct Dtls
     {
-        bool _isDtlsClient;
+        bool isDtlsClient;
     };
 
     TransportDescription() = default;
@@ -26,20 +26,20 @@ struct TransportDescription
     TransportDescription(const std::vector<ice::IceCandidate>& iceCandidates,
         const std::pair<std::string, std::string>& iceCredentials,
         const bool isDtlsClient)
-        : _ice(Ice{iceCandidates, iceCredentials}),
-          _dtls(Dtls{isDtlsClient})
+        : ice(Ice{iceCandidates, iceCredentials}),
+          dtls(Dtls{isDtlsClient})
     {
     }
 
-    TransportDescription(const transport::SocketAddress& localPeer, const bool isDtlsClient) : _dtls(Dtls{isDtlsClient})
+    TransportDescription(const transport::SocketAddress& localPeer, const bool isDtlsClient) : dtls(Dtls{isDtlsClient})
     {
     }
 
-    TransportDescription(const transport::SocketAddress& localPeer) : _localPeer(localPeer) {}
+    TransportDescription(const transport::SocketAddress& localPeer) : localPeer(localPeer) {}
 
-    utils::Optional<Ice> _ice;
-    utils::Optional<transport::SocketAddress> _localPeer;
-    utils::Optional<Dtls> _dtls;
+    utils::Optional<Ice> ice;
+    utils::Optional<transport::SocketAddress> localPeer;
+    utils::Optional<Dtls> dtls;
 };
 
 } // namespace bridge
