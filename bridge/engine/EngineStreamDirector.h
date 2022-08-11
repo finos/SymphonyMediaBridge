@@ -46,7 +46,8 @@ public:
           _bandwidthFloor(0),
           _requiredMidLevelBandwidth(0),
           _maxDefaultLevelBandwidthKbps(config.maxDefaultLevelBandwidthKbps),
-          _lastN(lastN)
+          _lastN(lastN),
+          _slidesBandwidthKbps(0)
     {
     }
 
