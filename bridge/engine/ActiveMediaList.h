@@ -7,6 +7,7 @@
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/List.h"
+#include "utils/Time.h"
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -139,10 +140,10 @@ public:
 #endif
 
 private:
-    static const size_t intervalMs = 10;
+    static const size_t INTERVAL_MS = 10;
     static const int32_t requiredConsecutiveWins = 3;
     // Only allow a new switch after 2s
-    static const uint32_t maxSwitchDominantSpeakerEveryMs = 2000;
+    static const uint64_t maxSwitchDominantSpeakerEvery = 2000 * utils::Time::ms;
     // 100 entries corresponding to 2s for the case of 20ms packets
     static const size_t numLevels = 100;
     // Short Window (5 packets, typically 100ms) used to estimate noise level
@@ -152,35 +153,36 @@ private:
     {
         AudioParticipant();
 
-        static constexpr float decayOfMaxLevel = 0.006f;
+        static constexpr float MAX_LEVEL_DECAY = 0.006f;
         // Ramp up last seen noise level by 1 every second if no new minimum
-        static constexpr float noiseLevelRampup = 0.01f;
+        static constexpr float NOISE_RAMPUP = 0.01f;
         // Min should not be below -120 dBov
-        static const uint8_t minNoiseLevel = 7;
 
-        std::array<uint8_t, numLevels> _levels;
-        size_t _index;
-        size_t _indexEndShortWindow;
+        static const uint8_t MIN_NOISE = 7;
 
-        int32_t _totalLevelLongWindow;
-        int32_t _totalLevelShortWindow;
-        int32_t _nonZeroLevelsShortWindow;
-        float _maxRecentLevel;
-        float _noiseLevel;
-        bool _ptt;
+        std::array<uint8_t, numLevels> levels;
+        size_t index;
+        size_t indexEndShortWindow;
+
+        int32_t totalLevelLongWindow;
+        int32_t totalLevelShortWindow;
+        int32_t nonZeroLevelsShortWindow;
+        float maxRecentLevel;
+        float noiseLevel;
+        bool ptt;
     };
 
     struct AudioLevelEntry
     {
-        size_t _participant;
-        uint8_t _level;
-        bool _ptt;
+        size_t participant;
+        uint8_t level;
+        bool ptt;
     };
 
     struct VideoParticipant
     {
-        SimulcastStream _simulcastStream;
-        utils::Optional<SimulcastStream> _secondarySimulcastStream;
+        SimulcastStream simulcastStream;
+        utils::Optional<SimulcastStream> secondarySimulcastStream;
     };
 
     struct AudioParticipantScore
@@ -240,8 +242,8 @@ private:
     std::atomic_uint32_t _reentrancyCounter;
 #endif
 
-    uint64_t _lastRunTimestampMs;
-    uint64_t _lastChangeTimestampMs;
+    uint64_t _lastRunTimestamp;
+    uint64_t _lastChangeTimestamp;
 
     size_t rankSpeakers(float& currentDominantSpeakerScore);
     void updateLevels(const uint64_t timestampMs);

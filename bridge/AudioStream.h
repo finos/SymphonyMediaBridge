@@ -2,6 +2,7 @@
 #include "bridge/RtpMap.h"
 #include "transport/RtcTransport.h"
 #include "utils/Optional.h"
+#include "utils/StdExtensions.h"
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -20,7 +21,7 @@ struct AudioStream
         bool ssrcRewrite)
         : id(id),
           endpointId(endpointId),
-          endpointIdHash(std::hash<std::string>{}(endpointId)),
+          endpointIdHash(utils::hash<std::string>{}(endpointId)),
           localSsrc(localSsrc),
           transport(transport),
           audioMixed(audioMixed),

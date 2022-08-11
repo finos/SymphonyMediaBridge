@@ -1,6 +1,7 @@
 #pragma once
 #include "transport/RtcTransport.h"
 #include "utils/Optional.h"
+#include "utils/StdExtensions.h"
 #include <atomic>
 #include <cstdint>
 #include <memory>
@@ -16,7 +17,7 @@ struct DataStream
         std::shared_ptr<transport::RtcTransport>& transport)
         : _id(id),
           _endpointId(endpointId),
-          _endpointIdHash(std::hash<std::string>{}(_endpointId)),
+          _endpointIdHash(utils::hash<std::string>{}(_endpointId)),
           _localSctpPort(rand() % 19000 + 1000),
           _transport(transport),
           _markedForDeletion(false),
