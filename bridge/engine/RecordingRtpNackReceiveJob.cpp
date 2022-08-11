@@ -29,12 +29,12 @@ void RecordingRtpNackReceiveJob::run()
         return;
     }
 
-    if (!_ssrcOutboundContext._packetCache.isSet() || !_ssrcOutboundContext._packetCache.get())
+    if (!_ssrcOutboundContext.packetCache.isSet() || !_ssrcOutboundContext.packetCache.get())
     {
         return;
     }
 
-    auto cachedPacket = _ssrcOutboundContext._packetCache.get()->get(recControlHeader->sequenceNumber);
+    auto cachedPacket = _ssrcOutboundContext.packetCache.get()->get(recControlHeader->sequenceNumber);
     if (!cachedPacket)
     {
         return;

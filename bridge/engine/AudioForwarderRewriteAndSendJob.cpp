@@ -26,12 +26,12 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
         if (senderInboundContext.rtpMap._audioLevelExtId.isSet() &&
             rtpHeaderExtension.getId() == senderInboundContext.rtpMap._audioLevelExtId.get())
         {
-            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._audioLevelExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap._audioLevelExtId.get());
         }
         else if (senderInboundContext.rtpMap._absSendTimeExtId.isSet() &&
             rtpHeaderExtension.getId() == senderInboundContext.rtpMap._absSendTimeExtId.get())
         {
-            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap._absSendTimeExtId.get());
         }
     }
 }
@@ -65,19 +65,19 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    bool newSource = _outboundContext._lastRewrittenSsrc != header->ssrc;
-    _outboundContext._lastRewrittenSsrc = header->ssrc;
+    bool newSource = _outboundContext.lastRewrittenSsrc != header->ssrc;
+    _outboundContext.lastRewrittenSsrc = header->ssrc;
     if (newSource)
     {
-        _outboundContext._timestampOffset = _outboundContext._lastSentTimestamp +
+        _outboundContext.timestampOffset = _outboundContext.lastSentTimestamp +
             codec::Opus::sampleRate / codec::Opus::packetsPerSecond - header->timestamp.get();
-        _outboundContext._highestSeenExtendedSequenceNumber = _extendedSequenceNumber - 1;
+        _outboundContext.highestSeenExtendedSequenceNumber = _extendedSequenceNumber - 1;
     }
 
     uint16_t nextSequenceNumber;
     if (!utils::OutboundSequenceNumber::process(_extendedSequenceNumber,
-            _outboundContext._highestSeenExtendedSequenceNumber,
-            _outboundContext._sequenceCounter,
+            _outboundContext.highestSeenExtendedSequenceNumber,
+            _outboundContext.sequenceCounter,
             nextSequenceNumber))
     {
         logger::warn("%s dropping packet ssrc %u, seq %u, timestamp %u",
@@ -89,13 +89,13 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    header->ssrc = _outboundContext._ssrc;
+    header->ssrc = _outboundContext.ssrc;
     header->sequenceNumber = nextSequenceNumber;
-    header->timestamp = _outboundContext._timestampOffset + header->timestamp;
-    header->payloadType = _outboundContext._rtpMap._payloadType;
-    if (static_cast<int32_t>(header->timestamp - _outboundContext._lastSentTimestamp) > 0)
+    header->timestamp = _outboundContext.timestampOffset + header->timestamp;
+    header->payloadType = _outboundContext.rtpMap._payloadType;
+    if (static_cast<int32_t>(header->timestamp - _outboundContext.lastSentTimestamp) > 0)
     {
-        _outboundContext._lastSentTimestamp = header->timestamp;
+        _outboundContext.lastSentTimestamp = header->timestamp;
     }
 
     rewriteHeaderExtensions(header, _senderInboundContext, _outboundContext);

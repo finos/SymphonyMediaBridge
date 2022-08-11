@@ -21,71 +21,71 @@ class SsrcOutboundContext
 {
 public:
     SsrcOutboundContext(const uint32_t ssrc, memory::PacketPoolAllocator& packetAllocator, const bridge::RtpMap& rtpMap)
-        : _ssrc(ssrc),
-          _allocator(packetAllocator),
-          _rtpMap(rtpMap),
-          _sequenceCounter(0),
-          _lastExtendedSequenceNumber(0xFFFFFFFF),
-          _lastSentPicId(0xFFFFFFFF),
-          _lastSentTl0PicIdx(0xFFFFFFFF),
-          _lastSentTimestamp(0),
-          _sequenceNumberOffset(0),
-          _picIdOffset(0),
-          _tl0PicIdxOffset(0),
-          _timestampOffset(0),
-          _lastRewrittenSsrc(ssrc),
-          _needsKeyframe(false),
-          _lastKeyFrameSequenceNumber(0),
-          _highestSeenExtendedSequenceNumber(0xFFFFFFFF),
-          _lastRespondedNackPid(0),
-          _lastRespondedNackBlp(0),
-          _lastRespondedNackTimestamp(0),
-          _lastSendTime(utils::Time::getAbsoluteTime()),
-          _markedForDeletion(false),
-          _idle(false)
+        : ssrc(ssrc),
+          allocator(packetAllocator),
+          rtpMap(rtpMap),
+          sequenceCounter(0),
+          lastExtendedSequenceNumber(0xFFFFFFFF),
+          lastSentPicId(0xFFFFFFFF),
+          lastSentTl0PicIdx(0xFFFFFFFF),
+          lastSentTimestamp(0),
+          sequenceNumberOffset(0),
+          picIdOffset(0),
+          tl0PicIdxOffset(0),
+          timestampOffset(0),
+          lastRewrittenSsrc(ssrc),
+          needsKeyframe(false),
+          lastKeyFrameSequenceNumber(0),
+          highestSeenExtendedSequenceNumber(0xFFFFFFFF),
+          lastRespondedNackPid(0),
+          lastRespondedNackBlp(0),
+          lastRespondedNackTimestamp(0),
+          lastSendTime(utils::Time::getAbsoluteTime()),
+          markedForDeletion(false),
+          idle(false)
     {
     }
 
     void onRtpSent(const uint64_t timestamp)
     {
-        _lastSendTime = timestamp;
-        _idle = false;
+        lastSendTime = timestamp;
+        idle = false;
     }
 
-    uint32_t _ssrc;
+    uint32_t ssrc;
 
-    std::unique_ptr<codec::OpusEncoder> _opusEncoder;
-    memory::PacketPoolAllocator& _allocator;
-    const bridge::RtpMap& _rtpMap;
+    std::unique_ptr<codec::OpusEncoder> opusEncoder;
+    memory::PacketPoolAllocator& allocator;
+    const bridge::RtpMap& rtpMap;
 
     // This is the highest sent outbound sequence number
-    uint32_t _sequenceCounter;
+    uint32_t sequenceCounter;
 
     // These are used by the VP8 forwarder
-    uint32_t _lastExtendedSequenceNumber;
-    uint32_t _lastSentPicId;
-    uint32_t _lastSentTl0PicIdx;
-    uint32_t _lastSentTimestamp;
-    int64_t _sequenceNumberOffset;
-    int32_t _picIdOffset;
-    int32_t _tl0PicIdxOffset;
-    int64_t _timestampOffset;
-    uint32_t _lastRewrittenSsrc;
-    bool _needsKeyframe;
-    uint32_t _lastKeyFrameSequenceNumber;
+    uint32_t lastExtendedSequenceNumber;
+    uint32_t lastSentPicId;
+    uint32_t lastSentTl0PicIdx;
+    uint32_t lastSentTimestamp;
+    int64_t sequenceNumberOffset;
+    int32_t picIdOffset;
+    int32_t tl0PicIdxOffset;
+    int64_t timestampOffset;
+    uint32_t lastRewrittenSsrc;
+    bool needsKeyframe;
+    uint32_t lastKeyFrameSequenceNumber;
 
     // Used to keep track of offset between inbound and outbound sequence numbers
-    uint32_t _highestSeenExtendedSequenceNumber;
+    uint32_t highestSeenExtendedSequenceNumber;
 
     // Store the pid and blp of the last nack that was responded to, to avoid resending
-    uint16_t _lastRespondedNackPid;
-    uint16_t _lastRespondedNackBlp;
-    uint64_t _lastRespondedNackTimestamp;
+    uint16_t lastRespondedNackPid;
+    uint16_t lastRespondedNackBlp;
+    uint64_t lastRespondedNackTimestamp;
 
-    utils::Optional<PacketCache*> _packetCache;
-    uint64_t _lastSendTime;
-    bool _markedForDeletion;
-    bool _idle;
+    utils::Optional<PacketCache*> packetCache;
+    uint64_t lastSendTime;
+    bool markedForDeletion;
+    bool idle;
 };
 
 } // namespace bridge

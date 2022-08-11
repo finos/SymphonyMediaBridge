@@ -39,8 +39,8 @@ void RecordingAudioForwarderSendJob::run()
 
     uint16_t nextSequenceNumber;
     if (!utils::OutboundSequenceNumber::process(_extendedSequenceNumber,
-            _outboundContext._highestSeenExtendedSequenceNumber,
-            _outboundContext._sequenceCounter,
+            _outboundContext.highestSeenExtendedSequenceNumber,
+            _outboundContext.sequenceCounter,
             nextSequenceNumber))
     {
         logger::debug("Dropping rec audio packet - sequence number...", "RecordingAudioForwarderSendJob");
@@ -48,9 +48,9 @@ void RecordingAudioForwarderSendJob::run()
     }
 
     rtpHeader->sequenceNumber = nextSequenceNumber;
-    if (_outboundContext._packetCache.isSet())
+    if (_outboundContext.packetCache.isSet())
     {
-        auto packetCache = _outboundContext._packetCache.get();
+        auto packetCache = _outboundContext.packetCache.get();
         if (packetCache)
         {
             if (!packetCache->add(*_packet, nextSequenceNumber))
