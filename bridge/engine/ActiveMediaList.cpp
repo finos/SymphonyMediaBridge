@@ -224,12 +224,12 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
     if (simulcastStream.isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
-            VideoScreenShareSsrcMapping{simulcastStream._levels[0]._ssrc, _videoScreenShareSsrc.main});
+            VideoScreenShareSsrcMapping{simulcastStream.levels[0].ssrc, _videoScreenShareSsrc.main});
     }
     else if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
-            VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc, _videoScreenShareSsrc.main});
+            VideoScreenShareSsrcMapping{secondarySimulcastStream.get().levels[0].ssrc, _videoScreenShareSsrc.main});
     }
 
     if (_activeVideoListLookupMap.size() == _maxActiveListSize)
@@ -256,7 +256,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
         _logId.c_str(),
         endpointId,
         endpointIdHash,
-        simulcastStream._levels[0]._ssrc);
+        simulcastStream.levels[0].ssrc);
     _activeVideoListLookupMap.emplace(endpointIdHash, _activeVideoList.head());
     assert(pushResult);
     return endpointIdHash != _dominantSpeakerId || updateActiveVideoList(_dominantSpeakerId);
@@ -698,7 +698,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
                 (targetVideoStream->_secondarySimulcastStream.isSet() &&
                     targetVideoStream->_secondarySimulcastStream.get().isSendingVideo()))
             {
-                api::DataChannelMessage::addUserMediaSsrc(outMessage, videoStream->_pinSsrc.get()._ssrc);
+                api::DataChannelMessage::addUserMediaSsrc(outMessage, videoStream->_pinSsrc.get().ssrc);
             }
 
             if (_videoScreenShareSsrcMapping.isSet() &&

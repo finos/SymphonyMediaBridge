@@ -1231,7 +1231,7 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     }
     auto videoStream = videoStreamItr->second.get();
 
-    if (simulcastStream._numLevels > 3)
+    if (simulcastStream.numLevels > 3)
     {
         logger::error("Simulcast levels can only be 0 - 3. Video stream endpoint id %s",
             _loggableId.c_str(),
@@ -1240,21 +1240,21 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     }
 
     utils::StringBuilder<1024> ssrcsString;
-    for (size_t i = 0; i < simulcastStream._numLevels; ++i)
+    for (size_t i = 0; i < simulcastStream.numLevels; ++i)
     {
-        ssrcsString.append(simulcastStream._levels[i]._ssrc);
+        ssrcsString.append(simulcastStream.levels[i].ssrc);
         ssrcsString.append(",");
-        ssrcsString.append(simulcastStream._levels[i]._feedbackSsrc);
+        ssrcsString.append(simulcastStream.levels[i].feedbackSsrc);
         ssrcsString.append(" ");
     }
 
     if (secondarySimulcastStream.isSet())
     {
-        for (size_t i = 0; i < secondarySimulcastStream.get()._numLevels; ++i)
+        for (size_t i = 0; i < secondarySimulcastStream.get().numLevels; ++i)
         {
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._ssrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].ssrc);
             ssrcsString.append(",");
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._feedbackSsrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].feedbackSsrc);
             ssrcsString.append(" ");
         }
     }
@@ -1306,21 +1306,21 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
     }
 
     utils::StringBuilder<1024> ssrcsString;
-    for (size_t i = 0; i < simulcastStream._numLevels; ++i)
+    for (size_t i = 0; i < simulcastStream.numLevels; ++i)
     {
-        ssrcsString.append(simulcastStream._levels[i]._ssrc);
+        ssrcsString.append(simulcastStream.levels[i].ssrc);
         ssrcsString.append(",");
-        ssrcsString.append(simulcastStream._levels[i]._feedbackSsrc);
+        ssrcsString.append(simulcastStream.levels[i].feedbackSsrc);
         ssrcsString.append(" ");
     }
 
     if (secondarySimulcastStream.isSet())
     {
-        for (size_t i = 0; i < secondarySimulcastStream.get()._numLevels; ++i)
+        for (size_t i = 0; i < secondarySimulcastStream.get().numLevels; ++i)
         {
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._ssrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].ssrc);
             ssrcsString.append(",");
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._feedbackSsrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].feedbackSsrc);
             ssrcsString.append(" ");
         }
     }
@@ -1620,7 +1620,7 @@ bool Mixer::addVideoStreamToEngine(const std::string& endpointId)
     logger::debug("Adding videoStream to engine, endpointId %s, %s",
         getLoggableId().c_str(),
         videoStream->endpointId.c_str(),
-        toString(videoStream->simulcastStream._contentType));
+        toString(videoStream->simulcastStream.contentType));
 
     videoStream->isConfigured = true;
 

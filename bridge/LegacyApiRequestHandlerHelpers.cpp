@@ -142,7 +142,7 @@ std::vector<SimulcastStream> makeSimulcastStreams(const legacyapi::Channel& chan
                 if (ssrcAttribute._content.compare(legacyapi::SsrcAttribute::slidesContent) == 0 &&
                     ssrcAttribute._sources[0] == sourcesSsrc)
                 {
-                    simulcastStream._contentType = SimulcastStream::VideoContentType::SLIDES;
+                    simulcastStream.contentType = SimulcastStream::VideoContentType::SLIDES;
                 }
             }
 
@@ -154,15 +154,15 @@ std::vector<SimulcastStream> makeSimulcastStreams(const legacyapi::Channel& chan
                     continue;
                 }
 
-                simulcastStream._levels[simulcastStream._numLevels]._ssrc = simulcastSsrc;
-                simulcastStream._levels[simulcastStream._numLevels]._feedbackSsrc = feedbackGroup->_sources[1];
-                ++simulcastStream._numLevels;
+                simulcastStream.levels[simulcastStream.numLevels].ssrc = simulcastSsrc;
+                simulcastStream.levels[simulcastStream.numLevels].feedbackSsrc = feedbackGroup->_sources[1];
+                ++simulcastStream.numLevels;
 
                 logger::debug("Add simulcast level main ssrc %u feedback ssrc %u, content %s, id %s, endpointId %s",
                     "RequestHandlerHelpers",
                     simulcastSsrc,
                     feedbackGroup->_sources[1],
-                    toString(simulcastStream._contentType),
+                    toString(simulcastStream.contentType),
                     channel._id.get().c_str(),
                     channel._endpoint.get().c_str());
             }
@@ -178,17 +178,17 @@ std::vector<SimulcastStream> makeSimulcastStreams(const legacyapi::Channel& chan
             }
 
             SimulcastStream simulcastStream{0};
-            simulcastStream._numLevels = 1;
+            simulcastStream.numLevels = 1;
 
-            simulcastStream._levels[0]._ssrc = sourcesSsrc;
-            simulcastStream._levels[0]._feedbackSsrc = feedbackGroup->_sources[1];
+            simulcastStream.levels[0].ssrc = sourcesSsrc;
+            simulcastStream.levels[0].feedbackSsrc = feedbackGroup->_sources[1];
 
             for (auto& ssrcAttribute : channel._ssrcAttributes)
             {
                 if (ssrcAttribute._content.compare(legacyapi::SsrcAttribute::slidesContent) == 0 &&
                     ssrcAttribute._sources[0] == sourcesSsrc)
                 {
-                    simulcastStream._contentType = SimulcastStream::VideoContentType::SLIDES;
+                    simulcastStream.contentType = SimulcastStream::VideoContentType::SLIDES;
                 }
             }
 
@@ -196,7 +196,7 @@ std::vector<SimulcastStream> makeSimulcastStreams(const legacyapi::Channel& chan
                 "RequestHandlerHelpers",
                 sourcesSsrc,
                 feedbackGroup->_sources[1],
-                toString(simulcastStream._contentType),
+                toString(simulcastStream.contentType),
                 channel._id.get().c_str(),
                 channel._endpoint.get().c_str());
 

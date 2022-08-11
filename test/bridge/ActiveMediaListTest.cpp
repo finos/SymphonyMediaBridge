@@ -147,9 +147,9 @@ protected:
     bridge::EngineVideoStream* addEngineVideoStream(const size_t id)
     {
         bridge::SimulcastStream simulcastStream{0};
-        simulcastStream._numLevels = 1;
-        simulcastStream._levels[0]._ssrc = id;
-        simulcastStream._levels[0]._feedbackSsrc = 100 + id;
+        simulcastStream.numLevels = 1;
+        simulcastStream.levels[0].ssrc = id;
+        simulcastStream.levels[0].feedbackSsrc = 100 + id;
 
         auto engineVideoStream = new bridge::EngineVideoStream(std::to_string(id),
             id,
