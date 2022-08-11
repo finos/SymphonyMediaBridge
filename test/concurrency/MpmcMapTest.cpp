@@ -562,3 +562,25 @@ TEST(MpmcMap, socketAddErase)
         first + 8 * 1024 * (sizeof(std::pair<transport::SocketAddress, MockTransport*>) + sizeof(uint64_t) * 2);
     ASSERT_EQ(reinterpret_cast<const uint8_t*>(&*testMap.cend()), expectedEnd);
 }
+
+TEST(MpmcMap, getItem)
+{
+    Simple a;
+    Simple b;
+    concurrency::MpmcHashmap32<uint64_t, Simple> hmap1(1024);
+    concurrency::MpmcHashmap32<uint64_t, Simple&> hmap2(1024);
+    concurrency::MpmcHashmap32<uint64_t, Simple*> hmap3(1024);
+    hmap1.emplace(1, a);
+    hmap2.emplace(2, b);
+    hmap3.emplace(3, &b);
+
+    Simple* p = nullptr;
+    p = hmap1.getItem(1);
+    EXPECT_EQ(p, &hmap1.find(1)->second);
+
+    p = hmap2.getItem(2);
+    EXPECT_EQ(p, &b);
+
+    p = hmap3.getItem(3);
+    EXPECT_EQ(p, &b);
+}

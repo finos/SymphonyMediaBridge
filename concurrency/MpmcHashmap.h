@@ -154,7 +154,7 @@ public:
     typedef const IterBase<std::pair<KeyT, T>> const_iterator;
     typedef IterBase<std::pair<KeyT, T>> iterator;
     typedef std::pair<KeyT, T> value_type;
-    using PointerType = typename std::add_pointer<T>::type;
+    using PointerType = typename std::conditional<std::is_pointer<T>::value, T, std::remove_reference_t<T>*>::type;
 
     explicit MpmcHashmap32(size_t maxElements) : _end(0), _capacity(maxElements), _index(maxElements * 4)
     {
@@ -354,7 +354,6 @@ public:
         return iterator(_elements, currentEnd, currentEnd);
     }
 
-    template <typename TypeName = T>
     PointerType getItem(const KeyT& key)
     {
         auto it = find(key);
@@ -365,11 +364,7 @@ public:
         return nullptr;
     }
 
-    template <typename TypeName = T>
-    const PointerType getItem(const KeyT& key) const
-    {
-        return const_cast<MpmcHashmap32<KeyT, T>&>(*this).getItem(key);
-    }
+    const PointerType getItem(const KeyT& key) const { return const_cast<MpmcHashmap32<KeyT, T>&>(*this).getItem(key); }
 
 private:
     static size_t blockSizeFor(size_t count, size_t size)
