@@ -53,6 +53,7 @@ public:
     void fillInReport(rtp::RtcpSenderReport& report, uint64_t timestamp, uint64_t wallClockNtp) const;
 
     void setRtpFrequency(uint32_t rtpFrequency);
+    void stop();
 
     // thread safe interface
     ReportSummary getSummary() const;

@@ -77,6 +77,17 @@ public:
         new (&_dataPtr[_size++]) T(value);
     }
 
+    T& back()
+    {
+        if (_size == 0)
+        {
+            return *_dataPtr;
+        }
+        return _dataPtr[_size - 1];
+    }
+
+    const T& back() const { return const_cast<Array<T, SIZE>&>(*this).back(); }
+
 private:
     const size_t _capacity;
     size_t _size;

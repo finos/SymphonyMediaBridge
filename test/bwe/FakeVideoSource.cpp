@@ -20,7 +20,8 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
       _sequenceCounter(0),
       _avgRate(0.0005),
       _rtpTimestamp(5000),
-      _keyFrame(true)
+      _keyFrame(true),
+      _packetsSent(0)
 {
     logger::info("created fake video source %u", "FakeVideoSource", ssrc);
 }
@@ -98,6 +99,7 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             tryFillFramePayload(packet->get(), packet->getLength(), _keyFrame);
             _keyFrame = false;
 
+            ++_packetsSent;
             return packet;
         }
         else
