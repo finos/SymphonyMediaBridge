@@ -191,19 +191,18 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
         videoContent["payload-types"] = payloadTypes;
 
-        auto streamsJson = json::array();
-
+        auto streamsArray = json::array();
+        auto stream = json::object();
+        auto sources = json::array();
         for (uint32_t* pSsrc = videoSsrcs; *pSsrc != 0; pSsrc += 2)
         {
-            auto stream = json::object();
-            auto sources = json::array();
             sources.push_back(json::object({{"main", *pSsrc}, {"feedback", *(pSsrc + 1)}}));
-            stream["sources"] = sources;
-            stream["id"] = "msidX";
-            stream["content"] = "video";
-            streamsJson.push_back(stream);
         }
-        videoContent["streams"] = streamsJson;
+        stream["sources"] = sources;
+        stream["id"] = "msidX";
+        stream["content"] = "video";
+        streamsArray.push_back(stream);
+        videoContent["streams"] = streamsArray;
 
         videoContent["rtp-hdrexts"] =
             json::array({{{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}},
@@ -260,13 +259,35 @@ std::unordered_set<uint32_t> Channel::getOfferedVideoSsrcs() const
     return ssrcs;
 }
 
-std::vector<SimulcastStream> Channel::getOfferedVideoStreams() const
+std::vector<api::SimulcastGroup> Channel::getOfferedVideoStreams() const
 {
-    std::vector<SimulcastStream> v;
+    std::vector<api::SimulcastGroup> v;
 
     if (_offer.find("video") != _offer.end())
     {
-        for (auto& group : _offer["video"]) {}
+        for (auto& stream : _offer["video"]["streams"])
+        {
+            api::SimulcastGroup group;
+            auto content = stream["content"].get<std::string>();
+            if (content.compare("local") == 0)
+            {
+                for (auto& ssrcPair : stream["sources"])
+                {
+                    api::SsrcPair ssrc = {ssrcPair["main"].get<uint32_t>(), 0};
+                    group.push_back(ssrc);
+                }
+            }
+            else if (content.compare("slides") == 0 || content.compare("video") == 0)
+            {
+                for (auto& ssrcPair : stream["sources"])
+                {
+                    api::SsrcPair ssrc = {ssrcPair["main"].get<uint32_t>(), ssrcPair["feedback"].get<uint32_t>()};
+                    group.push_back(ssrc);
+                }
+            }
+
+            v.push_back(group);
+        }
     }
 
     return v;
@@ -532,13 +553,13 @@ std::unordered_set<uint32_t> ColibriChannel::getOfferedVideoSsrcs() const
     return ssrcs;
 }
 
-std::vector<SimulcastStream> ColibriChannel::getOfferedVideoStreams() const
+std::vector<api::SimulcastGroup> ColibriChannel::getOfferedVideoStreams() const
 {
-    std::vector<SimulcastStream> v;
+    std::vector<api::SimulcastGroup> v;
 
     if (_offer.find("video") != _offer.end())
     {
-        for (auto& group : _offer["video"]) {}
+        // must dig through SIM and FID groups
     }
 
     return v;

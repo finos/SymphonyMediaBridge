@@ -314,7 +314,6 @@ private:
     concurrency::MpmcHashmap32<size_t, EngineDataStream*> _engineDataStreams;
     concurrency::MpmcHashmap32<size_t, EngineRecordingStream*> _engineRecordingStreams;
     concurrency::MpmcHashmap32<size_t, EngineBarbell*> _engineBarbells;
-    BarbellEndpointIdMap _barbellEndpoints;
 
     concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext> _ssrcInboundContexts;
     concurrency::MpmcHashmap32<uint32_t, uint32_t> _audioSsrcToUserIdMap;
