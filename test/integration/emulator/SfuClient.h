@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AudioSource.h"
+#include "api/SimulcastGroup.h"
 #include "memory/Array.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
@@ -100,6 +101,7 @@ public:
         }
 
         _remoteVideoSsrc = _channel.getOfferedVideoSsrcs();
+        _remoteVideoStreams = _channel.getOfferedVideoStreams();
     }
 
     void connect()
@@ -157,6 +159,8 @@ public:
                 auto packet = videoSource.second->getPacket(timestamp);
                 if (packet)
                 {
+                    // auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+                    // logger::debug("sending video %u", _loggableId.c_str(), rtpHeader->ssrc.get());
                     _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
                 }
             }
@@ -329,28 +333,12 @@ public:
             {
                 return;
             }
+            else
+            {
+                logger::warn("unxpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+            }
 
             it->second->onRtpPacketReceived(sender, *packet, extendedSequenceNumber, timestamp);
-            /*
-            _videoReceivers.emplace(rtpHeader->ssrc.get(),
-                new RtpVideoReceiver(_loggableId.getInstanceId(),
-                    rtpHeader->ssrc.get(),
-                    rtpMap,
-                    fbMap,
-                    sender,
-                    timestamp));
-            it = _videoReceivers.find(rtpHeader->ssrc.get());
-        }
-*/
-            if ((extendedSequenceNumber % 100) == 0)
-            {
-                logger::debug("%s ssrc %u received seq %u, audio receiver count %zu",
-                    _loggableId.c_str(),
-                    _channel.getEndpointId().c_str(),
-                    rtpHeader->ssrc.get(),
-                    extendedSequenceNumber,
-                    _audioReceivers.size());
-            }
         }
     }
 
@@ -442,6 +430,7 @@ private:
     logger::LoggableId _loggableId;
     std::atomic_bool _recordingActive;
     std::unordered_set<uint32_t> _remoteVideoSsrc;
+    std::vector<api::SimulcastGroup> _remoteVideoStreams;
     uint32_t _ptime;
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
 };
