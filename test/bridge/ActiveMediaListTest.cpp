@@ -71,7 +71,7 @@ bool endpointsContainsId(const nlohmann::json& messageJson, const std::string& m
 class ActiveMediaListTest : public ::testing::Test
 {
 public:
-    ActiveMediaListTest() : _engineAudioStreams(16), _engineVideoStreams(16), _barbellEndpoints(16) {}
+    ActiveMediaListTest() : _engineAudioStreams(16), _engineVideoStreams(16) {}
 
     const uint32_t AUDIO_REWRITE_COUNT = 5;
     const uint32_t VIDEO_REWRITE_COUNT = 10;
@@ -141,7 +141,6 @@ protected:
     std::unique_ptr<DummyRtcTransport> _transport;
     concurrency::MpmcHashmap32<size_t, bridge::EngineAudioStream*> _engineAudioStreams;
     concurrency::MpmcHashmap32<size_t, bridge::EngineVideoStream*> _engineVideoStreams;
-    bridge::BarbellEndpointIdMap _barbellEndpoints;
 
     std::unique_ptr<bridge::ActiveMediaList> _activeMediaList;
 

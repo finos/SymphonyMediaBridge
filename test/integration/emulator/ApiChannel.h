@@ -1,4 +1,5 @@
 #pragma once
+#include "api/SimulcastGroup.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
 #include "transport/RtcTransport.h"
@@ -60,7 +61,7 @@ public:
     virtual bool isAudioOffered() const = 0;
 
     virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const = 0;
-    virtual std::vector<SimulcastStream> getOfferedVideoStreams() const = 0;
+    virtual std::vector<api::SimulcastGroup> getOfferedVideoStreams() const = 0;
 
 public:
     bool isSuccess() const { return !raw.empty(); }
@@ -114,7 +115,7 @@ public:
     bool isAudioOffered() const override { return _offer.find("audio") != _offer.end(); }
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
-    std::vector<SimulcastStream> getOfferedVideoStreams() const override;
+    std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
 };
 
 class ColibriChannel : public BaseChannel
@@ -138,7 +139,7 @@ public:
     bool isAudioOffered() const override;
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
-    std::vector<SimulcastStream> getOfferedVideoStreams() const override;
+    std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
 };
 
 class Barbell

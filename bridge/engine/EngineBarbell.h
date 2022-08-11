@@ -29,6 +29,7 @@ struct EngineBarbell
 
     utils::Optional<uint32_t> getMainSsrcFor(uint32_t feedbackSsrc);
     utils::Optional<uint32_t> getFeedbackSsrcFor(uint32_t ssrc);
+    static bool isFromBarbell(const char* transportTag) { return 0 == std::strcmp(barbellTag, transportTag); }
 
     std::string id;
     size_t idHash;
