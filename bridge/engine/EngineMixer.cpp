@@ -3230,6 +3230,12 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             presenterSimulcastLevel->_ssrc,
             slidesLimit,
             _sendAllocator);
+
+        _engineStreamDirector->setSlidesSsrcAndBandwidth(presenterSimulcastLevel->_ssrc, slidesLimit);
+    }
+    else
+    {
+        _engineStreamDirector->setSlidesSsrcAndBandwidth(0, 0);
     }
 }
 

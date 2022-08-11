@@ -314,9 +314,9 @@ public:
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
-        size_t quality = _lowQualitySsrcs.contains(ssrc) ? lowQuality
-            : _midQualitySsrcs.contains(ssrc)            ? midQuality
-                                                         : highQuality;
+        const auto quality = _lowQualitySsrcs.contains(ssrc) ? lowQuality
+            : _midQualitySsrcs.contains(ssrc)                ? midQuality
+                                                             : highQuality;
 
         // We server low and mid for unpinned according to the ConfigLadder.
         if (highQuality != quality && isUnpinnedQualityUsed(quality, senderEndpointIdHash, isSenderInLastNList))
@@ -427,6 +427,17 @@ public:
                 toEndpointIdHash,
                 ssrc);
             return false;
+        }
+
+        // If slides ssrc is checked here, it must've passed isSsrcUsed check for being in the LastN, so
+        // forward unconditionally here (even if desired 'unpinned' quality is 'drop').
+        if (ssrc == _slidesSsrc)
+        {
+            DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: t - slides.",
+                "EngineStreamDirector",
+                toEndpointIdHash,
+                ssrc);
+            return true;
         }
 
         DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: max pinned quality: %d, max unpinned quality: %d",
@@ -623,6 +634,12 @@ public:
         return false;
     }
 
+    void setSlidesSsrcAndBandwidth(size_t slidesSsrc, uint32_t bwKbps)
+    {
+        _slidesSsrc = slidesSsrc;
+        _slidesBandwidthKbps = bwKbps;
+    }
+
 private:
     static constexpr size_t lowQuality = 0;
     static constexpr size_t midQuality = 1;
@@ -660,6 +677,12 @@ private:
 
     /** Max number of the video streams forwarded to any particular endpoint. */
     uint32_t _lastN;
+
+    /** Estimated min bandwidth screenshareing/slides will obey based on min of all participants uplink estimates. */
+    uint32_t _slidesBandwidthKbps;
+
+    /** SSRC for slides. */
+    size_t _slidesSsrc;
 
     inline size_t getParticipantHighestActiveQuality(const size_t endpointIdHash, const uint32_t ssrc)
     {
@@ -876,10 +899,10 @@ private:
         for (const auto& config : configLadder)
         {
             const auto configCost = config[(int)ConfigLadderCols::BasicCost] +
-                maxVideoStreams * config[(int)ConfigLadderCols::ExtraCostPerEach];
+                maxVideoStreams * config[(int)ConfigLadderCols::ExtraCostPerEach] + _slidesBandwidthKbps;
 
-            assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity]);
-            assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity]);
+            assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity] + _slidesBandwidthKbps);
+            assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity] + _slidesBandwidthKbps);
 
             if (configCost >= bestConfigCost && configCost <= estimatedUplinkBandwidth)
             {
@@ -892,12 +915,13 @@ private:
         outPinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::PinnedQuality];
         outUnpinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::UnpinnedQuality];
 
-        logger::info("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d",
+        logger::info("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d, reserve for slides: %d",
             "EngineStreamDirector",
             (char)outPinnedQuality + '0',
             (char)outUnpinnedQuality + '0',
             maxVideoStreams,
-            estimatedUplinkBandwidth);
+            estimatedUplinkBandwidth,
+            _slidesBandwidthKbps);
     }
 };
 
