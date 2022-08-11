@@ -37,6 +37,7 @@ public:
     void onRtpReceived(const memory::Packet& packet, uint64_t timestamp);
     void onRtcpReceived(const rtp::RtcpHeader& header, uint64_t timestamp, uint64_t ntpWallClock);
     void fillInReportBlock(uint64_t timestamp, rtp::ReportBlock& reportBlock, uint64_t ntpWallclock);
+    void stop();
 
     uint64_t getLastActive() const { return _activeAt; }
     PacketCounters getCounters() const;
@@ -75,6 +76,9 @@ public:
         uint32_t initialSequenceNumber;
         // TODO jitter avg
     };
+
+    // only for Transport thread context
+    ReceiveCounters getCumulativeSnapshot() const { return _receiveCounters; }
 
 private:
     struct SenderReportAggr

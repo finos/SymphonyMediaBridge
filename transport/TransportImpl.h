@@ -65,7 +65,11 @@ public:
         const Endpoints& rtpEndPoints,
         const ServerEndpoints& tcpEndPoints,
         TcpEndpointFactory* tcpEndpointFactory,
-        memory::PacketPoolAllocator& allocator);
+        memory::PacketPoolAllocator& allocator,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation);
 
     TransportImpl(jobmanager::JobManager& jobmanager,
         SrtpClientFactory& srtpClientFactory,
@@ -424,6 +428,9 @@ public:
 #endif
 
     char _tag[16];
+
+    bool _uplinkEstimationEnabled;
+    bool _downlinkEstimationEnabled;
 };
 
 } // namespace transport

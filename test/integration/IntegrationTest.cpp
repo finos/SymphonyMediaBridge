@@ -973,6 +973,37 @@ TEST_F(IntegrationTest, ptime10)
     }
 }
 
+namespace
+{
+template <typename T>
+void logVideoSent(const char* clientName, T& client)
+{
+    for (auto& itPair : client._videoSources)
+    {
+        auto& videoSource = itPair.second;
+        logger::info("%s video source %u, sent %u packets",
+            "bbTest",
+            clientName,
+            videoSource->getSsrc(),
+            videoSource->getPacketsSent());
+    }
+}
+
+template <typename T>
+void logTransportSummary(const char* clientName, transport::RtcTransport* transport, T& summary)
+{
+    for (auto& report : summary)
+    {
+        logger::debug("%s %s ssrc %u sent video pkts %u",
+            "bbTest",
+            clientName,
+            transport->getLoggableId().c_str(),
+            report.first,
+            report.second.packetsSent);
+    }
+}
+} // namespace
+
 TEST_F(IntegrationTest, simpleBarbell)
 {
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
@@ -986,10 +1017,20 @@ TEST_F(IntegrationTest, simpleBarbell)
     _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
+        "ice.publicIpv4":"127.0.0.1",
+        "rctl.enable": false,
+        "bwe.enable":false
         })");
 
     initBridge(_config);
+
+    config::Config config1;
+    config1.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "rctl.enable": false
+        })");
 
     config::Config config2;
     config2.readFromString(
@@ -999,7 +1040,8 @@ TEST_F(IntegrationTest, simpleBarbell)
         "ice.publicIpv4":"127.0.0.1",
         "ice.singlePort":12000,
         "port":8090,
-        "recording.singlePort":12500
+        "recording.singlePort":12500,
+        "rctl.enable": false
         })");
 
     auto bridge2 = std::make_unique<bridge::Bridge>(config2);
@@ -1066,15 +1108,20 @@ TEST_F(IntegrationTest, simpleBarbell)
     confRequest.awaitResponse(500 * utils::Time::ms);
     EXPECT_TRUE(confRequest.isSuccess());
 
+    utils::Time::nanoSleep(utils::Time::ms * 200); // let pending packets be sent and received
     client1._transport->stop();
     client2._transport->stop();
     client3._transport->stop();
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
+    logVideoSent("client1", client1);
+    logVideoSent("client2", client2);
+    logVideoSent("client3", client3);
+
     const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
     {
-        auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        auto audioCounters = client1._transport->getCumulativeAudioReceiveCounters();
         EXPECT_EQ(audioCounters.lostPackets, 0);
         const auto& rData1 = client1.getReceiveStats();
         std::vector<double> allFreq;
@@ -1106,9 +1153,23 @@ TEST_F(IntegrationTest, simpleBarbell)
         std::sort(allFreq.begin(), allFreq.end());
         EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
         EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
+
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary3;
+        auto videoReceiveStats = client1._transport->getCumulativeVideoReceiveCounters();
+        client2._transport->getReportSummary(transportSummary2);
+        client3._transport->getReportSummary(transportSummary3);
+
+        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logTransportSummary("client2", client2._transport.get(), transportSummary2);
+        logTransportSummary("client3", client3._transport.get(), transportSummary3);
+
+        EXPECT_NEAR(videoReceiveStats.packets,
+            transportSummary2.begin()->second.packetsSent + transportSummary3.begin()->second.packetsSent,
+            10);
     }
     {
-        auto audioCounters = client2._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        auto audioCounters = client2._transport->getCumulativeAudioReceiveCounters();
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& rData1 = client2.getReceiveStats();
