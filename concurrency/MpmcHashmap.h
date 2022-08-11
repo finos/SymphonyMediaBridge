@@ -17,7 +17,7 @@ namespace concurrency
 // No value may be zero !!
 // key is 40bits and will be truncated to 40 bits.
 // elementCount must be power of two and <= 16777216
-// Since key is prehashed and not stored in the index, there is a risk of hash collection and you will only notice by
+// Since key is prehashed and not stored in the index, there is a risk of hash collision and you will only notice by
 // add returning false. You cannot then add the item.
 class MurmurHashIndex
 {
