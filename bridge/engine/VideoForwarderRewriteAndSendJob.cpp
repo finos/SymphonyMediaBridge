@@ -23,8 +23,8 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
 
     for (auto& rtpHeaderExtension : headerExtensions->extensions())
     {
-        if (senderInboundContext._rtpMap._absSendTimeExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
+        if (senderInboundContext.rtpMap._absSendTimeExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext.rtpMap._absSendTimeExtId.get())
         {
             rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
             return;
@@ -81,7 +81,7 @@ void VideoForwarderRewriteAndSendJob::run()
         if (!isKeyFrame)
         {
             _outboundContext._needsKeyframe = true;
-            _senderInboundContext._pliScheduler.triggerPli();
+            _senderInboundContext.pliScheduler.triggerPli();
         }
     }
 

@@ -871,17 +871,17 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
     for (auto& ssrcInboundContextEntry : _ssrcInboundContexts)
     {
         auto& ssrcInboundContext = ssrcInboundContextEntry.second;
-        if (ssrcInboundContext._rtpMap._format != RtpMap::Format::VP8 || ssrcInboundContext._markedForDeletion)
+        if (ssrcInboundContext.rtpMap._format != RtpMap::Format::VP8 || ssrcInboundContext.markedForDeletion)
         {
             continue;
         }
-        auto videoMissingPacketsTracker = ssrcInboundContext._videoMissingPacketsTracker.get();
+        auto videoMissingPacketsTracker = ssrcInboundContext.videoMissingPacketsTracker.get();
         if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp / 1000000ULL))
         {
             continue;
         }
 
-        auto videoStreamItr = _engineVideoStreams.find(ssrcInboundContext._sender->getEndpointIdHash());
+        auto videoStreamItr = _engineVideoStreams.find(ssrcInboundContext.sender->getEndpointIdHash());
         if (videoStreamItr == _engineVideoStreams.end())
         {
             continue;
@@ -964,11 +964,11 @@ void EngineMixer::updateDirectorUplinkEstimates(const uint64_t engineIterationSt
 void EngineMixer::tryRemoveInboundSsrc(uint32_t ssrc)
 {
     auto contextIt = _ssrcInboundContexts.find(ssrc);
-    if (contextIt != _ssrcInboundContexts.end() && contextIt->second._markedForDeletion)
+    if (contextIt != _ssrcInboundContexts.end() && contextIt->second.markedForDeletion)
     {
-        if (contextIt->second._rtxSsrc.isSet())
+        if (contextIt->second.rtxSsrc.isSet())
         {
-            auto buddySsrcIt = _ssrcInboundContexts.find(contextIt->second._rtxSsrc.get());
+            auto buddySsrcIt = _ssrcInboundContexts.find(contextIt->second.rtxSsrc.get());
             if (buddySsrcIt != _ssrcInboundContexts.end())
             {
                 logger::info("Removing idle inbound context feedback ssrc %u, main ssrc %u",
@@ -979,7 +979,7 @@ void EngineMixer::tryRemoveInboundSsrc(uint32_t ssrc)
                 EngineMessage::Message message(EngineMessage::Type::InboundSsrcRemoved);
                 message.command.ssrcInboundRemoved = {this,
                     buddySsrcIt->first,
-                    buddySsrcIt->second._opusDecoder.release()};
+                    buddySsrcIt->second.opusDecoder.release()};
 
                 _ssrcInboundContexts.erase(buddySsrcIt->first);
                 _messageListener.onMessage(std::move(message));
@@ -991,7 +991,7 @@ void EngineMixer::tryRemoveInboundSsrc(uint32_t ssrc)
         EngineMessage::Message message(EngineMessage::Type::InboundSsrcRemoved);
         message.command.ssrcInboundRemoved.mixer = this;
         message.command.ssrcInboundRemoved.ssrc = ssrc;
-        message.command.ssrcInboundRemoved.opusDecoder = contextIt->second._opusDecoder.release();
+        message.command.ssrcInboundRemoved.opusDecoder = contextIt->second.opusDecoder.release();
         _ssrcInboundContexts.erase(ssrc);
         _messageListener.onMessage(std::move(message));
     }
@@ -1008,12 +1008,12 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
     {
         auto& inboundContext = inboundContextEntry.second;
         const auto ssrc = inboundContextEntry.first;
-        const auto endpointIdHash = inboundContext._sender->getEndpointIdHash();
-        auto receiveCounters = inboundContext._sender->getCumulativeReceiveCounters(ssrc);
+        const auto endpointIdHash = inboundContext.sender->getEndpointIdHash();
+        auto receiveCounters = inboundContext.sender->getCumulativeReceiveCounters(ssrc);
 
-        if (utils::Time::diffGT(inboundContext._lastReceiveTime.load(), timestamp, utils::Time::sec * 1) &&
-            receiveCounters.packets > 5 && inboundContext._activeMedia &&
-            inboundContext._rtpMap._format != RtpMap::Format::VP8RTX)
+        if (utils::Time::diffGT(inboundContext.lastReceiveTime.load(), timestamp, utils::Time::sec * 1) &&
+            receiveCounters.packets > 5 && inboundContext.activeMedia &&
+            inboundContext.rtpMap._format != RtpMap::Format::VP8RTX)
         {
             auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
             if (videoStreamItr != _engineVideoStreams.end())
@@ -1022,43 +1022,43 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                 {
                     sendPliForUsedSsrcs(*videoStreamItr->second);
                 }
-                inboundContext._inactiveCount++;
+                inboundContext.inactiveCount++;
 
                 // The reason for checking if the ssrc is equal to inboundContext._rewriteSsrc, is because that is the
                 // default simulcast level. We don't want to drop the default level even if it's unstable.
-                if (inboundContext._inactiveCount >= _config.dropInboundAfterInactive.get() &&
-                    ssrc != inboundContext._rewriteSsrc)
+                if (inboundContext.inactiveCount >= _config.dropInboundAfterInactive.get() &&
+                    ssrc != inboundContext.rewriteSsrc)
                 {
                     logger::info("Inbound packets ssrc %u, transport %s, endpointIdHash %lu will be dropped",
                         _loggableId.c_str(),
-                        inboundContext._ssrc,
-                        inboundContext._sender->getLoggableId().c_str(),
+                        inboundContext.ssrc,
+                        inboundContext.sender->getLoggableId().c_str(),
                         endpointIdHash);
 
-                    inboundContext._shouldDropPackets = true;
+                    inboundContext.shouldDropPackets = true;
                 }
             }
 
-            inboundContext._activeMedia = false;
+            inboundContext.activeMedia = false;
         }
 
-        if (utils::Time::diffGT(inboundContext._lastReceiveTime.load(), timestamp, utils::Time::minute * 5) &&
-            inboundContext._rtpMap._format != RtpMap::Format::VP8RTX)
+        if (utils::Time::diffGT(inboundContext.lastReceiveTime.load(), timestamp, utils::Time::minute * 5) &&
+            inboundContext.rtpMap._format != RtpMap::Format::VP8RTX)
         {
-            if (!inboundContext._markedForDeletion && !inboundContext._idle)
+            if (!inboundContext.markedForDeletion && !inboundContext.idle)
             {
                 logger::info("Inbound context ssrc %u has been idle for 5 minutes", _loggableId.c_str(), ssrc);
-                inboundContext._idle = true;
+                inboundContext.idle = true;
                 continue;
             }
-            else if (!inboundContext._markedForDeletion && inboundContext._idle)
+            else if (!inboundContext.markedForDeletion && inboundContext.idle)
             {
                 continue;
             }
 
             // if previous remove job is still pending, we may add another nop job
-            inboundContext._sender->getJobQueue().addJob<RemoveInboundSsrcContextJob>(ssrc,
-                *inboundContext._sender,
+            inboundContext.sender->getJobQueue().addJob<RemoveInboundSsrcContextJob>(ssrc,
+                *inboundContext.sender,
                 *this);
         }
     }
@@ -1251,14 +1251,14 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         return;
     }
 
-    if (ssrcContext->_shouldDropPackets)
+    if (ssrcContext->shouldDropPackets)
     {
         return;
     }
 
-    if (!ssrcContext->_activeMedia)
+    if (!ssrcContext->activeMedia)
     {
-        if (_engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrcContext->_ssrc, true))
+        if (_engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrcContext->ssrc, true))
         {
             if (videoStream)
             {
@@ -1275,7 +1275,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     const bool mustBeForwardedOnBarbells = isSenderInLastNList && !_engineBarbells.empty() && !isFromBarbell;
 
     if (!mustBeForwardedOnBarbells &&
-        !_engineStreamDirector->isSsrcUsed(ssrcContext->_ssrc,
+        !_engineStreamDirector->isSsrcUsed(ssrcContext->ssrc,
             endpointIdHash,
             isSenderInLastNList,
             _engineRecordingStreams.size()))
@@ -1332,7 +1332,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     }
 
     uint32_t mainSsrc;
-    const uint32_t feedbackSsrc = ssrcContext->_ssrc;
+    const uint32_t feedbackSsrc = ssrcContext->ssrc;
     if (videoStream && !_engineStreamDirector->getSsrc(videoStream->_endpointIdHash, feedbackSsrc, mainSsrc))
     {
         return;
@@ -1353,19 +1353,19 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         return;
     }
     auto& mainSsrcContext = mainSsrcContextItr->second;
-    if (mainSsrcContext._shouldDropPackets)
+    if (mainSsrcContext.shouldDropPackets)
     {
         return;
     }
-    mainSsrcContext._lastReceiveTime = timestamp;
+    mainSsrcContext.lastReceiveTime = timestamp;
 
-    if (!ssrcContext->_videoMissingPacketsTracker.get())
+    if (!ssrcContext->videoMissingPacketsTracker.get())
     {
-        if (!mainSsrcContext._videoMissingPacketsTracker.get())
+        if (!mainSsrcContext.videoMissingPacketsTracker.get())
         {
             return;
         }
-        ssrcContext->_videoMissingPacketsTracker = mainSsrcContext._videoMissingPacketsTracker;
+        ssrcContext->videoMissingPacketsTracker = mainSsrcContext.videoMissingPacketsTracker;
     }
 
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
@@ -1713,7 +1713,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
 
     if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
-        const bool isAudio = (ssrcContext->_rtpMap._format == bridge::RtpMap::Format::OPUS);
+        const bool isAudio = (ssrcContext->rtpMap._format == bridge::RtpMap::Format::OPUS);
         if (!setPacketSourceEndpointIdHash(*packet, sender->getEndpointIdHash(), ssrc, isAudio))
         {
             logger::debug("incoming barbell packet unmapped %zu ssrc %u %s",
@@ -1725,7 +1725,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         }
     }
 
-    switch (ssrcContext->_rtpMap._format)
+    switch (ssrcContext->rtpMap._format)
     {
     case bridge::RtpMap::Format::OPUS:
         ssrcContext->onRtpPacket(timestamp);
@@ -1893,16 +1893,16 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             auto& inboundContext = emplaceResult.first->second;
             if (&videoRtpMap == &barbell->videoRtpMap)
             {
-                inboundContext._rtxSsrc = barbell->getFeedbackSsrcFor(ssrc);
+                inboundContext.rtxSsrc = barbell->getFeedbackSsrcFor(ssrc);
             }
             else
             {
-                inboundContext._rtxSsrc = barbell->getMainSsrcFor(ssrc);
+                inboundContext.rtxSsrc = barbell->getMainSsrcFor(ssrc);
             }
 
             auto videoStream = barbell->videoSsrcMap.getItem(ssrc);
             assert(videoStream);
-            if (!videoStream->stream.getLevelOf(ssrc, inboundContext._simulcastLevel))
+            if (!videoStream->stream.getLevelOf(ssrc, inboundContext.simulcastLevel))
             {
                 logger::error("ssrc %u is not in simulcast group of barbell video stream %zu",
                     _loggableId.c_str(),
@@ -1979,9 +1979,9 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
         auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_rtpMap, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
-        inboundContext._rewriteSsrc = rewriteSsrc;
-        inboundContext._simulcastLevel = level;
-        inboundContext._rtxSsrc = videoStream->getFeedbackSsrcFor(ssrc);
+        inboundContext.rewriteSsrc = rewriteSsrc;
+        inboundContext.simulcastLevel = level;
+        inboundContext.rtxSsrc = videoStream->getFeedbackSsrcFor(ssrc);
 
         logger::info(
             "Created new inbound context for video stream ssrc %u, level %u, rewrite ssrc %u, endpointIdHash %lu, rtp "
@@ -1989,9 +1989,9 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             _loggableId.c_str(),
             ssrc,
             level,
-            inboundContext._rewriteSsrc,
+            inboundContext.rewriteSsrc,
             videoStream->_endpointIdHash,
-            static_cast<uint16_t>(inboundContext._rtpMap._format),
+            static_cast<uint16_t>(inboundContext.rtpMap._format),
             sender->getLoggableId().c_str());
 
         return &inboundContext;
@@ -2027,15 +2027,15 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
         auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_feedbackRtpMap, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
-        inboundContext._rewriteSsrc = rewriteSsrc;
-        inboundContext._rtxSsrc = videoStream->getMainSsrcFor(ssrc);
+        inboundContext.rewriteSsrc = rewriteSsrc;
+        inboundContext.rtxSsrc = videoStream->getMainSsrcFor(ssrc);
 
         logger::debug(
             "Created new inbound context for video stream feedback ssrc %u, endpointIdHash %lu, rtp format %u, %s",
             _loggableId.c_str(),
             ssrc,
             videoStream->_endpointIdHash,
-            static_cast<uint16_t>(inboundContext._rtpMap._format),
+            static_cast<uint16_t>(inboundContext.rtpMap._format),
             sender->getLoggableId().c_str());
 
         return &inboundContext;
@@ -2076,7 +2076,7 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
 
         if (audioStream->transport.isConnected())
         {
-            auto ssrc = packetInfo.inboundContext()->_ssrc;
+            auto ssrc = packetInfo.inboundContext()->ssrc;
             if (audioStream->ssrcRewrite)
             {
                 const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
@@ -2125,7 +2125,7 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
             continue;
         }
 
-        const auto ssrc = packetInfo.inboundContext()->_ssrc;
+        const auto ssrc = packetInfo.inboundContext()->ssrc;
         auto* ssrcOutboundContext = recordingStream->_ssrcOutboundContexts.getItem(ssrc);
         if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
         {
@@ -2304,8 +2304,8 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             continue; // not sending back over same barbell
         }
 
-        auto ssrc = packetInfo.inboundContext()->_rewriteSsrc;
-        auto simulcastLevel = packetInfo.inboundContext()->_simulcastLevel;
+        auto ssrc = packetInfo.inboundContext()->rewriteSsrc;
+        auto simulcastLevel = packetInfo.inboundContext()->simulcastLevel;
         const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
         if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
             screenShareSsrcMapping.get().second._ssrc == ssrc)
@@ -2384,17 +2384,17 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             continue;
         }
 
-        if (!_engineStreamDirector->shouldForwardSsrc(endpointIdHash, packetInfo.inboundContext()->_ssrc))
+        if (!_engineStreamDirector->shouldForwardSsrc(endpointIdHash, packetInfo.inboundContext()->ssrc))
         {
             continue;
         }
 
-        if (shouldSkipBecauseOfWhitelist(*videoStream, packetInfo.inboundContext()->_ssrc))
+        if (shouldSkipBecauseOfWhitelist(*videoStream, packetInfo.inboundContext()->ssrc))
         {
             continue;
         }
 
-        auto ssrc = packetInfo.inboundContext()->_rewriteSsrc;
+        auto ssrc = packetInfo.inboundContext()->rewriteSsrc;
         if (videoStream->_ssrcRewrite)
         {
             const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
@@ -2488,13 +2488,13 @@ void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo,
         }
 
         if (!_engineStreamDirector->shouldRecordSsrc(recordingStream->_endpointIdHash,
-                packetInfo.inboundContext()->_ssrc))
+                packetInfo.inboundContext()->ssrc))
         {
             continue;
         }
 
         auto* ssrcOutboundContext =
-            recordingStream->_ssrcOutboundContexts.getItem(packetInfo.inboundContext()->_rewriteSsrc);
+            recordingStream->_ssrcOutboundContexts.getItem(packetInfo.inboundContext()->rewriteSsrc);
         if (!ssrcOutboundContext || ssrcOutboundContext->_markedForDeletion)
         {
             continue;
@@ -2795,8 +2795,8 @@ void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
         auto ssrcIt = _ssrcInboundContexts.find(simulcastLevel._ssrc);
         if (ssrcIt != _ssrcInboundContexts.end())
         {
-            logger::debug("RequestPliJob created for inbound ssrc %u", _loggableId.c_str(), ssrcIt->second._ssrc);
-            ssrcIt->second._pliScheduler.triggerPli();
+            logger::debug("RequestPliJob created for inbound ssrc %u", _loggableId.c_str(), ssrcIt->second.ssrc);
+            ssrcIt->second.pliScheduler.triggerPli();
         }
     }
 
@@ -2815,7 +2815,7 @@ void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
             auto ssrcIt = _ssrcInboundContexts.find(simulcastLevel._ssrc);
             if (ssrcIt != _ssrcInboundContexts.end())
             {
-                ssrcIt->second._pliScheduler.triggerPli();
+                ssrcIt->second.pliScheduler.triggerPli();
             }
         }
     }
@@ -3132,10 +3132,10 @@ void EngineMixer::updateSimulcastLevelActiveState(EngineVideoStream& videoStream
     {
         const auto ssrc = simulcastStream._levels[i]._ssrc;
         auto ssrcInboundContextItr = _ssrcInboundContexts.find(ssrc);
-        if (ssrcInboundContextItr != _ssrcInboundContexts.end() && ssrcInboundContextItr->second._activeMedia)
+        if (ssrcInboundContextItr != _ssrcInboundContexts.end() && ssrcInboundContextItr->second.activeMedia)
         {
             _engineStreamDirector->streamActiveStateChanged(videoStream._endpointIdHash, ssrc, true);
-            ssrcInboundContextItr->second._pliScheduler.triggerPli();
+            ssrcInboundContextItr->second.pliScheduler.triggerPli();
         }
     }
 }
@@ -3185,7 +3185,7 @@ void EngineMixer::markInboundContextForDeletion(const uint32_t ssrc)
     auto inboundContextItr = _ssrcInboundContexts.find(ssrc);
     if (inboundContextItr != _ssrcInboundContexts.end())
     {
-        inboundContextItr->second._markedForDeletion = true;
+        inboundContextItr->second.markedForDeletion = true;
         logger::info("Marking unused inbound context for deletion, ssrc %u", _loggableId.c_str(), ssrc);
     }
 }

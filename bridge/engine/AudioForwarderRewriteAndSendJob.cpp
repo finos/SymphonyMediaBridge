@@ -23,13 +23,13 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
 
     for (auto& rtpHeaderExtension : headerExtensions->extensions())
     {
-        if (senderInboundContext._rtpMap._audioLevelExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext._rtpMap._audioLevelExtId.get())
+        if (senderInboundContext.rtpMap._audioLevelExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext.rtpMap._audioLevelExtId.get())
         {
             rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._audioLevelExtId.get());
         }
-        else if (senderInboundContext._rtpMap._absSendTimeExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
+        else if (senderInboundContext.rtpMap._absSendTimeExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext.rtpMap._absSendTimeExtId.get())
         {
             rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
         }

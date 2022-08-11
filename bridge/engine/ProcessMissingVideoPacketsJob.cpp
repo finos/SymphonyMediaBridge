@@ -23,7 +23,7 @@ ProcessMissingVideoPacketsJob::ProcessMissingVideoPacketsJob(SsrcInboundContext&
 
 void ProcessMissingVideoPacketsJob::run()
 {
-    if (!_ssrcContext._videoMissingPacketsTracker.get())
+    if (!_ssrcContext.videoMissingPacketsTracker.get())
     {
         assert(false);
         return;
@@ -31,8 +31,8 @@ void ProcessMissingVideoPacketsJob::run()
 
     std::array<uint16_t, VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
     const auto numMissingSequenceNumbers =
-        _ssrcContext._videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime() / 1000000ULL,
-            _ssrcContext._sender->getRtt() / utils::Time::ms,
+        _ssrcContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime() / 1000000ULL,
+            _ssrcContext.sender->getRtt() / utils::Time::ms,
             missingSequenceNumbers);
 
     if (numMissingSequenceNumbers == 0)
@@ -40,7 +40,7 @@ void ProcessMissingVideoPacketsJob::run()
         return;
     }
 
-    rtp::RtcpNackBuilder rtcpNackBuilder(_reporterSsrc, _ssrcContext._ssrc);
+    rtp::RtcpNackBuilder rtcpNackBuilder(_reporterSsrc, _ssrcContext.ssrc);
 
     for (size_t i = 0; i < numMissingSequenceNumbers; ++i)
     {

@@ -204,7 +204,7 @@ private:
         IncomingPacketAggregate(PacketT packet, SsrcInboundContext* inboundContext)
             : _packet(std::move(packet)),
               _inboundContext(inboundContext),
-              _transport(inboundContext->_sender),
+              _transport(inboundContext->sender),
               _extendedSequenceNumber(0)
         {
             assert(_packet);
@@ -228,7 +228,7 @@ private:
             const uint32_t extendedSequenceNumber)
             : _packet(std::move(packet)),
               _inboundContext(inboundContext),
-              _transport(inboundContext->_sender),
+              _transport(inboundContext->sender),
               _extendedSequenceNumber(extendedSequenceNumber)
         {
             assert(_packet);

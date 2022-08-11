@@ -249,7 +249,7 @@ public:
         void dumpPcmData()
         {
             utils::StringBuilder<512> fileName;
-            fileName.append(_loggableId.c_str()).append("-").append(_context._ssrc);
+            fileName.append(_loggableId.c_str()).append("-").append(_context.ssrc);
 
             FILE* logFile = ::fopen(fileName.get(), "wr");
             ::fwrite(_recording.data(), _recording.size(), 2, logFile);
@@ -317,7 +317,7 @@ public:
 
             ++videoPacketCount;
 
-            if (rtpHeader->payloadType != inboundContext._rtpMap._payloadType)
+            if (rtpHeader->payloadType != inboundContext.rtpMap._payloadType)
             {
                 logger::warn("%u unexpected payload type %u",
                     _loggableId.c_str(),

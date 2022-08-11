@@ -55,20 +55,20 @@ VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::UniquePacket packet,
 
 void VideoForwarderReceiveJob::run()
 {
-    const auto oldRolloverCounter = _ssrcContext._lastUnprotectedExtendedSequenceNumber >> 16;
+    const auto oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
     const auto newRolloverCounter = _extendedSequenceNumber >> 16;
     if (newRolloverCounter > oldRolloverCounter)
     {
         logger::debug("Setting new rollover counter for %s, ssrc %u",
             "VideoForwarderReceiveJob",
             _sender->getLoggableId().c_str(),
-            _ssrcContext._ssrc);
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext._ssrc, newRolloverCounter))
+            _ssrcContext.ssrc);
+        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
         {
             logger::error("Failed to set rollover counter srtp %s, ssrc %u, mixer %s",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
-                _ssrcContext._ssrc,
+                _ssrcContext.ssrc,
                 _engineMixer.getLoggableId().c_str());
             return;
         }
@@ -80,17 +80,17 @@ void VideoForwarderReceiveJob::run()
         logger::error("Failed to unprotect srtp %s, ssrc %u, seq %u, eseq %u, lreseq %u, lueseq %u, ts %u, mixer %s",
             "VideoForwarderReceiveJob",
             _sender->getLoggableId().c_str(),
-            _ssrcContext._ssrc,
+            _ssrcContext.ssrc,
             header != nullptr ? header->sequenceNumber.get() : 0,
             _extendedSequenceNumber,
-            _ssrcContext._lastReceivedExtendedSequenceNumber,
-            _ssrcContext._lastUnprotectedExtendedSequenceNumber,
+            _ssrcContext.lastReceivedExtendedSequenceNumber,
+            _ssrcContext.lastUnprotectedExtendedSequenceNumber,
             header != nullptr ? header->timestamp.get() : 0,
             _engineMixer.getLoggableId().c_str());
         return;
     }
 
-    _ssrcContext._lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+    _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
@@ -105,19 +105,19 @@ void VideoForwarderReceiveJob::run()
     const bool isKeyframe = codec::Vp8Header::isKeyFrame(payload, payloadDescriptorSize);
     const auto timestampMs = _timestamp / utils::Time::ms;
 
-    ++_ssrcContext._packetsProcessed;
+    ++_ssrcContext.packetsProcessed;
     bool missingPacketsTrackerReset = false;
 
-    if (_ssrcContext._packetsProcessed == 1)
+    if (_ssrcContext.packetsProcessed == 1)
     {
-        _ssrcContext._lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
-        _ssrcContext._videoMissingPacketsTracker =
+        _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
+        _ssrcContext.videoMissingPacketsTracker =
             std::make_shared<VideoMissingPacketsTracker>(missingPacketsTrackerIntervalMs);
 
         logger::info("Adding missing packet tracker for %s, ssrc %u",
             "VideoForwarderReceiveJob",
             _sender->getLoggableId().c_str(),
-            _ssrcContext._ssrc);
+            _ssrcContext.ssrc);
 
         if (isKeyframe)
         {
@@ -125,14 +125,14 @@ void VideoForwarderReceiveJob::run()
                          "tl0picidx %d",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
-                _ssrcContext._ssrc,
+                _ssrcContext.ssrc,
                 sequenceNumber,
                 rtpHeader->marker,
                 codec::Vp8Header::getPartitionId(payload),
                 codec::Vp8Header::getTid(payload),
                 codec::Vp8Header::getPicId(payload),
                 codec::Vp8Header::getTl0PicIdx(payload));
-            _ssrcContext._pliScheduler.onKeyFrameReceived();
+            _ssrcContext.pliScheduler.onKeyFrameReceived();
         }
         else
         {
@@ -140,7 +140,7 @@ void VideoForwarderReceiveJob::run()
                 "First packet was not key frame, %s ssrc %u seq %u, mark %u, pid %u, tid %d, picid %d, tl0picidx %d",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
-                _ssrcContext._ssrc,
+                _ssrcContext.ssrc,
                 sequenceNumber,
                 rtpHeader->marker,
                 codec::Vp8Header::getPartitionId(payload),
@@ -148,8 +148,8 @@ void VideoForwarderReceiveJob::run()
                 codec::Vp8Header::getPicId(payload),
                 codec::Vp8Header::getTl0PicIdx(payload));
 
-            _ssrcContext._pliScheduler.onPliSent(_timestamp);
-            _sender->getJobQueue().addJob<SendPliJob>(_localVideoSsrc, _ssrcContext._ssrc, *_sender, _allocator);
+            _ssrcContext.pliScheduler.onPliSent(_timestamp);
+            _sender->getJobQueue().addJob<SendPliJob>(_localVideoSsrc, _ssrcContext.ssrc, *_sender, _allocator);
         }
     }
     else
@@ -159,7 +159,7 @@ void VideoForwarderReceiveJob::run()
             logger::info("Received key frame, %s ssrc %u seq %u, mark %u, pid %u, tid %d, picid %d, tl0picidx %d",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
-                _ssrcContext._ssrc,
+                _ssrcContext.ssrc,
                 sequenceNumber,
                 rtpHeader->marker,
                 codec::Vp8Header::getPartitionId(payload),
@@ -167,22 +167,22 @@ void VideoForwarderReceiveJob::run()
                 codec::Vp8Header::getPicId(payload),
                 codec::Vp8Header::getTl0PicIdx(payload));
 
-            _ssrcContext._pliScheduler.onKeyFrameReceived();
-            _ssrcContext._videoMissingPacketsTracker->reset(timestampMs);
+            _ssrcContext.pliScheduler.onKeyFrameReceived();
+            _ssrcContext.videoMissingPacketsTracker->reset(timestampMs);
             missingPacketsTrackerReset = true;
         }
         else
         {
-            const auto rttMs = _ssrcContext._sender->getRtt() / utils::Time::ms;
-            if (_ssrcContext._pliScheduler.shouldSendPli(_timestamp, rttMs) && _sender->isConnected())
+            const auto rttMs = _ssrcContext.sender->getRtt() / utils::Time::ms;
+            if (_ssrcContext.pliScheduler.shouldSendPli(_timestamp, rttMs) && _sender->isConnected())
             {
                 logger::debug("shouldSendPli for inbound ssrc %u, rtt %ums",
                     "VideoForwarderReceiveJob",
-                    _ssrcContext._ssrc,
+                    _ssrcContext.ssrc,
                     static_cast<uint32_t>(rttMs));
 
-                _ssrcContext._pliScheduler.onPliSent(_timestamp);
-                _sender->getJobQueue().addJob<SendPliJob>(_localVideoSsrc, _ssrcContext._ssrc, *_sender, _allocator);
+                _ssrcContext.pliScheduler.onPliSent(_timestamp);
+                _sender->getJobQueue().addJob<SendPliJob>(_localVideoSsrc, _ssrcContext.ssrc, *_sender, _allocator);
             }
         }
     }
@@ -191,7 +191,7 @@ void VideoForwarderReceiveJob::run()
     {
         logger::debug("end of key frame ssrc %u, seqno %u, pid %u, tid %d, picid %d, tl0picidx %d",
             "VideoForwarderReceiveJob",
-            _ssrcContext._ssrc,
+            _ssrcContext.ssrc,
             rtpHeader->sequenceNumber.get(),
             codec::Vp8Header::getPartitionId(payload),
             codec::Vp8Header::getTid(payload),
@@ -204,46 +204,46 @@ void VideoForwarderReceiveJob::run()
         dumpPacket(videoDumpFile, *_packet, std::min(size_t(36), _packet->getLength()));
     }
 
-    assert(_ssrcContext._videoMissingPacketsTracker.get());
-    if (_extendedSequenceNumber > _ssrcContext._lastReceivedExtendedSequenceNumber)
+    assert(_ssrcContext.videoMissingPacketsTracker.get());
+    if (_extendedSequenceNumber > _ssrcContext.lastReceivedExtendedSequenceNumber)
     {
-        if (_extendedSequenceNumber - _ssrcContext._lastReceivedExtendedSequenceNumber >=
+        if (_extendedSequenceNumber - _ssrcContext.lastReceivedExtendedSequenceNumber >=
             VideoMissingPacketsTracker::maxMissingPackets)
         {
             logger::info("Resetting full missing packet tracker for %s, ssrc %u",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
-                _ssrcContext._ssrc);
-            _ssrcContext._videoMissingPacketsTracker->reset(timestampMs);
+                _ssrcContext.ssrc);
+            _ssrcContext.videoMissingPacketsTracker->reset(timestampMs);
         }
         else if (!missingPacketsTrackerReset)
         {
-            for (uint32_t missingSequenceNumber = _ssrcContext._lastReceivedExtendedSequenceNumber + 1;
+            for (uint32_t missingSequenceNumber = _ssrcContext.lastReceivedExtendedSequenceNumber + 1;
                  missingSequenceNumber != _extendedSequenceNumber;
                  ++missingSequenceNumber)
             {
-                _ssrcContext._videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
+                _ssrcContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
             }
         }
 
-        _ssrcContext._lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
+        _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
     }
-    else if (_extendedSequenceNumber != _ssrcContext._lastReceivedExtendedSequenceNumber)
+    else if (_extendedSequenceNumber != _ssrcContext.lastReceivedExtendedSequenceNumber)
     {
         uint32_t extendedSequenceNumber = 0;
-        if (!_ssrcContext._videoMissingPacketsTracker->onPacketArrived(sequenceNumber, extendedSequenceNumber) ||
+        if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, extendedSequenceNumber) ||
             extendedSequenceNumber != _extendedSequenceNumber)
         {
             logger::debug("%s Not waiting for packet seq %u ssrc %u, dropping",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
                 sequenceNumber,
-                _ssrcContext._ssrc);
+                _ssrcContext.ssrc);
             return;
         }
     }
 
-    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext._rtpMap._payloadType));
+    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap._payloadType));
     _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), _extendedSequenceNumber);
 }
 
