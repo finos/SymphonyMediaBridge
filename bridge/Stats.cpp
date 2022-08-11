@@ -77,56 +77,56 @@ std::string MixerManagerStats::describe()
 {
     nlohmann::json result;
     result["current_timestamp"] = utils::Time::getAbsoluteTime() / 1000000ULL;
-    result["conferences"] = _conferences;
-    result["largestConference"] = _largestConference;
-    result["participants"] = std::max({_videoStreams, _audioStreams, _dataStreams});
-    result["audiochannels"] = _audioStreams;
-    result["videochannels"] = _videoStreams;
-    result["threads"] = _systemStats.totalNumberOfThreads;
-    result["cpu_usage"] = _systemStats.processCPU;
-    result["cpu_engine"] = _systemStats.engineCpu;
-    result["cpu_rtce"] = _systemStats.rtceCpu;
-    result["cpu_workers"] = _systemStats.workerCpu;
-    result["cpu_manager"] = _systemStats.managerCpu;
+    result["conferences"] = conferences;
+    result["largestConference"] = largestConference;
+    result["participants"] = std::max({videoStreams, audioStreams, dataStreams});
+    result["audiochannels"] = audioStreams;
+    result["videochannels"] = videoStreams;
+    result["threads"] = systemStats.totalNumberOfThreads;
+    result["cpu_usage"] = systemStats.processCPU;
+    result["cpu_engine"] = systemStats.engineCpu;
+    result["cpu_rtce"] = systemStats.rtceCpu;
+    result["cpu_workers"] = systemStats.workerCpu;
+    result["cpu_manager"] = systemStats.managerCpu;
 
-    result["total_memory"] = _systemStats.processMemory;
-    result["used_memory"] = _systemStats.processMemory;
-    result["packet_rate_download"] = _engineStats.activeMixers.inbound.total().packetsPerSecond;
-    result["bit_rate_download"] = _engineStats.activeMixers.inbound.total().bitrateKbps;
-    result["packet_rate_upload"] = _engineStats.activeMixers.outbound.total().packetsPerSecond;
-    result["bit_rate_upload"] = _engineStats.activeMixers.outbound.total().bitrateKbps;
-    result["total_udp_connections"] = _systemStats.connections.udpTotol();
-    result["total_tcp_connections"] = _systemStats.connections.tcpTotal();
-    result["rtc_tcp4_connections"] = _systemStats.connections.tcp4.rtp;
-    result["rtc_tcp6_connections"] = _systemStats.connections.tcp6.rtp;
+    result["total_memory"] = systemStats.processMemory;
+    result["used_memory"] = systemStats.processMemory;
+    result["packet_rate_download"] = engineStats.activeMixers.inbound.total().packetsPerSecond;
+    result["bit_rate_download"] = engineStats.activeMixers.inbound.total().bitrateKbps;
+    result["packet_rate_upload"] = engineStats.activeMixers.outbound.total().packetsPerSecond;
+    result["bit_rate_upload"] = engineStats.activeMixers.outbound.total().bitrateKbps;
+    result["total_udp_connections"] = systemStats.connections.udpTotol();
+    result["total_tcp_connections"] = systemStats.connections.tcpTotal();
+    result["rtc_tcp4_connections"] = systemStats.connections.tcp4.rtp;
+    result["rtc_tcp6_connections"] = systemStats.connections.tcp6.rtp;
 
-    result["http_tcp_connections"] = _systemStats.connections.tcp4.http;
+    result["http_tcp_connections"] = systemStats.connections.tcp4.http;
 
-    result["inbound_audio_streams"] = _engineStats.activeMixers.inbound.audio.activeStreamCount;
-    result["outbound_audio_streams"] = _engineStats.activeMixers.outbound.audio.activeStreamCount;
-    result["inbound_video_streams"] = _engineStats.activeMixers.inbound.video.activeStreamCount;
-    result["outbound_video_streams"] = _engineStats.activeMixers.outbound.video.activeStreamCount;
+    result["inbound_audio_streams"] = engineStats.activeMixers.inbound.audio.activeStreamCount;
+    result["outbound_audio_streams"] = engineStats.activeMixers.outbound.audio.activeStreamCount;
+    result["inbound_video_streams"] = engineStats.activeMixers.inbound.video.activeStreamCount;
+    result["outbound_video_streams"] = engineStats.activeMixers.outbound.video.activeStreamCount;
 
-    result["job_queue"] = _jobQueueLength;
-    result["loss_upload"] = _engineStats.activeMixers.outbound.total().getSendLossRatio();
-    result["loss_download"] = _engineStats.activeMixers.inbound.total().getReceiveLossRatio();
+    result["job_queue"] = jobQueueLength;
+    result["loss_upload"] = engineStats.activeMixers.outbound.total().getSendLossRatio();
+    result["loss_download"] = engineStats.activeMixers.inbound.total().getReceiveLossRatio();
 
-    result["pacing_queue"] = _engineStats.activeMixers.pacingQueue;
-    result["rtx_pacing_queue"] = _engineStats.activeMixers.rtxPacingQueue;
+    result["pacing_queue"] = engineStats.activeMixers.pacingQueue;
+    result["rtx_pacing_queue"] = engineStats.activeMixers.rtxPacingQueue;
 
-    result["shared_udp_send_queue"] = _udpSharedEndpointsSendQueue;
-    result["shared_udp_receive_rate"] = _udpSharedEndpointsReceiveKbps;
-    result["shared_udp_send_rate"] = _udpSharedEndpointsSendKbps;
+    result["shared_udp_send_queue"] = udpSharedEndpointsSendQueue;
+    result["shared_udp_receive_rate"] = udpSharedEndpointsReceiveKbps;
+    result["shared_udp_send_rate"] = udpSharedEndpointsSendKbps;
 
-    result["send_pool"] = _sendPoolSize;
-    result["receive_pool"] = _receivePoolSize;
+    result["send_pool"] = sendPoolSize;
+    result["receive_pool"] = receivePoolSize;
 
-    result["loss_upload_hist"] = nlohmann::to_json(_engineStats.activeMixers.outbound.transport.lossGroup);
-    result["loss_download_hist"] = nlohmann::to_json(_engineStats.activeMixers.inbound.transport.lossGroup);
-    result["bwe_download_hist"] = nlohmann::to_json(_engineStats.activeMixers.inbound.transport.bandwidthEstimateGroup);
-    result["rtt_download_hist"] = nlohmann::to_json(_engineStats.activeMixers.inbound.transport.rttGroup);
+    result["loss_upload_hist"] = nlohmann::to_json(engineStats.activeMixers.outbound.transport.lossGroup);
+    result["loss_download_hist"] = nlohmann::to_json(engineStats.activeMixers.inbound.transport.lossGroup);
+    result["bwe_download_hist"] = nlohmann::to_json(engineStats.activeMixers.inbound.transport.bandwidthEstimateGroup);
+    result["rtt_download_hist"] = nlohmann::to_json(engineStats.activeMixers.inbound.transport.rttGroup);
 
-    result["engine_slips"] = _engineStats.timeSlipCount;
+    result["engine_slips"] = engineStats.timeSlipCount;
 
     return result.dump(4);
 }

@@ -9,9 +9,9 @@ namespace bridge
 struct VideoStreamDescription
 {
     VideoStreamDescription() = default;
-    explicit VideoStreamDescription(const VideoStream& stream) : id(stream._id), endpointId(stream._endpointId)
+    explicit VideoStreamDescription(const VideoStream& stream) : id(stream.id), endpointId(stream.endpointId)
     {
-        localSsrc = stream._localSsrc;
+        localSsrc = stream.localSsrc;
     }
 
     std::vector<uint32_t> getSsrcs()
