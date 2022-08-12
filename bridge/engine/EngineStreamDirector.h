@@ -25,16 +25,29 @@ class EngineStreamDirector
 public:
     struct ParticipantStreams
     {
-        SimulcastStream _primary;
-        utils::Optional<SimulcastStream> _secondary;
-        size_t _highestEstimatedPinnedLevel;
-        size_t _desiredHighestEstimatedPinnedLevel;
-        size_t _desiredUnpinnedLevel;
-        uint64_t _lowEstimateTimestamp;
-        /** Min of incoming estimate and EngineStreamDirector::_maxDefaultLevelBandwidthKbps */
-        uint32_t _defaultLevelBandwidthLimit;
-        /** Max of incoming estimate and _defaultLevelBandwidthLimit */
-        uint32_t _estimatedUplinkBandwidth;
+        ParticipantStreams(const SimulcastStream& primary,
+            const utils::Optional<SimulcastStream>& secondary,
+            const uint32_t maxDefaultLevelBandwidthKbps)
+            : primary(primary),
+              secondary(secondary),
+              highestEstimatedPinnedLevel(SimulcastStream::maxLevels - 1),
+              desiredHighestEstimatedPinnedLevel(SimulcastStream::maxLevels - 1),
+              desiredUnpinnedLevel(0),
+              lowEstimateTimestamp(0),
+              defaultLevelBandwidthLimit(maxDefaultLevelBandwidthKbps),
+              estimatedUplinkBandwidth(0)
+        {
+        }
+        SimulcastStream primary;
+        utils::Optional<SimulcastStream> secondary;
+        size_t highestEstimatedPinnedLevel;
+        size_t desiredHighestEstimatedPinnedLevel;
+        size_t desiredUnpinnedLevel;
+        uint64_t lowEstimateTimestamp;
+        /** Min of incoming estimate and EngineStreamDirector::maxDefaultLevelBandwidthKbps */
+        uint32_t defaultLevelBandwidthLimit;
+        /** Max of incoming estimate and defaultLevelBandwidthLimit */
+        uint32_t estimatedUplinkBandwidth;
     };
 
     EngineStreamDirector(const config::Config& config, uint32_t lastN)
@@ -47,7 +60,7 @@ public:
           _requiredMidLevelBandwidth(0),
           _maxDefaultLevelBandwidthKbps(config.maxDefaultLevelBandwidthKbps),
           _lastN(lastN),
-          _slidesBandwidthKbps(0)
+          _slidesBitrateKbps(0)
     {
     }
 
@@ -129,17 +142,17 @@ public:
         }
         auto& participantStream = participantStreamsItr->second;
 
-        if (participantStream._primary._numLevels > 0)
+        if (participantStream.primary._numLevels > 0)
         {
-            _lowQualitySsrcs.erase(participantStream._primary._levels[lowQuality]._ssrc);
-            _midQualitySsrcs.erase(participantStream._primary._levels[midQuality]._ssrc);
+            _lowQualitySsrcs.erase(participantStream.primary._levels[lowQuality]._ssrc);
+            _midQualitySsrcs.erase(participantStream.primary._levels[midQuality]._ssrc);
             assert(_requiredMidLevelBandwidth > 0);
             _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
         }
-        if (participantStream._secondary.isSet() && participantStream._secondary.get()._numLevels > 0)
+        if (participantStream.secondary.isSet() && participantStream.secondary.get()._numLevels > 0)
         {
-            _lowQualitySsrcs.erase(participantStream._secondary.get()._levels[lowQuality]._ssrc);
-            _midQualitySsrcs.erase(participantStream._secondary.get()._levels[midQuality]._ssrc);
+            _lowQualitySsrcs.erase(participantStream.secondary.get()._levels[lowQuality]._ssrc);
+            _midQualitySsrcs.erase(participantStream.secondary.get()._levels[midQuality]._ssrc);
             assert(_requiredMidLevelBandwidth > 0);
             _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
         }
@@ -250,32 +263,32 @@ public:
         }
         auto& participantStream = participantStreamsItr->second;
 
-        participantStream._defaultLevelBandwidthLimit = std::min(uplinkEstimateKbps, _maxDefaultLevelBandwidthKbps);
-        participantStream._estimatedUplinkBandwidth =
-            std::max(uplinkEstimateKbps, participantStream._defaultLevelBandwidthLimit);
+        participantStream.defaultLevelBandwidthLimit = std::min(uplinkEstimateKbps, _maxDefaultLevelBandwidthKbps);
+        participantStream.estimatedUplinkBandwidth =
+            std::max(uplinkEstimateKbps, participantStream.defaultLevelBandwidthLimit);
 
         size_t pinnedQuality, unpinnedQuality;
         getVideoQualityLimits(participantStream, pinnedQuality, unpinnedQuality);
 
-        participantStream._desiredHighestEstimatedPinnedLevel = pinnedQuality;
-        participantStream._desiredUnpinnedLevel = unpinnedQuality;
+        participantStream.desiredHighestEstimatedPinnedLevel = pinnedQuality;
+        participantStream.desiredUnpinnedLevel = unpinnedQuality;
 
-        if (participantStream._desiredHighestEstimatedPinnedLevel == participantStream._highestEstimatedPinnedLevel)
+        if (participantStream.desiredHighestEstimatedPinnedLevel == participantStream.highestEstimatedPinnedLevel)
         {
-            participantStream._lowEstimateTimestamp = timestamp;
+            participantStream.lowEstimateTimestamp = timestamp;
             return false;
         }
-        else if (participantStream._desiredHighestEstimatedPinnedLevel < participantStream._highestEstimatedPinnedLevel)
+        else if (participantStream.desiredHighestEstimatedPinnedLevel < participantStream.highestEstimatedPinnedLevel)
         {
             logger::info("setUplinkEstimateKbps %u, endpointIdHash %lu, desiredLevel %lu < level %lu, scale down",
                 "EngineStreamDirector",
                 uplinkEstimateKbps,
                 endpointIdHash,
-                participantStream._desiredHighestEstimatedPinnedLevel,
-                participantStream._highestEstimatedPinnedLevel);
+                participantStream.desiredHighestEstimatedPinnedLevel,
+                participantStream.highestEstimatedPinnedLevel);
 
-            participantStream._highestEstimatedPinnedLevel = participantStream._desiredHighestEstimatedPinnedLevel;
-            participantStream._lowEstimateTimestamp = timestamp;
+            participantStream.highestEstimatedPinnedLevel = participantStream.desiredHighestEstimatedPinnedLevel;
+            participantStream.lowEstimateTimestamp = timestamp;
             return true;
         }
 
@@ -283,10 +296,10 @@ public:
             "EngineStreamDirector",
             uplinkEstimateKbps,
             endpointIdHash,
-            participantStream._desiredHighestEstimatedPinnedLevel,
-            participantStream._highestEstimatedPinnedLevel);
+            participantStream.desiredHighestEstimatedPinnedLevel,
+            participantStream.highestEstimatedPinnedLevel);
 
-        if (utils::Time::diffGE(participantStream._lowEstimateTimestamp,
+        if (utils::Time::diffGE(participantStream.lowEstimateTimestamp,
                 timestamp,
                 timeBeforeScaleUpMs * utils::Time::ms))
         {
@@ -294,15 +307,22 @@ public:
                 "EngineStreamDirector",
                 uplinkEstimateKbps,
                 endpointIdHash,
-                participantStream._desiredHighestEstimatedPinnedLevel,
-                participantStream._highestEstimatedPinnedLevel);
+                participantStream.desiredHighestEstimatedPinnedLevel,
+                participantStream.highestEstimatedPinnedLevel);
 
-            participantStream._highestEstimatedPinnedLevel = participantStream._desiredHighestEstimatedPinnedLevel;
-            participantStream._lowEstimateTimestamp = timestamp;
+            participantStream.highestEstimatedPinnedLevel = participantStream.desiredHighestEstimatedPinnedLevel;
+            participantStream.lowEstimateTimestamp = timestamp;
             return true;
         }
 
         return false;
+    }
+
+    inline size_t getQualityLevel(const uint32_t ssrc)
+    {
+        return (_lowQualitySsrcs.contains(ssrc)   ? lowQuality
+                : _midQualitySsrcs.contains(ssrc) ? midQuality
+                                                  : highQuality);
     }
 
     /**
@@ -315,9 +335,7 @@ public:
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
-        const auto quality = _lowQualitySsrcs.contains(ssrc) ? lowQuality
-            : _midQualitySsrcs.contains(ssrc)                ? midQuality
-                                                             : highQuality;
+        const auto quality = getQualityLevel(ssrc);
 
         // We server low and mid for unpinned according to the ConfigLadder.
         if (highQuality != quality && isUnpinnedQualityUsed(quality, senderEndpointIdHash, isSenderInLastNList))
@@ -347,7 +365,7 @@ public:
             const auto& participant = _participantStreams.find(pinnedBy);
             if (participant != _participantStreams.end())
             {
-                if (participant->second._desiredHighestEstimatedPinnedLevel == quality)
+                if (participant->second.desiredHighestEstimatedPinnedLevel == quality)
                 {
                     DIRECTOR_LOG("isSsrcUsed, %u pinned %s",
                         "EngineStreamDirector",
@@ -451,8 +469,8 @@ public:
         const auto pinMapItr = _pinMap.find(toEndpointIdHash);
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
         const auto maxWantedQuality =
-            (fromPinnedEndpoint ? viewedByParticipantStreamItr->second._desiredHighestEstimatedPinnedLevel
-                                : viewedByParticipantStreamItr->second._desiredUnpinnedLevel);
+            (fromPinnedEndpoint ? viewedByParticipantStreamItr->second.desiredHighestEstimatedPinnedLevel
+                                : viewedByParticipantStreamItr->second.desiredUnpinnedLevel);
 
         size_t fromEndpointId = 0;
         size_t quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
@@ -492,7 +510,7 @@ public:
 
         DIRECTOR_LOG(
             "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, current quality %lu, "
-            "maxWantedLevelQuality %lu, requiredMidLevelBandwidth %u, _defaultLevelBandwidthLimit %u, pinned %c",
+            "maxWantedLevelQuality %lu, requiredMidLevelBandwidth %u, defaultLevelBandwidthLimit %u, pinned %c",
             "EngineStreamDirector",
             toEndpointIdHash,
             ssrc,
@@ -500,7 +518,7 @@ public:
             quality,
             maxWantedQuality,
             _requiredMidLevelBandwidth,
-            viewedByParticipantStreamItr->second._defaultLevelBandwidthLimit,
+            viewedByParticipantStreamItr->second.defaultLevelBandwidthLimit,
             fromPinnedEndpoint ? 't' : 'f');
 
         return result;
@@ -519,8 +537,8 @@ public:
             return false;
         }
         auto& participantStreams = participantStreamsItr->second;
-        auto& primary = participantStreams._primary;
-        auto& secondary = participantStreams._secondary;
+        auto& primary = participantStreams.primary;
+        auto& secondary = participantStreams.secondary;
 
         logger::info("streamActiveStateChanged, endpointIdHash %lu, ssrc %u, active %c",
             "EngineStreamDirector",
@@ -578,8 +596,8 @@ public:
             return false;
         }
         auto& participantStreams = participantStreamsItr->second;
-        auto& primary = participantStreams._primary;
-        auto& secondary = participantStreams._secondary;
+        auto& primary = participantStreams.primary;
+        auto& secondary = participantStreams.secondary;
 
         SimulcastStream* simulcastStream;
         if (defaultLevelSsrc == primary._levels[lowQuality]._ssrc)
@@ -608,8 +626,8 @@ public:
             return false;
         }
         auto& participantStreams = participantStreamsItr->second;
-        const auto& primary = participantStreams._primary;
-        auto& secondary = participantStreams._secondary;
+        const auto& primary = participantStreams.primary;
+        auto& secondary = participantStreams.secondary;
 
         for (size_t i = 0; i < primary._numLevels; ++i)
         {
@@ -635,28 +653,33 @@ public:
         return false;
     }
 
-    void setSlidesSsrcAndBandwidth(size_t slidesSsrc, uint32_t bwKbps)
+    void setSlidesSsrcAndBitrate(size_t slidesSsrc, uint32_t bwKbps)
     {
         _slidesSsrc = slidesSsrc;
-        _slidesBandwidthKbps = bwKbps;
+        _slidesBitrateKbps = bwKbps;
     }
 
 private:
-    static constexpr size_t lowQuality = 0;
-    static constexpr size_t midQuality = 1;
-    static constexpr size_t highQuality = 2;
-    static constexpr size_t dropQuality = 3;
-
-    enum class ConfigLadderCols
+    enum QualityLevel
     {
-        BasicCost = 0,
-        PinnedQuality,
-        UnpinnedQuality,
-        ExtraCostPerEach,
-        MinCostSanity,
-        MaxCostSanity
+        lowQuality = 0,
+        midQuality = 1,
+        highQuality = 2,
+        dropQuality = 3
     };
-    static const size_t configLadder[6][6];
+
+    /** All bandwidth valuea are in kbps. */
+    struct ConfigRow
+    {
+        size_t BaseRate;
+        size_t PinnedQuality;
+        size_t UnpinnedQuality;
+        size_t OverheadBitrate;
+        size_t MinBitrateMargin;
+        size_t MaxBitrateMargin;
+    };
+
+    static const ConfigRow configLadder[6];
 
     /** Important: This has to be a lot bigger than the actual maximum participants per conference since we have
      * to avoid map entry reuse. Currently multiplied by 2 for that reason. */
@@ -680,7 +703,7 @@ private:
     uint32_t _lastN;
 
     /** Estimated min bandwidth screenshareing/slides will obey based on min of all participants uplink estimates. */
-    uint32_t _slidesBandwidthKbps;
+    uint32_t _slidesBitrateKbps;
 
     /** SSRC for slides. */
     size_t _slidesSsrc;
@@ -694,8 +717,8 @@ private:
         }
 
         auto& participantStreams = participantStreamsItr->second;
-        const auto& primary = participantStreams._primary;
-        const auto& secondaryOptional = participantStreams._secondary;
+        const auto& primary = participantStreams.primary;
+        const auto& secondaryOptional = participantStreams.secondary;
 
         if (ssrc == primary._levels[0]._ssrc || ssrc == primary._levels[1]._ssrc || ssrc == primary._levels[2]._ssrc)
         {
@@ -724,8 +747,8 @@ private:
             return false;
         }
         auto& participantStreams = participantStreamsItr->second;
-        const auto& primary = participantStreams._primary;
-        auto& secondary = participantStreams._secondary;
+        const auto& primary = participantStreams.primary;
+        auto& secondary = participantStreams.secondary;
 
         for (size_t i = 0; i < primary._numLevels; ++i)
         {
@@ -810,12 +833,7 @@ private:
     inline ParticipantStreams makeParticipantStreams(const SimulcastStream& primary,
         const utils::Optional<SimulcastStream>& secondary)
     {
-        return ParticipantStreams{primary,
-            secondary,
-            SimulcastStream::maxLevels - 1,
-            SimulcastStream::maxLevels - 1,
-            0,
-            _maxDefaultLevelBandwidthKbps};
+        return ParticipantStreams(primary, secondary, _maxDefaultLevelBandwidthKbps);
     }
 
     inline bool isContentSlides(const uint32_t ssrc, const size_t senderEndpointIdHash)
@@ -826,7 +844,7 @@ private:
             return false;
         }
 
-        const auto& primary = participantStreamsItr->second._primary;
+        const auto& primary = participantStreamsItr->second.primary;
 
         if (primary._contentType == SimulcastStream::VideoContentType::SLIDES && primary._numLevels == 1 &&
             primary._levels[0]._ssrc == ssrc)
@@ -834,11 +852,11 @@ private:
             return true;
         }
 
-        if (!participantStreamsItr->second._secondary.isSet())
+        if (!participantStreamsItr->second.secondary.isSet())
         {
             return false;
         }
-        const auto& secondary = participantStreamsItr->second._secondary.get();
+        const auto& secondary = participantStreamsItr->second.secondary.get();
 
         if (secondary._contentType == SimulcastStream::VideoContentType::SLIDES && secondary._numLevels == 1 &&
             secondary._levels[0]._ssrc == ssrc)
@@ -871,7 +889,7 @@ private:
         // Unpinned, belogns to lastN and some of the participants needs this quality.
         for (const auto& participant : _participantStreams)
         {
-            if (participant.first != senderEndpointIdHash && participant.second._desiredUnpinnedLevel == quality)
+            if (participant.first != senderEndpointIdHash && participant.second.desiredUnpinnedLevel == quality)
             {
                 return true;
             }
@@ -894,16 +912,15 @@ private:
         int configId = 0;
 
         const auto estimatedUplinkBandwidth =
-            (participantStreams._estimatedUplinkBandwidth != 0 ? participantStreams._estimatedUplinkBandwidth
-                                                               : _maxDefaultLevelBandwidthKbps);
+            (participantStreams.estimatedUplinkBandwidth != 0 ? participantStreams.estimatedUplinkBandwidth
+                                                              : _maxDefaultLevelBandwidthKbps);
 
         for (const auto& config : configLadder)
         {
-            const auto configCost = config[(int)ConfigLadderCols::BasicCost] +
-                maxVideoStreams * config[(int)ConfigLadderCols::ExtraCostPerEach] + _slidesBandwidthKbps;
+            const auto configCost = config.BaseRate + maxVideoStreams * config.OverheadBitrate + _slidesBitrateKbps;
 
-            assert(configCost >= config[(int)ConfigLadderCols::MinCostSanity] + _slidesBandwidthKbps);
-            assert(configCost <= config[(int)ConfigLadderCols::MaxCostSanity] + _slidesBandwidthKbps);
+            assert(configCost >= config.MinBitrateMargin + _slidesBitrateKbps);
+            assert(configCost <= config.MaxBitrateMargin + _slidesBitrateKbps);
 
             if (configCost >= bestConfigCost && configCost <= estimatedUplinkBandwidth)
             {
@@ -913,8 +930,8 @@ private:
             configId++;
         }
         assert(configId == 6);
-        outPinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::PinnedQuality];
-        outUnpinnedQuality = configLadder[bestConfigId][(int)ConfigLadderCols::UnpinnedQuality];
+        outPinnedQuality = configLadder[bestConfigId].PinnedQuality;
+        outUnpinnedQuality = configLadder[bestConfigId].UnpinnedQuality;
 
         logger::info("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d, reserve for slides: %d",
             "EngineStreamDirector",
@@ -922,7 +939,7 @@ private:
             (char)outUnpinnedQuality + '0',
             maxVideoStreams,
             estimatedUplinkBandwidth,
-            _slidesBandwidthKbps);
+            _slidesBitrateKbps);
     }
 };
 
