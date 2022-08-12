@@ -1,4 +1,6 @@
 #pragma once
+
+#include <cstring>
 #include <functional>
 #include <string>
 
@@ -41,6 +43,13 @@ inline bool strncpy(char* dst, const char* src, size_t maxLength)
     }
     dst[maxLength - 1] = '\0';
     return false;
+}
+
+
+inline bool startsWith(const std::string& prefix, const std::string& value)
+{
+    return value.size() >= prefix.size() &&
+        std::memcmp(prefix.c_str(), value.c_str(), prefix.size()) == 0;
 }
 
 /**
