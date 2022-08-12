@@ -155,50 +155,37 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
     {
         const auto& video = channelsDescription._video.get();
         nlohmann::json videoJson;
-        if (video._transport.isSet())
+        if (video.transport.isSet())
         {
-            videoJson["transport"] = generateTransport(video._transport.get());
+            videoJson["transport"] = generateTransport(video.transport.get());
         }
 
-        videoJson["ssrcs"] = nlohmann::json::array();
-        for (const auto ssrc : video._ssrcs)
+        videoJson["streams"] = nlohmann::json::array();
+        for (const auto& stream : video.streams)
         {
-            videoJson["ssrcs"].push_back(ssrc);
-        }
-
-        videoJson["ssrc-groups"] = nlohmann::json::array();
-        for (const auto& ssrcGroup : video._ssrcGroups)
-        {
-            nlohmann::json ssrcGroupJson;
-            ssrcGroupJson["ssrcs"] = nlohmann::json::array();
-            for (const auto ssrc : ssrcGroup._ssrcs)
+            nlohmann::json streamJson;
+            streamJson["sources"] = nlohmann::json::array();
+            for (const auto level : stream.sources)
             {
-                ssrcGroupJson["ssrcs"].push_back(ssrc);
+                nlohmann::json sourceJson;
+                sourceJson["main"] = level.main;
+                if (level.feedback != 0)
+                {
+                    sourceJson["feedback"] = level.feedback;
+                }
+                streamJson["sources"].push_back(sourceJson);
             }
-            ssrcGroupJson["semantics"] = ssrcGroup._semantics;
-
-            videoJson["ssrc-groups"].push_back(ssrcGroupJson);
+            streamJson["content"] = stream.content;
+            videoJson["streams"].push_back(streamJson);
         }
 
         videoJson["payload-types"] = nlohmann::json::array();
-        for (const auto& payloadType : video._payloadTypes)
+        for (const auto& payloadType : video.payloadTypes)
         {
             videoJson["payload-types"].push_back(generatePayloadType(payloadType));
         }
 
-        videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video._rtpHeaderExtensions);
-
-        videoJson["ssrc-attributes"] = nlohmann::json::array();
-        for (const auto& ssrcAttribute : video._ssrcAttributes)
-        {
-            nlohmann::json ssrcAttributeJson;
-            ssrcAttributeJson["ssrcs"] = nlohmann::json::array();
-            for (const auto ssrc : ssrcAttribute._ssrcs)
-            {
-                ssrcAttributeJson["ssrcs"].push_back(ssrc);
-            }
-            ssrcAttributeJson["content"] = ssrcAttribute._content;
-        }
+        videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video.rtpHeaderExtensions);
 
         responseJson["video"] = videoJson;
     }
@@ -218,13 +205,49 @@ nlohmann::json generateConferenceEndpoint(const ConferenceEndpoint& endpoint)
 {
     nlohmann::json jsonEndpoint = nlohmann::json::object();
     jsonEndpoint.emplace("id", endpoint.id);
-    jsonEndpoint.emplace("isBundled", endpoint.isBundled);
-    jsonEndpoint.emplace("hasAudio", endpoint.hasAudio);
-    jsonEndpoint.emplace("hasVideo", endpoint.hasVideo);
-    jsonEndpoint.emplace("isActiveSpeaker", endpoint.isActiveSpeaker);
-    jsonEndpoint.emplace("isRecording", endpoint.isRecording);
+    jsonEndpoint.emplace("isDominantSpeaker", endpoint.isDominantSpeaker);
+    jsonEndpoint.emplace("isActiveTalker", endpoint.isActiveTalker);
     jsonEndpoint.emplace("iceState", api::utils::toString(endpoint.iceState));
     jsonEndpoint.emplace("dtlsState", api::utils::toString(endpoint.dtlsState));
+
+    if (endpoint.isActiveTalker)
+    {
+        nlohmann::json activeTalkerInfo = nlohmann::json::object();
+        activeTalkerInfo.emplace("ptt", endpoint.activeTalkerInfo.isPtt);
+        activeTalkerInfo.emplace("score", endpoint.activeTalkerInfo.score);
+        activeTalkerInfo.emplace("noiseLevel", endpoint.activeTalkerInfo.noiseLevel);
+        jsonEndpoint.emplace("ActiveTalker", activeTalkerInfo);
+    }
+    return jsonEndpoint;
+}
+
+nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtendedInfo& endpoint)
+{
+    nlohmann::json jsonEndpoint = generateConferenceEndpoint(endpoint.basicEndpointInfo);
+    {
+        nlohmann::json fiveTuple = nlohmann::json::object();
+        fiveTuple.emplace("localIP", endpoint.localIP);
+        fiveTuple.emplace("localPort", endpoint.localPort);
+        fiveTuple.emplace("protocol", endpoint.protocol);
+        fiveTuple.emplace("remoteIP", endpoint.remoteIP);
+        fiveTuple.emplace("remotePort", endpoint.remotePort);
+        jsonEndpoint.emplace("iceSelectedTuple", fiveTuple);
+    }
+    {
+        nlohmann::json ssrcMap = nlohmann::json::array();
+        {
+            nlohmann::json ssrcMsid = nlohmann::json::object();
+            if (endpoint.userId.isSet())
+            {
+                nlohmann::json ssrcs = nlohmann::json::object();
+                ssrcs.emplace("ssrcOriginal", endpoint.ssrcOriginal);
+                ssrcs.emplace("ssrcRewritten", endpoint.ssrcRewritten);
+                ssrcMsid.emplace(std::to_string(endpoint.userId.get()), ssrcs);
+            }
+            ssrcMap.push_back(ssrcMsid);
+        }
+        jsonEndpoint.emplace("audioUserIdToSsrcMap", ssrcMap);
+    }
     return jsonEndpoint;
 }
 

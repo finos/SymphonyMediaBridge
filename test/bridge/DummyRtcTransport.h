@@ -92,6 +92,10 @@ public:
     ice::IceSession::State getIceState() const override { return ice::IceSession::State::CONNECTED; };
 
     transport::SrtpClient::State getDtlsState() const override { return transport::SrtpClient::State::CONNECTED; }
+    utils::Optional<ice::TransportType> getSelectedTransportType() const override
+    {
+        return utils::Optional<ice::TransportType>();
+    }
 
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;

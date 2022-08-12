@@ -2,10 +2,11 @@
 #include "api/ConferenceEndpoint.h"
 #include "api/RecordingChannel.h"
 #include "bridge/AudioStream.h"
+#include "bridge/AudioStreamDescription.h"
 #include "bridge/Barbell.h"
 #include "bridge/DataStreamDescription.h"
-#include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
+#include "bridge/VideoStreamDescription.h"
 #include "bridge/engine/Engine.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineBarbell.h"
@@ -17,6 +18,7 @@
 #include "jobmanager/JobManager.h"
 #include "logger/Logger.h"
 #include "transport/TransportFactory.h"
+#include "transport/ice/IceCandidate.h"
 #include "utils/IdGenerator.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
@@ -299,7 +301,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return true;
     }
 
-    const auto endpointIdHash = std::hash<std::string>{}(endpointId);
+    const auto endpointIdHash = utils::hash<std::string>{}(endpointId);
     const auto emplaceResult =
         _bundleTransports.emplace(endpointId, _transportFactory.create(iceRole, 512, endpointIdHash));
     if (!emplaceResult.second)
@@ -333,8 +335,17 @@ bool Mixer::addAudioStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
+        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
+
+    if (!transport)
+    {
+        logger::error("Failed to create transport for AudioStream with endpointId %s",
+            _loggableId.c_str(),
+            endpointId.c_str());
+        return false;
+    }
 
     const auto streamItr = _audioStreams.emplace(endpointId,
         std::make_unique<AudioStream>(outId, endpointId, _ssrcGenerator.next(), transport, audioMixed, rewriteSsrcs));
@@ -365,8 +376,17 @@ bool Mixer::addVideoStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), 32, std::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(32, std::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
+        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
+
+    if (!transport)
+    {
+        logger::error("Failed to create transport for VideoStream with endpointId %s",
+            _loggableId.c_str(),
+            endpointId.c_str());
+        return false;
+    }
 
     const auto emplaceResult = _videoStreams.emplace(endpointId,
         std::make_unique<VideoStream>(outId, endpointId, _ssrcGenerator.next(), transport, rewriteSsrcs));
@@ -768,35 +788,79 @@ std::unordered_set<std::string> Mixer::getEndpoints() const
     return endpoints;
 }
 
-bool Mixer::getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoint& endpoint)
+std::map<size_t, ActiveTalker> Mixer::getActiveTalkers()
+{
+    return _engineMixer.getActiveTalkers();
+}
+
+bool Mixer::getEndpointInfo(const std::string& endpointId,
+    api::ConferenceEndpoint& endpoint,
+    const std::map<size_t, ActiveTalker>& activeTalkers)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
     endpoint.id = endpointId;
-    endpoint.hasAudio = false;
-    endpoint.isActiveSpeaker = false;
+    endpoint.isDominantSpeaker = false;
+    endpoint.isActiveTalker = false;
+    bool foundAudio = false;
     if (audio != _audioStreams.cend())
     {
-        endpoint.hasAudio = true;
         if (audio->second)
         {
-            endpoint.isActiveSpeaker =
-                (audio->second) && audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
-
+            foundAudio = true;
+            endpoint.isDominantSpeaker = audio->second->endpointIdHash == _engineMixer.getDominantSpeakerId();
             auto transport = audio->second->transport;
             endpoint.iceState = transport->getIceState();
             endpoint.dtlsState = transport->getDtlsState();
+
+            auto const& it = activeTalkers.find(audio->second->endpointIdHash);
+            endpoint.isActiveTalker = it != activeTalkers.end();
+
+            if (it != activeTalkers.end())
+            {
+                assert(endpoint.isActiveTalker == true);
+                endpoint.activeTalkerInfo.endpointHashId = it->second.endpointHashId;
+                endpoint.activeTalkerInfo.isPtt = it->second.isPtt;
+                endpoint.activeTalkerInfo.score = it->second.score;
+                endpoint.activeTalkerInfo.noiseLevel = it->second.noiseLevel;
+            }
         }
     }
 
-    endpoint.hasVideo = _videoStreams.find(endpointId) != _videoStreams.cend() ? true : false;
-    endpoint.isBundled = _bundleTransports.find(endpointId) != _bundleTransports.cend() ? true : false;
-    endpoint.isRecording = _recordingStreams.find(endpointId) != _recordingStreams.cend() ? true : false;
-
-    return endpoint.hasAudio || endpoint.hasVideo || endpoint.isBundled || endpoint.isRecording;
+    return foundAudio || _videoStreams.find(endpointId) != _videoStreams.cend();
 }
 
-bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
+bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
+    api::ConferenceEndpointExtendedInfo& endpoint,
+    const std::map<size_t, ActiveTalker>& activeTalkers)
+{
+    if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
+    {
+        return false;
+    }
+
+    const auto audio = _audioStreams.find(endpointId);
+    const auto transport = audio->second->transport;
+    const auto& remoteSsrc = audio->second->remoteSsrc;
+    if (remoteSsrc.isSet())
+    {
+        endpoint.userId = _engineMixer.getUserId(remoteSsrc.get());
+        endpoint.ssrcOriginal = remoteSsrc.get();
+        endpoint.ssrcRewritten = audio->second->localSsrc;
+    }
+
+    auto remote = transport->getRemotePeer();
+    endpoint.remotePort = remote.getPort();
+    endpoint.remoteIP = remote.ipToString();
+    endpoint.localIP = transport->getLocalRtpPort().ipToString();
+    endpoint.localPort = transport->getLocalRtpPort().getPort();
+    auto transportType = transport->getSelectedTransportType();
+    endpoint.protocol = (transportType.isSet() ? ice::toString(transportType.get()) : "n/a");
+
+    return true;
+}
+
+bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _audioStreams.find(endpointId);
@@ -805,27 +869,27 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, StreamDescr
         return false;
     }
 
-    outDescription = StreamDescription(*streamItr->second);
+    outDescription = AudioStreamDescription(*streamItr->second);
     if (streamItr->second->ssrcRewrite)
     {
         for (auto ssrc : _audioSsrcs)
         {
-            outDescription._localSsrcs.push_back(ssrc);
+            outDescription.ssrcs.push_back(ssrc);
         }
     }
     return true;
 }
 
-void Mixer::getAudioStreamDescription(StreamDescription& outDescription)
+void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription)
 {
-    outDescription = StreamDescription();
+    outDescription = AudioStreamDescription();
     for (auto ssrc : _audioSsrcs)
     {
-        outDescription._localSsrcs.push_back(ssrc);
+        outDescription.ssrcs.push_back(ssrc);
     }
 }
 
-bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription)
+bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _videoStreams.find(endpointId);
@@ -834,38 +898,34 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, StreamDescr
         return false;
     }
 
-    outDescription = StreamDescription(*streamItr->second);
+    outDescription = VideoStreamDescription(*streamItr->second);
     if (streamItr->second->_ssrcRewrite)
     {
         for (auto ssrcPair : _videoSsrcs)
         {
-            outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-            outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+            outDescription.simulcastSsrcs.push_back(ssrcPair);
         }
         for (auto ssrcPair : _videoPinSsrcs)
         {
-            outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-            outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+            outDescription.simulcastSsrcs.push_back(ssrcPair);
         }
     }
     return true;
 }
 
-void Mixer::getVideoStreamDescription(StreamDescription& outDescription)
+void Mixer::getVideoStreamDescription(VideoStreamDescription& outDescription)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    outDescription = StreamDescription();
+    outDescription = VideoStreamDescription();
 
     for (auto ssrcPair : _videoSsrcs)
     {
-        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+        outDescription.simulcastSsrcs.push_back(ssrcPair);
     }
     for (auto ssrcPair : _videoPinSsrcs)
     {
-        outDescription._localSsrcs.push_back(ssrcPair._ssrc);
-        outDescription._localSsrcs.push_back(ssrcPair._feedbackSsrc);
+        outDescription.simulcastSsrcs.push_back(ssrcPair);
     }
 }
 
@@ -1077,7 +1137,8 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     const RtpMap& rtpMap,
     const utils::Optional<uint32_t>& remoteSsrc,
     const utils::Optional<uint8_t>& audioLevelExtensionId,
-    const utils::Optional<uint8_t>& absSendTimeExtensionId)
+    const utils::Optional<uint8_t>& absSendTimeExtensionId,
+    const utils::Optional<uint8_t>& c9infoExtensionId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1110,6 +1171,7 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     audioStream->rtpMap._audioLevelExtId = audioLevelExtensionId;
     audioStream->transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
     audioStream->rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+    audioStream->rtpMap._c9infoExtId = c9infoExtensionId;
     if (audioStream->rtpMap._absSendTimeExtId.isSet())
     {
         audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap._absSendTimeExtId.get());
@@ -1605,8 +1667,7 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
     auto emplaceResult = _dataEngineStreams.emplace(dataStream->_endpointId,
         std::make_unique<EngineDataStream>(dataStream->_endpointId,
             dataStream->_endpointIdHash,
-            *(dataStream->_transport.get()),
-            _engineMixer.getSendAllocator()));
+            *(dataStream->_transport.get())));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddDataStream;
@@ -1940,7 +2001,7 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
 {
     for (const auto& channel : channels)
     {
-        auto endpointIdHash = std::hash<std::string>{}(channel._id);
+        auto endpointIdHash = utils::hash<std::string>{}(channel._id);
         const auto transportEntry = recordingStream->_transports.find(endpointIdHash);
         if (transportEntry == recordingStream->_transports.end())
         {
@@ -1995,7 +2056,7 @@ bool Mixer::removeRecordingTransports(const std::string& conferenceId,
 
         for (const auto& channel : channels)
         {
-            auto endpointIdHash = std::hash<std::string>{}(channel._id);
+            auto endpointIdHash = utils::hash<std::string>{}(channel._id);
             auto transportItr = stream->_transports.find(endpointIdHash);
             if (transportItr == stream->_transports.end())
             {
@@ -2229,7 +2290,7 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
         }
     }
 
-    transport = _transportFactory.createOnPorts(iceRole, 64, std::hash<std::string>{}(barbellId), _barbellPorts);
+    transport = _transportFactory.createOnPorts(iceRole, 64, utils::hash<std::string>{}(barbellId), _barbellPorts);
     if (!transport)
     {
         logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());
@@ -2265,8 +2326,8 @@ bool Mixer::addBarbellToEngine(const std::string& barbellId)
 
     auto& barbell = *barbellIt->second;
     barbell.isConfigured = true;
-    auto emplaceResult = _engineBarbells.emplace(barbell.id,
-        std::make_unique<EngineBarbell>(barbell.id, *barbell.transport, _engineMixer.getSendAllocator()));
+    auto emplaceResult =
+        _engineBarbells.emplace(barbell.id, std::make_unique<EngineBarbell>(barbell.id, *barbell.transport));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddBarbell;

@@ -3,7 +3,7 @@
 namespace api
 {
 
-const char* EndpointDescription::SsrcAttribute::slidesContent = "slides";
-const char* EndpointDescription::SsrcAttribute::videoContent = "video";
+const char* EndpointDescription::slidesContent = "slides";
+const char* EndpointDescription::videoContent = "video";
 
 } // namespace api

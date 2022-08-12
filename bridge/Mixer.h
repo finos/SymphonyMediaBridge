@@ -2,12 +2,14 @@
 
 #include "bridge/Barbell.h"
 #include "bridge/RecordingStream.h"
+#include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
 #include "transport/dtls/SrtpClient.h"
 #include "transport/ice/IceSession.h"
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -19,6 +21,7 @@ namespace api
 {
 struct RecordingChannel;
 struct ConferenceEndpoint;
+struct ConferenceEndpointExtendedInfo;
 } // namespace api
 
 namespace transport
@@ -46,7 +49,8 @@ class Engine;
 class EngineMixer;
 struct EngineAudioStream;
 struct EngineVideoStream;
-struct StreamDescription;
+struct AudioStreamDescription;
+struct VideoStreamDescription;
 struct DataStreamDescription;
 struct TransportDescription;
 struct EngineDataStream;
@@ -131,7 +135,8 @@ public:
         const RtpMap& rtpMap,
         const utils::Optional<uint32_t>& remoteSsrc,
         const utils::Optional<uint8_t>& audioLevelExtensionId,
-        const utils::Optional<uint8_t>& absSendTimeExtensionId);
+        const utils::Optional<uint8_t>& absSendTimeExtensionId,
+        const utils::Optional<uint8_t>& c9infoExtensionId);
 
     bool reconfigureAudioStream(const std::string& endpointId, const utils::Optional<uint32_t>& remoteSsrc);
 
@@ -211,15 +216,21 @@ public:
 
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
-    bool getEndpointInfo(const std::string& endpointId, api::ConferenceEndpoint&);
-    bool getAudioStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
-    bool getVideoStreamDescription(const std::string& endpointId, StreamDescription& outDescription);
+    bool getEndpointInfo(const std::string& endpointId,
+        api::ConferenceEndpoint&,
+        const std::map<size_t, ActiveTalker>& activeTalkers);
+    bool getEndpointExtendedInfo(const std::string& endpointId,
+        api::ConferenceEndpointExtendedInfo&,
+        const std::map<size_t, ActiveTalker>& activeTalkers);
+    std::map<size_t, ActiveTalker> getActiveTalkers();
+    bool getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription);
+    bool getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription);
     bool getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription);
     bool isAudioStreamConfigured(const std::string& endpointId);
     bool isVideoStreamConfigured(const std::string& endpointId);
     bool isDataStreamConfigured(const std::string& endpointId);
-    void getAudioStreamDescription(StreamDescription& outDescription);
-    void getVideoStreamDescription(StreamDescription& outDescription);
+    void getAudioStreamDescription(AudioStreamDescription& outDescription);
+    void getVideoStreamDescription(VideoStreamDescription& outDescription);
 
     bool getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription);
     bool getAudioStreamTransportDescription(const std::string& endpointId,

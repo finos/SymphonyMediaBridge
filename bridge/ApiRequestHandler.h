@@ -35,7 +35,8 @@ namespace bridge
 
 class Mixer;
 class MixerManager;
-struct StreamDescription;
+struct AudioStreamDescription;
+struct VideoStreamDescription;
 class RequestLogger;
 
 class ApiRequestHandler : public httpd::HttpRequestHandler, public ActionContext

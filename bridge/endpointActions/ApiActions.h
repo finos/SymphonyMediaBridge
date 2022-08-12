@@ -9,6 +9,8 @@
 
 namespace bridge
 {
+class Mixer;
+
 class RequestLogger;
 std::unique_lock<std::mutex> getConferenceMixer(ActionContext*, const std::string&, Mixer*&);
 

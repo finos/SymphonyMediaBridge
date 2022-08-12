@@ -401,7 +401,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     establishConnection(A, B);
 
     DummySctpTransport fakeTransport;
-    webrtc::WebRtcDataStream dataStream(2, fakeTransport, B.getAllocator());
+    webrtc::WebRtcDataStream dataStream(2, fakeTransport);
     alignas(memory::Packet) const char webRtcOpen[] =
         "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
         "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";

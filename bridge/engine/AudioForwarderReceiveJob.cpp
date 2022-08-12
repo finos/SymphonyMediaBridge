@@ -104,7 +104,7 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& ssrcContext,
     ActiveMediaList& activeMediaList,
-    const int32_t silenceThresholdLevel,
+    const uint8_t silenceThresholdLevel,
     const bool hasMixedAudioStreams,
     const uint32_t extendedSequenceNumber)
     : CountedJob(sender->getJobCounter()),
@@ -132,23 +132,52 @@ void AudioForwarderReceiveJob::run()
     const auto rtpHeaderExtensions = rtpHeader->getExtensionHeader();
     if (rtpHeaderExtensions)
     {
-        int32_t audioLevel = -1;
+        auto c9infoExtId = _ssrcContext._rtpMap._c9infoExtId.valueOr(0);
+        auto audioLevelExtId = _ssrcContext._rtpMap._audioLevelExtId.valueOr(0);
+
+        utils::Optional<uint8_t> audioLevel;
+        utils::Optional<bool> isPtt;
+        uint32_t c9UserId = 0;
 
         for (const auto& rtpHeaderExtension : rtpHeaderExtensions->extensions())
         {
-            if (!_ssrcContext._rtpMap._audioLevelExtId.isSet() ||
-                rtpHeaderExtension.getId() != _ssrcContext._rtpMap._audioLevelExtId.get())
+            if (0 != c9infoExtId && rtpHeaderExtension.getId() == c9infoExtId)
             {
-                continue;
+                isPtt.set(rtpHeaderExtension.data[3] & 0x80);
+                c9UserId = rtpHeaderExtension.data[0];
+                c9UserId <<= 8;
+                c9UserId |= rtpHeaderExtension.data[1];
+                c9UserId <<= 8;
+                c9UserId |= rtpHeaderExtension.data[2];
             }
-
-            audioLevel = rtpHeaderExtension.data[0] & 0x7F;
-            break;
+            else if (0 != audioLevelExtId && rtpHeaderExtension.getId() == audioLevelExtId)
+            {
+                audioLevel.set(rtpHeaderExtension.data[0] & 0x7F);
+            }
         }
 
-        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(), audioLevel);
+        bool silence = false;
+        if (audioLevel.isSet())
+        {
+            silence = audioLevel.get() > _silenceThresholdLevel;
+        }
+        if (isPtt.isSet())
+        {
+            silence = !isPtt.get();
+            if (!audioLevel.isSet())
+            {
+                // We need to 'fake' reasonable audio levels for the reasons.
+                audioLevel.set(silence ? 90 : 25);
+            }
 
-        if (audioLevel >= _silenceThresholdLevel)
+            _engineMixer.mapSsrc2UserId(_ssrcContext._ssrc, c9UserId);
+        }
+
+        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(),
+            audioLevel.valueOr(120),
+            isPtt.isSet() && isPtt.get());
+
+        if (silence)
         {
             _ssrcContext._markNextPacket = true;
             return;

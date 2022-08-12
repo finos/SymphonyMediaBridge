@@ -38,6 +38,7 @@ void addDefaultAudioProperties(api::EndpointDescription::Audio& audioChannel)
     audioChannel._payloadType.set(opus);
     audioChannel._rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
     audioChannel._rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
+    audioChannel._rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
 }
 
 void addDefaultVideoProperties(api::EndpointDescription::Video& videoChannel)
@@ -50,7 +51,7 @@ void addDefaultVideoProperties(api::EndpointDescription::Video& videoChannel)
         vp8._rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
         vp8._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
         vp8._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
-        videoChannel._payloadTypes.push_back(vp8);
+        videoChannel.payloadTypes.push_back(vp8);
     }
 
     {
@@ -59,11 +60,11 @@ void addDefaultVideoProperties(api::EndpointDescription::Video& videoChannel)
         vp8Rtx._name = "rtx";
         vp8Rtx._clockRate = codec::Vp8::sampleRate;
         vp8Rtx._parameters.emplace_back("apt", std::to_string(codec::Vp8::payloadType));
-        videoChannel._payloadTypes.push_back(vp8Rtx);
+        videoChannel.payloadTypes.push_back(vp8Rtx);
     }
 
-    videoChannel._rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
-    videoChannel._rtpHeaderExtensions.emplace_back(4, "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id");
+    videoChannel.rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
+    videoChannel.rtpHeaderExtensions.emplace_back(4, "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id");
 }
 
 ice::TransportType parseTransportType(const std::string& protocol)
@@ -208,12 +209,12 @@ bridge::RtpMap makeRtpMap(const api::EndpointDescription::PayloadType& payloadTy
     return rtpMap;
 }
 
-utils::Optional<uint8_t> findAbsSendTimeExtensionId(
+utils::Optional<uint8_t> findExtensionId(const std::string& extName,
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
 {
     for (const auto& rtpHeaderExtension : rtpHeaderExtensions)
     {
-        if (rtpHeaderExtension.second.compare("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time") == 0)
+        if (rtpHeaderExtension.second.compare(extName) == 0)
         {
             return utils::Optional<uint8_t>((::utils::checkedCast<uint8_t>(rtpHeaderExtension.first)));
         }
@@ -221,121 +222,47 @@ utils::Optional<uint8_t> findAbsSendTimeExtensionId(
     return utils::Optional<uint8_t>();
 }
 
-const api::EndpointDescription::SsrcGroup* findFeedbackGroup(const api::EndpointDescription::Video& video,
-    const uint32_t ssrc)
+utils::Optional<uint8_t> findAudioLevelExtensionId(
+    const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
 {
-    for (auto& ssrcGroup : video._ssrcGroups)
-    {
-        if (ssrcGroup._semantics.compare("FID") == 0 && ssrcGroup._ssrcs.size() == 2 && ssrcGroup._ssrcs[0] == ssrc)
-        {
-            return &ssrcGroup;
-        }
-    }
-    return nullptr;
+    return findExtensionId("urn:ietf:params:rtp-hdrext:ssrc-audio-level", rtpHeaderExtensions);
 }
 
-const api::EndpointDescription::SsrcGroup* findSimulcastGroup(const api::EndpointDescription::Video& video,
-    const uint32_t ssrc)
+utils::Optional<uint8_t> findAbsSendTimeExtensionId(
+    const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
 {
-    for (auto& ssrcGroup : video._ssrcGroups)
-    {
-        if (ssrcGroup._semantics.compare("SIM") == 0 && ssrcGroup._ssrcs.size() > 1)
-        {
-            const auto source = std::find(ssrcGroup._ssrcs.begin(), ssrcGroup._ssrcs.end(), ssrc);
-            if (source != ssrcGroup._ssrcs.end())
-            {
-                return &ssrcGroup;
-            }
-        }
-    }
-    return nullptr;
+    return findExtensionId("http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time", rtpHeaderExtensions);
+}
+
+utils::Optional<uint8_t> findC9InfoExtensionId(const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions)
+{
+    return findExtensionId("c9:params:rtp-hdrext:info", rtpHeaderExtensions);
 }
 
 std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDescription::Video& video,
     const std::string& endpointId)
 {
     std::vector<bridge::SimulcastStream> simulcastStreams;
-    for (const auto sourcesSsrc : video._ssrcs)
+    for (const auto& stream : video.streams)
     {
-        auto simulcastGroup = findSimulcastGroup(video, sourcesSsrc);
-
-        if (simulcastGroup)
+        bridge::SimulcastStream simulcastStream{0};
+        if (stream.content.compare(api::EndpointDescription::slidesContent) == 0)
         {
-            assert(simulcastGroup->_ssrcs.size() > 1);
-            const auto sources = simulcastGroup->_ssrcs;
-            if (std::find(sources.begin() + 1, sources.end(), sourcesSsrc) != sources.end())
-            {
-                continue;
-            }
+            simulcastStream._contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
         }
 
-        if (simulcastGroup && sourcesSsrc == simulcastGroup->_ssrcs[0])
+        for (auto& level : stream.sources)
         {
-            bridge::SimulcastStream simulcastStream{0};
-
-            for (auto& ssrcAttribute : video._ssrcAttributes)
-            {
-                if (ssrcAttribute._content.compare(api::EndpointDescription::SsrcAttribute::slidesContent) == 0 &&
-                    ssrcAttribute._ssrcs[0] == sourcesSsrc)
-                {
-                    simulcastStream._contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
-                }
-            }
-
-            for (auto simulcastSsrc : simulcastGroup->_ssrcs)
-            {
-                const auto feedbackGroup = findFeedbackGroup(video, simulcastSsrc);
-                if (!feedbackGroup)
-                {
-                    continue;
-                }
-
-                simulcastStream._levels[simulcastStream._numLevels]._ssrc = simulcastSsrc;
-                simulcastStream._levels[simulcastStream._numLevels]._feedbackSsrc = feedbackGroup->_ssrcs[1];
-                ++simulcastStream._numLevels;
-
-                logger::debug("Add simulcast level main ssrc %u feedback ssrc %u, content %s, endpointId %s",
-                    "ApiRequestHandler",
-                    simulcastSsrc,
-                    feedbackGroup->_ssrcs[1],
-                    toString(simulcastStream._contentType),
-                    endpointId.c_str());
-            }
-
-            simulcastStreams.emplace_back(simulcastStream);
-        }
-        else
-        {
-            const auto feedbackGroup = findFeedbackGroup(video, sourcesSsrc);
-            if (!feedbackGroup)
-            {
-                continue;
-            }
-
-            bridge::SimulcastStream simulcastStream{0};
-            simulcastStream._numLevels = 1;
-
-            simulcastStream._levels[0]._ssrc = sourcesSsrc;
-            simulcastStream._levels[0]._feedbackSsrc = feedbackGroup->_ssrcs[1];
-
-            for (auto& ssrcAttribute : video._ssrcAttributes)
-            {
-                if (ssrcAttribute._content.compare(api::EndpointDescription::SsrcAttribute::slidesContent) == 0 &&
-                    ssrcAttribute._ssrcs[0] == sourcesSsrc)
-                {
-                    simulcastStream._contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
-                }
-            }
-
-            logger::debug("Add non-simulcast stream main ssrc %u feedback ssrc %u, content %s, endpointId %s",
+            simulcastStream._levels[simulcastStream._numLevels++] = SimulcastLevel{level.main, level.feedback, false};
+            logger::debug("Add simulcast level main ssrc %u feedback ssrc %u, content %s, endpointId %s",
                 "ApiRequestHandler",
-                sourcesSsrc,
-                feedbackGroup->_ssrcs[1],
-                toString(simulcastStream._contentType),
+                level.main,
+                level.feedback,
+                stream.content.c_str(),
                 endpointId.c_str());
-
-            simulcastStreams.emplace_back(simulcastStream);
         }
+
+        simulcastStreams.push_back(simulcastStream);
     }
 
     if (simulcastStreams.size() > 2)
@@ -350,13 +277,13 @@ bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::EndpointDescription::
 {
     bridge::SsrcWhitelist ssrcWhitelist = {false, 0, {0, 0}};
 
-    if (video._ssrcWhitelist.isSet())
+    if (video.ssrcWhitelist.isSet())
     {
         ssrcWhitelist.enabled = true;
-        ssrcWhitelist.numSsrcs = std::min(video._ssrcWhitelist.get().size(), ssrcWhitelist.ssrcs.size());
+        ssrcWhitelist.numSsrcs = std::min(video.ssrcWhitelist.get().size(), ssrcWhitelist.ssrcs.size());
         for (size_t i = 0; i < ssrcWhitelist.numSsrcs; ++i)
         {
-            ssrcWhitelist.ssrcs[i] = video._ssrcWhitelist.get()[i];
+            ssrcWhitelist.ssrcs[i] = video.ssrcWhitelist.get()[i];
         }
     }
 

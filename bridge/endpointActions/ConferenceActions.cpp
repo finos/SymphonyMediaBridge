@@ -1,12 +1,13 @@
 #include "ApiActions.h"
 #include "api/Generator.h"
 #include "api/Parser.h"
+#include "bridge/AudioStreamDescription.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
-#include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
+#include "bridge/VideoStreamDescription.h"
 #include "bridge/endpointActions/ApiHelpers.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
@@ -78,7 +79,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         const auto& audio = allocateChannel._audio.get();
         api::EndpointDescription::Audio responseAudio;
 
-        StreamDescription streamDescription;
+        AudioStreamDescription streamDescription;
         TransportDescription transportDescription;
 
         if (!mixer.getAudioStreamDescription(endpointId, streamDescription) ||
@@ -88,7 +89,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get audio description");
         }
 
-        responseAudio._ssrcs = streamDescription._localSsrcs;
+        responseAudio._ssrcs = streamDescription.ssrcs;
 
         if (audio._transport.isSet())
         {
@@ -145,7 +146,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         const auto& video = allocateChannel._video.get();
         api::EndpointDescription::Video responseVideo;
 
-        StreamDescription streamDescription;
+        VideoStreamDescription streamDescription;
         TransportDescription transportDescription;
 
         if (!mixer.getVideoStreamDescription(endpointId, streamDescription) ||
@@ -155,22 +156,28 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get video description");
         }
 
-        responseVideo._ssrcs = streamDescription._localSsrcs;
-        if (responseVideo._ssrcs.size() > 1)
+        if (streamDescription.localSsrc != 0)
         {
-            for (size_t i = 1; i < responseVideo._ssrcs.size() - 1; i += 2)
-            {
-                api::EndpointDescription::SsrcGroup responseSsrcGroup;
-                responseSsrcGroup._ssrcs.push_back(responseVideo._ssrcs[i]);
-                responseSsrcGroup._ssrcs.push_back(responseVideo._ssrcs[i + 1]);
-                responseSsrcGroup._semantics = "FID";
-                responseVideo._ssrcGroups.push_back(responseSsrcGroup);
-            }
+            api::EndpointDescription::VideoStream videoStream;
+            videoStream.sources.push_back({streamDescription.localSsrc, 0});
+            videoStream.content = "local";
+            responseVideo.streams.push_back(videoStream);
+        }
 
-            api::EndpointDescription::SsrcAttribute responseSsrcAttribute;
-            responseSsrcAttribute._ssrcs.push_back(responseVideo._ssrcs[1]);
-            responseSsrcAttribute._content = "slides";
-            responseVideo._ssrcAttributes.push_back(responseSsrcAttribute);
+        size_t index = 0;
+        for (auto& level : streamDescription.simulcastSsrcs)
+        {
+            api::EndpointDescription::VideoStream videoStream;
+            videoStream.sources.push_back({level._ssrc, level._feedbackSsrc});
+            if (index++ == 0)
+            {
+                videoStream.content = "slides";
+            }
+            else
+            {
+                videoStream.content = "video";
+            }
+            responseVideo.streams.push_back(videoStream);
         }
 
         if (video._transport.isSet())
@@ -216,7 +223,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseTransport._dtls.set(responseDtls);
             }
 
-            responseVideo._transport.set(responseTransport);
+            responseVideo.transport.set(responseTransport);
         }
 
         addDefaultVideoProperties(responseVideo);
@@ -453,6 +460,8 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
 
     const auto rtpMap = makeRtpMap(audio._payloadType.get());
     const auto absSendTimeExtensionId = findAbsSendTimeExtensionId(audio._rtpHeaderExtensions);
+    const auto c9infoExtensionId = findC9InfoExtensionId(audio._rtpHeaderExtensions);
+    const auto audioLevelExtensionId = findAudioLevelExtensionId(audio._rtpHeaderExtensions);
 
     utils::Optional<uint32_t> remoteSsrc;
     if (!audio._ssrcs.empty())
@@ -460,16 +469,12 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         remoteSsrc.set(audio._ssrcs.front());
     }
 
-    utils::Optional<uint8_t> audioLevelExtensionId;
-    for (const auto& rtpHeaderExtension : audio._rtpHeaderExtensions)
-    {
-        if (rtpHeaderExtension.second.compare("urn:ietf:params:rtp-hdrext:ssrc-audio-level") == 0)
-        {
-            audioLevelExtensionId.set(utils::checkedCast<uint8_t>(rtpHeaderExtension.first));
-        }
-    }
-
-    if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, audioLevelExtensionId, absSendTimeExtensionId))
+    if (!mixer.configureAudioStream(endpointId,
+            rtpMap,
+            remoteSsrc,
+            audioLevelExtensionId,
+            absSendTimeExtensionId,
+            c9infoExtensionId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Audio stream not found for endpoint '%s'", endpointId.c_str()));
@@ -544,17 +549,17 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Video stream was configured already");
     }
 
-    if (video._payloadTypes.empty())
+    if (video.payloadTypes.empty())
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Video payload type is required");
     }
 
     std::vector<RtpMap> rtpMaps;
-    for (const auto& payloadType : video._payloadTypes)
+    for (const auto& payloadType : video.payloadTypes)
     {
         rtpMaps.emplace_back(makeRtpMap(payloadType));
     }
-    const auto absSendTimeExtensionId = findAbsSendTimeExtensionId(video._rtpHeaderExtensions);
+    const auto absSendTimeExtensionId = findAbsSendTimeExtensionId(video.rtpHeaderExtensions);
 
     const auto feedbackRtpMap = rtpMaps.size() > 1 ? rtpMaps[1] : RtpMap();
     auto simulcastStreams = makeSimulcastStreams(video, endpointId);
@@ -588,9 +593,9 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Max simulcast streams allowed is 2");
     }
 
-    if (video._transport.isSet())
+    if (video.transport.isSet())
     {
-        const auto& transport = video._transport.get();
+        const auto& transport = video.transport.get();
 
         if (transport._ice.isSet())
         {

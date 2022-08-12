@@ -8,6 +8,13 @@ namespace emulator
 class AudioSource
 {
 public:
+    enum IsPttState
+    {
+        NotSpecified = 0,
+        Unset,
+        Set
+    };
+
     AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, uint32_t ptime = 20);
     ~AudioSource(){};
     memory::UniquePacket getPacket(uint64_t timestamp);
@@ -19,6 +26,8 @@ public:
 
     void setVolume(double normalized) { _amplitude = 15000 * normalized; }
     void setFrequency(double frequency) { _frequency = frequency; }
+    void setIsPtt(const IsPttState isPtt);
+    void setUseAudioLevel(const bool useAudioLevel);
 
 private:
     static const uint32_t maxSentBufferSize = 12 * 1024;
@@ -32,6 +41,8 @@ private:
     uint16_t _amplitude;
     double _frequency;
     uint32_t _ptime;
+    IsPttState _isPtt;
+    bool _useAudioLevel;
 };
 
 } // namespace emulator

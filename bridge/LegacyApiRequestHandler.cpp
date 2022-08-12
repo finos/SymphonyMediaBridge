@@ -1,11 +1,12 @@
 #include "bridge/LegacyApiRequestHandler.h"
+#include "bridge/AudioStreamDescription.h"
 #include "bridge/DataStreamDescription.h"
 #include "bridge/LegacyApiRequestHandlerHelpers.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
-#include "bridge/StreamDescription.h"
 #include "bridge/TransportDescription.h"
+#include "bridge/VideoStreamDescription.h"
 #include "bridge/engine/SsrcWhitelist.h"
 #include "legacyapi/Generator.h"
 #include "legacyapi/Helpers.h"
@@ -803,10 +804,11 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
         if (content._name.compare("audio") == 0 || content._name.compare("video") == 0)
         {
             auto& channel = content._channels[0];
-            StreamDescription streamDescription;
+
             TransportDescription transportDescription;
             if (content._name.compare("audio") == 0)
             {
+                AudioStreamDescription streamDescription;
                 if (!mixer.getAudioStreamDescription(channel._endpoint.get(), streamDescription) ||
                     !mixer.getAudioStreamTransportDescription(channel._endpoint.get(), transportDescription))
                 {
@@ -814,9 +816,13 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                     requestLogger.setResponse(response);
                     return response;
                 }
+
+                channel._sources = streamDescription.ssrcs;
+                channel._id.set(streamDescription.id);
             }
             else
             {
+                VideoStreamDescription streamDescription;
                 if (!mixer.getVideoStreamDescription(channel._endpoint.get(), streamDescription) ||
                     !mixer.getVideoStreamTransportDescription(channel._endpoint.get(), transportDescription))
                 {
@@ -824,26 +830,26 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                     requestLogger.setResponse(response);
                     return response;
                 }
-            }
 
-            channel._sources = streamDescription._localSsrcs;
-            channel._id.set(streamDescription._id);
+                channel._sources = streamDescription.getSsrcs();
+                channel._id.set(streamDescription.id);
 
-            if (channel._sources.size() > 1 && (content._name.compare("video") == 0))
-            {
-                for (size_t i = 1; i < channel._sources.size() - 1; i += 2)
+                if (!streamDescription.simulcastSsrcs.empty())
                 {
-                    legacyapi::SsrcGroup group;
-                    group._sources.push_back(channel._sources[i]);
-                    group._sources.push_back(channel._sources[i + 1]);
-                    group._semantics = "FID";
-                    channel._ssrcGroups.push_back(group);
-                }
+                    for (auto level : streamDescription.simulcastSsrcs)
+                    {
+                        legacyapi::SsrcGroup group;
+                        group._sources.push_back(level._ssrc);
+                        group._sources.push_back(level._feedbackSsrc);
+                        group._semantics = "FID";
+                        channel._ssrcGroups.push_back(group);
+                    }
 
-                legacyapi::SsrcAttribute ssrcAttribute;
-                ssrcAttribute._sources.push_back(channel._sources[1]);
-                ssrcAttribute._content = "slides";
-                channel._ssrcAttributes.push_back(ssrcAttribute);
+                    legacyapi::SsrcAttribute ssrcAttribute;
+                    ssrcAttribute._sources.push_back(streamDescription.simulcastSsrcs[0]._ssrc);
+                    ssrcAttribute._content = "slides";
+                    channel._ssrcAttributes.push_back(ssrcAttribute);
+                }
             }
 
             if (channel._transport.isSet())
@@ -1141,7 +1147,8 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                     rtpMaps.front(),
                     remoteSsrc,
                     audioLevelExtensionId,
-                    absSendTimeExtensionId))
+                    absSendTimeExtensionId,
+                    utils::Optional<uint8_t>()))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;

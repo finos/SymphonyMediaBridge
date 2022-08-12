@@ -1717,7 +1717,7 @@ void TransportImpl::appendRemb(memory::Packet& rtcpPacket,
         remb.addSsrc(activeInbound[i]);
     }
     rtcpPacket.setLength(rtcpPacket.getLength() + remb.header.size());
-    assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
+    assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket));
 }
 
 void TransportImpl::sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp)
@@ -2046,6 +2046,8 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                 _selectedRtcp = endpoint.get();
                 _peerRtpPort = candidatePair.second.address;
                 _peerRtcpPort = candidatePair.second.address;
+
+                _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
 
                 logger::info("candidate selected %s %s, %s",
                     _loggableId.c_str(),

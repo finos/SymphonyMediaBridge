@@ -155,7 +155,8 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
         auto audioContent =
             json::object({{"rtp-hdrexts",
                               json::array({{{"id", 1}, {"uri", "urn:ietf:params:rtp-hdrext:ssrc-audio-level"}},
-                                  {{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}}})},
+                                  {{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}},
+                                  {{"id", 8}, {"uri", "c9:params:rtp-hdrext:info"}}})},
                 {"ssrcs", json::array({audioSsrc})},
                 {"payload-type",
                     {{"id", 111},
@@ -173,7 +174,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
         auto payloadTypes = json::array();
         payloadTypes.push_back(json::object({{"id", 100},
             {"name", "VP8"},
-            {"clockrate", "90000"},
+            {"clockrate", 90000},
             {"parameters", json::object()},
             {"rtcp-fbs",
                 json::array({{{"type", "goog-remb"}},
@@ -183,31 +184,25 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
         payloadTypes.push_back(json::object({{"id", 96},
             {"name", "rtx"},
-            {"clockrate", "90000"},
+            {"clockrate", 90000},
             {"rtcp-fbs", json::array()},
             {"parameters", {{"apt", "100"}}}}));
 
         videoContent["payload-types"] = payloadTypes;
-        auto sources = json::array();
-        for (uint32_t* pSsrc = videoSsrcs; *pSsrc != 0; ++pSsrc)
-        {
-            sources.push_back(*pSsrc);
-        }
-        videoContent["ssrcs"] = sources;
 
-        auto ssrcGroups = json::array();
-        auto mainSsrcs = json::array();
-        for (uint32_t* pSsrc = videoSsrcs; *pSsrc != 0; pSsrc += 2)
-        {
-            mainSsrcs.push_back(*pSsrc);
-        }
-        ssrcGroups.push_back(json::object({{"ssrcs", mainSsrcs}, {"semantics", "SIM"}}));
+        auto streamsJson = json::array();
 
         for (uint32_t* pSsrc = videoSsrcs; *pSsrc != 0; pSsrc += 2)
         {
-            ssrcGroups.push_back(json::object({{"ssrcs", json::array({*pSsrc, *(pSsrc + 1)})}, {"semantics", "FID"}}));
+            auto stream = json::object();
+            auto sources = json::array();
+            sources.push_back(json::object({{"main", *pSsrc}, {"feedback", *(pSsrc + 1)}}));
+            stream["sources"] = sources;
+            stream["id"] = "msidX";
+            stream["content"] = "video";
+            streamsJson.push_back(stream);
         }
-        videoContent["ssrc-groups"] = ssrcGroups;
+        videoContent["streams"] = streamsJson;
 
         videoContent["rtp-hdrexts"] =
             json::array({{{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}},
@@ -247,9 +242,16 @@ std::unordered_set<uint32_t> Channel::getOfferedVideoSsrcs() const
     std::unordered_set<uint32_t> ssrcs;
     if (_offer.find("video") != _offer.end())
     {
-        for (uint32_t ssrc : _offer["video"]["ssrcs"])
+        for (auto& stream : _offer["video"]["streams"])
         {
-            ssrcs.emplace(ssrc);
+            for (auto& ssrcLevel : stream["sources"])
+            {
+                ssrcs.emplace(ssrcLevel["main"].get<uint32_t>());
+                if (ssrcLevel.find("feedback") != ssrcLevel.end())
+                {
+                    ssrcs.emplace(ssrcLevel["feedback"].get<uint32_t>());
+                }
+            }
         }
     }
 
@@ -536,6 +538,7 @@ std::string Barbell::allocate(const std::string& baseUrl, const std::string& con
     if (request.isSuccess())
     {
         _offer = request.getJsonBody();
+        logger::debug("barbell allocated:%s", "Test", _offer.dump().c_str());
     }
     else
     {

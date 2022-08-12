@@ -18,7 +18,9 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, 
       _sequenceCounter(100),
       _amplitude(0),
       _frequency(340.0),
-      _ptime(ptime)
+      _ptime(ptime),
+      _isPtt(IsPttState::NotSpecified),
+      _useAudioLevel(true)
 {
 }
 
@@ -65,12 +67,35 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     rtp::GeneralExtension1Byteheader absSendTime(3, 3);
     extensionHead.addExtension(cursor, absSendTime);
 
-    rtp::GeneralExtension1Byteheader audioLevel(1, 1);
-    audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
-    extensionHead.addExtension(cursor, audioLevel);
+    if (_useAudioLevel)
+    {
+        rtp::GeneralExtension1Byteheader audioLevel(1, 1);
+        audioLevel.data[0] = codec::computeAudioLevel(audio, samplesPerPacket);
+        extensionHead.addExtension(cursor, audioLevel);
+    }
+
+    if (IsPttState::NotSpecified != _isPtt)
+    {
+        rtp::GeneralExtension1Byteheader c9hdrExtension(8, 4);
+        // Construct pseudo user-id (we need 24 bits only) from ssrc,
+        *((uint32_t*)&c9hdrExtension.data[0]) = (uint32_t)_ssrc;
+        c9hdrExtension.data[3] = IsPttState::Set == _isPtt ? 0x80 : 0x00;
+        extensionHead.addExtension(cursor, c9hdrExtension);
+    }
+
     rtpHeader->setExtensions(extensionHead);
 
-    assert(rtpHeader->headerLength() == 24);
+    size_t expectedHeaderLength = 22;
+    if (_useAudioLevel)
+    {
+        expectedHeaderLength += 2;
+    }
+    if (IsPttState::NotSpecified != _isPtt)
+    {
+        expectedHeaderLength += 6;
+    }
+    assert(rtpHeader->headerLength() == expectedHeaderLength);
+
     const auto bytesEncoded = _encoder.encode(audio,
         samplesPerPacket,
         static_cast<unsigned char*>(rtpHeader->getPayload()),
@@ -100,6 +125,16 @@ int64_t AudioSource::timeToRelease(uint64_t timestamp) const
     }
 
     return 0;
+}
+
+void AudioSource::setIsPtt(const IsPttState isPtt)
+{
+    _isPtt = isPtt;
+}
+
+void AudioSource::setUseAudioLevel(const bool useAudioLevel)
+{
+    _useAudioLevel = useAudioLevel;
 }
 
 } // namespace emulator
