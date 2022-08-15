@@ -415,8 +415,7 @@ public:
 
         // Dominant speaker is always pinned for the recording endpoint.
         const bool fromPinnedEndpoint = _pinMap.end() != _pinMap.find(toEndpointIdHash);
-        const auto wantedQuality =
-            fromPinnedEndpoint ? getParticipantHighestActiveQuality(fromEndpointId, ssrc) : lowQuality;
+        const auto wantedQuality = fromPinnedEndpoint ? highestActiveQuality(fromEndpointId, ssrc) : lowQuality;
 
         const auto result = wantedQuality == quality;
 
@@ -492,10 +491,10 @@ public:
         else
         {
             assert(quality != highQuality);
-            result = quality == getParticipantHighestActiveQuality(fromEndpointId, ssrc);
+            result = quality == highestActiveQuality(fromEndpointId, ssrc);
         }
 
-        const auto phaq = getParticipantHighestActiveQuality(fromEndpointId, ssrc);
+        const auto phaq = highestActiveQuality(fromEndpointId, ssrc);
 
         logger::info("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
                      "wantQ %lu, pinned %c",
@@ -671,12 +670,12 @@ private:
     /** All bandwidth valuea are in kbps. */
     struct ConfigRow
     {
-        size_t BaseRate;
-        size_t PinnedQuality;
-        size_t UnpinnedQuality;
-        size_t OverheadBitrate;
-        size_t MinBitrateMargin;
-        size_t MaxBitrateMargin;
+        const size_t BaseRate;
+        const size_t PinnedQuality;
+        const size_t UnpinnedQuality;
+        const size_t OverheadBitrate;
+        const size_t MinBitrateMargin;
+        const size_t MaxBitrateMargin;
     };
 
     static const ConfigRow configLadder[6];
@@ -708,7 +707,7 @@ private:
     /** SSRC for slides. */
     size_t _slidesSsrc;
 
-    inline size_t getParticipantHighestActiveQuality(const size_t endpointIdHash, const uint32_t ssrc)
+    inline size_t highestActiveQuality(const size_t endpointIdHash, const uint32_t ssrc)
     {
         const auto participantStreamsItr = _participantStreams.find(endpointIdHash);
         if (participantStreamsItr == _participantStreams.end())
