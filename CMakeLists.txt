@@ -154,6 +154,7 @@ set(FILES
         bridge/engine/EngineMixer.h
         bridge/engine/EngineStats.h
         bridge/engine/EngineStreamDirector.h
+        bridge/engine/EngineStreamDirector.cpp
         bridge/engine/EngineVideoStream.h
         bridge/engine/PacketCache.cpp
         bridge/engine/PacketCache.h

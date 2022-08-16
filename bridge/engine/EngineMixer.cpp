@@ -179,7 +179,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _lastReceiveTime(utils::Time::getAbsoluteTime()),
       _noTicks(0),
       _ticksPerSSRCCheck(ticksPerSSRCCheck),
-      _engineStreamDirector(std::make_unique<EngineStreamDirector>(config)),
+      _engineStreamDirector(std::make_unique<EngineStreamDirector>(config, lastN)),
       _activeMediaList(std::make_unique<ActiveMediaList>(_loggableId.getInstanceId(),
           audioSsrcs,
           videoSsrcs,
@@ -2142,7 +2142,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             continue;
         }
 
-        if (!_engineStreamDirector->shouldForwardSsrc(recordingStream->_endpointIdHash,
+        if (!_engineStreamDirector->shouldRecordSsrc(recordingStream->_endpointIdHash,
                 packetInfo.inboundContext()->_ssrc))
         {
             continue;
@@ -3230,6 +3230,12 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             presenterSimulcastLevel->_ssrc,
             slidesLimit,
             _sendAllocator);
+
+        _engineStreamDirector->setSlidesSsrcAndBitrate(presenterSimulcastLevel->_ssrc, _config.slides.minBitrate);
+    }
+    else
+    {
+        _engineStreamDirector->setSlidesSsrcAndBitrate(0, 0);
     }
 }
 
