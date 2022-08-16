@@ -102,6 +102,29 @@ public:
 
         _remoteVideoSsrc = _channel.getOfferedVideoSsrcs();
         _remoteVideoStreams = _channel.getOfferedVideoStreams();
+
+        bridge::RtpMap videoRtpMap(bridge::RtpMap::Format::VP8);
+        bridge::RtpMap feedbackRtpMap(bridge::RtpMap::Format::VP8RTX);
+
+        for (auto& stream : _remoteVideoStreams)
+        {
+
+            _videoReceivers.emplace_back(std::make_unique<RtpVideoReceiver>(++_instanceId,
+                stream,
+                videoRtpMap,
+                feedbackRtpMap,
+                _transport.get(),
+                utils::Time::getAbsoluteTime()));
+
+            for (auto& ssrcPair : stream)
+            {
+                _videoSsrcMap.emplace(ssrcPair.main, _videoReceivers.back().get());
+                if (ssrcPair.feedback != 0)
+                {
+                    _videoSsrcMap.emplace(ssrcPair.feedback, _videoReceivers.back().get());
+                }
+            }
+        }
     }
 
     void connect()
@@ -161,7 +184,10 @@ public:
                 {
                     // auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
                     // logger::debug("sending video %u", _loggableId.c_str(), rtpHeader->ssrc.get());
-                    _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+                    if (!_transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp))
+                    {
+                        logger::warn("failed to add SendMediaJob", "SfuClient");
+                    }
                 }
             }
         }
@@ -242,17 +268,22 @@ public:
     {
     public:
         RtpVideoReceiver(size_t instanceId,
-            uint32_t ssrc,
+            api::SimulcastGroup ssrcs,
             const bridge::RtpMap& rtpMap,
-            const bridge::RtpMap& rtpMapFeedback,
+            const bridge::RtpMap& rtxRtpMap,
             transport::RtcTransport* transport,
             uint64_t timestamp)
-            : _rtpMap(rtpMap),
-              _rtpMapFeedback(rtpMapFeedback),
-              _context(ssrc, _rtpMap, transport, timestamp),
-              _loggableId("rtprcv", instanceId)
+            : contexts(256),
+              _rtpMap(rtpMap),
+              _rtxRtpMap(rtxRtpMap),
+              _loggableId("rtprcv", instanceId),
+              _ssrcs(ssrcs)
         {
             _recording.reserve(256 * 1024);
+            logger::info("video offered ssrc %u, payload %u",
+                _loggableId.c_str(),
+                _ssrcs[0].main,
+                _rtpMap._payloadType);
         }
 
         void onRtpPacketReceived(transport::RtcTransport* sender,
@@ -260,35 +291,55 @@ public:
             uint32_t extendedSequenceNumber,
             uint64_t timestamp)
         {
-            _context.onRtpPacket(timestamp);
+            auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
+            auto it = contexts.find(rtpHeader->ssrc.get());
+            if (it == contexts.end())
+            {
+
+                auto result = contexts.emplace(rtpHeader->ssrc.get(),
+                    rtpHeader->ssrc.get(),
+                    rtpHeader->payloadType == _rtpMap._payloadType ? _rtpMap : _rtxRtpMap,
+                    sender,
+                    timestamp);
+                it = result.first;
+            }
+
+            auto& inboundContext = it->second;
+            inboundContext.onRtpPacket(timestamp);
+
             if (!sender->unprotect(packet))
             {
                 return;
             }
 
-            auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-            if (rtpHeader->payloadType == _rtpMap._payloadType)
+            ++videoPacketCount;
+
+            if (rtpHeader->payloadType != inboundContext._rtpMap._payloadType)
             {
-                ++videoPacketCount;
+                logger::warn("%u unexpected payload type %u",
+                    _loggableId.c_str(),
+                    rtpHeader->ssrc.get(),
+                    rtpHeader->payloadType);
             }
-            else
+            if (videoPacketCount % 100 == 0)
             {
-                ++rtxPacketCount;
+                logger::info("%u receive video %zu", _loggableId.c_str(), rtpHeader->ssrc.get(), videoPacketCount);
             }
         }
 
         const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
         size_t videoPacketCount = 0;
-        size_t rtxPacketCount = 0;
+
+        concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext> contexts;
 
     private:
         bridge::RtpMap _rtpMap;
-        bridge::RtpMap _rtpMapFeedback;
-        bridge::SsrcInboundContext _context;
+        bridge::RtpMap _rtxRtpMap;
         codec::OpusDecoder _decoder;
         logger::LoggableId _loggableId;
         std::vector<int16_t> _recording;
+        api::SimulcastGroup _ssrcs;
     };
 
 public:
@@ -331,11 +382,8 @@ public:
             auto it = _videoSsrcMap.find(rtpHeader->ssrc.get());
             if (it == _videoSsrcMap.end())
             {
-                return;
-            }
-            else
-            {
                 logger::warn("unxpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+                return;
             }
 
             it->second->onRtpPacketReceived(sender, *packet, extendedSequenceNumber, timestamp);
@@ -425,7 +473,7 @@ private:
     transport::TransportFactory& _transportFactory;
     transport::SslDtls& _sslDtls;
     concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*> _audioReceivers;
-    memory::Array<std::unique_ptr<RtpVideoReceiver>, 32> _videoReceivers;
+    std::vector<std::unique_ptr<RtpVideoReceiver>> _videoReceivers;
     concurrency::MpmcHashmap32<uint32_t, RtpVideoReceiver*> _videoSsrcMap;
     logger::LoggableId _loggableId;
     std::atomic_bool _recordingActive;
@@ -433,6 +481,7 @@ private:
     std::vector<api::SimulcastGroup> _remoteVideoStreams;
     uint32_t _ptime;
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
+    size_t _instanceId = 0;
 };
 
 template <typename T>
