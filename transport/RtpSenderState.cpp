@@ -224,4 +224,14 @@ int64_t RtpSenderState::timeToSenderReport(const uint64_t timestamp) const
 
     return std::max(int64_t(0), static_cast<int64_t>(_scheduledSenderReport - timestamp));
 }
+
+void RtpSenderState::stop()
+{
+    ReportSummary summary;
+    _summary.read(summary);
+    summary.sequenceNumberSent = _sendCounters.sequenceNumber;
+    summary.packetsSent = _sendCounters.packets;
+    summary.rtpTimestamp = _sendCounters.rtpTimestamp;
+    _summary.write(summary);
+}
 } // namespace transport

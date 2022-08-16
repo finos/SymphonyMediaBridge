@@ -851,7 +851,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     processMissingPackets(engineIterationStartTimestamp); // must run after checkPacketCounters
 
     // 3. Update bandwidth estimates
-    if (_config.bwe.useUplinkEstimate)
+    if (_config.rctl.useUplinkEstimate)
     {
         checkIfRateControlIsNeeded(engineIterationStartTimestamp);
         updateDirectorUplinkEstimates(engineIterationStartTimestamp);

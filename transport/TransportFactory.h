@@ -64,7 +64,9 @@ public:
         const size_t endpointIdHash,
         const Endpoints& rtpPorts,
         size_t expectedInboundStreamCount,
-        size_t expectedOutboundStreamCount) = 0;
+        size_t expectedOutboundStreamCount,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) = 0;
 
     virtual bool openRtpMuxPorts(Endpoints& rtpPorts) const = 0;
 

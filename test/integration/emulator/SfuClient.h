@@ -91,6 +91,7 @@ public:
         _transport =
             _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, 256 * 1024, _channel.getEndpointIdHash());
         _transport->setDataReceiver(this);
+        _transport->setAbsSendTimeExtensionId(3);
 
         _channel.configureTransport(*_transport, _audioAllocator);
 
@@ -99,6 +100,8 @@ public:
             _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next());
             _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
         }
+
+        logger::info("client using %s", _loggableId.c_str(), _transport->getLoggableId().c_str());
 
         _remoteVideoSsrc = _channel.getOfferedVideoSsrcs();
         _remoteVideoStreams = _channel.getOfferedVideoStreams();
@@ -321,10 +324,6 @@ public:
                     rtpHeader->ssrc.get(),
                     rtpHeader->payloadType);
             }
-            if (videoPacketCount % 100 == 0)
-            {
-                logger::info("%u receive video %zu", _loggableId.c_str(), rtpHeader->ssrc.get(), videoPacketCount);
-            }
         }
 
         const logger::LoggableId& getLoggableId() const { return _loggableId; }
@@ -522,6 +521,7 @@ public:
 
             if (it == _clients.end())
             {
+                logger::info("all clients connected", "test");
                 return true;
             }
 

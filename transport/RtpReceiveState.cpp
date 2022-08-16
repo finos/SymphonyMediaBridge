@@ -163,4 +163,9 @@ int64_t RtpReceiveState::timeToReceiveReport(uint64_t timestamp) const
     return std::max(int64_t(0), static_cast<int64_t>(_scheduledReceiveReport - timestamp));
 }
 
+void RtpReceiveState::stop()
+{
+    _cumulativeReport.write(_receiveCounters);
+}
+
 } // namespace transport

@@ -401,7 +401,9 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     TcpEndpointFactory* tcpEndpointFactory,
     memory::PacketPoolAllocator& allocator,
     size_t expectedInboundStreamCount,
-    size_t expectedOutboundStreamCount)
+    size_t expectedOutboundStreamCount,
+    bool enableUplinkEstimation,
+    bool enableDownlinkEstimation)
 {
     return std::make_shared<TransportImpl>(jobmanager,
         srtpClientFactory,
@@ -417,7 +419,9 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
         tcpEndpointFactory,
         allocator,
         expectedInboundStreamCount,
-        expectedOutboundStreamCount);
+        expectedOutboundStreamCount,
+        enableUplinkEstimation,
+        enableDownlinkEstimation);
 }
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
@@ -483,7 +487,9 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _rtxProbeSequenceCounter(nullptr),
       _pacingInUse(false),
       _iceState(ice::IceSession::State::IDLE),
-      _dtlsState(SrtpClient::State::IDLE)
+      _dtlsState(SrtpClient::State::IDLE),
+      _uplinkEstimationEnabled(false),
+      _downlinkEstimationEnabled(false)
 {
     assert(endpointIdHash != 0);
     _tag[0] = 0;
@@ -516,12 +522,22 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
         _selectedRtcp = _rtcpEndpoints.front().get();
     }
 
+    if (!_downlinkEstimationEnabled)
+    {
+        const uint32_t Mbps100 = 100000;
+        _inboundMetrics.estimatedKbps = Mbps100;
+        _inboundMetrics.estimatedKbpsMin = Mbps100;
+        _inboundMetrics.estimatedKbpsMax = Mbps100;
+    }
+
     _isInitialized = true;
-    logger::debug("started with %zu rtp + %zu rtcp endpoints. job count %u",
+    logger::debug("started with %zu rtp + %zu rtcp endpoints. job count %u, bwe %s, rctl %s",
         _loggableId.c_str(),
         _rtpEndpoints.size(),
         _rtcpEndpoints.size(),
-        _jobCounter.load());
+        _jobCounter.load(),
+        _downlinkEstimationEnabled ? "on" : "off",
+        _uplinkEstimationEnabled ? "on" : "off");
 }
 
 TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
@@ -538,7 +554,9 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     TcpEndpointFactory* tcpEndpointFactory,
     memory::PacketPoolAllocator& allocator,
     const size_t expectedInboundStreamCount,
-    const size_t expectedOutboundStreamCount)
+    const size_t expectedOutboundStreamCount,
+    const bool enableUplinkEstimation,
+    const bool enableDownlinkEstimation)
     : _isInitialized(false),
       _loggableId("Transport"),
       _endpointIdHash(endpointIdHash),
@@ -567,7 +585,9 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _rateController(_loggableId.getInstanceId(), rateControllerConfig),
       _rtxProbeSsrc(0),
       _rtxProbeSequenceCounter(nullptr),
-      _pacingInUse(false)
+      _pacingInUse(false),
+      _uplinkEstimationEnabled(enableUplinkEstimation && _config.rctl.enable),
+      _downlinkEstimationEnabled(enableDownlinkEstimation && _config.bwe.enable)
 {
     assert(endpointIdHash != 0);
     _tag[0] = 0;
@@ -660,12 +680,22 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
 
     _rtpIceSession->gatherLocalCandidates(iceConfig.gather.stunServers, utils::Time::getAbsoluteTime());
 
+    if (!_downlinkEstimationEnabled)
+    {
+        const uint32_t Mbps100 = 100000;
+        _inboundMetrics.estimatedKbps = Mbps100;
+        _inboundMetrics.estimatedKbpsMin = Mbps100;
+        _inboundMetrics.estimatedKbpsMax = Mbps100;
+    }
+
     _isInitialized = true;
-    logger::debug("started with %zu udp + %zu tcp endpoints. job count %u",
+    logger::debug("started with %zu udp + %zu tcp endpoints. job count %u, bwe %s, rctl %s",
         _loggableId.c_str(),
         _rtpEndpoints.size(),
         _tcpServerEndpoints.size(),
-        _jobCounter.load());
+        _jobCounter.load(),
+        _downlinkEstimationEnabled ? "on" : "off",
+        _uplinkEstimationEnabled ? "on" : "off");
 
     if (!_config.bwe.packetLogLocation.get().empty())
     {
@@ -728,6 +758,16 @@ void TransportImpl::stop()
 
 void TransportImpl::internalUnregisterEndpoints()
 {
+    for (auto& it : _outboundSsrcCounters)
+    {
+        it.second.stop();
+    }
+
+    for (auto& it : _inboundSsrcCounters)
+    {
+        it.second.stop();
+    }
+
     logger::debug("Unregister from rtp endpoints jobcount %u, endpoints %zu",
         _loggableId.c_str(),
         _jobCounter.load(),
@@ -833,14 +873,18 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
         }
     }
 
+    const uint32_t ssrc = rtpHeader->ssrc;
+    auto& ssrcState = getInboundSsrc(ssrc); // will do nothing if already exists
+    ssrcState.onRtpReceived(*packet, timestamp);
+    if (ssrcState.getCumulativeSnapshot().packets == 1 && !_downlinkEstimationEnabled)
+    {
+        rembReady = true; // force REMB to allow for high receive rate
+    }
+
     if (utils::Time::diffGE(_rtcp.lastSendTime, timestamp, utils::Time::ms * 100) || rembReady)
     {
         sendReports(timestamp, rembReady);
     }
-
-    const uint32_t ssrc = rtpHeader->ssrc;
-    auto& ssrcState = getInboundSsrc(ssrc); // will do nothing if already exists
-    ssrcState.onRtpReceived(*packet, timestamp);
 
     if (ssrcState.currentRtpSource != source)
     {
@@ -1102,7 +1146,7 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
             recvNtp32,
             _rateController);
 
-        if (_config.rctl.enable)
+        if (_uplinkEstimationEnabled)
         {
             _outboundMetrics.estimatedKbps = _rateController.getTargetRate();
         }
@@ -1119,7 +1163,7 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
             timestamp,
             recvNtp32,
             _rateController);
-        if (_config.rctl.enable)
+        if (_uplinkEstimationEnabled)
         {
             _outboundMetrics.estimatedKbps = _rateController.getTargetRate();
         }
@@ -1129,7 +1173,8 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
         const auto& remb = reinterpret_cast<const rtp::RtcpRembFeedback&>(header);
         const uint32_t estimatedKbps = remb.getBitrate() / 1000LLU;
         _outboundRembEstimateKbps = estimatedKbps;
-        if (!_config.rctl.enable)
+
+        if (!_uplinkEstimationEnabled)
         {
             _outboundMetrics.estimatedKbps = estimatedKbps;
         }
@@ -1203,6 +1248,15 @@ bool TransportImpl::doBandwidthEstimation(const uint64_t receiveTime,
     const utils::Optional<uint32_t>& absSendTime,
     const uint32_t packetSize)
 {
+    if (!_downlinkEstimationEnabled)
+    {
+        const uint32_t Mbps100 = 100000;
+        _inboundMetrics.estimatedKbps = Mbps100;
+        _inboundMetrics.estimatedKbpsMin = Mbps100;
+        _inboundMetrics.estimatedKbpsMax = Mbps100;
+        return false;
+    }
+
     if (!absSendTime.isSet())
     {
         _bwe->onUnmarkedTraffic(packetSize, receiveTime);
@@ -1398,7 +1452,7 @@ void TransportImpl::doProtectAndSend(uint64_t timestamp,
 
 void TransportImpl::sendPadding(uint64_t timestamp)
 {
-    if (!_config.rctl.enable || !_rtxProbeSequenceCounter)
+    if (!_uplinkEstimationEnabled || !_rtxProbeSequenceCounter)
     {
         return;
     }
@@ -1464,6 +1518,7 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
 
     if (!_srtpClient || !_selectedRtp || !isConnected())
     {
+        logger::debug("dropping packet, not connected", _loggableId.c_str());
         return;
     }
 
@@ -1521,7 +1576,10 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
     }
 
     ssrcState.onRtpSent(timestamp, *packet);
-    _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
+    if (_uplinkEstimationEnabled)
+    {
+        _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
+    }
     doProtectAndSend(timestamp, std::move(packet), _peerRtpPort, _selectedRtp);
 }
 
@@ -1788,7 +1846,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
                 rtpStateIt->second.onRtcpSent(timestamp, &header, rtcpPacket.getLength());
             }
             const auto* senderReport = rtp::RtcpSenderReport::fromPtr(&header, remainingBytes);
-            if (senderReport && _config.rctl.enable)
+            if (senderReport && _uplinkEstimationEnabled)
             {
                 // only one SR is allowed in packet
                 _rateController.onSenderReportSent(timestamp,
@@ -2383,8 +2441,9 @@ void TransportImpl::runTick(uint64_t timestamp)
 
 void TransportImpl::doRunTick(const uint64_t timestamp)
 {
-    auto drainMode = _config.rctl.enable && _config.bwe.useUplinkEstimate ? DrainPacingBufferMode::UseBudget
-                                                                          : DrainPacingBufferMode::DrainAll;
+    auto drainMode = _uplinkEstimationEnabled && _config.rctl.useUplinkEstimate ? DrainPacingBufferMode::UseBudget
+                                                                                : DrainPacingBufferMode::DrainAll;
+
     drainPacingBuffer(timestamp, drainMode);
     if (DrainPacingBufferMode::UseBudget == drainMode)
     {

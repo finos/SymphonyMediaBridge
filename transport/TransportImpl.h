@@ -67,7 +67,9 @@ public:
         TcpEndpointFactory* tcpEndpointFactory,
         memory::PacketPoolAllocator& allocator,
         size_t expectedInboundStreamCount,
-        size_t expectedOutboundStreamCount);
+        size_t expectedOutboundStreamCount,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation);
 
     TransportImpl(jobmanager::JobManager& jobmanager,
         SrtpClientFactory& srtpClientFactory,
@@ -427,7 +429,8 @@ public:
 
     char _tag[16];
 
-    uint32_t _pktCounter = 0;
+    bool _uplinkEstimationEnabled;
+    bool _downlinkEstimationEnabled;
 };
 
 } // namespace transport

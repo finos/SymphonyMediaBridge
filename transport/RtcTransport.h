@@ -130,6 +130,8 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     TcpEndpointFactory* tcpEndpointFactory,
     memory::PacketPoolAllocator& allocator,
     size_t expectedInboundStreamCount,
-    size_t expectedOutboundStreamCount);
+    size_t expectedOutboundStreamCount,
+    bool enableUplinkEstimation,
+    bool enableDownlinkEstimation);
 
 } // namespace transport
