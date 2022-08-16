@@ -128,6 +128,8 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     const Endpoints& sharedEndPoints,
     const ServerEndpoints& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
-    memory::PacketPoolAllocator& allocator);
+    memory::PacketPoolAllocator& allocator,
+    size_t expectedInboundStreamCount,
+    size_t expectedOutboundStreamCount);
 
 } // namespace transport

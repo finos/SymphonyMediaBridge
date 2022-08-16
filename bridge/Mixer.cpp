@@ -2288,7 +2288,8 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
         }
     }
 
-    transport = _transportFactory.createOnPorts(iceRole, 64, utils::hash<std::string>{}(barbellId), _barbellPorts);
+    transport =
+        _transportFactory.createOnPorts(iceRole, 64, utils::hash<std::string>{}(barbellId), _barbellPorts, 128, 128);
     if (!transport)
     {
         logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());

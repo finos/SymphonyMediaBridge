@@ -399,7 +399,9 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     const Endpoints& rtpEndPoints,
     const ServerEndpoints& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
-    memory::PacketPoolAllocator& allocator)
+    memory::PacketPoolAllocator& allocator,
+    size_t expectedInboundStreamCount,
+    size_t expectedOutboundStreamCount)
 {
     return std::make_shared<TransportImpl>(jobmanager,
         srtpClientFactory,
@@ -413,7 +415,9 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
         rtpEndPoints,
         tcpEndpoints,
         tcpEndpointFactory,
-        allocator);
+        allocator,
+        expectedInboundStreamCount,
+        expectedOutboundStreamCount);
 }
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
@@ -532,7 +536,9 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     const Endpoints& sharedEndpoints,
     const ServerEndpoints& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
-    memory::PacketPoolAllocator& allocator)
+    memory::PacketPoolAllocator& allocator,
+    const size_t expectedInboundStreamCount,
+    const size_t expectedOutboundStreamCount)
     : _isInitialized(false),
       _loggableId("Transport"),
       _endpointIdHash(endpointIdHash),
@@ -551,8 +557,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _outboundRembEstimateKbps(bweConfig.estimate.initialKbpsUplink),
       _sendRateTracker(utils::Time::ms * 100),
       _lastLogTimestamp(0),
-      _outboundSsrcCounters(256),
-      _inboundSsrcCounters(16),
+      _outboundSsrcCounters(expectedOutboundStreamCount),
+      _inboundSsrcCounters(expectedInboundStreamCount),
       _isRunning(true),
       _absSendTimeExtensionId(0),
       _videoRtxPayloadType(96),
@@ -685,6 +691,7 @@ bool TransportImpl::start()
 
 TransportImpl::~TransportImpl()
 {
+    // logger::info("pkts sent %u", _loggableId.c_str(), _pktCounter);
     if (_jobCounter.load() > 0 || _isRunning || _jobQueue.getCount() > 0)
     {
         logger::warn("~TransportImpl not idle %p running%u jobcount %u, serialjobs %zu",
@@ -1377,6 +1384,7 @@ void TransportImpl::doProtectAndSend(uint64_t timestamp,
     const SocketAddress& target,
     Endpoint* endpoint)
 {
+    // ++_pktCounter;
     _outboundMetrics.bytesCount += packet->getLength();
     ++_outboundMetrics.packetCount;
 

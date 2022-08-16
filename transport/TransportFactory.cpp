@@ -338,7 +338,9 @@ public:
                 rtpPorts,
                 _tcpServerEndpoints,
                 this,
-                _mainAllocator);
+                _mainAllocator,
+                16,
+                256);
         }
 
         return nullptr;
@@ -347,7 +349,9 @@ public:
     std::shared_ptr<RtcTransport> createOnPorts(const ice::IceRole iceRole,
         const size_t sendPoolSize,
         const size_t endpointId,
-        const Endpoints& rtpPorts) override
+        const Endpoints& rtpPorts,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount) override
     {
         return transport::createTransport(_jobManager,
             _srtpClientFactory,
@@ -361,7 +365,9 @@ public:
             rtpPorts,
             _tcpServerEndpoints,
             this,
-            _mainAllocator);
+            _mainAllocator,
+            expectedInboundStreamCount,
+            expectedOutboundStreamCount);
     }
 
     std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole,
@@ -381,7 +387,9 @@ public:
             _sharedEndpoints[index],
             _tcpServerEndpoints,
             this,
-            _mainAllocator);
+            _mainAllocator,
+            16,
+            256);
     }
 
     std::shared_ptr<RtcTransport> create(const size_t sendPoolSize, const size_t endpointId) override

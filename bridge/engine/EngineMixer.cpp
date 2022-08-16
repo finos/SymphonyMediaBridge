@@ -2350,7 +2350,6 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
 
 void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
 {
-    bool isFromBarbell = EngineBarbell::isFromBarbell(packetInfo.transport()->getTag());
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
     if (!rtpHeader)
     {
@@ -2448,12 +2447,6 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
             if (packet)
             {
-                if (isFromBarbell)
-                {
-                    logger::debug("fwd video from barbell over %s",
-                        _loggableId.c_str(),
-                        videoStream->_transport.getLoggableId().c_str());
-                }
                 videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                     *(packetInfo.inboundContext()),
                     std::move(packet),

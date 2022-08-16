@@ -65,7 +65,9 @@ public:
         const Endpoints& rtpEndPoints,
         const ServerEndpoints& tcpEndPoints,
         TcpEndpointFactory* tcpEndpointFactory,
-        memory::PacketPoolAllocator& allocator);
+        memory::PacketPoolAllocator& allocator,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount);
 
     TransportImpl(jobmanager::JobManager& jobmanager,
         SrtpClientFactory& srtpClientFactory,
@@ -424,6 +426,8 @@ public:
 #endif
 
     char _tag[16];
+
+    uint32_t _pktCounter = 0;
 };
 
 } // namespace transport
