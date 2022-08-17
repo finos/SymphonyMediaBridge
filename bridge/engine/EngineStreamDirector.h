@@ -494,30 +494,15 @@ public:
             result = quality == highestActiveQuality(fromEndpointId, ssrc);
         }
 
-        const auto phaq = highestActiveQuality(fromEndpointId, ssrc);
-
-        logger::info("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
+        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
                      "wantQ %lu, pinned %c",
             "EngineStreamDirector",
             toEndpointIdHash,
             ssrc,
             result ? 't' : 'f',
             quality,
-            phaq,
+            highestActiveQuality(fromEndpointId, ssrc),
             maxWantedQuality,
-            fromPinnedEndpoint ? 't' : 'f');
-
-        DIRECTOR_LOG(
-            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, current quality %lu, "
-            "maxWantedLevelQuality %lu, requiredMidLevelBandwidth %u, defaultLevelBandwidthLimit %u, pinned %c",
-            "EngineStreamDirector",
-            toEndpointIdHash,
-            ssrc,
-            result ? 't' : 'f',
-            quality,
-            maxWantedQuality,
-            _requiredMidLevelBandwidth,
-            viewedByParticipantStreamItr->second.defaultLevelBandwidthLimit,
             fromPinnedEndpoint ? 't' : 'f');
 
         return result;

@@ -2880,7 +2880,10 @@ void EngineMixer::sendMessagesToNewDataStreams()
             continue;
         }
 
-        dataStream->_stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
+        if (!dominantSpeakerMessage.empty())
+        {
+            dataStream->_stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
+        }
 
         const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
         if (videoStreamItr == _engineVideoStreams.end())
