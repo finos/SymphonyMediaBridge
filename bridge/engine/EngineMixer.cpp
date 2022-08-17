@@ -1902,7 +1902,13 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
             auto videoStream = barbell->videoSsrcMap.getItem(ssrc);
             assert(videoStream);
-            inboundContext._simulcastLevel = videoStream->stream.getLevelOf(ssrc);
+            if (!videoStream->stream.getLevelOf(ssrc, inboundContext._simulcastLevel))
+            {
+                logger::error("ssrc %u is not in simulcast group of barbell video stream %zu",
+                    _loggableId.c_str(),
+                    ssrc,
+                    barbell->idHash);
+            }
 
             logger::info("Created new barbell inbound video context for stream ssrc %u, endpointIdHash %zu, %s",
                 _loggableId.c_str(),
@@ -2578,25 +2584,27 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     }
 
     auto videoStreamItr = _engineVideoStreams.find(participant);
-    if (videoStreamItr == _engineVideoStreams.end())
+    if (videoStreamItr != _engineVideoStreams.end())
     {
+        if (videoStreamItr->second->_localSsrc == rtcpFeedback->_mediaSsrc.get())
+        {
+            return;
+        }
+
+        logger::info("Incoming rtcp feedback PLI, reporterSsrc %u, mediaSsrc %u, reporter participant %zu, media "
+                     "participant %zu",
+            _loggableId.c_str(),
+            rtcpFeedback->_reporterSsrc.get(),
+            rtcpFeedback->_mediaSsrc.get(),
+            rtcpSenderEndpointIdHash,
+            participant);
+
+        sendPliForUsedSsrcs(*videoStreamItr->second);
         return;
     }
 
-    if (videoStreamItr->second->_localSsrc == rtcpFeedback->_mediaSsrc.get())
-    {
-        return;
-    }
-
-    logger::info("Incoming rtcp feedback PLI, reporterSsrc %u, mediaSsrc %u, reporter participant %zu, media "
-                 "participant %zu",
-        _loggableId.c_str(),
-        rtcpFeedback->_reporterSsrc.get(),
-        rtcpFeedback->_mediaSsrc.get(),
-        rtcpSenderEndpointIdHash,
-        participant);
-
-    sendPliForUsedSsrcs(*videoStreamItr->second);
+    // TODO use activeMediaList to find which barbell the video participant is on.
+    // Once we have that, send
 }
 
 void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
@@ -2880,7 +2888,10 @@ void EngineMixer::sendMessagesToNewDataStreams()
             continue;
         }
 
-        dataStream->_stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
+        if (!dominantSpeakerMessage.empty())
+        {
+            dataStream->_stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
+        }
 
         const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
         if (videoStreamItr == _engineVideoStreams.end())
