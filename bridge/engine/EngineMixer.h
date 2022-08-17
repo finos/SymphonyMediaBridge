@@ -12,7 +12,6 @@
 #include "memory/PacketPoolAllocator.h"
 #include "memory/RingBuffer.h"
 #include "transport/RtcTransport.h"
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -67,6 +66,8 @@ public:
     static constexpr size_t minimumSamplesInBuffer = samplesPerIteration * 25; // 250 ms
     static constexpr size_t audioBufferSamples = preBufferSamples * 2; // 1000 ms
     static constexpr size_t ticksPerSSRCCheck = 100; // 1000 ms
+
+    static constexpr size_t maxNumBarbells = 16;
 
     using AudioBuffer = memory::RingBuffer<int16_t, audioBufferSamples, preBufferSamples>;
 
@@ -341,7 +342,11 @@ private:
     uint64_t _lastVideoBandwidthCheck;
     uint64_t _lastVideoPacketProcessed;
     bool _probingVideoStreams;
+    uint32_t _minUplinkEstimate;
 
+    uint32_t getBarbellsMinUplinkBitrate() const;
+    void reportMinUplinkToBarbells(const uint32_t minUplinkEstimate) const;
+    bool needToUpdateMinUplinkEstimate(const uint32_t curEstimate, const uint32_t oldEstimate) const;
     void processBarbellSctp(const uint64_t timestamp);
     void processIncomingRtpPackets(const uint64_t timestamp);
     void forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
@@ -438,6 +443,7 @@ private:
     void stopProbingVideoStream(const EngineVideoStream&);
 
     void onBarbellUserMediaMap(size_t barbellIdHash, const char* message);
+    void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message);
 
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
     utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);

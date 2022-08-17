@@ -19,7 +19,8 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
       dataChannel(rtcTransport.getLoggableId().getInstanceId(), rtcTransport),
       audioRtpMap(audioRtpMap),
       videoRtpMap(videoRtpMap),
-      videoFeedbackRtpMap(videoFeedbackRtpMap)
+      videoFeedbackRtpMap(videoFeedbackRtpMap),
+      minEstimatedUplinkBitrate(std::numeric_limits<uint32_t>::max())
 {
     audioStreams.reserve(audioSsrcs.size());
     for (auto& ssrc : audioSsrcs)

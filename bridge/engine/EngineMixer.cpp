@@ -1,5 +1,6 @@
 #include "bridge/engine/EngineMixer.h"
 #include "api/DataChannelMessage.h"
+#include "api/DataChannelMessageParser.h"
 #include "bridge/RecordingDescription.h"
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/AudioForwarderReceiveJob.h"
@@ -35,6 +36,7 @@
 #include "rtp/RtcpHeader.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
+#include "transport/TransportImpl.h"
 #include "transport/recp/RecControlHeader.h"
 #include "transport/recp/RecDominantSpeakerEventBuilder.h"
 #include "transport/recp/RecStartStopEventBuilder.h"
@@ -172,7 +174,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _engineVideoStreams(maxStreamsPerModality),
       _engineDataStreams(maxStreamsPerModality),
       _engineRecordingStreams(maxRecordingStreams),
-      _engineBarbells(16),
+      _engineBarbells(maxNumBarbells),
       _ssrcInboundContexts(maxSsrcs),
       _audioSsrcToUserIdMap(ActiveMediaList::maxParticipants),
       _localVideoSsrc(localVideoSsrc),
@@ -195,7 +197,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _numMixedAudioStreams(0),
       _lastVideoBandwidthCheck(0),
       _lastVideoPacketProcessed(0),
-      _probingVideoStreams(false)
+      _probingVideoStreams(false),
+      _minUplinkEstimate(0)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -1591,11 +1594,17 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
         }
         auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
         auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packet->get());
-        auto s = reinterpret_cast<char*>(header->data());
-        if (std::strstr(s, "user-media-map") != nullptr)
+        const auto s = reinterpret_cast<char*>(header->data());
+
+        size_t payloadLen = length - (s - reinterpret_cast<const char*>(data));
+        auto messageJson = utils::SimpleJson::create(s, payloadLen);
         {
-            _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
-            return;
+            if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
+                api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
+            {
+                _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
+                return;
+            }
         }
     }
 
@@ -2043,8 +2052,20 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
     for (IncomingPacketInfo packetInfo; _incomingBarbellSctp.pop(packetInfo);)
     {
         auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packetInfo.packet()->get());
-        onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(),
-            reinterpret_cast<const char*>(header->data()));
+        auto message = reinterpret_cast<const char*>(header->data());
+        auto messageJson = utils::SimpleJson::create(message, strlen(message));
+
+        if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
+        {
+            return onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(),
+                reinterpret_cast<const char*>(header->data()));
+        }
+
+        if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
+        {
+            return onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(),
+                reinterpret_cast<const char*>(header->data()));
+        }
     }
 }
 
@@ -3528,6 +3549,33 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
     }
 }
 
+bool EngineMixer::needToUpdateMinUplinkEstimate(const uint32_t curEstimate, const uint32_t oldEstimate) const
+{
+    // For screensharing (a.k.a. 'slides') we have a minumum allowed bitrate of 900 kbps,
+    // so it does not worth to react on the fluctuation below ~10% of this value.
+    return abs((int64_t)oldEstimate - (int64_t)curEstimate) > 100;
+}
+
+uint32_t EngineMixer::getBarbellsMinUplinkBitrate() const
+{
+    auto minBitrate = std::numeric_limits<uint32_t>::max();
+    for (const auto& itBb : _engineBarbells)
+    {
+        minBitrate = std::min(minBitrate, itBb.second->minEstimatedUplinkBitrate);
+    }
+    return minBitrate;
+}
+
+void EngineMixer::reportMinUplinkToBarbells(const uint32_t minUplinkEstimate) const
+{
+    utils::StringBuilder<1024> message;
+    api::DataChannelMessage::makeMinUplinkBitrate(message, minUplinkEstimate);
+    for (const auto& itBb : _engineBarbells)
+    {
+        itBb.second->dataChannel.sendData(message.get(), message.getLength());
+    }
+}
+
 void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 {
     if (!utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3))
@@ -3560,6 +3608,13 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     }
 
     minUplinkEstimate = std::max(minUplinkEstimate, _config.slides.minBitrate.get());
+    if (needToUpdateMinUplinkEstimate(minUplinkEstimate, _minUplinkEstimate))
+    {
+        reportMinUplinkToBarbells(minUplinkEstimate);
+    }
+
+    minUplinkEstimate =
+        std::max(_config.slides.minBitrate.get(), std::min(minUplinkEstimate, getBarbellsMinUplinkBitrate()));
 
     if (presenterSimulcastLevel)
     {
@@ -3728,11 +3783,6 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     }
 
     auto mediaMapJson = utils::SimpleJson::create(message, strlen(message));
-    char messageType[64];
-    if (!mediaMapJson["type"].getString(messageType) || std::strcmp(messageType, "user-media-map") != 0)
-    {
-        return;
-    }
 
     EngineBarbell& barbell = *(it->second);
 
@@ -3891,4 +3941,23 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     }
 }
 
+void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message)
+{
+    auto it = _engineBarbells.find(barbellIdHash);
+    if (it == _engineBarbells.end())
+    {
+        return;
+    }
+
+    EngineBarbell& barbell = *(it->second);
+
+    logger::info("received BB msg over barbell %s %zu, json %s",
+        _loggableId.c_str(),
+        barbell.id.c_str(),
+        barbellIdHash,
+        message);
+
+    barbell.minEstimatedUplinkBitrate =
+        api::DataChannelMessageParser::getMinUplinkBirate(utils::SimpleJson::create(message, strlen(message)));
+}
 } // namespace bridge

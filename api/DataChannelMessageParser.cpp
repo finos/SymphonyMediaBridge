@@ -74,6 +74,23 @@ nlohmann::json::const_iterator getEndpointMessagePayload(const nlohmann::json& m
     }
 }
 
+bool isUserMediaMap(const utils::SimpleJson& json)
+{
+    char messageType[64];
+    return json["type"].getString(messageType) && 0 == std::strcmp(messageType, "user-media-map");
+}
+
+bool isMinUplinkBitrate(const utils::SimpleJson& json)
+{
+    char messageType[64];
+    return json["type"].getString(messageType) && 0 == std::strcmp(messageType, "min-uplink-bitrate");
+}
+
+uint32_t getMinUplinkBirate(const utils::SimpleJson& json)
+{
+    return json["bitrateKbps"].getInt(std::numeric_limits<uint32_t>::max());
+}
+
 } // namespace DataChannelMessageParser
 
 } // namespace api
