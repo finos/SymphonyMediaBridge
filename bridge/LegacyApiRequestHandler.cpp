@@ -822,6 +822,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
             }
             else
             {
+                channel._ssrcGroups.clear();
                 VideoStreamDescription streamDescription;
                 if (!mixer.getVideoStreamDescription(channel._endpoint.get(), streamDescription) ||
                     !mixer.getVideoStreamTransportDescription(channel._endpoint.get(), transportDescription))

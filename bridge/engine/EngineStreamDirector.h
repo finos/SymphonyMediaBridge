@@ -494,16 +494,14 @@ public:
             result = quality == highestActiveQuality(fromEndpointId, ssrc);
         }
 
-        const auto phaq = highestActiveQuality(fromEndpointId, ssrc);
-
-        logger::info("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
+        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
                      "wantQ %lu, pinned %c",
             "EngineStreamDirector",
             toEndpointIdHash,
             ssrc,
             result ? 't' : 'f',
             quality,
-            phaq,
+            highestActiveQuality(fromEndpointId, ssrc),
             maxWantedQuality,
             fromPinnedEndpoint ? 't' : 'f');
 
@@ -932,7 +930,7 @@ private:
         outPinnedQuality = configLadder[bestConfigId].PinnedQuality;
         outUnpinnedQuality = configLadder[bestConfigId].UnpinnedQuality;
 
-        logger::info("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d, reserve for slides: %d",
+        DIRECTOR_LOG("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d, reserve for slides: %d",
             "EngineStreamDirector",
             (char)outPinnedQuality + '0',
             (char)outUnpinnedQuality + '0',
