@@ -1166,7 +1166,7 @@ TEST_F(IntegrationTest, simpleBarbell)
 
         EXPECT_NEAR(videoReceiveStats.packets,
             transportSummary2.begin()->second.packetsSent + transportSummary3.begin()->second.packetsSent,
-            10);
+            25);
     }
     {
         auto audioCounters = client2._transport->getCumulativeAudioReceiveCounters();
