@@ -917,7 +917,7 @@ private:
         outPinnedQuality = configLadder[bestConfigId].PinnedQuality;
         outUnpinnedQuality = configLadder[bestConfigId].UnpinnedQuality;
 
-        logger::info("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d, reserve for slides: %d",
+        DIRECTOR_LOG("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d, reserve for slides: %d",
             "EngineStreamDirector",
             (char)outPinnedQuality + '0',
             (char)outUnpinnedQuality + '0',
