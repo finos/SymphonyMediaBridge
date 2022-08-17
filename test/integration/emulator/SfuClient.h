@@ -381,7 +381,10 @@ public:
             auto it = _videoSsrcMap.find(rtpHeader->ssrc.get());
             if (it == _videoSsrcMap.end())
             {
-                logger::warn("unexpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+                if (_remoteVideoSsrc.find(rtpHeader->ssrc.get()) == _remoteVideoSsrc.end())
+                {
+                    logger::warn("unexpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+                }
                 return;
             }
 
