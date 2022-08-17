@@ -505,19 +505,6 @@ public:
             maxWantedQuality,
             fromPinnedEndpoint ? 't' : 'f');
 
-        DIRECTOR_LOG(
-            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, current quality %lu, "
-            "maxWantedLevelQuality %lu, requiredMidLevelBandwidth %u, defaultLevelBandwidthLimit %u, pinned %c",
-            "EngineStreamDirector",
-            toEndpointIdHash,
-            ssrc,
-            result ? 't' : 'f',
-            quality,
-            maxWantedQuality,
-            _requiredMidLevelBandwidth,
-            viewedByParticipantStreamItr->second.defaultLevelBandwidthLimit,
-            fromPinnedEndpoint ? 't' : 'f');
-
         return result;
     }
 
