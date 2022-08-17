@@ -88,7 +88,7 @@ bool isMinUplinkBitrate(const utils::SimpleJson& json)
 
 uint32_t getMinUplinkBirate(const utils::SimpleJson& json)
 {
-    return json["bitrateKbps"].getInt(std::numeric_limits<uint32_t>::max());
+    return json["bitrateKbps"].getInt(100000);
 }
 
 } // namespace DataChannelMessageParser

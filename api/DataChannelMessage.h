@@ -134,9 +134,9 @@ inline void makeLastNEnd(utils::StringBuilder<1024>& outMessage)
 
 inline void makeMinUplinkBitrate(utils::StringBuilder<1024>& outMessage, const uint32_t maxBitrateKbps)
 {
-    outMessage.append("{\"type\":\"min-uplink-bitrate\", \"bitrateKbps\":\"");
+    outMessage.append(R"({"type":"min-uplink-bitrate", "bitrateKbps":")");
     outMessage.append(maxBitrateKbps);
-    outMessage.append("\"}");
+    outMessage.append(R"("})");
 }
 
 } // namespace DataChannelMessage

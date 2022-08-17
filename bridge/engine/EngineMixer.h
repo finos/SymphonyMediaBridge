@@ -344,8 +344,8 @@ private:
     bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
 
-    uint32_t getBarbellsMinUplinkBitrate() const;
-    void reportMinUplinkToBarbells(const uint32_t minUplinkEstimate) const;
+    uint32_t getMinRemoteClientDownlinkBandwidth() const;
+    void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;
     bool needToUpdateMinUplinkEstimate(const uint32_t curEstimate, const uint32_t oldEstimate) const;
     void processBarbellSctp(const uint64_t timestamp);
     void processIncomingRtpPackets(const uint64_t timestamp);

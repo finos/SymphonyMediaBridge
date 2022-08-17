@@ -20,7 +20,7 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
       audioRtpMap(audioRtpMap),
       videoRtpMap(videoRtpMap),
       videoFeedbackRtpMap(videoFeedbackRtpMap),
-      minEstimatedUplinkBitrate(std::numeric_limits<uint32_t>::max())
+      minClientDownlinkBandwidth(100000)
 {
     audioStreams.reserve(audioSsrcs.size());
     for (auto& ssrc : audioSsrcs)

@@ -68,7 +68,7 @@ struct EngineBarbell
     bridge::RtpMap videoRtpMap;
     bridge::RtpMap videoFeedbackRtpMap;
 
-    uint32_t minEstimatedUplinkBitrate;
+    uint32_t minClientDownlinkBandwidth;
 
     static const char* barbellTag;
 };

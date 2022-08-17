@@ -1596,7 +1596,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
         auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packet->get());
         const auto s = reinterpret_cast<char*>(header->data());
 
-        size_t payloadLen = length - (s - reinterpret_cast<const char*>(data));
+        const size_t payloadLen = length - (s - reinterpret_cast<const char*>(data));
         auto messageJson = utils::SimpleJson::create(s, payloadLen);
         {
             if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
@@ -2057,14 +2057,12 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
 
         if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
         {
-            return onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(),
-                reinterpret_cast<const char*>(header->data()));
+            return onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
         }
 
         if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
         {
-            return onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(),
-                reinterpret_cast<const char*>(header->data()));
+            return onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), message);
         }
     }
 }
@@ -3556,17 +3554,17 @@ bool EngineMixer::needToUpdateMinUplinkEstimate(const uint32_t curEstimate, cons
     return abs((int64_t)oldEstimate - (int64_t)curEstimate) > 100;
 }
 
-uint32_t EngineMixer::getBarbellsMinUplinkBitrate() const
+uint32_t EngineMixer::getMinRemoteClientDownlinkBandwidth() const
 {
-    auto minBitrate = std::numeric_limits<uint32_t>::max();
+    auto minBitrate = 100000u;
     for (const auto& itBb : _engineBarbells)
     {
-        minBitrate = std::min(minBitrate, itBb.second->minEstimatedUplinkBitrate);
+        minBitrate = std::min(minBitrate, itBb.second->minClientDownlinkBandwidth);
     }
     return minBitrate;
 }
 
-void EngineMixer::reportMinUplinkToBarbells(const uint32_t minUplinkEstimate) const
+void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const
 {
     utils::StringBuilder<1024> message;
     api::DataChannelMessage::makeMinUplinkBitrate(message, minUplinkEstimate);
@@ -3610,11 +3608,11 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     minUplinkEstimate = std::max(minUplinkEstimate, _config.slides.minBitrate.get());
     if (needToUpdateMinUplinkEstimate(minUplinkEstimate, _minUplinkEstimate))
     {
-        reportMinUplinkToBarbells(minUplinkEstimate);
+        reportMinRemoteClientDownlinkBandwidthToBarbells(minUplinkEstimate);
     }
 
     minUplinkEstimate =
-        std::max(_config.slides.minBitrate.get(), std::min(minUplinkEstimate, getBarbellsMinUplinkBitrate()));
+        std::max(_config.slides.minBitrate.get(), std::min(minUplinkEstimate, getMinRemoteClientDownlinkBandwidth()));
 
     if (presenterSimulcastLevel)
     {
@@ -3951,13 +3949,13 @@ void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* m
 
     EngineBarbell& barbell = *(it->second);
 
-    logger::info("received BB msg over barbell %s %zu, json %s",
+    logger::debug("received BB msg over barbell %s %zu, json %s",
         _loggableId.c_str(),
         barbell.id.c_str(),
         barbellIdHash,
         message);
 
-    barbell.minEstimatedUplinkBitrate =
+    barbell.minClientDownlinkBandwidth =
         api::DataChannelMessageParser::getMinUplinkBirate(utils::SimpleJson::create(message, strlen(message)));
 }
 } // namespace bridge
