@@ -1667,22 +1667,16 @@ bool EngineMixer::setPacketSourceEndpointIdHash(memory::Packet& packet,
     uint32_t ssrc,
     bool isAudio)
 {
-    auto barbellIt = _engineBarbells.find(barbellIdHash);
-    if (barbellIt == _engineBarbells.end())
+    auto* barbell = _engineBarbells.getItem(barbellIdHash);
+    if (!barbell)
     {
         return false;
     }
 
-    auto& barbell = *barbellIt->second;
     if (isAudio)
     {
-        auto streamIt = barbell.audioSsrcMap.find(ssrc);
-        if (streamIt == barbell.audioSsrcMap.end())
-        {
-            return false;
-        }
-        auto* audioStream = streamIt->second;
-        if (audioStream->endpointIdHash.isSet())
+        const auto* audioStream = barbell->audioSsrcMap.getItem(ssrc);
+        if (audioStream && audioStream->endpointIdHash.isSet())
         {
             packet.endpointIdHash = audioStream->endpointIdHash.get();
             return true;
@@ -1690,13 +1684,8 @@ bool EngineMixer::setPacketSourceEndpointIdHash(memory::Packet& packet,
     }
     else
     {
-        auto streamIt = barbell.videoSsrcMap.find(ssrc);
-        if (streamIt == barbell.videoSsrcMap.end())
-        {
-            return false;
-        }
-        auto* videoStream = streamIt->second;
-        if (videoStream->endpointIdHash.isSet())
+        const auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
+        if (videoStream && videoStream->endpointIdHash.isSet())
         {
             packet.endpointIdHash = videoStream->endpointIdHash.get();
             return true;
@@ -1729,7 +1718,11 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         const bool isAudio = (ssrcContext->_rtpMap._format == bridge::RtpMap::Format::OPUS);
         if (!setPacketSourceEndpointIdHash(*packet, sender->getEndpointIdHash(), ssrc, isAudio))
         {
-            logger::debug("incoming barbell packet unmapped %zu", _loggableId.c_str(), sender->getEndpointIdHash());
+            logger::debug("incoming barbell packet unmapped %zu ssrc %u %s",
+                _loggableId.c_str(),
+                sender->getEndpointIdHash(),
+                ssrc,
+                isAudio ? "audio" : "video");
             return; // drop packet as we cannot process it
         }
     }
