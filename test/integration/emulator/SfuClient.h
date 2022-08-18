@@ -381,7 +381,10 @@ public:
             auto it = _videoSsrcMap.find(rtpHeader->ssrc.get());
             if (it == _videoSsrcMap.end())
             {
-                logger::warn("unxpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+                if (_remoteVideoSsrc.find(rtpHeader->ssrc.get()) == _remoteVideoSsrc.end())
+                {
+                    logger::warn("unexpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+                }
                 return;
             }
 
@@ -462,7 +465,10 @@ public:
     // Video source that produces fake VP8
     std::unordered_map<uint32_t, std::unique_ptr<fakenet::FakeVideoSource>> _videoSources;
 
-    const concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*>& getReceiveStats() const { return _audioReceivers; }
+    const concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*>& getAudioReceiveStats() const
+    {
+        return _audioReceivers;
+    }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
 private:

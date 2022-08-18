@@ -557,9 +557,33 @@ std::vector<api::SimulcastGroup> ColibriChannel::getOfferedVideoStreams() const
 {
     std::vector<api::SimulcastGroup> v;
 
-    if (_offer.find("video") != _offer.end())
+    for (auto& content : _offer["contents"])
     {
-        // must dig through SIM and FID groups
+        if (content["name"] == "video")
+        {
+            auto channel = content["channels"][0];
+            for (auto& jsonGroup : channel["ssrc-groups"])
+            {
+                api::SimulcastGroup group;
+                api::SsrcPair ssrcPair{0};
+                int index = 0;
+                for (auto& ssrc : jsonGroup["sources"])
+                {
+                    if (index & 1)
+                    {
+                        ssrcPair.feedback = ssrc.get<uint32_t>();
+                        group.push_back(ssrcPair);
+                        v.push_back(group);
+                    }
+                    else
+                    {
+                        ssrcPair.main = ssrc.get<uint32_t>();
+                    }
+                    ++index;
+                }
+            }
+            return v;
+        }
     }
 
     return v;

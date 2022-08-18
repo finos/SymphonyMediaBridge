@@ -721,7 +721,6 @@ bool TransportImpl::start()
 
 TransportImpl::~TransportImpl()
 {
-    // logger::info("pkts sent %u", _loggableId.c_str(), _pktCounter);
     if (_jobCounter.load() > 0 || _isRunning || _jobQueue.getCount() > 0)
     {
         logger::warn("~TransportImpl not idle %p running%u jobcount %u, serialjobs %zu",
@@ -874,7 +873,7 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     }
 
     const uint32_t ssrc = rtpHeader->ssrc;
-    auto& ssrcState = getInboundSsrc(ssrc); // will do nothing if already exists
+    auto& ssrcState = getInboundSsrc(ssrc);
     ssrcState.onRtpReceived(*packet, timestamp);
     if (ssrcState.getCumulativeSnapshot().packets == 1 && !_downlinkEstimationEnabled)
     {
@@ -1186,6 +1185,9 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
     }
 }
 
+/** Adds ssrc tracker if it does not exist
+ *
+ */
 RtpReceiveState& TransportImpl::getInboundSsrc(const uint32_t ssrc)
 {
     auto ssrcIt = _inboundSsrcCounters.find(ssrc);
@@ -1438,7 +1440,6 @@ void TransportImpl::doProtectAndSend(uint64_t timestamp,
     const SocketAddress& target,
     Endpoint* endpoint)
 {
-    // ++_pktCounter;
     _outboundMetrics.bytesCount += packet->getLength();
     ++_outboundMetrics.packetCount;
 

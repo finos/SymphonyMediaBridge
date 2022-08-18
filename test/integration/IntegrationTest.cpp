@@ -300,7 +300,7 @@ TEST_F(IntegrationTest, plain)
     {
         auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
-        const auto& rData1 = client1.getReceiveStats();
+        const auto& rData1 = client1.getAudioReceiveStats();
         std::vector<double> allFreq;
 
         for (const auto& item : rData1)
@@ -335,7 +335,7 @@ TEST_F(IntegrationTest, plain)
         auto audioCounters = client2._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
-        const auto& rData1 = client2.getReceiveStats();
+        const auto& rData1 = client2.getAudioReceiveStats();
         std::vector<double> allFreq;
         for (const auto& item : rData1)
         {
@@ -369,7 +369,7 @@ TEST_F(IntegrationTest, plain)
         auto audioCounters = client3._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
-        const auto& rData1 = client3.getReceiveStats();
+        const auto& rData1 = client3.getAudioReceiveStats();
         // We expect one audio ssrc
         EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
@@ -480,9 +480,9 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
     {
         utils::Time::nanoSleep(1 * utils::Time::sec);
     }
-    const auto& rData1 = client1.getReceiveStats();
-    const auto& rData2 = client2.getReceiveStats();
-    const auto& rData3 = client3.getReceiveStats();
+    const auto& rData1 = client1.getAudioReceiveStats();
+    const auto& rData2 = client2.getAudioReceiveStats();
+    const auto& rData3 = client3.getAudioReceiveStats();
     // We expect only one ssrc (audio), since padding (that comes on video ssrc) is disabled for audio only
     // calls).
     EXPECT_EQ(rData1.size(), 1);
@@ -594,9 +594,9 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         utils::Time::nanoSleep(1 * utils::Time::sec);
     }
 
-    const auto& rData1 = client1.getReceiveStats();
-    const auto& rData2 = client2.getReceiveStats();
-    const auto& rData3 = client3.getReceiveStats();
+    const auto& rData1 = client1.getAudioReceiveStats();
+    const auto& rData2 = client2.getAudioReceiveStats();
+    const auto& rData3 = client3.getAudioReceiveStats();
 
     EXPECT_EQ(rData1.size(), 2); // s2's audio, s3's audio
     EXPECT_EQ(rData2.size(), 1); // s1's audio, + padding
@@ -677,7 +677,7 @@ TEST_F(IntegrationTest, plainNewApi)
     {
         auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
-        const auto& rData1 = client1.getReceiveStats();
+        const auto& rData1 = client1.getAudioReceiveStats();
         std::vector<double> allFreq;
 
         for (const auto& item : rData1)
@@ -712,7 +712,7 @@ TEST_F(IntegrationTest, plainNewApi)
         auto audioCounters = client2._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
-        const auto& rData1 = client2.getReceiveStats();
+        const auto& rData1 = client2.getAudioReceiveStats();
         std::vector<double> allFreq;
         for (const auto& item : rData1)
         {
@@ -746,7 +746,7 @@ TEST_F(IntegrationTest, plainNewApi)
         auto audioCounters = client3._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
-        const auto& rData1 = client3.getReceiveStats();
+        const auto& rData1 = client3.getAudioReceiveStats();
         // We expect one audio ssrc
         EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
@@ -853,7 +853,7 @@ TEST_F(IntegrationTest, ptime10)
     {
         auto audioCounters = client1._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
-        const auto& rData1 = client1.getReceiveStats();
+        const auto& rData1 = client1.getAudioReceiveStats();
         std::vector<double> allFreq;
         EXPECT_EQ(rData1.size(), 2);
 
@@ -889,8 +889,8 @@ TEST_F(IntegrationTest, ptime10)
         auto audioCounters = client2._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
-        const auto& rData1 = client2.getReceiveStats();
-        EXPECT_EQ(rData1.size(), 5);
+        const auto& rData1 = client2.getAudioReceiveStats();
+        EXPECT_EQ(rData1.size(), 2);
         std::vector<double> allFreq;
         for (const auto& item : rData1)
         {
@@ -924,7 +924,7 @@ TEST_F(IntegrationTest, ptime10)
         auto audioCounters = client3._transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
-        const auto& rData1 = client3.getReceiveStats();
+        const auto& rData1 = client3.getAudioReceiveStats();
         // We expect one audio ssrc
         EXPECT_EQ(rData1.size(), 1);
         size_t audioSsrcCount = 0;
@@ -1123,7 +1123,7 @@ TEST_F(IntegrationTest, simpleBarbell)
     {
         auto audioCounters = client1._transport->getCumulativeAudioReceiveCounters();
         EXPECT_EQ(audioCounters.lostPackets, 0);
-        const auto& rData1 = client1.getReceiveStats();
+        const auto& rData1 = client1.getAudioReceiveStats();
         std::vector<double> allFreq;
         EXPECT_EQ(rData1.size(), 2);
 
@@ -1166,13 +1166,13 @@ TEST_F(IntegrationTest, simpleBarbell)
 
         EXPECT_NEAR(videoReceiveStats.packets,
             transportSummary2.begin()->second.packetsSent + transportSummary3.begin()->second.packetsSent,
-            10);
+            25);
     }
     {
         auto audioCounters = client2._transport->getCumulativeAudioReceiveCounters();
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
-        const auto& rData1 = client2.getReceiveStats();
+        const auto& rData1 = client2.getAudioReceiveStats();
         std::vector<double> allFreq;
         for (const auto& item : rData1)
         {
