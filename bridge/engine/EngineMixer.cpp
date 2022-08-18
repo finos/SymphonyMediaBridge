@@ -124,19 +124,19 @@ private:
  */
 inline bool shouldSkipBecauseOfWhitelist(const bridge::EngineVideoStream& videoStream, const uint32_t ssrc)
 {
-    if (!videoStream._ssrcWhitelist.enabled)
+    if (!videoStream.ssrcWhitelist.enabled)
     {
         return false;
     }
 
-    switch (videoStream._ssrcWhitelist.numSsrcs)
+    switch (videoStream.ssrcWhitelist.numSsrcs)
     {
     case 0:
         return true;
     case 1:
-        return videoStream._ssrcWhitelist.ssrcs[0] != ssrc;
+        return videoStream.ssrcWhitelist.ssrcs[0] != ssrc;
     case 2:
-        return videoStream._ssrcWhitelist.ssrcs[0] != ssrc && videoStream._ssrcWhitelist.ssrcs[1] != ssrc;
+        return videoStream.ssrcWhitelist.ssrcs[0] != ssrc && videoStream.ssrcWhitelist.ssrcs[1] != ssrc;
     default:
         return false;
     }
@@ -302,7 +302,7 @@ void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
 
 void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
 {
-    const auto endpointIdHash = engineVideoStream->_endpointIdHash;
+    const auto endpointIdHash = engineVideoStream->endpointIdHash;
     if (_engineVideoStreams.find(endpointIdHash) != _engineVideoStreams.end())
     {
         return;
@@ -310,7 +310,7 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
 
     logger::debug("Add engineVideoStream, transport %s, endpointIdHash %lu",
         _loggableId.c_str(),
-        engineVideoStream->_transport.getLoggableId().c_str(),
+        engineVideoStream->transport.getLoggableId().c_str(),
         endpointIdHash);
 
     if (_probingVideoStreams)
@@ -319,13 +319,13 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     }
     const auto mapRevision = _activeMediaList->getMapRevision();
     _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
-    if (engineVideoStream->_simulcastStream.numLevels > 0)
+    if (engineVideoStream->simulcastStream.numLevels > 0)
     {
-        _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->_simulcastStream);
+        _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->simulcastStream);
         _activeMediaList->addVideoParticipant(endpointIdHash,
-            engineVideoStream->_simulcastStream,
-            engineVideoStream->_secondarySimulcastStream,
-            engineVideoStream->_endpointId.c_str());
+            engineVideoStream->simulcastStream,
+            engineVideoStream->secondarySimulcastStream,
+            engineVideoStream->endpointId.c_str());
     }
     else
     {
@@ -344,53 +344,53 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
 
 void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
 {
-    engineVideoStream->_transport.getJobQueue().getJobManager().abortTimedJob(engineVideoStream->_transport.getId(),
-        engineVideoStream->_localSsrc);
+    engineVideoStream->transport.getJobQueue().getJobManager().abortTimedJob(engineVideoStream->transport.getId(),
+        engineVideoStream->localSsrc);
 
-    auto* outboundContext = engineVideoStream->_ssrcOutboundContexts.getItem(engineVideoStream->_localSsrc);
+    auto* outboundContext = engineVideoStream->ssrcOutboundContexts.getItem(engineVideoStream->localSsrc);
     if (outboundContext)
     {
         outboundContext->markedForDeletion = true;
-        if (engineVideoStream->_transport.isConnected())
+        if (engineVideoStream->transport.isConnected())
         {
             stopProbingVideoStream(*engineVideoStream);
             auto goodByePacket = createGoodBye(outboundContext->ssrc, outboundContext->allocator);
             if (goodByePacket)
             {
-                engineVideoStream->_transport.getJobQueue().addJob<SendRtcpJob>(std::move(goodByePacket),
-                    engineVideoStream->_transport);
+                engineVideoStream->transport.getJobQueue().addJob<SendRtcpJob>(std::move(goodByePacket),
+                    engineVideoStream->transport);
             }
         }
     }
 
-    if (engineVideoStream->_simulcastStream.numLevels != 0)
+    if (engineVideoStream->simulcastStream.numLevels != 0)
     {
-        for (size_t i = 0; i < engineVideoStream->_simulcastStream.numLevels; ++i)
+        for (size_t i = 0; i < engineVideoStream->simulcastStream.numLevels; ++i)
         {
-            markInboundContextForDeletion(engineVideoStream->_simulcastStream.levels[i].ssrc);
-            markInboundContextForDeletion(engineVideoStream->_simulcastStream.levels[i].feedbackSsrc);
+            markInboundContextForDeletion(engineVideoStream->simulcastStream.levels[i].ssrc);
+            markInboundContextForDeletion(engineVideoStream->simulcastStream.levels[i].feedbackSsrc);
         }
 
         markAssociatedVideoOutboundContextsForDeletion(engineVideoStream,
-            engineVideoStream->_simulcastStream.levels[0].ssrc,
-            engineVideoStream->_simulcastStream.levels[0].feedbackSsrc);
+            engineVideoStream->simulcastStream.levels[0].ssrc,
+            engineVideoStream->simulcastStream.levels[0].feedbackSsrc);
     }
 
-    if (engineVideoStream->_secondarySimulcastStream.isSet() &&
-        engineVideoStream->_secondarySimulcastStream.get().numLevels != 0)
+    if (engineVideoStream->secondarySimulcastStream.isSet() &&
+        engineVideoStream->secondarySimulcastStream.get().numLevels != 0)
     {
-        for (size_t i = 0; i < engineVideoStream->_simulcastStream.numLevels; ++i)
+        for (size_t i = 0; i < engineVideoStream->simulcastStream.numLevels; ++i)
         {
-            markInboundContextForDeletion(engineVideoStream->_secondarySimulcastStream.get().levels[i].ssrc);
-            markInboundContextForDeletion(engineVideoStream->_secondarySimulcastStream.get().levels[i].feedbackSsrc);
+            markInboundContextForDeletion(engineVideoStream->secondarySimulcastStream.get().levels[i].ssrc);
+            markInboundContextForDeletion(engineVideoStream->secondarySimulcastStream.get().levels[i].feedbackSsrc);
         }
 
         markAssociatedVideoOutboundContextsForDeletion(engineVideoStream,
-            engineVideoStream->_secondarySimulcastStream.get().levels[0].ssrc,
-            engineVideoStream->_secondarySimulcastStream.get().levels[0].feedbackSsrc);
+            engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc,
+            engineVideoStream->secondarySimulcastStream.get().levels[0].feedbackSsrc);
     }
 
-    const auto endpointIdHash = engineVideoStream->_endpointIdHash;
+    const auto endpointIdHash = engineVideoStream->endpointIdHash;
 
     const auto mapRevision = _activeMediaList->getMapRevision();
     _activeMediaList->removeVideoParticipant(endpointIdHash);
@@ -409,7 +409,7 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
 
     logger::debug("Remove engineVideoStream, transport %s, endpointIdHash %lu",
         _loggableId.c_str(),
-        engineVideoStream->_transport.getLoggableId().c_str(),
+        engineVideoStream->transport.getLoggableId().c_str(),
         endpointIdHash);
 
     _engineVideoStreams.erase(endpointIdHash);
@@ -417,28 +417,28 @@ void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
     EngineMessage::Message message(EngineMessage::Type::VideoStreamRemoved);
     message.command.videoStreamRemoved.mixer = this;
     message.command.videoStreamRemoved.engineStream = engineVideoStream;
-    engineVideoStream->_transport.getJobQueue().addJob<SendEngineMessageJob>(engineVideoStream->_transport,
+    engineVideoStream->transport.getJobQueue().addJob<SendEngineMessageJob>(engineVideoStream->transport,
         _messageListener,
         std::move(message));
 }
 
 void EngineMixer::addRecordingStream(EngineRecordingStream* engineRecordingStream)
 {
-    const auto it = _engineRecordingStreams.find(engineRecordingStream->_endpointIdHash);
+    const auto it = _engineRecordingStreams.find(engineRecordingStream->endpointIdHash);
     if (it != _engineRecordingStreams.end())
     {
         assert(false);
         return;
     }
 
-    _engineRecordingStreams.emplace(engineRecordingStream->_endpointIdHash, engineRecordingStream);
+    _engineRecordingStreams.emplace(engineRecordingStream->endpointIdHash, engineRecordingStream);
 }
 
 void EngineMixer::removeRecordingStream(EngineRecordingStream* engineRecordingStream)
 {
-    _engineStreamDirector->removeParticipant(engineRecordingStream->_endpointIdHash);
-    _engineStreamDirector->removeParticipantPins(engineRecordingStream->_endpointIdHash);
-    _engineRecordingStreams.erase(engineRecordingStream->_endpointIdHash);
+    _engineStreamDirector->removeParticipant(engineRecordingStream->endpointIdHash);
+    _engineStreamDirector->removeParticipantPins(engineRecordingStream->endpointIdHash);
+    _engineRecordingStreams.erase(engineRecordingStream->endpointIdHash);
 }
 
 void EngineMixer::updateRecordingStreamModalities(EngineRecordingStream* engineRecordingStream,
@@ -446,30 +446,30 @@ void EngineMixer::updateRecordingStreamModalities(EngineRecordingStream* engineR
     bool isVideoEnabled,
     bool isScreenSharingEnabled)
 {
-    if (!engineRecordingStream->_isReady)
+    if (!engineRecordingStream->isReady)
     {
         // I think this is very unlikely or even impossible to happen
         logger::warn("Received a stream update modality but the stream is not ready yet. endpointIdHash %lu",
             _loggableId.c_str(),
-            engineRecordingStream->_endpointIdHash);
+            engineRecordingStream->endpointIdHash);
         return;
     }
 
-    if (engineRecordingStream->_isAudioEnabled != isAudioEnabled)
+    if (engineRecordingStream->isAudioEnabled != isAudioEnabled)
     {
-        engineRecordingStream->_isAudioEnabled = isAudioEnabled;
+        engineRecordingStream->isAudioEnabled = isAudioEnabled;
         updateRecordingAudioStreams(*engineRecordingStream, isAudioEnabled);
     }
 
-    if (engineRecordingStream->_isVideoEnabled != isVideoEnabled)
+    if (engineRecordingStream->isVideoEnabled != isVideoEnabled)
     {
-        engineRecordingStream->_isVideoEnabled = isVideoEnabled;
+        engineRecordingStream->isVideoEnabled = isVideoEnabled;
         updateRecordingVideoStreams(*engineRecordingStream, SimulcastStream::VideoContentType::VIDEO, isVideoEnabled);
     }
 
-    if (engineRecordingStream->_isScreenSharingEnabled != isScreenSharingEnabled)
+    if (engineRecordingStream->isScreenSharingEnabled != isScreenSharingEnabled)
     {
-        engineRecordingStream->_isScreenSharingEnabled = isScreenSharingEnabled;
+        engineRecordingStream->isScreenSharingEnabled = isScreenSharingEnabled;
         updateRecordingVideoStreams(*engineRecordingStream,
             SimulcastStream::VideoContentType::SLIDES,
             isScreenSharingEnabled);
@@ -570,51 +570,51 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     auto engineVideoStream = videoStreamItr->second;
 
     const auto mapRevision = _activeMediaList->getMapRevision();
-    if (engineVideoStream->_simulcastStream.numLevels != 0 &&
+    if (engineVideoStream->simulcastStream.numLevels != 0 &&
         (simulcastStream.numLevels == 0 ||
-            simulcastStream.levels[0].ssrc != engineVideoStream->_simulcastStream.levels[0].ssrc))
+            simulcastStream.levels[0].ssrc != engineVideoStream->simulcastStream.levels[0].ssrc))
     {
-        removeVideoSsrcFromRecording(*engineVideoStream, engineVideoStream->_simulcastStream.levels[0].ssrc);
+        removeVideoSsrcFromRecording(*engineVideoStream, engineVideoStream->simulcastStream.levels[0].ssrc);
     }
 
-    if ((engineVideoStream->_secondarySimulcastStream.isSet() &&
-            engineVideoStream->_secondarySimulcastStream.get().numLevels != 0) &&
+    if ((engineVideoStream->secondarySimulcastStream.isSet() &&
+            engineVideoStream->secondarySimulcastStream.get().numLevels != 0) &&
         (!secondarySimulcastStream ||
             secondarySimulcastStream->levels[0].ssrc !=
-                engineVideoStream->_secondarySimulcastStream.get().levels[0].ssrc))
+                engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc))
     {
         removeVideoSsrcFromRecording(*engineVideoStream,
-            engineVideoStream->_secondarySimulcastStream.get().levels[0].ssrc);
+            engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc);
     }
 
-    engineVideoStream->_simulcastStream = simulcastStream;
-    engineVideoStream->_secondarySimulcastStream = secondarySimulcastStream == nullptr
+    engineVideoStream->simulcastStream = simulcastStream;
+    engineVideoStream->secondarySimulcastStream = secondarySimulcastStream == nullptr
         ? utils::Optional<SimulcastStream>()
         : utils::Optional<SimulcastStream>(*secondarySimulcastStream);
 
     _engineStreamDirector->removeParticipant(endpointIdHash);
     _activeMediaList->removeVideoParticipant(endpointIdHash);
 
-    if (engineVideoStream->_simulcastStream.numLevels > 0)
+    if (engineVideoStream->simulcastStream.numLevels > 0)
     {
         if (secondarySimulcastStream && secondarySimulcastStream->numLevels > 0)
         {
-            engineVideoStream->_secondarySimulcastStream.set(*secondarySimulcastStream);
+            engineVideoStream->secondarySimulcastStream.set(*secondarySimulcastStream);
             _engineStreamDirector->addParticipant(endpointIdHash,
-                engineVideoStream->_simulcastStream,
-                &engineVideoStream->_secondarySimulcastStream.get());
+                engineVideoStream->simulcastStream,
+                &engineVideoStream->secondarySimulcastStream.get());
         }
         else
         {
-            _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->_simulcastStream);
+            _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->simulcastStream);
         }
 
         _activeMediaList->addVideoParticipant(endpointIdHash,
-            engineVideoStream->_simulcastStream,
-            engineVideoStream->_secondarySimulcastStream,
-            engineVideoStream->_endpointId.c_str());
+            engineVideoStream->simulcastStream,
+            engineVideoStream->secondarySimulcastStream,
+            engineVideoStream->endpointId.c_str());
 
-        updateSimulcastLevelActiveState(*engineVideoStream, engineVideoStream->_simulcastStream);
+        updateSimulcastLevelActiveState(*engineVideoStream, engineVideoStream->simulcastStream);
         if (secondarySimulcastStream && secondarySimulcastStream->numLevels > 0)
         {
             updateSimulcastLevelActiveState(*engineVideoStream, *secondarySimulcastStream);
@@ -633,7 +633,7 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     }
     sendVideoStreamToRecording(*engineVideoStream, true);
 
-    memcpy(&engineVideoStream->_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
+    memcpy(&engineVideoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
 
     for (auto& videoStreamEntry : _engineVideoStreams)
     {
@@ -653,7 +653,7 @@ void EngineMixer::addVideoPacketCache(const uint32_t ssrc, const size_t endpoint
     auto* videoStream = _engineVideoStreams.getItem(endpointIdHash);
     if (videoStream)
     {
-        ssrcOutboundContext = videoStream->_ssrcOutboundContexts.getItem(ssrc);
+        ssrcOutboundContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
     }
     else
     {
@@ -680,13 +680,13 @@ void EngineMixer::addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer)
 
 void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc)
 {
-    auto seq = stream->_recordingEventsOutboundContext._sequenceNumber++;
+    auto seq = stream->recordingEventsOutboundContext._sequenceNumber++;
     auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
 
-    for (const auto& transportEntry : stream->_transports)
+    for (const auto& transportEntry : stream->transports)
     {
-        auto unackedPacketsTrackerItr = stream->_recEventUnackedPacketsTracker.find(transportEntry.first);
-        if (unackedPacketsTrackerItr == stream->_recEventUnackedPacketsTracker.end())
+        auto unackedPacketsTrackerItr = stream->recEventUnackedPacketsTracker.find(transportEntry.first);
+        if (unackedPacketsTrackerItr == stream->recEventUnackedPacketsTracker.end())
         {
             logger::error("RecEvent packet tracker not found. Unable to send start recording event to %s",
                 _loggableId.c_str(),
@@ -712,20 +712,20 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            stream->_recordingEventsOutboundContext._packetCache,
+            stream->recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
 
 void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDescription* desc)
 {
-    const auto sequenceNumber = stream->_recordingEventsOutboundContext._sequenceNumber++;
+    const auto sequenceNumber = stream->recordingEventsOutboundContext._sequenceNumber++;
     const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
 
-    for (const auto& transportEntry : stream->_transports)
+    for (const auto& transportEntry : stream->transports)
     {
-        auto unackedPacketsTrackerItr = stream->_recEventUnackedPacketsTracker.find(transportEntry.first);
-        if (unackedPacketsTrackerItr == stream->_recEventUnackedPacketsTracker.end())
+        auto unackedPacketsTrackerItr = stream->recEventUnackedPacketsTracker.find(transportEntry.first);
+        if (unackedPacketsTrackerItr == stream->recEventUnackedPacketsTracker.end())
         {
             logger::error("RecEvent packet tracker not found. Unable to send stop recording event to %s",
                 _loggableId.c_str(),
@@ -752,7 +752,7 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            stream->_recordingEventsOutboundContext._packetCache,
+            stream->recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
@@ -767,7 +767,7 @@ void EngineMixer::addRecordingRtpPacketCache(const uint32_t ssrc, const size_t e
         return;
     }
 
-    auto outboundContext = recordingStreamItr->second->_ssrcOutboundContexts.getItem(ssrc);
+    auto outboundContext = recordingStreamItr->second->ssrcOutboundContexts.getItem(ssrc);
     if (!outboundContext || (outboundContext->packetCache.isSet() && outboundContext->packetCache.get()))
     {
         return;
@@ -787,12 +787,12 @@ void EngineMixer::addTransportToRecordingStream(const size_t streamIdHash,
     }
 
     auto recordingStream = recordingStreamItr->second;
-    recordingStream->_transports.emplace(transport->getEndpointIdHash(), *transport);
-    recordingStream->_recEventUnackedPacketsTracker.emplace(transport->getEndpointIdHash(), *recUnackedPacketsTracker);
+    recordingStream->transports.emplace(transport->getEndpointIdHash(), *transport);
+    recordingStream->recEventUnackedPacketsTracker.emplace(transport->getEndpointIdHash(), *recUnackedPacketsTracker);
 
-    if (!recordingStream->_isReady)
+    if (!recordingStream->isReady)
     {
-        recordingStream->_isReady = true;
+        recordingStream->isReady = true;
         startRecordingAllCurrentStreams(*recordingStream);
     }
 }
@@ -806,11 +806,11 @@ void EngineMixer::removeTransportFromRecordingStream(const size_t streamIdHash, 
     }
 
     auto recordingStream = recordingStreamItr->second;
-    recordingStream->_transports.erase(endpointIdHash);
-    recordingStream->_recEventUnackedPacketsTracker.erase(endpointIdHash);
+    recordingStream->transports.erase(endpointIdHash);
+    recordingStream->recEventUnackedPacketsTracker.erase(endpointIdHash);
 
     EngineMessage::Message message(EngineMessage::Type::RemoveRecordingTransport);
-    message.command.removeRecordingTransport.streamId = recordingStream->_id.c_str();
+    message.command.removeRecordingTransport.streamId = recordingStream->id.c_str();
     message.command.removeRecordingTransport.endpointIdHash = endpointIdHash;
     _messageListener.onMessage(std::move(message));
 }
@@ -888,9 +888,9 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
         }
         auto videoStream = videoStreamItr->second;
 
-        videoStream->_transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
-            videoStream->_localSsrc,
-            videoStream->_transport,
+        videoStream->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
+            videoStream->localSsrc,
+            videoStream->transport,
             _sendAllocator);
     }
 
@@ -931,22 +931,22 @@ void EngineMixer::updateDirectorUplinkEstimates(const uint64_t engineIterationSt
 
     for (const auto& videoStreamEntry : _engineVideoStreams)
     {
-        if (!videoStreamEntry.second->_transport.isConnected())
+        if (!videoStreamEntry.second->transport.isConnected())
         {
             continue;
         }
 
         auto videoStream = videoStreamEntry.second;
-        const auto uplinkEstimateKbps = videoStream->_transport.getUplinkEstimateKbps();
+        const auto uplinkEstimateKbps = videoStream->transport.getUplinkEstimateKbps();
         if (uplinkEstimateKbps == 0 ||
-            !_engineStreamDirector->setUplinkEstimateKbps(videoStream->_endpointIdHash,
+            !_engineStreamDirector->setUplinkEstimateKbps(videoStream->endpointIdHash,
                 uplinkEstimateKbps,
                 engineIterationStartTimestamp))
         {
             continue;
         }
 
-        const auto pinTarget = _engineStreamDirector->getPinTarget(videoStream->_endpointIdHash);
+        const auto pinTarget = _engineStreamDirector->getPinTarget(videoStream->endpointIdHash);
         if (!pinTarget)
         {
             continue;
@@ -1066,7 +1066,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
     for (auto& videoStreamEntry : _engineVideoStreams)
     {
         const auto endpointIdHash = videoStreamEntry.first;
-        for (auto& outboundContextEntry : videoStreamEntry.second->_ssrcOutboundContexts)
+        for (auto& outboundContextEntry : videoStreamEntry.second->ssrcOutboundContexts)
         {
             auto& outboundContext = outboundContextEntry.second;
 
@@ -1096,10 +1096,10 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                         feedbackSsrc,
                         outboundContextEntry.first,
                         endpointIdHash);
-                    videoStreamEntry.second->_transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
-                        videoStreamEntry.second->_transport,
+                    videoStreamEntry.second->transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
+                        videoStreamEntry.second->transport,
                         feedbackSsrc);
-                    videoStreamEntry.second->_ssrcOutboundContexts.erase(feedbackSsrc);
+                    videoStreamEntry.second->ssrcOutboundContexts.erase(feedbackSsrc);
                 }
 
                 // Pending jobs with reference to this ssrc context has had 30s to complete.
@@ -1116,10 +1116,10 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                     _loggableId.c_str(),
                     outboundContextEntry.first,
                     endpointIdHash);
-                videoStreamEntry.second->_transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
-                    videoStreamEntry.second->_transport,
+                videoStreamEntry.second->transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
+                    videoStreamEntry.second->transport,
                     outboundContextEntry.first);
-                videoStreamEntry.second->_ssrcOutboundContexts.erase(outboundContextEntry.first);
+                videoStreamEntry.second->ssrcOutboundContexts.erase(outboundContextEntry.first);
             }
         }
     }
@@ -1127,7 +1127,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
     for (auto& recordingStreamEntry : _engineRecordingStreams)
     {
         const auto endpointIdHash = recordingStreamEntry.first;
-        for (auto& outboundContextEntry : recordingStreamEntry.second->_ssrcOutboundContexts)
+        for (auto& outboundContextEntry : recordingStreamEntry.second->ssrcOutboundContexts)
         {
             auto& outboundContext = outboundContextEntry.second;
             if (utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 30))
@@ -1157,7 +1157,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                     _loggableId.c_str(),
                     outboundContextEntry.first,
                     endpointIdHash);
-                recordingStreamEntry.second->_ssrcOutboundContexts.erase(outboundContextEntry.first);
+                recordingStreamEntry.second->ssrcOutboundContexts.erase(outboundContextEntry.first);
             }
         }
     }
@@ -1195,15 +1195,15 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
     {
         if (!_engineAudioStreams.contains(videoStreamEntry.first))
         {
-            const auto videoRecvCounters = videoStreamEntry.second->_transport.getVideoReceiveCounters(idleTimestamp);
-            const auto videoSendCounters = videoStreamEntry.second->_transport.getVideoSendCounters(idleTimestamp);
-            const auto pacingQueueCount = videoStreamEntry.second->_transport.getPacingQueueCount();
-            const auto rtxPacingQueueCount = videoStreamEntry.second->_transport.getRtxPacingQueueCount();
+            const auto videoRecvCounters = videoStreamEntry.second->transport.getVideoReceiveCounters(idleTimestamp);
+            const auto videoSendCounters = videoStreamEntry.second->transport.getVideoSendCounters(idleTimestamp);
+            const auto pacingQueueCount = videoStreamEntry.second->transport.getPacingQueueCount();
+            const auto rtxPacingQueueCount = videoStreamEntry.second->transport.getRtxPacingQueueCount();
 
             stats.inbound.video += videoRecvCounters;
             stats.outbound.video += videoSendCounters;
-            stats.inbound.transport.addBandwidthGroup(videoStreamEntry.second->_transport.getDownlinkEstimateKbps());
-            stats.inbound.transport.addRttGroup(videoStreamEntry.second->_transport.getRtt() / utils::Time::ms);
+            stats.inbound.transport.addBandwidthGroup(videoStreamEntry.second->transport.getDownlinkEstimateKbps());
+            stats.inbound.transport.addRttGroup(videoStreamEntry.second->transport.getRtt() / utils::Time::ms);
             stats.inbound.transport.addLossGroup(videoRecvCounters.getReceiveLossRatio());
             stats.outbound.transport.addLossGroup(videoSendCounters.getSendLossRatio());
             stats.pacingQueue += pacingQueueCount;
@@ -1333,7 +1333,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
 
     uint32_t mainSsrc;
     const uint32_t feedbackSsrc = ssrcContext->ssrc;
-    if (videoStream && !_engineStreamDirector->getSsrc(videoStream->_endpointIdHash, feedbackSsrc, mainSsrc))
+    if (videoStream && !_engineStreamDirector->getSsrc(videoStream->endpointIdHash, feedbackSsrc, mainSsrc))
     {
         return;
     }
@@ -1373,7 +1373,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
 
     if (!mustBeForwardedOnBarbells &&
         !_engineStreamDirector->isSsrcUsed(mainSsrc,
-            videoStream->_endpointIdHash,
+            videoStream->endpointIdHash,
             isSenderInLastNList,
             _engineRecordingStreams.size()))
     {
@@ -1395,7 +1395,7 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
     for (auto& videoStreamEntry : _engineVideoStreams)
     {
         auto videoStream = videoStreamEntry.second;
-        if (&videoStream->_transport == sender)
+        if (&videoStream->transport == sender)
         {
             continue;
         }
@@ -1472,18 +1472,18 @@ void EngineMixer::pinEndpoint(const size_t endpointIdHash, const size_t targetEn
     if (videoStreamItr != _engineVideoStreams.end())
     {
         const auto videoStream = videoStreamItr->second;
-        const auto oldPinSsrc = videoStream->_pinSsrc;
+        const auto oldPinSsrc = videoStream->pinSsrc;
         if (oldPinSsrc.isSet())
         {
-            videoStream->_videoPinSsrcs.push(oldPinSsrc.get());
-            videoStream->_pinSsrc.clear();
+            videoStream->videoPinSsrcs.push(oldPinSsrc.get());
+            videoStream->pinSsrc.clear();
         }
         if (targetEndpointIdHash)
         {
             SimulcastLevel newPinSsrc;
-            if (videoStream->_videoPinSsrcs.pop(newPinSsrc))
+            if (videoStream->videoPinSsrcs.pop(newPinSsrc))
             {
-                videoStream->_pinSsrc.set(newPinSsrc);
+                videoStream->pinSsrc.set(newPinSsrc);
                 logger::debug("EndpointIdHash %zu pin %zu, pin ssrc %u",
                     _loggableId.c_str(),
                     endpointIdHash,
@@ -1634,8 +1634,8 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
     auto recControlHeader = recp::RecControlHeader::fromPacket(*packet);
     if (recControlHeader->isEventAck())
     {
-        auto unackedPacketsTrackerItr = stream->_recEventUnackedPacketsTracker.find(sender->getEndpointIdHash());
-        if (unackedPacketsTrackerItr == stream->_recEventUnackedPacketsTracker.end())
+        auto unackedPacketsTrackerItr = stream->recEventUnackedPacketsTracker.find(sender->getEndpointIdHash());
+        if (unackedPacketsTrackerItr == stream->recEventUnackedPacketsTracker.end())
         {
             return;
         }
@@ -1647,7 +1647,7 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
     else if (recControlHeader->isRtpNack())
     {
         auto ssrc = recControlHeader->getSsrc();
-        auto ssrcContext = stream->_ssrcOutboundContexts.getItem(ssrc);
+        auto ssrcContext = stream->ssrcOutboundContexts.getItem(ssrc);
         if (!ssrcContext)
         {
             return;
@@ -1945,28 +1945,28 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     }
 
     auto videoStream = engineVideoStreamItr->second;
-    if (payloadType == videoStream->_rtpMap._payloadType)
+    if (payloadType == videoStream->rtpMap._payloadType)
     {
         uint32_t rewriteSsrc = 0;
         uint32_t level = 0;
-        for (size_t i = 0; i < videoStream->_simulcastStream.numLevels; ++i)
+        for (size_t i = 0; i < videoStream->simulcastStream.numLevels; ++i)
         {
-            if (ssrc == videoStream->_simulcastStream.levels[i].ssrc)
+            if (ssrc == videoStream->simulcastStream.levels[i].ssrc)
             {
                 level = i;
-                rewriteSsrc = videoStream->_simulcastStream.levels[0].ssrc;
+                rewriteSsrc = videoStream->simulcastStream.levels[0].ssrc;
                 break;
             }
         }
 
-        if (rewriteSsrc == 0 && videoStream->_secondarySimulcastStream.isSet())
+        if (rewriteSsrc == 0 && videoStream->secondarySimulcastStream.isSet())
         {
-            for (size_t i = 0; i < videoStream->_secondarySimulcastStream.get().numLevels; ++i)
+            for (size_t i = 0; i < videoStream->secondarySimulcastStream.get().numLevels; ++i)
             {
-                if (ssrc == videoStream->_secondarySimulcastStream.get().levels[i].ssrc)
+                if (ssrc == videoStream->secondarySimulcastStream.get().levels[i].ssrc)
                 {
                     level = i;
-                    rewriteSsrc = videoStream->_secondarySimulcastStream.get().levels[0].ssrc;
+                    rewriteSsrc = videoStream->secondarySimulcastStream.get().levels[0].ssrc;
                     break;
                 }
             }
@@ -1977,7 +1977,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_rtpMap, sender, timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->rtpMap, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext.rewriteSsrc = rewriteSsrc;
         inboundContext.simulcastLevel = level;
@@ -1990,31 +1990,31 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             ssrc,
             level,
             inboundContext.rewriteSsrc,
-            videoStream->_endpointIdHash,
+            videoStream->endpointIdHash,
             static_cast<uint16_t>(inboundContext.rtpMap._format),
             sender->getLoggableId().c_str());
 
         return &inboundContext;
     }
-    else if (payloadType == videoStream->_feedbackRtpMap._payloadType)
+    else if (payloadType == videoStream->feedbackRtpMap._payloadType)
     {
         uint32_t rewriteSsrc = 0;
-        for (size_t i = 0; i < videoStream->_simulcastStream.numLevels; ++i)
+        for (size_t i = 0; i < videoStream->simulcastStream.numLevels; ++i)
         {
-            if (ssrc == videoStream->_simulcastStream.levels[i].feedbackSsrc)
+            if (ssrc == videoStream->simulcastStream.levels[i].feedbackSsrc)
             {
-                rewriteSsrc = videoStream->_simulcastStream.levels[0].feedbackSsrc;
+                rewriteSsrc = videoStream->simulcastStream.levels[0].feedbackSsrc;
                 break;
             }
         }
 
-        if (rewriteSsrc == 0 && videoStream->_secondarySimulcastStream.isSet())
+        if (rewriteSsrc == 0 && videoStream->secondarySimulcastStream.isSet())
         {
-            for (size_t i = 0; i < videoStream->_secondarySimulcastStream.get().numLevels; ++i)
+            for (size_t i = 0; i < videoStream->secondarySimulcastStream.get().numLevels; ++i)
             {
-                if (ssrc == videoStream->_secondarySimulcastStream.get().levels[i].feedbackSsrc)
+                if (ssrc == videoStream->secondarySimulcastStream.get().levels[i].feedbackSsrc)
                 {
-                    rewriteSsrc = videoStream->_secondarySimulcastStream.get().levels[0].feedbackSsrc;
+                    rewriteSsrc = videoStream->secondarySimulcastStream.get().levels[0].feedbackSsrc;
                     break;
                 }
             }
@@ -2025,7 +2025,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->_feedbackRtpMap, sender, timestamp);
+        auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoStream->feedbackRtpMap, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext.rewriteSsrc = rewriteSsrc;
         inboundContext.rtxSsrc = videoStream->getMainSsrcFor(ssrc);
@@ -2034,7 +2034,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             "Created new inbound context for video stream feedback ssrc %u, endpointIdHash %lu, rtp format %u, %s",
             _loggableId.c_str(),
             ssrc,
-            videoStream->_endpointIdHash,
+            videoStream->endpointIdHash,
             static_cast<uint16_t>(inboundContext.rtpMap._format),
             sender->getLoggableId().c_str());
 
@@ -2120,13 +2120,13 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
     for (auto& recordingStreams : _engineRecordingStreams)
     {
         auto* recordingStream = recordingStreams.second;
-        if (!(recordingStream && recordingStream->_isAudioEnabled))
+        if (!(recordingStream && recordingStream->isAudioEnabled))
         {
             continue;
         }
 
         const auto ssrc = packetInfo.inboundContext()->ssrc;
-        auto* ssrcOutboundContext = recordingStream->_ssrcOutboundContexts.getItem(ssrc);
+        auto* ssrcOutboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
         if (!ssrcOutboundContext || ssrcOutboundContext->markedForDeletion)
         {
             continue;
@@ -2134,7 +2134,7 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
 
         allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
 
-        for (const auto& transportEntry : recordingStream->_transports)
+        for (const auto& transportEntry : recordingStream->transports)
         {
             ssrcOutboundContext->onRtpSent(timestamp);
             auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
@@ -2395,7 +2395,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
         }
 
         auto ssrc = packetInfo.inboundContext()->rewriteSsrc;
-        if (videoStream->_ssrcRewrite)
+        if (videoStream->ssrcRewrite)
         {
             const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
             if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
@@ -2406,9 +2406,9 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             else if (_engineStreamDirector->getPinTarget(endpointIdHash) == senderEndpointIdHash &&
                 !_activeMediaList->isInUserActiveVideoList(senderEndpointIdHash))
             {
-                if (videoStream->_pinSsrc.isSet())
+                if (videoStream->pinSsrc.isSet())
                 {
-                    ssrc = videoStream->_pinSsrc.get().ssrc;
+                    ssrc = videoStream->pinSsrc.get().ssrc;
                 }
                 else
                 {
@@ -2433,10 +2433,10 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
         }
 
-        auto* ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->_endpointIdHash,
-            videoStream->_ssrcOutboundContexts,
+        auto* ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->endpointIdHash,
+            videoStream->ssrcOutboundContexts,
             ssrc,
-            videoStream->_rtpMap);
+            videoStream->rtpMap);
 
         if (!ssrcOutboundContext)
         {
@@ -2457,16 +2457,16 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             }
         }
 
-        if (videoStream->_transport.isConnected())
+        if (videoStream->transport.isConnected())
         {
             ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
             auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
             if (packet)
             {
-                videoStream->_transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                videoStream->transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                     *(packetInfo.inboundContext()),
                     std::move(packet),
-                    videoStream->_transport,
+                    videoStream->transport,
                     packetInfo.extendedSequenceNumber());
             }
             else
@@ -2482,19 +2482,19 @@ void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo,
     for (auto& recordingStreams : _engineRecordingStreams)
     {
         auto* recordingStream = recordingStreams.second;
-        if (!(recordingStream && (recordingStream->_isVideoEnabled || recordingStream->_isScreenSharingEnabled)))
+        if (!(recordingStream && (recordingStream->isVideoEnabled || recordingStream->isScreenSharingEnabled)))
         {
             continue;
         }
 
-        if (!_engineStreamDirector->shouldRecordSsrc(recordingStream->_endpointIdHash,
+        if (!_engineStreamDirector->shouldRecordSsrc(recordingStream->endpointIdHash,
                 packetInfo.inboundContext()->ssrc))
         {
             continue;
         }
 
         auto* ssrcOutboundContext =
-            recordingStream->_ssrcOutboundContexts.getItem(packetInfo.inboundContext()->rewriteSsrc);
+            recordingStream->ssrcOutboundContexts.getItem(packetInfo.inboundContext()->rewriteSsrc);
         if (!ssrcOutboundContext || ssrcOutboundContext->markedForDeletion)
         {
             continue;
@@ -2502,7 +2502,7 @@ void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo,
 
         allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
 
-        for (const auto& transportEntry : recordingStream->_transports)
+        for (const auto& transportEntry : recordingStream->transports)
         {
             ssrcOutboundContext->onRtpSent(timestamp); // active jobs on this ssrc context
             auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
@@ -2566,8 +2566,8 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     const auto rtcpSenderVideoStreamItr = _engineVideoStreams.find(rtcpSenderEndpointIdHash);
 
     size_t participant;
-    if (rtcpSenderVideoStreamItr != _engineVideoStreams.end() && rtcpSenderVideoStreamItr->second->_pinSsrc.isSet() &&
-        rtcpSenderVideoStreamItr->second->_pinSsrc.get().ssrc == mediaSsrc)
+    if (rtcpSenderVideoStreamItr != _engineVideoStreams.end() && rtcpSenderVideoStreamItr->second->pinSsrc.isSet() &&
+        rtcpSenderVideoStreamItr->second->pinSsrc.get().ssrc == mediaSsrc)
     {
         // The mediaSsrc refers to the pinned video ssrc
         participant = _engineStreamDirector->getPinTarget(rtcpSenderEndpointIdHash);
@@ -2596,7 +2596,7 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     auto videoStreamItr = _engineVideoStreams.find(participant);
     if (videoStreamItr != _engineVideoStreams.end())
     {
-        if (videoStreamItr->second->_localSsrc == rtcpFeedback->_mediaSsrc.get())
+        if (videoStreamItr->second->localSsrc == rtcpFeedback->_mediaSsrc.get())
         {
             return;
         }
@@ -2636,7 +2636,7 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     }
     auto rtcpSenderVideoStream = rtcpSenderVideoStreamItr->second;
 
-    auto* mediaSsrcOutboundContext = rtcpSenderVideoStream->_ssrcOutboundContexts.getItem(mediaSsrc);
+    auto* mediaSsrcOutboundContext = rtcpSenderVideoStream->ssrcOutboundContexts.getItem(mediaSsrc);
     if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
         !mediaSsrcOutboundContext->packetCache.get())
     {
@@ -2644,16 +2644,16 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     }
 
     uint32_t feedbackSsrc;
-    if (!(rtcpSenderVideoStream->_ssrcRewrite ? _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc)
-                                              : _engineStreamDirector->getFeedbackSsrc(mediaSsrc, feedbackSsrc)))
+    if (!(rtcpSenderVideoStream->ssrcRewrite ? _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc)
+                                             : _engineStreamDirector->getFeedbackSsrc(mediaSsrc, feedbackSsrc)))
     {
         return;
     }
 
-    auto feedbackSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->_endpointIdHash,
-        rtcpSenderVideoStream->_ssrcOutboundContexts,
+    auto feedbackSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->endpointIdHash,
+        rtcpSenderVideoStream->ssrcOutboundContexts,
         feedbackSsrc,
-        rtcpSenderVideoStream->_feedbackRtpMap);
+        rtcpSenderVideoStream->feedbackRtpMap);
 
     if (!feedbackSsrcOutboundContext)
     {
@@ -2668,9 +2668,8 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     {
         feedbackSsrcOutboundContext->onRtpSent(timestamp);
         rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
-        rtcpSenderVideoStream->_transport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(
-            *feedbackSsrcOutboundContext,
-            rtcpSenderVideoStream->_transport,
+        rtcpSenderVideoStream->transport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+            rtcpSenderVideoStream->transport,
             *(mediaSsrcOutboundContext->packetCache.get()),
             pid,
             blp,
@@ -2780,13 +2779,13 @@ inline void EngineMixer::processAudioStreams()
 
 void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
 {
-    const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(videoStream._endpointIdHash);
+    const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(videoStream.endpointIdHash);
 
-    for (size_t i = 0; i < videoStream._simulcastStream.numLevels; ++i)
+    for (size_t i = 0; i < videoStream.simulcastStream.numLevels; ++i)
     {
-        const auto& simulcastLevel = videoStream._simulcastStream.levels[i];
+        const auto& simulcastLevel = videoStream.simulcastStream.levels[i];
         if (!_engineStreamDirector->isSsrcUsed(simulcastLevel.ssrc,
-                videoStream._endpointIdHash,
+                videoStream.endpointIdHash,
                 isSenderInLastNList,
                 _engineRecordingStreams.size()))
         {
@@ -2800,13 +2799,13 @@ void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
         }
     }
 
-    if (videoStream._secondarySimulcastStream.isSet())
+    if (videoStream.secondarySimulcastStream.isSet())
     {
-        for (size_t i = 0; i < videoStream._secondarySimulcastStream.get().numLevels; ++i)
+        for (size_t i = 0; i < videoStream.secondarySimulcastStream.get().numLevels; ++i)
         {
-            const auto& simulcastLevel = videoStream._secondarySimulcastStream.get().levels[i];
+            const auto& simulcastLevel = videoStream.secondarySimulcastStream.get().levels[i];
             if (!_engineStreamDirector->isSsrcUsed(simulcastLevel.ssrc,
-                    videoStream._endpointIdHash,
+                    videoStream.endpointIdHash,
                     isSenderInLastNList,
                     _engineRecordingStreams.size()))
             {
@@ -2836,7 +2835,7 @@ void EngineMixer::sendLastNListMessage(const size_t endpointIdHash)
     }
 
     const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-    if (videoStreamItr == _engineVideoStreams.end() || videoStreamItr->second->_ssrcRewrite)
+    if (videoStreamItr == _engineVideoStreams.end() || videoStreamItr->second->ssrcRewrite)
     {
         return;
     }
@@ -2861,7 +2860,7 @@ void EngineMixer::sendLastNListMessageToAll()
         }
 
         const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-        if (videoStreamItr == _engineVideoStreams.end() || videoStreamItr->second->_ssrcRewrite)
+        if (videoStreamItr == _engineVideoStreams.end() || videoStreamItr->second->ssrcRewrite)
         {
             continue;
         }
@@ -2883,7 +2882,7 @@ void EngineMixer::sendMessagesToNewDataStreams()
     if (dominantSpeakerVideoStreamItr != _engineVideoStreams.end())
     {
         api::DataChannelMessage::makeDominantSpeaker(dominantSpeakerMessage,
-            dominantSpeakerVideoStreamItr->second->_endpointId);
+            dominantSpeakerVideoStreamItr->second->endpointId);
     }
 
     utils::StringBuilder<1024> lastNListMessage;
@@ -2911,7 +2910,7 @@ void EngineMixer::sendMessagesToNewDataStreams()
         const auto videoStream = videoStreamItr->second;
         const auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);
 
-        if (videoStream->_ssrcRewrite)
+        if (videoStream->ssrcRewrite)
         {
             userMediaMapMessage.clear();
             if (_activeMediaList->makeUserMediaMapMessage(_lastN,
@@ -2941,12 +2940,12 @@ void EngineMixer::updateBandwidthFloor()
     auto videoStreams = 0;
     for (const auto& videoStreamEntry : _engineVideoStreams)
     {
-        if (videoStreamEntry.second->_simulcastStream.numLevels > 0)
+        if (videoStreamEntry.second->simulcastStream.numLevels > 0)
         {
             ++videoStreams;
         }
-        if (videoStreamEntry.second->_secondarySimulcastStream.isSet() &&
-            videoStreamEntry.second->_secondarySimulcastStream.get().numLevels > 0)
+        if (videoStreamEntry.second->secondarySimulcastStream.isSet() &&
+            videoStreamEntry.second->secondarySimulcastStream.get().numLevels > 0)
         {
             ++videoStreams;
         }
@@ -2981,7 +2980,7 @@ void EngineMixer::sendUserMediaMapMessage(const size_t endpointIdHash)
     }
 
     const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-    if (videoStreamItr == _engineVideoStreams.end() || !videoStreamItr->second->_ssrcRewrite)
+    if (videoStreamItr == _engineVideoStreams.end() || !videoStreamItr->second->ssrcRewrite)
     {
         return;
     }
@@ -3009,7 +3008,7 @@ void EngineMixer::sendUserMediaMapMessageToAll()
         }
 
         const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-        if (videoStreamItr == _engineVideoStreams.end() || !videoStreamItr->second->_ssrcRewrite)
+        if (videoStreamItr == _engineVideoStreams.end() || !videoStreamItr->second->ssrcRewrite)
         {
             continue;
         }
@@ -3077,18 +3076,18 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
     const size_t dominantSpeaker,
     const std::string& dominantSpeakerEndpoint)
 {
-    if (recordingStream._isVideoEnabled)
+    if (recordingStream.isVideoEnabled)
     {
-        pinEndpoint(recordingStream._endpointIdHash, dominantSpeaker);
+        pinEndpoint(recordingStream.endpointIdHash, dominantSpeaker);
     }
 
-    const auto sequenceNumber = recordingStream._recordingEventsOutboundContext._sequenceNumber++;
+    const auto sequenceNumber = recordingStream.recordingEventsOutboundContext._sequenceNumber++;
     const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
 
-    for (const auto& transportEntry : recordingStream._transports)
+    for (const auto& transportEntry : recordingStream.transports)
     {
-        auto unackedPacketsTrackerItr = recordingStream._recEventUnackedPacketsTracker.find(transportEntry.first);
-        if (unackedPacketsTrackerItr == recordingStream._recEventUnackedPacketsTracker.end())
+        auto unackedPacketsTrackerItr = recordingStream.recEventUnackedPacketsTracker.find(transportEntry.first);
+        if (unackedPacketsTrackerItr == recordingStream.recEventUnackedPacketsTracker.end())
         {
             logger::error("RecEvent packet tracker not found. Unable to send dominant speaker recording event to %s",
                 _loggableId.c_str(),
@@ -3110,7 +3109,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            recordingStream._recordingEventsOutboundContext._packetCache,
+            recordingStream.recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
@@ -3134,7 +3133,7 @@ void EngineMixer::updateSimulcastLevelActiveState(EngineVideoStream& videoStream
         auto ssrcInboundContextItr = _ssrcInboundContexts.find(ssrc);
         if (ssrcInboundContextItr != _ssrcInboundContexts.end() && ssrcInboundContextItr->second.activeMedia)
         {
-            _engineStreamDirector->streamActiveStateChanged(videoStream._endpointIdHash, ssrc, true);
+            _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
             ssrcInboundContextItr->second.pliScheduler.triggerPli();
         }
     }
@@ -3154,8 +3153,8 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
         const auto endpointIdHash = videoStreamEntry.first;
 
         {
-            auto outboundContextItr = videoStream->_ssrcOutboundContexts.find(ssrc);
-            if (outboundContextItr != videoStream->_ssrcOutboundContexts.end())
+            auto outboundContextItr = videoStream->ssrcOutboundContexts.find(ssrc);
+            if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
             {
                 outboundContextItr->second.markedForDeletion = true;
                 logger::info("Marking unused video outbound context for deletion, ssrc %u, endpointIdHash %lu",
@@ -3166,8 +3165,8 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
         }
 
         {
-            auto outboundContextItr = videoStream->_ssrcOutboundContexts.find(feedbackSsrc);
-            if (outboundContextItr != videoStream->_ssrcOutboundContexts.end())
+            auto outboundContextItr = videoStream->ssrcOutboundContexts.find(feedbackSsrc);
+            if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
             {
                 outboundContextItr->second.markedForDeletion = true;
                 logger::info(
@@ -3192,19 +3191,19 @@ void EngineMixer::markInboundContextForDeletion(const uint32_t ssrc)
 
 void EngineMixer::startRecordingAllCurrentStreams(EngineRecordingStream& recordingStream)
 {
-    if (recordingStream._isAudioEnabled)
+    if (recordingStream.isAudioEnabled)
     {
         updateRecordingAudioStreams(recordingStream, true);
     }
 
-    if (recordingStream._isVideoEnabled)
+    if (recordingStream.isVideoEnabled)
     {
         updateRecordingVideoStreams(recordingStream, SimulcastStream::VideoContentType::VIDEO, true);
-        _engineStreamDirector->addParticipant(recordingStream._endpointIdHash);
+        _engineStreamDirector->addParticipant(recordingStream.endpointIdHash);
         sendDominantSpeakerToRecordingStream(recordingStream);
     }
 
-    if (recordingStream._isScreenSharingEnabled)
+    if (recordingStream.isScreenSharingEnabled)
     {
         updateRecordingVideoStreams(recordingStream, SimulcastStream::VideoContentType::SLIDES, true);
     }
@@ -3217,10 +3216,10 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
     const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
     const auto ssrc = audioStream.remoteSsrc.isSet() ? audioStream.remoteSsrc.get() : 0;
 
-    for (const auto& transportEntry : targetStream._transports)
+    for (const auto& transportEntry : targetStream.transports)
     {
-        auto unackedPacketsTrackerItr = targetStream._recEventUnackedPacketsTracker.find(transportEntry.first);
-        if (unackedPacketsTrackerItr == targetStream._recEventUnackedPacketsTracker.end())
+        auto unackedPacketsTrackerItr = targetStream.recEventUnackedPacketsTracker.find(transportEntry.first);
+        if (unackedPacketsTrackerItr == targetStream.recEventUnackedPacketsTracker.end())
         {
             logger::error("RecEvent packet tracker not found. Unable to send recording audio stream event to %s",
                 _loggableId.c_str(),
@@ -3231,8 +3230,8 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
         memory::UniquePacket packet;
         if (isAdded)
         {
-            auto outboundContextIt = targetStream._ssrcOutboundContexts.find(ssrc);
-            if (outboundContextIt != targetStream._ssrcOutboundContexts.end())
+            auto outboundContextIt = targetStream.ssrcOutboundContexts.find(ssrc);
+            if (outboundContextIt != targetStream.ssrcOutboundContexts.end())
             {
                 if (!outboundContextIt->second.markedForDeletion)
                 {
@@ -3246,7 +3245,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             }
 
             packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream._recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
                          .setTimestamp(timestamp)
                          .setSsrc(ssrc)
                          .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap._payloadType))
@@ -3256,9 +3255,9 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
                          .build();
 
             auto emplaceResult =
-                targetStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream.rtpMap);
+                targetStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream.rtpMap);
 
-            if (!emplaceResult.second && emplaceResult.first == targetStream._ssrcOutboundContexts.end())
+            if (!emplaceResult.second && emplaceResult.first == targetStream.ssrcOutboundContexts.end())
             {
                 logger::error("Failed to create outbound context for audio ssrc %u, rec transport %s",
                     _loggableId.c_str(),
@@ -3269,20 +3268,20 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             {
                 logger::info("Created new outbound context for audio rec stream, rec endpointIdHash %lu, ssrc %u",
                     _loggableId.c_str(),
-                    targetStream._endpointIdHash,
+                    targetStream.endpointIdHash,
                     ssrc);
             }
         }
         else
         {
             packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream._recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
                          .setTimestamp(timestamp)
                          .setSsrc(ssrc)
                          .build();
 
-            auto outboundContextItr = targetStream._ssrcOutboundContexts.find(ssrc);
-            if (outboundContextItr != targetStream._ssrcOutboundContexts.end())
+            auto outboundContextItr = targetStream.ssrcOutboundContexts.find(ssrc);
+            if (outboundContextItr != targetStream.ssrcOutboundContexts.end())
             {
                 outboundContextItr->second.markedForDeletion = true;
             }
@@ -3300,7 +3299,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            targetStream._recordingEventsOutboundContext._packetCache,
+            targetStream.recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
@@ -3318,15 +3317,15 @@ void EngineMixer::sendRecordingVideoStream(EngineRecordingStream& targetStream,
     SimulcastStream::VideoContentType contentType,
     bool isAdded)
 {
-    if (videoStream._simulcastStream.contentType == contentType)
+    if (videoStream.simulcastStream.contentType == contentType)
     {
-        sendRecordingSimulcast(targetStream, videoStream, videoStream._simulcastStream, isAdded);
+        sendRecordingSimulcast(targetStream, videoStream, videoStream.simulcastStream, isAdded);
     }
 
-    if (videoStream._secondarySimulcastStream.isSet() &&
-        videoStream._secondarySimulcastStream.get().contentType == contentType)
+    if (videoStream.secondarySimulcastStream.isSet() &&
+        videoStream.secondarySimulcastStream.get().contentType == contentType)
     {
-        sendRecordingSimulcast(targetStream, videoStream, videoStream._secondarySimulcastStream.get(), isAdded);
+        sendRecordingSimulcast(targetStream, videoStream, videoStream.secondarySimulcastStream.get(), isAdded);
     }
 }
 
@@ -3352,10 +3351,10 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
         return;
     }
 
-    for (const auto& transportEntry : targetStream._transports)
+    for (const auto& transportEntry : targetStream.transports)
     {
-        auto unackedPacketsTrackerItr = targetStream._recEventUnackedPacketsTracker.find(transportEntry.first);
-        if (unackedPacketsTrackerItr == targetStream._recEventUnackedPacketsTracker.end())
+        auto unackedPacketsTrackerItr = targetStream.recEventUnackedPacketsTracker.find(transportEntry.first);
+        if (unackedPacketsTrackerItr == targetStream.recEventUnackedPacketsTracker.end())
         {
             logger::error("RecEvent packet tracker not found. Unable to send stream event to %s",
                 _loggableId.c_str(),
@@ -3366,8 +3365,8 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
         memory::UniquePacket packet;
         if (isAdded)
         {
-            auto outboundContextIt = targetStream._ssrcOutboundContexts.find(ssrc);
-            if (outboundContextIt != targetStream._ssrcOutboundContexts.end())
+            auto outboundContextIt = targetStream.ssrcOutboundContexts.find(ssrc);
+            if (outboundContextIt != targetStream.ssrcOutboundContexts.end())
             {
                 if (!outboundContextIt->second.markedForDeletion)
                 {
@@ -3381,20 +3380,20 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             }
 
             packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream._recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
                          .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL))
                          .setSsrc(ssrc)
                          .setIsScreenSharing(simulcast.contentType == SimulcastStream::VideoContentType::SLIDES)
-                         .setRtpPayloadType(static_cast<uint8_t>(videoStream._rtpMap._payloadType))
-                         .setPayloadFormat(videoStream._rtpMap._format)
-                         .setEndpoint(videoStream._endpointId)
+                         .setRtpPayloadType(static_cast<uint8_t>(videoStream.rtpMap._payloadType))
+                         .setPayloadFormat(videoStream.rtpMap._format)
+                         .setEndpoint(videoStream.endpointId)
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
 
             auto emplaceResult =
-                targetStream._ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream._rtpMap);
+                targetStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream.rtpMap);
 
-            if (!emplaceResult.second && emplaceResult.first == targetStream._ssrcOutboundContexts.end())
+            if (!emplaceResult.second && emplaceResult.first == targetStream.ssrcOutboundContexts.end())
             {
                 logger::error("Failed to create outbound context for video ssrc %u, rec transport %s",
                     _loggableId.c_str(),
@@ -3405,20 +3404,20 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             {
                 logger::info("Created new outbound context for video rec stream, endpointIdHash %lu, ssrc %u",
                     _loggableId.c_str(),
-                    targetStream._endpointIdHash,
+                    targetStream.endpointIdHash,
                     ssrc);
             }
         }
         else
         {
             packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream._recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
                          .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL))
                          .setSsrc(ssrc)
                          .build();
 
-            auto outboundContextItr = targetStream._ssrcOutboundContexts.find(ssrc);
-            if (outboundContextItr != targetStream._ssrcOutboundContexts.end())
+            auto outboundContextItr = targetStream.ssrcOutboundContexts.find(ssrc);
+            if (outboundContextItr != targetStream.ssrcOutboundContexts.end())
             {
                 outboundContextItr->second.markedForDeletion = true;
             }
@@ -3436,7 +3435,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            targetStream._recordingEventsOutboundContext._packetCache,
+            targetStream.recordingEventsOutboundContext._packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
@@ -3445,7 +3444,7 @@ void EngineMixer::sendAudioStreamToRecording(const EngineAudioStream& audioStrea
 {
     for (auto& rec : _engineRecordingStreams)
     {
-        if (rec.second->_isAudioEnabled)
+        if (rec.second->isAudioEnabled)
         {
             sendRecordingAudioStream(*rec.second, audioStream, isAdded);
         }
@@ -3456,12 +3455,12 @@ void EngineMixer::sendVideoStreamToRecording(const EngineVideoStream& videoStrea
 {
     for (auto& rec : _engineRecordingStreams)
     {
-        if (rec.second->_isVideoEnabled)
+        if (rec.second->isVideoEnabled)
         {
             sendRecordingVideoStream(*rec.second, videoStream, SimulcastStream::VideoContentType::VIDEO, isAdded);
         }
 
-        if (rec.second->_isScreenSharingEnabled)
+        if (rec.second->isScreenSharingEnabled)
         {
             sendRecordingVideoStream(*rec.second, videoStream, SimulcastStream::VideoContentType::SLIDES, isAdded);
         }
@@ -3472,35 +3471,35 @@ void EngineMixer::removeVideoSsrcFromRecording(const EngineVideoStream& videoStr
 {
     for (auto& rec : _engineRecordingStreams)
     {
-        if (rec.second->_isVideoEnabled)
+        if (rec.second->isVideoEnabled)
         {
-            if (videoStream._simulcastStream.levels[0].ssrc == ssrc &&
-                videoStream._simulcastStream.contentType == SimulcastStream::VideoContentType::VIDEO)
+            if (videoStream.simulcastStream.levels[0].ssrc == ssrc &&
+                videoStream.simulcastStream.contentType == SimulcastStream::VideoContentType::VIDEO)
             {
-                sendRecordingSimulcast(*rec.second, videoStream, videoStream._simulcastStream, false);
+                sendRecordingSimulcast(*rec.second, videoStream, videoStream.simulcastStream, false);
             }
 
-            if (videoStream._secondarySimulcastStream.isSet() &&
-                videoStream._secondarySimulcastStream.get().levels[0].ssrc == ssrc &&
-                videoStream._secondarySimulcastStream.get().contentType == SimulcastStream::VideoContentType::VIDEO)
+            if (videoStream.secondarySimulcastStream.isSet() &&
+                videoStream.secondarySimulcastStream.get().levels[0].ssrc == ssrc &&
+                videoStream.secondarySimulcastStream.get().contentType == SimulcastStream::VideoContentType::VIDEO)
             {
-                sendRecordingSimulcast(*rec.second, videoStream, videoStream._simulcastStream, false);
+                sendRecordingSimulcast(*rec.second, videoStream, videoStream.simulcastStream, false);
             }
         }
 
-        if (rec.second->_isScreenSharingEnabled)
+        if (rec.second->isScreenSharingEnabled)
         {
-            if (videoStream._simulcastStream.levels[0].ssrc == ssrc &&
-                videoStream._simulcastStream.contentType == SimulcastStream::VideoContentType::SLIDES)
+            if (videoStream.simulcastStream.levels[0].ssrc == ssrc &&
+                videoStream.simulcastStream.contentType == SimulcastStream::VideoContentType::SLIDES)
             {
-                sendRecordingSimulcast(*rec.second, videoStream, videoStream._simulcastStream, false);
+                sendRecordingSimulcast(*rec.second, videoStream, videoStream.simulcastStream, false);
             }
 
-            if (videoStream._secondarySimulcastStream.isSet() &&
-                videoStream._secondarySimulcastStream.get().levels[0].ssrc == ssrc &&
-                videoStream._secondarySimulcastStream.get().contentType == SimulcastStream::VideoContentType::SLIDES)
+            if (videoStream.secondarySimulcastStream.isSet() &&
+                videoStream.secondarySimulcastStream.get().levels[0].ssrc == ssrc &&
+                videoStream.secondarySimulcastStream.get().contentType == SimulcastStream::VideoContentType::SLIDES)
             {
-                sendRecordingSimulcast(*rec.second, videoStream, videoStream._secondarySimulcastStream.get(), false);
+                sendRecordingSimulcast(*rec.second, videoStream, videoStream.secondarySimulcastStream.get(), false);
             }
         }
     }
@@ -3515,7 +3514,7 @@ void EngineMixer::allocateRecordingRtpPacketCacheIfNecessary(SsrcOutboundContext
         EngineMessage::Message message(EngineMessage::Type::AllocateRecordingRtpPacketCache);
         message.command.allocateRecordingRtpPacketCache.mixer = this;
         message.command.allocateRecordingRtpPacketCache.ssrc = ssrcOutboundContext.ssrc;
-        message.command.allocateRecordingRtpPacketCache.endpointIdHash = recordingStream._endpointIdHash;
+        message.command.allocateRecordingRtpPacketCache.endpointIdHash = recordingStream.endpointIdHash;
         _messageListener.onMessage(std::move(message));
     }
 }
@@ -3525,7 +3524,7 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
     for (auto& engineRecordingStreamEntry : _engineRecordingStreams)
     {
         auto engineRecordingStream = engineRecordingStreamEntry.second;
-        for (auto& recEventMissingPacketsTrackerEntry : engineRecordingStream->_recEventUnackedPacketsTracker)
+        for (auto& recEventMissingPacketsTrackerEntry : engineRecordingStream->recEventUnackedPacketsTracker)
         {
             auto& recEventMissingPacketsTracker = recEventMissingPacketsTrackerEntry.second;
             if (!recEventMissingPacketsTracker.shouldProcess(timestamp / 1000000ULL))
@@ -3533,15 +3532,15 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
                 continue;
             }
 
-            auto transportItr = engineRecordingStream->_transports.find(recEventMissingPacketsTrackerEntry.first);
-            if (transportItr == engineRecordingStream->_transports.end())
+            auto transportItr = engineRecordingStream->transports.find(recEventMissingPacketsTrackerEntry.first);
+            if (transportItr == engineRecordingStream->transports.end())
             {
                 continue;
             }
 
             auto& transport = transportItr->second;
             transport.getJobQueue().addJob<ProcessUnackedRecordingEventPacketsJob>(
-                engineRecordingStream->_recordingEventsOutboundContext,
+                engineRecordingStream->recordingEventsOutboundContext,
                 recEventMissingPacketsTracker,
                 transport,
                 _sendAllocator);
@@ -3590,20 +3589,20 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     for (auto videoIt : _engineVideoStreams)
     {
         auto& videoStream = *videoIt.second;
-        if (videoStream._simulcastStream.contentType == SimulcastStream::VideoContentType::SLIDES)
+        if (videoStream.simulcastStream.contentType == SimulcastStream::VideoContentType::SLIDES)
         {
-            presenterSimulcastLevel = &videoStream._simulcastStream.levels[0];
+            presenterSimulcastLevel = &videoStream.simulcastStream.levels[0];
             presenterStream = videoIt.second;
         }
-        else if (videoStream._secondarySimulcastStream.isSet() &&
-            videoStream._secondarySimulcastStream.get().contentType == SimulcastStream::VideoContentType::SLIDES)
+        else if (videoStream.secondarySimulcastStream.isSet() &&
+            videoStream.secondarySimulcastStream.get().contentType == SimulcastStream::VideoContentType::SLIDES)
         {
-            presenterSimulcastLevel = &videoStream._secondarySimulcastStream.get().levels[0];
+            presenterSimulcastLevel = &videoStream.secondarySimulcastStream.get().levels[0];
             presenterStream = videoIt.second;
         }
         else
         {
-            minUplinkEstimate = std::min(minUplinkEstimate, videoIt.second->_transport.getUplinkEstimateKbps());
+            minUplinkEstimate = std::min(minUplinkEstimate, videoIt.second->transport.getUplinkEstimateKbps());
         }
     }
 
@@ -3625,8 +3624,8 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             presenterSimulcastLevel->ssrc,
             slidesLimit);
 
-        presenterStream->_transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->_transport,
-            presenterStream->_localSsrc,
+        presenterStream->transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->transport,
+            presenterStream->localSsrc,
             presenterSimulcastLevel->ssrc,
             slidesLimit,
             _sendAllocator);
@@ -3641,15 +3640,15 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 
 void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
 {
-    auto* outboundContext = obtainOutboundSsrcContext(engineVideoStream._endpointIdHash,
-        engineVideoStream._ssrcOutboundContexts,
-        engineVideoStream._localSsrc,
-        engineVideoStream._feedbackRtpMap);
+    auto* outboundContext = obtainOutboundSsrcContext(engineVideoStream.endpointIdHash,
+        engineVideoStream.ssrcOutboundContexts,
+        engineVideoStream.localSsrc,
+        engineVideoStream.feedbackRtpMap);
 
     if (outboundContext)
     {
-        engineVideoStream._transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream._transport,
-            engineVideoStream._localSsrc,
+        engineVideoStream.transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream.transport,
+            engineVideoStream.localSsrc,
             &outboundContext->sequenceCounter,
             outboundContext->rtpMap._payloadType);
     }
@@ -3658,10 +3657,10 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
 
 void EngineMixer::stopProbingVideoStream(const EngineVideoStream& engineVideoStream)
 {
-    engineVideoStream._transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream._transport,
-        engineVideoStream._localSsrc,
+    engineVideoStream.transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream.transport,
+        engineVideoStream.localSsrc,
         nullptr,
-        engineVideoStream._feedbackRtpMap._payloadType);
+        engineVideoStream.feedbackRtpMap._payloadType);
 }
 
 bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const
@@ -3699,7 +3698,7 @@ void EngineMixer::runTransportTicks(const uint64_t timestamp)
     for (auto videoIt : _engineVideoStreams)
     {
         auto& videoStream = *videoIt.second;
-        videoStream._transport.runTick(timestamp);
+        videoStream.transport.runTick(timestamp);
     }
 }
 

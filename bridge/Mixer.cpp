@@ -723,11 +723,11 @@ void Mixer::engineVideoStreamRemoved(EngineVideoStream* engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto endpointId = engineStream->_endpointId;
+    const auto endpointId = engineStream->endpointId;
     auto streamItr = _videoStreams.find(endpointId);
     if (streamItr == _videoStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->_transport, endpointId);
+        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _videoEngineStreams.erase(endpointId);
 
         logger::warn("EngineVideoStream endpointId %s removed, no matching videoStream found",
@@ -1941,7 +1941,7 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
         {
             EngineCommand::Command command{EngineCommand::Type::AddTransportToRecordingStream};
             command.command.addTransportToRecordingStream.mixer = &_engineMixer;
-            command.command.addTransportToRecordingStream.streamIdHash = engineStream->_endpointIdHash;
+            command.command.addTransportToRecordingStream.streamIdHash = engineStream->endpointIdHash;
             command.command.addTransportToRecordingStream.transport = transport.second.get();
             command.command.addTransportToRecordingStream.recUnackedPacketsTracker =
                 stream->_recEventUnackedPacketsTracker[transport.first].get();
@@ -2063,8 +2063,7 @@ bool Mixer::removeRecordingTransports(const std::string& conferenceId,
 
             EngineCommand::Command command{EngineCommand::Type::RemoveTransportFromRecordingStream};
             command.command.removeTransportFromRecordingStream.mixer = &_engineMixer;
-            command.command.removeTransportFromRecordingStream.streamIdHash =
-                engineStreamEntry->second->_endpointIdHash;
+            command.command.removeTransportFromRecordingStream.streamIdHash = engineStreamEntry->second->endpointIdHash;
             command.command.removeTransportFromRecordingStream.endpointIdHash = transportItr->first;
             _engine.pushCommand(std::move(command));
         }
@@ -2154,7 +2153,7 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    auto streamItr = _recordingStreams.find(engineStream->_id);
+    auto streamItr = _recordingStreams.find(engineStream->id);
     assert(streamItr != _recordingStreams.end());
     auto& stream = streamItr->second;
     assert(stream->_attachedRecording.empty());
@@ -2186,7 +2185,7 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
     _recordingEventPacketCache.erase(stream->_endpointIdHash);
     _recordingRtpPacketCaches.erase(stream->_endpointIdHash);
     _recordingStreams.erase(streamItr);
-    _recordingEngineStreams.erase(engineStream->_id);
+    _recordingEngineStreams.erase(engineStream->id);
 }
 
 void Mixer::allocateRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash)

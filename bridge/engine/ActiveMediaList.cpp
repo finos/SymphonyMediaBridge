@@ -686,19 +686,19 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
         const auto videoStreamItr = engineVideoStreams.find(endpointIdHash);
         const auto targetVideoStreamItr = engineVideoStreams.find(pinTargetEndpointIdHash);
         if (videoStreamItr != engineVideoStreams.end() && targetVideoStreamItr != engineVideoStreams.end() &&
-            videoStreamItr->second->_pinSsrc.isSet())
+            videoStreamItr->second->pinSsrc.isSet())
         {
             const auto videoStream = videoStreamItr->second;
             const auto targetVideoStream = targetVideoStreamItr->second;
 
             api::DataChannelMessage::addUserMediaEndpointStart(outMessage,
-                targetVideoStreamItr->second->_endpointId.c_str());
+                targetVideoStreamItr->second->endpointId.c_str());
 
-            if (targetVideoStream->_simulcastStream.isSendingVideo() ||
-                (targetVideoStream->_secondarySimulcastStream.isSet() &&
-                    targetVideoStream->_secondarySimulcastStream.get().isSendingVideo()))
+            if (targetVideoStream->simulcastStream.isSendingVideo() ||
+                (targetVideoStream->secondarySimulcastStream.isSet() &&
+                    targetVideoStream->secondarySimulcastStream.get().isSendingVideo()))
             {
-                api::DataChannelMessage::addUserMediaSsrc(outMessage, videoStream->_pinSsrc.get().ssrc);
+                api::DataChannelMessage::addUserMediaSsrc(outMessage, videoStream->pinSsrc.get().ssrc);
             }
 
             if (_videoScreenShareSsrcMapping.isSet() &&

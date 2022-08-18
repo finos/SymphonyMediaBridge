@@ -451,7 +451,7 @@ void MixerManager::engineMessageVideoStreamRemoved(const EngineMessage::Message&
     const auto& command = message.command.videoStreamRemoved;
     logger::info("Removing videoStream endpointId %s from mixer %s",
         "MixerManager",
-        command.engineStream->_endpointId.c_str(),
+        command.engineStream->endpointId.c_str(),
         command.mixer->getLoggableId().c_str());
 
     const auto mixerIter = _mixers.find(command.mixer->getId());
@@ -474,7 +474,7 @@ void MixerManager::engineMessageRecordingStreamRemoved(const EngineMessage::Mess
     const auto& command = message.command.recordingStreamRemoved;
     logger::info("Removing recordingStream  %s from mixer %s",
         "MixerManager",
-        command.engineStream->_id.c_str(),
+        command.engineStream->id.c_str(),
         command.mixer->getLoggableId().c_str());
 
     const auto mixerIter = _mixers.find(command.mixer->getId());
