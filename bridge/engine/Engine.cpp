@@ -411,7 +411,7 @@ void Engine::removeDataStream(EngineCommand::Command& nextCommand)
     logger::debug("Remove dataStream, mixer %s, transport id %s",
         "Engine",
         nextCommand.command.removeDataStream.mixer->getLoggableId().c_str(),
-        nextCommand.command.removeDataStream.engineStream->_transport.getLoggableId().c_str());
+        nextCommand.command.removeDataStream.engineStream->transport.getLoggableId().c_str());
 
     auto mixer = nextCommand.command.removeDataStream.mixer;
     mixer->removeDataStream(nextCommand.command.removeDataStream.engineStream);

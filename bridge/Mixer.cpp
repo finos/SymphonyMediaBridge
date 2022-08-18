@@ -753,11 +753,11 @@ void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto endpointId = engineStream->_endpointId;
+    const auto endpointId = engineStream->endpointId;
     auto streamItr = _dataStreams.find(endpointId);
     if (streamItr == _dataStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->_transport, endpointId);
+        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _dataEngineStreams.erase(endpointId);
 
         logger::warn("EngineDataStream endpointId %s removed, no matching dataStream found",

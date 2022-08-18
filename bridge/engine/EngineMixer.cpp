@@ -478,7 +478,7 @@ void EngineMixer::updateRecordingStreamModalities(EngineRecordingStream* engineR
 
 void EngineMixer::addDataSteam(EngineDataStream* engineDataStream)
 {
-    const auto endpointIdHash = engineDataStream->_endpointIdHash;
+    const auto endpointIdHash = engineDataStream->endpointIdHash;
     if (_engineDataStreams.find(endpointIdHash) != _engineDataStreams.end())
     {
         return;
@@ -486,7 +486,7 @@ void EngineMixer::addDataSteam(EngineDataStream* engineDataStream)
 
     logger::debug("Add engineDataStream, transport %s, endpointIdHash %lu",
         _loggableId.c_str(),
-        engineDataStream->_transport.getLoggableId().c_str(),
+        engineDataStream->transport.getLoggableId().c_str(),
         endpointIdHash);
 
     _engineDataStreams.emplace(endpointIdHash, engineDataStream);
@@ -494,10 +494,10 @@ void EngineMixer::addDataSteam(EngineDataStream* engineDataStream)
 
 void EngineMixer::removeDataStream(EngineDataStream* engineDataStream)
 {
-    const auto endpointIdHash = engineDataStream->_endpointIdHash;
+    const auto endpointIdHash = engineDataStream->endpointIdHash;
     logger::debug("Remove engineDataStream, transport %s, endpointIdHash %lu",
         _loggableId.c_str(),
-        engineDataStream->_transport.getLoggableId().c_str(),
+        engineDataStream->transport.getLoggableId().c_str(),
         endpointIdHash);
 
     _engineDataStreams.erase(endpointIdHash);
@@ -1419,7 +1419,7 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::P
     {
         auto engineStream = dataStreamItr->second;
 
-        engineStream->_stream.onSctpMessage(&engineStream->_transport,
+        engineStream->stream.onSctpMessage(&engineStream->transport,
             header.id,
             header.sequenceNumber,
             header.payloadProtocol,
@@ -1518,17 +1518,17 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     if (toEndpointIdHash)
     {
         auto toDataStreamItr = _engineDataStreams.find(toEndpointIdHash);
-        if (toDataStreamItr == _engineDataStreams.end() || !toDataStreamItr->second->_stream.isOpen())
+        if (toDataStreamItr == _engineDataStreams.end() || !toDataStreamItr->second->stream.isOpen())
         {
             return;
         }
 
         api::DataChannelMessage::makeEndpointMessage(endpointMessage,
-            toDataStreamItr->second->_endpointId,
-            fromDataStreamItr->second->_endpointId,
+            toDataStreamItr->second->endpointId,
+            fromDataStreamItr->second->endpointId,
             message);
 
-        toDataStreamItr->second->_stream.sendString(endpointMessage.get(), endpointMessage.getLength());
+        toDataStreamItr->second->stream.sendString(endpointMessage.get(), endpointMessage.getLength());
         logger::debug("Endpoint message %lu -> %lu: %s",
             _loggableId.c_str(),
             fromEndpointIdHash,
@@ -1539,18 +1539,18 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     {
         for (auto& dataStreamEntry : _engineDataStreams)
         {
-            if (dataStreamEntry.first == fromEndpointIdHash || !dataStreamEntry.second->_stream.isOpen())
+            if (dataStreamEntry.first == fromEndpointIdHash || !dataStreamEntry.second->stream.isOpen())
             {
                 continue;
             }
 
             endpointMessage.clear();
             api::DataChannelMessage::makeEndpointMessage(endpointMessage,
-                dataStreamEntry.second->_endpointId,
-                fromDataStreamItr->second->_endpointId,
+                dataStreamEntry.second->endpointId,
+                fromDataStreamItr->second->endpointId,
                 message);
 
-            dataStreamEntry.second->_stream.sendString(endpointMessage.get(), endpointMessage.getLength());
+            dataStreamEntry.second->stream.sendString(endpointMessage.get(), endpointMessage.getLength());
             logger::debug("Endpoint message %lu -> %lu %s",
                 _loggableId.c_str(),
                 fromEndpointIdHash,
@@ -2829,7 +2829,7 @@ void EngineMixer::sendLastNListMessage(const size_t endpointIdHash)
         return;
     }
     auto dataStream = dataStreamItr->second;
-    if (!dataStream->_stream.isOpen() || !dataStream->_hasSeenInitialSpeakerList)
+    if (!dataStream->stream.isOpen() || !dataStream->hasSeenInitialSpeakerList)
     {
         return;
     }
@@ -2843,7 +2843,7 @@ void EngineMixer::sendLastNListMessage(const size_t endpointIdHash)
     auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);
     _activeMediaList->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, lastNListMessage);
 
-    dataStream->_stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
+    dataStream->stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
 }
 
 void EngineMixer::sendLastNListMessageToAll()
@@ -2854,7 +2854,7 @@ void EngineMixer::sendLastNListMessageToAll()
     {
         const auto endpointIdHash = dataStreamEntry.first;
         auto dataStream = dataStreamEntry.second;
-        if (!dataStream->_stream.isOpen() || !dataStream->_hasSeenInitialSpeakerList)
+        if (!dataStream->stream.isOpen() || !dataStream->hasSeenInitialSpeakerList)
         {
             continue;
         }
@@ -2869,7 +2869,7 @@ void EngineMixer::sendLastNListMessageToAll()
         auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);
         _activeMediaList->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, lastNListMessage);
 
-        dataStream->_stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
+        dataStream->stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
     }
 }
 
@@ -2892,14 +2892,14 @@ void EngineMixer::sendMessagesToNewDataStreams()
     {
         const auto endpointIdHash = dataStreamEntry.first;
         auto dataStream = dataStreamEntry.second;
-        if (dataStream->_hasSeenInitialSpeakerList || !dataStream->_stream.isOpen())
+        if (dataStream->hasSeenInitialSpeakerList || !dataStream->stream.isOpen())
         {
             continue;
         }
 
         if (!dominantSpeakerMessage.empty())
         {
-            dataStream->_stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
+            dataStream->stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
         }
 
         const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
@@ -2919,7 +2919,7 @@ void EngineMixer::sendMessagesToNewDataStreams()
                     _engineVideoStreams,
                     userMediaMapMessage))
             {
-                dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
+                dataStream->stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
             }
         }
         else
@@ -2927,11 +2927,11 @@ void EngineMixer::sendMessagesToNewDataStreams()
             lastNListMessage.clear();
             if (_activeMediaList->makeLastNListMessage(_lastN, endpointIdHash, pinTarget, lastNListMessage))
             {
-                dataStream->_stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
+                dataStream->stream.sendString(lastNListMessage.get(), lastNListMessage.getLength());
             }
         }
 
-        dataStream->_hasSeenInitialSpeakerList = true;
+        dataStream->hasSeenInitialSpeakerList = true;
     }
 }
 
@@ -2974,7 +2974,7 @@ void EngineMixer::sendUserMediaMapMessage(const size_t endpointIdHash)
     }
 
     auto dataStream = dataStreamItr->second;
-    if (!dataStream->_stream.isOpen() || !dataStream->_hasSeenInitialSpeakerList)
+    if (!dataStream->stream.isOpen() || !dataStream->hasSeenInitialSpeakerList)
     {
         return;
     }
@@ -2992,7 +2992,7 @@ void EngineMixer::sendUserMediaMapMessage(const size_t endpointIdHash)
         _engineVideoStreams,
         userMediaMapMessage);
 
-    dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
+    dataStream->stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
 }
 
 void EngineMixer::sendUserMediaMapMessageToAll()
@@ -3002,7 +3002,7 @@ void EngineMixer::sendUserMediaMapMessageToAll()
     {
         const auto endpointIdHash = dataStreamEntry.first;
         auto dataStream = dataStreamEntry.second;
-        if (!dataStream->_stream.isOpen() || !dataStream->_hasSeenInitialSpeakerList)
+        if (!dataStream->stream.isOpen() || !dataStream->hasSeenInitialSpeakerList)
         {
             continue;
         }
@@ -3021,7 +3021,7 @@ void EngineMixer::sendUserMediaMapMessageToAll()
             _engineVideoStreams,
             userMediaMapMessage);
 
-        dataStream->_stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
+        dataStream->stream.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
     }
 }
 
@@ -3052,23 +3052,23 @@ void EngineMixer::sendDominantSpeakerMessageToAll(const size_t dominantSpeaker)
 
     utils::StringBuilder<256> dominantSpeakerMessage;
     api::DataChannelMessage::makeDominantSpeaker(dominantSpeakerMessage,
-        dominantSpeakerDataStreamItr->second->_endpointId);
+        dominantSpeakerDataStreamItr->second->endpointId);
 
     for (auto dataStreamEntry : _engineDataStreams)
     {
         auto dataStream = dataStreamEntry.second;
-        if (!dataStream->_stream.isOpen() || !dataStream->_hasSeenInitialSpeakerList)
+        if (!dataStream->stream.isOpen() || !dataStream->hasSeenInitialSpeakerList)
         {
             continue;
         }
-        dataStream->_stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
+        dataStream->stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
     }
 
     for (auto& recStreamPair : _engineRecordingStreams)
     {
         sendDominantSpeakerToRecordingStream(*recStreamPair.second,
             dominantSpeaker,
-            dominantSpeakerDataStreamItr->second->_endpointId);
+            dominantSpeakerDataStreamItr->second->endpointId);
     }
 }
 
