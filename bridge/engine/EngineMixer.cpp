@@ -1584,10 +1584,12 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     const void* data,
     size_t length)
 {
+    logger::debug("### sctp received %zu", _loggableId.c_str(), length);
     // TODO  parse this with wonderful json parser and figure out if this is a barbell UMM
     // if it is we should handle it locally in onBarbellUserMediaMap
     if (_engineBarbells.contains(sender->getEndpointIdHash()))
     {
+        logger::debug("### barbell found", _loggableId.c_str());
         if (length == 0)
         {
             return;
@@ -1597,6 +1599,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
         const auto s = reinterpret_cast<char*>(header->data());
 
         const size_t payloadLen = length - (s - reinterpret_cast<const char*>(data));
+        logger::debug("### fragment  %s %zu", _loggableId.c_str(), s, payloadLen);
         auto messageJson = utils::SimpleJson::create(s, payloadLen);
         {
             if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||

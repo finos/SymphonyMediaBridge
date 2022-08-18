@@ -2395,6 +2395,7 @@ void TransportImpl::onSctpFragmentReceived(sctp::SctpAssociation* session,
     const uint64_t timestamp)
 {
     auto* dataReceiver = _dataReceiver.load();
+    logger::debug("### fragment received %zu %p", _loggableId.c_str(), length, dataReceiver);
     if (dataReceiver)
     {
         dataReceiver->onSctpMessage(this, streamId, streamSequenceNumber, payloadProtocol, buffer, length);
