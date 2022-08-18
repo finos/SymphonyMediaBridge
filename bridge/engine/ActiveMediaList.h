@@ -36,8 +36,8 @@ public:
 
     struct VideoScreenShareSsrcMapping
     {
-        uint32_t _ssrc;
-        uint32_t _rewriteSsrc;
+        uint32_t ssrc;
+        uint32_t rewriteSsrc;
     };
 
     ActiveMediaList(size_t instanceId,

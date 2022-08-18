@@ -2308,9 +2308,9 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
         auto simulcastLevel = packetInfo.inboundContext()->simulcastLevel;
         const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
         if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
-            screenShareSsrcMapping.get().second._ssrc == ssrc)
+            screenShareSsrcMapping.get().second.ssrc == ssrc)
         {
-            ssrc = screenShareSsrcMapping.get().second._rewriteSsrc;
+            ssrc = screenShareSsrcMapping.get().second.rewriteSsrc;
         }
         else
         {
@@ -2399,9 +2399,9 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
         {
             const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
             if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
-                screenShareSsrcMapping.get().second._ssrc == ssrc)
+                screenShareSsrcMapping.get().second.ssrc == ssrc)
             {
-                ssrc = screenShareSsrcMapping.get().second._rewriteSsrc;
+                ssrc = screenShareSsrcMapping.get().second.rewriteSsrc;
             }
             else if (_engineStreamDirector->getPinTarget(endpointIdHash) == senderEndpointIdHash &&
                 !_activeMediaList->isInUserActiveVideoList(senderEndpointIdHash))
@@ -2572,7 +2572,7 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
         // The mediaSsrc refers to the pinned video ssrc
         participant = _engineStreamDirector->getPinTarget(rtcpSenderEndpointIdHash);
     }
-    else if (videoScreenShareSsrcMapping.isSet() && videoScreenShareSsrcMapping.get().second._rewriteSsrc == mediaSsrc)
+    else if (videoScreenShareSsrcMapping.isSet() && videoScreenShareSsrcMapping.get().second.rewriteSsrc == mediaSsrc)
     {
         // The mediaSsrc refers to the screen share ssrc
         participant = videoScreenShareSsrcMapping.get().first;

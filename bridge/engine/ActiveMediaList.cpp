@@ -705,7 +705,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
                 _videoScreenShareSsrcMapping.get().first == pinTargetEndpointIdHash)
             {
                 api::DataChannelMessage::addUserMediaSsrc(outMessage,
-                    _videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                    _videoScreenShareSsrcMapping.get().second.rewriteSsrc);
             }
 
             api::DataChannelMessage::addUserMediaEndpointEnd(outMessage);
@@ -746,7 +746,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
         if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == videoEndpointIdhash)
         {
             api::DataChannelMessage::addUserMediaSsrc(outMessage,
-                _videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                _videoScreenShareSsrcMapping.get().second.rewriteSsrc);
         }
 
         api::DataChannelMessage::addUserMediaEndpointEnd(outMessage);
@@ -790,7 +790,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
 
                 if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == item.first)
                 {
-                    videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                    videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second.rewriteSsrc);
                 }
             }
         }
