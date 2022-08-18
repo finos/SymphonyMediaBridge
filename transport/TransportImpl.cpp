@@ -2283,7 +2283,6 @@ bool TransportImpl::sendSctp(const uint16_t streamId,
         logger::error("sctp message invalid size %u", getLoggableId().c_str(), length);
         return false;
     }
-    logger::debug("### sending sctp %s", _loggableId.c_str(), reinterpret_cast<const char*>(data));
 
     _jobQueue
         .addJob<SctpSendJob>(*_sctpAssociation, streamId, protocolId, data, length, _mainAllocator, _jobQueue, *this);
