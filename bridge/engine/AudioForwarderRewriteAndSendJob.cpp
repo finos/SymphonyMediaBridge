@@ -23,15 +23,15 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
 
     for (auto& rtpHeaderExtension : headerExtensions->extensions())
     {
-        if (senderInboundContext.rtpMap._audioLevelExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext.rtpMap._audioLevelExtId.get())
+        if (senderInboundContext.rtpMap.audioLevelExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext.rtpMap.audioLevelExtId.get())
         {
-            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap._audioLevelExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.audioLevelExtId.get());
         }
-        else if (senderInboundContext.rtpMap._absSendTimeExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext.rtpMap._absSendTimeExtId.get())
+        else if (senderInboundContext.rtpMap.absSendTimeExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext.rtpMap.absSendTimeExtId.get())
         {
-            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap._absSendTimeExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.absSendTimeExtId.get());
         }
     }
 }
@@ -92,7 +92,7 @@ void AudioForwarderRewriteAndSendJob::run()
     header->ssrc = _outboundContext.ssrc;
     header->sequenceNumber = nextSequenceNumber;
     header->timestamp = _outboundContext.timestampOffset + header->timestamp;
-    header->payloadType = _outboundContext.rtpMap._payloadType;
+    header->payloadType = _outboundContext.rtpMap.payloadType;
     if (static_cast<int32_t>(header->timestamp - _outboundContext.lastSentTimestamp) > 0)
     {
         _outboundContext.lastSentTimestamp = header->timestamp;

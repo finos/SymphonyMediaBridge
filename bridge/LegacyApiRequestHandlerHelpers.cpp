@@ -72,7 +72,7 @@ std::vector<RtpMap> makeRtpMaps(const legacyapi::Channel& channel)
 
         for (const auto& parameter : payloadType._parameters)
         {
-            rtpMaps.back()._parameters.emplace(parameter.first, parameter.second);
+            rtpMaps.back().parameters.emplace(parameter.first, parameter.second);
         }
     }
 
@@ -98,7 +98,7 @@ std::vector<RtpMap> makeRtpMaps(const legacyapi::Channel& channel)
     {
         for (auto& rtpMap : rtpMaps)
         {
-            rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+            rtpMap.absSendTimeExtId = absSendTimeExtensionId;
         }
     }
 
@@ -106,9 +106,9 @@ std::vector<RtpMap> makeRtpMaps(const legacyapi::Channel& channel)
     {
         for (auto& rtpMap : rtpMaps)
         {
-            if (rtpMap._format == RtpMap::Format::OPUS)
+            if (rtpMap.format == RtpMap::Format::OPUS)
             {
-                rtpMap._absSendTimeExtId = absSendTimeExtensionId;
+                rtpMap.absSendTimeExtId = absSendTimeExtensionId;
             }
         }
     }

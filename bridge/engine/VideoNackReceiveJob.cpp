@@ -132,7 +132,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     }
 
     rtpHeader->ssrc = _feedbackSsrc;
-    rtpHeader->payloadType = _ssrcOutboundContext.rtpMap._payloadType;
+    rtpHeader->payloadType = _ssrcOutboundContext.rtpMap.payloadType;
     rtpHeader->sequenceNumber = _ssrcOutboundContext.sequenceCounter & 0xFFFF;
     ++_ssrcOutboundContext.sequenceCounter;
 

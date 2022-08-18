@@ -871,7 +871,7 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
     for (auto& ssrcInboundContextEntry : _ssrcInboundContexts)
     {
         auto& ssrcInboundContext = ssrcInboundContextEntry.second;
-        if (ssrcInboundContext.rtpMap._format != RtpMap::Format::VP8 || ssrcInboundContext.markedForDeletion)
+        if (ssrcInboundContext.rtpMap.format != RtpMap::Format::VP8 || ssrcInboundContext.markedForDeletion)
         {
             continue;
         }
@@ -1013,7 +1013,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
 
         if (utils::Time::diffGT(inboundContext.lastReceiveTime.load(), timestamp, utils::Time::sec * 1) &&
             receiveCounters.packets > 5 && inboundContext.activeMedia &&
-            inboundContext.rtpMap._format != RtpMap::Format::VP8RTX)
+            inboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
         {
             auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
             if (videoStreamItr != _engineVideoStreams.end())
@@ -1043,7 +1043,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         }
 
         if (utils::Time::diffGT(inboundContext.lastReceiveTime.load(), timestamp, utils::Time::minute * 5) &&
-            inboundContext.rtpMap._format != RtpMap::Format::VP8RTX)
+            inboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
         {
             if (!inboundContext.markedForDeletion && !inboundContext.idle)
             {
@@ -1071,7 +1071,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
             auto& outboundContext = outboundContextEntry.second;
 
             if (utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 30) &&
-                outboundContext.rtpMap._format != RtpMap::Format::VP8RTX)
+                outboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
             {
                 if (!outboundContext.markedForDeletion && !outboundContext.idle)
                 {
@@ -1713,7 +1713,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
 
     if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
-        const bool isAudio = (ssrcContext->rtpMap._format == bridge::RtpMap::Format::OPUS);
+        const bool isAudio = (ssrcContext->rtpMap.format == bridge::RtpMap::Format::OPUS);
         if (!setPacketSourceEndpointIdHash(*packet, sender->getEndpointIdHash(), ssrc, isAudio))
         {
             logger::debug("incoming barbell packet unmapped %zu ssrc %u %s",
@@ -1725,7 +1725,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         }
     }
 
-    switch (ssrcContext->rtpMap._format)
+    switch (ssrcContext->rtpMap.format)
     {
     case bridge::RtpMap::Format::OPUS:
         ssrcContext->onRtpPacket(timestamp);
@@ -1849,7 +1849,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     const auto endpointIdHash = sender->getEndpointIdHash();
     auto* audioStream = _engineAudioStreams.getItem(endpointIdHash);
 
-    if (audioStream && audioStream->rtpMap._payloadType == payloadType)
+    if (audioStream && audioStream->rtpMap.payloadType == payloadType)
     {
         if (!audioStream->remoteSsrc.isSet() || audioStream->remoteSsrc.get() != ssrc)
         {
@@ -1869,8 +1869,8 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             _loggableId.c_str(),
             ssrc,
             audioStream->endpointIdHash,
-            audioStream->rtpMap._audioLevelExtId.isSet() ? audioStream->rtpMap._audioLevelExtId.get() : -1,
-            audioStream->rtpMap._absSendTimeExtId.isSet() ? audioStream->rtpMap._absSendTimeExtId.get() : -1,
+            audioStream->rtpMap.audioLevelExtId.isSet() ? audioStream->rtpMap.audioLevelExtId.get() : -1,
+            audioStream->rtpMap.absSendTimeExtId.isSet() ? audioStream->rtpMap.absSendTimeExtId.get() : -1,
             sender->getLoggableId().c_str());
         return &emplaceResult.first->second;
     }
@@ -1881,7 +1881,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         if (barbell->videoSsrcMap.contains(ssrc))
         {
             const RtpMap& videoRtpMap =
-                barbell->videoRtpMap._payloadType == payloadType ? barbell->videoRtpMap : barbell->videoFeedbackRtpMap;
+                barbell->videoRtpMap.payloadType == payloadType ? barbell->videoRtpMap : barbell->videoFeedbackRtpMap;
 
             auto emplaceResult = _ssrcInboundContexts.emplace(ssrc, ssrc, videoRtpMap, sender, timestamp);
 
@@ -1945,7 +1945,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     }
 
     auto videoStream = engineVideoStreamItr->second;
-    if (payloadType == videoStream->rtpMap._payloadType)
+    if (payloadType == videoStream->rtpMap.payloadType)
     {
         uint32_t rewriteSsrc = 0;
         uint32_t level = 0;
@@ -1991,12 +1991,12 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             level,
             inboundContext.rewriteSsrc,
             videoStream->endpointIdHash,
-            static_cast<uint16_t>(inboundContext.rtpMap._format),
+            static_cast<uint16_t>(inboundContext.rtpMap.format),
             sender->getLoggableId().c_str());
 
         return &inboundContext;
     }
-    else if (payloadType == videoStream->feedbackRtpMap._payloadType)
+    else if (payloadType == videoStream->feedbackRtpMap.payloadType)
     {
         uint32_t rewriteSsrc = 0;
         for (size_t i = 0; i < videoStream->simulcastStream.numLevels; ++i)
@@ -2035,7 +2035,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             _loggableId.c_str(),
             ssrc,
             videoStream->endpointIdHash,
-            static_cast<uint16_t>(inboundContext.rtpMap._format),
+            static_cast<uint16_t>(inboundContext.rtpMap.format),
             sender->getLoggableId().c_str());
 
         return &inboundContext;
@@ -3248,8 +3248,8 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
                          .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
                          .setTimestamp(timestamp)
                          .setSsrc(ssrc)
-                         .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap._payloadType))
-                         .setPayloadFormat(audioStream.rtpMap._format)
+                         .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap.payloadType))
+                         .setPayloadFormat(audioStream.rtpMap.format)
                          .setEndpoint(audioStream.endpointId)
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
@@ -3384,8 +3384,8 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
                          .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL))
                          .setSsrc(ssrc)
                          .setIsScreenSharing(simulcast.contentType == SimulcastStream::VideoContentType::SLIDES)
-                         .setRtpPayloadType(static_cast<uint8_t>(videoStream.rtpMap._payloadType))
-                         .setPayloadFormat(videoStream.rtpMap._format)
+                         .setRtpPayloadType(static_cast<uint8_t>(videoStream.rtpMap.payloadType))
+                         .setPayloadFormat(videoStream.rtpMap.format)
                          .setEndpoint(videoStream.endpointId)
                          .setWallClock(std::chrono::system_clock::now())
                          .build();
@@ -3650,7 +3650,7 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
         engineVideoStream.transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream.transport,
             engineVideoStream.localSsrc,
             &outboundContext->sequenceCounter,
-            outboundContext->rtpMap._payloadType);
+            outboundContext->rtpMap.payloadType);
     }
     _probingVideoStreams = true;
 }
@@ -3660,7 +3660,7 @@ void EngineMixer::stopProbingVideoStream(const EngineVideoStream& engineVideoStr
     engineVideoStream.transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream.transport,
         engineVideoStream.localSsrc,
         nullptr,
-        engineVideoStream.feedbackRtpMap._payloadType);
+        engineVideoStream.feedbackRtpMap.payloadType);
 }
 
 bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const

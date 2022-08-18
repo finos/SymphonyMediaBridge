@@ -132,8 +132,8 @@ void AudioForwarderReceiveJob::run()
     const auto rtpHeaderExtensions = rtpHeader->getExtensionHeader();
     if (rtpHeaderExtensions)
     {
-        auto c9infoExtId = _ssrcContext.rtpMap._c9infoExtId.valueOr(0);
-        auto audioLevelExtId = _ssrcContext.rtpMap._audioLevelExtId.valueOr(0);
+        auto c9infoExtId = _ssrcContext.rtpMap.c9infoExtId.valueOr(0);
+        auto audioLevelExtId = _ssrcContext.rtpMap.audioLevelExtId.valueOr(0);
 
         utils::Optional<uint8_t> audioLevel;
         utils::Optional<bool> isPtt;
@@ -209,7 +209,7 @@ void AudioForwarderReceiveJob::run()
     }
     _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
 
-    if (_hasMixedAudioStreams && _ssrcContext.rtpMap._format == bridge::RtpMap::Format::OPUS)
+    if (_hasMixedAudioStreams && _ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS)
     {
         decodeOpus(*_packet);
     }
@@ -220,7 +220,7 @@ void AudioForwarderReceiveJob::run()
         _ssrcContext.markNextPacket = false;
     }
 
-    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap._payloadType));
+    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap.payloadType));
     _engineMixer.onForwarderAudioRtpPacketDecrypted(_ssrcContext, std::move(_packet), _extendedSequenceNumber);
 }
 

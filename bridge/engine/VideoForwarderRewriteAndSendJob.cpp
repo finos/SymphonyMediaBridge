@@ -23,10 +23,10 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
 
     for (auto& rtpHeaderExtension : headerExtensions->extensions())
     {
-        if (senderInboundContext.rtpMap._absSendTimeExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext.rtpMap._absSendTimeExtId.get())
+        if (senderInboundContext.rtpMap.absSendTimeExtId.isSet() &&
+            rtpHeaderExtension.getId() == senderInboundContext.rtpMap.absSendTimeExtId.get())
         {
-            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap._absSendTimeExtId.get());
+            rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.absSendTimeExtId.get());
             return;
         }
     }
@@ -62,7 +62,7 @@ void VideoForwarderRewriteAndSendJob::run()
     }
 
     bool isRetransmittedPacket = false;
-    if (_outboundContext.rtpMap._format == RtpMap::Format::VP8RTX)
+    if (_outboundContext.rtpMap.format == RtpMap::Format::VP8RTX)
     {
         isRetransmittedPacket = true;
     }
@@ -121,7 +121,7 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         _outboundContext.lastKeyFrameSequenceNumber = nextSequenceNumber;
     }
-    rtpHeader->payloadType = _outboundContext.rtpMap._payloadType;
+    rtpHeader->payloadType = _outboundContext.rtpMap.payloadType;
     rewriteHeaderExtensions(rtpHeader, _senderInboundContext, _outboundContext);
 
     if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())

@@ -1156,25 +1156,25 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
             _loggableId.c_str(),
             endpointId.c_str(),
             remoteSsrc.get(),
-            static_cast<uint32_t>(rtpMap._format),
-            rtpMap._payloadType);
+            static_cast<uint32_t>(rtpMap.format),
+            rtpMap.payloadType);
     }
     else
     {
         logger::info("Configure audio stream, endpoint id %s, ssrc not set, rtpMap format %u, payloadType %u",
             _loggableId.c_str(),
             endpointId.c_str(),
-            static_cast<uint32_t>(rtpMap._format),
-            rtpMap._payloadType);
+            static_cast<uint32_t>(rtpMap.format),
+            rtpMap.payloadType);
     }
 
     audioStream->rtpMap = rtpMap;
     audioStream->remoteSsrc = remoteSsrc;
-    audioStream->transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
+    audioStream->transport->setAudioPayloadType(rtpMap.payloadType, rtpMap.sampleRate);
 
-    if (audioStream->rtpMap._absSendTimeExtId.isSet())
+    if (audioStream->rtpMap.absSendTimeExtId.isSet())
     {
-        audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap._absSendTimeExtId.get());
+        audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap.absSendTimeExtId.get());
     }
     return true;
 }
@@ -1276,9 +1276,9 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
         videoStream->secondarySimulcastStream = secondarySimulcastStream;
     }
 
-    if (videoStream->rtpMap._absSendTimeExtId.isSet())
+    if (videoStream->rtpMap.absSendTimeExtId.isSet())
     {
-        videoStream->transport->setAbsSendTimeExtensionId(videoStream->rtpMap._absSendTimeExtId.get());
+        videoStream->transport->setAbsSendTimeExtensionId(videoStream->rtpMap.absSendTimeExtId.get());
     }
 
     std::memcpy(&videoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));

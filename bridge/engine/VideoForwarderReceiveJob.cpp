@@ -243,7 +243,7 @@ void VideoForwarderReceiveJob::run()
         }
     }
 
-    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap._payloadType));
+    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap.payloadType));
     _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), _extendedSequenceNumber);
 }
 

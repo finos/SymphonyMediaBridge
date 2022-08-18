@@ -283,10 +283,7 @@ public:
               _ssrcs(ssrcs)
         {
             _recording.reserve(256 * 1024);
-            logger::info("video offered ssrc %u, payload %u",
-                _loggableId.c_str(),
-                _ssrcs[0].main,
-                _rtpMap._payloadType);
+            logger::info("video offered ssrc %u, payload %u", _loggableId.c_str(), _ssrcs[0].main, _rtpMap.payloadType);
         }
 
         void onRtpPacketReceived(transport::RtcTransport* sender,
@@ -301,7 +298,7 @@ public:
 
                 auto result = contexts.emplace(rtpHeader->ssrc.get(),
                     rtpHeader->ssrc.get(),
-                    rtpHeader->payloadType == _rtpMap._payloadType ? _rtpMap : _rtxRtpMap,
+                    rtpHeader->payloadType == _rtpMap.payloadType ? _rtpMap : _rtxRtpMap,
                     sender,
                     timestamp);
                 it = result.first;
@@ -317,7 +314,7 @@ public:
 
             ++videoPacketCount;
 
-            if (rtpHeader->payloadType != inboundContext.rtpMap._payloadType)
+            if (rtpHeader->payloadType != inboundContext.rtpMap.payloadType)
             {
                 logger::warn("%u unexpected payload type %u",
                     _loggableId.c_str(),
@@ -355,8 +352,8 @@ public:
             if (it == _audioReceivers.end())
             {
                 bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
-                rtpMap._audioLevelExtId.set(1);
-                rtpMap._c9infoExtId.set(8);
+                rtpMap.audioLevelExtId.set(1);
+                rtpMap.c9infoExtId.set(8);
                 _audioReceivers.emplace(rtpHeader->ssrc.get(),
                     new RtpAudioReceiver(_loggableId.getInstanceId(),
                         rtpHeader->ssrc.get(),
