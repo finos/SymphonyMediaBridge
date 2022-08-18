@@ -1151,6 +1151,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         }
 
         std::sort(allFreq.begin(), allFreq.end());
+        ASSERT_GE(allFreq.size(), 2);
         EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
         EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
 
