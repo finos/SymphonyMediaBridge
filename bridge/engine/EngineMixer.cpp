@@ -1605,6 +1605,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
             if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
                 api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
             {
+                logger::debug("pushing sctp message to queue", _loggableId.c_str());
                 _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
                 return;
             }
@@ -2057,8 +2058,10 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
         auto message = reinterpret_cast<const char*>(header->data());
         auto messageJson = utils::SimpleJson::create(message, strlen(message));
 
+        logger::debug("### pop sctp msg %s", _loggableId.c_str(), message);
         if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
         {
+            logger::debug("### sctp is umm", _loggableId.c_str());
             return onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
         }
 
@@ -3790,6 +3793,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     auto it = _engineBarbells.find(barbellIdHash);
     if (it == _engineBarbells.end())
     {
+        logger::debug("### cannot find barbell with hashid %zu", _loggableId.c_str(), barbellIdHash);
         return;
     }
 
