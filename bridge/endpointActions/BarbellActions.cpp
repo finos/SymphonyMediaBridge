@@ -4,6 +4,7 @@
 #include "api/Generator.h"
 #include "api/Parser.h"
 #include "bridge/AudioStreamDescription.h"
+#include "bridge/BarbellVideoStreamDescription.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
@@ -74,29 +75,19 @@ httpd::Response generateBarbellResponse(ActionContext* context,
 
     api::EndpointDescription::Video responseVideo;
     {
-        VideoStreamDescription streamDescription;
-        mixer.getVideoStreamDescription(streamDescription);
-        if (streamDescription.localSsrc != 0)
+        std::vector<BarbellVideoStreamDescription> streamDescriptions;
+        mixer.getBarbellVideoStreamDescription(streamDescriptions);
+        for (auto& group : streamDescriptions)
         {
-            api::EndpointDescription::VideoStream videoStream;
-            videoStream.sources.push_back({streamDescription.localSsrc, 0});
-            videoStream.content = "local";
-        }
+            responseVideo.streams.emplace_back(api::EndpointDescription::VideoStream());
+            auto& stream = responseVideo.streams.back();
+            for (auto level : group.ssrcLevels)
+            {
+                stream.sources.push_back({level.main, level.feedback});
+            }
 
-        size_t index = 0;
-        for (auto& level : streamDescription.simulcastSsrcs)
-        {
-            api::EndpointDescription::VideoStream videoStream;
-            videoStream.sources.push_back({level._ssrc, level._feedbackSsrc});
-            if (index++ == 0)
-            {
-                videoStream.content = "slides";
-            }
-            else
-            {
-                videoStream.content = "video";
-            }
-            responseVideo.streams.push_back(videoStream);
+            stream.content =
+                (group.slides ? api::EndpointDescription::slidesContent : api::EndpointDescription::videoContent);
         }
 
         addDefaultVideoProperties(responseVideo);
@@ -112,7 +103,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
     response._headers["Content-type"] = "text/json";
 
-    logger::debug("barbell alloc response %s", "", response._body.c_str());
+    logger::debug("barbell response %s", "", response._body.c_str());
     return response;
 }
 
@@ -150,12 +141,25 @@ httpd::Response configureBarbell(ActionContext* context,
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
     if (!barbellDescription._bundleTransport.isSet() || !barbellDescription._bundleTransport.get()._ice.isSet() ||
-        !barbellDescription._bundleTransport.get()._dtls.isSet())
+        !barbellDescription._bundleTransport.get()._dtls.isSet() || !barbellDescription._audio.isSet() ||
+        !barbellDescription._video.isSet())
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND,
-            utils::format("Missing barbell ice or dtls transport description %s - %s",
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Missing barbell ice/dtls transport description %s - %s",
                 conferenceId.c_str(),
                 barbellId.c_str()));
+    }
+
+    if (!barbellDescription._audio.isSet())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Missing barbell audio description %s - %s", conferenceId.c_str(), barbellId.c_str()));
+    }
+
+    if (!barbellDescription._video.isSet() || barbellDescription._video.get().payloadTypes.size() < 2)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Missing barbell video description %s - %s", conferenceId.c_str(), barbellId.c_str()));
     }
 
     auto& transportDescription = barbellDescription._bundleTransport.get();
@@ -175,8 +179,39 @@ httpd::Response configureBarbell(ActionContext* context,
             utils::format("Failed to configure barbell transport %s - %s", conferenceId.c_str(), barbellId.c_str()));
     }
 
-    mixer->addBarbellToEngine(barbellId);
+    std::vector<BarbellVideoStreamDescription> videoDescriptions;
+    auto& videoDescription = barbellDescription._video.get();
+    for (auto& stream : videoDescription.streams)
+    {
+        BarbellVideoStreamDescription barbellGroup;
+        barbellGroup.ssrcLevels = stream.sources;
+        barbellGroup.slides = (stream.content.compare(api::EndpointDescription::slidesContent) == 0);
+        videoDescriptions.push_back(barbellGroup);
+    }
 
+    const auto audioRtpMap = makeRtpMap(barbellDescription._audio.get());
+    bridge::RtpMap videoRtpMap;
+    bridge::RtpMap videoFeedbackRtpMap;
+    for (auto& payloadDescription : barbellDescription._video.get().payloadTypes)
+    {
+        if (payloadDescription._name.compare("rtx") == 0)
+        {
+            videoFeedbackRtpMap = makeRtpMap(barbellDescription._video.get(), payloadDescription);
+        }
+        else
+        {
+            videoRtpMap = makeRtpMap(barbellDescription._video.get(), payloadDescription);
+        }
+    }
+
+    mixer->configureBarbellSsrcs(barbellId,
+        videoDescriptions,
+        barbellDescription._audio.get()._ssrcs,
+        audioRtpMap,
+        videoRtpMap,
+        videoFeedbackRtpMap);
+
+    mixer->addBarbellToEngine(barbellId);
     mixer->startBarbellTransport(barbellId);
 
     return generateBarbellResponse(context, requestLogger, *mixer, conferenceId, barbellId, !isRemoteSideDtlsClient);

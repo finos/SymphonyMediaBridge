@@ -62,6 +62,7 @@ struct SctpStreamMessageHeader
     void* data() { return &sequenceNumber + 1; }
     const void* data() const { return &sequenceNumber + 1; }
     const char* getMessage() const { return reinterpret_cast<const char*>(data()); }
+    static size_t getMessageLength(size_t packetSize) { return packetSize - sizeof(SctpStreamMessageHeader); }
 };
 static_assert(sizeof(SctpStreamMessageHeader) == 8, "Misalignment of SctpStreamMessageHeader");
 

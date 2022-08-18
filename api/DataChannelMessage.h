@@ -108,7 +108,7 @@ inline void addUserMediaMapEnd(utils::StringBuilder<1024>& outMessage)
 #endif
 }
 
-inline void makeLastNAppend(utils::StringBuilder<1024>& outMessage, const std::string& endpointId, const bool isFirst)
+inline void makeLastNAppend(utils::StringBuilder<1024>& outMessage, const char* endpointId, const bool isFirst)
 {
 #if ENABLE_LEGACY_API
     legacyapi::DataChannelMessage::makeLastNEndpointsChangeAppend(outMessage, endpointId, isFirst);
@@ -130,6 +130,13 @@ inline void makeLastNEnd(utils::StringBuilder<1024>& outMessage)
 #else
     outMessage.append("]}");
 #endif
+}
+
+inline void makeMinUplinkBitrate(utils::StringBuilder<1024>& outMessage, const uint32_t maxBitrateKbps)
+{
+    outMessage.append(R"({"type":"min-uplink-bitrate", "bitrateKbps":")");
+    outMessage.append(maxBitrateKbps);
+    outMessage.append(R"("})");
 }
 
 } // namespace DataChannelMessage

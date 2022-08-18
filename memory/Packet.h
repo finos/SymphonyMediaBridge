@@ -11,7 +11,7 @@ template <size_t PacketSize>
 class FixedPacket
 {
 public:
-    FixedPacket() : _length(0) { _data[0] = 0; }
+    FixedPacket() : endpointIdHash(0), _length(0) { _data[0] = 0; }
 
     static const size_t size = PacketSize;
     static_assert(PacketSize % 8 == 0, "packet size must be 8B aligned");
@@ -31,6 +31,7 @@ public:
     {
         std::memcpy(dst.get(), get(), getLength());
         dst.setLength(getLength());
+        dst.endpointIdHash = endpointIdHash;
     }
 
     void append(const void* data, size_t length)
@@ -43,6 +44,8 @@ public:
     }
 
     void clear() { std::memset(_data, 0, size); }
+
+    size_t endpointIdHash = 0;
 
 private:
     unsigned char _data[size];

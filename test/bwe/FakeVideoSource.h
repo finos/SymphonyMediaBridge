@@ -27,6 +27,10 @@ public:
     double getBitRate() const { return _avgRate.get() / 1000; }
     uint32_t getSsrc() const override { return _ssrc; }
 
+    void requestKeyFrame() { _keyFrame = true; }
+
+    uint32_t getPacketsSent() const { return _packetsSent; }
+
 private:
     void tryFillFramePayload(unsigned char*, size_t, bool) const;
     void setNextFrameSize();
@@ -45,6 +49,7 @@ private:
     utils::AvgRateTracker _avgRate;
     uint32_t _rtpTimestamp;
     bool _keyFrame;
+    uint32_t _packetsSent;
 };
 
 } // namespace fakenet

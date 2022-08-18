@@ -65,7 +65,11 @@ public:
         const Endpoints& rtpEndPoints,
         const ServerEndpoints& tcpEndPoints,
         TcpEndpointFactory* tcpEndpointFactory,
-        memory::PacketPoolAllocator& allocator);
+        memory::PacketPoolAllocator& allocator,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation);
 
     TransportImpl(jobmanager::JobManager& jobmanager,
         SrtpClientFactory& srtpClientFactory,
@@ -173,6 +177,9 @@ public: // Transport
     ice::IceSession::State getIceState() const override { return _iceState; };
     SrtpClient::State getDtlsState() const override { return _dtlsState; };
     utils::Optional<ice::TransportType> getSelectedTransportType() const override { return _transportType.load(); }
+
+    void setTag(const char* tag) override;
+    const char* getTag() const override { return _tag; };
 
 public: // SslWriteBioListener
     // Called from Transport serial thread
@@ -419,6 +426,11 @@ private:
 public:
     concurrency::MutexGuard _singleThreadMutex;
 #endif
+
+    char _tag[16];
+
+    bool _uplinkEstimationEnabled;
+    bool _downlinkEstimationEnabled;
 };
 
 } // namespace transport

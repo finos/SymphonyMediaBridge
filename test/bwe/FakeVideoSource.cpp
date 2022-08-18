@@ -1,6 +1,8 @@
 #include "FakeVideoSource.h"
 #include "FakeMedia.h"
+#include "logger/Logger.h"
 #include "rtp/RtpHeader.h"
+
 namespace fakenet
 {
 
@@ -18,8 +20,10 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
       _sequenceCounter(0),
       _avgRate(0.0005),
       _rtpTimestamp(5000),
-      _keyFrame(true)
+      _keyFrame(true),
+      _packetsSent(0)
 {
+    logger::info("created fake video source %u", "FakeVideoSource", ssrc);
 }
 
 void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, bool keyFrame) const
@@ -95,12 +99,13 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             tryFillFramePayload(packet->get(), packet->getLength(), _keyFrame);
             _keyFrame = false;
 
+            ++_packetsSent;
             return packet;
         }
         else
         {
             _releaseTime = timestamp + utils::Time::ms * 10;
-            logger::warn("allocator depleted", "FakeAudioSource");
+            logger::warn("allocator depleted", "FakeVideoSource");
         }
     }
     else if (utils::Time::diff(timestamp, _frameReleaseTime) <= 0)

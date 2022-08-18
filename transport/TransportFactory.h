@@ -62,7 +62,11 @@ public:
     virtual std::shared_ptr<RtcTransport> createOnPorts(const ice::IceRole iceRole,
         const size_t sendPoolSize,
         const size_t endpointIdHash,
-        const Endpoints& rtpPorts) = 0;
+        const Endpoints& rtpPorts,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) = 0;
 
     virtual bool openRtpMuxPorts(Endpoints& rtpPorts) const = 0;
 

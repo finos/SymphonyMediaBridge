@@ -98,7 +98,11 @@ public:
     virtual void runTick(uint64_t timestamp) = 0;
     virtual ice::IceSession::State getIceState() const = 0;
     virtual SrtpClient::State getDtlsState() const = 0;
+
     virtual utils::Optional<ice::TransportType> getSelectedTransportType() const = 0;
+
+    virtual void setTag(const char* tag) = 0;
+    virtual const char* getTag() const = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
@@ -124,6 +128,10 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     const Endpoints& sharedEndPoints,
     const ServerEndpoints& tcpEndpoints,
     TcpEndpointFactory* tcpEndpointFactory,
-    memory::PacketPoolAllocator& allocator);
+    memory::PacketPoolAllocator& allocator,
+    size_t expectedInboundStreamCount,
+    size_t expectedOutboundStreamCount,
+    bool enableUplinkEstimation,
+    bool enableDownlinkEstimation);
 
 } // namespace transport

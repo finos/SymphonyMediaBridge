@@ -59,10 +59,10 @@ public:
     CFG_GROUP_END(ice);
 
     CFG_GROUP()
-    CFG_PROP(bool, useUplinkEstimate, true);
     CFG_PROP(bool, logDownlinkEstimates, true);
     CFG_PROP(std::string, packetLogLocation, "");
     CFG_PROP(double, packetOverhead, 0.1);
+    CFG_PROP(bool, enable, true);
     CFG_GROUP_END(bwe);
 
     CFG_GROUP() // rate control
@@ -72,6 +72,7 @@ public:
     CFG_PROP(uint32_t, initialEstimate, 1200);
     CFG_PROP(bool, debugLog, false);
     CFG_PROP(uint64_t, cooldownInterval, 30); // Time until rtcl inactivates after last received video
+    CFG_PROP(bool, useUplinkEstimate, true);
     CFG_GROUP_END(rctl)
 
     CFG_GROUP()

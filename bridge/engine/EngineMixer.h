@@ -1,15 +1,17 @@
 #pragma once
 
+#include "api/SimulcastGroup.h"
 #include "bridge/engine/ActiveTalker.h"
+#include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/EngineStats.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
 #include "memory/AudioPacketPoolAllocator.h"
+#include "memory/Map.h"
 #include "memory/PacketPoolAllocator.h"
 #include "memory/RingBuffer.h"
 #include "transport/RtcTransport.h"
-#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -65,6 +67,8 @@ public:
     static constexpr size_t audioBufferSamples = preBufferSamples * 2; // 1000 ms
     static constexpr size_t ticksPerSSRCCheck = 100; // 1000 ms
 
+    static constexpr size_t maxNumBarbells = 16;
+
     using AudioBuffer = memory::RingBuffer<int16_t, audioBufferSamples, preBufferSamples>;
 
     EngineMixer(const std::string& id,
@@ -75,7 +79,7 @@ public:
         memory::PacketPoolAllocator& sendAllocator,
         memory::AudioPacketPoolAllocator& audioAllocator,
         const std::vector<uint32_t>& audioSsrcs,
-        const std::vector<SimulcastLevel>& videoSsrcs,
+        const std::vector<api::SimulcastGroup>& videoSsrcs,
         const uint32_t lastN);
     ~EngineMixer() override;
 
@@ -131,6 +135,8 @@ public:
     void flush();
 
     void run(const uint64_t engineIterationStartTimestamp);
+
+    void processIncomingSctp(const uint64_t timestamp);
     void forwardPackets(const uint64_t engineTimestamp);
 
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
@@ -298,6 +304,7 @@ private:
 
     concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
 
+    concurrency::MpmcQueue<IncomingPacketInfo> _incomingBarbellSctp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderAudioRtp;
     concurrency::MpmcQueue<IncomingAudioPacketInfo> _incomingMixerAudioRtp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingRtcp;
@@ -335,9 +342,19 @@ private:
     uint64_t _lastVideoBandwidthCheck;
     uint64_t _lastVideoPacketProcessed;
     bool _probingVideoStreams;
+    uint32_t _minUplinkEstimate;
 
+    uint32_t getMinRemoteClientDownlinkBandwidth() const;
+    void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;
+    bool needToUpdateMinUplinkEstimate(const uint32_t curEstimate, const uint32_t oldEstimate) const;
+    void processBarbellSctp(const uint64_t timestamp);
     void processIncomingRtpPackets(const uint64_t timestamp);
     void forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
+    void forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
+    void forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
+    void forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+    void forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+    void forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket);
@@ -370,12 +387,11 @@ private:
         transport::RtcTransport* sender,
         const uint32_t payloadType,
         const uint64_t timestamp);
-    SsrcOutboundContext* obtainOutboundSsrcContext(EngineAudioStream& audioStream, const uint32_t ssrc);
-    SsrcOutboundContext* obtainOutboundSsrcContext(EngineVideoStream& videoStream,
+
+    SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
+        concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
         const uint32_t ssrc,
         const RtpMap& rtpMap);
-    SsrcOutboundContext* getOutboundSsrcContext(EngineVideoStream& videoStream, const uint32_t ssrc);
-    SsrcOutboundContext* getOutboundSsrcContext(EngineRecordingStream& recordingStream, const uint32_t ssrc);
 
     void sendPliForUsedSsrcs(EngineVideoStream& videoStream);
     void sendLastNListMessage(const size_t endpointIdHash);
@@ -385,6 +401,7 @@ private:
     void sendDominantSpeakerMessageToAll(const size_t dominantSpeaker);
     void sendUserMediaMapMessage(const size_t endpointIdHash);
     void sendUserMediaMapMessageToAll();
+    void sendUserMediaMapMessageOverBarbells();
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream,
         const size_t dominantSpeaker,
         const std::string& dominantSpeakerEndpoint);
@@ -424,6 +441,12 @@ private:
     void processRecordingMissingPackets(const uint64_t timestamp);
     void startProbingVideoStream(EngineVideoStream&);
     void stopProbingVideoStream(const EngineVideoStream&);
+
+    void onBarbellUserMediaMap(size_t barbellIdHash, const char* message);
+    void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message);
+
+    bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
+    utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);
 };
 
 } // namespace bridge
