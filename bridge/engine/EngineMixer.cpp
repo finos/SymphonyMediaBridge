@@ -1584,31 +1584,25 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     const void* data,
     size_t length)
 {
-    logger::debug("### sctp received %zu", _loggableId.c_str(), length);
     // TODO  parse this with wonderful json parser and figure out if this is a barbell UMM
     // if it is we should handle it locally in onBarbellUserMediaMap
     if (_engineBarbells.contains(sender->getEndpointIdHash()))
     {
-        logger::debug("### barbell found", _loggableId.c_str());
         if (length == 0)
         {
             return;
         }
         auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
         auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packet->get());
-        const auto s = reinterpret_cast<char*>(header->data());
+        auto s = header->getMessage();
 
-        const size_t payloadLen = length - (s - reinterpret_cast<const char*>(data));
-        logger::debug("### fragment  %s %zu", _loggableId.c_str(), s, payloadLen);
-        auto messageJson = utils::SimpleJson::create(s, payloadLen);
+        auto messageJson = utils::SimpleJson::create(s, header->getMessageLength(length));
+
+        if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
+            api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
         {
-            if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
-                api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
-            {
-                logger::debug("pushing sctp message to queue", _loggableId.c_str());
-                _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
-                return;
-            }
+            _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
+            return;
         }
     }
 
@@ -2058,10 +2052,8 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
         auto message = reinterpret_cast<const char*>(header->data());
         auto messageJson = utils::SimpleJson::create(message, strlen(message));
 
-        logger::debug("### pop sctp msg %s", _loggableId.c_str(), message);
         if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
         {
-            logger::debug("### sctp is umm", _loggableId.c_str());
             return onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
         }
 
@@ -3793,7 +3785,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     auto it = _engineBarbells.find(barbellIdHash);
     if (it == _engineBarbells.end())
     {
-        logger::debug("### cannot find barbell with hashid %zu", _loggableId.c_str(), barbellIdHash);
+        logger::debug("cannot find barbell for UMM. %zu", _loggableId.c_str(), barbellIdHash);
         return;
     }
 

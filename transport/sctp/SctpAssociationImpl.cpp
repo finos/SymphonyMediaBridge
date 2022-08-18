@@ -7,7 +7,7 @@
 #include "utils/MersienneRandom.h"
 #include "utils/Time.h"
 
-#define SCTP_LOG_ENABLE 1
+#define SCTP_LOG_ENABLE 0
 
 #if SCTP_LOG_ENABLE
 #define SCTP_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
