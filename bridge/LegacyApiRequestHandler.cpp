@@ -912,9 +912,9 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                 return response;
             }
 
-            sctpConnection._id.set(streamDescription._id);
-            sctpConnection._port = streamDescription._sctpPort.isSet()
-                ? utils::Optional<std::string>(std::to_string(streamDescription._sctpPort.get()))
+            sctpConnection._id.set(streamDescription.id);
+            sctpConnection._port = streamDescription.sctpPort.isSet()
+                ? utils::Optional<std::string>(std::to_string(streamDescription.sctpPort.get()))
                 : utils::Optional<std::string>();
         }
     }

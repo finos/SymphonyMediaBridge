@@ -242,7 +242,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get data stream description");
         }
 
-        responseData._port = streamDescription._sctpPort.isSet() ? streamDescription._sctpPort.get() : 5000;
+        responseData._port = streamDescription.sctpPort.isSet() ? streamDescription.sctpPort.get() : 5000;
         channelsDescription._data.set(responseData);
     }
 

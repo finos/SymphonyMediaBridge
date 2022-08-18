@@ -522,17 +522,17 @@ bool Mixer::addBundledDataStream(std::string& outId, const std::string& endpoint
     }
     if (_config.sctp.fixedPort)
     {
-        streamItr.first->second->_localSctpPort = 5000;
+        streamItr.first->second->localSctpPort = 5000;
     }
 
     logger::info("Created bundled dataStream id %s, endpointId %s, transport %s, port %u",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
-        streamItr.first->second->_transport->getLoggableId().c_str(),
-        streamItr.first->second->_localSctpPort);
+        streamItr.first->second->transport->getLoggableId().c_str(),
+        streamItr.first->second->localSctpPort);
 
-    return streamItr.first->second->_transport->isInitialized();
+    return streamItr.first->second->transport->isInitialized();
 }
 
 bool Mixer::removeAudioStream(const std::string& endpointId)
@@ -648,13 +648,13 @@ bool Mixer::removeDataStream(const std::string& endpointId)
     }
     auto dataStream = dataStreamItr->second.get();
 
-    if (dataStream->_markedForDeletion)
+    if (dataStream->markedForDeletion)
     {
         return true;
     }
 
-    dataStream->_markedForDeletion = true;
-    auto engineStreamItr = _dataEngineStreams.find(dataStream->_endpointId);
+    dataStream->markedForDeletion = true;
+    auto engineStreamItr = _dataEngineStreams.find(dataStream->endpointId);
     if (engineStreamItr == _dataEngineStreams.end())
     {
         return true;
@@ -674,7 +674,7 @@ bool Mixer::removeDataStreamId(const std::string& id)
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
         auto dataStreamItr = std::find_if(_dataStreams.begin(), _dataStreams.end(), [&](const auto& element) {
-            return element.second->_id.compare(id) == 0;
+            return element.second->id.compare(id) == 0;
         });
 
         if (dataStreamItr == _dataStreams.end())
@@ -682,7 +682,7 @@ bool Mixer::removeDataStreamId(const std::string& id)
             return false;
         }
 
-        endpointId = dataStreamItr->second->_endpointId;
+        endpointId = dataStreamItr->second->endpointId;
     }
 
     return removeDataStream(endpointId);
@@ -770,11 +770,11 @@ void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
 
     logger::info("DataStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->_id.c_str(),
+        stream->id.c_str(),
         endpointId.c_str());
 
-    auto streamTransport = stream->_transport;
-    _dataStreams.erase(stream->_endpointId);
+    auto streamTransport = stream->transport;
+    _dataStreams.erase(stream->endpointId);
 
     stopTransportIfNeeded(streamTransport.get(), endpointId);
     _dataEngineStreams.erase(endpointId);
@@ -977,7 +977,7 @@ bool Mixer::isDataStreamConfigured(const std::string& endpointId)
     {
         return false;
     }
-    return streamItr->second->_isConfigured;
+    return streamItr->second->isConfigured;
 }
 
 bool Mixer::getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription)
@@ -1375,8 +1375,8 @@ bool Mixer::configureDataStream(const std::string& endpointId, const uint32_t sc
     }
     auto dataStream = dataStreamItr->second.get();
 
-    dataStream->_remoteSctpPort.set(sctpPort);
-    dataStream->_transport->setSctp(dataStream->_localSctpPort, dataStream->_remoteSctpPort.get());
+    dataStream->remoteSctpPort.set(sctpPort);
+    dataStream->transport->setSctp(dataStream->localSctpPort, dataStream->remoteSctpPort.get());
     return true;
 }
 
@@ -1650,7 +1650,7 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto dataStreamItr = _dataStreams.find(endpointId);
-    if (dataStreamItr == _dataStreams.end() || !dataStreamItr->second->_remoteSctpPort.isSet())
+    if (dataStreamItr == _dataStreams.end() || !dataStreamItr->second->remoteSctpPort.isSet())
     {
         return false;
     }
@@ -1658,14 +1658,14 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
 
     logger::debug("Adding dataStream to engine, endpointId %s",
         getLoggableId().c_str(),
-        dataStream->_endpointId.c_str());
+        dataStream->endpointId.c_str());
 
-    dataStream->_isConfigured = true;
+    dataStream->isConfigured = true;
 
-    auto emplaceResult = _dataEngineStreams.emplace(dataStream->_endpointId,
-        std::make_unique<EngineDataStream>(dataStream->_endpointId,
-            dataStream->_endpointIdHash,
-            *(dataStream->_transport.get())));
+    auto emplaceResult = _dataEngineStreams.emplace(dataStream->endpointId,
+        std::make_unique<EngineDataStream>(dataStream->endpointId,
+            dataStream->endpointIdHash,
+            *(dataStream->transport.get())));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddDataStream;
@@ -1738,7 +1738,7 @@ bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId)
     {
         return false;
     }
-    return dataStreamItr->second->_transport->isGatheringComplete();
+    return dataStreamItr->second->transport->isGatheringComplete();
 }
 
 void Mixer::sendEndpointMessage(const std::string& toEndpointId,
@@ -1761,7 +1761,7 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
         {
             return;
         }
-        toEndpointIdHash = dataStreamItr->second->_endpointIdHash;
+        toEndpointIdHash = dataStreamItr->second->endpointIdHash;
     }
 
     EngineCommand::Command command{EngineCommand::Type::EndpointMessage};

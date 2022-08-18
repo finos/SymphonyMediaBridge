@@ -15,26 +15,26 @@ struct DataStream
     DataStream(const std::string& id,
         const std::string& endpointId,
         std::shared_ptr<transport::RtcTransport>& transport)
-        : _id(id),
-          _endpointId(endpointId),
-          _endpointIdHash(utils::hash<std::string>{}(_endpointId)),
-          _localSctpPort(rand() % 19000 + 1000),
-          _transport(transport),
-          _markedForDeletion(false),
-          _isConfigured(false)
+        : id(id),
+          endpointId(endpointId),
+          endpointIdHash(utils::hash<std::string>{}(endpointId)),
+          localSctpPort(rand() % 19000 + 1000),
+          transport(transport),
+          markedForDeletion(false),
+          isConfigured(false)
     {
     }
 
-    std::string _id;
-    std::string _endpointId;
-    size_t _endpointIdHash;
-    uint32_t _localSctpPort;
-    utils::Optional<uint32_t> _remoteSctpPort;
+    std::string id;
+    std::string endpointId;
+    size_t endpointIdHash;
+    uint32_t localSctpPort;
+    utils::Optional<uint32_t> remoteSctpPort;
 
-    std::shared_ptr<transport::RtcTransport> _transport;
+    std::shared_ptr<transport::RtcTransport> transport;
 
-    bool _markedForDeletion;
-    bool _isConfigured;
+    bool markedForDeletion;
+    bool isConfigured;
 };
 
 } // namespace bridge
