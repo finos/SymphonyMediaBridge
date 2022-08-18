@@ -9,10 +9,10 @@ class PacketCache;
 class RecordingOutboundContext
 {
 public:
-    RecordingOutboundContext(PacketCache& packetCache) : _sequenceNumber(0), _packetCache(packetCache) {}
+    RecordingOutboundContext(PacketCache& packetCache) : sequenceNumber(0), packetCache(packetCache) {}
 
-    uint16_t _sequenceNumber;
-    PacketCache& _packetCache;
+    uint16_t sequenceNumber;
+    PacketCache& packetCache;
 };
 
 } // namespace bridge

@@ -680,7 +680,7 @@ void EngineMixer::addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer)
 
 void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc)
 {
-    auto seq = stream->recordingEventsOutboundContext._sequenceNumber++;
+    auto seq = stream->recordingEventsOutboundContext.sequenceNumber++;
     auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
 
     for (const auto& transportEntry : stream->transports)
@@ -712,14 +712,14 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            stream->recordingEventsOutboundContext._packetCache,
+            stream->recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
 
 void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDescription* desc)
 {
-    const auto sequenceNumber = stream->recordingEventsOutboundContext._sequenceNumber++;
+    const auto sequenceNumber = stream->recordingEventsOutboundContext.sequenceNumber++;
     const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
 
     for (const auto& transportEntry : stream->transports)
@@ -752,7 +752,7 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            stream->recordingEventsOutboundContext._packetCache,
+            stream->recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
@@ -3081,7 +3081,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
         pinEndpoint(recordingStream.endpointIdHash, dominantSpeaker);
     }
 
-    const auto sequenceNumber = recordingStream.recordingEventsOutboundContext._sequenceNumber++;
+    const auto sequenceNumber = recordingStream.recordingEventsOutboundContext.sequenceNumber++;
     const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
 
     for (const auto& transportEntry : recordingStream.transports)
@@ -3109,7 +3109,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            recordingStream.recordingEventsOutboundContext._packetCache,
+            recordingStream.recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
@@ -3245,7 +3245,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             }
 
             packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
                          .setTimestamp(timestamp)
                          .setSsrc(ssrc)
                          .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap.payloadType))
@@ -3275,7 +3275,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
         else
         {
             packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
                          .setTimestamp(timestamp)
                          .setSsrc(ssrc)
                          .build();
@@ -3299,7 +3299,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            targetStream.recordingEventsOutboundContext._packetCache,
+            targetStream.recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);
     }
 }
@@ -3380,7 +3380,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             }
 
             packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
                          .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL))
                          .setSsrc(ssrc)
                          .setIsScreenSharing(simulcast.contentType == SimulcastStream::VideoContentType::SLIDES)
@@ -3411,7 +3411,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
         else
         {
             packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext._sequenceNumber++)
+                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
                          .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL))
                          .setSsrc(ssrc)
                          .build();
@@ -3435,7 +3435,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            targetStream.recordingEventsOutboundContext._packetCache,
+            targetStream.recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);
     }
 }

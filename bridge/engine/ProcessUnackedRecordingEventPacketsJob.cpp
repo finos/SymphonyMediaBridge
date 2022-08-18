@@ -46,7 +46,7 @@ void ProcessUnackedRecordingEventPacketsJob::run()
 
 void ProcessUnackedRecordingEventPacketsJob::sendIfCached(const uint16_t sequenceNumber)
 {
-    auto cachedPacket = _recordingOutboundContext._packetCache.get(sequenceNumber);
+    auto cachedPacket = _recordingOutboundContext.packetCache.get(sequenceNumber);
     if (!cachedPacket)
     {
         return;
