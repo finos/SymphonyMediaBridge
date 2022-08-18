@@ -1930,7 +1930,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
                 return nullptr;
             }
 
-            logger::info("Created new barbelll inbound audio context for stream ssrc %u, endpointIdHash %zu, %s",
+            logger::info("Created new barbell inbound audio context for stream ssrc %u, endpointIdHash %zu, %s",
                 _loggableId.c_str(),
                 ssrc,
                 endpointIdHash,
