@@ -31,7 +31,7 @@ void SendPliJob::run()
         _aboutSsrc,
         _fromSsrc);
     auto* feedback = rtp::createPLI(packet->get(), _fromSsrc, _aboutSsrc);
-    packet->setLength(feedback->_header.size());
+    packet->setLength(feedback->header.size());
     _transport.protectAndSend(std::move(packet));
 }
 

@@ -17,9 +17,9 @@ TEST(RtcpNackBuilderTest, firstAppendedPidShouldBeInFirstPid)
     EXPECT_EQ(sizeof(rtp::RtcpFeedback) + 4, rtcpNackSize);
 
     auto rtcpFeedbackHeader = reinterpret_cast<const rtp::RtcpFeedback*>(rtcpNack);
-    EXPECT_EQ(1, rtcpFeedbackHeader->_reporterSsrc);
-    EXPECT_EQ(2, rtcpFeedbackHeader->_mediaSsrc);
-    EXPECT_EQ(3, rtcpFeedbackHeader->_header.length.get());
+    EXPECT_EQ(1, rtcpFeedbackHeader->reporterSsrc);
+    EXPECT_EQ(2, rtcpFeedbackHeader->mediaSsrc);
+    EXPECT_EQ(3, rtcpFeedbackHeader->header.length.get());
 
     EXPECT_EQ(0x04, rtcpNack[12]);
     EXPECT_EQ(0xD2, rtcpNack[13]);
@@ -48,9 +48,9 @@ TEST(RtcpNackBuilderTest, additionalAdjacentAppendedPidsShouldBeIncludedInBlp)
     EXPECT_EQ(sizeof(rtp::RtcpFeedback) + 4, rtcpNackSize);
 
     auto rtcpFeedbackHeader = reinterpret_cast<const rtp::RtcpFeedback*>(rtcpNack);
-    EXPECT_EQ(1, rtcpFeedbackHeader->_reporterSsrc);
-    EXPECT_EQ(2, rtcpFeedbackHeader->_mediaSsrc);
-    EXPECT_EQ(3, rtcpFeedbackHeader->_header.length.get());
+    EXPECT_EQ(1, rtcpFeedbackHeader->reporterSsrc);
+    EXPECT_EQ(2, rtcpFeedbackHeader->mediaSsrc);
+    EXPECT_EQ(3, rtcpFeedbackHeader->header.length.get());
 
     EXPECT_EQ(0x04, rtcpNack[12]);
     EXPECT_EQ(0xD2, rtcpNack[13]);
@@ -76,9 +76,9 @@ TEST(RtcpNackBuilderTest, additionalNonAdjacentAppendedPidsShouldBeInNewPid)
     EXPECT_EQ(sizeof(rtp::RtcpFeedback) + 8, rtcpNackSize);
 
     auto rtcpFeedbackHeader = reinterpret_cast<const rtp::RtcpFeedback*>(rtcpNack);
-    EXPECT_EQ(1, rtcpFeedbackHeader->_reporterSsrc);
-    EXPECT_EQ(2, rtcpFeedbackHeader->_mediaSsrc);
-    EXPECT_EQ(4, rtcpFeedbackHeader->_header.length.get());
+    EXPECT_EQ(1, rtcpFeedbackHeader->reporterSsrc);
+    EXPECT_EQ(2, rtcpFeedbackHeader->mediaSsrc);
+    EXPECT_EQ(4, rtcpFeedbackHeader->header.length.get());
 
     EXPECT_EQ(0x04, rtcpNack[12]);
     EXPECT_EQ(0xD2, rtcpNack[13]);

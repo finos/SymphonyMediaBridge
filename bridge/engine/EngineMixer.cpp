@@ -2553,16 +2553,16 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     const rtp::RtcpHeader& rtcpPacket)
 {
     auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
-    if (rtcpFeedback->_header.fmtCount != rtp::PayloadSpecificFeedbackType::Pli &&
-        rtcpFeedback->_header.fmtCount != rtp::PayloadSpecificFeedbackType::Fir)
+    if (rtcpFeedback->header.fmtCount != rtp::PayloadSpecificFeedbackType::Pli &&
+        rtcpFeedback->header.fmtCount != rtp::PayloadSpecificFeedbackType::Fir)
     {
         return;
     }
 
     const auto& reverseRewriteMap = _activeMediaList->getReverseVideoSsrcRewriteMap();
-    const auto reverseRewriteMapItr = reverseRewriteMap.find(rtcpFeedback->_mediaSsrc.get());
+    const auto reverseRewriteMapItr = reverseRewriteMap.find(rtcpFeedback->mediaSsrc.get());
     const auto& videoScreenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
-    const auto mediaSsrc = rtcpFeedback->_mediaSsrc.get();
+    const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
     const auto rtcpSenderVideoStreamItr = _engineVideoStreams.find(rtcpSenderEndpointIdHash);
 
     size_t participant;
@@ -2585,7 +2585,7 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     else
     {
         // The mediaSsrc is not rewritten
-        participant = _engineStreamDirector->getParticipantForDefaultLevelSsrc(rtcpFeedback->_mediaSsrc.get());
+        participant = _engineStreamDirector->getParticipantForDefaultLevelSsrc(rtcpFeedback->mediaSsrc.get());
     }
 
     if (!participant)
@@ -2596,7 +2596,7 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     auto videoStreamItr = _engineVideoStreams.find(participant);
     if (videoStreamItr != _engineVideoStreams.end())
     {
-        if (videoStreamItr->second->localSsrc == rtcpFeedback->_mediaSsrc.get())
+        if (videoStreamItr->second->localSsrc == rtcpFeedback->mediaSsrc.get())
         {
             return;
         }
@@ -2604,8 +2604,8 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
         logger::info("Incoming rtcp feedback PLI, reporterSsrc %u, mediaSsrc %u, reporter participant %zu, media "
                      "participant %zu",
             _loggableId.c_str(),
-            rtcpFeedback->_reporterSsrc.get(),
-            rtcpFeedback->_mediaSsrc.get(),
+            rtcpFeedback->reporterSsrc.get(),
+            rtcpFeedback->mediaSsrc.get(),
             rtcpSenderEndpointIdHash,
             participant);
 
@@ -2622,12 +2622,12 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     const uint64_t timestamp)
 {
     auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
-    if (rtcpFeedback->_header.fmtCount != rtp::TransportLayerFeedbackType::PacketNack)
+    if (rtcpFeedback->header.fmtCount != rtp::TransportLayerFeedbackType::PacketNack)
     {
         return;
     }
 
-    const auto mediaSsrc = rtcpFeedback->_mediaSsrc.get();
+    const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
 
     auto rtcpSenderVideoStreamItr = _engineVideoStreams.find(transport->getEndpointIdHash());
     if (rtcpSenderVideoStreamItr == _engineVideoStreams.end())

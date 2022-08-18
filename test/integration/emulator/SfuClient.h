@@ -396,14 +396,14 @@ public:
         {
             auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
             if (rtcpPacket.packetType == rtp::RtcpPacketType::PAYLOADSPECIFIC_FB &&
-                rtcpFeedback->_header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
+                rtcpFeedback->header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
             {
-                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->_mediaSsrc.get());
-                auto it = _videoSources.find(rtcpFeedback->_mediaSsrc.get());
+                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
+                auto it = _videoSources.find(rtcpFeedback->mediaSsrc.get());
                 if (it != _videoSources.end())
                 {
                     auto& videoSource = it->second;
-                    if (videoSource->getSsrc() == rtcpFeedback->_mediaSsrc.get())
+                    if (videoSource->getSsrc() == rtcpFeedback->mediaSsrc.get())
                     {
                         videoSource->requestKeyFrame();
                     }
@@ -412,7 +412,7 @@ public:
                 {
                     logger::warn("cannot find video ssrc for PLI %u",
                         _loggableId.c_str(),
-                        rtcpFeedback->_mediaSsrc.get());
+                        rtcpFeedback->mediaSsrc.get());
                     for (auto& it : _videoSources)
                     {
                         logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
