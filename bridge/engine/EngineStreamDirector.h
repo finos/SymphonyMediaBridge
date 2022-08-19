@@ -9,7 +9,7 @@
 #include "utils/Time.h"
 #include <cstdint>
 
-#define DEBUG_DIRECTOR 0
+#define DEBUG_DIRECTOR 1
 
 #if DEBUG_DIRECTOR
 #define DIRECTOR_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
@@ -337,7 +337,7 @@ public:
     {
         const auto quality = getQualityLevel(ssrc);
 
-        // We server low and mid for unpinned according to the ConfigLadder.
+        // We serve low and mid for unpinned according to the ConfigLadder.
         if (highQuality != quality && isUnpinnedQualityUsed(quality, senderEndpointIdHash, isSenderInLastNList))
         {
             DIRECTOR_LOG("isSsrcUsed, %u default", "EngineStreamDirector", ssrc);
@@ -372,7 +372,7 @@ public:
                         ssrc,
                         lowQuality == quality       ? "low"
                             : midQuality == quality ? "mid"
-                                                    : high);
+                                                    : "high");
                     return true;
                 }
             }
@@ -419,7 +419,7 @@ public:
 
         const auto result = wantedQuality == quality;
 
-        DIRECTOR_LOG("shouldRecordSsrc toEndpointIdHash %lu ssrc %u: result %c, dominant speaker: %c, quality: %d",
+        DIRECTOR_LOG("shouldRecordSsrc toEndpointIdHash %lu ssrc %u: result %c, dominant speaker: %c, quality: %lu",
             "EngineStreamDirector",
             toEndpointIdHash,
             ssrc,
@@ -458,13 +458,6 @@ public:
             return true;
         }
 
-        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: max pinned quality: %d, max unpinned quality: %d",
-            "EngineStreamDirector",
-            toEndpointIdHash,
-            ssrc,
-            pinnedQuality,
-            unpinnedQuality);
-
         const auto pinMapItr = _pinMap.find(toEndpointIdHash);
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
         const auto maxWantedQuality =
@@ -473,6 +466,13 @@ public:
 
         size_t fromEndpointId = 0;
         size_t quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
+
+        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: cur quality: %lu, wanted quality: %lu",
+            "EngineStreamDirector",
+            toEndpointIdHash,
+            ssrc,
+            quality,
+            maxWantedQuality);
 
         // Check against max desired quality.
         bool result = false;
