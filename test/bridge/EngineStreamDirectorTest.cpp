@@ -93,7 +93,7 @@ TEST_F(EngineStreamDirectorTest, oldSimulcastStreamIsIncludedWhenNewIsAdded)
     _engineStreamDirector->setUplinkEstimateKbps(2, 100000, 5 * utils::Time::sec);
 
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
-    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(7, 1, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(7, 2, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, simulcastStreamIsNotIncludedWhenRemoved)
@@ -158,7 +158,7 @@ TEST_F(EngineStreamDirectorTest, simulcastStreamCannotBeAddedTwice)
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(7, 8, 9, 10, 11, 12));
 
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
-    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(7, 1, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(7, 2, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, pinnedHighQualityStreamIsIncluded)
