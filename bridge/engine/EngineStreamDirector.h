@@ -860,11 +860,6 @@ private:
             return false;
         }
 
-        // if (anyParticipantsWithoutPinTarget())
-        // {
-        //     return true;
-        // }
-
         // Unpinned, belogns to lastN and some of the participants needs this quality.
         for (const auto& participant : _participantStreams)
         {
@@ -902,10 +897,8 @@ private:
 
             const auto& participant = _participantStreams.find(pinnedBy);
 
-            const auto s = participant->second.desiredHighestEstimatedPinnedLevel;
             if (participant != _participantStreams.end() &&
-                // quality == std::min(participant->second.desiredHighestEstimatedPinnedLevel, highestAvailableQuality))
-                quality == std::min(s, highestAvailableQuality))
+                quality == std::min(participant->second.desiredHighestEstimatedPinnedLevel, highestAvailableQuality))
             {
                 return true;
             }
