@@ -74,6 +74,7 @@ TEST_F(EngineStreamDirectorTest, newSimulcastStreamIsIncludedFirstStream)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
     _engineStreamDirector->setUplinkEstimateKbps(1, 100000, 5 * utils::Time::sec);
+    _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12));
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
 }
 
@@ -82,6 +83,7 @@ TEST_F(EngineStreamDirectorTest, newSecondarySimulcastStreamIsIncludedFirstStrea
     bridge::SimulcastStream secondary = makeSimulcastStream(7, 8);
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6), &secondary);
     _engineStreamDirector->setUplinkEstimateKbps(1, 100000, 5 * utils::Time::sec);
+    _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12));
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(7, 1, true, 0));
 }
 
@@ -92,8 +94,8 @@ TEST_F(EngineStreamDirectorTest, oldSimulcastStreamIsIncludedWhenNewIsAdded)
     _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12));
     _engineStreamDirector->setUplinkEstimateKbps(2, 100000, 5 * utils::Time::sec);
 
-    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
-    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(7, 2, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(3, 1, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(9, 2, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, simulcastStreamIsNotIncludedWhenRemoved)
@@ -103,11 +105,13 @@ TEST_F(EngineStreamDirectorTest, simulcastStreamIsNotIncludedWhenRemoved)
     _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12));
     _engineStreamDirector->setUplinkEstimateKbps(2, 100000, 5 * utils::Time::sec);
 
-    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(3, 1, true, 0));
 
     _engineStreamDirector->removeParticipant(1);
 
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(3, 1, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(5, 1, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, secondarySimulcastStreamIsNotIncludedWhenRemoved)
@@ -118,12 +122,12 @@ TEST_F(EngineStreamDirectorTest, secondarySimulcastStreamIsNotIncludedWhenRemove
     _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12), &secondary);
     _engineStreamDirector->setUplinkEstimateKbps(2, 100000, 5 * utils::Time::sec);
 
-    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(7, 2, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(9, 2, true, 0));
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(13, 2, true, 0));
 
     _engineStreamDirector->removeParticipant(2);
 
-    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(7, 2, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(9, 2, true, 0));
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(13, 2, true, 0));
 }
 
@@ -133,6 +137,8 @@ TEST_F(EngineStreamDirectorTest, remainingSimulcastStreamIsIncludedWhenSecondIsR
     _engineStreamDirector->setUplinkEstimateKbps(1, 100000, 5 * utils::Time::sec);
     _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12));
     _engineStreamDirector->setUplinkEstimateKbps(2, 100000, 5 * utils::Time::sec);
+
+    _engineStreamDirector->addParticipant(3, makeSimulcastStream(13, 14, 15, 16, 17, 18));
 
     _engineStreamDirector->removeParticipant(2);
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
@@ -146,6 +152,8 @@ TEST_F(EngineStreamDirectorTest, remainingSecondarySimulcastStreamIsIncludedWhen
     _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12), &secondary);
     _engineStreamDirector->setUplinkEstimateKbps(2, 100000, 5 * utils::Time::sec);
 
+    _engineStreamDirector->addParticipant(3, makeSimulcastStream(15, 16, 17, 18, 19, 20));
+
     _engineStreamDirector->removeParticipant(1);
 
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(13, 2, true, 0));
@@ -157,8 +165,11 @@ TEST_F(EngineStreamDirectorTest, simulcastStreamCannotBeAddedTwice)
     _engineStreamDirector->setUplinkEstimateKbps(1, 100000, 5 * utils::Time::sec);
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(7, 8, 9, 10, 11, 12));
 
-    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
-    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(7, 2, true, 0));
+    _engineStreamDirector->addParticipant(2, makeSimulcastStream(13, 14, 15, 16, 17, 18));
+    _engineStreamDirector->setUplinkEstimateKbps(2, 100000, 5 * utils::Time::sec);
+
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(3, 1, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(9, 2, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, pinnedHighQualityStreamIsIncluded)
@@ -571,10 +582,24 @@ TEST_F(EngineStreamDirectorTest, lowEstimateUsesLowQualityLevel)
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 101, 60 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(2, 101, 61 * utils::Time::sec);
+
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
+}
+
+TEST_F(EngineStreamDirectorTest, veryLowEstimateDropsVideo)
+{
+    _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
+
+    _engineStreamDirector->addParticipant(2);
+    _engineStreamDirector->pin(2, 1);
+
     _engineStreamDirector->setUplinkEstimateKbps(2, 1, 60 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 1, 61 * utils::Time::sec);
 
-    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
 }
 
 TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreUsed)
@@ -876,7 +901,7 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_InLastN_AndNotPinned_AndAllPart
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(17, 3, true, 0));
 }
 
-TEST_F(EngineStreamDirectorTest, lowQualitySsrc_InLastN_AndNotPinned_AndSomeParticipantsHaveNoPinTargets_IsUsed)
+TEST_F(EngineStreamDirectorTest, lowQualitySsrc_InLastN_AndNotPinned_ParticipantsHaveNoPinTargetsLowBitrate_IsUsed)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
@@ -887,10 +912,12 @@ TEST_F(EngineStreamDirectorTest, lowQualitySsrc_InLastN_AndNotPinned_AndSomePart
     _engineStreamDirector->pin(3, 2);
     _engineStreamDirector->pin(4, 2);
 
+    _engineStreamDirector->setUplinkEstimateKbps(1, 500, 6 * utils::Time::sec);
+
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(13, 3, true, 0));
 }
 
-TEST_F(EngineStreamDirectorTest, midQualitySsrc_InLastN_AndNotPinned_AndSomeParticipantsHaveNoPinTargets_IsUsed)
+TEST_F(EngineStreamDirectorTest, midQualitySsrc_InLastN_AndNotPinned_ParticipantsHaveNoPinTargetsHighBitrate_IsUsed)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
@@ -946,7 +973,7 @@ TEST_F(EngineStreamDirectorTest, midQualitySsrc_NotInLastN_AndNotPinned_AndSomeP
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(15, 3, false, 0));
 }
 
-TEST_F(EngineStreamDirectorTest, highQualitySsrc_NotInLastN_AndNotPinned_AndSomeParticipantsHaveNoPinTargets_IsNotUsed)
+TEST_F(EngineStreamDirectorTest, highQualitySsrc_NotInLastN_AndNotPinned_IsNotUsed)
 {
     addActiveVideoSender(1, 1);
     addActiveVideoSender(2, 7);
