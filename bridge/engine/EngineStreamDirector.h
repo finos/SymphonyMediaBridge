@@ -335,57 +335,41 @@ public:
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
+        if (_participantStreams.find(senderEndpointIdHash) == _participantStreams.end())
+        {
+            DIRECTOR_LOG("isSsrcUsed, %u false, endpoint removed", "EngineStreamDirector", ssrc);
+            return false;
+        }
+
         const auto quality = getQualityLevel(ssrc);
         const auto highestAvailableQuality = highestActiveQuality(senderEndpointIdHash, ssrc);
+        if (highestAvailableQuality == dropQuality)
+        {
+            DIRECTOR_LOG("isSsrcUsed, %u false, ssrc not found", "EngineStreamDirector", ssrc);
+            return false;
+        }
 
-        // We serve low and mid for unpinned according to the ConfigLadder.
-        if (isUnpinnedQualityUsed(quality, highestAvailableQuality, senderEndpointIdHash, isSenderInLastNList))
+        if (isUsedForUnpinnedVideo(quality, highestAvailableQuality, senderEndpointIdHash, isSenderInLastNList))
         {
             DIRECTOR_LOG("isSsrcUsed, %u default", "EngineStreamDirector", ssrc);
             return true;
         }
 
-        // Pinned endpoint, cold be served in ANY quality, depending on the estimated bandwidth.
-        const auto reversePinMapItr = _reversePinMap.find(senderEndpointIdHash);
-        if (reversePinMapItr != _reversePinMap.end() && reversePinMapItr->second == 0)
+        if (isUsedForPinnedVideo(quality, highestAvailableQuality, senderEndpointIdHash))
         {
-            // This participant used to be pinned, but is no more.
-            DIRECTOR_LOG("isSsrcUsed, %u used to be pinned, but no more", "EngineStreamDirector", ssrc);
-            return false;
+            DIRECTOR_LOG("isSsrcUsed, %u pinned %s",
+                "EngineStreamDirector",
+                ssrc,
+                lowQuality == quality       ? "low"
+                    : midQuality == quality ? "mid"
+                                            : "high");
+            return true;
         }
 
-        // Find who pinned this sender, and which quality does it want.
-        for (const auto& pinMapEntry : _pinMap)
+        if (isUsedForRecordingSlides(ssrc, senderEndpointIdHash, numRecordingStreams))
         {
-            auto const& pinnedBy = pinMapEntry.first;
-            auto const& sender = pinMapEntry.second;
-            if (pinnedBy == senderEndpointIdHash || sender != senderEndpointIdHash)
-            {
-                continue;
-            }
-
-            const auto& participant = _participantStreams.find(pinnedBy);
-            if (participant != _participantStreams.end())
-            {
-                if (std::min(participant->second.desiredHighestEstimatedPinnedLevel, highestAvailableQuality) ==
-                    quality)
-                {
-                    DIRECTOR_LOG("isSsrcUsed, %u pinned %s",
-                        "EngineStreamDirector",
-                        ssrc,
-                        lowQuality == quality       ? "low"
-                            : midQuality == quality ? "mid"
-                                                    : "high");
-                    return true;
-                }
-            }
-        }
-
-        if (numRecordingStreams != 0)
-        {
-            const auto result = isContentSlides(ssrc, senderEndpointIdHash);
             DIRECTOR_LOG("isSsrcUsed isContentSlides %u: result %c", "EngineStreamDirector", ssrc, result ? 't' : 'f');
-            return result;
+            return true;
         }
 
         DIRECTOR_LOG("isSsrcUsed, %u false", "EngineStreamDirector", ssrc);
@@ -722,8 +706,7 @@ private:
             }
         }
 
-        assert(false);
-        return 0;
+        return dropQuality;
     }
 
     inline bool isSsrcFromParticipant(const size_t endpointIdHash, const uint32_t ssrc)
@@ -859,11 +842,14 @@ private:
     /**
      * Checks for ssrcs belonging to a default level if there are participants without pin targets.
      */
-    inline bool isUnpinnedQualityUsed(const size_t quality,
+    inline bool isUsedForUnpinnedVideo(const size_t quality,
         const size_t highestAvailableQuality,
         const size_t senderEndpointIdHash,
         const bool isSenderInLastNList)
     {
+        // Fast return, we serve unpinned only:
+        // - when it's low or medium quality;
+        // - when the sender is in the LastN list;
         if (quality == highQuality)
         {
             return false;
@@ -874,10 +860,10 @@ private:
             return false;
         }
 
-        if (anyParticipantsWithoutPinTarget())
-        {
-            return true;
-        }
+        // if (anyParticipantsWithoutPinTarget())
+        // {
+        //     return true;
+        // }
 
         // Unpinned, belogns to lastN and some of the participants needs this quality.
         for (const auto& participant : _participantStreams)
@@ -891,6 +877,47 @@ private:
         // If the sender endpoint is in the lastN list and pinned, we'll return false
         // but for pinned one there is another check in "isSsrcUsed".
         return false;
+    }
+
+    inline bool isUsedForPinnedVideo(const size_t quality,
+        const size_t highestAvailableQuality,
+        const size_t senderEndpointIdHash)
+    {
+        // Fast return, if nobody pins this endpoint.
+        const auto reversePinMapItr = _reversePinMap.find(senderEndpointIdHash);
+        if (reversePinMapItr != _reversePinMap.end() && reversePinMapItr->second == 0)
+        {
+            return false;
+        }
+
+        // If somebody pin this endpoint, we need check what quality is actually needed.
+        for (const auto& pinMapEntry : _pinMap)
+        {
+            auto const& pinnedBy = pinMapEntry.first;
+            auto const& sender = pinMapEntry.second;
+            if (pinnedBy == senderEndpointIdHash || sender != senderEndpointIdHash)
+            {
+                continue;
+            }
+
+            const auto& participant = _participantStreams.find(pinnedBy);
+
+            const auto s = participant->second.desiredHighestEstimatedPinnedLevel;
+            if (participant != _participantStreams.end() &&
+                // quality == std::min(participant->second.desiredHighestEstimatedPinnedLevel, highestAvailableQuality))
+                quality == std::min(s, highestAvailableQuality))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    inline bool isUsedForRecordingSlides(const size_t ssrc,
+        const size_t senderEndpointIdHash,
+        const size_t numRecordingStreams)
+    {
+        return (numRecordingStreams != 0 && isContentSlides(ssrc, senderEndpointIdHash));
     }
 
     inline void getVideoQualityLimits(const ParticipantStreams& participantStreams,
