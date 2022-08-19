@@ -9,7 +9,7 @@
 #include "utils/Time.h"
 #include <cstdint>
 
-#define DEBUG_DIRECTOR 1
+#define DEBUG_DIRECTOR 0
 
 #if DEBUG_DIRECTOR
 #define DIRECTOR_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
@@ -336,9 +336,10 @@ public:
         const size_t numRecordingStreams)
     {
         const auto quality = getQualityLevel(ssrc);
+        const auto highestAvailableQuality = highestActiveQuality(senderEndpointIdHash, ssrc);
 
         // We serve low and mid for unpinned according to the ConfigLadder.
-        if (highQuality != quality && isUnpinnedQualityUsed(quality, senderEndpointIdHash, isSenderInLastNList))
+        if (isUnpinnedQualityUsed(quality, highestAvailableQuality, senderEndpointIdHash, isSenderInLastNList))
         {
             DIRECTOR_LOG("isSsrcUsed, %u default", "EngineStreamDirector", ssrc);
             return true;
@@ -349,6 +350,7 @@ public:
         if (reversePinMapItr != _reversePinMap.end() && reversePinMapItr->second == 0)
         {
             // This participant used to be pinned, but is no more.
+            DIRECTOR_LOG("isSsrcUsed, %u used to be pinned, but no more", "EngineStreamDirector", ssrc);
             return false;
         }
 
@@ -365,7 +367,8 @@ public:
             const auto& participant = _participantStreams.find(pinnedBy);
             if (participant != _participantStreams.end())
             {
-                if (participant->second.desiredHighestEstimatedPinnedLevel == quality)
+                if (std::min(participant->second.desiredHighestEstimatedPinnedLevel, highestAvailableQuality) ==
+                    quality)
                 {
                     DIRECTOR_LOG("isSsrcUsed, %u pinned %s",
                         "EngineStreamDirector",
@@ -856,10 +859,16 @@ private:
     /**
      * Checks for ssrcs belonging to a default level if there are participants without pin targets.
      */
-    inline bool isUnpinnedQualityUsed(const uint32_t quality,
+    inline bool isUnpinnedQualityUsed(const size_t quality,
+        const size_t highestAvailableQuality,
         const size_t senderEndpointIdHash,
         const bool isSenderInLastNList)
     {
+        if (quality == highQuality)
+        {
+            return false;
+        }
+
         if (!isSenderInLastNList)
         {
             return false;
@@ -873,11 +882,14 @@ private:
         // Unpinned, belogns to lastN and some of the participants needs this quality.
         for (const auto& participant : _participantStreams)
         {
-            if (participant.first != senderEndpointIdHash && participant.second.desiredUnpinnedLevel == quality)
+            if (participant.first != senderEndpointIdHash &&
+                quality == std::min(participant.second.desiredUnpinnedLevel, highestAvailableQuality))
             {
                 return true;
             }
         }
+        // If the sender endpoint is in the lastN list and pinned, we'll return false
+        // but for pinned one there is another check in "isSsrcUsed".
         return false;
     }
 
