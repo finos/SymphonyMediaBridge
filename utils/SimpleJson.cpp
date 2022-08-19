@@ -177,6 +177,11 @@ void JsonToken::trim()
     }
 }
 
+SimpleJson SimpleJson::create(const char* c_str)
+{
+    return create(c_str, strlen(c_str));
+}
+
 SimpleJson SimpleJson::create(const char* cursorIn, const char* cursorOut)
 {
     if (!cursorIn || !cursorOut || cursorIn > cursorOut)
