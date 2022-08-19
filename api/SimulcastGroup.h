@@ -1,5 +1,6 @@
 #pragma once
 #include "utils/Optional.h"
+#include <cstring>
 #include <cstddef>
 #include <cstdint>
 
