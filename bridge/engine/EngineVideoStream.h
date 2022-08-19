@@ -29,67 +29,67 @@ struct EngineVideoStream
         transport::RtcTransport& transport,
         const bridge::RtpMap& rtpMap,
         const bridge::RtpMap& feedbackRtpMap,
-        const SsrcWhitelist& ssrcWhitelist,
+        const SsrcWhitelist& whitelist,
         const bool ssrcRewrite,
-        const std::vector<api::SsrcPair>& videoPinSsrcs)
-        : _endpointId(endpointId),
-          _endpointIdHash(endpointIdHash),
-          _localSsrc(localSsrc),
-          _simulcastStream(simulcastStream),
-          _secondarySimulcastStream(secondarySimulcastStream),
-          _ssrcOutboundContexts(1024),
-          _transport(transport),
-          _rtpMap(rtpMap),
-          _feedbackRtpMap(feedbackRtpMap),
-          _ssrcRewrite(ssrcRewrite),
-          _videoPinSsrcs(SsrcRewrite::ssrcArraySize)
+        const std::vector<api::SsrcPair>& pinSsrcs)
+        : endpointId(endpointId),
+          endpointIdHash(endpointIdHash),
+          localSsrc(localSsrc),
+          simulcastStream(simulcastStream),
+          secondarySimulcastStream(secondarySimulcastStream),
+          ssrcOutboundContexts(1024),
+          transport(transport),
+          rtpMap(rtpMap),
+          feedbackRtpMap(feedbackRtpMap),
+          ssrcRewrite(ssrcRewrite),
+          videoPinSsrcs(SsrcRewrite::ssrcArraySize)
     {
-        assert(videoPinSsrcs.size() <= SsrcRewrite::ssrcArraySize);
+        assert(pinSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
-        std::memcpy(&_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
-        for (const auto& videoSsrc : videoPinSsrcs)
+        std::memcpy(&ssrcWhitelist, &whitelist, sizeof(SsrcWhitelist));
+        for (const auto& videoSsrc : pinSsrcs)
         {
-            _videoPinSsrcs.push({videoSsrc.main, videoSsrc.feedback, false});
+            videoPinSsrcs.push({videoSsrc.main, videoSsrc.feedback, false});
         }
     }
 
     utils::Optional<uint32_t> getFeedbackSsrcFor(uint32_t ssrc)
     {
-        auto fbSsrc = _simulcastStream.getFeedbackSsrcFor(ssrc);
-        if (!fbSsrc.isSet() && _secondarySimulcastStream.isSet())
+        auto fbSsrc = simulcastStream.getFeedbackSsrcFor(ssrc);
+        if (!fbSsrc.isSet() && secondarySimulcastStream.isSet())
         {
-            return _secondarySimulcastStream.get().getFeedbackSsrcFor(ssrc);
+            return secondarySimulcastStream.get().getFeedbackSsrcFor(ssrc);
         }
         return fbSsrc;
     }
 
     utils::Optional<uint32_t> getMainSsrcFor(uint32_t feedbackSsrc)
     {
-        auto mainSsrc = _simulcastStream.getMainSsrcFor(feedbackSsrc);
-        if (!mainSsrc.isSet() && _secondarySimulcastStream.isSet())
+        auto mainSsrc = simulcastStream.getMainSsrcFor(feedbackSsrc);
+        if (!mainSsrc.isSet() && secondarySimulcastStream.isSet())
         {
-            return _secondarySimulcastStream.get().getMainSsrcFor(feedbackSsrc);
+            return secondarySimulcastStream.get().getMainSsrcFor(feedbackSsrc);
         }
         return mainSsrc;
     }
 
-    std::string _endpointId;
-    size_t _endpointIdHash;
-    uint32_t _localSsrc;
-    SimulcastStream _simulcastStream;
-    utils::Optional<SimulcastStream> _secondarySimulcastStream;
-    concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> _ssrcOutboundContexts;
+    std::string endpointId;
+    size_t endpointIdHash;
+    uint32_t localSsrc;
+    SimulcastStream simulcastStream;
+    utils::Optional<SimulcastStream> secondarySimulcastStream;
+    concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
-    transport::RtcTransport& _transport;
+    transport::RtcTransport& transport;
 
-    bridge::RtpMap _rtpMap;
-    bridge::RtpMap _feedbackRtpMap;
+    bridge::RtpMap rtpMap;
+    bridge::RtpMap feedbackRtpMap;
 
-    SsrcWhitelist _ssrcWhitelist;
-    bool _ssrcRewrite;
+    SsrcWhitelist ssrcWhitelist;
+    bool ssrcRewrite;
 
-    concurrency::MpmcQueue<SimulcastLevel> _videoPinSsrcs;
-    utils::Optional<SimulcastLevel> _pinSsrc;
+    concurrency::MpmcQueue<SimulcastLevel> videoPinSsrcs;
+    utils::Optional<SimulcastLevel> pinSsrc;
 };
 
 } // namespace bridge

@@ -52,20 +52,20 @@ struct SystemStats
 
 struct MixerManagerStats
 {
-    SystemStats _systemStats;
-    uint32_t _conferences = 0;
-    uint32_t _videoStreams = 0;
-    uint32_t _audioStreams = 0;
-    uint32_t _dataStreams = 0;
-    uint32_t _largestConference = 0;
-    EngineStats::EngineStats _engineStats;
-    uint32_t _jobQueueLength = 0;
+    SystemStats systemStats;
+    uint32_t conferences = 0;
+    uint32_t videoStreams = 0;
+    uint32_t audioStreams = 0;
+    uint32_t dataStreams = 0;
+    uint32_t largestConference = 0;
+    EngineStats::EngineStats engineStats;
+    uint32_t jobQueueLength = 0;
 
-    uint32_t _receivePoolSize = 0;
-    uint32_t _sendPoolSize = 0;
-    uint32_t _udpSharedEndpointsSendQueue = 0;
-    uint32_t _udpSharedEndpointsReceiveKbps = 0;
-    uint32_t _udpSharedEndpointsSendKbps = 0;
+    uint32_t receivePoolSize = 0;
+    uint32_t sendPoolSize = 0;
+    uint32_t udpSharedEndpointsSendQueue = 0;
+    uint32_t udpSharedEndpointsReceiveKbps = 0;
+    uint32_t udpSharedEndpointsSendKbps = 0;
 
     std::string describe();
 };

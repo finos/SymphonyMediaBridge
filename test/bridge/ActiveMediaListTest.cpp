@@ -147,9 +147,9 @@ protected:
     bridge::EngineVideoStream* addEngineVideoStream(const size_t id)
     {
         bridge::SimulcastStream simulcastStream{0};
-        simulcastStream._numLevels = 1;
-        simulcastStream._levels[0]._ssrc = id;
-        simulcastStream._levels[0]._feedbackSsrc = 100 + id;
+        simulcastStream.numLevels = 1;
+        simulcastStream.levels[0].ssrc = id;
+        simulcastStream.levels[0].feedbackSsrc = 100 + id;
 
         auto engineVideoStream = new bridge::EngineVideoStream(std::to_string(id),
             id,
@@ -443,16 +443,16 @@ TEST_F(ActiveMediaListTest, videoParticipantsAddedToVideoRewriteMap)
     auto videoStream3 = addEngineVideoStream(3);
 
     _activeMediaList->addVideoParticipant(1,
-        videoStream1->_simulcastStream,
-        videoStream1->_secondarySimulcastStream,
+        videoStream1->simulcastStream,
+        videoStream1->secondarySimulcastStream,
         "1");
     _activeMediaList->addVideoParticipant(2,
-        videoStream2->_simulcastStream,
-        videoStream2->_secondarySimulcastStream,
+        videoStream2->simulcastStream,
+        videoStream2->secondarySimulcastStream,
         "2");
     _activeMediaList->addVideoParticipant(3,
-        videoStream3->_simulcastStream,
-        videoStream3->_secondarySimulcastStream,
+        videoStream3->simulcastStream,
+        videoStream3->secondarySimulcastStream,
         "3");
 
     const auto& videoRewriteMap = _activeMediaList->getVideoSsrcRewriteMap();
@@ -469,20 +469,20 @@ TEST_F(ActiveMediaListTest, videoParticipantsNotAddedToFullVideoRewriteMap)
     auto videoStream4 = addEngineVideoStream(4);
 
     _activeMediaList->addVideoParticipant(1,
-        videoStream1->_simulcastStream,
-        videoStream1->_secondarySimulcastStream,
+        videoStream1->simulcastStream,
+        videoStream1->secondarySimulcastStream,
         "1");
     _activeMediaList->addVideoParticipant(2,
-        videoStream2->_simulcastStream,
-        videoStream2->_secondarySimulcastStream,
+        videoStream2->simulcastStream,
+        videoStream2->secondarySimulcastStream,
         "2");
     _activeMediaList->addVideoParticipant(3,
-        videoStream3->_simulcastStream,
-        videoStream3->_secondarySimulcastStream,
+        videoStream3->simulcastStream,
+        videoStream3->secondarySimulcastStream,
         "3");
     _activeMediaList->addVideoParticipant(4,
-        videoStream4->_simulcastStream,
-        videoStream4->_secondarySimulcastStream,
+        videoStream4->simulcastStream,
+        videoStream4->secondarySimulcastStream,
         "4");
 
     const auto& videoRewriteMap = _activeMediaList->getVideoSsrcRewriteMap();
@@ -499,16 +499,16 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsAllStreamsExcludingSelf)
     auto videoStream3 = addEngineVideoStream(3);
 
     _activeMediaList->addVideoParticipant(1,
-        videoStream1->_simulcastStream,
-        videoStream1->_secondarySimulcastStream,
+        videoStream1->simulcastStream,
+        videoStream1->secondarySimulcastStream,
         "1");
     _activeMediaList->addVideoParticipant(2,
-        videoStream2->_simulcastStream,
-        videoStream2->_secondarySimulcastStream,
+        videoStream2->simulcastStream,
+        videoStream2->secondarySimulcastStream,
         "2");
     _activeMediaList->addVideoParticipant(3,
-        videoStream3->_simulcastStream,
-        videoStream3->_secondarySimulcastStream,
+        videoStream3->simulcastStream,
+        videoStream3->secondarySimulcastStream,
         "3");
 
     utils::StringBuilder<1024> message;
@@ -528,20 +528,20 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsOnlyLastNItems)
     auto videoStream4 = addEngineVideoStream(4);
 
     _activeMediaList->addVideoParticipant(1,
-        videoStream1->_simulcastStream,
-        videoStream1->_secondarySimulcastStream,
+        videoStream1->simulcastStream,
+        videoStream1->secondarySimulcastStream,
         "1");
     _activeMediaList->addVideoParticipant(2,
-        videoStream2->_simulcastStream,
-        videoStream2->_secondarySimulcastStream,
+        videoStream2->simulcastStream,
+        videoStream2->secondarySimulcastStream,
         "2");
     _activeMediaList->addVideoParticipant(3,
-        videoStream3->_simulcastStream,
-        videoStream3->_secondarySimulcastStream,
+        videoStream3->simulcastStream,
+        videoStream3->secondarySimulcastStream,
         "3");
     _activeMediaList->addVideoParticipant(4,
-        videoStream4->_simulcastStream,
-        videoStream4->_secondarySimulcastStream,
+        videoStream4->simulcastStream,
+        videoStream4->secondarySimulcastStream,
         "4");
 
     utils::StringBuilder<1024> message;
@@ -571,25 +571,25 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsPinnedItem)
     auto videoStream4 = addEngineVideoStream(4);
 
     _activeMediaList->addVideoParticipant(1,
-        videoStream1->_simulcastStream,
-        videoStream1->_secondarySimulcastStream,
+        videoStream1->simulcastStream,
+        videoStream1->secondarySimulcastStream,
         "1");
     _activeMediaList->addVideoParticipant(2,
-        videoStream2->_simulcastStream,
-        videoStream2->_secondarySimulcastStream,
+        videoStream2->simulcastStream,
+        videoStream2->secondarySimulcastStream,
         "2");
     _activeMediaList->addVideoParticipant(3,
-        videoStream3->_simulcastStream,
-        videoStream3->_secondarySimulcastStream,
+        videoStream3->simulcastStream,
+        videoStream3->secondarySimulcastStream,
         "3");
     _activeMediaList->addVideoParticipant(4,
-        videoStream4->_simulcastStream,
-        videoStream4->_secondarySimulcastStream,
+        videoStream4->simulcastStream,
+        videoStream4->secondarySimulcastStream,
         "4");
 
     bridge::SimulcastLevel simulcastLevel;
-    videoStream4->_videoPinSsrcs.pop(simulcastLevel);
-    videoStream2->_pinSsrc.set(simulcastLevel);
+    videoStream4->videoPinSsrcs.pop(simulcastLevel);
+    videoStream2->pinSsrc.set(simulcastLevel);
 
     utils::StringBuilder<1024> message;
     _activeMediaList->makeUserMediaMapMessage(defaultLastN, 2, 4, _engineVideoStreams, message);
@@ -619,20 +619,20 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     addEngineAudioStream(4);
 
     _activeMediaList->addVideoParticipant(1,
-        videoStream1->_simulcastStream,
-        videoStream1->_secondarySimulcastStream,
+        videoStream1->simulcastStream,
+        videoStream1->secondarySimulcastStream,
         "1");
     _activeMediaList->addVideoParticipant(2,
-        videoStream2->_simulcastStream,
-        videoStream2->_secondarySimulcastStream,
+        videoStream2->simulcastStream,
+        videoStream2->secondarySimulcastStream,
         "2");
     _activeMediaList->addVideoParticipant(3,
-        videoStream3->_simulcastStream,
-        videoStream3->_secondarySimulcastStream,
+        videoStream3->simulcastStream,
+        videoStream3->secondarySimulcastStream,
         "3");
     _activeMediaList->addVideoParticipant(4,
-        videoStream4->_simulcastStream,
-        videoStream4->_secondarySimulcastStream,
+        videoStream4->simulcastStream,
+        videoStream4->secondarySimulcastStream,
         "4");
 
     uint64_t timestamp = 0;

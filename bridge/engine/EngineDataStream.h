@@ -13,19 +13,19 @@ namespace bridge
 struct EngineDataStream
 {
     EngineDataStream(const std::string& endpointId, const size_t endpointIdHash, transport::RtcTransport& transport)
-        : _endpointId(endpointId),
-          _endpointIdHash(endpointIdHash),
-          _transport(transport),
-          _stream(transport.getId(), transport),
-          _hasSeenInitialSpeakerList(false)
+        : endpointId(endpointId),
+          endpointIdHash(endpointIdHash),
+          transport(transport),
+          stream(transport.getId(), transport),
+          hasSeenInitialSpeakerList(false)
     {
     }
 
-    std::string _endpointId;
-    size_t _endpointIdHash;
-    transport::RtcTransport& _transport;
-    webrtc::WebRtcDataStream _stream;
-    bool _hasSeenInitialSpeakerList;
+    std::string endpointId;
+    size_t endpointIdHash;
+    transport::RtcTransport& transport;
+    webrtc::WebRtcDataStream stream;
+    bool hasSeenInitialSpeakerList;
 };
 
 } // namespace bridge

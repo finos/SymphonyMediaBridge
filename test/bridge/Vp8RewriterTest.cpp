@@ -118,7 +118,7 @@ TEST_F(Vp8RewriterTest, rewriteRtx)
     auto rtxHeader = rtp::RtpHeader::fromPacket(*rtxPacket);
     rtxHeader->ssrc = 2;
     rtxHeader->sequenceNumber = 2;
-    rtxHeader->payloadType = rtxRtpMap._payloadType;
+    rtxHeader->payloadType = rtxRtpMap.payloadType;
 
     // Rewrite RTX
     const auto originalSequenceNumber = bridge::Vp8Rewriter::rewriteRtxPacket(*rtxPacket, 1);
@@ -128,7 +128,7 @@ TEST_F(Vp8RewriterTest, rewriteRtx)
     EXPECT_EQ(1, originalSequenceNumber);
     EXPECT_EQ(1, rewrittenRtpHeader->sequenceNumber.get());
     EXPECT_EQ(1, rewrittenRtpHeader->ssrc.get());
-    EXPECT_EQ(rtxRtpMap._payloadType, rewrittenRtpHeader->payloadType);
+    EXPECT_EQ(rtxRtpMap.payloadType, rewrittenRtpHeader->payloadType);
 }
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchanged)

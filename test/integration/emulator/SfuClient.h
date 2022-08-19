@@ -249,7 +249,7 @@ public:
         void dumpPcmData()
         {
             utils::StringBuilder<512> fileName;
-            fileName.append(_loggableId.c_str()).append("-").append(_context._ssrc);
+            fileName.append(_loggableId.c_str()).append("-").append(_context.ssrc);
 
             FILE* logFile = ::fopen(fileName.get(), "wr");
             ::fwrite(_recording.data(), _recording.size(), 2, logFile);
@@ -283,10 +283,7 @@ public:
               _ssrcs(ssrcs)
         {
             _recording.reserve(256 * 1024);
-            logger::info("video offered ssrc %u, payload %u",
-                _loggableId.c_str(),
-                _ssrcs[0].main,
-                _rtpMap._payloadType);
+            logger::info("video offered ssrc %u, payload %u", _loggableId.c_str(), _ssrcs[0].main, _rtpMap.payloadType);
         }
 
         void onRtpPacketReceived(transport::RtcTransport* sender,
@@ -301,7 +298,7 @@ public:
 
                 auto result = contexts.emplace(rtpHeader->ssrc.get(),
                     rtpHeader->ssrc.get(),
-                    rtpHeader->payloadType == _rtpMap._payloadType ? _rtpMap : _rtxRtpMap,
+                    rtpHeader->payloadType == _rtpMap.payloadType ? _rtpMap : _rtxRtpMap,
                     sender,
                     timestamp);
                 it = result.first;
@@ -317,7 +314,7 @@ public:
 
             ++videoPacketCount;
 
-            if (rtpHeader->payloadType != inboundContext._rtpMap._payloadType)
+            if (rtpHeader->payloadType != inboundContext.rtpMap.payloadType)
             {
                 logger::warn("%u unexpected payload type %u",
                     _loggableId.c_str(),
@@ -355,8 +352,8 @@ public:
             if (it == _audioReceivers.end())
             {
                 bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
-                rtpMap._audioLevelExtId.set(1);
-                rtpMap._c9infoExtId.set(8);
+                rtpMap.audioLevelExtId.set(1);
+                rtpMap.c9infoExtId.set(8);
                 _audioReceivers.emplace(rtpHeader->ssrc.get(),
                     new RtpAudioReceiver(_loggableId.getInstanceId(),
                         rtpHeader->ssrc.get(),
@@ -399,14 +396,14 @@ public:
         {
             auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
             if (rtcpPacket.packetType == rtp::RtcpPacketType::PAYLOADSPECIFIC_FB &&
-                rtcpFeedback->_header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
+                rtcpFeedback->header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
             {
-                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->_mediaSsrc.get());
-                auto it = _videoSources.find(rtcpFeedback->_mediaSsrc.get());
+                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
+                auto it = _videoSources.find(rtcpFeedback->mediaSsrc.get());
                 if (it != _videoSources.end())
                 {
                     auto& videoSource = it->second;
-                    if (videoSource->getSsrc() == rtcpFeedback->_mediaSsrc.get())
+                    if (videoSource->getSsrc() == rtcpFeedback->mediaSsrc.get())
                     {
                         videoSource->requestKeyFrame();
                     }
@@ -415,7 +412,7 @@ public:
                 {
                     logger::warn("cannot find video ssrc for PLI %u",
                         _loggableId.c_str(),
-                        rtcpFeedback->_mediaSsrc.get());
+                        rtcpFeedback->mediaSsrc.get());
                     for (auto& it : _videoSources)
                     {
                         logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());

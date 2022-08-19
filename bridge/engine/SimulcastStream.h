@@ -25,11 +25,11 @@ struct SimulcastStream
 
     utils::Optional<uint32_t> getFeedbackSsrcFor(uint32_t ssrc)
     {
-        for (size_t i = 0; i < _numLevels; ++i)
+        for (size_t i = 0; i < numLevels; ++i)
         {
-            if (_levels[i]._ssrc == ssrc)
+            if (levels[i].ssrc == ssrc)
             {
-                return utils::Optional<uint32_t>(_levels[i]._feedbackSsrc);
+                return utils::Optional<uint32_t>(levels[i].feedbackSsrc);
             }
         }
         return utils::Optional<uint32_t>();
@@ -37,24 +37,24 @@ struct SimulcastStream
 
     utils::Optional<uint32_t> getMainSsrcFor(uint32_t feedbackSsrc)
     {
-        for (size_t i = 0; i < _numLevels; ++i)
+        for (size_t i = 0; i < numLevels; ++i)
         {
-            if (_levels[i]._feedbackSsrc == feedbackSsrc)
+            if (levels[i].feedbackSsrc == feedbackSsrc)
             {
-                return utils::Optional<uint32_t>(_levels[i]._ssrc);
+                return utils::Optional<uint32_t>(levels[i].ssrc);
             }
         }
         return utils::Optional<uint32_t>();
     }
 
-    bool isSendingVideo() const { return _numLevels > 0 && _contentType == VideoContentType::VIDEO; }
-    bool isSendingSlides() const { return _numLevels > 0 && _contentType == VideoContentType::SLIDES; }
+    bool isSendingVideo() const { return numLevels > 0 && contentType == VideoContentType::VIDEO; }
+    bool isSendingSlides() const { return numLevels > 0 && contentType == VideoContentType::SLIDES; }
 
     bool getLevelOf(uint32_t ssrc, uint32_t& level) const
     {
-        for (size_t i = 0; i < _numLevels; ++i)
+        for (size_t i = 0; i < numLevels; ++i)
         {
-            if (_levels[i]._ssrc == ssrc)
+            if (levels[i].ssrc == ssrc)
             {
                 level = i;
                 return true;
@@ -64,23 +64,23 @@ struct SimulcastStream
         return false;
     }
 
-    size_t _numLevels;
-    size_t _highestActiveLevel;
-    SimulcastLevel _levels[maxLevels];
-    VideoContentType _contentType;
+    size_t numLevels;
+    size_t highestActiveLevel;
+    SimulcastLevel levels[maxLevels];
+    VideoContentType contentType;
 };
 
 inline bool operator==(const SimulcastStream& first, const SimulcastStream& second)
 {
-    if (first._numLevels != second._numLevels)
+    if (first.numLevels != second.numLevels)
     {
         return false;
     }
 
-    for (size_t i = 0; i < first._numLevels; ++i)
+    for (size_t i = 0; i < first.numLevels; ++i)
     {
-        if (first._levels[i]._ssrc != second._levels[i]._ssrc ||
-            first._levels[i]._feedbackSsrc != second._levels[i]._feedbackSsrc)
+        if (first.levels[i].ssrc != second.levels[i].ssrc ||
+            first.levels[i].feedbackSsrc != second.levels[i].feedbackSsrc)
         {
             return false;
         }

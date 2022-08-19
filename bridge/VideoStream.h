@@ -19,34 +19,34 @@ struct VideoStream
         const uint32_t localSsrc,
         std::shared_ptr<transport::RtcTransport>& transport,
         bool ssrcRewrite)
-        : _id(id),
-          _endpointId(endpointId),
-          _endpointIdHash(utils::hash<std::string>{}(_endpointId)),
-          _localSsrc(localSsrc),
-          _simulcastStream{0},
-          _transport(transport),
-          _markedForDeletion(false),
-          _ssrcRewrite(ssrcRewrite),
-          _isConfigured(false)
+        : id(id),
+          endpointId(endpointId),
+          endpointIdHash(utils::hash<std::string>{}(endpointId)),
+          localSsrc(localSsrc),
+          simulcastStream{0},
+          transport(transport),
+          markedForDeletion(false),
+          ssrcRewrite(ssrcRewrite),
+          isConfigured(false)
     {
     }
 
-    std::string _id;
-    std::string _endpointId;
-    size_t _endpointIdHash;
-    uint32_t _localSsrc;
-    SimulcastStream _simulcastStream;
-    utils::Optional<SimulcastStream> _secondarySimulcastStream;
-    std::shared_ptr<transport::RtcTransport> _transport;
+    std::string id;
+    std::string endpointId;
+    size_t endpointIdHash;
+    uint32_t localSsrc;
+    SimulcastStream simulcastStream;
+    utils::Optional<SimulcastStream> secondarySimulcastStream;
+    std::shared_ptr<transport::RtcTransport> transport;
 
-    bridge::RtpMap _rtpMap;
-    bridge::RtpMap _feedbackRtpMap;
+    bridge::RtpMap rtpMap;
+    bridge::RtpMap feedbackRtpMap;
 
-    SsrcWhitelist _ssrcWhitelist;
+    SsrcWhitelist ssrcWhitelist;
 
-    bool _markedForDeletion;
-    bool _ssrcRewrite;
-    bool _isConfigured;
+    bool markedForDeletion;
+    bool ssrcRewrite;
+    bool isConfigured;
 };
 
 } // namespace bridge

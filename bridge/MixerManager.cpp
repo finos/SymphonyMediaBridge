@@ -451,7 +451,7 @@ void MixerManager::engineMessageVideoStreamRemoved(const EngineMessage::Message&
     const auto& command = message.command.videoStreamRemoved;
     logger::info("Removing videoStream endpointId %s from mixer %s",
         "MixerManager",
-        command.engineStream->_endpointId.c_str(),
+        command.engineStream->endpointId.c_str(),
         command.mixer->getLoggableId().c_str());
 
     const auto mixerIter = _mixers.find(command.mixer->getId());
@@ -474,7 +474,7 @@ void MixerManager::engineMessageRecordingStreamRemoved(const EngineMessage::Mess
     const auto& command = message.command.recordingStreamRemoved;
     logger::info("Removing recordingStream  %s from mixer %s",
         "MixerManager",
-        command.engineStream->_id.c_str(),
+        command.engineStream->id.c_str(),
         command.mixer->getLoggableId().c_str());
 
     const auto mixerIter = _mixers.find(command.mixer->getId());
@@ -497,7 +497,7 @@ void MixerManager::engineMessageDataStreamRemoved(const EngineMessage::Message& 
     const auto& command = message.command.dataStreamRemoved;
     logger::info("Removing dataStream endpointId %s from mixer %s",
         "MixerManager",
-        command.engineStream->_endpointId.c_str(),
+        command.engineStream->endpointId.c_str(),
         command.mixer->getLoggableId().c_str());
 
     const auto mixerIter = _mixers.find(command.mixer->getId());
@@ -716,23 +716,23 @@ Stats::MixerManagerStats MixerManager::getStats()
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
 
-        result._conferences = _stats.conferences;
-        result._videoStreams = _stats.videoStreams;
-        result._audioStreams = _stats.audioStreams;
-        result._dataStreams = _stats.dataStreams;
-        result._engineStats = _stats.engine;
-        result._systemStats = systemStats;
-        result._largestConference = _stats.largestConference;
+        result.conferences = _stats.conferences;
+        result.videoStreams = _stats.videoStreams;
+        result.audioStreams = _stats.audioStreams;
+        result.dataStreams = _stats.dataStreams;
+        result.engineStats = _stats.engine;
+        result.systemStats = systemStats;
+        result.largestConference = _stats.largestConference;
     }
 
     EndpointMetrics udpMetrics = _transportFactory.getSharedUdpEndpointsMetrics();
 
-    result._jobQueueLength = _jobManager.getCount();
-    result._receivePoolSize = _mainAllocator.size();
-    result._sendPoolSize = _sendAllocator.size();
-    result._udpSharedEndpointsSendQueue = udpMetrics.sendQueue;
-    result._udpSharedEndpointsReceiveKbps = static_cast<uint32_t>(udpMetrics.receiveKbps);
-    result._udpSharedEndpointsSendKbps = static_cast<uint32_t>(udpMetrics.sendKbps);
+    result.jobQueueLength = _jobManager.getCount();
+    result.receivePoolSize = _mainAllocator.size();
+    result.sendPoolSize = _sendAllocator.size();
+    result.udpSharedEndpointsSendQueue = udpMetrics.sendQueue;
+    result.udpSharedEndpointsReceiveKbps = static_cast<uint32_t>(udpMetrics.receiveKbps);
+    result.udpSharedEndpointsSendKbps = static_cast<uint32_t>(udpMetrics.sendKbps);
 
     return result;
 }

@@ -81,9 +81,9 @@ TEST_F(VideoNackReceiveJobTest, nacksNotAlreadyRespondedToAreHandled)
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->_lastRespondedNackTimestamp);
-    EXPECT_EQ(pid, _ssrcOutboundContext->_lastRespondedNackPid);
-    EXPECT_EQ(blp, _ssrcOutboundContext->_lastRespondedNackBlp);
+    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
+    EXPECT_EQ(pid, _ssrcOutboundContext->lastRespondedNackPid);
+    EXPECT_EQ(blp, _ssrcOutboundContext->lastRespondedNackBlp);
 
     pid = 5;
     blp = 7;
@@ -99,9 +99,9 @@ TEST_F(VideoNackReceiveJobTest, nacksNotAlreadyRespondedToAreHandled)
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->_lastRespondedNackTimestamp);
-    EXPECT_EQ(pid, _ssrcOutboundContext->_lastRespondedNackPid);
-    EXPECT_EQ(blp, _ssrcOutboundContext->_lastRespondedNackBlp);
+    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
+    EXPECT_EQ(pid, _ssrcOutboundContext->lastRespondedNackPid);
+    EXPECT_EQ(blp, _ssrcOutboundContext->lastRespondedNackBlp);
 }
 
 TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
@@ -131,7 +131,7 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->_lastRespondedNackTimestamp);
+    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
 }
 
 TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
@@ -163,5 +163,5 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->_lastRespondedNackTimestamp);
+    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
 }

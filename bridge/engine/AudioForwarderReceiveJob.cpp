@@ -36,16 +36,16 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
 
 void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 {
-    if (!_ssrcContext._opusDecoder)
+    if (!_ssrcContext.opusDecoder)
     {
         logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
             "OpusDecodeJob",
-            _ssrcContext._ssrc,
+            _ssrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
-        _ssrcContext._opusDecoder.reset(new codec::OpusDecoder());
+        _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
     }
 
-    codec::OpusDecoder& decoder = *_ssrcContext._opusDecoder;
+    codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
 
     if (!decoder.isInitialized())
     {
@@ -132,8 +132,8 @@ void AudioForwarderReceiveJob::run()
     const auto rtpHeaderExtensions = rtpHeader->getExtensionHeader();
     if (rtpHeaderExtensions)
     {
-        auto c9infoExtId = _ssrcContext._rtpMap._c9infoExtId.valueOr(0);
-        auto audioLevelExtId = _ssrcContext._rtpMap._audioLevelExtId.valueOr(0);
+        auto c9infoExtId = _ssrcContext.rtpMap.c9infoExtId.valueOr(0);
+        auto audioLevelExtId = _ssrcContext.rtpMap.audioLevelExtId.valueOr(0);
 
         utils::Optional<uint8_t> audioLevel;
         utils::Optional<bool> isPtt;
@@ -170,7 +170,7 @@ void AudioForwarderReceiveJob::run()
                 audioLevel.set(silence ? 90 : 25);
             }
 
-            _engineMixer.mapSsrc2UserId(_ssrcContext._ssrc, c9UserId);
+            _engineMixer.mapSsrc2UserId(_ssrcContext.ssrc, c9UserId);
         }
 
         _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(),
@@ -179,21 +179,21 @@ void AudioForwarderReceiveJob::run()
 
         if (silence)
         {
-            _ssrcContext._markNextPacket = true;
+            _ssrcContext.markNextPacket = true;
             return;
         }
     }
 
-    const auto oldRolloverCounter = _ssrcContext._lastUnprotectedExtendedSequenceNumber >> 16;
+    const auto oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
     const auto newRolloverCounter = _extendedSequenceNumber >> 16;
     if (newRolloverCounter > oldRolloverCounter)
     {
-        logger::debug("Setting new rollover counter for ssrc %u", "AudioForwarderReceiveJob", _ssrcContext._ssrc);
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext._ssrc, newRolloverCounter))
+        logger::debug("Setting new rollover counter for ssrc %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
+        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
         {
             logger::error("Failed to set rollover counter srtp %u, mixer %s",
                 "AudioForwarderReceiveJob",
-                _ssrcContext._ssrc,
+                _ssrcContext.ssrc,
                 _engineMixer.getLoggableId().c_str());
             return;
         }
@@ -203,24 +203,24 @@ void AudioForwarderReceiveJob::run()
     {
         logger::error("Failed to unprotect srtp %u, mixer %s",
             "AudioForwarderReceiveJob",
-            _ssrcContext._ssrc,
+            _ssrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
         return;
     }
-    _ssrcContext._lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+    _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
 
-    if (_hasMixedAudioStreams && _ssrcContext._rtpMap._format == bridge::RtpMap::Format::OPUS)
+    if (_hasMixedAudioStreams && _ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS)
     {
         decodeOpus(*_packet);
     }
 
-    if (_ssrcContext._markNextPacket)
+    if (_ssrcContext.markNextPacket)
     {
         rtpHeader->marker = 1;
-        _ssrcContext._markNextPacket = false;
+        _ssrcContext.markNextPacket = false;
     }
 
-    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext._rtpMap._payloadType));
+    assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap.payloadType));
     _engineMixer.onForwarderAudioRtpPacketDecrypted(_ssrcContext, std::move(_packet), _extendedSequenceNumber);
 }
 

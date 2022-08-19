@@ -51,11 +51,11 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 utils::format("Bundling without ice is not supported, conference %s", conferenceId.c_str()));
         }
 
-        const auto& transportDescriptionIce = transportDescription._ice.get();
+        const auto& transportDescriptionIce = transportDescription.ice.get();
         api::EndpointDescription::Ice responseIce;
-        responseIce._ufrag = transportDescriptionIce._iceCredentials.first;
-        responseIce._pwd = transportDescriptionIce._iceCredentials.second;
-        for (const auto& iceCandidate : transportDescriptionIce._iceCandidates)
+        responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
+        responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+        for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
         {
             if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
             {
@@ -100,10 +100,10 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             if (transport._ice)
             {
                 api::EndpointDescription::Ice responseIce;
-                const auto& transportDescriptionIce = transportDescription._ice.get();
-                responseIce._ufrag = transportDescriptionIce._iceCredentials.first;
-                responseIce._pwd = transportDescriptionIce._iceCredentials.second;
-                for (const auto& iceCandidate : transportDescriptionIce._iceCandidates)
+                const auto& transportDescriptionIce = transportDescription.ice.get();
+                responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
+                responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+                for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
                 {
                     if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
                     {
@@ -115,18 +115,18 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             }
             else
             {
-                if (transportDescription._localPeer.isSet() && !transportDescription._localPeer.get().empty())
+                if (transportDescription.localPeer.isSet() && !transportDescription.localPeer.get().empty())
                 {
                     api::EndpointDescription::Connection responseConnection;
-                    responseConnection._ip = transportDescription._localPeer.get().ipToString();
-                    responseConnection._port = transportDescription._localPeer.get().getPort();
+                    responseConnection._ip = transportDescription.localPeer.get().ipToString();
+                    responseConnection._port = transportDescription.localPeer.get().getPort();
                     responseTransport._connection.set(responseConnection);
                 }
 
                 responseTransport._rtcpMux = false;
             }
 
-            if (transportDescription._dtls.isSet())
+            if (transportDescription.dtls.isSet())
             {
                 api::EndpointDescription::Dtls responseDtls;
                 responseDtls.setup = "active";
@@ -189,10 +189,10 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             if (transport._ice)
             {
                 api::EndpointDescription::Ice responseIce;
-                const auto& transportDescriptionIce = transportDescription._ice.get();
-                responseIce._ufrag = transportDescriptionIce._iceCredentials.first;
-                responseIce._pwd = transportDescriptionIce._iceCredentials.second;
-                for (const auto& iceCandidate : transportDescriptionIce._iceCandidates)
+                const auto& transportDescriptionIce = transportDescription.ice.get();
+                responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
+                responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+                for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
                 {
                     if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
                     {
@@ -204,18 +204,18 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             }
             else
             {
-                if (transportDescription._localPeer.isSet() && !transportDescription._localPeer.get().empty())
+                if (transportDescription.localPeer.isSet() && !transportDescription.localPeer.get().empty())
                 {
                     api::EndpointDescription::Connection responseConnection;
-                    responseConnection._ip = transportDescription._localPeer.get().ipToString();
-                    responseConnection._port = transportDescription._localPeer.get().getPort();
+                    responseConnection._ip = transportDescription.localPeer.get().ipToString();
+                    responseConnection._port = transportDescription.localPeer.get().getPort();
                     responseTransport._connection.set(responseConnection);
                 }
 
                 responseTransport._rtcpMux = false;
             }
 
-            if (transportDescription._dtls.isSet())
+            if (transportDescription.dtls.isSet())
             {
                 api::EndpointDescription::Dtls responseDtls;
                 responseDtls.setup = "active";
@@ -242,7 +242,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get data stream description");
         }
 
-        responseData._port = streamDescription._sctpPort.isSet() ? streamDescription._sctpPort.get() : 5000;
+        responseData._port = streamDescription.sctpPort.isSet() ? streamDescription.sctpPort.get() : 5000;
         channelsDescription._data.set(responseData);
     }
 

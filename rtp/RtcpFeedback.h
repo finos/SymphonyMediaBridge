@@ -10,9 +10,9 @@ namespace rtp
 
 struct RtcpFeedback
 {
-    RtcpHeader _header;
-    nwuint32_t _reporterSsrc;
-    nwuint32_t _mediaSsrc;
+    RtcpHeader header;
+    nwuint32_t reporterSsrc;
+    nwuint32_t mediaSsrc;
 };
 
 enum PayloadSpecificFeedbackType

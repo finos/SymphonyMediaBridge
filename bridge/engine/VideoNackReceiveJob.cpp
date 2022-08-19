@@ -43,8 +43,8 @@ void VideoNackReceiveJob::run()
         return;
     }
 
-    if (_pid == _ssrcOutboundContext._lastRespondedNackPid && _blp == _ssrcOutboundContext._lastRespondedNackBlp &&
-        _timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp < _rtt)
+    if (_pid == _ssrcOutboundContext.lastRespondedNackPid && _blp == _ssrcOutboundContext.lastRespondedNackBlp &&
+        _timestamp - _ssrcOutboundContext.lastRespondedNackTimestamp < _rtt)
     {
         NACK_LOG("Ignoring NACK, feedbackSsrc %u, pid %u, blp 0x%x, time since last response %" PRIi64
                  " us less than rtt %" PRIi64 "us",
@@ -52,14 +52,14 @@ void VideoNackReceiveJob::run()
             _feedbackSsrc,
             _pid,
             _blp,
-            (_timestamp - _ssrcOutboundContext._lastRespondedNackTimestamp) / utils::Time::us,
+            (_timestamp - _ssrcOutboundContext.lastRespondedNackTimestamp) / utils::Time::us,
             _rtt / utils::Time::us);
         return;
     }
 
-    _ssrcOutboundContext._lastRespondedNackPid = _pid;
-    _ssrcOutboundContext._lastRespondedNackBlp = _blp;
-    _ssrcOutboundContext._lastRespondedNackTimestamp = _timestamp;
+    _ssrcOutboundContext.lastRespondedNackPid = _pid;
+    _ssrcOutboundContext.lastRespondedNackBlp = _blp;
+    _ssrcOutboundContext.lastRespondedNackTimestamp = _timestamp;
 
     auto sequenceNumber = _pid;
     sendIfCached(sequenceNumber);
@@ -80,13 +80,13 @@ void VideoNackReceiveJob::run()
 
 void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
 {
-    if (static_cast<int16_t>((_ssrcOutboundContext._lastKeyFrameSequenceNumber & 0xFFFFu) - sequenceNumber) > 0)
+    if (static_cast<int16_t>((_ssrcOutboundContext.lastKeyFrameSequenceNumber & 0xFFFFu) - sequenceNumber) > 0)
     {
         NACK_LOG("%u ignoring NACK for pre key frame packet %u, key frame at %u",
             "VideoNackReceiveJob",
-            _ssrcOutboundContext._ssrc,
+            _ssrcOutboundContext.ssrc,
             sequenceNumber,
-            _ssrcOutboundContext._lastKeyFrameSequenceNumber);
+            _ssrcOutboundContext.lastKeyFrameSequenceNumber);
         return;
     }
 
@@ -102,7 +102,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
         return;
     }
 
-    auto packet = memory::makeUniquePacket(_ssrcOutboundContext._allocator);
+    auto packet = memory::makeUniquePacket(_ssrcOutboundContext.allocator);
     if (!packet)
     {
         return;
@@ -123,7 +123,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
         "VideoNackReceiveJob",
         sequenceNumber,
         _feedbackSsrc,
-        _ssrcOutboundContext._sequenceCounter & 0xFFFFu);
+        _ssrcOutboundContext.sequenceCounter & 0xFFFFu);
 
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     if (!rtpHeader)
@@ -132,9 +132,9 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     }
 
     rtpHeader->ssrc = _feedbackSsrc;
-    rtpHeader->payloadType = _ssrcOutboundContext._rtpMap._payloadType;
-    rtpHeader->sequenceNumber = _ssrcOutboundContext._sequenceCounter & 0xFFFF;
-    ++_ssrcOutboundContext._sequenceCounter;
+    rtpHeader->payloadType = _ssrcOutboundContext.rtpMap.payloadType;
+    rtpHeader->sequenceNumber = _ssrcOutboundContext.sequenceCounter & 0xFFFF;
+    ++_ssrcOutboundContext.sequenceCounter;
 
     _sender.protectAndSend(std::move(packet));
 }

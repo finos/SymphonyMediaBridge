@@ -38,11 +38,11 @@ httpd::Response generateBarbellResponse(ActionContext* context,
             "Fail to get barbell transport description");
     }
 
-    const auto& transportDescriptionIce = transportDescription._ice.get();
+    const auto& transportDescriptionIce = transportDescription.ice.get();
     api::EndpointDescription::Ice responseIce;
-    responseIce._ufrag = transportDescriptionIce._iceCredentials.first;
-    responseIce._pwd = transportDescriptionIce._iceCredentials.second;
-    for (const auto& iceCandidate : transportDescriptionIce._iceCandidates)
+    responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
+    responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+    for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
     {
         if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
         {

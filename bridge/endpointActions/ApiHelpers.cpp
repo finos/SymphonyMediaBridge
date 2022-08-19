@@ -196,12 +196,12 @@ bridge::RtpMap makeRtpMap(const api::EndpointDescription::Audio& audio)
 
     for (const auto& parameter : payloadType._parameters)
     {
-        rtpMap._parameters.emplace(parameter.first, parameter.second);
+        rtpMap.parameters.emplace(parameter.first, parameter.second);
     }
 
-    rtpMap._audioLevelExtId = findAudioLevelExtensionId(audio._rtpHeaderExtensions);
-    rtpMap._absSendTimeExtId = findAbsSendTimeExtensionId(audio._rtpHeaderExtensions);
-    rtpMap._c9infoExtId = findC9InfoExtensionId(audio._rtpHeaderExtensions);
+    rtpMap.audioLevelExtId = findAudioLevelExtensionId(audio._rtpHeaderExtensions);
+    rtpMap.absSendTimeExtId = findAbsSendTimeExtensionId(audio._rtpHeaderExtensions);
+    rtpMap.c9infoExtId = findC9InfoExtensionId(audio._rtpHeaderExtensions);
 
     return rtpMap;
 }
@@ -227,10 +227,10 @@ bridge::RtpMap makeRtpMap(const api::EndpointDescription::Video& video,
 
     for (const auto& parameter : payloadType._parameters)
     {
-        rtpMap._parameters.emplace(parameter.first, parameter.second);
+        rtpMap.parameters.emplace(parameter.first, parameter.second);
     }
 
-    rtpMap._absSendTimeExtId = findAbsSendTimeExtensionId(video.rtpHeaderExtensions);
+    rtpMap.absSendTimeExtId = findAbsSendTimeExtensionId(video.rtpHeaderExtensions);
 
     return rtpMap;
 }
@@ -274,12 +274,12 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDes
         bridge::SimulcastStream simulcastStream{0};
         if (stream.content.compare(api::EndpointDescription::slidesContent) == 0)
         {
-            simulcastStream._contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
+            simulcastStream.contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
         }
 
         for (auto& level : stream.sources)
         {
-            simulcastStream._levels[simulcastStream._numLevels++] = SimulcastLevel{level.main, level.feedback, false};
+            simulcastStream.levels[simulcastStream.numLevels++] = SimulcastLevel{level.main, level.feedback, false};
             logger::debug("Add simulcast level main ssrc %u feedback ssrc %u, content %s, endpointId %s",
                 "ApiRequestHandler",
                 level.main,

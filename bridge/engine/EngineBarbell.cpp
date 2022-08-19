@@ -32,12 +32,12 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
     for (auto& videoGroup : videoDescriptions)
     {
         VideoStream videoStream;
-        videoStream.stream._contentType =
+        videoStream.stream.contentType =
             (videoGroup.slides ? SimulcastStream::VideoContentType::SLIDES : SimulcastStream::VideoContentType::VIDEO);
 
         for (auto& ssrcPair : videoGroup.ssrcLevels)
         {
-            videoStream.stream._levels[videoStream.stream._numLevels++] = {ssrcPair.main, ssrcPair.feedback, false};
+            videoStream.stream.levels[videoStream.stream.numLevels++] = {ssrcPair.main, ssrcPair.feedback, false};
         }
 
         if (videoGroup.slides)
@@ -58,19 +58,19 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
 
     for (auto& videoStream : videoStreams)
     {
-        for (size_t i = 0; i < videoStream.stream._numLevels; ++i)
+        for (size_t i = 0; i < videoStream.stream.numLevels; ++i)
         {
-            auto& ssrcPair = videoStream.stream._levels[i];
-            videoSsrcMap.emplace(ssrcPair._ssrc, &videoStream);
-            videoSsrcMap.emplace(ssrcPair._feedbackSsrc, &videoStream);
+            auto& ssrcPair = videoStream.stream.levels[i];
+            videoSsrcMap.emplace(ssrcPair.ssrc, &videoStream);
+            videoSsrcMap.emplace(ssrcPair.feedbackSsrc, &videoStream);
         }
     }
 
-    for (size_t i = 0; i < slideStream.stream._numLevels; ++i)
+    for (size_t i = 0; i < slideStream.stream.numLevels; ++i)
     {
-        auto& ssrcPair = slideStream.stream._levels[i];
-        videoSsrcMap.emplace(ssrcPair._ssrc, &slideStream);
-        videoSsrcMap.emplace(ssrcPair._feedbackSsrc, &slideStream);
+        auto& ssrcPair = slideStream.stream.levels[i];
+        videoSsrcMap.emplace(ssrcPair.ssrc, &slideStream);
+        videoSsrcMap.emplace(ssrcPair.feedbackSsrc, &slideStream);
     }
 }
 

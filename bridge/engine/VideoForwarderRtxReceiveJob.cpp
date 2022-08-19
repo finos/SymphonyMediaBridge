@@ -40,16 +40,16 @@ void VideoForwarderRtxReceiveJob::run()
         return;
     }
 
-    const auto oldRolloverCounter = _ssrcContext._lastUnprotectedExtendedSequenceNumber >> 16;
+    const auto oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
     const auto newRolloverCounter = _extendedSequenceNumber >> 16;
     if (newRolloverCounter > oldRolloverCounter)
     {
-        logger::debug("Setting new rollover counter for ssrc %u", "VideoForwarderRtxReceiveJob", _ssrcContext._ssrc);
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext._ssrc, newRolloverCounter))
+        logger::debug("Setting new rollover counter for ssrc %u", "VideoForwarderRtxReceiveJob", _ssrcContext.ssrc);
+        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
         {
             logger::error("Failed to set rollover counter srtp %u, mixer %s",
                 "VideoForwarderReceiveJob",
-                _ssrcContext._ssrc,
+                _ssrcContext.ssrc,
                 _engineMixer.getLoggableId().c_str());
             return;
         }
@@ -59,22 +59,22 @@ void VideoForwarderRtxReceiveJob::run()
     {
         logger::error("Failed to unprotect srtp %u, mixer %s",
             "VideoForwarderRtxReceiveJob",
-            _ssrcContext._ssrc,
+            _ssrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
         return;
     }
 
-    _ssrcContext._lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+    _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
     Vp8Rewriter::rewriteRtxPacket(*_packet, _mainSsrc);
 
-    if (!_ssrcContext._videoMissingPacketsTracker.get())
+    if (!_ssrcContext.videoMissingPacketsTracker.get())
     {
         assert(false);
         return;
     }
 
     uint32_t extendedSequenceNumber = 0;
-    if (!_ssrcContext._videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
+    if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
             extendedSequenceNumber))
     {
         return;

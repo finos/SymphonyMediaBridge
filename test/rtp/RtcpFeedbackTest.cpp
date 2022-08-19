@@ -9,13 +9,13 @@ TEST(RtcpFeedbackTest, parsePacketNack)
     memset(nack.data(), 0, nack.size());
 
     auto rtcpFeedback = reinterpret_cast<rtp::RtcpFeedback*>(nack.data());
-    rtcpFeedback->_header.packetType = rtp::RTPTRANSPORT_FB;
-    rtcpFeedback->_header.fmtCount = rtp::TransportLayerFeedbackType::PacketNack;
-    rtcpFeedback->_header.length = sizeof(rtp::RtcpFeedback) / 4 + 2 - 1;
-    rtcpFeedback->_header.padding = 0;
-    rtcpFeedback->_header.version = 2;
-    rtcpFeedback->_mediaSsrc = 1;
-    rtcpFeedback->_reporterSsrc = 2;
+    rtcpFeedback->header.packetType = rtp::RTPTRANSPORT_FB;
+    rtcpFeedback->header.fmtCount = rtp::TransportLayerFeedbackType::PacketNack;
+    rtcpFeedback->header.length = sizeof(rtp::RtcpFeedback) / 4 + 2 - 1;
+    rtcpFeedback->header.padding = 0;
+    rtcpFeedback->header.version = 2;
+    rtcpFeedback->mediaSsrc = 1;
+    rtcpFeedback->reporterSsrc = 2;
 
     auto feedbackControlInfo = nack.data() + sizeof(rtp::RtcpFeedback);
     feedbackControlInfo[0] = 0x12;

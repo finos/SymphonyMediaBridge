@@ -222,20 +222,20 @@ void Mixer::stopTransports()
 
     for (auto& videoStreamEntry : _videoStreams)
     {
-        assert(videoStreamEntry.second->_transport);
-        if (_bundleTransports.find(videoStreamEntry.second->_endpointId) != _bundleTransports.end())
+        assert(videoStreamEntry.second->transport);
+        if (_bundleTransports.find(videoStreamEntry.second->endpointId) != _bundleTransports.end())
         {
             continue;
         }
 
-        logTransportPacketLoss("", *videoStreamEntry.second->_transport, _loggableId.c_str());
-        videoStreamEntry.second->_transport->stop();
-        if (!waitForPendingJobs(700, 5, *videoStreamEntry.second->_transport))
+        logTransportPacketLoss("", *videoStreamEntry.second->transport, _loggableId.c_str());
+        videoStreamEntry.second->transport->stop();
+        if (!waitForPendingJobs(700, 5, *videoStreamEntry.second->transport))
         {
             logger::error("Transport for endpointId %s did not finish pending jobs in time. Continuing "
                           "deletion anyway.",
                 _loggableId.c_str(),
-                videoStreamEntry.second->_endpointId.c_str());
+                videoStreamEntry.second->endpointId.c_str());
         }
     }
 
@@ -276,7 +276,7 @@ bool Mixer::waitForAllPendingJobs(const uint32_t timeoutMs)
 
         for (auto& videoStream : _videoStreams)
         {
-            if (videoStream.second->_transport && videoStream.second->_transport->hasPendingJobs())
+            if (videoStream.second->transport && videoStream.second->transport->hasPendingJobs())
             {
                 pendingJobs = true;
                 break;
@@ -402,10 +402,10 @@ bool Mixer::addVideoStream(std::string& outId,
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
-        emplaceResult.first->second->_endpointIdHash,
-        emplaceResult.first->second->_transport->getLoggableId().c_str());
+        emplaceResult.first->second->endpointIdHash,
+        emplaceResult.first->second->transport->getLoggableId().c_str());
 
-    return emplaceResult.first->second->_transport->isInitialized();
+    return emplaceResult.first->second->transport->isInitialized();
 }
 
 bool Mixer::addBundledAudioStream(std::string& outId,
@@ -488,10 +488,10 @@ bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpoin
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
-        streamItr.first->second->_endpointIdHash,
-        streamItr.first->second->_transport->getLoggableId().c_str());
+        streamItr.first->second->endpointIdHash,
+        streamItr.first->second->transport->getLoggableId().c_str());
 
-    return streamItr.first->second->_transport->isInitialized();
+    return streamItr.first->second->transport->isInitialized();
 }
 
 bool Mixer::addBundledDataStream(std::string& outId, const std::string& endpointId)
@@ -522,17 +522,17 @@ bool Mixer::addBundledDataStream(std::string& outId, const std::string& endpoint
     }
     if (_config.sctp.fixedPort)
     {
-        streamItr.first->second->_localSctpPort = 5000;
+        streamItr.first->second->localSctpPort = 5000;
     }
 
     logger::info("Created bundled dataStream id %s, endpointId %s, transport %s, port %u",
         _loggableId.c_str(),
         outId.c_str(),
         endpointId.c_str(),
-        streamItr.first->second->_transport->getLoggableId().c_str(),
-        streamItr.first->second->_localSctpPort);
+        streamItr.first->second->transport->getLoggableId().c_str(),
+        streamItr.first->second->localSctpPort);
 
-    return streamItr.first->second->_transport->isInitialized();
+    return streamItr.first->second->transport->isInitialized();
 }
 
 bool Mixer::removeAudioStream(const std::string& endpointId)
@@ -597,13 +597,13 @@ bool Mixer::removeVideoStream(const std::string& endpointId)
     }
     auto videoStream = videoStreamItr->second.get();
 
-    if (videoStream->_markedForDeletion)
+    if (videoStream->markedForDeletion)
     {
         return true;
     }
 
-    videoStream->_markedForDeletion = true;
-    auto engineStreamItr = _videoEngineStreams.find(videoStream->_endpointId);
+    videoStream->markedForDeletion = true;
+    auto engineStreamItr = _videoEngineStreams.find(videoStream->endpointId);
     if (engineStreamItr == _videoEngineStreams.end())
     {
         return true;
@@ -623,7 +623,7 @@ bool Mixer::removeVideoStreamId(const std::string& id)
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
         auto videoStreamItr = std::find_if(_videoStreams.begin(), _videoStreams.end(), [&](const auto& element) {
-            return element.second->_id.compare(id) == 0;
+            return element.second->id.compare(id) == 0;
         });
 
         if (videoStreamItr == _videoStreams.end())
@@ -631,7 +631,7 @@ bool Mixer::removeVideoStreamId(const std::string& id)
             return false;
         }
 
-        endpointId = videoStreamItr->second->_endpointId;
+        endpointId = videoStreamItr->second->endpointId;
     }
 
     return removeVideoStream(endpointId);
@@ -648,13 +648,13 @@ bool Mixer::removeDataStream(const std::string& endpointId)
     }
     auto dataStream = dataStreamItr->second.get();
 
-    if (dataStream->_markedForDeletion)
+    if (dataStream->markedForDeletion)
     {
         return true;
     }
 
-    dataStream->_markedForDeletion = true;
-    auto engineStreamItr = _dataEngineStreams.find(dataStream->_endpointId);
+    dataStream->markedForDeletion = true;
+    auto engineStreamItr = _dataEngineStreams.find(dataStream->endpointId);
     if (engineStreamItr == _dataEngineStreams.end())
     {
         return true;
@@ -674,7 +674,7 @@ bool Mixer::removeDataStreamId(const std::string& id)
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
         auto dataStreamItr = std::find_if(_dataStreams.begin(), _dataStreams.end(), [&](const auto& element) {
-            return element.second->_id.compare(id) == 0;
+            return element.second->id.compare(id) == 0;
         });
 
         if (dataStreamItr == _dataStreams.end())
@@ -682,7 +682,7 @@ bool Mixer::removeDataStreamId(const std::string& id)
             return false;
         }
 
-        endpointId = dataStreamItr->second->_endpointId;
+        endpointId = dataStreamItr->second->endpointId;
     }
 
     return removeDataStream(endpointId);
@@ -723,11 +723,11 @@ void Mixer::engineVideoStreamRemoved(EngineVideoStream* engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto endpointId = engineStream->_endpointId;
+    const auto endpointId = engineStream->endpointId;
     auto streamItr = _videoStreams.find(endpointId);
     if (streamItr == _videoStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->_transport, endpointId);
+        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _videoEngineStreams.erase(endpointId);
 
         logger::warn("EngineVideoStream endpointId %s removed, no matching videoStream found",
@@ -739,11 +739,11 @@ void Mixer::engineVideoStreamRemoved(EngineVideoStream* engineStream)
     auto& stream = streamItr->second;
     logger::info("VideoStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->_id.c_str(),
+        stream->id.c_str(),
         endpointId.c_str());
 
-    auto streamTransport = stream->_transport;
-    _videoStreams.erase(stream->_endpointId);
+    auto streamTransport = stream->transport;
+    _videoStreams.erase(stream->endpointId);
 
     stopTransportIfNeeded(streamTransport.get(), endpointId);
     _videoEngineStreams.erase(endpointId);
@@ -753,11 +753,11 @@ void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto endpointId = engineStream->_endpointId;
+    const auto endpointId = engineStream->endpointId;
     auto streamItr = _dataStreams.find(endpointId);
     if (streamItr == _dataStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->_transport, endpointId);
+        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _dataEngineStreams.erase(endpointId);
 
         logger::warn("EngineDataStream endpointId %s removed, no matching dataStream found",
@@ -770,11 +770,11 @@ void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
 
     logger::info("DataStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->_id.c_str(),
+        stream->id.c_str(),
         endpointId.c_str());
 
-    auto streamTransport = stream->_transport;
-    _dataStreams.erase(stream->_endpointId);
+    auto streamTransport = stream->transport;
+    _dataStreams.erase(stream->endpointId);
 
     stopTransportIfNeeded(streamTransport.get(), endpointId);
     _dataEngineStreams.erase(endpointId);
@@ -905,7 +905,7 @@ bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStream
     }
 
     outDescription = VideoStreamDescription(*streamItr->second);
-    if (streamItr->second->_ssrcRewrite)
+    if (streamItr->second->ssrcRewrite)
     {
         outDescription.sources.reserve(_videoSsrcs.size() + _videoPinSsrcs.size());
         for (auto& ssrcGroup : _videoSsrcs)
@@ -966,7 +966,7 @@ bool Mixer::isVideoStreamConfigured(const std::string& endpointId)
     {
         return false;
     }
-    return streamItr->second->_isConfigured;
+    return streamItr->second->isConfigured;
 }
 
 bool Mixer::isDataStreamConfigured(const std::string& endpointId)
@@ -977,7 +977,7 @@ bool Mixer::isDataStreamConfigured(const std::string& endpointId)
     {
         return false;
     }
-    return streamItr->second->_isConfigured;
+    return streamItr->second->isConfigured;
 }
 
 bool Mixer::getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription)
@@ -1063,7 +1063,7 @@ bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
         return false;
     }
 
-    auto transport = videoStreamItr->second->_transport.get();
+    auto transport = videoStreamItr->second->transport.get();
     if (!transport)
     {
         return false;
@@ -1156,25 +1156,25 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
             _loggableId.c_str(),
             endpointId.c_str(),
             remoteSsrc.get(),
-            static_cast<uint32_t>(rtpMap._format),
-            rtpMap._payloadType);
+            static_cast<uint32_t>(rtpMap.format),
+            rtpMap.payloadType);
     }
     else
     {
         logger::info("Configure audio stream, endpoint id %s, ssrc not set, rtpMap format %u, payloadType %u",
             _loggableId.c_str(),
             endpointId.c_str(),
-            static_cast<uint32_t>(rtpMap._format),
-            rtpMap._payloadType);
+            static_cast<uint32_t>(rtpMap.format),
+            rtpMap.payloadType);
     }
 
     audioStream->rtpMap = rtpMap;
     audioStream->remoteSsrc = remoteSsrc;
-    audioStream->transport->setAudioPayloadType(rtpMap._payloadType, rtpMap._sampleRate);
+    audioStream->transport->setAudioPayloadType(rtpMap.payloadType, rtpMap.sampleRate);
 
-    if (audioStream->rtpMap._absSendTimeExtId.isSet())
+    if (audioStream->rtpMap.absSendTimeExtId.isSet())
     {
-        audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap._absSendTimeExtId.get());
+        audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap.absSendTimeExtId.get());
     }
     return true;
 }
@@ -1231,7 +1231,7 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     }
     auto videoStream = videoStreamItr->second.get();
 
-    if (simulcastStream._numLevels > 3)
+    if (simulcastStream.numLevels > 3)
     {
         logger::error("Simulcast levels can only be 0 - 3. Video stream endpoint id %s",
             _loggableId.c_str(),
@@ -1240,21 +1240,21 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     }
 
     utils::StringBuilder<1024> ssrcsString;
-    for (size_t i = 0; i < simulcastStream._numLevels; ++i)
+    for (size_t i = 0; i < simulcastStream.numLevels; ++i)
     {
-        ssrcsString.append(simulcastStream._levels[i]._ssrc);
+        ssrcsString.append(simulcastStream.levels[i].ssrc);
         ssrcsString.append(",");
-        ssrcsString.append(simulcastStream._levels[i]._feedbackSsrc);
+        ssrcsString.append(simulcastStream.levels[i].feedbackSsrc);
         ssrcsString.append(" ");
     }
 
     if (secondarySimulcastStream.isSet())
     {
-        for (size_t i = 0; i < secondarySimulcastStream.get()._numLevels; ++i)
+        for (size_t i = 0; i < secondarySimulcastStream.get().numLevels; ++i)
         {
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._ssrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].ssrc);
             ssrcsString.append(",");
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._feedbackSsrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].feedbackSsrc);
             ssrcsString.append(" ");
         }
     }
@@ -1264,24 +1264,24 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
 
     logger::info("Configure video stream, endpoint id %s, ssrc %s, %s",
         _loggableId.c_str(),
-        videoStream->_endpointId.c_str(),
+        videoStream->endpointId.c_str(),
         ssrcsString.get(),
         ssrcWhitelistLog.get());
 
-    videoStream->_rtpMap = rtpMap;
-    videoStream->_feedbackRtpMap = feedbackRtpMap;
-    videoStream->_simulcastStream = simulcastStream;
+    videoStream->rtpMap = rtpMap;
+    videoStream->feedbackRtpMap = feedbackRtpMap;
+    videoStream->simulcastStream = simulcastStream;
     if (secondarySimulcastStream.isSet())
     {
-        videoStream->_secondarySimulcastStream = secondarySimulcastStream;
+        videoStream->secondarySimulcastStream = secondarySimulcastStream;
     }
 
-    if (videoStream->_rtpMap._absSendTimeExtId.isSet())
+    if (videoStream->rtpMap.absSendTimeExtId.isSet())
     {
-        videoStream->_transport->setAbsSendTimeExtensionId(videoStream->_rtpMap._absSendTimeExtId.get());
+        videoStream->transport->setAbsSendTimeExtensionId(videoStream->rtpMap.absSendTimeExtId.get());
     }
 
-    std::memcpy(&videoStream->_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
+    std::memcpy(&videoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
     return true;
 }
 
@@ -1299,28 +1299,28 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
     }
     auto videoStream = videoStreamItr->second.get();
 
-    if (!videoStream->_isConfigured)
+    if (!videoStream->isConfigured)
     {
         logger::warn("Reconfigure video stream id %s, not configured", _loggableId.c_str(), endpointId.c_str());
         return false;
     }
 
     utils::StringBuilder<1024> ssrcsString;
-    for (size_t i = 0; i < simulcastStream._numLevels; ++i)
+    for (size_t i = 0; i < simulcastStream.numLevels; ++i)
     {
-        ssrcsString.append(simulcastStream._levels[i]._ssrc);
+        ssrcsString.append(simulcastStream.levels[i].ssrc);
         ssrcsString.append(",");
-        ssrcsString.append(simulcastStream._levels[i]._feedbackSsrc);
+        ssrcsString.append(simulcastStream.levels[i].feedbackSsrc);
         ssrcsString.append(" ");
     }
 
     if (secondarySimulcastStream.isSet())
     {
-        for (size_t i = 0; i < secondarySimulcastStream.get()._numLevels; ++i)
+        for (size_t i = 0; i < secondarySimulcastStream.get().numLevels; ++i)
         {
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._ssrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].ssrc);
             ssrcsString.append(",");
-            ssrcsString.append(secondarySimulcastStream.get()._levels[i]._feedbackSsrc);
+            ssrcsString.append(secondarySimulcastStream.get().levels[i].feedbackSsrc);
             ssrcsString.append(" ");
         }
     }
@@ -1330,14 +1330,14 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
 
     logger::info("Reconfigure video stream id %s, endpoint id %s, ssrcs %s, %s",
         _loggableId.c_str(),
-        videoStream->_id.c_str(),
-        videoStream->_endpointId.c_str(),
+        videoStream->id.c_str(),
+        videoStream->endpointId.c_str(),
         ssrcsString.get(),
         ssrcWhitelistLog.get());
 
-    videoStream->_simulcastStream = simulcastStream;
-    videoStream->_secondarySimulcastStream = secondarySimulcastStream;
-    std::memcpy(&videoStream->_ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
+    videoStream->simulcastStream = simulcastStream;
+    videoStream->secondarySimulcastStream = secondarySimulcastStream;
+    std::memcpy(&videoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
 
     EngineCommand::Command command;
 
@@ -1345,10 +1345,10 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
     {
         command.type = EngineCommand::Type::ReconfigureVideoStreamSecondary;
         command.command.reconfigureVideoStreamSecondary.mixer = &_engineMixer;
-        command.command.reconfigureVideoStreamSecondary.simulcastStream = videoStream->_simulcastStream;
+        command.command.reconfigureVideoStreamSecondary.simulcastStream = videoStream->simulcastStream;
         command.command.reconfigureVideoStreamSecondary.secondarySimulcastStream =
-            videoStream->_secondarySimulcastStream.get();
-        command.command.reconfigureVideoStreamSecondary.transport = videoStream->_transport.get();
+            videoStream->secondarySimulcastStream.get();
+        command.command.reconfigureVideoStreamSecondary.transport = videoStream->transport.get();
         std::memcpy(&command.command.reconfigureVideoStreamSecondary.ssrcWhitelist,
             &ssrcWhitelist,
             sizeof(SsrcWhitelist));
@@ -1357,8 +1357,8 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
     {
         command.type = EngineCommand::Type::ReconfigureVideoStream;
         command.command.reconfigureVideoStream.mixer = &_engineMixer;
-        command.command.reconfigureVideoStream.simulcastStream = videoStream->_simulcastStream;
-        command.command.reconfigureVideoStream.transport = videoStream->_transport.get();
+        command.command.reconfigureVideoStream.simulcastStream = videoStream->simulcastStream;
+        command.command.reconfigureVideoStream.transport = videoStream->transport.get();
         std::memcpy(&command.command.reconfigureVideoStream.ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
     }
     _engine.pushCommand(std::move(command));
@@ -1375,8 +1375,8 @@ bool Mixer::configureDataStream(const std::string& endpointId, const uint32_t sc
     }
     auto dataStream = dataStreamItr->second.get();
 
-    dataStream->_remoteSctpPort.set(sctpPort);
-    dataStream->_transport->setSctp(dataStream->_localSctpPort, dataStream->_remoteSctpPort.get());
+    dataStream->remoteSctpPort.set(sctpPort);
+    dataStream->transport->setSctp(dataStream->localSctpPort, dataStream->remoteSctpPort.get());
     return true;
 }
 
@@ -1405,7 +1405,7 @@ bool Mixer::configureVideoStreamTransportIce(const std::string& endpointId,
     {
         return false;
     }
-    videoStreamItr->second->_transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
+    videoStreamItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer.getAudioAllocator());
     return true;
 }
 
@@ -1429,7 +1429,7 @@ bool Mixer::configureVideoStreamTransportConnection(const std::string& endpointI
     {
         return false;
     }
-    return videoStreamItr->second->_transport->setRemotePeer(peer);
+    return videoStreamItr->second->transport->setRemotePeer(peer);
 }
 
 bool Mixer::configureAudioStreamTransportDtls(const std::string& endpointId,
@@ -1458,7 +1458,7 @@ bool Mixer::configureVideoStreamTransportDtls(const std::string& endpointId,
     {
         return false;
     }
-    videoStreamItr->second->_transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    videoStreamItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     return true;
 }
 
@@ -1482,7 +1482,7 @@ bool Mixer::configureVideoStreamTransportDisableDtls(const std::string& endpoint
     {
         return false;
     }
-    videoStreamItr->second->_transport->disableDtls();
+    videoStreamItr->second->transport->disableDtls();
     return true;
 }
 
@@ -1566,7 +1566,7 @@ bool Mixer::startVideoStreamTransport(const std::string& endpointId)
     EngineCommand::Command command;
     command.type = EngineCommand::Type::StartTransport;
     command.command.startTransport.mixer = &_engineMixer;
-    command.command.startTransport.transport = videoStreamItr->second->_transport.get();
+    command.command.startTransport.transport = videoStreamItr->second->transport.get();
     _engine.pushCommand(std::move(command));
 
     return true;
@@ -1619,22 +1619,22 @@ bool Mixer::addVideoStreamToEngine(const std::string& endpointId)
 
     logger::debug("Adding videoStream to engine, endpointId %s, %s",
         getLoggableId().c_str(),
-        videoStream->_endpointId.c_str(),
-        toString(videoStream->_simulcastStream._contentType));
+        videoStream->endpointId.c_str(),
+        toString(videoStream->simulcastStream.contentType));
 
-    videoStream->_isConfigured = true;
+    videoStream->isConfigured = true;
 
-    auto emplaceResult = _videoEngineStreams.emplace(videoStream->_endpointId,
-        std::make_unique<EngineVideoStream>(videoStream->_endpointId,
-            videoStream->_endpointIdHash,
-            videoStream->_localSsrc,
-            videoStream->_simulcastStream,
-            videoStream->_secondarySimulcastStream,
-            *(videoStream->_transport.get()),
-            videoStream->_rtpMap,
-            videoStream->_feedbackRtpMap,
-            videoStream->_ssrcWhitelist,
-            videoStream->_ssrcRewrite,
+    auto emplaceResult = _videoEngineStreams.emplace(videoStream->endpointId,
+        std::make_unique<EngineVideoStream>(videoStream->endpointId,
+            videoStream->endpointIdHash,
+            videoStream->localSsrc,
+            videoStream->simulcastStream,
+            videoStream->secondarySimulcastStream,
+            *(videoStream->transport.get()),
+            videoStream->rtpMap,
+            videoStream->feedbackRtpMap,
+            videoStream->ssrcWhitelist,
+            videoStream->ssrcRewrite,
             _videoPinSsrcs));
 
     EngineCommand::Command command;
@@ -1650,7 +1650,7 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto dataStreamItr = _dataStreams.find(endpointId);
-    if (dataStreamItr == _dataStreams.end() || !dataStreamItr->second->_remoteSctpPort.isSet())
+    if (dataStreamItr == _dataStreams.end() || !dataStreamItr->second->remoteSctpPort.isSet())
     {
         return false;
     }
@@ -1658,14 +1658,14 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
 
     logger::debug("Adding dataStream to engine, endpointId %s",
         getLoggableId().c_str(),
-        dataStream->_endpointId.c_str());
+        dataStream->endpointId.c_str());
 
-    dataStream->_isConfigured = true;
+    dataStream->isConfigured = true;
 
-    auto emplaceResult = _dataEngineStreams.emplace(dataStream->_endpointId,
-        std::make_unique<EngineDataStream>(dataStream->_endpointId,
-            dataStream->_endpointIdHash,
-            *(dataStream->_transport.get())));
+    auto emplaceResult = _dataEngineStreams.emplace(dataStream->endpointId,
+        std::make_unique<EngineDataStream>(dataStream->endpointId,
+            dataStream->endpointIdHash,
+            *(dataStream->transport.get())));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddDataStream;
@@ -1690,7 +1690,7 @@ bool Mixer::pinEndpoint(const size_t endpointIdHash, const std::string& pinnedEn
     auto& pinEndpoint = command.command.pinEndpoint;
     pinEndpoint.mixer = &_engineMixer;
     pinEndpoint.endpointIdHash = endpointIdHash;
-    pinEndpoint.pinnedEndpointIdHash = pinnedVideoStreamItr->second->_endpointIdHash;
+    pinEndpoint.pinnedEndpointIdHash = pinnedVideoStreamItr->second->endpointIdHash;
     _engine.pushCommand(std::move(command));
     return true;
 }
@@ -1727,7 +1727,7 @@ bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId)
     {
         return false;
     }
-    return videoStreamItr->second->_transport->isGatheringComplete();
+    return videoStreamItr->second->transport->isGatheringComplete();
 }
 
 bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId)
@@ -1738,7 +1738,7 @@ bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId)
     {
         return false;
     }
-    return dataStreamItr->second->_transport->isGatheringComplete();
+    return dataStreamItr->second->transport->isGatheringComplete();
 }
 
 void Mixer::sendEndpointMessage(const std::string& toEndpointId,
@@ -1761,7 +1761,7 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
         {
             return;
         }
-        toEndpointIdHash = dataStreamItr->second->_endpointIdHash;
+        toEndpointIdHash = dataStreamItr->second->endpointIdHash;
     }
 
     EngineCommand::Command command{EngineCommand::Type::EndpointMessage};
@@ -1941,7 +1941,7 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
         {
             EngineCommand::Command command{EngineCommand::Type::AddTransportToRecordingStream};
             command.command.addTransportToRecordingStream.mixer = &_engineMixer;
-            command.command.addTransportToRecordingStream.streamIdHash = engineStream->_endpointIdHash;
+            command.command.addTransportToRecordingStream.streamIdHash = engineStream->endpointIdHash;
             command.command.addTransportToRecordingStream.transport = transport.second.get();
             command.command.addTransportToRecordingStream.recUnackedPacketsTracker =
                 stream->_recEventUnackedPacketsTracker[transport.first].get();
@@ -2063,8 +2063,7 @@ bool Mixer::removeRecordingTransports(const std::string& conferenceId,
 
             EngineCommand::Command command{EngineCommand::Type::RemoveTransportFromRecordingStream};
             command.command.removeTransportFromRecordingStream.mixer = &_engineMixer;
-            command.command.removeTransportFromRecordingStream.streamIdHash =
-                engineStreamEntry->second->_endpointIdHash;
+            command.command.removeTransportFromRecordingStream.streamIdHash = engineStreamEntry->second->endpointIdHash;
             command.command.removeTransportFromRecordingStream.endpointIdHash = transportItr->first;
             _engine.pushCommand(std::move(command));
         }
@@ -2154,7 +2153,7 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    auto streamItr = _recordingStreams.find(engineStream->_id);
+    auto streamItr = _recordingStreams.find(engineStream->id);
     assert(streamItr != _recordingStreams.end());
     auto& stream = streamItr->second;
     assert(stream->_attachedRecording.empty());
@@ -2186,7 +2185,7 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
     _recordingEventPacketCache.erase(stream->_endpointIdHash);
     _recordingRtpPacketCaches.erase(stream->_endpointIdHash);
     _recordingStreams.erase(streamItr);
-    _recordingEngineStreams.erase(engineStream->_id);
+    _recordingEngineStreams.erase(engineStream->id);
 }
 
 void Mixer::allocateRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash)

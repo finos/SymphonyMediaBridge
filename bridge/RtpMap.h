@@ -19,37 +19,37 @@ struct RtpMap
         EMPTY
     };
 
-    RtpMap() : _format(Format::EMPTY), _payloadType(4096), _sampleRate(0) {}
+    RtpMap() : format(Format::EMPTY), payloadType(4096), sampleRate(0) {}
 
-    explicit RtpMap(const Format format) : _format(format)
+    explicit RtpMap(const Format format) : format(format)
     {
         switch (format)
         {
         case Format::VP8:
-            _payloadType = 100;
-            _sampleRate = 90000;
+            payloadType = 100;
+            sampleRate = 90000;
             break;
         case Format::VP8RTX:
-            _payloadType = 96;
-            _sampleRate = 90000;
+            payloadType = 96;
+            sampleRate = 90000;
             break;
         case Format::OPUS:
-            _payloadType = 111;
-            _sampleRate = 48000;
-            _channels.set(2);
+            payloadType = 111;
+            sampleRate = 48000;
+            channels.set(2);
             break;
         default:
             assert(false);
-            _payloadType = 4096;
-            _sampleRate = 0;
+            payloadType = 4096;
+            sampleRate = 0;
             break;
         }
     }
 
     RtpMap(const Format format, const uint16_t payloadType, const uint32_t sampleRate)
-        : _format(format),
-          _payloadType(payloadType),
-          _sampleRate(sampleRate)
+        : format(format),
+          payloadType(payloadType),
+          sampleRate(sampleRate)
     {
     }
 
@@ -57,24 +57,24 @@ struct RtpMap
         const uint16_t payloadType,
         const uint32_t sampleRate,
         const utils::Optional<uint32_t>& channels)
-        : _format(format),
-          _payloadType(payloadType),
-          _sampleRate(sampleRate),
-          _channels(channels)
+        : format(format),
+          payloadType(payloadType),
+          sampleRate(sampleRate),
+          channels(channels)
     {
     }
 
     RtpMap(const RtpMap& rtpMap) = default;
 
-    Format _format;
-    uint16_t _payloadType;
-    uint32_t _sampleRate;
-    utils::Optional<uint32_t> _channels;
-    std::unordered_map<std::string, std::string> _parameters;
-    std::vector<std::pair<std::string, utils::Optional<std::string>>> _rtcpFeedbacks;
-    utils::Optional<uint8_t> _audioLevelExtId;
-    utils::Optional<uint8_t> _absSendTimeExtId;
-    utils::Optional<uint8_t> _c9infoExtId;
+    Format format;
+    uint16_t payloadType;
+    uint32_t sampleRate;
+    utils::Optional<uint32_t> channels;
+    std::unordered_map<std::string, std::string> parameters;
+    std::vector<std::pair<std::string, utils::Optional<std::string>>> rtcpFeedbacks;
+    utils::Optional<uint8_t> audioLevelExtId;
+    utils::Optional<uint8_t> absSendTimeExtId;
+    utils::Optional<uint8_t> c9infoExtId;
 };
 
 } // namespace bridge

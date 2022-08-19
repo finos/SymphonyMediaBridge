@@ -16,12 +16,12 @@ rtp::RtcpNackBuilder::RtcpNackBuilder(const uint32_t reporterSsrc, const uint32_
     memset(_pids.data(), 0, _pids.size() * sizeof(uint16_t));
     memset(_blps.data(), 0, _blps.size() * sizeof(uint16_t));
 
-    _rtcpFeedback->_header.fmtCount = static_cast<uint8_t>(TransportLayerFeedbackType::PacketNack);
-    _rtcpFeedback->_header.version = 2;
-    _rtcpFeedback->_header.packetType = RTPTRANSPORT_FB;
-    _rtcpFeedback->_header.length = 2;
-    _rtcpFeedback->_reporterSsrc = reporterSsrc;
-    _rtcpFeedback->_mediaSsrc = mediaSsrc;
+    _rtcpFeedback->header.fmtCount = static_cast<uint8_t>(TransportLayerFeedbackType::PacketNack);
+    _rtcpFeedback->header.version = 2;
+    _rtcpFeedback->header.packetType = RTPTRANSPORT_FB;
+    _rtcpFeedback->header.length = 2;
+    _rtcpFeedback->reporterSsrc = reporterSsrc;
+    _rtcpFeedback->mediaSsrc = mediaSsrc;
 }
 
 bool RtcpNackBuilder::appendSequenceNumber(const uint16_t sequenceNumber)
@@ -61,7 +61,7 @@ const uint8_t* RtcpNackBuilder::build(size_t& outSize)
 {
     auto offset = sizeof(RtcpFeedback);
     auto feedbackControlInfo = _data.data() + offset;
-    auto headerLengthField = _rtcpFeedback->_header.length.get();
+    auto headerLengthField = _rtcpFeedback->header.length.get();
 
     for (size_t i = 0; i < _nextFreePid; ++i)
     {
@@ -77,7 +77,7 @@ const uint8_t* RtcpNackBuilder::build(size_t& outSize)
         feedbackControlInfo = _data.data() + offset;
     }
 
-    _rtcpFeedback->_header.length = headerLengthField;
+    _rtcpFeedback->header.length = headerLengthField;
     outSize = offset;
     return _data.data();
 }

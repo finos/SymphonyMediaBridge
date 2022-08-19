@@ -7,9 +7,9 @@ namespace bridge
 
 struct SimulcastLevel
 {
-    uint32_t _ssrc;
-    uint32_t _feedbackSsrc;
-    bool _mediaActive;
+    uint32_t ssrc;
+    uint32_t feedbackSsrc;
+    bool mediaActive;
 };
 
 } // namespace bridge

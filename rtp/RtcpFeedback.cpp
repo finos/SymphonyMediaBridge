@@ -6,7 +6,7 @@ namespace
 
 size_t getFeedbackControlInfoSize(const rtp::RtcpFeedback* rtcpFeedback)
 {
-    return rtcpFeedback->_header.size() - sizeof(rtp::RtcpFeedback);
+    return rtcpFeedback->header.size() - sizeof(rtp::RtcpFeedback);
 }
 
 } // namespace
@@ -17,12 +17,12 @@ namespace rtp
 RtcpFeedback* createPLI(void* buffer, const uint32_t fromSsrc, const uint32_t aboutSsrc)
 {
     auto* feedback = reinterpret_cast<RtcpFeedback*>(buffer);
-    feedback->_header.fmtCount = PayloadSpecificFeedbackType::Pli;
-    feedback->_header.version = 2;
-    feedback->_header.packetType = PAYLOADSPECIFIC_FB;
-    feedback->_header.length = 2;
-    feedback->_reporterSsrc = fromSsrc;
-    feedback->_mediaSsrc = aboutSsrc;
+    feedback->header.fmtCount = PayloadSpecificFeedbackType::Pli;
+    feedback->header.version = 2;
+    feedback->header.packetType = PAYLOADSPECIFIC_FB;
+    feedback->header.length = 2;
+    feedback->reporterSsrc = fromSsrc;
+    feedback->mediaSsrc = aboutSsrc;
     return feedback;
 }
 

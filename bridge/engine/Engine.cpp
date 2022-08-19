@@ -334,7 +334,7 @@ void Engine::removeVideoStream(EngineCommand::Command& nextCommand)
     logger::debug("Remove videoStream, mixer %s, transport id %s",
         "Engine",
         nextCommand.command.removeVideoStream.mixer->getLoggableId().c_str(),
-        nextCommand.command.removeVideoStream.engineStream->_transport.getLoggableId().c_str());
+        nextCommand.command.removeVideoStream.engineStream->transport.getLoggableId().c_str());
 
     auto mixer = nextCommand.command.removeVideoStream.mixer;
     mixer->removeVideoStream(nextCommand.command.removeVideoStream.engineStream);
@@ -381,7 +381,7 @@ void Engine::updateRecordingStreamModalities(EngineCommand::Command& command)
     logger::debug("Update recordingStream modalities, mixer %s, stream: %s audio: %s, video: %s",
         "Engine",
         updateModalitiesCommand.mixer->getLoggableId().c_str(),
-        updateModalitiesCommand.recordingStream->_id.c_str(),
+        updateModalitiesCommand.recordingStream->id.c_str(),
         updateModalitiesCommand.audioEnabled ? "enabled" : "disabled",
         updateModalitiesCommand.videoEnabled ? "enabled" : "disabled");
 
@@ -411,7 +411,7 @@ void Engine::removeDataStream(EngineCommand::Command& nextCommand)
     logger::debug("Remove dataStream, mixer %s, transport id %s",
         "Engine",
         nextCommand.command.removeDataStream.mixer->getLoggableId().c_str(),
-        nextCommand.command.removeDataStream.engineStream->_transport.getLoggableId().c_str());
+        nextCommand.command.removeDataStream.engineStream->transport.getLoggableId().c_str());
 
     auto mixer = nextCommand.command.removeDataStream.mixer;
     mixer->removeDataStream(nextCommand.command.removeDataStream.engineStream);

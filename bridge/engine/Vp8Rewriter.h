@@ -59,12 +59,12 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     const auto picId = codec::Vp8Header::getPicId(rtpPayload);
     const auto tl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload);
 
-    if (ssrcOutboundContext._lastExtendedSequenceNumber == 0xFFFFFFFF)
+    if (ssrcOutboundContext.lastExtendedSequenceNumber == 0xFFFFFFFF)
     {
-        ssrcOutboundContext._lastExtendedSequenceNumber = extendedSequenceNumber;
-        ssrcOutboundContext._lastSentPicId = codec::Vp8Header::getPicId(rtpPayload);
-        ssrcOutboundContext._lastSentTl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload);
-        ssrcOutboundContext._lastSentTimestamp = timestamp;
+        ssrcOutboundContext.lastExtendedSequenceNumber = extendedSequenceNumber;
+        ssrcOutboundContext.lastSentPicId = codec::Vp8Header::getPicId(rtpPayload);
+        ssrcOutboundContext.lastSentTl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload);
+        ssrcOutboundContext.lastSentTimestamp = timestamp;
         logger::info("Ssrc %u -> %u, sequence %u roc %u",
             "Vp8Rewriter",
             rtpHeader->ssrc.get(),
@@ -73,23 +73,23 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             extractRolloverCounter(extendedSequenceNumber));
     }
 
-    if (ssrcOutboundContext._lastRewrittenSsrc != ssrc)
+    if (ssrcOutboundContext.lastRewrittenSsrc != ssrc)
     {
-        ssrcOutboundContext._lastRewrittenSsrc = ssrc;
-        ssrcOutboundContext._sequenceNumberOffset = utils::Offset::getOffset<int64_t, 32>(
-            static_cast<int32_t>(ssrcOutboundContext._lastExtendedSequenceNumber + 1),
+        ssrcOutboundContext.lastRewrittenSsrc = ssrc;
+        ssrcOutboundContext.sequenceNumberOffset = utils::Offset::getOffset<int64_t, 32>(
+            static_cast<int32_t>(ssrcOutboundContext.lastExtendedSequenceNumber + 1),
             static_cast<int64_t>(extendedSequenceNumber));
 
-        ssrcOutboundContext._picIdOffset =
-            utils::Offset::getOffset<int32_t, 15>(static_cast<int32_t>(ssrcOutboundContext._lastSentPicId + 1),
+        ssrcOutboundContext.picIdOffset =
+            utils::Offset::getOffset<int32_t, 15>(static_cast<int32_t>(ssrcOutboundContext.lastSentPicId + 1),
                 static_cast<int32_t>(picId));
 
-        ssrcOutboundContext._tl0PicIdxOffset =
-            utils::Offset::getOffset<int32_t, 8>(static_cast<int32_t>(ssrcOutboundContext._lastSentTl0PicIdx + 1),
+        ssrcOutboundContext.tl0PicIdxOffset =
+            utils::Offset::getOffset<int32_t, 8>(static_cast<int32_t>(ssrcOutboundContext.lastSentTl0PicIdx + 1),
                 static_cast<int32_t>(tl0PicIdx));
 
-        ssrcOutboundContext._timestampOffset =
-            utils::Offset::getOffset<int64_t, 32>(static_cast<int64_t>(ssrcOutboundContext._lastSentTimestamp + 1),
+        ssrcOutboundContext.timestampOffset =
+            utils::Offset::getOffset<int64_t, 32>(static_cast<int64_t>(ssrcOutboundContext.lastSentTimestamp + 1),
                 static_cast<int64_t>(timestamp)) +
             500;
 
@@ -98,25 +98,25 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             "Vp8Rewriter",
             transportName,
             rtpHeader->ssrc.get(),
-            ssrcOutboundContext._sequenceNumberOffset,
-            ssrcOutboundContext._picIdOffset,
-            ssrcOutboundContext._tl0PicIdxOffset,
-            ssrcOutboundContext._timestampOffset);
+            ssrcOutboundContext.sequenceNumberOffset,
+            ssrcOutboundContext.picIdOffset,
+            ssrcOutboundContext.tl0PicIdxOffset,
+            ssrcOutboundContext.timestampOffset);
 #endif
         logger::info("Ssrc %u -> %u, sequence %u",
             "Vp8Rewriter",
             rtpHeader->ssrc.get(),
             rewriteSsrc,
-            applyOffset(extendedSequenceNumber, ssrcOutboundContext._sequenceNumberOffset));
+            applyOffset(extendedSequenceNumber, ssrcOutboundContext.sequenceNumberOffset));
     }
 
     const auto newExtendedSequenceNumber =
-        applyOffset(extendedSequenceNumber, ssrcOutboundContext._sequenceNumberOffset);
-    const auto newPicId = static_cast<uint16_t>(static_cast<int32_t>(picId) + ssrcOutboundContext._picIdOffset);
+        applyOffset(extendedSequenceNumber, ssrcOutboundContext.sequenceNumberOffset);
+    const auto newPicId = static_cast<uint16_t>(static_cast<int32_t>(picId) + ssrcOutboundContext.picIdOffset);
     const auto newTl0PicIdx =
-        static_cast<uint8_t>(static_cast<int32_t>(tl0PicIdx) + ssrcOutboundContext._tl0PicIdxOffset);
+        static_cast<uint8_t>(static_cast<int32_t>(tl0PicIdx) + ssrcOutboundContext.tl0PicIdxOffset);
     const auto newTimestamp =
-        static_cast<uint32_t>(static_cast<int64_t>(timestamp) + ssrcOutboundContext._timestampOffset);
+        static_cast<uint32_t>(static_cast<int64_t>(timestamp) + ssrcOutboundContext.timestampOffset);
 
     rtpHeader->ssrc = rewriteSsrc;
     rtpHeader->sequenceNumber = newExtendedSequenceNumber;
@@ -144,12 +144,12 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
         newTimestamp);
 #endif
 
-    if (newExtendedSequenceNumber > ssrcOutboundContext._lastExtendedSequenceNumber)
+    if (newExtendedSequenceNumber > ssrcOutboundContext.lastExtendedSequenceNumber)
     {
-        ssrcOutboundContext._lastExtendedSequenceNumber = newExtendedSequenceNumber;
-        ssrcOutboundContext._lastSentPicId = newPicId;
-        ssrcOutboundContext._lastSentTl0PicIdx = newTl0PicIdx;
-        ssrcOutboundContext._lastSentTimestamp = newTimestamp;
+        ssrcOutboundContext.lastExtendedSequenceNumber = newExtendedSequenceNumber;
+        ssrcOutboundContext.lastSentPicId = newPicId;
+        ssrcOutboundContext.lastSentTl0PicIdx = newTl0PicIdx;
+        ssrcOutboundContext.lastSentTimestamp = newTimestamp;
     }
 
     outExtendedSequenceNumber = newExtendedSequenceNumber;

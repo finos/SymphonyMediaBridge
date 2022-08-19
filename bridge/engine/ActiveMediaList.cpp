@@ -224,12 +224,12 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
     if (simulcastStream.isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
-            VideoScreenShareSsrcMapping{simulcastStream._levels[0]._ssrc, _videoScreenShareSsrc.main});
+            VideoScreenShareSsrcMapping{simulcastStream.levels[0].ssrc, _videoScreenShareSsrc.main});
     }
     else if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
-            VideoScreenShareSsrcMapping{secondarySimulcastStream.get()._levels[0]._ssrc, _videoScreenShareSsrc.main});
+            VideoScreenShareSsrcMapping{secondarySimulcastStream.get().levels[0].ssrc, _videoScreenShareSsrc.main});
     }
 
     if (_activeVideoListLookupMap.size() == _maxActiveListSize)
@@ -256,7 +256,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
         _logId.c_str(),
         endpointId,
         endpointIdHash,
-        simulcastStream._levels[0]._ssrc);
+        simulcastStream.levels[0].ssrc);
     _activeVideoListLookupMap.emplace(endpointIdHash, _activeVideoList.head());
     assert(pushResult);
     return endpointIdHash != _dominantSpeakerId || updateActiveVideoList(_dominantSpeakerId);
@@ -686,26 +686,26 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
         const auto videoStreamItr = engineVideoStreams.find(endpointIdHash);
         const auto targetVideoStreamItr = engineVideoStreams.find(pinTargetEndpointIdHash);
         if (videoStreamItr != engineVideoStreams.end() && targetVideoStreamItr != engineVideoStreams.end() &&
-            videoStreamItr->second->_pinSsrc.isSet())
+            videoStreamItr->second->pinSsrc.isSet())
         {
             const auto videoStream = videoStreamItr->second;
             const auto targetVideoStream = targetVideoStreamItr->second;
 
             api::DataChannelMessage::addUserMediaEndpointStart(outMessage,
-                targetVideoStreamItr->second->_endpointId.c_str());
+                targetVideoStreamItr->second->endpointId.c_str());
 
-            if (targetVideoStream->_simulcastStream.isSendingVideo() ||
-                (targetVideoStream->_secondarySimulcastStream.isSet() &&
-                    targetVideoStream->_secondarySimulcastStream.get().isSendingVideo()))
+            if (targetVideoStream->simulcastStream.isSendingVideo() ||
+                (targetVideoStream->secondarySimulcastStream.isSet() &&
+                    targetVideoStream->secondarySimulcastStream.get().isSendingVideo()))
             {
-                api::DataChannelMessage::addUserMediaSsrc(outMessage, videoStream->_pinSsrc.get()._ssrc);
+                api::DataChannelMessage::addUserMediaSsrc(outMessage, videoStream->pinSsrc.get().ssrc);
             }
 
             if (_videoScreenShareSsrcMapping.isSet() &&
                 _videoScreenShareSsrcMapping.get().first == pinTargetEndpointIdHash)
             {
                 api::DataChannelMessage::addUserMediaSsrc(outMessage,
-                    _videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                    _videoScreenShareSsrcMapping.get().second.rewriteSsrc);
             }
 
             api::DataChannelMessage::addUserMediaEndpointEnd(outMessage);
@@ -746,7 +746,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
         if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == videoEndpointIdhash)
         {
             api::DataChannelMessage::addUserMediaSsrc(outMessage,
-                _videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                _videoScreenShareSsrcMapping.get().second.rewriteSsrc);
         }
 
         api::DataChannelMessage::addUserMediaEndpointEnd(outMessage);
@@ -790,7 +790,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
 
                 if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == item.first)
                 {
-                    videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second._rewriteSsrc);
+                    videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second.rewriteSsrc);
                 }
             }
         }

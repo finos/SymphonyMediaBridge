@@ -97,14 +97,14 @@ public:
         logger::info("addParticipant primary, endpointIdHash %lu, %u %u %u",
             "EngineStreamDirector",
             endpointIdHash,
-            primary._levels[0]._ssrc,
-            primary._levels[1]._ssrc,
-            primary._levels[2]._ssrc);
+            primary.levels[0].ssrc,
+            primary.levels[1].ssrc,
+            primary.levels[2].ssrc);
 
-        _lowQualitySsrcs.emplace(primary._levels[lowQuality]._ssrc, endpointIdHash);
-        if (primary._numLevels > 1)
+        _lowQualitySsrcs.emplace(primary.levels[lowQuality].ssrc, endpointIdHash);
+        if (primary.numLevels > 1)
         {
-            _midQualitySsrcs.emplace(primary._levels[midQuality]._ssrc, endpointIdHash);
+            _midQualitySsrcs.emplace(primary.levels[midQuality].ssrc, endpointIdHash);
         }
         _requiredMidLevelBandwidth += bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
 
@@ -112,19 +112,19 @@ public:
         {
             _participantStreams.emplace(endpointIdHash,
                 makeParticipantStreams(primary, utils::Optional<SimulcastStream>(*secondary)));
-            _lowQualitySsrcs.emplace(secondary->_levels[lowQuality]._ssrc, endpointIdHash);
-            if (secondary->_numLevels > 1)
+            _lowQualitySsrcs.emplace(secondary->levels[lowQuality].ssrc, endpointIdHash);
+            if (secondary->numLevels > 1)
             {
-                _midQualitySsrcs.emplace(secondary->_levels[midQuality]._ssrc, endpointIdHash);
+                _midQualitySsrcs.emplace(secondary->levels[midQuality].ssrc, endpointIdHash);
             }
             _requiredMidLevelBandwidth += bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
 
             logger::info("addParticipant secondary, endpointIdHash %lu, %u %u %u",
                 "EngineStreamDirector",
                 endpointIdHash,
-                secondary->_levels[0]._ssrc,
-                secondary->_levels[1]._ssrc,
-                secondary->_levels[2]._ssrc);
+                secondary->levels[0].ssrc,
+                secondary->levels[1].ssrc,
+                secondary->levels[2].ssrc);
         }
         else
         {
@@ -142,17 +142,17 @@ public:
         }
         auto& participantStream = participantStreamsItr->second;
 
-        if (participantStream.primary._numLevels > 0)
+        if (participantStream.primary.numLevels > 0)
         {
-            _lowQualitySsrcs.erase(participantStream.primary._levels[lowQuality]._ssrc);
-            _midQualitySsrcs.erase(participantStream.primary._levels[midQuality]._ssrc);
+            _lowQualitySsrcs.erase(participantStream.primary.levels[lowQuality].ssrc);
+            _midQualitySsrcs.erase(participantStream.primary.levels[midQuality].ssrc);
             assert(_requiredMidLevelBandwidth > 0);
             _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
         }
-        if (participantStream.secondary.isSet() && participantStream.secondary.get()._numLevels > 0)
+        if (participantStream.secondary.isSet() && participantStream.secondary.get().numLevels > 0)
         {
-            _lowQualitySsrcs.erase(participantStream.secondary.get()._levels[lowQuality]._ssrc);
-            _midQualitySsrcs.erase(participantStream.secondary.get()._levels[midQuality]._ssrc);
+            _lowQualitySsrcs.erase(participantStream.secondary.get().levels[lowQuality].ssrc);
+            _midQualitySsrcs.erase(participantStream.secondary.get().levels[midQuality].ssrc);
             assert(_requiredMidLevelBandwidth > 0);
             _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
         }
@@ -530,22 +530,22 @@ public:
             ssrc,
             active ? 't' : 'f');
 
-        for (size_t i = 0; i < primary._numLevels; ++i)
+        for (size_t i = 0; i < primary.numLevels; ++i)
         {
-            if (ssrc == primary._levels[i]._ssrc)
+            if (ssrc == primary.levels[i].ssrc)
             {
-                primary._levels[i]._mediaActive = active;
+                primary.levels[i].mediaActive = active;
                 return setHighestActiveIndex(endpointIdHash, primary);
             }
         }
 
         if (secondary.isSet())
         {
-            for (size_t i = 0; i < secondary.get()._numLevels; ++i)
+            for (size_t i = 0; i < secondary.get().numLevels; ++i)
             {
-                if (ssrc == secondary.get()._levels[i]._ssrc)
+                if (ssrc == secondary.get().levels[i].ssrc)
                 {
-                    secondary.get()._levels[i]._mediaActive = active;
+                    secondary.get().levels[i].mediaActive = active;
                     return setHighestActiveIndex(endpointIdHash, secondary.get());
                 }
             }
@@ -584,11 +584,11 @@ public:
         auto& secondary = participantStreams.secondary;
 
         SimulcastStream* simulcastStream;
-        if (defaultLevelSsrc == primary._levels[lowQuality]._ssrc)
+        if (defaultLevelSsrc == primary.levels[lowQuality].ssrc)
         {
             simulcastStream = &primary;
         }
-        else if (secondary.isSet() && defaultLevelSsrc == secondary.get()._levels[lowQuality]._ssrc)
+        else if (secondary.isSet() && defaultLevelSsrc == secondary.get().levels[lowQuality].ssrc)
         {
             simulcastStream = &secondary.get();
         }
@@ -598,7 +598,7 @@ public:
             return false;
         }
 
-        outDefaultLevelFeedbackSsrc = simulcastStream->_levels[lowQuality]._feedbackSsrc;
+        outDefaultLevelFeedbackSsrc = simulcastStream->levels[lowQuality].feedbackSsrc;
         return true;
     }
 
@@ -613,22 +613,22 @@ public:
         const auto& primary = participantStreams.primary;
         auto& secondary = participantStreams.secondary;
 
-        for (size_t i = 0; i < primary._numLevels; ++i)
+        for (size_t i = 0; i < primary.numLevels; ++i)
         {
-            if (primary._levels[i]._feedbackSsrc == feedbackSsrc)
+            if (primary.levels[i].feedbackSsrc == feedbackSsrc)
             {
-                outSsrc = primary._levels[i]._ssrc;
+                outSsrc = primary.levels[i].ssrc;
                 return true;
             }
         }
 
         if (secondary.isSet())
         {
-            for (size_t i = 0; i < secondary.get()._numLevels; ++i)
+            for (size_t i = 0; i < secondary.get().numLevels; ++i)
             {
-                if (secondary.get()._levels[i]._feedbackSsrc == feedbackSsrc)
+                if (secondary.get().levels[i].feedbackSsrc == feedbackSsrc)
                 {
-                    outSsrc = secondary.get()._levels[i]._ssrc;
+                    outSsrc = secondary.get().levels[i].ssrc;
                     return true;
                 }
             }
@@ -704,18 +704,18 @@ private:
         const auto& primary = participantStreams.primary;
         const auto& secondaryOptional = participantStreams.secondary;
 
-        if (ssrc == primary._levels[0]._ssrc || ssrc == primary._levels[1]._ssrc || ssrc == primary._levels[2]._ssrc)
+        if (ssrc == primary.levels[0].ssrc || ssrc == primary.levels[1].ssrc || ssrc == primary.levels[2].ssrc)
         {
-            return primary._highestActiveLevel;
+            return primary.highestActiveLevel;
         }
 
         if (secondaryOptional.isSet())
         {
             const auto& secondary = secondaryOptional.get();
-            if (ssrc == secondary._levels[0]._ssrc || ssrc == secondary._levels[1]._ssrc ||
-                ssrc == secondary._levels[2]._ssrc)
+            if (ssrc == secondary.levels[0].ssrc || ssrc == secondary.levels[1].ssrc ||
+                ssrc == secondary.levels[2].ssrc)
             {
-                return secondary._highestActiveLevel;
+                return secondary.highestActiveLevel;
             }
         }
 
@@ -734,9 +734,9 @@ private:
         const auto& primary = participantStreams.primary;
         auto& secondary = participantStreams.secondary;
 
-        for (size_t i = 0; i < primary._numLevels; ++i)
+        for (size_t i = 0; i < primary.numLevels; ++i)
         {
-            if (ssrc == primary._levels[i]._ssrc)
+            if (ssrc == primary.levels[i].ssrc)
             {
                 return true;
             }
@@ -744,9 +744,9 @@ private:
 
         if (secondary.isSet())
         {
-            for (size_t i = 0; i < secondary.get()._numLevels; ++i)
+            for (size_t i = 0; i < secondary.get().numLevels; ++i)
             {
-                if (ssrc == secondary.get()._levels[i]._ssrc)
+                if (ssrc == secondary.get().levels[i].ssrc)
                 {
                     return true;
                 }
@@ -758,25 +758,25 @@ private:
 
     inline bool setHighestActiveIndex(const size_t endpointIdHash, SimulcastStream& simulcastStream)
     {
-        const auto oldHighestActiveIndex = simulcastStream._highestActiveLevel;
+        const auto oldHighestActiveIndex = simulcastStream.highestActiveLevel;
 
-        simulcastStream._highestActiveLevel = 0;
+        simulcastStream.highestActiveLevel = 0;
         for (auto i = (SimulcastStream::maxLevels - 1); i > 0; --i)
         {
-            if (simulcastStream._levels[i]._mediaActive)
+            if (simulcastStream.levels[i].mediaActive)
             {
-                simulcastStream._highestActiveLevel = i;
+                simulcastStream.highestActiveLevel = i;
                 break;
             }
         }
 
-        if (simulcastStream._highestActiveLevel > oldHighestActiveIndex &&
+        if (simulcastStream.highestActiveLevel > oldHighestActiveIndex &&
             _reversePinMap.find(endpointIdHash) != _reversePinMap.end())
         {
             return true;
         }
 
-        return oldHighestActiveIndex != simulcastStream._highestActiveLevel;
+        return oldHighestActiveIndex != simulcastStream.highestActiveLevel;
     }
 
     inline size_t unpinOldTarget(const size_t endpointIdHash, const size_t targetEndpointIdHash)
@@ -830,8 +830,8 @@ private:
 
         const auto& primary = participantStreamsItr->second.primary;
 
-        if (primary._contentType == SimulcastStream::VideoContentType::SLIDES && primary._numLevels == 1 &&
-            primary._levels[0]._ssrc == ssrc)
+        if (primary.contentType == SimulcastStream::VideoContentType::SLIDES && primary.numLevels == 1 &&
+            primary.levels[0].ssrc == ssrc)
         {
             return true;
         }
@@ -842,8 +842,8 @@ private:
         }
         const auto& secondary = participantStreamsItr->second.secondary.get();
 
-        if (secondary._contentType == SimulcastStream::VideoContentType::SLIDES && secondary._numLevels == 1 &&
-            secondary._levels[0]._ssrc == ssrc)
+        if (secondary.contentType == SimulcastStream::VideoContentType::SLIDES && secondary.numLevels == 1 &&
+            secondary.levels[0].ssrc == ssrc)
         {
             return true;
         }

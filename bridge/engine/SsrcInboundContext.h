@@ -35,60 +35,60 @@ public:
         const bridge::RtpMap& rtpMap,
         transport::RtcTransport* sender,
         uint64_t timestamp)
-        : _ssrc(ssrc),
-          _rtpMap(rtpMap),
-          _sender(sender),
-          _markNextPacket(true),
-          _rewriteSsrc(ssrc),
-          _lastReceivedExtendedSequenceNumber(0),
-          _packetsProcessed(0),
-          _lastUnprotectedExtendedSequenceNumber(0),
-          _activeMedia(false),
-          _lastReceiveTime(timestamp),
-          _markedForDeletion(false),
-          _idle(false),
-          _shouldDropPackets(false),
-          _inactiveCount(0),
-          _simulcastLevel(0)
+        : ssrc(ssrc),
+          rtpMap(rtpMap),
+          sender(sender),
+          markNextPacket(true),
+          rewriteSsrc(ssrc),
+          lastReceivedExtendedSequenceNumber(0),
+          packetsProcessed(0),
+          lastUnprotectedExtendedSequenceNumber(0),
+          activeMedia(false),
+          lastReceiveTime(timestamp),
+          markedForDeletion(false),
+          idle(false),
+          shouldDropPackets(false),
+          inactiveCount(0),
+          simulcastLevel(0)
     {
     }
 
     void onRtpPacket(const uint64_t timestamp)
     {
-        _activeMedia = true;
-        _lastReceiveTime = timestamp;
-        _idle = false;
+        activeMedia = true;
+        lastReceiveTime = timestamp;
+        idle = false;
     }
 
-    uint32_t _ssrc;
-    const bridge::RtpMap _rtpMap;
-    transport::RtcTransport* _sender;
-    utils::Optional<uint32_t> _rtxSsrc; // points to main from rtc and to rtx from main
+    uint32_t ssrc;
+    const bridge::RtpMap rtpMap;
+    transport::RtcTransport* sender;
+    utils::Optional<uint32_t> rtxSsrc; // points to main from rtc and to rtx from main
 
-    std::unique_ptr<codec::OpusDecoder> _opusDecoder;
+    std::unique_ptr<codec::OpusDecoder> opusDecoder;
 
-    bool _markNextPacket;
-    uint32_t _rewriteSsrc;
-    uint32_t _lastReceivedExtendedSequenceNumber;
-    uint32_t _packetsProcessed;
-    uint32_t _lastUnprotectedExtendedSequenceNumber;
-    bool _activeMedia;
-    std::atomic_uint64_t _lastReceiveTime;
-    bool _markedForDeletion;
-    bool _idle;
+    bool markNextPacket;
+    uint32_t rewriteSsrc;
+    uint32_t lastReceivedExtendedSequenceNumber;
+    uint32_t packetsProcessed;
+    uint32_t lastUnprotectedExtendedSequenceNumber;
+    bool activeMedia;
+    std::atomic_uint64_t lastReceiveTime;
+    bool markedForDeletion;
+    bool idle;
 
     /** If an inbound stream is considered unstable, we can in a simulcast scenario decide to drop an inbound stream
      * early to avoid toggling between quality levels. If this is set to true, any incoming packets will be dropped. */
-    bool _shouldDropPackets;
+    bool shouldDropPackets;
 
     /** The number of times this inbound stream has transitioned from active to inactive. Used to decide
      * _shouldDropPackets. */
-    uint32_t _inactiveCount;
+    uint32_t inactiveCount;
 
-    std::shared_ptr<VideoMissingPacketsTracker> _videoMissingPacketsTracker;
+    std::shared_ptr<VideoMissingPacketsTracker> videoMissingPacketsTracker;
 
-    PliScheduler _pliScheduler;
-    uint32_t _simulcastLevel;
+    PliScheduler pliScheduler;
+    uint32_t simulcastLevel;
 };
 
 } // namespace bridge

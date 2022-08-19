@@ -762,14 +762,14 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
             return response;
         }
 
-        if (legacyapi::Helpers::iceEnabled(channelBundle._transport) && transportDescription._ice.isSet() &&
-            transportDescription._dtls.isSet())
+        if (legacyapi::Helpers::iceEnabled(channelBundle._transport) && transportDescription.ice.isSet() &&
+            transportDescription.dtls.isSet())
         {
-            const auto& transportDescriptionIce = transportDescription._ice.get();
-            channelBundle._transport._ufrag.set(transportDescriptionIce._iceCredentials.first);
-            channelBundle._transport._pwd.set(transportDescriptionIce._iceCredentials.second);
+            const auto& transportDescriptionIce = transportDescription.ice.get();
+            channelBundle._transport._ufrag.set(transportDescriptionIce.iceCredentials.first);
+            channelBundle._transport._pwd.set(transportDescriptionIce.iceCredentials.second);
             channelBundle._transport._candidates.clear();
-            for (const auto& iceCandidate : transportDescriptionIce._iceCandidates)
+            for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
             {
                 if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
                 {
@@ -857,13 +857,13 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
             {
                 legacyapi::Transport channelTransport;
 
-                if (legacyapi::Helpers::iceEnabled(channel._transport.get()) && transportDescription._ice.isSet())
+                if (legacyapi::Helpers::iceEnabled(channel._transport.get()) && transportDescription.ice.isSet())
                 {
-                    const auto& transportDescriptionIce = transportDescription._ice.get();
-                    channelTransport._ufrag.set(transportDescriptionIce._iceCredentials.first);
-                    channelTransport._pwd.set(transportDescriptionIce._iceCredentials.second);
+                    const auto& transportDescriptionIce = transportDescription.ice.get();
+                    channelTransport._ufrag.set(transportDescriptionIce.iceCredentials.first);
+                    channelTransport._pwd.set(transportDescriptionIce.iceCredentials.second);
                     channelTransport._candidates.clear();
-                    for (const auto& iceCandidate : transportDescriptionIce._iceCandidates)
+                    for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
                     {
                         if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
                         {
@@ -876,11 +876,11 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                 }
                 else
                 {
-                    if (transportDescription._localPeer.isSet() && !transportDescription._localPeer.get().empty())
+                    if (transportDescription.localPeer.isSet() && !transportDescription.localPeer.get().empty())
                     {
                         legacyapi::Connection connection;
-                        connection._ip = transportDescription._localPeer.get().ipToString();
-                        connection._port = transportDescription._localPeer.get().getPort();
+                        connection._ip = transportDescription.localPeer.get().ipToString();
+                        connection._port = transportDescription.localPeer.get().getPort();
                         channelTransport._connection.set(connection);
                     }
 
@@ -888,7 +888,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                     channelTransport._xmlns.set("urn:xmpp:jingle:transports:raw-udp:1");
                 }
 
-                if (transportDescription._dtls.isSet())
+                if (transportDescription.dtls.isSet())
                 {
                     channelTransport._fingerprints.clear();
                     legacyapi::Fingerprint fingerprint;
@@ -912,9 +912,9 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                 return response;
             }
 
-            sctpConnection._id.set(streamDescription._id);
-            sctpConnection._port = streamDescription._sctpPort.isSet()
-                ? utils::Optional<std::string>(std::to_string(streamDescription._sctpPort.get()))
+            sctpConnection._id.set(streamDescription.id);
+            sctpConnection._port = streamDescription.sctpPort.isSet()
+                ? utils::Optional<std::string>(std::to_string(streamDescription.sctpPort.get()))
                 : utils::Optional<std::string>();
         }
     }
