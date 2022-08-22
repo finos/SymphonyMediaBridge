@@ -86,6 +86,25 @@ public:
     uint64_t lastSendTime;
     bool markedForDeletion;
     bool idle;
+
+    struct PliMetric
+    {
+        uint64_t userRequestTimestamp = 0;
+        uint64_t triggerTimestamp = 0;
+        uint64_t keyFrameTimestamp = 0;
+
+        uint64_t getDelay(const uint64_t timestamp) const
+        {
+            if (userRequestTimestamp != 0 && static_cast<int64_t>(userRequestTimestamp - keyFrameTimestamp) > 0)
+            {
+                return timestamp - userRequestTimestamp;
+            }
+            else
+            {
+                return timestamp - triggerTimestamp;
+            }
+        }
+    } pli;
 };
 
 } // namespace bridge

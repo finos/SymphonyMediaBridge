@@ -634,16 +634,6 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     sendVideoStreamToRecording(*engineVideoStream, true);
 
     memcpy(&engineVideoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
-
-    for (auto& videoStreamEntry : _engineVideoStreams)
-    {
-        auto otherVideoStream = videoStreamEntry.second;
-        if (otherVideoStream == engineVideoStream)
-        {
-            continue;
-        }
-        sendPliForUsedSsrcs(*otherVideoStream);
-    }
 }
 
 void EngineMixer::addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache)
@@ -957,7 +947,6 @@ void EngineMixer::updateDirectorUplinkEstimates(const uint64_t engineIterationSt
         {
             continue;
         }
-        sendPliForUsedSsrcs(*pinnedVideoStreamItr->second);
     }
 }
 
@@ -1018,10 +1007,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
             auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
             if (videoStreamItr != _engineVideoStreams.end())
             {
-                if (_engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false))
-                {
-                    sendPliForUsedSsrcs(*videoStreamItr->second);
-                }
+                _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false);
                 inboundContext.inactiveCount++;
 
                 // The reason for checking if the ssrc is equal to inboundContext._rewriteSsrc, is because that is the
@@ -1258,14 +1244,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
 
     if (!ssrcContext->activeMedia)
     {
-        if (_engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrcContext->ssrc, true))
-        {
-            if (videoStream)
-            {
-                sendPliForUsedSsrcs(*videoStream);
-            }
-            // TODO must send PLI for barbelled streams also
-        }
+        _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrcContext->ssrc, true);
     }
 
     // This must happen after checking ssrcContext->_activeMedia above, so that we can detect streamActiveStateChanged
@@ -1399,8 +1378,6 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
         {
             continue;
         }
-
-        sendPliForUsedSsrcs(*videoStream);
     }
 
     auto barbell = _engineBarbells.getItem(sender->getEndpointIdHash());
@@ -1448,24 +1425,6 @@ void EngineMixer::pinEndpoint(const size_t endpointIdHash, const size_t targetEn
     if (oldTarget == targetEndpointIdHash)
     {
         return;
-    }
-
-    if (oldTarget)
-    {
-        auto videoStreamItr = _engineVideoStreams.find(oldTarget);
-        if (videoStreamItr != _engineVideoStreams.end())
-        {
-            sendPliForUsedSsrcs(*videoStreamItr->second);
-        }
-    }
-
-    if (targetEndpointIdHash)
-    {
-        auto videoStreamItr = _engineVideoStreams.find(targetEndpointIdHash);
-        if (videoStreamItr != _engineVideoStreams.end())
-        {
-            sendPliForUsedSsrcs(*videoStreamItr->second);
-        }
     }
 
     auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
@@ -1594,10 +1553,10 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
         }
         auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
         auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packet->get());
-
         auto s = header->getMessage();
 
         auto messageJson = utils::SimpleJson::create(s, header->getMessageLength(length));
+
         if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
             api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
         {
@@ -2535,7 +2494,9 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
             case rtp::RtcpPacketType::SENDER_REPORT:
                 break;
             case rtp::RtcpPacketType::PAYLOADSPECIFIC_FB:
-                processIncomingPayloadSpecificRtcpPacket(packetInfo.transport()->getEndpointIdHash(), rtcpPacket);
+                processIncomingPayloadSpecificRtcpPacket(packetInfo.transport()->getEndpointIdHash(),
+                    rtcpPacket,
+                    timestamp);
                 break;
             case rtp::RtcpPacketType::RTPTRANSPORT_FB:
                 processIncomingTransportFbRtcpPacket(packetInfo.transport(), rtcpPacket, timestamp);
@@ -2550,7 +2511,8 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
 }
 
 void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
-    const rtp::RtcpHeader& rtcpPacket)
+    const rtp::RtcpHeader& rtcpPacket,
+    const uint64_t timestamp)
 {
     auto rtcpFeedback = reinterpret_cast<const rtp::RtcpFeedback*>(&rtcpPacket);
     if (rtcpFeedback->header.fmtCount != rtp::PayloadSpecificFeedbackType::Pli &&
@@ -2609,12 +2571,9 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
             rtcpSenderEndpointIdHash,
             participant);
 
-        sendPliForUsedSsrcs(*videoStreamItr->second);
+        onPliRequestFromReceiver(rtcpSenderEndpointIdHash, rtcpFeedback->mediaSsrc.get(), timestamp);
         return;
     }
-
-    // TODO use activeMediaList to find which barbell the video participant is on.
-    // Once we have that, send
 }
 
 void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
@@ -2777,47 +2736,41 @@ inline void EngineMixer::processAudioStreams()
     }
 }
 
-void EngineMixer::sendPliForUsedSsrcs(EngineVideoStream& videoStream)
+void EngineMixer::onPliRequestFromReceiver(const size_t endpointIdHash, const uint32_t ssrc, const uint64_t timestamp)
 {
-    const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(videoStream.endpointIdHash);
-
-    for (size_t i = 0; i < videoStream.simulcastStream.numLevels; ++i)
+    SsrcOutboundContext* outboundContext = nullptr;
+    auto videoStream = _engineVideoStreams.getItem(endpointIdHash);
+    if (videoStream)
     {
-        const auto& simulcastLevel = videoStream.simulcastStream.levels[i];
-        if (!_engineStreamDirector->isSsrcUsed(simulcastLevel.ssrc,
-                videoStream.endpointIdHash,
-                isSenderInLastNList,
-                _engineRecordingStreams.size()))
+        outboundContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
+    }
+    else
+    {
+        auto barbell = _engineBarbells.getItem(endpointIdHash);
+        if (barbell)
         {
-            continue;
-        }
-        auto ssrcIt = _ssrcInboundContexts.find(simulcastLevel.ssrc);
-        if (ssrcIt != _ssrcInboundContexts.end())
-        {
-            logger::debug("RequestPliJob created for inbound ssrc %u", _loggableId.c_str(), ssrcIt->second.ssrc);
-            ssrcIt->second.pliScheduler.triggerPli();
+            outboundContext = barbell->ssrcOutboundContexts.getItem(ssrc);
         }
     }
 
-    if (videoStream.secondarySimulcastStream.isSet())
+    if (!outboundContext)
     {
-        for (size_t i = 0; i < videoStream.secondarySimulcastStream.get().numLevels; ++i)
-        {
-            const auto& simulcastLevel = videoStream.secondarySimulcastStream.get().levels[i];
-            if (!_engineStreamDirector->isSsrcUsed(simulcastLevel.ssrc,
-                    videoStream.endpointIdHash,
-                    isSenderInLastNList,
-                    _engineRecordingStreams.size()))
-            {
-                continue;
-            }
-            auto ssrcIt = _ssrcInboundContexts.find(simulcastLevel.ssrc);
-            if (ssrcIt != _ssrcInboundContexts.end())
-            {
-                ssrcIt->second.pliScheduler.triggerPli();
-            }
-        }
+        return;
     }
+
+    if (utils::Time::diffGE(outboundContext->pli.userRequestTimestamp, outboundContext->pli.keyFrameTimestamp, 0))
+    {
+        outboundContext->pli.userRequestTimestamp = timestamp;
+    }
+
+    const auto sourceSsrc = outboundContext->lastRewrittenSsrc;
+    auto inboundSsrcContext = _ssrcInboundContexts.getItem(sourceSsrc);
+    if (!inboundSsrcContext)
+    {
+        return;
+    }
+
+    inboundSsrcContext->pliScheduler.triggerPli();
 }
 
 void EngineMixer::sendLastNListMessage(const size_t endpointIdHash)
@@ -3134,7 +3087,6 @@ void EngineMixer::updateSimulcastLevelActiveState(EngineVideoStream& videoStream
         if (ssrcInboundContextItr != _ssrcInboundContexts.end() && ssrcInboundContextItr->second.activeMedia)
         {
             _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
-            ssrcInboundContextItr->second.pliScheduler.triggerPli();
         }
     }
 }
