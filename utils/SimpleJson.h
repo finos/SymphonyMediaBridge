@@ -99,6 +99,7 @@ public:
         Object,
         Array
     };
+    static SimpleJson create(const char* c_str);
     static SimpleJson create(const char* begin, size_t length) { return create(begin, begin + length); }
     static SimpleJson create(const char* begin, const char* end);
 

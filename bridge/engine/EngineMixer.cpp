@@ -1594,10 +1594,10 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
         }
         auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
         auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packet->get());
+
         auto s = header->getMessage();
 
         auto messageJson = utils::SimpleJson::create(s, header->getMessageLength(length));
-
         if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
             api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
         {

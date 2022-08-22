@@ -517,6 +517,7 @@ set(TEST_FILES
     test/bridge/EngineStreamDirectorTest.cpp
     test/codec/Vp8HeaderTest.cpp
     test/bridge/ActiveMediaListTest.cpp
+    test/bridge/BarbellMessagesTest.cpp
     test/bridge/Vp8RewriterTest.cpp
     test/rtp/RtcpFeedbackTest.cpp
     test/bridge/PacketCacheTest.cpp
