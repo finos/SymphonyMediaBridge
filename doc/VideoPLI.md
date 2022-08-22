@@ -1,25 +1,9 @@
+# Video streaming through SMB
+Each participant can produce output from 0 to 2 video sources. From a video camera, the client will typically produce a simulcast stream with up to 3 levels. 
+A second video stream may be present and that would in that case be a single ssrc screen share stream with variable quality.
 
-# Use of PLI in SMB
-Picture Loss Indicator is a request sent over RTCP to request the remote side to generate a new key frame. It is generally needed of the 
-receiver lost the initial key frame or has encountered too much packet loss to make it meaningful trying to mend the stream by re-transmissions.
-
-## Situations when a PLI is needed and sent from SMB
-- A client sends a PLI to SMB for a specific video ssrc. SMB cannot regenerate the key frame and must forward this PLI to the original sender of the stream.
-- A client joins a video meeting. All existing clients with video must now generate key frames for all the streams that the new client will receive.
-- SMB Director changes the stream quality sent to a client due to bandwidth variation. The stream carrying the quality needed, must generate a key frame.
-- A client pins another user. This is similar to quality changing of stream being forwarded. The pinned user must generate a key frame on the higher quality stream. The previously pinned user msut generate key frame for his lower resolution streams.
-- A client enters the lastN list. His stream is new to everyone else and a key frame must be generated.
-- A client stops sending on a stream that was previsouly active. SMB has to assume client dropped stream because of uplink bandwidth and other streams from that user must now send key frame.
-- A client starts sending on a stream that was previously idle.
-- A client transport has connected. All other video streams are requested to send new key frame.
-
-The situation with pin is happening frequently as dominant speaker is pinned by all users. Instead of sending massive number of PLI, the outbound ssc context remembers that a PLI has been sent and whether a n key frame has been received after that. It means multiple PLIs may be batched as one. Unfortunately, when a key frame has arrived, we are not sure if stragglers pinning the user, got that key frame or not and we need to request another one. We are using RTT to figure out if the pinning client will likely see the key frame that was recently received and, in those cases, we drop the PLI.
-
-
-### questions marks
-In updateDirectorUplinkEstimates it seems that all users that are pinning someone, and also had a new "client downlink estimate" will trigger a PLI request to pinned target. IF it is the same user, only one PLI will be sent.
-This seems like a lot of load.
-
+The responsibility of SMB is to forward the incoming streams to receivers in the meeting according to the receivers capability. 
+SMB will pick only one simulcast level to forward per receiver. 
 
 # Pinning
 Each user can pin one other user. Each user can be pinned by >= 0 users. Decisions are made at the following events:
@@ -103,10 +87,10 @@ The map containing pointers to participant records for users who are actually pi
 ![](./images/PINPLI.png)
 
 # Stream subscription on lastN list
-Each user has a limited downlink bandwidth and this will inevitable put a restriciton on which streams the user may receive from the video senders in the lastN list.
+Each user has a limited downlink bandwidth and this will inevitably put a restriciton on which streams the user may receive from the video senders in the lastN list.
 The subscription can be expressed as a quality matrix like 
 ```
-Wanted quality, position and quality
+Desired quality, position and quality
     H  M  L
 1:  1  0  0
 2:  0  1  0
@@ -114,21 +98,56 @@ Wanted quality, position and quality
 4:  0  1  0
 5:  0  1  0
 
+or subscription vector
+1: H
+2: M
+3: M
+4: M
+...
+
 ```
 
 For all users in the system the total subscription and be aggregated as matrix addition into:
 ```
     H   M   L
-1: 25   4   1
-2:  0   29  1
-3:  0   29  1 
-4:  0   29  1
-5:  0   29  1
+1: 25   4   0
+2:  0  29   1 
+3:  0  29   0 
+4:  0  29   0
+5:  0  29   0
 ```
+
+This reflects the desired quality, but then there is a concept of available quality. Some devices may only produce 1 or 2 simulcast levels instead of three. The exact quality of these levels can be unknown. A device can choose to produce one level and turn it dormant. SMB must detect his dynamically and be able to fall back to the next available quality below the desired quality. 
+```
+Available quality matrix
+
+1:  1   1   1
+2:  0   0   1 
+3:  0   1   1 
+4:  0   0   1
+5:  0   0   1
+
+```
+
+Combining the global subscription and available quality matrix to answer the question: is received ssrc used?
+Compare row by row and shift the subscription to the next available lower quality.
+```
+1: 25   4   0
+2:  0   0  30 
+3:  0  29   0 
+4:  0   0  29
+5:  0   0  29
+```
+If the packet received has a number > 0 in the global subscription matrix, the stream is in use.
+
+To answer the question: should ssrc from X be forwarded to user Y
+Look at the subscription row for user Y, and compare with availability row for user X. Shift subscription to the right until it coincides with 
+available stream from X. If the receive ssrc has a 1 in the row, the packet should be forwarded.
 
 The subsriptions could be like the pin matrix, for a specific user and quality. The advantage by having a subscription table referring to a position in the lastN list, means the subscription is mostly static, but the lastN list may change every 2s. Only when a user's downlink limit changes, would his subscription potentially change and the aggregated matrix must be update by a subtraction and addition.
 
-I would actually suggest that the math::Matrix is used to store the subscription as it provides Matrix addition and subtraction.
+I would actually suggest that the math::Matrix is used to store the subscription as it provides Matrix addition and subtraction that helps 
+maintaining the global subscription table.
 ## Maintaining the subscriptions
 Events that will cause updating of the subscription matrices:
 A user joins or leaves. A user's downlink estimate is updated in a way that requires his subscription to change.
@@ -165,3 +184,35 @@ Finding participant records A and X are plain hash map lookups.
 Finding A's position in lastN is either a linear scan of a short list, or retrieved from a map in ActiveMediaList that would map users in lastN to their current position. Updating this map is a bit tedious as rearranging 
 the lastN members requires updating all in the map.
 The other values are straightforward referencing in the participant records.
+
+# Use of PLI in SMB
+Picture Loss Indicator is a request sent over RTCP to request the remote side to generate a new key frame. It is generally needed if the 
+receiver lost the initial key frame, or has encountered too much packet loss to make it meaningful trying to mend the stream by re-transmissions.
+
+## Situations when a PLI is needed and sent from SMB
+- A client sends a PLI to SMB for a specific video ssrc. SMB cannot regenerate the key frame and must forward this PLI to the original sender of the stream.
+The streams of interest can be identified by comparing the new users subscription matrix against the contents of lastN list.
+- SMB Director changes the stream subscription for a receiver client, due to bandwidth variation. The streams not yet received by the user must generate a key frames.
+- A client pins another user. This is similar to subscription change. The pinned user must generate a key frame on the higher quality stream. The previously pinned user must generate key frame for his lower resolution streams.
+- A client enters the lastN list. His stream is new to everyone else and a key frame must be generated for streams subscribed to. The global subscription table can be used.
+- A client stops sending on a stream that was previously active. SMB has to assume client dropped stream because of uplink bandwidth. The next active stream will be used and that stream must now generate a key frame. How is this best identified in the data structures???
+- A client starts sending on a stream that was previously idle. This stream may now be forwarded according to global subscription matrix and a key frame is needed unless that is already.
+- A client transport has connected, which means successful join and earliest point of sending video to the new receiver. All existing clients, with video, must now generate key frames for all the streams that the new client will receive.
+
+What is actually being forwarded is a combination of: 
+- the sender's position in lastN and if the receiver pins the sender.
+- the receiver's subscription
+- the available streams from the sender. Effective quality can actually be lower if requested quality is unavailable.
+
+A new key frame is needed for the receiver if the source stream is different from the previous stream being sent to the receiver. 
+Instead of comparing previous subscriptions, available qualities and pinning we can go for a much simpler condition to generate PLI.
+- When a video packet is about to be forwarded, check if the ssrc of the packet is different from the previous ssrc of video packet being rewritten for the receiver. If it is, the stream is "new" to the receiver and a key frame is needed.
+- If a client sends PLI to SMB it needs something went wrong at the client or network and SMB must forward that PLI to the sender.
+
+There are optimizations inplace to prevent multiple PLIs being sent to a sender until there is a theoretical chance for the sender to generate a key frame and for SMB to receive it. That is RTT to sender is used.
+Also if SMB receives a new PLI a short time after sending a key frame to client, it is probably the case that this PLI can be ignored. The RTT to the receiver can be used to figure out if the PLI could hve been sent after receiver got the key frame.
+
+
+## Questions
+In updateDirectorUplinkEstimates it seems that all users that are pinning someone, and also had a new "client downlink estimate" will trigger a PLI request to pinned target. If it is the same user, only one PLI will be sent.
+This seems like a lot of load.
