@@ -26,10 +26,10 @@ constexpr static uint32_t timerGroupId = 23963832U;
 public:
 struct AsyncEntry
 {
-    AsyncEntry(std::unique_ptr<AsyncWaitTask>&& task, uint64_t startTime, uint64_t timeout)
+    AsyncEntry(std::unique_ptr<AsyncWaitTask>&& task, uint64_t startTime, uint64_t endTime)
         : task(std::move(task)),
         startTime(startTime),
-        endTime(startTime + timeout)
+        endTime(endTime)
     { }
 
     std::unique_ptr<AsyncWaitTask> task;
