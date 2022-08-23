@@ -4,6 +4,7 @@
 #include "bridge/engine/EngineMessageListener.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/EngineStats.h"
+#include "jobmanager/AsyncWaiter.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include <memory>
@@ -66,8 +67,9 @@ public:
 
     void stop();
     void run();
-    void onMessage(EngineMessage::Message&& message) override;
+    bool onMessage(EngineMessage::Message&& message) override;
     Stats::MixerManagerStats getStats();
+    void onPendingMixerAsyncTaskEnd(const std::string& mixerId);
 
 private:
     struct MixerStats
@@ -103,6 +105,7 @@ private:
     memory::PacketPoolAllocator& _mainAllocator;
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
+    jobmanager::AsyncWaiter _asyncWaiter;
 
     void engineMessageMixerRemoved(const EngineMessage::Message& message);
     void engineMessageAllocateAudioBuffer(const EngineMessage::Message& message);

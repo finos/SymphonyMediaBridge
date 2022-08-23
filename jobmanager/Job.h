@@ -1,6 +1,5 @@
 #pragma once
 #include "utils/ScopedIncrement.h"
-#include "utils/Time.h"
 #include <atomic>
 
 namespace jobmanager
@@ -16,7 +15,7 @@ public:
 };
 
 /**
- * Job that counts itseft in a counter help by job's owner.
+ * Job that counts itself in a counter help by job's owner.
  * This allows the job owner know if there are in-flight jobs.
  */
 class CountedJob : public Job

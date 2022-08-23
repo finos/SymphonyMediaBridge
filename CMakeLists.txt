@@ -113,6 +113,10 @@ set(FILES
         bridge/Mixer.h
         bridge/MixerManager.cpp
         bridge/MixerManager.h
+        bridge/PendingJobsAsyncWaitTask.cpp
+        bridge/PendingJobsAsyncWaitTask.h
+        bridge/PendingMixerAsyncWaitTask.cpp
+        bridge/PendingMixerAsyncWaitTask.h
         bridge/RequestLogger.h
         bridge/RequestLogger.cpp
         bridge/RtpMap.h

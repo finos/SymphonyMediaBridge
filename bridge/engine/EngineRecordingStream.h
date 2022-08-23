@@ -1,6 +1,8 @@
 #pragma once
+#include "bridge/engine/PacketCache.h"
 #include "bridge/engine/RecordingOutboundContext.h"
 #include "bridge/engine/UnackedPacketsTracker.h"
+#include "bridge/engine/UntypedEngineObject.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "transport/RecordingTransport.h"
 #include <atomic>
@@ -9,14 +11,14 @@
 namespace bridge
 {
 
-struct EngineRecordingStream
+struct EngineRecordingStream final : UntypedEngineObject
 {
     EngineRecordingStream(const std::string& id,
         const size_t endpointIdHash,
         bool isAudioEnabled,
         bool isVideoEnabled,
         bool isScreenSharingEnabled,
-        PacketCache& recordingEventPacketCache)
+        std::unique_ptr<PacketCache>&& recordingEventPacketCache)
         : id(id),
           endpointIdHash(endpointIdHash),
           transports(2),
@@ -25,8 +27,9 @@ struct EngineRecordingStream
           isScreenSharingEnabled(isScreenSharingEnabled),
           isReady(false),
           ssrcOutboundContexts(1024),
-          recordingEventsOutboundContext(recordingEventPacketCache),
-          recEventUnackedPacketsTracker(2)
+          recEventUnackedPacketsTracker(2),
+          recordingEventPacketCache(std::move(recordingEventPacketCache)),
+          recordingEventsOutboundContext(*this->recordingEventPacketCache)
     {
     }
 
@@ -39,10 +42,12 @@ struct EngineRecordingStream
     bool isReady;
 
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
-    RecordingOutboundContext recordingEventsOutboundContext;
 
     // missing packet trackers per transport peer
     concurrency::MpmcHashmap32<size_t, UnackedPacketsTracker&> recEventUnackedPacketsTracker;
+
+    std::unique_ptr<PacketCache> recordingEventPacketCache;
+    RecordingOutboundContext recordingEventsOutboundContext;
 };
 
 } // namespace bridge

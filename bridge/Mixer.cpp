@@ -31,6 +31,31 @@
 namespace
 {
 
+constexpr uint64_t asyncTaskCheckMaxInterval = 5 * utils::Time::ms;
+
+struct RecordingPendingTransportsCounter
+{
+    RecordingPendingTransportsCounter(uint64_t endpointIdHash)
+        : endpointIdHash(endpointIdHash),
+          count(1)
+    { }
+
+    const uint64_t endpointIdHash;
+    std::atomic_int32_t count;
+};
+
+void initializeOrIncrement(std::shared_ptr<RecordingPendingTransportsCounter>& counter, uint64_t endpointIdHash)
+{
+    if (!counter)
+    {
+        counter.reset(new RecordingPendingTransportsCounter(endpointIdHash));
+    }
+    else
+    {
+        ++counter->count;
+    }
+}
+
 void logTransportPacketLoss(const std::string& endpointId, transport::RtcTransport& transport, const char* mixerId)
 {
     const auto lossCount = transport.getSenderLossCount();
@@ -124,6 +149,21 @@ void makeSsrcWhitelistLog(const bridge::SsrcWhitelist& ssrcWhitelist, utils::Str
     }
 }
 
+template<class TStream>
+std::unique_ptr<TStream> eraseAndGet(std::unordered_map<std::string, std::unique_ptr<TStream>>& map, const std::string& streamId)
+{
+    auto it = map.find(streamId);
+    if (it != map.end())
+    {
+        auto stream = std::move(it->second);
+        map.erase(it);
+        return stream;
+    }
+
+    return nullptr;
+}
+
+
 bool waitForPendingJobs(const uint32_t timeoutMs, const uint32_t pollIntervalMs, transport::Transport& transport)
 {
     uint32_t totalSleepTimeMs = 0;
@@ -162,12 +202,17 @@ Mixer::Mixer(std::string id,
       _engine(engine),
       _engineMixer(engineMixer),
       _idGenerator(idGenerator),
-      _ssrcGenerator(ssrcGenerator)
+      _ssrcGenerator(ssrcGenerator),
+      _pendingJobsAsyncWaiter(engineMixer.getJobManager(), asyncTaskCheckMaxInterval)
 {
     logger::info("id=%s, served by engine mixer %s",
         _loggableId.c_str(),
         _id.c_str(),
         engineMixer.getLoggableId().c_str());
+}
+
+Mixer::~Mixer()
+{
 }
 
 void Mixer::markForDeletion()
@@ -191,14 +236,6 @@ void Mixer::stopTransports()
         logTransportPacketLoss("", *bundleTransportEntry.second._transport, _loggableId.c_str());
 
         bundleTransportEntry.second._transport->stop();
-        if (!waitForPendingJobs(700, 5, *bundleTransportEntry.second._transport))
-        {
-            logger::error("Transport for endpointId %s did not finish pending jobs in time. count=%u. Continuing "
-                          "deletion anyway.",
-                _loggableId.c_str(),
-                bundleTransportEntry.first.c_str(),
-                bundleTransportEntry.second._transport->getJobCounter().load());
-        }
     }
 
     for (auto& audioStreamEntry : _audioStreams)
@@ -211,13 +248,6 @@ void Mixer::stopTransports()
 
         logTransportPacketLoss("", *audioStreamEntry.second->transport, _loggableId.c_str());
         audioStreamEntry.second->transport->stop();
-        if (!waitForPendingJobs(700, 5, *audioStreamEntry.second->transport))
-        {
-            logger::error("Transport for endpointId %s did not finish pending jobs in time. Continuing "
-                          "deletion anyway.",
-                _loggableId.c_str(),
-                audioStreamEntry.second->endpointId.c_str());
-        }
     }
 
     for (auto& videoStreamEntry : _videoStreams)
@@ -230,69 +260,39 @@ void Mixer::stopTransports()
 
         logTransportPacketLoss("", *videoStreamEntry.second->transport, _loggableId.c_str());
         videoStreamEntry.second->transport->stop();
-        if (!waitForPendingJobs(700, 5, *videoStreamEntry.second->transport))
-        {
-            logger::error("Transport for endpointId %s did not finish pending jobs in time. Continuing "
-                          "deletion anyway.",
-                _loggableId.c_str(),
-                videoStreamEntry.second->endpointId.c_str());
-        }
     }
 
     for (auto& barbell : _barbells)
     {
         logTransportPacketLoss(barbell.second->id, *barbell.second->transport, _loggableId.c_str());
         barbell.second->transport->stop();
-        if (!waitForPendingJobs(700, 5, *barbell.second->transport))
-        {
-            logger::error("Transport for barbell %s did not finish pending jobs in time. Continuing "
-                          "deletion anyway.",
-                _loggableId.c_str(),
-                barbell.second->id.c_str());
-        }
     }
 
     _barbellPorts.clear();
 }
 
-bool Mixer::waitForAllPendingJobs(const uint32_t timeoutMs)
+bool Mixer::hasPendingJobs() const
 {
-    uint32_t totalSleepTimeMs = 0;
-    const uint32_t waitSlice = 10;
-    bool pendingJobs = true;
-
-    while (totalSleepTimeMs < timeoutMs && pendingJobs)
+    static const auto hasPendingJobsPredicate = [] (auto& stream)
     {
-        pendingJobs = false;
+        return stream.second->transport && stream.second->transport->hasPendingJobs();
+    };
 
-        for (auto& audioStream : _audioStreams)
-        {
-            if (audioStream.second->transport && audioStream.second->transport->hasPendingJobs())
-            {
-                pendingJobs = true;
-                break;
-            }
-        }
+    static const auto recordingHasPendingJobsPredicate = [] (auto& recordingStream)
+    {
+            const auto& transports = recordingStream.second->_transports;
+            return std::find_if(transports.begin(), transports.end(), [] (auto& transport) { return transport.second->hasPendingJobs(); }) != transports.end();
+    };
 
-        for (auto& videoStream : _videoStreams)
-        {
-            if (videoStream.second->transport && videoStream.second->transport->hasPendingJobs())
-            {
-                pendingJobs = true;
-                break;
-            }
-        }
+    bool hasPendingJobs = _pendingJobsAsyncWaiter.hasTaskWaiting();
+    hasPendingJobs = hasPendingJobs || std::find_if(_audioStreams.begin(), _audioStreams.end(), hasPendingJobsPredicate) != _audioStreams.end();
+    hasPendingJobs = hasPendingJobs || std::find_if(_videoStreams.begin(), _videoStreams.end(), hasPendingJobsPredicate) != _videoStreams.end();
+    hasPendingJobs = hasPendingJobs || std::find_if(_dataStreams.begin(), _dataStreams.end(), hasPendingJobsPredicate) != _dataStreams.end();
+    hasPendingJobs = hasPendingJobs || std::find_if(_barbells.begin(), _barbells.end(), hasPendingJobsPredicate) != _barbells.end();
+    hasPendingJobs = hasPendingJobs || std::find_if(_recordingStreams.begin(), _recordingStreams.end(), recordingHasPendingJobsPredicate) != _recordingStreams.end();
 
-        if (pendingJobs)
-        {
-            usleep(waitSlice * 1000);
-            totalSleepTimeMs += waitSlice;
-        }
-
-        _engineMixer.flush();
-    }
-
-    return totalSleepTimeMs < timeoutMs;
+    _engineMixer.flush();
+    return hasPendingJobs;
 }
 
 bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice::IceRole iceRole)
@@ -312,7 +312,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return false;
     }
 
-    logger::info("Created bundle transport, endpointId %s, endpointIdHash %zu, transport %s (%p), ice controlling %c",
+    logger::info("Created bundle transport, endpointId %s, endpointIdHash %llu, transport %s (%p), ice controlling %c",
         _loggableId.c_str(),
         endpointId.c_str(),
         endpointIdHash,
@@ -694,11 +694,10 @@ void Mixer::engineAudioStreamRemoved(EngineAudioStream* engineStream)
 
     const auto endpointId = engineStream->endpointId;
     auto streamItr = _audioStreams.find(endpointId);
+    assert(streamItr != _audioStreams.end());
     if (streamItr == _audioStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _audioEngineStreams.erase(endpointId);
-
         logger::warn("EngineAudioStream endpointId %s removed, no matching audioStream found",
             _loggableId.c_str(),
             endpointId.c_str());
@@ -706,17 +705,16 @@ void Mixer::engineAudioStreamRemoved(EngineAudioStream* engineStream)
     }
 
     auto& stream = streamItr->second;
-    logger::info("AudioStream id %s, endpointId %s deleted.",
+    logger::info("AudioStream id %s, endpointId %s will be deleted.",
         _loggableId.c_str(),
         stream->id.c_str(),
         endpointId.c_str());
 
     auto streamTransport = stream->transport;
-
     _audioStreams.erase(endpointId);
 
-    stopTransportIfNeeded(streamTransport.get(), endpointId);
-    _audioEngineStreams.erase(endpointId);
+    auto engineStreamUniquePtr = eraseAndGet(_audioEngineStreams, endpointId);
+    stopTransportAndRemoveStream(streamTransport, endpointId, std::move(engineStreamUniquePtr));
 }
 
 void Mixer::engineVideoStreamRemoved(EngineVideoStream* engineStream)
@@ -725,11 +723,10 @@ void Mixer::engineVideoStreamRemoved(EngineVideoStream* engineStream)
 
     const auto endpointId = engineStream->endpointId;
     auto streamItr = _videoStreams.find(endpointId);
+    assert(streamItr != _videoStreams.end());
     if (streamItr == _videoStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _videoEngineStreams.erase(endpointId);
-
         logger::warn("EngineVideoStream endpointId %s removed, no matching videoStream found",
             _loggableId.c_str(),
             endpointId.c_str());
@@ -745,8 +742,8 @@ void Mixer::engineVideoStreamRemoved(EngineVideoStream* engineStream)
     auto streamTransport = stream->transport;
     _videoStreams.erase(stream->endpointId);
 
-    stopTransportIfNeeded(streamTransport.get(), endpointId);
-    _videoEngineStreams.erase(endpointId);
+    auto engineStreamUniquePtr = eraseAndGet(_videoEngineStreams, endpointId);
+    stopTransportAndRemoveStream(streamTransport, endpointId, std::move(engineStreamUniquePtr));
 }
 
 void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
@@ -755,11 +752,10 @@ void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
 
     const auto endpointId = engineStream->endpointId;
     auto streamItr = _dataStreams.find(endpointId);
+    assert(streamItr != _dataStreams.end());
     if (streamItr == _dataStreams.end())
     {
-        stopTransportIfNeeded(&engineStream->transport, endpointId);
         _dataEngineStreams.erase(endpointId);
-
         logger::warn("EngineDataStream endpointId %s removed, no matching dataStream found",
             _loggableId.c_str(),
             endpointId.c_str());
@@ -776,8 +772,8 @@ void Mixer::engineDataStreamRemoved(EngineDataStream* engineStream)
     auto streamTransport = stream->transport;
     _dataStreams.erase(stream->endpointId);
 
-    stopTransportIfNeeded(streamTransport.get(), endpointId);
-    _dataEngineStreams.erase(endpointId);
+    auto engineStreamUniquePtr = eraseAndGet(_dataEngineStreams, endpointId);
+    stopTransportAndRemoveStream(streamTransport, endpointId, std::move(engineStreamUniquePtr));
 }
 
 std::unordered_set<std::string> Mixer::getEndpoints() const
@@ -1786,9 +1782,9 @@ RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)
     return nullptr;
 }
 
-void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId)
+void Mixer::stopTransportAndRemoveStream(const std::shared_ptr<transport::RtcTransport>& streamTransport, const std::string& endpointId, std::unique_ptr<UntypedEngineObject> streamToRemove)
 {
-    transport::RtcTransport* transport = nullptr;
+    std::shared_ptr<transport::RtcTransport> transport = nullptr;
 
     auto bundleTransportItr = _bundleTransports.find(endpointId);
     if (bundleTransportItr != _bundleTransports.end())
@@ -1802,7 +1798,7 @@ void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, cons
                 endpointId.c_str(),
                 bundleTransportItr->second._transport->getLoggableId().c_str());
 
-            transport = bundleTransportItr->second._transport.get();
+            transport = bundleTransportItr->second._transport;
         }
     }
     else
@@ -1814,7 +1810,7 @@ void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, cons
         transport = streamTransport;
     }
 
-    if (transport == nullptr)
+    if (!transport)
     {
         return;
     }
@@ -1828,13 +1824,10 @@ void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, cons
 
     // Allow pending transmissions to complete
     transport->stop();
-    if (!waitForPendingJobs(700, 5, *transport))
+    if (transport->hasPendingJobs())
     {
-        logger::error("Transport for endpointId %s did not finish pending jobs in time. count=%u. Continuing "
-                      "deletion anyway.",
-            _loggableId.c_str(),
-            endpointId.c_str(),
-            transport->getJobCounter().load());
+        const auto timeout = 1 * utils::Time::sec;
+        _pendingJobsAsyncWaiter.emplaceTask<PendingJobsAsyncWaitTask>(timeout, _loggableId, transport, std::move(streamToRemove), endpointId);
     }
 }
 
@@ -1909,15 +1902,13 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
 
         if (stream->_attachedRecording.size() == 1)
         {
-            auto recEventPacketCache = std::make_unique<PacketCache>("RecordingEventPacketCache");
             auto emplaceResult = _recordingEngineStreams.emplace(conferenceId,
                 std::make_unique<EngineRecordingStream>(stream->_id,
                     stream->_endpointIdHash,
                     isAudioEnabled,
                     isVideoEnabled,
                     isScreenSharingEnabled,
-                    *recEventPacketCache));
-            _recordingEventPacketCache.emplace(stream->_endpointIdHash, std::move(recEventPacketCache));
+                    std::make_unique<PacketCache>("RecordingEventPacketCache")));
 
             logger::info("New recording stream, recording stream %s. a: %c v: %c ss: %c",
                 _loggableId.c_str(),
@@ -2158,7 +2149,11 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
     auto& stream = streamItr->second;
     assert(stream->_attachedRecording.empty());
 
-    for (const auto& transportEntry : stream->_transports)
+    // store it in shared_ptr as we may need to wait for pending jobs in multiple transports
+    std::shared_ptr<EngineRecordingStream> engineRecordingStream = eraseAndGet(_recordingEngineStreams, engineStream->id);
+    std::shared_ptr<RecordingPendingTransportsCounter> pendingTransportCounter;
+
+    for (auto& transportEntry : stream->_transports)
     {
         logger::info("RecordingStream id %s, endpointId %s deleted.",
             _loggableId.c_str(),
@@ -2167,25 +2162,33 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
 
         // Try first wait for pending jobs without stop the transport
         // as we may have some recording events to be sent and we don't
-        // want to lose them
+        // want to lose them.
+        // Improvement: This could be async as well.
         waitForPendingJobs(200, 5, *transportEntry.second);
         transportEntry.second->stop();
         _engineMixer.getJobManager().abortTimedJobs(transportEntry.second->getId());
 
-        if (!waitForPendingJobs(500, 5, *transportEntry.second))
+        if (transportEntry.second->hasPendingJobs())
         {
-            logger::error("RecordingStream id %s did not finish pending jobs in time. count=%u. Continuing "
-                          "deletion anyway.",
-                _loggableId.c_str(),
-                stream->_id.c_str(),
-                transportEntry.second->getJobCounter().load());
+            initializeOrIncrement(pendingTransportCounter, stream->_endpointIdHash);
+            auto asyncWaitTask = PendingJobsAsyncWaitTask(_loggableId, std::move(transportEntry.second), engineRecordingStream, engineStream->id);
+            asyncWaitTask.setOnTaskEndHandler([this, pendingTransportCounter] () {
+                if (pendingTransportCounter->count.fetch_sub(1, std::memory_order_release) == 1)
+                {
+                    _recordingRtpPacketCaches.erase(pendingTransportCounter->endpointIdHash);
+                }
+            });
+
+            const auto timeout = 1 * utils::Time::sec;
+            _pendingJobsAsyncWaiter.addTask(timeout, std::move(asyncWaitTask));
         }
     }
 
-    _recordingEventPacketCache.erase(stream->_endpointIdHash);
-    _recordingRtpPacketCaches.erase(stream->_endpointIdHash);
     _recordingStreams.erase(streamItr);
-    _recordingEngineStreams.erase(engineStream->id);
+    if (!pendingTransportCounter)
+    {
+        _recordingRtpPacketCaches.erase(stream->_endpointIdHash);
+    }
 }
 
 void Mixer::allocateRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash)
@@ -2247,23 +2250,41 @@ void Mixer::removeRecordingTransport(const std::string& streamId, const size_t e
         return;
     }
 
+    // We only can remove stream->_transports when transport is not have more pendingJobs
+    // because the RecordingEngineStream can be removed meanwhile
+    // and we want to wait for this transport before remove engine strea,
+    auto transport = transportItr->second;
+
     // Try first wait for pending jobs without stop the transport
     // as we may have some recording events to be sent and we don't
     // want to lose them
-    waitForPendingJobs(200, 5, *transportItr->second);
-    transportItr->second->stop();
-    _engineMixer.getJobManager().abortTimedJobs(transportItr->second->getId());
-    if (!waitForPendingJobs(500, 5, *transportItr->second))
+     // Improvement: This could be async as well.
+    waitForPendingJobs(200, 5, *transport);
+    transport->stop();
+    _engineMixer.getJobManager().abortTimedJobs(transport->getId());
+    if (transport->hasPendingJobs())
     {
-        logger::error("RecordingTransport for streamId %s did not finish pending jobs in time. count=%u. Continuing "
-                      "deletion anyway.",
-            _loggableId.c_str(),
-            streamId.c_str(),
-            transportItr->second->getJobCounter().load());
-    }
+        auto waitTask = PendingJobsAsyncWaitTask(_loggableId, transport, nullptr, stream->_id);
+        waitTask.setOnTaskEndHandler([=]()
+        {
+            std::lock_guard<std::mutex> locker(_configurationLock);
+            auto streamItr = _recordingStreams.find(streamId);
+            if (streamItr != _recordingStreams.end())
+            {
+                auto& stream = streamItr->second;
+                stream->_transports.erase(endpointIdHash);
+                stream->_recEventUnackedPacketsTracker.erase(endpointIdHash);
+            }
+        });
 
-    stream->_recEventUnackedPacketsTracker.erase(endpointIdHash);
-    stream->_transports.erase(endpointIdHash);
+        const auto timeout = 1 * utils::Time::sec;
+        _pendingJobsAsyncWaiter.addTask(timeout, std::move(waitTask));
+    }
+    else
+    {
+        stream->_transports.erase(transportItr);
+        stream->_recEventUnackedPacketsTracker.erase(endpointIdHash);
+    }
 }
 
 bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
@@ -2425,28 +2446,36 @@ void Mixer::removeBarbell(const std::string& barbellId)
 
 void Mixer::engineBarbellRemoved(EngineBarbell* engineBarbell)
 {
-    std::unique_ptr<Barbell> barbell;
-    {
-        std::lock_guard<std::mutex> locker(_configurationLock);
-        auto it = _barbells.find(engineBarbell->id);
-        if (it == _barbells.cend())
-        {
-            return;
-        }
+    std::lock_guard<std::mutex> locker(_configurationLock);
 
-        barbell = std::move(it->second);
-        _barbells.erase(it);
-        _engineBarbells.erase(barbell->id);
+    auto barbellIt = _barbells.find(engineBarbell->id);
+    assert(barbellIt != _barbells.end());
+    if (barbellIt == _barbells.end())
+    {
+        logger::warn("EngineBarbell %s removed, no matching barbell found",
+            _loggableId.c_str(),
+            engineBarbell->id.c_str());
+
+        _engineBarbells.erase(engineBarbell->id);
+        return;
     }
 
-    logTransportPacketLoss(barbell->id, *barbell->transport, _loggableId.c_str());
-    barbell->transport->stop();
-    if (!waitForPendingJobs(700, 5, *barbell->transport))
+    auto transport = barbellIt->second->transport;
+    _barbells.erase(barbellIt);
+    auto engineBarbellUniquePtr = eraseAndGet(_engineBarbells, engineBarbell->id);
+    if (engineBarbellUniquePtr)
     {
-        logger::error("Transport for barbell %s did not finish pending jobs in time. Continuing "
-                      "deletion anyway.",
-            _loggableId.c_str(),
-            barbell->id.c_str());
+        logTransportPacketLoss(engineBarbellUniquePtr->id, *transport, _loggableId.c_str());
+        transport->stop();
+        if (transport->hasPendingJobs())
+        {
+            const auto timeout = 1 * utils::Time::sec;
+            _pendingJobsAsyncWaiter.emplaceTask<PendingJobsAsyncWaitTask>(timeout,
+                    _loggableId,
+                    transport,
+                    std::move(engineBarbellUniquePtr),
+                    engineBarbellUniquePtr->id);
+        }
     }
 }
 

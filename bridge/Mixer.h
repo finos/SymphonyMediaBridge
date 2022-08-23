@@ -1,9 +1,11 @@
 #pragma once
 
 #include "bridge/Barbell.h"
+#include "bridge/PendingJobsAsyncWaitTask.h"
 #include "bridge/RecordingStream.h"
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/SimulcastLevel.h"
+#include "jobmanager/AsyncWaiter.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
 #include "transport/dtls/SrtpClient.h"
@@ -90,7 +92,7 @@ public:
         const std::vector<api::SimulcastGroup>& videoSsrcs,
         const std::vector<api::SsrcPair>& videoPinSsrcs);
 
-    virtual ~Mixer() = default;
+    virtual ~Mixer();
 
     void markForDeletion();
     bool isMarkedForDeletion() const { return _markedForDeletion; }
@@ -265,7 +267,7 @@ public:
     void removeRecordingTransport(const std::string& streamId, const size_t endpointIdHash);
 
     Stats getStats();
-    bool waitForAllPendingJobs(const uint32_t timeoutMs);
+    bool hasPendingJobs() const;
 
     void sendEndpointMessage(const std::string& toEndpointId,
         const size_t fromEndpointIdHash,
@@ -307,7 +309,6 @@ private:
     std::unordered_map<std::string, BundleTransport> _bundleTransports;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _videoPacketCaches;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _recordingRtpPacketCaches;
-    std::unordered_map<size_t, std::unique_ptr<PacketCache>> _recordingEventPacketCache;
 
     std::unordered_map<std::string, std::unique_ptr<Barbell>> _barbells;
     std::unordered_map<std::string, std::unique_ptr<EngineBarbell>> _engineBarbells;
@@ -315,9 +316,11 @@ private:
 
     std::mutex _configurationLock;
 
+    jobmanager::AsyncWaiter _pendingJobsAsyncWaiter;
+
     RecordingStream* findRecordingStream(const std::string& recordingId);
 
-    void stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId);
+    void stopTransportAndRemoveStream(const std::shared_ptr<transport::RtcTransport>& streamTransport, const std::string& endpointId, std::unique_ptr<UntypedEngineObject> streamToRelease);
 };
 
 } // namespace bridge

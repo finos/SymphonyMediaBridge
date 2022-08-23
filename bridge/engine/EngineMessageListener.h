@@ -10,7 +10,7 @@ class EngineMessageListener
 public:
     virtual ~EngineMessageListener() = default;
 
-    virtual void onMessage(EngineMessage::Message&& message) = 0;
+    virtual bool onMessage(EngineMessage::Message&& message) = 0;
 };
 
 } // namespace bridge

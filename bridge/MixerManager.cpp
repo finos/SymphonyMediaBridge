@@ -3,6 +3,7 @@
 #include "bridge/AudioStream.h"
 #include "bridge/DataStream.h"
 #include "bridge/Mixer.h"
+#include "bridge/PendingMixerAsyncWaitTask.h"
 #include "bridge/VideoStream.h"
 #include "bridge/engine/Engine.h"
 #include "bridge/engine/EngineAudioStream.h"
@@ -27,8 +28,24 @@
 namespace
 {
 
-const auto intervalNs = 10000000UL;
-const uint32_t maxLastN = 16;
+constexpr auto intervalNs = 10000000UL;
+constexpr uint32_t maxLastN = 16;
+constexpr uint64_t asyncWaitMaxCheckInterval = 20 * utils::Time::ms;
+
+
+template<class T>
+std::unique_ptr<T> eraseAndGet(std::unordered_map<std::string, std::unique_ptr<T>>& map, const std::string& id)
+{
+    auto it = map.find(id);
+    if (it != map.end())
+    {
+        auto value = std::move(it->second);
+        map.erase(it);
+        return value;
+    }
+
+    return nullptr;
+}
 
 } // namespace
 
@@ -54,7 +71,8 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _engineMessages(16 * 1024),
       _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
-      _audioAllocator(audioAllocator)
+      _audioAllocator(audioAllocator),
+      _asyncWaiter(_jobManager, asyncWaitMaxCheckInterval)
 {
     _engine.setMessageListener(this);
 
@@ -336,10 +354,11 @@ void MixerManager::run()
     }
 }
 
-void MixerManager::onMessage(EngineMessage::Message&& message)
+bool MixerManager::onMessage(EngineMessage::Message&& message)
 {
-    auto rc = _engineMessages.push(std::move(message));
-    assert(rc);
+    const bool enqueuedSuccessfully = _engineMessages.push(std::move(message));
+    assert(enqueuedSuccessfully);
+    return enqueuedSuccessfully;
 }
 
 void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& message)
@@ -354,17 +373,20 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
         auto& command = message.command.mixerRemoved;
 
         std::string mixerId(command.mixer->getId()); // copy id string to have it after EngineMixer is deleted
-        auto findResult = _mixers.find(mixerId);
-        if (findResult != _mixers.end())
+        auto mixer = eraseAndGet(_mixers, mixerId);
+        if (mixer)
         {
-            mixer = std::move(findResult->second);
             mixer->stopTransports(); // this will stop new packets from coming in
-            if (!mixer->waitForAllPendingJobs(1000))
+            if (mixer->hasPendingJobs())
             {
-                logger::error("still pending jobs or packets after 1s.", mixer->getLoggableId().c_str());
+                auto engineMixer = std::move(_engineMixers.at(mixerId));
+                _engineMixers.erase(mixerId);
+                logger::debug("Mixer %s has pending jobs, will be async deleted", "MixerManager", mixerId.c_str());
+                const auto timeout = 1 * utils::Time::sec;
+                _asyncWaiter.emplaceTask<PendingMixerAsyncWaitTask>(timeout, *this, std::move(mixer), std::move(engineMixer));
+                return;
             }
 
-            _mixers.erase(findResult);
         }
         else
         {
@@ -372,7 +394,7 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
         }
 
         logger::info("Removing EngineMixer %s", "MixerManager", command.mixer->getLoggableId().c_str());
-        // This will sweep the PacketPoolAllocator. Any pending jobs may crash or corrupt memory.
+            // This will sweep the PacketPoolAllocator. Any pending jobs may crash or corrupt memory.
         _engineMixers.erase(mixerId);
 
         auto mixerAudioBuffers = _audioBuffers.find(mixerId);
@@ -386,7 +408,28 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
     mixer.reset();
     logger::info("EngineMixer removed", "MixerManager");
 
-    if (_engineMixers.empty())
+    if (_engineMixers.empty() && !_asyncWaiter.hasTaskWaiting())
+    {
+        _mainAllocator.logAllocatedElements();
+        _sendAllocator.logAllocatedElements();
+        _audioAllocator.logAllocatedElements();
+    }
+}
+
+void MixerManager::onPendingMixerAsyncTaskEnd(const std::string& mixerId)
+{
+    {
+        std::lock_guard<std::mutex> locker(_configurationLock);
+
+        auto mixerAudioBuffers = _audioBuffers.find(mixerId);
+        if (mixerAudioBuffers != _audioBuffers.cend())
+        {
+            mixerAudioBuffers->second.clear();
+            _audioBuffers.erase(mixerAudioBuffers);
+        }
+    }
+
+    if (_engineMixers.empty() && !_asyncWaiter.hasTaskWaiting())
     {
         _mainAllocator.logAllocatedElements();
         _sendAllocator.logAllocatedElements();
