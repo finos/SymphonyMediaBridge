@@ -2,6 +2,7 @@
 #include "bridge/BarbellVideoStreamDescription.h"
 #include "bridge/RtpMap.h"
 #include "bridge/engine/BarbellEndpointMap.h"
+#include "bridge/engine/UntypedEngineObject.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "concurrency/MpmcHashmap.h"
@@ -17,7 +18,7 @@ class RtcTransport;
 namespace bridge
 {
 
-struct EngineBarbell
+struct EngineBarbell final : UntypedEngineObject
 {
     EngineBarbell(const std::string& barbellId,
         transport::RtcTransport& rtcTransport,

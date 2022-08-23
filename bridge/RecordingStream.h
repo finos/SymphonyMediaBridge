@@ -27,7 +27,7 @@ struct RecordingStream
 
     std::string _id;
     size_t _endpointIdHash;
-    std::unordered_map<size_t, std::unique_ptr<transport::RecordingTransport>> _transports;
+    std::unordered_map<size_t, std::shared_ptr<transport::RecordingTransport>> _transports;
     std::unordered_map<size_t, std::unique_ptr<bridge::UnackedPacketsTracker>> _recEventUnackedPacketsTracker;
 
     uint16_t _audioActiveRecCount;

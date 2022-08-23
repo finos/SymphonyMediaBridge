@@ -1,5 +1,6 @@
 #pragma once
 #include "bridge/RtpMap.h"
+#include "bridge/engine/UntypedEngineObject.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "concurrency/MpmcHashmap.h"
 #include <cstdint>
@@ -12,7 +13,7 @@ class RtcTransport;
 namespace bridge
 {
 
-struct EngineAudioStream
+struct EngineAudioStream final : UntypedEngineObject
 {
     EngineAudioStream(const std::string& endpointId,
         const size_t endpointIdHash,

@@ -342,8 +342,9 @@ private:
 
     uint64_t _lastVideoBandwidthCheck;
     uint64_t _lastVideoPacketProcessed;
-    bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
+    bool _probingVideoStreams;
+    bool _timedout;
 
     uint32_t getMinRemoteClientDownlinkBandwidth() const;
     void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;
