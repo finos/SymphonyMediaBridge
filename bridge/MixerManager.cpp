@@ -381,7 +381,7 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
             {
                 auto engineMixer = std::move(_engineMixers.at(mixerId));
                 _engineMixers.erase(mixerId);
-                logger::debug("Mixer %s has pending jobs, will be async deleted", "MixerManager", mixerId.c_str());
+                logger::debug("Mixer %s has pending jobs, will be async deleted", "MixerManager", mixer->getLoggableId().c_str());
                 const auto timeout = 1 * utils::Time::sec;
                 _asyncWaiter.emplaceTask<PendingMixerAsyncWaitTask>(timeout, *this, std::move(mixer), std::move(engineMixer));
                 return;
