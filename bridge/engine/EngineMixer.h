@@ -357,7 +357,8 @@ private:
     void forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
-        const rtp::RtcpHeader& rtcpPacket);
+        const rtp::RtcpHeader& rtcpPacket,
+        uint64_t timestamp);
     void processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
         const rtp::RtcpHeader& rtcpPacket,
         const uint64_t timestamp);
@@ -393,7 +394,8 @@ private:
         const uint32_t ssrc,
         const RtpMap& rtpMap);
 
-    void sendPliForUsedSsrcs(EngineVideoStream& videoStream);
+    void onPliRequestFromReceiver(size_t endpointIdHash, uint32_t ssrc, uint64_t timestamp);
+
     void sendLastNListMessage(const size_t endpointIdHash);
     void sendLastNListMessageToAll();
     void sendMessagesToNewDataStreams();

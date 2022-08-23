@@ -82,6 +82,10 @@ void VideoForwarderRewriteAndSendJob::run()
         {
             _outboundContext.needsKeyframe = true;
             _senderInboundContext.pliScheduler.triggerPli();
+            if (utils::Time::diffGE(_outboundContext.pli.triggerTimestamp, _outboundContext.pli.keyFrameTimestamp, 0))
+            {
+                _outboundContext.pli.triggerTimestamp = utils::Time::getAbsoluteTime();
+            }
         }
     }
 
@@ -93,7 +97,16 @@ void VideoForwarderRewriteAndSendJob::run()
         }
         else
         {
+            const auto timestamp = utils::Time::getAbsoluteTime();
+            const auto delay = _outboundContext.pli.getDelay(timestamp);
+            _outboundContext.pli.keyFrameTimestamp = timestamp;
             _outboundContext.needsKeyframe = false;
+
+            logger::debug("%s requested key frame from %u fwd after %" PRIu64 "ms",
+                "VideoForwarderRewriteAndSendJob",
+                _transport.getLoggableId().c_str(),
+                _senderInboundContext.ssrc,
+                delay / utils::Time::ms);
         }
     }
 
