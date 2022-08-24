@@ -3,6 +3,7 @@
 #include "concurrency/Semaphore.h"
 #include "jobmanager/Job.h"
 #include "jobmanager/JobManager.h"
+#include "jobmanager/WorkerThread.h"
 #include "logger/Logger.h"
 #include "memory/PoolAllocator.h"
 #include "utils/Trackers.h"
@@ -59,7 +60,32 @@ public:
     {
         concurrency::Semaphore sema;
         addJob<StopJob>(sema, _running);
-        sema.wait();
+        if (!sema.wait(1))
+        {
+            // If it's a worker thread we will try keep it busy with other tasks
+            if (WorkerThread::isWorkerThread())
+            {
+                uint32_t nextWaitTime;
+                do
+                {
+                    Job* job = _jobManager.tryFetchNoWait();
+                    if (job)
+                    {
+                        job->run();
+                        nextWaitTime = 0;
+                    }
+                    else
+                    {
+                        nextWaitTime = 1;
+                    }
+
+                } while (!sema.wait(nextWaitTime));
+            }
+            else
+            {
+                sema.wait();
+            }
+        }
     }
 
     JobManager& getJobManager() { return _jobManager; }

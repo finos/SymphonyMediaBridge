@@ -114,6 +114,17 @@ public:
         return nullptr;
     }
 
+    Job* tryFetchNoWait()
+    {
+        Job* job;
+        if (_jobQueue.pop(job))
+        {
+            return job;
+        }
+
+        return nullptr;
+    }
+
     void stop()
     {
         _timers.stop();

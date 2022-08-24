@@ -2,6 +2,13 @@
 #include "concurrency/ThreadUtils.h"
 #include "jobmanager/JobManager.h"
 
+namespace
+{
+
+thread_local bool threadLocalIsWorkerThread = false;
+
+} // namespace
+
 namespace jobmanager
 {
 
@@ -21,6 +28,7 @@ void WorkerThread::stop()
 void WorkerThread::run()
 {
     concurrency::setThreadName("Worker");
+    threadLocalIsWorkerThread = true;
 
     try
     {
@@ -46,5 +54,11 @@ void WorkerThread::run()
         logger::error("unknown exception", "WorkerThread");
     }
 }
+
+bool WorkerThread::isWorkerThread()
+{
+    return threadLocalIsWorkerThread;
+}
+
 
 } // namespace jobmanager

@@ -90,7 +90,7 @@ public:
 
 private:
     void runCheck();
-    void scheduleNexCheck(uint64_t timeoutTs);
+    void scheduleNexCheck(uint64_t delay);
     void addNewTaskInternal(uint64_t timeout, std::unique_ptr<AsyncWaitTask>&& task);
     bool checkTaskCompletion(AsyncWaitTask& task);
 
@@ -114,6 +114,7 @@ inline AsyncWaiter::AsyncWaiter(JobManager& jobManager, size_t maxCheckInterval,
 
 inline void AsyncWaiter::runCheck()
 {
+    logger::info("runCheck", "AsyncWaiter");
     const auto timestamp = utils::Time::getAbsoluteTime();
     auto itEnd = _tasks.end();
     auto nextTimeout = _maxCheckInterval;
@@ -123,6 +124,7 @@ inline void AsyncWaiter::runCheck()
         const bool isEnded = isCompleted || timestamp >= it->endTime;
         if (isEnded)
         {
+            logger::info("isEnded", "AsyncWaiter");
             if (!isCompleted)
             {
                 it->task->onTimeout();
@@ -154,7 +156,8 @@ inline void AsyncWaiter::addNewTaskInternal(uint64_t timeout, std::unique_ptr<As
         _tasks.emplace_back(std::move(task), startTime, startTime + timeout);
         if (_tasks.size() == 1)
         {
-            scheduleNexCheck(timeout);
+            const auto delay  = std::min(timeout, _maxCheckInterval);
+            scheduleNexCheck(delay);
         }
     }
 }
@@ -170,11 +173,11 @@ inline bool AsyncWaiter::checkTaskCompletion(AsyncWaitTask& task)
     return false;
 }
 
-inline void AsyncWaiter::scheduleNexCheck(uint64_t nextTimeout)
+inline void AsyncWaiter::scheduleNexCheck(uint64_t delay)
 {
     _jobQueue.getJobManager().template replaceTimedJob<ScheduleCheckJobTimer>(timerGroupId,
             _timerId,
-            nextTimeout,
+            delay / 1000,
             *this);
 }
 

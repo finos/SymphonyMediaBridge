@@ -15,6 +15,9 @@ public:
 
     static double getWaitTime(); // ms
     static double getWorkTime(); // ms
+
+    static bool isWorkerThread();
+
 private:
     std::atomic<bool> _running;
     jobmanager::JobManager& _jobManager;
