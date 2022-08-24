@@ -56,4 +56,14 @@ public:
     }
 };
 
+class HttpDeleteRequest : public HttpRequest
+{
+public:
+    HttpDeleteRequest(const char* url)
+    {
+        _request = http_delete(url, nullptr);
+        assert(_request);
+    }
+};
+
 } // namespace emulator

@@ -308,7 +308,7 @@ void MixerManager::run()
                     break;
 
                 case EngineMessage::Type::BarbellRemoved:
-                    engineBarbellRemoved(nextMessage.command.barbellRemoved);
+                    engineBarbellRemoved(nextMessage.command.barbellMessage);
                     break;
                 default:
                     assert(false);
@@ -696,7 +696,7 @@ void MixerManager::engineMessageRemoveRecordingTransport(const EngineMessage::Me
     mixerItr->second->removeRecordingTransport(command.streamId, command.endpointIdHash);
 }
 
-void MixerManager::engineBarbellRemoved(const EngineMessage::EngineBarbellRemoved& message)
+void MixerManager::engineBarbellRemoved(const EngineMessage::EngineBarbellMessage& message)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 

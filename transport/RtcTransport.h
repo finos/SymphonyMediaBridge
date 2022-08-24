@@ -92,6 +92,7 @@ public:
     virtual PacketCounters getAudioSendCounters(uint64_t idleTimestamp) const = 0;
     virtual PacketCounters getVideoSendCounters(uint64_t idleTimestamp) const = 0;
     virtual void getReportSummary(std::unordered_map<uint32_t, ReportSummary>& outReportSummary) const = 0;
+    virtual uint64_t getInboundPacketCount() const = 0;
 
     virtual void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) = 0;
 

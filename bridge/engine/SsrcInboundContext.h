@@ -45,8 +45,6 @@ public:
           lastUnprotectedExtendedSequenceNumber(0),
           activeMedia(false),
           lastReceiveTime(timestamp),
-          markedForDeletion(false),
-          idle(false),
           shouldDropPackets(false),
           inactiveCount(0),
           simulcastLevel(0)
@@ -57,7 +55,6 @@ public:
     {
         activeMedia = true;
         lastReceiveTime = timestamp;
-        idle = false;
     }
 
     uint32_t ssrc;
@@ -74,8 +71,6 @@ public:
     uint32_t lastUnprotectedExtendedSequenceNumber;
     bool activeMedia;
     std::atomic_uint64_t lastReceiveTime;
-    bool markedForDeletion;
-    bool idle;
 
     /** If an inbound stream is considered unstable, we can in a simulcast scenario decide to drop an inbound stream
      * early to avoid toggling between quality levels. If this is set to true, any incoming packets will be dropped. */

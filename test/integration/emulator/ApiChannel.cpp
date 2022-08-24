@@ -722,4 +722,10 @@ void Barbell::configure(const std::string& body)
     }
 }
 
+void Barbell::remove(const std::string& baseUrl)
+{
+    HttpDeleteRequest request((_baseUrl + "/barbell/" + _conferenceId + "/" + _id).c_str());
+    request.awaitResponse(9000 * utils::Time::ms);
+}
+
 } // namespace emulator

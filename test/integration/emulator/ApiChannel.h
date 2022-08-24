@@ -163,7 +163,7 @@ public:
     Barbell();
 
     std::string allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling);
-
+    void remove(const std::string& baseUrl);
     void configure(const std::string& body);
     const std::string& getId() const { return _id; }
 
