@@ -739,19 +739,22 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
-    if (!mixer->isAudioStreamConfigured(endpointId))
+    const bool isAudioSet = endpointDescription._audio.isSet();
+    const bool isVideoSet = endpointDescription._video.isSet();
+
+    if (isAudioSet && !mixer->isAudioStreamConfigured(endpointId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             "Can't reconfigure audio because it was not configured in first place");
     }
 
-    if (!mixer->isVideoStreamConfigured(endpointId))
+    if (isVideoSet && !mixer->isVideoStreamConfigured(endpointId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             "Can't reconfigure video because it was not configured in first place");
     }
 
-    if (endpointDescription._audio.isSet())
+    if (isAudioSet)
     {
         const auto& audio = endpointDescription._audio.get();
         utils::Optional<uint32_t> remoteSsrc;
@@ -767,7 +770,7 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
         }
     }
 
-    if (endpointDescription._video.isSet())
+    if (isVideoSet)
     {
         const auto& video = endpointDescription._video.get();
         auto simulcastStreams = makeSimulcastStreams(video, endpointId);
