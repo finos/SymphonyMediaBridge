@@ -145,7 +145,7 @@ public:
         if (!isLocalSsrcFound && localSsrc.isSet())
         {
             api::SsrcPair ssrcPair[1];
-            ssrcPair[0].main = localSsrc;
+            ssrcPair[0].main = localSsrc.get();
             ssrcPair[0].feedback = 0;
             auto stream = makeSsrcGroup(ssrcPair);
 
