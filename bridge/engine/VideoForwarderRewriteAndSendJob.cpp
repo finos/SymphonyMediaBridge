@@ -21,13 +21,20 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
         return;
     }
 
-    for (auto& rtpHeaderExtension : headerExtensions->extensions())
+    const bool senderHasAbsSendTimeEx = senderInboundContext._rtpMap._absSendTimeExtId.isSet();
+    const bool receiverHasAbsSendTimeEx = receiverOutboundContext._rtpMap._absSendTimeExtId.isSet();
+    const bool absSendTimeExNeedToBeRewritten = senderHasAbsSendTimeEx && receiverHasAbsSendTimeEx &&
+        senderInboundContext._rtpMap._absSendTimeExtId.get() != receiverOutboundContext._rtpMap._absSendTimeExtId.get();
+
+    if (absSendTimeExNeedToBeRewritten)
     {
-        if (senderInboundContext._rtpMap._absSendTimeExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
+        for (auto& rtpHeaderExtension : headerExtensions->extensions())
         {
-            rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
-            return;
+            if (rtpHeaderExtension.getId() == senderInboundContext._rtpMap._absSendTimeExtId.get())
+            {
+                rtpHeaderExtension.setId(receiverOutboundContext._rtpMap._absSendTimeExtId.get());
+                return;
+            }
         }
     }
 }

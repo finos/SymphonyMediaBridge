@@ -3241,6 +3241,11 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 
 void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
 {
+    if (engineVideoStream._feedbackRtpMap.isEmpty())
+    {
+        return;
+    }
+
     auto* outboundContext =
         obtainOutboundSsrcContext(engineVideoStream, engineVideoStream._localSsrc, engineVideoStream._feedbackRtpMap);
     if (outboundContext)
@@ -3255,6 +3260,11 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
 
 void EngineMixer::stopProbingVideoStream(const EngineVideoStream& engineVideoStream)
 {
+    if (engineVideoStream._feedbackRtpMap.isEmpty())
+    {
+        return;
+    }
+
     engineVideoStream._transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream._transport,
         engineVideoStream._localSsrc,
         nullptr,
