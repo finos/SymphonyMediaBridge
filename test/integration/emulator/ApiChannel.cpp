@@ -183,11 +183,14 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
                     {{"type", "nack"}},
                     {{"type", "nack"}, {"subtype", "pli"}}})}}));
 
-        payloadTypes.push_back(json::object({{"id", 96},
-            {"name", "rtx"},
-            {"clockrate", 90000},
-            {"rtcp-fbs", json::array()},
-            {"parameters", {{"apt", "100"}}}}));
+        if (!_answerOptions.rtxDisabled)
+        {
+            payloadTypes.push_back(json::object({{"id", 96},
+                {"name", "rtx"},
+                {"clockrate", 90000},
+                {"rtcp-fbs", json::array()},
+                {"parameters", {{"apt", "100"}}}}));
+        }
 
         videoContent["payload-types"] = payloadTypes;
 
@@ -291,6 +294,48 @@ std::vector<api::SimulcastGroup> Channel::getOfferedVideoStreams() const
     }
 
     return v;
+}
+
+utils::Optional<uint32_t> Channel::getOfferedScreensharingSsrc() const
+{
+    if (_offer.find("video") != _offer.end())
+    {
+        for (auto& stream : _offer["video"]["streams"])
+        {
+            api::SimulcastGroup group;
+            auto content = stream["content"].get<std::string>();
+            if (content.compare("slides") == 0)
+            {
+                for (auto& ssrcPair : stream["sources"])
+                {
+                    return utils::Optional<uint32_t>(ssrcPair["main"].get<uint32_t>());
+                }
+            }
+        }
+    }
+
+    return utils::Optional<uint32_t>();
+}
+
+utils::Optional<uint32_t> Channel::getOfferedLocalSsrc() const
+{
+    if (_offer.find("video") != _offer.end())
+    {
+        for (auto& stream : _offer["video"]["streams"])
+        {
+            api::SimulcastGroup group;
+            auto content = stream["content"].get<std::string>();
+            if (content.compare("local") == 0)
+            {
+                for (auto& ssrcPair : stream["sources"])
+                {
+                    return utils::Optional<uint32_t>(ssrcPair["main"].get<uint32_t>());
+                }
+            }
+        }
+    }
+
+    return utils::Optional<uint32_t>();
 }
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
@@ -459,11 +504,14 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
                     {{"type", "nack"}},
                     {{"type", "nack"}, {"subtype", "pli"}}})}}));
 
-        payloadTypes.push_back(json::object({{"id", 96},
-            {"name", "rtx"},
-            {"clockrate", "90000"},
-            {"rtcp-fbs", json::array()},
-            {"parameters", {{"apt", "100"}}}}));
+        if (!_answerOptions.rtxDisabled)
+        {
+            payloadTypes.push_back(json::object({{"id", 96},
+                {"name", "rtx"},
+                {"clockrate", "90000"},
+                {"rtcp-fbs", json::array()},
+                {"parameters", {{"apt", "100"}}}}));
+        }
 
         videoChannel["payload-types"] = payloadTypes;
 
@@ -587,6 +635,44 @@ std::vector<api::SimulcastGroup> ColibriChannel::getOfferedVideoStreams() const
     }
 
     return v;
+}
+
+utils::Optional<uint32_t> ColibriChannel::getOfferedScreensharingSsrc() const
+{
+    for (auto& content : _offer["contents"])
+    {
+        if (content["name"] == "video")
+        {
+            auto channel = content["channels"][0];
+
+            if (channel.find("ssrc-attributes") != channel.end())
+            {
+                for (auto& attribute : channel["ssrc-attributes"])
+                {
+                    if (attribute["content"] == "slides")
+                    {
+                        return utils::Optional<uint32_t>(attribute["sources"][0].get<uint32_t>());
+                    }
+                }
+            }
+        }
+    }
+
+    return utils::Optional<uint32_t>();
+}
+
+utils::Optional<uint32_t> ColibriChannel::getOfferedLocalSsrc() const
+{
+    for (auto& content : _offer["contents"])
+    {
+        if (content["name"] == "video")
+        {
+            auto channel = content["channels"][0];
+            return utils::Optional<uint32_t>(channel["sources"][0].get<uint32_t>());
+        }
+    }
+
+    return utils::Optional<uint32_t>();
 }
 
 Barbell::Barbell() : _id(newIdString()) {}
