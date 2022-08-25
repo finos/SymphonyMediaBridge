@@ -68,7 +68,7 @@ public:
     virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const = 0;
     virtual std::vector<api::SimulcastGroup> getOfferedVideoStreams() const = 0;
     virtual utils::Optional<uint32_t> getOfferedScreensharingSsrc() const = 0;
-    virtual uint32_t getOfferedLocalSsrc() const = 0;
+    virtual utils::Optional<uint32_t> getOfferedLocalSsrc() const = 0;
 
 public:
     bool isSuccess() const { return !raw.empty(); }
@@ -128,7 +128,7 @@ public:
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
     utils::Optional<uint32_t> getOfferedScreensharingSsrc() const override;
-    uint32_t getOfferedLocalSsrc() const override;
+    utils::Optional<uint32_t> getOfferedLocalSsrc() const override;
 };
 
 class ColibriChannel : public BaseChannel
@@ -154,7 +154,7 @@ public:
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
     utils::Optional<uint32_t> getOfferedScreensharingSsrc() const override;
-    uint32_t getOfferedLocalSsrc() const override;
+    utils::Optional<uint32_t> getOfferedLocalSsrc() const override;
 };
 
 class Barbell

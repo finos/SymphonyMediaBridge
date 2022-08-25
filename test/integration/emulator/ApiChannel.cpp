@@ -317,7 +317,7 @@ utils::Optional<uint32_t> Channel::getOfferedScreensharingSsrc() const
     return utils::Optional<uint32_t>();
 }
 
-uint32_t Channel::getOfferedLocalSsrc() const
+utils::Optional<uint32_t> Channel::getOfferedLocalSsrc() const
 {
     if (_offer.find("video") != _offer.end())
     {
@@ -329,14 +329,13 @@ uint32_t Channel::getOfferedLocalSsrc() const
             {
                 for (auto& ssrcPair : stream["sources"])
                 {
-                    return ssrcPair["main"].get<uint32_t>();
+                    return utils::Optional<uint32_t>(ssrcPair["main"].get<uint32_t>());
                 }
             }
         }
     }
 
-    // It shouldn't happen
-    return 0;
+    return utils::Optional<uint32_t>();
 }
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
@@ -662,16 +661,18 @@ utils::Optional<uint32_t> ColibriChannel::getOfferedScreensharingSsrc() const
     return utils::Optional<uint32_t>();
 }
 
-uint32_t ColibriChannel::getOfferedLocalSsrc() const
+utils::Optional<uint32_t> ColibriChannel::getOfferedLocalSsrc() const
 {
     for (auto& content : _offer["contents"])
     {
         if (content["name"] == "video")
         {
             auto channel = content["channels"][0];
-            return channel["sources"][0].get<uint32_t>();
+            return utils::Optional<uint32_t>(channel["sources"][0].get<uint32_t>());
         }
     }
+
+    return utils::Optional<uint32_t>();
 }
 
 Barbell::Barbell() : _id(newIdString()) {}

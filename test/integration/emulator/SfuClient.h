@@ -105,22 +105,23 @@ public:
 
         _remoteVideoSsrc = _channel.getOfferedVideoSsrcs();
         _remoteVideoStreams = _channel.getOfferedVideoStreams();
-        uint32_t localSsrc = _channel.getOfferedLocalSsrc();
+        utils::Optional<uint32_t> localSsrc = _channel.getOfferedLocalSsrc();
         utils::Optional<uint32_t> slidesSsrc = _channel.getOfferedScreensharingSsrc();
 
         bridge::RtpMap videoRtpMap(bridge::RtpMap::Format::VP8);
         bridge::RtpMap feedbackRtpMap(bridge::RtpMap::Format::VP8RTX);
 
-        bool isLocalSsrcFond = false;
+        bool isLocalSsrcFound = false;
 
         for (auto& stream : _remoteVideoStreams)
         {
-            const auto videoContent = stream.containsMainSsrc(localSsrc) ? RtpVideoReceiver::VideoContent::LOCAL
+            const auto videoContent = localSsrc.isSet() && stream.containsMainSsrc(localSsrc.get())
+                ? RtpVideoReceiver::VideoContent::LOCAL
                 : slidesSsrc.isSet() && stream.containsMainSsrc(slidesSsrc.get())
                 ? RtpVideoReceiver::VideoContent::SLIDES
                 : RtpVideoReceiver::VideoContent::VIDEO;
 
-            isLocalSsrcFond = isLocalSsrcFond || videoContent == RtpVideoReceiver::VideoContent::LOCAL;
+            isLocalSsrcFound = isLocalSsrcFound || videoContent == RtpVideoReceiver::VideoContent::LOCAL;
 
             _videoReceivers.emplace_back(std::make_unique<RtpVideoReceiver>(++_instanceId,
                 stream,
@@ -141,7 +142,7 @@ public:
         }
 
         // Local ssrc probably is not in _remoteVideoSsrc
-        if (!isLocalSsrcFond)
+        if (!isLocalSsrcFound && localSsrc.isSet())
         {
             api::SsrcPair ssrcPair[1];
             ssrcPair[0].main = localSsrc;
