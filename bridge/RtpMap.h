@@ -66,6 +66,8 @@ struct RtpMap
 
     RtpMap(const RtpMap& rtpMap) = default;
 
+    bool isEmpty() const { return format == Format::EMPTY; }
+
     Format format;
     uint16_t payloadType;
     uint32_t sampleRate;
