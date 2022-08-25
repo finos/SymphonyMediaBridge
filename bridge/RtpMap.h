@@ -40,7 +40,7 @@ struct RtpMap
             break;
         default:
             assert(false);
-            payloadType = 4096;
+            payloadType = 0x7F;
             sampleRate = 0;
             break;
         }
