@@ -19,7 +19,7 @@ struct RtpMap
         EMPTY
     };
 
-    RtpMap() : _format(Format::EMPTY), _payloadType(4096), _sampleRate(0) {}
+    RtpMap() : _format(Format::EMPTY), _payloadType(0xFF), _sampleRate(0) {}
 
     explicit RtpMap(const Format format) : _format(format)
     {
@@ -40,13 +40,13 @@ struct RtpMap
             break;
         default:
             assert(false);
-            _payloadType = 4096;
+            _payloadType = 0xFF;
             _sampleRate = 0;
             break;
         }
     }
 
-    RtpMap(const Format format, const uint16_t payloadType, const uint32_t sampleRate)
+    RtpMap(const Format format, const uint8_t payloadType, const uint32_t sampleRate)
         : _format(format),
           _payloadType(payloadType),
           _sampleRate(sampleRate)
@@ -55,7 +55,7 @@ struct RtpMap
 
     RtpMap(const Format format,
         const uint16_t payloadType,
-        const uint32_t sampleRate,
+        const uint8_t sampleRate,
         const utils::Optional<uint32_t>& channels)
         : _format(format),
           _payloadType(payloadType),
@@ -66,8 +66,10 @@ struct RtpMap
 
     RtpMap(const RtpMap& rtpMap) = default;
 
+    bool isEmpty() const { return _format == Format::EMPTY; }
+
     Format _format;
-    uint16_t _payloadType;
+    uint8_t _payloadType;
     uint32_t _sampleRate;
     utils::Optional<uint32_t> _channels;
     std::unordered_map<std::string, std::string> _parameters;
