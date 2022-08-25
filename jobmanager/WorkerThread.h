@@ -17,6 +17,7 @@ public:
     static double getWorkTime(); // ms
 
     static bool isWorkerThread();
+    static bool yield();
 
 private:
     std::atomic<bool> _running;

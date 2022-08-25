@@ -5,7 +5,7 @@
 namespace
 {
 
-thread_local bool threadLocalIsWorkerThread = false;
+thread_local jobmanager::WorkerThread* workerThreadHandler = nullptr;
 
 } // namespace
 
@@ -28,7 +28,7 @@ void WorkerThread::stop()
 void WorkerThread::run()
 {
     concurrency::setThreadName("Worker");
-    threadLocalIsWorkerThread = true;
+    workerThreadHandler = this;
 
     try
     {
@@ -53,11 +53,30 @@ void WorkerThread::run()
     {
         logger::error("unknown exception", "WorkerThread");
     }
+
+    workerThreadHandler = nullptr;
+}
+
+bool WorkerThread::yield()
+{
+    WorkerThread* wt = workerThreadHandler;
+    if (workerThreadHandler)
+    {
+        Job* job = workerThreadHandler->_jobManager.tryFetchNoWait();
+        if (job)
+        {
+            job->run();
+            workerThreadHandler->_jobManager.freeJob(job);
+            return true;
+        }
+    }
+
+    return false;
 }
 
 bool WorkerThread::isWorkerThread()
 {
-    return threadLocalIsWorkerThread;
+    return workerThreadHandler != nullptr;
 }
 
 

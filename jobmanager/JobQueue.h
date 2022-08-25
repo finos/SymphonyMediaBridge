@@ -62,24 +62,15 @@ public:
         addJob<StopJob>(sema, _running);
         if (!sema.wait(1))
         {
-            // If it's a worker thread we will try keep it busy with other tasks
             if (WorkerThread::isWorkerThread())
             {
-                uint32_t nextWaitTime;
-                do
+                bool waiting = true;
+                while(waiting)
                 {
-                    Job* job = _jobManager.tryFetchNoWait();
-                    if (job)
-                    {
-                        job->run();
-                        nextWaitTime = 0;
-                    }
-                    else
-                    {
-                        nextWaitTime = 1;
-                    }
-
-                } while (!sema.wait(nextWaitTime));
+                    // Let's yield thread until StopJob is done
+                    const bool switchedJobExecution = WorkerThread::yield();
+                    waiting = !sema.wait(switchedJobExecution ? 0 : 1);
+                }
             }
             else
             {
