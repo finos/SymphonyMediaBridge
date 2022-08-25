@@ -1,11 +1,11 @@
 #pragma once
 #include "bridge/RtpMap.h"
-#include "bridge/engine/UntypedEngineObject.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "bridge/engine/SsrcRewrite.h"
 #include "bridge/engine/SsrcWhitelist.h"
+#include "bridge/engine/UntypedEngineObject.h"
 #include "concurrency/MpmcHashmap.h"
 #include "utils/Optional.h"
 #include <cstdint>
@@ -20,7 +20,7 @@ class RtcTransport;
 namespace bridge
 {
 
-struct EngineVideoStream final : UntypedEngineObject
+struct EngineVideoStream final
 {
     EngineVideoStream(const std::string& endpointId,
         const size_t endpointIdHash,

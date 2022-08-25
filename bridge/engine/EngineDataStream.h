@@ -11,7 +11,7 @@
 namespace bridge
 {
 
-struct EngineDataStream final : UntypedEngineObject
+struct EngineDataStream final 
 {
     EngineDataStream(const std::string& endpointId, const size_t endpointIdHash, transport::RtcTransport& transport)
         : endpointId(endpointId),

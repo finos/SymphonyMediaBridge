@@ -13,7 +13,7 @@ class RtcTransport;
 namespace bridge
 {
 
-struct EngineAudioStream final : UntypedEngineObject
+struct EngineAudioStream final 
 {
     EngineAudioStream(const std::string& endpointId,
         const size_t endpointIdHash,

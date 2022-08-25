@@ -11,7 +11,7 @@
 namespace bridge
 {
 
-struct EngineRecordingStream final : UntypedEngineObject
+struct EngineRecordingStream final
 {
     EngineRecordingStream(const std::string& id,
         const size_t endpointIdHash,
