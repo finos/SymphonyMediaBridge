@@ -105,18 +105,55 @@ public:
 
         _remoteVideoSsrc = _channel.getOfferedVideoSsrcs();
         _remoteVideoStreams = _channel.getOfferedVideoStreams();
+        uint32_t localSsrc = _channel.getOfferedLocalSsrc();
+        utils::Optional<uint32_t> slidesSsrc = _channel.getOfferedScreensharingSsrc();
 
         bridge::RtpMap videoRtpMap(bridge::RtpMap::Format::VP8);
         bridge::RtpMap feedbackRtpMap(bridge::RtpMap::Format::VP8RTX);
 
+        bool isLocalSsrcFond = false;
+
         for (auto& stream : _remoteVideoStreams)
         {
+            const auto videoContent = stream.containsMainSsrc(localSsrc) ? RtpVideoReceiver::VideoContent::LOCAL
+                : slidesSsrc.isSet() && stream.containsMainSsrc(slidesSsrc.get())
+                ? RtpVideoReceiver::VideoContent::SLIDES
+                : RtpVideoReceiver::VideoContent::VIDEO;
+
+            isLocalSsrcFond = isLocalSsrcFond || videoContent == RtpVideoReceiver::VideoContent::LOCAL;
 
             _videoReceivers.emplace_back(std::make_unique<RtpVideoReceiver>(++_instanceId,
                 stream,
                 videoRtpMap,
                 feedbackRtpMap,
                 _transport.get(),
+                videoContent,
+                utils::Time::getAbsoluteTime()));
+
+            for (auto& ssrcPair : stream)
+            {
+                _videoSsrcMap.emplace(ssrcPair.main, _videoReceivers.back().get());
+                if (ssrcPair.feedback != 0)
+                {
+                    _videoSsrcMap.emplace(ssrcPair.feedback, _videoReceivers.back().get());
+                }
+            }
+        }
+
+        // Local ssrc probably is not in _remoteVideoSsrc
+        if (!isLocalSsrcFond)
+        {
+            api::SsrcPair ssrcPair[1];
+            ssrcPair[0].main = localSsrc;
+            ssrcPair[0].feedback = 0;
+            auto stream = makeSsrcGroup(ssrcPair);
+
+            _videoReceivers.emplace_back(std::make_unique<RtpVideoReceiver>(++_instanceId,
+                stream,
+                videoRtpMap,
+                feedbackRtpMap,
+                _transport.get(),
+                RtpVideoReceiver::VideoContent::LOCAL,
                 utils::Time::getAbsoluteTime()));
 
             for (auto& ssrcPair : stream)
@@ -270,17 +307,26 @@ public:
     class RtpVideoReceiver
     {
     public:
+        enum class VideoContent
+        {
+            LOCAL,
+            VIDEO,
+            SLIDES
+        };
+
         RtpVideoReceiver(size_t instanceId,
             api::SimulcastGroup ssrcs,
             const bridge::RtpMap& rtpMap,
             const bridge::RtpMap& rtxRtpMap,
             transport::RtcTransport* transport,
+            VideoContent content,
             uint64_t timestamp)
             : contexts(256),
               _rtpMap(rtpMap),
               _rtxRtpMap(rtxRtpMap),
               _loggableId("rtprcv", instanceId),
-              _ssrcs(ssrcs)
+              _ssrcs(ssrcs),
+              _videoContent(content)
         {
             _recording.reserve(256 * 1024);
             logger::info("video offered ssrc %u, payload %u", _loggableId.c_str(), _ssrcs[0].main, _rtpMap.payloadType);
@@ -296,11 +342,8 @@ public:
             if (it == contexts.end())
             {
 
-                auto result = contexts.emplace(rtpHeader->ssrc.get(),
-                    rtpHeader->ssrc.get(),
-                    rtpHeader->payloadType == _rtpMap.payloadType ? _rtpMap : _rtxRtpMap,
-                    sender,
-                    timestamp);
+                auto result =
+                    contexts.emplace(rtpHeader->ssrc.get(), rtpHeader->ssrc.get(), _rtpMap, sender, timestamp);
                 it = result.first;
             }
 
@@ -312,10 +355,18 @@ public:
                 return;
             }
 
-            ++videoPacketCount;
-
-            if (rtpHeader->payloadType != inboundContext.rtpMap.payloadType)
+            if (rtpHeader->payloadType == _rtpMap.payloadType)
             {
+                ++videoPacketCount;
+            }
+            else if (!_rtxRtpMap.isEmpty() && rtpHeader->payloadType == _rtxRtpMap.payloadType)
+            {
+                ++rtxPacketCount;
+            }
+            else
+            {
+                ++unknownPayloadPacketCount;
+
                 logger::warn("%u unexpected payload type %u",
                     _loggableId.c_str(),
                     rtpHeader->ssrc.get(),
@@ -325,7 +376,14 @@ public:
 
         const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
+        bool hasPackets() const { return (videoPacketCount | rtxPacketCount | unknownPayloadPacketCount) != 0; }
+        VideoContent getContent() const { return _videoContent; }
+        bool isLocalContent() const { return _videoContent == VideoContent::LOCAL; }
+        bool isSlidesContent() const { return _videoContent == VideoContent::SLIDES; }
+
         size_t videoPacketCount = 0;
+        size_t rtxPacketCount = 0;
+        size_t unknownPayloadPacketCount = 0;
 
         concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext> contexts;
 
@@ -336,6 +394,7 @@ public:
         logger::LoggableId _loggableId;
         std::vector<int16_t> _recording;
         api::SimulcastGroup _ssrcs;
+        VideoContent _videoContent;
     };
 
 public:
@@ -467,6 +526,20 @@ public:
         return _audioReceivers;
     }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
+
+    std::vector<RtpVideoReceiver*> collectReceiversWithPackets()
+    {
+        std::vector<RtpVideoReceiver*> v;
+        for (auto& receiver : _videoReceivers)
+        {
+            if (receiver->hasPackets())
+            {
+                v.push_back(receiver.get());
+            }
+        }
+
+        return v;
+    }
 
 private:
     utils::IdGenerator _idGenerator;

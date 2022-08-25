@@ -490,6 +490,136 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
     EXPECT_EQ(rData3.size(), 1);
 }
 
+TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
+{
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        return;
+    }
+#if !ENABLE_LEGACY_API
+    return;
+#endif
+
+    _config.readFromString("{\"ip\":\"127.0.0.1\", "
+                           "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+    initBridge(_config);
+
+    const std::string baseUrl = "http://127.0.0.1:8080";
+
+    DEFINE_3_CLIENT_CONFERENCE(ColibriChannel, baseUrl + "/colibri")
+
+    GroupCall<SfuClient<ColibriChannel>> groupCall({&client1, &client2, &client3});
+
+    using RtpVideoReceiver = typename SfuClient<ColibriChannel>::RtpVideoReceiver;
+
+    AnswerOptions answerOptionNoRtx;
+    answerOptionNoRtx.rtxDisabled = true;
+
+    client1._channel.setAnswerOptions(answerOptionNoRtx);
+    client2._channel.setAnswerOptions(answerOptionNoRtx);
+
+    // Audio only for all three participants.
+    client1.initiateCall(baseUrl, conf.getId(), true, true, true, true);
+    client2.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+    client3.initiateCall(baseUrl, conf.getId(), false, true, true, true);
+
+    if (!groupCall.connect(utils::Time::sec * 8))
+    {
+        EXPECT_TRUE(false);
+        return;
+    }
+
+    // Have to produce some audio volume above "silence threshold", otherwise audio packets
+    // won't be forwarded by SFU.
+    client1._audioSource->setFrequency(600);
+    client2._audioSource->setFrequency(1300);
+    client3._audioSource->setFrequency(1500);
+
+    client1._audioSource->setVolume(0.6);
+    client2._audioSource->setVolume(0.6);
+    client3._audioSource->setVolume(0.6);
+
+    utils::Pacer pacer(10 * utils::Time::ms);
+    for (int i = 0; i < 300; ++i)
+    {
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        client1.process(timestamp, true);
+        client2.process(timestamp, true);
+        client3.process(timestamp, true);
+        pacer.tick(utils::Time::getAbsoluteTime());
+        utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
+    }
+
+    client1.stopRecording();
+    client2.stopRecording();
+    client3.stopRecording();
+
+    client1._transport->stop();
+    client2._transport->stop();
+    client3._transport->stop();
+
+    for (int i = 0; i < 10 &&
+         (client1._transport->hasPendingJobs() || client2._transport->hasPendingJobs() ||
+             client3._transport->hasPendingJobs());
+         ++i)
+    {
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+    }
+
+    const auto& rData1 = client1.getAudioReceiveStats();
+    const auto& rData2 = client2.getAudioReceiveStats();
+    const auto& rData3 = client3.getAudioReceiveStats();
+
+    EXPECT_EQ(rData1.size(), 2); // s2's audio, s3's audio
+    EXPECT_EQ(rData2.size(), 2); // s1's audio, s3's audio
+    EXPECT_EQ(rData3.size(), 2); // s1's audio, s2's audio
+
+    auto videoReceivers1 = client1.collectReceiversWithPackets();
+    auto videoReceivers2 = client2.collectReceiversWithPackets();
+    auto videoReceivers3 = client3.collectReceiversWithPackets();
+
+    ASSERT_EQ(videoReceivers1.size(), 2); // s2's video, s3's video
+    ASSERT_EQ(videoReceivers2.size(), 2); // s1's video, s3's video
+    ASSERT_EQ(videoReceivers3.size(), 3); // s1's video, s3's video + padding
+
+    // Check if all others have received video content only
+    for (auto* videoReceiver : videoReceivers1)
+    {
+        ASSERT_GT(videoReceiver->videoPacketCount, 0); // It should contain video
+        ASSERT_EQ(videoReceiver->rtxPacketCount, 0); // It should NOT contain rtx
+        ASSERT_EQ(videoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
+        ASSERT_EQ(videoReceiver->getContent(), RtpVideoReceiver::VideoContent::VIDEO);
+    }
+
+    for (auto* videoReceiver : videoReceivers2)
+    {
+        ASSERT_GT(videoReceiver->videoPacketCount, 0); // It should contain video
+        ASSERT_EQ(videoReceiver->rtxPacketCount, 0); // It should NOT contain rtx
+        ASSERT_EQ(videoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
+        ASSERT_EQ(videoReceiver->getContent(), RtpVideoReceiver::VideoContent::VIDEO);
+    }
+
+    RtpVideoReceiver* localVideoReceiver = nullptr;
+    for (auto* videoReceiver : videoReceivers3)
+    {
+        if (videoReceiver->getContent() == RtpVideoReceiver::VideoContent::LOCAL)
+        {
+            localVideoReceiver = videoReceiver;
+        }
+        else
+        {
+            ASSERT_GT(videoReceiver->videoPacketCount, 0); // It should contain video
+            ASSERT_EQ(videoReceiver->rtxPacketCount, 0); // It should NOT contain rtx
+            ASSERT_EQ(videoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
+        }
+    }
+
+    ASSERT_NE(localVideoReceiver, nullptr);
+    ASSERT_GT(localVideoReceiver->rtxPacketCount, 0); // It should contain rtx
+    ASSERT_EQ(localVideoReceiver->videoPacketCount, 0); // It should NOT video packets
+    ASSERT_EQ(localVideoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
+}
+
 TEST_F(IntegrationTest, videoOffPaddingOff)
 {
     /*
@@ -527,7 +657,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         return;
     }
 
-    // Have to produce some audio volume above "silence threshold", otherwise audio packats
+    // Have to produce some audio volume above "silence threshold", otherwise audio packets
     // won't be forwarded by SFU.
     client1._audioSource->setFrequency(600);
     client2._audioSource->setFrequency(1300);
@@ -600,7 +730,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
     EXPECT_EQ(rData1.size(), 2); // s2's audio, s3's audio
     EXPECT_EQ(rData2.size(), 1); // s1's audio, + padding
-                                 // s1's audio, no padding, since it joined the call whith no video.
+                                 // s1's audio, no padding, since it joined the call with no video.
     EXPECT_EQ(rData3.size(), 1);
 }
 

@@ -1,8 +1,8 @@
 #pragma once
 #include "utils/Optional.h"
-#include <cstring>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 namespace api
 {
@@ -80,6 +80,19 @@ struct SimulcastLevelArray
             }
         }
         return utils::Optional<uint32_t>();
+    }
+
+    bool containsMainSsrc(uint32_t ssrc)
+    {
+        for (auto& p : *this)
+        {
+            if (p.main == ssrc)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 private:

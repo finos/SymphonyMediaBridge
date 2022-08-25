@@ -37,6 +37,11 @@ struct SimulcastStream
     bool slides = false;
 };
 
+struct AnswerOptions
+{
+    bool rtxDisabled = false;
+};
+
 class BaseChannel
 {
 public:
@@ -62,10 +67,14 @@ public:
 
     virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const = 0;
     virtual std::vector<api::SimulcastGroup> getOfferedVideoStreams() const = 0;
+    virtual utils::Optional<uint32_t> getOfferedScreensharingSsrc() const = 0;
+    virtual uint32_t getOfferedLocalSsrc() const = 0;
 
 public:
     bool isSuccess() const { return !raw.empty(); }
     bool isVideoEnabled() const { return _videoEnabled; }
+
+    void setAnswerOptions(const AnswerOptions& answerOptions) { _answerOptions = answerOptions; }
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
@@ -92,6 +101,8 @@ protected:
     nlohmann::json _offer;
     std::string _baseUrl;
     bool _videoEnabled;
+
+    AnswerOptions _answerOptions;
 };
 
 class Channel : public BaseChannel
@@ -116,6 +127,8 @@ public:
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
+    utils::Optional<uint32_t> getOfferedScreensharingSsrc() const override;
+    uint32_t getOfferedLocalSsrc() const override;
 };
 
 class ColibriChannel : public BaseChannel
@@ -140,6 +153,8 @@ public:
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
+    utils::Optional<uint32_t> getOfferedScreensharingSsrc() const override;
+    uint32_t getOfferedLocalSsrc() const override;
 };
 
 class Barbell
