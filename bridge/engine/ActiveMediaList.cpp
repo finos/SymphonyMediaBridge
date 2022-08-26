@@ -225,11 +225,13 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
             VideoScreenShareSsrcMapping{simulcastStream.levels[0].ssrc, _videoScreenShareSsrc.main});
+        ++_ssrcMapRevision;
     }
     else if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingSlides())
     {
         _videoScreenShareSsrcMapping.set(endpointIdHash,
             VideoScreenShareSsrcMapping{secondarySimulcastStream.get().levels[0].ssrc, _videoScreenShareSsrc.main});
+        ++_ssrcMapRevision;
     }
 
     if (_activeVideoListLookupMap.size() == _maxActiveListSize)
@@ -278,6 +280,7 @@ bool ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
     if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == endpointIdHash)
     {
         _videoScreenShareSsrcMapping.clear();
+        ++_ssrcMapRevision;
     }
 
     removeFromRewriteMap(endpointIdHash);
@@ -394,10 +397,10 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
 // 3. Keep track of peak value (_maxRecentLevel) for each participant
 // 4. Keep track of noise level (_noiseLevel) for each participant where _noiseLevel value is
 //    the minimum level seen recently in the ~100ms window
-// 5. Peak is decayed towards average of the 2s Window if no new max is recevied
+// 5. Peak is decayed towards average of the 2s Window if no new max is received
 // 6. Noise level estimate is increased if no new minimum is found
 //
-// Score is calcuated as diff (spread) between _maxRecentLevel and _noiseLevel.
+// Score is calculated as diff (spread) between _maxRecentLevel and _noiseLevel.
 // To take over the dominant speaker position a participant has to have the highest score
 // three times in a row. Current dominant speaker score must also be < 75% of new dominant speaker score. That is 33%
 // louder over the entire measurement window. The time passed since last speaker switch must be > 2s.
@@ -737,10 +740,6 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
         if (rewriteMapItr != _videoSsrcRewriteMap.end())
         {
             api::DataChannelMessage::addUserMediaSsrc(outMessage, rewriteMapItr->second[0].main);
-        }
-        else
-        {
-            logger::warn("cannot find video ssrcmap for %zu", "", videoEndpointIdhash);
         }
 
         if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == videoEndpointIdhash)
