@@ -33,7 +33,7 @@ public:
     virtual void OnTestEnd(const TestInfo& test_info) override
     {
         logger::info("Test Ended %s.%s <<<", "gtest", test_info.test_case_name(), test_info.name());
-        utils::Time::nanoSleep(50 * utils::Time::ms); // TODO replace with call to logger flush
+        logger::flushLog();
     }
     virtual void OnEnvironmentsTearDownStart(const UnitTest& unit_test) override {}
     virtual void OnEnvironmentsTearDownEnd(const UnitTest& unit_test) override {}
