@@ -57,14 +57,6 @@ public:
         ::nanosleep(&sleepTime, nullptr);
     }
 
-    void nanoSleep(int64_t nanoSeconds) override
-    {
-        uint64_t ns = (nanoSeconds > 0 ? nanoSeconds : 0);
-        nanoSleep(ns);
-    }
-    void uSleep(uint64_t uSec) override { utils::Time::nanoSleep(uSec * utils::Time::us); }
-    void mSleep(uint64_t milliSeconds) override { utils::Time::nanoSleep(milliSeconds * utils::Time::ms); }
-
     std::chrono::system_clock::time_point wallClock() override { return std::chrono::system_clock::now(); }
 };
 
@@ -108,14 +100,48 @@ uint64_t getApproximateTime()
     return _timeSource->getApproximateTime();
 }
 
+std::chrono::system_clock::time_point now()
+{
+    return _timeSource->wallClock();
+}
+
 void nanoSleep(int64_t ns)
+{
+    _timeSource->nanoSleep(ns > 0 ? ns : 0);
+}
+
+void nanoSleep(uint64_t ns)
 {
     _timeSource->nanoSleep(ns);
 }
 
-void usleep(long uSec)
+void nanoSleep(int32_t ns)
 {
-    _timeSource->nanoSleep(static_cast<uint64_t>(uSec) * 1000);
+    _timeSource->nanoSleep(ns > 0 ? ns : 0);
+}
+
+void nanoSleep(uint32_t ns)
+{
+    _timeSource->nanoSleep(ns);
+}
+
+void uSleep(int64_t uSec)
+{
+    _timeSource->nanoSleep((uSec > 0 ? uSec : 0) * 1000);
+}
+
+void mSleep(int64_t milliSeconds)
+{
+    _timeSource->nanoSleep((milliSeconds > 0 ? milliSeconds : 0) * 1000000);
+}
+
+// OS sleep bypass TimeSource
+void rawNanoSleep(int64_t ns)
+{
+    ns = (ns > 0 ? ns : 0);
+    ns = std::min(ns, static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * int64_t(1000'000'000));
+    const timespec sleepTime = {static_cast<long>(ns / 1000'000'000UL), static_cast<long>(ns % 1000000000UL)};
+    ::nanosleep(&sleepTime, nullptr);
 }
 
 uint64_t toNtp(const std::chrono::system_clock::time_point timestamp)

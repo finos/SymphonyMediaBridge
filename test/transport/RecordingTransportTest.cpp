@@ -117,7 +117,7 @@ private:
             .setRtpPayloadType(rtpPayload)
             .setPayloadFormat(rtpPayloadFormat)
             .setEndpoint("test")
-            .setWallClock(std::chrono::system_clock::now())
+            .setWallClock(utils::Time::now())
             .build();
     }
 

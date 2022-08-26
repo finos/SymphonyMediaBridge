@@ -479,6 +479,9 @@ set(TEST_FILES
     test/integration/emulator/SfuClient.h
     test/integration/emulator/HttpRequests.h
     test/integration/emulator/HttpRequests.cpp
+    test/integration/emulator/TimeTurner.h
+    test/integration/emulator/TimeTurner.cpp
+    test/integration/TimeTurnerTest.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
     test/gtest_main.cpp

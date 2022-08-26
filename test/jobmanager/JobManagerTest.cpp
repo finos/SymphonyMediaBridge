@@ -215,7 +215,7 @@ TEST_F(JobManagerTest, serialJobQueueFull)
 
     while (jobManager.template addJob<NoJob>(mainCounter))
         ;
-    utils::Time::usleep(15000);
+    utils::Time::uSleep(15000);
     EXPECT_GT(mainCounter.load(), 4096);
     for (int i = 0; i < 10; ++i)
     {
@@ -225,7 +225,7 @@ TEST_F(JobManagerTest, serialJobQueueFull)
         }
     }
 
-    utils::Time::usleep(5000);
+    utils::Time::uSleep(5000);
     EXPECT_EQ(counter.load(), 10);
 
     while (serialJobQ.addJob<NoJob>(counter))
@@ -237,12 +237,12 @@ TEST_F(JobManagerTest, serialJobQueueFull)
     {
         sem.post();
     }
-    utils::Time::usleep(500000);
+    utils::Time::uSleep(500000);
     EXPECT_EQ(mainCounter.load(), 0);
     EXPECT_EQ(counter.load(), full);
 
     serialJobQ.addJob<NoJob>(counter);
-    utils::Time::usleep(500000);
+    utils::Time::uSleep(500000);
 
     EXPECT_EQ(counter.load(), 0);
 }

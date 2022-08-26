@@ -153,7 +153,7 @@ void runQueueTest(const int consumerCount,
         cons[i] = std::make_unique<std::thread>(consumerRun<LockQueue>, &queue, reports, consumerCount == 1);
     }
 
-    utils::Time::usleep(durationMs * 1000ull);
+    utils::Time::uSleep(durationMs * 1000ull);
     producerRunning = false;
     for (int i = 0; i < producerCount; ++i)
     {

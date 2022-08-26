@@ -292,7 +292,7 @@ void RecordingTransport::sendRtcpSenderReport(memory::PacketPoolAllocator& sendA
 
     constexpr int MINIMUM_SR = 7 * sizeof(uint32_t);
 
-    const auto wallClock = std::chrono::system_clock::now();
+    const auto wallClock = utils::Time::now();
 
     for (auto& it : _outboundSsrcCounters)
     {
