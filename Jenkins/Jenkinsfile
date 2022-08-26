@@ -24,7 +24,7 @@ node('be-integration') {
             env.GIT_BRANCH = scmVars.GIT_BRANCH
 
             if (env.GIT_BRANCH.equals("master")) {
-                version = "2.1.0-${currentBuild.number}"
+                version = "2.2.0-${currentBuild.number}"
                 isReleaseBuild = true
             } else if (env.GIT_BRANCH.equals("2.0.0")) {
                 version = "2.0.0-${currentBuild.number}"
