@@ -1,0 +1,21 @@
+
+#pragma once
+
+#include <string>
+
+#ifndef _TEST_OUTPUT_FOLDER
+#define _TEST_OUTPUT_FOLDER "${CMAKE_TEST_DIRECTORY}"
+#endif
+
+#ifndef _TEST_RESOURCES_FOLDER
+#define _TEST_RESOURCES_FOLDER _TEST_OUTPUT_FOLDER "/resources"
+#endif
+
+struct TestConfig
+{
+    static std::string getResourceDirectory() { return _TEST_RESOURCES_FOLDER; }
+    static std::string getResourcePath(const std::string& resourceName)
+    {
+        return getResourceDirectory() + "/" + resourceName;
+    }
+};

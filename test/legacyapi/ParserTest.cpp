@@ -187,7 +187,7 @@ const std::string requestData =
 
 }
 
-class ParserTest : public ::testing::Test
+class LegacyParserTest : public ::testing::Test
 {
     void SetUp() override
     {
@@ -201,12 +201,12 @@ protected:
     legacyapi::Conference _conference;
 };
 
-TEST_F(ParserTest, conferenceId)
+TEST_F(LegacyParserTest, conferenceId)
 {
     EXPECT_EQ("b554cdfd47c6133d", _conference._id);
 }
 
-TEST_F(ParserTest, channelBundle)
+TEST_F(LegacyParserTest, channelBundle)
 {
     EXPECT_EQ(1, _conference._channelBundles.size());
     const auto& channelBundle = _conference._channelBundles[0];
@@ -250,7 +250,7 @@ TEST_F(ParserTest, channelBundle)
     EXPECT_EQ(0, channelBundle._transport._candidates[1]._network);
 }
 
-TEST_F(ParserTest, contents)
+TEST_F(LegacyParserTest, contents)
 {
     EXPECT_EQ(3, _conference._contents.size());
 
@@ -314,7 +314,7 @@ TEST_F(ParserTest, contents)
     }
 }
 
-TEST_F(ParserTest, payloadTypes)
+TEST_F(LegacyParserTest, payloadTypes)
 {
     {
         const auto& audioChannel = _conference._contents[0]._channels[0];

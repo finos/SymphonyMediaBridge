@@ -1,0 +1,67 @@
+{
+  "action" : "configure",
+  "bundle-transport" : {
+    "rtcp-mux" : true,
+    "ice" : {
+      "ufrag" : "Rl3b",
+      "pwd" : "gb4ISfk9Ppy6M5zYcZdtqldd"
+    },
+    "dtls" : {
+      "setup" : "active",
+      "type" : "sha-256",
+      "hash" : "2C:F8:DD:0D:BD:E6:18:0D:6E:83:0F:F3:A9:FD:CD:BA:18:C6:8E:34:91:EC:D1:4C:A5:1A:BC:26:FB:0B:92:02"
+    }
+  },
+  "audio" : {
+    "payload-type" : {
+      "id" : 111,
+      "parameters" : {
+        "minptime" : "10",
+        "useinbandfec" : "1"
+      },
+      "rtcp-fbs" : [ ],
+      "name" : "opus",
+      "clockrate" : 48000,
+      "channels" : 2
+    },
+    "rtp-hdrexts" : [ {
+      "id" : 1,
+      "uri" : "urn:ietf:params:rtp-hdrext:ssrc-audio-level"
+    } ],
+    "ssrcs" : [ 3455980998 ]
+  },
+  "video" : {
+    "payload-types" : [ {
+      "id" : 100,
+      "parameters" : { },
+      "rtcp-fbs" : [ {
+        "type" : "goog-remb"
+      }, {
+        "type" : "ccm",
+        "subtype" : "fir"
+      }, {
+        "type" : "nack"
+      }, {
+        "type" : "nack",
+        "subtype" : "pli"
+      } ],
+      "name" : "VP8",
+      "clockrate" : 90000
+    }, {
+      "id" : 96,
+      "parameters" : {
+        "apt" : "100"
+      },
+      "rtcp-fbs" : [ ],
+      "name" : "rtx",
+      "clockrate" : 90000
+    } ],
+    "rtp-hdrexts" : [ {
+      "id" : 3,
+      "uri" : "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"
+    } ]
+  },
+  "data" : {
+    "port" : 5000
+  }
+}
