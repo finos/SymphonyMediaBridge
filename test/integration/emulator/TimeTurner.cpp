@@ -51,7 +51,7 @@ void TimeTurner::runFor(uint64_t durationNs)
     for (auto timestamp = getAbsoluteTime(); utils::Time::diffLE(startTime, timestamp, durationNs);
          timestamp = getAbsoluteTime())
     {
-        logger::awaitLogDrain();
+        logger::awaitLogDrained(0.75);
         _sleeperCount.wait();
         _sleeperCount.post();
         advance();

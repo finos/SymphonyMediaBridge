@@ -63,9 +63,13 @@ TimeSourceImpl _defaultTimeSource;
 
 void initialize()
 {
+    if (!_timeSource)
+    {
 #ifdef __APPLE__
-    mach_timebase_info(&machTimeBase);
+        mach_timebase_info(&machTimeBase);
 #endif
+    }
+
     _timeSource = &_defaultTimeSource;
 }
 

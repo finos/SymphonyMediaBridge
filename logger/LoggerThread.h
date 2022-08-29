@@ -26,7 +26,7 @@ public:
     void flush();
     void stop();
 
-    void awaitLogDrain();
+    void awaitLogDrained(float level);
 
 private:
     void run();
