@@ -59,16 +59,17 @@ public:
 
     std::chrono::system_clock::time_point wallClock() override { return std::chrono::system_clock::now(); }
 };
+TimeSourceImpl _defaultTimeSource;
 
 void initialize()
 {
 #ifdef __APPLE__
     mach_timebase_info(&machTimeBase);
 #endif
-    _timeSource = new TimeSourceImpl();
+    _timeSource = &_defaultTimeSource;
 }
 
-void initialize(TimeSource* timeSource)
+void initialize(TimeSource& timeSource)
 {
     if (!_timeSource)
     {
@@ -76,17 +77,8 @@ void initialize(TimeSource* timeSource)
         mach_timebase_info(&machTimeBase);
 #endif
     }
-    else
-    {
-        delete _timeSource;
-    }
 
-    _timeSource = timeSource;
-}
-
-void cleanup()
-{
-    delete _timeSource;
+    _timeSource = &timeSource;
 }
 
 uint64_t getAbsoluteTime()

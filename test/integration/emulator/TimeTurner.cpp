@@ -1,5 +1,6 @@
 #include "TimeTurner.h"
 #include "logger/Logger.h"
+#include <thread>
 
 namespace emulator
 {
@@ -10,6 +11,7 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
 {
     if (!_running)
     {
+        std::this_thread::yield();
         return;
     }
 

@@ -8,7 +8,7 @@
 TEST(TimeTurner, threads3)
 {
     emulator::TimeTurner timeSource;
-    utils::Time::initialize(&timeSource);
+    utils::Time::initialize(timeSource);
 
     std::atomic_bool terminate(false);
     uint32_t count[3] = {0};

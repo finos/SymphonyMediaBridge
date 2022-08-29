@@ -25,8 +25,8 @@ namespace Time
 {
 
 void initialize();
-void initialize(TimeSource* timeSource);
-void cleanup();
+void initialize(TimeSource& timeSource);
+
 /**
  * Returns absolute time since some machine specific point in time in nanoseconds.
  */
