@@ -1,27 +1,19 @@
 #include "TimeTurner.h"
+#include "logger/Logger.h"
 
 namespace emulator
 {
 
-TimeTurner::TimeTurner()
-    : _timestamp(100),
-      _startTime(std::chrono::system_clock::now()),
-      _running(true),
-      _sleepersCount(0)
-{
-}
+TimeTurner::TimeTurner() : _timestamp(100), _startTime(std::chrono::system_clock::now()), _running(true) {}
 
 void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
 {
     if (!_running)
     {
-        utils::Time::rawNanoSleep(nanoSeconds);
         return;
     }
 
-    _sleepersCount.fetch_add(1);
-
-    const auto timerExpires = _timestamp.load() + nanoSeconds;
+    const auto timerExpires = _timestamp + nanoSeconds;
     for (size_t i = 0; i < _sleepers.size() * 5; ++i)
     {
         auto& slot = _sleepers[i % _sleepers.size()];
@@ -30,44 +22,46 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
         {
             slot.expireTimestamp = timerExpires;
             slot.state.store(State::Committed);
-
+            _sleeperCount.post();
             slot.semaphore.wait();
             slot.state.store(State::Empty);
-            _sleepersCount.fetch_sub(1);
             return;
         }
     }
+
     assert(false);
 }
 
 std::chrono::system_clock::time_point TimeTurner::wallClock()
 {
-    return _startTime +
-        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(_timestamp.load()));
+    return _startTime + std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(_timestamp));
 }
 
 /**
- * Requires all threads to be created and asleep. You cannot remove or add threads.
+ * Requires all threads to be created and asleep when called. You cannot remove or add threads after calling runFor
+ * or while runFor runs.
  */
-void TimeTurner::runFor(uint64_t nanoSeconds)
+void TimeTurner::runFor(uint64_t durationNs)
 {
+    _sleeperCount.reset(1);
     const auto startTime = getAbsoluteTime();
 
-    const auto threadCount = _sleepersCount.load();
-    while (getAbsoluteTime() - startTime < nanoSeconds)
+    for (auto timestamp = getAbsoluteTime(); utils::Time::diffLE(startTime, timestamp, durationNs);
+         timestamp = getAbsoluteTime())
     {
+        logger::awaitLogDrain();
+        _sleeperCount.wait();
+        _sleeperCount.post();
         advance();
-        do
-        {
-            utils::Time::rawNanoSleep(10);
-        } while (_sleepersCount.load() < threadCount);
     }
+
+    _sleeperCount.wait();
 }
 
 void TimeTurner::advance()
 {
     int64_t minDuration = std::numeric_limits<int64_t>::max();
-    const auto timestamp = _timestamp.load();
+    const auto timestamp = _timestamp;
 
     Sleeper* minItem = nullptr;
     for (auto& slot : _sleepers)
@@ -91,14 +85,14 @@ void TimeTurner::advance()
 
 void TimeTurner::advance(uint64_t nanoSeconds)
 {
-    const auto timestamp = _timestamp.load() + nanoSeconds;
-    _timestamp = timestamp;
+    _timestamp += nanoSeconds;
 
     for (auto& slot : _sleepers)
     {
-        if (slot.state.load() == State::Committed && utils::Time::diffGE(slot.expireTimestamp, timestamp, 0))
+        if (slot.state.load() == State::Committed && utils::Time::diffGE(slot.expireTimestamp, _timestamp, 0))
         {
             slot.state = State::Fired;
+            _sleeperCount.decrement();
             slot.semaphore.post();
         }
     }

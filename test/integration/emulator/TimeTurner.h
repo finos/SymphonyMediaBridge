@@ -10,6 +10,8 @@ namespace emulator
 class TimeTurner : public utils::TimeSource
 {
 public:
+    static const size_t MAX_THREAD_COUNT = 30;
+
     TimeTurner();
 
     virtual uint64_t getAbsoluteTime() override { return _timestamp; }
@@ -21,7 +23,7 @@ public:
 
     void advance();
     void advance(uint64_t nanoSeconds);
-    void runFor(uint64_t nanoSeconds);
+    void runFor(uint64_t durationNs);
 
     TimeTurner& operator+=(uint64_t nanoSeconds)
     {
@@ -30,7 +32,7 @@ public:
     }
 
 private:
-    std::atomic_uint64_t _timestamp;
+    uint64_t _timestamp;
 
     std::chrono::system_clock::time_point _startTime;
 
@@ -51,8 +53,10 @@ private:
         concurrency::Semaphore semaphore;
     };
 
-    std::array<Sleeper, 30> _sleepers;
+    std::array<Sleeper, MAX_THREAD_COUNT> _sleepers;
     bool _running;
-    std::atomic_uint32_t _sleepersCount;
+
+    // equals 1 when all threads are asleep.
+    concurrency::Semaphore _sleeperCount;
 };
 } // namespace emulator

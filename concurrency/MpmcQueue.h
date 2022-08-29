@@ -144,6 +144,8 @@ public:
         }
     }
 
+    uint32_t capacity() const { return _maxElements; }
+
 private:
     const uint32_t _maxElements;
     std::atomic_uint32_t _readCursor;

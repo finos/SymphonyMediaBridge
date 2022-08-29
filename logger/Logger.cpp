@@ -74,4 +74,9 @@ void flushLog()
     _logThread->flush();
 }
 
+void awaitLogDrain()
+{
+    _logThread->awaitLogDrain();
+}
+
 } // namespace logger

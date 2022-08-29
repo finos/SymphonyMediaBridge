@@ -5,10 +5,7 @@
 namespace concurrency
 {
 
-Semaphore::Semaphore(uint32_t initial) : _count(initial)
-{
-    assert(initial < std::numeric_limits<int32_t>::max());
-}
+Semaphore::Semaphore(int32_t initial) : _count(initial) {}
 
 void Semaphore::wait()
 {
@@ -17,7 +14,7 @@ void Semaphore::wait()
     {
         _conditionVariable.wait(locker);
     }
-    --_count;
+    _count.fetch_sub(1);
 }
 
 // returns false on timeout
@@ -33,7 +30,8 @@ bool Semaphore::wait(uint32_t timeoutMs)
             return false;
         }
     }
-    --_count;
+
+    _count.fetch_sub(1);
     return true;
 }
 
@@ -41,23 +39,23 @@ bool Semaphore::wait(uint32_t timeoutMs)
 // use this if you know count > 0
 void Semaphore::decrement()
 {
-    if (_count.fetch_sub(1) <= 0)
-    {
-        ++_count;
-    }
+    _count.fetch_sub(1);
 }
 
-void Semaphore::reset()
+void Semaphore::reset(int32_t count)
 {
     std::unique_lock<std::mutex> locker(_lock);
-    _count = 0;
+    _count = count;
 }
 
 void Semaphore::post()
 {
     std::lock_guard<std::mutex> locker(_lock);
-    ++_count;
-    _conditionVariable.notify_one();
+    const auto count = _count.fetch_add(1);
+    if (count >= 0)
+    {
+        _conditionVariable.notify_one();
+    }
 }
 
 } // namespace concurrency

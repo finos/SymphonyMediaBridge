@@ -5,12 +5,11 @@
 #include <gtest/gtest.h>
 #include <thread>
 
-TEST(Time, threads3)
+TEST(TimeTurner, threads3)
 {
     emulator::TimeTurner timeSource;
     utils::Time::initialize(&timeSource);
 
-    auto start = utils::Time::getAbsoluteTime();
     std::atomic_bool terminate(false);
     uint32_t count[3] = {0};
     std::thread thread1([&terminate, &count] {
@@ -41,7 +40,7 @@ TEST(Time, threads3)
     });
 
     utils::Time::rawNanoSleep(1000u); // let threads fall asleep
-    timeSource.runFor(utils::Time::ms * 1000);
+    timeSource.runFor(utils::Time::ms * 999);
 
     terminate = true;
     timeSource.shutdown();
