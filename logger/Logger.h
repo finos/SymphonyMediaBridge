@@ -23,7 +23,7 @@ void logv(const char* logLevel, const char* logGroup, const bool immediate, cons
 void logv(const char* logLevel, const char* logGroup, const char* format, va_list args);
 void logStack(const void* stack, int frames, const char* logGroup);
 void flushLog();
-void awaitLogDrained(float level);
+void awaitLogDrained(float level = 0.0f);
 
 __attribute__((format(printf, 1, 3))) inline void info(const char* format, const char* logGroup, ...)
 {

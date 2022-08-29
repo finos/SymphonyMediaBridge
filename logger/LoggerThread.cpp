@@ -198,7 +198,7 @@ void LoggerThread::formatTime(const LogItem& item, char* output)
 void LoggerThread::awaitLogDrained(float level)
 {
     level = std::max(0.0f, std::min(1.0f, level));
-    if (_logQueue.size() < _logQueue.capacity() * level)
+    if (_logQueue.size() <= _logQueue.capacity() * level)
     {
         return;
     }

@@ -35,7 +35,7 @@ public:
     {
         utils::Time::initialize(); // the time source may be deleted by now
         logger::info("Test Ended %s.%s <<<", "gtest", test_info.test_case_name(), test_info.name());
-        logger::flushLog();
+        logger::awaitLogDrained();
     }
     virtual void OnEnvironmentsTearDownStart(const UnitTest& unit_test) override {}
     virtual void OnEnvironmentsTearDownEnd(const UnitTest& unit_test) override {}
