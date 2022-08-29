@@ -138,7 +138,6 @@ void runQueueTest(const int consumerCount,
     TransmissionReport reports[],
     uint32_t durationMs)
 {
-    utils::Time::initialize();
     producerRunning = true;
     consumerRunning = true;
     std::unique_ptr<std::thread> prod[producerCount];

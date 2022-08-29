@@ -259,8 +259,6 @@ struct SctpTransportTest : public ::testing::Test
 
     void SetUp() override
     {
-        utils::Time::initialize();
-
         _config = std::make_unique<config::Config>();
         _sslDtls = std::make_unique<transport::SslDtls>();
         _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);

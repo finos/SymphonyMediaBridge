@@ -270,7 +270,6 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
 
     void SetUp() override
     {
-        utils::Time::initialize();
         _bweConfig.sanitize();
 
         std::string configJson = "{\"rtc.ip\": \"127.0.0.1\", \"ice.singlePort\": 10008}";
