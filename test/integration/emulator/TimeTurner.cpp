@@ -26,6 +26,7 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
             slot.state.store(State::Committed);
             _sleeperCount.post();
             slot.semaphore.wait();
+
             slot.state.store(State::Empty);
             return;
         }
@@ -118,6 +119,17 @@ void TimeTurner::advance(uint64_t nanoSeconds)
 void TimeTurner::shutdown()
 {
     _running = false;
+
+    uint64_t maxTimeout = 0;
+    for (auto& slot : _sleepers)
+    {
+        if (slot.state.load() == State::Committed)
+        {
+            maxTimeout = std::max(maxTimeout, slot.expireTimestamp);
+        }
+    }
+    _timestamp += maxTimeout;
+
     for (auto& slot : _sleepers)
     {
         if (slot.state.load() == State::Committed)
