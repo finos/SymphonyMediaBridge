@@ -33,6 +33,7 @@ public:
     }
     virtual void OnTestEnd(const TestInfo& test_info) override
     {
+        utils::Time::initialize(); // the time source may be deleted by now
         logger::info("Test Ended %s.%s <<<", "gtest", test_info.test_case_name(), test_info.name());
         logger::flushLog();
     }
