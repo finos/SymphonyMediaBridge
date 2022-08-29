@@ -40,6 +40,20 @@ std::chrono::system_clock::time_point TimeTurner::wallClock()
 }
 
 /**
+ * You can run this initially if you know how many threads minimum will join the sleep.
+ * It can only be run once.
+ */
+void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutNs)
+{
+    for (uint32_t i = 0; i < expectedCount - 1; ++i)
+    {
+        _sleeperCount.decrement();
+    }
+
+    _sleeperCount.wait(timeoutNs);
+}
+
+/**
  * Requires all threads to be created and asleep when called. You cannot remove or add threads after calling runFor
  * or while runFor runs.
  */
@@ -53,8 +67,9 @@ void TimeTurner::runFor(uint64_t durationNs)
     {
         logger::awaitLogDrained(0.75);
         _sleeperCount.wait();
-        _sleeperCount.post();
         advance();
+        _sleeperCount.post();
+        assert(_sleeperCount.getCount() < 2);
     }
 
     _sleeperCount.wait();

@@ -39,9 +39,10 @@ TEST(TimeTurner, threads3)
         }
     });
 
-    utils::Time::rawNanoSleep(1000u); // let threads fall asleep
-    timeSource.runFor(utils::Time::ms * 999);
+    timeSource.waitForThreadsToSleep(3, 3000);
 
+    timeSource.runFor(utils::Time::ms * 999);
+    logger::info("finished waiting", "main");
     terminate = true;
     timeSource.shutdown();
     thread1.join();

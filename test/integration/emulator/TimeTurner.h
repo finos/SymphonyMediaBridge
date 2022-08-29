@@ -23,6 +23,7 @@ public:
 
     void advance();
     void advance(uint64_t nanoSeconds);
+    void waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutNs);
     void runFor(uint64_t durationNs);
 
     TimeTurner& operator+=(uint64_t nanoSeconds)
