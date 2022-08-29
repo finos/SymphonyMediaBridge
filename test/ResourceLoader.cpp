@@ -3,11 +3,6 @@
 #include <fstream>
 #include <iterator>
 
-namespace
-{
-
-}
-
 std::string ResourceLoader::loadAsString(const std::string& resource)
 {
     const std::string resourcePath = TestConfig::getResourcePath(resource);
