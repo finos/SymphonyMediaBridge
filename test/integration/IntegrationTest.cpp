@@ -1446,7 +1446,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         EXPECT_EQ(audioCounters.lostPackets, 0);
         const auto& rData1 = client1.getAudioReceiveStats();
         std::vector<double> allFreq;
-        EXPECT_EQ(rData1.size(), 2);
+        EXPECT_EQ(rData1.size(), 1);
 
         for (const auto& item : rData1)
         {
