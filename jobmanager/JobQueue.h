@@ -60,14 +60,21 @@ public:
     {
         concurrency::Semaphore sema;
         addJob<StopJob>(sema, _running);
+
+        // Wait 1ms to this semaphore to be released, if it's not
+        // released after that we will check if this a worker thread
+        // and yield it to process other jobs that jobManager may have.
+        // If it is not an worker thread then will wait forever until semaphore is released
         if (!sema.wait(1))
         {
             if (WorkerThread::isWorkerThread())
             {
                 bool waiting = true;
-                while(waiting)
+                while (waiting)
                 {
-                    // Let's yield thread until StopJob is done
+                    // Let's yield thread until StopJob is done.
+                    // check semaphore without wait in the case a job has been
+                    // processed, otherwise wait for 1ms until next yield
                     const bool switchedJobExecution = WorkerThread::yield();
                     waiting = !sema.wait(switchedJobExecution ? 0 : 1);
                 }

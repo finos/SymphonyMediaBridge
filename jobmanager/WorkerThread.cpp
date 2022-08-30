@@ -60,13 +60,13 @@ void WorkerThread::run()
 bool WorkerThread::yield()
 {
     WorkerThread* wt = workerThreadHandler;
-    if (workerThreadHandler)
+    if (wt)
     {
-        Job* job = workerThreadHandler->_jobManager.tryFetchNoWait();
+        Job* job = wt->_jobManager.tryFetchNoWait();
         if (job)
         {
             job->run();
-            workerThreadHandler->_jobManager.freeJob(job);
+            wt->_jobManager.freeJob(job);
             return true;
         }
     }
@@ -78,6 +78,5 @@ bool WorkerThread::isWorkerThread()
 {
     return workerThreadHandler != nullptr;
 }
-
 
 } // namespace jobmanager
