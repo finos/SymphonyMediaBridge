@@ -7,21 +7,28 @@
 namespace concurrency
 {
 
-class Semaphore
+/**
+ * Semaphore that allows negative counter. Waiting thread is released if count > 0.
+ */
+class DebtSemaphore
 {
 public:
-    Semaphore(uint32_t initial = 0);
-    ~Semaphore() = default;
+    DebtSemaphore(int32_t initial = 0);
+    ~DebtSemaphore() = default;
 
     void wait();
     bool wait(const uint32_t timeoutMs);
     void post();
-    void reset();
+    void reset(int32_t count = 0);
+
+    void decrement();
+
+    int32_t getCount() const;
 
 private:
     mutable std::mutex _lock;
     std::condition_variable _conditionVariable;
-    uint32_t _count;
+    int32_t _count;
 };
 
 } // namespace concurrency
