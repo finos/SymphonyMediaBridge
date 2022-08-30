@@ -1533,6 +1533,7 @@ void EngineMixer::onSctpEstablished(transport::RtcTransport* sender)
     if (barbellIt != _engineBarbells.cend() && sender->isDtlsClient())
     {
         barbellIt->second->dataChannel.open("barbell");
+        sendUserMediaMapMessageOverBarbells();
     }
 }
 
