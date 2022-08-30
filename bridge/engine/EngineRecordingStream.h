@@ -2,7 +2,6 @@
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/RecordingOutboundContext.h"
 #include "bridge/engine/UnackedPacketsTracker.h"
-#include "bridge/engine/UntypedEngineObject.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "transport/RecordingTransport.h"
 #include <atomic>
@@ -11,7 +10,7 @@
 namespace bridge
 {
 
-struct EngineRecordingStream final
+struct EngineRecordingStream
 {
     EngineRecordingStream(const std::string& id,
         const size_t endpointIdHash,

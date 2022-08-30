@@ -5,7 +5,6 @@
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "bridge/engine/SsrcRewrite.h"
 #include "bridge/engine/SsrcWhitelist.h"
-#include "bridge/engine/UntypedEngineObject.h"
 #include "concurrency/MpmcHashmap.h"
 #include "utils/Optional.h"
 #include <cstdint>
@@ -20,7 +19,7 @@ class RtcTransport;
 namespace bridge
 {
 
-struct EngineVideoStream final
+struct EngineVideoStream
 {
     EngineVideoStream(const std::string& endpointId,
         const size_t endpointIdHash,

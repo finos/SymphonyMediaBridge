@@ -1,7 +1,6 @@
 
 #pragma once
 
-#include "bridge/engine/UntypedEngineObject.h"
 #include "jobmanager/AsyncWaiter.h"
 #include "logger/Logger.h"
 #include "transport/Transport.h"

@@ -2,7 +2,6 @@
 
 #include "transport/RtcTransport.h"
 #include "webrtc/WebRtcDataStream.h"
-#include "bridge/engine/UntypedEngineObject.h"
 #include <atomic>
 #include <cstdint>
 #include <string>
@@ -11,7 +10,7 @@
 namespace bridge
 {
 
-struct EngineDataStream final 
+struct EngineDataStream
 {
     EngineDataStream(const std::string& endpointId, const size_t endpointIdHash, transport::RtcTransport& transport)
         : endpointId(endpointId),
