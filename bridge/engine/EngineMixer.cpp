@@ -979,30 +979,7 @@ void EngineMixer::internalRemoveInboundSsrc(uint32_t ssrc)
     auto contextIt = _allSsrcInboundContexts.find(ssrc);
     if (contextIt != _allSsrcInboundContexts.end())
     {
-        if (contextIt->second.rtxSsrc.isSet())
-        {
-            auto buddySsrcIt = _allSsrcInboundContexts.find(contextIt->second.rtxSsrc.get());
-            if (buddySsrcIt != _allSsrcInboundContexts.end())
-            {
-                logger::info("Removing idle inbound context feedback ssrc %u, main ssrc %u",
-                    _loggableId.c_str(),
-                    buddySsrcIt->first,
-                    contextIt->first);
-
-                EngineMessage::Message message(EngineMessage::Type::InboundSsrcRemoved);
-                message.command.ssrcInboundRemoved = {this,
-                    buddySsrcIt->first,
-                    buddySsrcIt->second.opusDecoder.release()};
-
-                _allSsrcInboundContexts.erase(buddySsrcIt->first);
-                if (message.command.ssrcInboundRemoved.opusDecoder)
-                {
-                    _messageListener.onMessage(std::move(message));
-                }
-            }
-        }
-
-        logger::info("Removing idle inbound context ssrc %u", _loggableId.c_str(), contextIt->first);
+        logger::info("Removing inbound context ssrc %u", _loggableId.c_str(), contextIt->first);
 
         EngineMessage::Message message(EngineMessage::Type::InboundSsrcRemoved);
         message.command.ssrcInboundRemoved.mixer = this;
@@ -1861,14 +1838,6 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             _ssrcInboundContexts.emplace(ssrc, &emplaceResult.first->second);
 
             auto& inboundContext = emplaceResult.first->second;
-            if (&videoRtpMap == &barbell->videoRtpMap)
-            {
-                inboundContext.rtxSsrc = barbell->getFeedbackSsrcFor(ssrc);
-            }
-            else
-            {
-                inboundContext.rtxSsrc = barbell->getMainSsrcFor(ssrc);
-            }
 
             auto videoStream = barbell->videoSsrcMap.getItem(ssrc);
             assert(videoStream);
@@ -1952,7 +1921,6 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         auto& inboundContext = emplaceResult.first->second;
         inboundContext.rewriteSsrc = rewriteSsrc;
         inboundContext.simulcastLevel = level;
-        inboundContext.rtxSsrc = videoStream->getFeedbackSsrcFor(ssrc);
 
         _ssrcInboundContexts.emplace(ssrc, &emplaceResult.first->second);
 
@@ -2002,7 +1970,6 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             _allSsrcInboundContexts.emplace(ssrc, ssrc, videoStream->feedbackRtpMap, sender, timestamp);
         auto& inboundContext = emplaceResult.first->second;
         inboundContext.rewriteSsrc = rewriteSsrc;
-        inboundContext.rtxSsrc = videoStream->getMainSsrcFor(ssrc);
 
         _ssrcInboundContexts.emplace(ssrc, &emplaceResult.first->second);
 

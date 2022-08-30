@@ -60,8 +60,7 @@ public:
     uint32_t ssrc;
     const bridge::RtpMap rtpMap;
     transport::RtcTransport* sender;
-    utils::Optional<uint32_t> rtxSsrc; // points to main from rtc and to rtx from main
-
+   
     std::unique_ptr<codec::OpusDecoder> opusDecoder;
 
     bool markNextPacket;
