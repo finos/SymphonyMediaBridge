@@ -1784,6 +1784,62 @@ RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)
     return nullptr;
 }
 
+template <typename StreamType>
+void Mixer::stopTransportAndRemoveStream(const std::shared_ptr<transport::RtcTransport>& streamTransport,
+    const std::string& endpointId,
+    std::unique_ptr<StreamType> streamToRemove)
+{
+    std::shared_ptr<transport::RtcTransport> transport = nullptr;
+
+    auto bundleTransportItr = _bundleTransports.find(endpointId);
+    if (bundleTransportItr != _bundleTransports.end())
+    {
+        if (_audioStreams.find(endpointId) == _audioStreams.end() &&
+            _videoStreams.find(endpointId) == _videoStreams.end() &&
+            _dataStreams.find(endpointId) == _dataStreams.end())
+        {
+            logger::info("EngineStream removed, endpointId %s. Has bundle transport %s but no other related streams.",
+                _loggableId.c_str(),
+                endpointId.c_str(),
+                bundleTransportItr->second._transport->getLoggableId().c_str());
+
+            transport = bundleTransportItr->second._transport;
+        }
+    }
+    else
+    {
+        logger::info("EngineStream removed, endpointId %s. No bundle transport.",
+            _loggableId.c_str(),
+            endpointId.c_str());
+
+        transport = streamTransport;
+    }
+
+    if (!transport)
+    {
+        return;
+    }
+
+    // logTransportPacketLoss(endpointId, *transport, _loggableId.c_str());
+
+    logger::info("Engine stream removed, stopping transport %s, endpointId %s.",
+        _loggableId.c_str(),
+        transport->getLoggableId().c_str(),
+        endpointId.c_str());
+
+    // Allow pending transmissions to complete
+    transport->stop();
+    if (transport->hasPendingJobs())
+    {
+        const auto timeout = 1 * utils::Time::sec;
+        _pendingJobsAsyncWaiter.emplaceTask<PendingJobsAsyncWaitTask<StreamType>>(timeout,
+            _loggableId,
+            transport,
+            std::move(streamToRemove),
+            endpointId);
+    }
+}
+
 bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
     const std::vector<api::RecordingChannel>& channels,
     const RecordingDescription& recordingDescription)
