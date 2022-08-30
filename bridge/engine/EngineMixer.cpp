@@ -1548,7 +1548,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     // if it is we should handle it locally in onBarbellUserMediaMap
     if (_engineBarbells.contains(sender->getEndpointIdHash()))
     {
-        if (length == 0)
+        if (length == 0 || length <= sizeof(webrtc::SctpStreamMessageHeader))
         {
             return;
         }
@@ -2014,12 +2014,12 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
 
         if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
         {
-            return onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
+            onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
         }
 
         if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
         {
-            return onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), message);
+            onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), message);
         }
     }
 }
