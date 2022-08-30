@@ -371,7 +371,11 @@ SctpAssociationImpl::SctpAssociationImpl(size_t logId,
         _local.inboundStreamCount = cookie.inboundStreams;
         _local.outboundStreamCount = cookie.outboundStreams;
     }
+}
 
+// must only be called once and immediately after creation due to COOKIE ECHO received
+void SctpAssociationImpl::onCookieEcho(const SctpPacket& cookieEcho, const uint64_t timestamp)
+{
     SctpPacketW outboundPacket(_peer.tag, _local.port, _peer.port);
     outboundPacket.addChunk<GenericChunk>(ChunkType::COOKIE_ACK);
     setState(State::ESTABLISHED);
@@ -387,6 +391,7 @@ bool SctpAssociationImpl::sendMessage(uint16_t streamId,
     auto streamIt = _streams.find(streamId);
     if (_state < State::ESTABLISHED || streamIt == _streams.cend())
     {
+        logger::warn("SCTP stream not open yet %u, count %zu", _loggableId.c_str(), streamId, _streams.size());
         return false;
     }
     if (length == 0)

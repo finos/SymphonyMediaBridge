@@ -28,6 +28,11 @@ namespace memory
 class Packet;
 }
 
+namespace webrtc
+{
+struct SctpStreamMessageHeader;
+}
+
 namespace jobmanager
 {
 class JobManager;
@@ -446,6 +451,9 @@ private:
 
     void onBarbellUserMediaMap(size_t barbellIdHash, const char* message);
     void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message);
+    void onBarbellDataChannelEstablish(size_t barbellIdHash,
+        webrtc::SctpStreamMessageHeader& header,
+        size_t packetSize);
 
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
     utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);

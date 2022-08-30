@@ -112,6 +112,8 @@ public:
         IEvents* listener,
         const SctpConfig& config);
 
+    void onCookieEcho(const SctpPacket& sctpPacket, const uint64_t timestamp) override;
+
     void connect(uint16_t inboundStreamCount, uint16_t outboundStreamCount, uint64_t timestamp) override;
     uint16_t allocateStream() override;
     bool sendMessage(uint16_t streamId,

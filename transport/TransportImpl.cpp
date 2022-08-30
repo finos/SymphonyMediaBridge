@@ -2265,6 +2265,10 @@ uint16_t TransportImpl::allocateOutboundSctpStream()
     {
         return _sctpAssociation->allocateStream();
     }
+    else
+    {
+        logger::error("cannot allocate outbound sctp stream. No association established yet", _loggableId.c_str());
+    }
     return 0xFFFFu;
 }
 
@@ -2275,6 +2279,7 @@ bool TransportImpl::sendSctp(const uint16_t streamId,
 {
     if (!_remoteSctpPort.isSet() || !_sctpAssociation)
     {
+        logger::warn("SCTP not established yet.", _loggableId.c_str());
         return false;
     }
 
@@ -2361,6 +2366,7 @@ void TransportImpl::onSctpCookieEchoReceived(sctp::SctpServerPort* serverPort,
             sctpPacket,
             this,
             serverPort->getConfig());
+        _sctpAssociation->onCookieEcho(sctpPacket, timestamp);
     }
 }
 

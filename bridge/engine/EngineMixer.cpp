@@ -43,6 +43,7 @@
 #include "transport/recp/RecStreamAddedEventBuilder.h"
 #include "transport/recp/RecStreamRemovedEventBuilder.h"
 #include "utils/SimpleJson.h"
+#include "webrtc/DataChannel.h"
 #include <cstring>
 
 namespace
@@ -1403,19 +1404,6 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::P
             header.data(),
             packet.getLength() - sizeof(header));
     }
-    else
-    {
-        auto barbellIt = _engineBarbells.find(endpointIdHash);
-        if (barbellIt != _engineBarbells.cend())
-        {
-            barbellIt->second->dataChannel.onSctpMessage(&barbellIt->second->transport,
-                header.id,
-                header.sequenceNumber,
-                header.payloadProtocol,
-                header.data(),
-                packet.getLength() - sizeof(header));
-        }
-    }
 }
 
 void EngineMixer::pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash)
@@ -1527,11 +1515,14 @@ bool EngineMixer::onSctpConnectionRequest(transport::RtcTransport* sender, uint1
 
 void EngineMixer::onSctpEstablished(transport::RtcTransport* sender)
 {
-    logger::debug("SCTP association established", sender->getLoggableId().c_str());
+    logger::info("SCTP association established %s", _loggableId.c_str(), sender->getLoggableId().c_str());
 
     auto barbellIt = _engineBarbells.find(sender->getEndpointIdHash());
     if (barbellIt != _engineBarbells.cend() && sender->isDtlsClient())
     {
+        logger::debug("opening barbell webrtc data channel on %s",
+            _loggableId.c_str(),
+            sender->getLoggableId().c_str());
         barbellIt->second->dataChannel.open("barbell");
     }
 }
@@ -1543,26 +1534,11 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     const void* data,
     size_t length)
 {
-    // TODO  parse this with wonderful json parser and figure out if this is a barbell UMM
-    // if it is we should handle it locally in onBarbellUserMediaMap
-    if (_engineBarbells.contains(sender->getEndpointIdHash()))
+    if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
-        if (length == 0)
-        {
-            return;
-        }
         auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
-        auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packet->get());
-        auto s = header->getMessage();
-
-        auto messageJson = utils::SimpleJson::create(s, header->getMessageLength(length));
-
-        if (api::DataChannelMessageParser::isUserMediaMap(messageJson) ||
-            api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
-        {
-            _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
-            return;
-        }
+        _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
+        return;
     }
 
     EngineMessage::Message message(EngineMessage::Type::SctpMessage);
@@ -2008,17 +1984,32 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
     for (IncomingPacketInfo packetInfo; _incomingBarbellSctp.pop(packetInfo);)
     {
         auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packetInfo.packet()->get());
-        auto message = reinterpret_cast<const char*>(header->data());
-        auto messageJson = utils::SimpleJson::create(message, strlen(message));
 
-        if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
+        if (header->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
         {
-            return onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
+            auto message = reinterpret_cast<const char*>(header->data());
+            const auto messageLength = header->getMessageLength(packetInfo.packet()->getLength());
+            if (messageLength == 0)
+            {
+                return;
+            }
+
+            auto messageJson = utils::SimpleJson::create(message, messageLength);
+
+            if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
+            {
+                onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
+            }
+            else if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
+            {
+                onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), message);
+            }
         }
-
-        if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
+        else if (header->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
         {
-            return onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), message);
+            onBarbellDataChannelEstablish(packetInfo.transport()->getEndpointIdHash(),
+                *header,
+                packetInfo.packet()->getLength());
         }
     }
 }
@@ -3523,7 +3514,7 @@ void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_
     api::DataChannelMessage::makeMinUplinkBitrate(message, minUplinkEstimate);
     for (const auto& itBb : _engineBarbells)
     {
-        itBb.second->dataChannel.sendData(message.get(), message.getLength());
+        itBb.second->dataChannel.sendString(message.get(), message.getLength());
     }
 }
 
@@ -3928,4 +3919,30 @@ void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* m
     barbell.minClientDownlinkBandwidth =
         api::DataChannelMessageParser::getMinUplinkBirate(utils::SimpleJson::create(message, strlen(message)));
 }
+
+void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
+    webrtc::SctpStreamMessageHeader& header,
+    size_t packetSize)
+{
+    auto barbell = _engineBarbells.getItem(barbellIdHash);
+    if (!barbell)
+    {
+        return;
+    }
+
+    const auto state = barbell->dataChannel.getState();
+    barbell->dataChannel.onSctpMessage(&barbell->transport,
+        header.id,
+        header.sequenceNumber,
+        header.payloadProtocol,
+        header.data(),
+        header.getMessageLength(packetSize));
+
+    const auto newState = barbell->dataChannel.getState();
+    if (state != newState && newState == webrtc::WebRtcDataStream::State::OPEN)
+    {
+        sendUserMediaMapMessageOverBarbells();
+    }
+}
+
 } // namespace bridge
