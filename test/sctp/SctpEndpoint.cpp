@@ -161,6 +161,7 @@ void SctpEndpoint::onSctpCookieEchoReceived(sctp::SctpServerPort* serverPort,
     else
     {
         _session = sctp::createSctpAssociation(_loggableId.getInstanceId(), *serverPort, packet, this, _config);
+        _session->onCookieEcho(packet, timestamp);
     }
 }
 
