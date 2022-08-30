@@ -432,6 +432,7 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/googletest-src ${CMAKE_CURRENT_BINARY_DIR}/googletest-build EXCLUDE_FROM_ALL)
 
 set(TEST_FILES
+    test/api/ParserTest.cpp
     test/memory/MapTest.cpp
     test/memory/PoolAllocatorTest.cpp
     test/memory/RingAllocatorTest.cpp
@@ -484,6 +485,7 @@ set(TEST_FILES
     test/gtest_main.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp
+    test/ResourceLoader.cpp
     test/concurrency/MpscTest.cpp
     test/concurrency/MpmcMapTest.cpp
     test/concurrency/LockFreeListTest.cpp
@@ -541,9 +543,19 @@ set(TEST_FILES
     test/bridge/VideoNackReceiveJobTest.cpp
     test/bridge/DummyRtcTransport.h)
 
+
+set(CMAKE_TEST_DIRECTORY "${CMAKE_BINARY_DIR}/test")
+set(CMAKE_TEST_INCLUDE "${CMAKE_TEST_DIRECTORY}/include")
+configure_file(test/TestConfig.h.in ${CMAKE_TEST_INCLUDE}/TestConfig.h)
+
 add_executable(UnitTest
     ${FILES}
     ${TEST_FILES})
+
+target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE})
+
+# Copy test Data
+file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
 
 target_link_libraries(UnitTest gtest gmock ${THIRD_PARTY_LIBS})
 

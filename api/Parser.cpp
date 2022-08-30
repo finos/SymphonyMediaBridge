@@ -167,7 +167,7 @@ api::EndpointDescription::Transport parsePatchEndpointTransport(const nlohmann::
         ice._ufrag = iceJson["ufrag"].get<std::string>();
         ice._pwd = iceJson["pwd"].get<std::string>();
 
-        for (const auto& candidateJson : iceJson["candidates"])
+        for (const auto& candidateJson : optionalJsonArray(iceJson, "candidates"))
         {
             api::EndpointDescription::Candidate candidate;
             candidate._generation = candidateJson["generation"].get<uint32_t>();
