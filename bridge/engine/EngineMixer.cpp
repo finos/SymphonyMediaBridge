@@ -1527,12 +1527,16 @@ bool EngineMixer::onSctpConnectionRequest(transport::RtcTransport* sender, uint1
 
 void EngineMixer::onSctpEstablished(transport::RtcTransport* sender)
 {
-    logger::debug("SCTP association established", sender->getLoggableId().c_str());
+    logger::info("SCTP association established %s", _loggableId.c_str(), sender->getLoggableId().c_str());
 
     auto barbellIt = _engineBarbells.find(sender->getEndpointIdHash());
-    if (barbellIt != _engineBarbells.cend() && sender->isDtlsClient())
+    if (barbellIt != _engineBarbells.cend())
     {
+        logger::debug("opening barbell webrtc data channel on %s",
+            _loggableId.c_str(),
+            sender->getLoggableId().c_str());
         barbellIt->second->dataChannel.open("barbell");
+
         sendUserMediaMapMessageOverBarbells();
     }
 }

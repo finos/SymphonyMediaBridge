@@ -41,6 +41,8 @@ public:
         virtual void onSctpChunkDropped(SctpAssociation* session, size_t size) = 0;
     };
 
+    virtual void onCookieEcho(const SctpPacket& sctpPacket, const uint64_t timestamp) = 0;
+
     virtual void connect(uint16_t inboundStreamCount, uint16_t outboundStreamCount, uint64_t timestamp) = 0;
     virtual uint16_t allocateStream() = 0;
     virtual bool sendMessage(uint16_t streamId,
@@ -76,6 +78,8 @@ std::unique_ptr<SctpAssociation> createSctpAssociation(size_t logId,
     SctpAssociation::IEvents* listener,
     const SctpConfig& config);
 
+/** You must call onCookieEcho on the SctpAssociation after this
+ */
 std::unique_ptr<SctpAssociation> createSctpAssociation(size_t logId,
     SctpServerPort& transport,
     const SctpPacket& cookieEcho,
