@@ -16,10 +16,11 @@ class DataStreamTransport;
 class WebRtcDataStream
 {
 public:
-    class IEvents
+    enum State
     {
-    public:
-        virtual void onWebRtcDataChannelStringMessage(transport::Transport& transport, const std::string&) = 0;
+        CLOSED = 0,
+        OPENING,
+        OPEN
     };
 
     WebRtcDataStream(size_t logId, webrtc::DataStreamTransport& transport);
@@ -39,13 +40,9 @@ public:
         const void* data,
         size_t length);
 
+    State getState() const { return _state; }
+
 private:
-    enum State
-    {
-        CLOSED = 0,
-        OPENING,
-        OPEN
-    };
     uint16_t _streamId;
     webrtc::DataStreamTransport& _transport;
     State _state;
