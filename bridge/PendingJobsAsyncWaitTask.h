@@ -7,6 +7,7 @@
 #include <functional>
 #include <memory>
 #include <string>
+#include <tuple>
 
 namespace transport
 {
@@ -16,72 +17,94 @@ class Transport;
 namespace bridge
 {
 
-template <typename StreamType>
+template <class T, class... Args>
 class PendingJobsAsyncWaitTask : public jobmanager::AsyncWaitTask
 {
 public:
     using OnTaskEndHandler = std::function<void()>;
 
-    PendingJobsAsyncWaitTask(const logger::LoggableId& loggableId,
-        const std::shared_ptr<const transport::Transport>& _transport,
-        const std::shared_ptr<StreamType>& streamToHold,
-        const std::string& endpointId);
+    template <class... UTypes>
+    PendingJobsAsyncWaitTask(const char* loggableId,
+        uint32_t _taskId,
+        T&& pendingJobsChecker,
+        UTypes&&... memoryToHold);
 
     bool checkCompletion() final;
     void onComplete() final;
     void onTimeout() final;
 
-    void setOnTaskEndHandler(OnTaskEndHandler onTaskEndHandler) { _onTaskEndHandler = onTaskEndHandler; }
-
 private:
-    const logger::LoggableId* _loggableId;
-    std::shared_ptr<const transport::Transport> _transport;
-    std::shared_ptr<StreamType> _streamToHold;
-    std::string _endpointId;
-    OnTaskEndHandler _onTaskEndHandler;
+    const char* _loggableId;
+    uint32_t _taskId;
+    T _pendingJobsChecker;
+    std::tuple<Args...> _memoryToHold;
 };
 
-template <typename StreamType>
-PendingJobsAsyncWaitTask<StreamType>::PendingJobsAsyncWaitTask(const logger::LoggableId& loggableId,
-    const std::shared_ptr<const transport::Transport>& transport,
-    const std::shared_ptr<StreamType>& streamToHold,
-    const std::string& endpointId)
-    : _loggableId(&loggableId),
-      _transport(transport),
-      _streamToHold(streamToHold),
-      _endpointId(endpointId)
+template <class T, class... Args>
+template <class... UTypes>
+PendingJobsAsyncWaitTask<T, Args...>::PendingJobsAsyncWaitTask(const char* loggableId,
+    uint32_t _taskId,
+    T&& pendingJobsChecker,
+    UTypes&&... memoryToHold)
+    : _loggableId(loggableId),
+      _taskId(_taskId),
+      _pendingJobsChecker(std::move(pendingJobsChecker)),
+      _memoryToHold(std::forward<UTypes>(memoryToHold)...)
 {
-    logger::info("Wait for pending jobs on transport for endpointId %s", _loggableId->c_str(), _endpointId.c_str());
 }
 
-template <typename StreamType>
-bool PendingJobsAsyncWaitTask<StreamType>::checkCompletion()
+template <class T, class... Args>
+bool PendingJobsAsyncWaitTask<T, Args...>::checkCompletion()
 {
-    return !_transport->hasPendingJobs();
+    return !_pendingJobsChecker->hasPendingJobs();
 }
 
-template <typename StreamType>
-void PendingJobsAsyncWaitTask<StreamType>::onComplete()
+template <class T, class... Args>
+void PendingJobsAsyncWaitTask<T, Args...>::onComplete()
 {
-    logger::info("Transport for endpointId %s has finished pending jobs", _loggableId->c_str(), _endpointId.c_str());
-
-    if (_onTaskEndHandler)
-    {
-        _onTaskEndHandler();
-    }
+    logger::info("PendingJobsAsyncWaitTask %u has completed", _loggableId, _taskId);
 }
 
-template <typename StreamType>
-void PendingJobsAsyncWaitTask<StreamType>::onTimeout()
+template <class T, class... Args>
+void PendingJobsAsyncWaitTask<T, Args...>::onTimeout()
 {
-    logger::error("Transport for endpointId %s did not finish pending jobs in time. deletion anyway.",
-        _loggableId->c_str(),
-        _endpointId.c_str());
+    logger::error("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
+}
 
-    if (_onTaskEndHandler)
-    {
-        _onTaskEndHandler();
-    }
+template <class T, class... Args>
+PendingJobsAsyncWaitTask<std::shared_ptr<T>, Args...> makePendingJobsAsyncTask(const char* loggableId,
+    uint32_t _taskId,
+    std::shared_ptr<T> pendingJobsChecker,
+    Args&&... memoryToHold)
+{
+    return PendingJobsAsyncWaitTask<std::shared_ptr<T>, Args...>(loggableId,
+        _taskId,
+        std::move(pendingJobsChecker),
+        std::forward<Args>(memoryToHold)...);
+}
+
+template <class T, class... Args>
+PendingJobsAsyncWaitTask<std::unique_ptr<T>, Args...> makePendingJobsAsyncTask(const char* loggableId,
+    uint32_t _taskId,
+    std::unique_ptr<T>&& pendingJobsChecker,
+    Args&&... memoryToHold)
+{
+    return PendingJobsAsyncWaitTask<std::shared_ptr<T>, Args...>(loggableId,
+        _taskId,
+        std::move(pendingJobsChecker),
+        std::forward<Args>(memoryToHold)...);
+}
+
+template <class T, class... Args>
+PendingJobsAsyncWaitTask<T*, Args...> makePendingJobsAsyncTask(const char* loggableId,
+    uint32_t _taskId,
+    T* pendingJobsChecker,
+    Args&&... memoryToHold)
+{
+    return PendingJobsAsyncWaitTask<T*, Args...>(loggableId,
+        _taskId,
+        std::move(pendingJobsChecker), // It expects a rvalue, so move the pointer which does not move the object
+        std::forward<Args>(memoryToHold)...);
 }
 
 } // namespace bridge

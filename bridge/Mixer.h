@@ -282,6 +282,13 @@ private:
         std::shared_ptr<transport::RtcTransport> _transport;
     };
 
+    RecordingStream* findRecordingStream(const std::string& recordingId);
+
+    template <typename StreamType>
+    void stopTransportAndRemoveStream(const std::shared_ptr<transport::RtcTransport>& streamTransport,
+        const std::string& endpointId,
+        std::unique_ptr<StreamType> streamToRemove);
+
     const config::Config& _config;
     const std::string _id;
     logger::LoggableId _loggableId;
@@ -316,14 +323,8 @@ private:
 
     std::mutex _configurationLock;
 
-    jobmanager::AsyncWaiter _pendingJobsAsyncWaiter;
-
-    RecordingStream* findRecordingStream(const std::string& recordingId);
-
-    template <typename StreamType>
-    void stopTransportAndRemoveStream(const std::shared_ptr<transport::RtcTransport>& streamTransport,
-        const std::string& endpointId,
-        std::unique_ptr<StreamType> streamToRemove);
+    jobmanager::AsyncWaiter _transportShutdownTasks;
+    uint32_t _transportShutdownTasksCount;
 };
 
 } // namespace bridge

@@ -3,7 +3,7 @@
 #include "bridge/AudioStream.h"
 #include "bridge/DataStream.h"
 #include "bridge/Mixer.h"
-#include "bridge/PendingMixerAsyncWaitTask.h"
+#include "bridge/PendingJobsAsyncWaitTask.h"
 #include "bridge/VideoStream.h"
 #include "bridge/engine/Engine.h"
 #include "bridge/engine/EngineAudioStream.h"
@@ -32,9 +32,8 @@ constexpr auto intervalNs = 10000000UL;
 constexpr uint32_t maxLastN = 16;
 constexpr uint64_t asyncWaitMaxCheckInterval = 20 * utils::Time::ms;
 
-
-template<class T>
-std::unique_ptr<T> eraseAndGet(std::unordered_map<std::string, std::unique_ptr<T>>& map, const std::string& id)
+template <class T>
+std::unique_ptr<T> pop(std::unordered_map<std::string, std::unique_ptr<T>>& map, const std::string& id)
 {
     auto it = map.find(id);
     if (it != map.end())
@@ -51,6 +50,56 @@ std::unique_ptr<T> eraseAndGet(std::unordered_map<std::string, std::unique_ptr<T
 
 namespace bridge
 {
+
+struct MixerDeleteTask
+{
+    MixerDeleteTask() = default;
+    MixerDeleteTask(bridge::MixerManager* _mixerManger,
+        std::unique_ptr<bridge::Mixer>&& mixer,
+        std::unique_ptr<bridge::EngineMixer>&& engineMixer)
+        : _mixerManger(_mixerManger),
+          _mixer(std::move(mixer)),
+          _engineMixer(std::move(engineMixer))
+    {
+    }
+
+    MixerDeleteTask(MixerDeleteTask&& rhs)
+        : MixerDeleteTask(std::exchange(rhs._mixerManger, nullptr), std::move(rhs._mixer), std::move(rhs._engineMixer))
+    {
+    }
+
+    MixerDeleteTask(const MixerDeleteTask&) = delete;
+    MixerDeleteTask& operator=(const MixerDeleteTask&) = delete;
+    MixerDeleteTask& operator=(MixerDeleteTask&& rhs)
+    {
+        releaseMixer();
+        _mixerManger = std::exchange(rhs._mixerManger, nullptr);
+        _engineMixer = std::move(rhs._engineMixer);
+        _mixer = std::move(rhs._mixer);
+
+        return *this;
+    }
+
+    ~MixerDeleteTask() { releaseMixer(); }
+
+    void releaseMixer()
+    {
+        if (_mixerManger && _mixer)
+        {
+            logger::info("Removing EngineMixer %s", "MixerManager", _engineMixer->getLoggableId().c_str());
+            _engineMixer.reset();
+            _mixerManger->onMixerReadyToDeletion(std::move(_mixer));
+        }
+
+        _mixerManger = nullptr;
+        _engineMixer.reset();
+        _mixer.reset();
+    }
+
+    bridge::MixerManager* _mixerManger = nullptr;
+    std::unique_ptr<bridge::Mixer> _mixer;
+    std::unique_ptr<bridge::EngineMixer> _engineMixer;
+};
 
 MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     utils::SsrcGenerator& ssrcGenerator,
@@ -72,7 +121,8 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator),
-      _asyncWaiter(_jobManager, asyncWaitMaxCheckInterval)
+      _asyncWaiter(_jobManager, asyncWaitMaxCheckInterval),
+      _asyncWaiterTaskCount(0)
 {
     _engine.setMessageListener(this);
 
@@ -363,39 +413,51 @@ bool MixerManager::onMessage(EngineMessage::Message&& message)
 
 void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& message)
 {
-    // Aims to delete the mixer out of the locker at it can take some time
-    // and we want to reduce the lock contention
-    std::unique_ptr<bridge::Mixer> mixer;
+    // When this task execute it will call onMixerReadyToDeletion
+    // and acquired the _configurationLock again
+    MixerDeleteTask mixerDeleteTask;
+
+    auto& command = message.command.mixerRemoved;
+    std::string mixerId(command.mixer->getId());
 
     {
-        std::lock_guard<std::mutex> locker(_configurationLock);
+        std::unique_lock<std::mutex> locker(_configurationLock);
+        // copy id string to have it after EngineMixer is deleted
+        auto mixer = pop(_mixers, mixerId);
+        auto engineMixer = pop(_engineMixers, mixerId);
+        mixerDeleteTask = MixerDeleteTask(this, pop(_mixers, mixerId), pop(_engineMixers, mixerId));
+    }
 
-        auto& command = message.command.mixerRemoved;
-
-        std::string mixerId(command.mixer->getId()); // copy id string to have it after EngineMixer is deleted
-        auto mixer = eraseAndGet(_mixers, mixerId);
-        if (mixer)
+    if (mixerDeleteTask._mixer)
+    {
+        mixerDeleteTask._mixer->stopTransports(); // this will stop new packets from coming in
+        if (mixerDeleteTask._mixer->hasPendingJobs())
         {
-            mixer->stopTransports(); // this will stop new packets from coming in
-            if (mixer->hasPendingJobs())
-            {
-                auto engineMixer = std::move(_engineMixers.at(mixerId));
-                _engineMixers.erase(mixerId);
-                logger::debug("Mixer %s has pending jobs, will be async deleted", "MixerManager", mixer->getLoggableId().c_str());
-                const auto timeout = 1 * utils::Time::sec;
-                _asyncWaiter.emplaceTask<PendingMixerAsyncWaitTask>(timeout, *this, std::move(mixer), std::move(engineMixer));
-                return;
-            }
+            const auto timeout = 1 * utils::Time::sec;
+            const auto taskId = ++_asyncWaiterTaskCount;
 
-        }
-        else
-        {
-            logger::debug("did not find mixer to stop %s", "MixerManager", mixerId.c_str());
-        }
+            logger::info("Mixer %s has pending jobs, will be async deleted on task %u",
+                "MixerManager",
+                mixerDeleteTask._mixer->getLoggableId().c_str(),
+                taskId);
 
-        logger::info("Removing EngineMixer %s", "MixerManager", command.mixer->getLoggableId().c_str());
-            // This will sweep the PacketPoolAllocator. Any pending jobs may crash or corrupt memory.
-        _engineMixers.erase(mixerId);
+            auto* mixerManagerRawPointer = mixerDeleteTask._mixer.get();
+            _asyncWaiter.addTask(timeout,
+                makePendingJobsAsyncTask("MixerManager", taskId, mixerManagerRawPointer, std::move(mixerDeleteTask)));
+        }
+    }
+    else
+    {
+        logger::warn("did not find mixer to stop %s", "MixerManager", mixerId.c_str());
+    }
+}
+
+void MixerManager::onMixerReadyToDeletion(std::unique_ptr<Mixer>&& mixer)
+{
+
+    std::string mixerId = mixer->getId();
+    {
+        std::unique_lock<std::mutex> locker(_configurationLock);
 
         auto mixerAudioBuffers = _audioBuffers.find(mixerId);
         if (mixerAudioBuffers != _audioBuffers.cend())
@@ -406,28 +468,7 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
     }
 
     mixer.reset();
-    logger::info("EngineMixer removed", "MixerManager");
-
-    if (_engineMixers.empty() && !_asyncWaiter.hasTaskWaiting())
-    {
-        _mainAllocator.logAllocatedElements();
-        _sendAllocator.logAllocatedElements();
-        _audioAllocator.logAllocatedElements();
-    }
-}
-
-void MixerManager::onPendingMixerAsyncTaskEnd(const std::string& mixerId)
-{
-    {
-        std::lock_guard<std::mutex> locker(_configurationLock);
-
-        auto mixerAudioBuffers = _audioBuffers.find(mixerId);
-        if (mixerAudioBuffers != _audioBuffers.cend())
-        {
-            mixerAudioBuffers->second.clear();
-            _audioBuffers.erase(mixerAudioBuffers);
-        }
-    }
+    logger::info("EngineMixer %s removed", "MixerManager", mixerId.c_str());
 
     if (_engineMixers.empty() && !_asyncWaiter.hasTaskWaiting())
     {
