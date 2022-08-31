@@ -6,6 +6,7 @@
 #include "httpd/Httpd.h"
 #include "jobmanager/JobManager.h"
 #include "jobmanager/WorkerThread.h"
+#include "transport/EndpointFactoryImpl.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SrtpClientFactory.h"
@@ -92,6 +93,11 @@ Bridge::~Bridge()
 
 void Bridge::initialize()
 {
+    initialize(std::make_shared<transport::EndpointFactoryImpl>());
+}
+
+void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory)
+{
     _localInterfaces = gatherInterfaces(_config);
     if (_localInterfaces.size() == 0)
     {
@@ -145,7 +151,8 @@ void Bridge::initialize()
         _rateControllerConfig,
         _localInterfaces,
         *_network,
-        *_mainPacketAllocator);
+        *_mainPacketAllocator,
+        endpointFactory);
     if (!_transportFactory->isGood())
     {
         logger::error("Failed to initialize transport factory", "main");

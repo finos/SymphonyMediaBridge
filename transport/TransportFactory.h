@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory/PacketPoolAllocator.h"
+#include "transport/EndpointFactory.h"
 #include "transport/EndpointMetrics.h"
 #include "transport/ice/IceSession.h"
 #include <memory>
@@ -82,6 +83,7 @@ std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager&
     const bwe::RateControllerConfig& rateControllerConfig,
     const std::vector<SocketAddress>& interfaces,
     transport::RtcePoll& rtcePoll,
-    memory::PacketPoolAllocator& mainAllocator);
+    memory::PacketPoolAllocator& mainAllocator,
+    std::shared_ptr<EndpointFactory> endpointFactory);
 
 } // namespace transport

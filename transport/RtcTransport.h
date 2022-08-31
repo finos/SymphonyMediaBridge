@@ -41,7 +41,7 @@ class SrtpClientFactory;
 class Endpoint;
 class ServerEndpoint;
 class TcpEndpointFactory;
-class UdpEndpoint;
+class UdpEndpointImpl;
 typedef std::vector<std::shared_ptr<ServerEndpoint>> ServerEndpoints;
 typedef std::vector<std::shared_ptr<Endpoint>> Endpoints;
 

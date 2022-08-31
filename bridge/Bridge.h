@@ -25,6 +25,7 @@ class RtcePoll;
 class SrtpClientFactory;
 class SslDtls;
 class TransportFactory;
+class EndpointFactory;
 } // namespace transport
 
 namespace httpd
@@ -45,6 +46,7 @@ public:
     ~Bridge();
 
     void initialize();
+    void initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory);
     bool isInitialized() const { return _initialized; }
 
     transport::SslDtls& getSslDtls() { return *_sslDtls; }

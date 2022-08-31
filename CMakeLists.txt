@@ -305,6 +305,7 @@ set(FILES
         rtp/SendTimeDial.cpp
         rtp/SendTimeDial.h
         test/macros.h
+        transport/UdpEndpoint.h
         transport/BaseUdpEndpoint.cpp
         transport/BaseUdpEndpoint.h
         transport/DataReceiver.h
@@ -333,13 +334,16 @@ set(FILES
         transport/TcpServerEndpoint.cpp
         transport/TcpServerEndpoint.h
         transport/Transport.h
+        transport/EndpointFactory.h
+        transport/EndpointFactoryImpl.h
+        transport/EndpointFactoryImpl.cpp
         transport/TransportFactory.cpp
         transport/TransportFactory.h
         transport/TransportImpl.cpp
         transport/TransportImpl.h
         transport/TransportStats.h
-        transport/UdpEndpoint.cpp
-        transport/UdpEndpoint.h
+        transport/UdpEndpointImpl.cpp
+        transport/UdpEndpointImpl.h
         transport/dtls/DtlsMessageListener.h
         transport/dtls/SrtpClient.cpp
         transport/dtls/SrtpClient.h
@@ -487,6 +491,10 @@ set(TEST_FILES
     test/integration/emulator/TimeTurner.h
     test/integration/emulator/TimeTurner.cpp
     test/integration/TimeTurnerTest.cpp
+    test/integration/emulator/FakeEndpointFactory.h
+    test/integration/emulator/FakeEndpointFactory.cpp
+    test/integration/emulator/FakeUdpEndpoint.h
+    test/integration/emulator/FakeUdpEndpoint.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
     test/gtest_main.cpp

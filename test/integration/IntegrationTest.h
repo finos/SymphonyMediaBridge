@@ -2,10 +2,15 @@
 
 #include "bridge/Bridge.h"
 #include "config/Config.h"
+#include "test/transport/FakeNetwork.h"
+#include "transport/EndpointFactory.h"
 #include "utils/Pacer.h"
+#include <atomic>
+#include <condition_variable>
 #include <cstdint>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <mutex>
 
 struct IntegrationTest : public ::testing::Test
 {
@@ -28,6 +33,8 @@ struct IntegrationTest : public ::testing::Test
     utils::Pacer _pacer;
 
     std::unique_ptr<transport::TransportFactory> _transportFactory;
+    std::shared_ptr<fakenet::InternetRunner> _internet;
+    std::shared_ptr<transport::EndpointFactory> _endpointFacory;
 
     uint32_t _instanceCounter;
 
@@ -35,4 +42,9 @@ struct IntegrationTest : public ::testing::Test
     void TearDown() override;
 
     void initBridge(config::Config& config);
+
+protected:
+    void startInternet();
+    void stopInternet();
+    bool _internetStartedAtLeastOnce;
 };

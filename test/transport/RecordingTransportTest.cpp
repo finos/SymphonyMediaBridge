@@ -6,8 +6,9 @@
 #include "rtp/RtpHeader.h"
 #include "test/transport/EndpointListenerMock.h"
 #include "test/transport/SendJob.h"
+#include "transport/EndpointFactoryImpl.h"
 #include "transport/RtcePoll.h"
-#include "transport/UdpEndpoint.h"
+#include "transport/UdpEndpointImpl.h"
 #include "transport/recp/RecStreamAddedEventBuilder.h"
 #include "utils/Time.h"
 #include <cinttypes>
@@ -150,8 +151,9 @@ TEST_F(RecordingTransportTest, protectAndSend)
     EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
     EXPECT_CALL(listener, onRegistered(_)).Times(1);
 
-    auto udpEndpoint =
-        std::make_shared<UdpEndpoint>(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
+    transport::EndpointFactoryImpl endpointFactory;
+    auto udpEndpoint = std::shared_ptr<UdpEndpoint>(
+        endpointFactory.createUdpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true));
     udpEndpoint->registerListener(sourceAddress, &listener);
     udpEndpoint->start();
 
@@ -248,9 +250,11 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     EXPECT_CALL(listener, onRtcpReceived(_, _, _, _)).Times(AtLeast(1));
     EXPECT_CALL(listener, onRegistered(_)).Times(1);
 
-    UdpEndpoint udpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true);
-    udpEndpoint.registerListener(sourceAddress, &listener);
-    udpEndpoint.start();
+    transport::EndpointFactoryImpl endpointFactory;
+    auto udpEndpoint = std::shared_ptr<UdpEndpoint>(
+        endpointFactory.createUdpEndpoint(*_jobManager, 64, *_mainPoolAllocator, targetAddress, *_rtcePoll, true));
+    udpEndpoint->registerListener(sourceAddress, &listener);
+    udpEndpoint->start();
 
     auto recordingEndpoint =
         std::make_shared<RecordingEndpoint>(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
@@ -297,21 +301,21 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     }
 
     const auto waitForClose = [](auto& endpoint) {
-        for (auto i = 0; i < 10 && endpoint.getState() == Endpoint::State::STOPPING; ++i)
+        for (auto i = 0; i < 10 && endpoint->getState() == Endpoint::State::STOPPING; ++i)
         {
             this_thread::sleep_for(chrono::seconds(1));
         }
 
-        if (endpoint.getState() != Endpoint::State::CREATED)
+        if (endpoint->getState() != Endpoint::State::CREATED)
         {
             FAIL() << "Endpoint has not closed after 10 seconds";
         }
     };
 
-    udpEndpoint.registerDefaultListener(&listener);
-    udpEndpoint.stop(nullptr);
+    udpEndpoint->registerDefaultListener(&listener);
+    udpEndpoint->stop(nullptr);
     recordingEndpoint->stop(nullptr);
 
     waitForClose(udpEndpoint);
-    waitForClose(*recordingEndpoint);
+    waitForClose(recordingEndpoint);
 }

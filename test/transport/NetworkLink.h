@@ -5,6 +5,7 @@
 #include "utils/Trackers.h"
 #include <gtest/gtest.h>
 #include <inttypes.h>
+#include <mutex>
 #include <queue>
 #include <unistd.h>
 
@@ -84,6 +85,7 @@ private:
     double _lossRate;
     uint64_t _burstIntervalUs;
     utils::RateTracker<10> _bitRate;
+    std::mutex _pushMutex;
 };
 
 } // namespace fakenet

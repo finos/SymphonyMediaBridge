@@ -3526,6 +3526,8 @@ void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_
 {
     utils::StringBuilder<1024> message;
     api::DataChannelMessage::makeMinUplinkBitrate(message, minUplinkEstimate);
+
+    logger::debug("send BB msg %s", _loggableId.c_str(), message.get());
     for (const auto& itBb : _engineBarbells)
     {
         itBb.second->dataChannel.sendString(message.get(), message.getLength());

@@ -5,6 +5,7 @@
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "test/transport/SendJob.h"
+#include "transport/EndpointFactoryImpl.h"
 #include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
@@ -277,7 +278,8 @@ struct SctpTransportTest : public ::testing::Test
             _rateControlConfig,
             interfaces,
             *_network,
-            *_mainAllocator);
+            *_mainAllocator,
+            std::shared_ptr<EndpointFactory>(new transport::EndpointFactoryImpl()));
     }
 
     void TearDown() override
