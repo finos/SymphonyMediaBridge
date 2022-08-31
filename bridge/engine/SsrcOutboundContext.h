@@ -84,7 +84,11 @@ public:
 
     utils::Optional<PacketCache*> packetCache;
     uint64_t lastSendTime;
+
+    // Stream owner is being removed. Stop outbound packets over this context
     bool markedForDeletion;
+
+    // Stream is temporarily idle and srtp encryption context is removed. It may be activated again.
     bool idle;
 
     struct PliMetric

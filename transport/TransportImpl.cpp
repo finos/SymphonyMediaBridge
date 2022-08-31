@@ -2430,6 +2430,11 @@ uint64_t TransportImpl::getRtt() const
     return (static_cast<uint64_t>(_rttNtp) * utils::Time::sec) >> 16;
 }
 
+uint64_t TransportImpl::getInboundPacketCount() const
+{
+    return _inboundMetrics.packetCount.load();
+}
+
 void TransportImpl::setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType)
 {
     _rtxProbeSsrc = ssrc;

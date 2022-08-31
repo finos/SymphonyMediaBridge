@@ -1238,6 +1238,8 @@ TEST_F(IntegrationTest, simpleBarbell)
     confRequest.awaitResponse(500 * utils::Time::ms);
     EXPECT_TRUE(confRequest.isSuccess());
 
+    bb1.remove(baseUrl);
+
     utils::Time::nanoSleep(utils::Time::ms * 200); // let pending packets be sent and received
     client1._transport->stop();
     client2._transport->stop();

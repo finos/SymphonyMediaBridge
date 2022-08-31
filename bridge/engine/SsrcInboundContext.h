@@ -45,8 +45,6 @@ public:
           lastUnprotectedExtendedSequenceNumber(0),
           activeMedia(false),
           lastReceiveTime(timestamp),
-          markedForDeletion(false),
-          idle(false),
           shouldDropPackets(false),
           inactiveCount(0),
           simulcastLevel(0)
@@ -57,14 +55,12 @@ public:
     {
         activeMedia = true;
         lastReceiveTime = timestamp;
-        idle = false;
     }
 
     uint32_t ssrc;
     const bridge::RtpMap rtpMap;
     transport::RtcTransport* sender;
-    utils::Optional<uint32_t> rtxSsrc; // points to main from rtc and to rtx from main
-
+   
     std::unique_ptr<codec::OpusDecoder> opusDecoder;
 
     bool markNextPacket;
@@ -74,8 +70,6 @@ public:
     uint32_t lastUnprotectedExtendedSequenceNumber;
     bool activeMedia;
     std::atomic_uint64_t lastReceiveTime;
-    bool markedForDeletion;
-    bool idle;
 
     /** If an inbound stream is considered unstable, we can in a simulcast scenario decide to drop an inbound stream
      * early to avoid toggling between quality levels. If this is set to true, any incoming packets will be dropped. */

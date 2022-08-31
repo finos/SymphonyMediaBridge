@@ -117,7 +117,7 @@ struct RemoveRecordingTransport
     size_t endpointIdHash;
 };
 
-struct EngineBarbellRemoved
+struct EngineBarbellMessage
 {
     EngineMixer* mixer;
     EngineBarbell* barbell;
@@ -140,7 +140,8 @@ enum class Type
     AllocateRecordingRtpPacketCache,
     FreeRecordingRtpPacketCache,
     RemoveRecordingTransport,
-    BarbellRemoved
+    BarbellRemoved,
+    BarbellIdle
 };
 
 union MessageUnion
@@ -160,7 +161,7 @@ union MessageUnion
     AllocateRecordingRtpPacketCache allocateRecordingRtpPacketCache;
     FreeRecordingRtpPacketCache freeRecordingRtpPacketCache;
     RemoveRecordingTransport removeRecordingTransport;
-    EngineBarbellRemoved barbellRemoved;
+    EngineBarbellMessage barbellMessage;
 };
 
 struct Message

@@ -36,6 +36,7 @@ typedef struct http_t
 http_t* http_get(char const* url, void* memctx);
 http_t* http_post(char const* url, void const* data, size_t size, void* memctx);
 http_t* http_patch(char const* url, void const* data, size_t size, void* memctx);
+http_t* http_delete(char const* url, void* memctx);
 
 http_status_t http_process(http_t* http);
 
@@ -498,6 +499,45 @@ http_t* http_patch(char const* url, void const* data, size_t size, void* memctx)
     internal->request_data_size = size;
     internal->request_data = (internal + 1);
     memcpy(internal->request_data, data, size);
+
+    return &internal->http;
+}
+
+http_t* http_delete(char const* url, void* memctx)
+{
+#ifdef _WIN32
+    WSADATA wsa_data;
+    if (WSAStartup(MAKEWORD(1, 0), &wsa_data) != 0)
+        return 0;
+#endif
+
+    char address[256];
+    char port[16];
+    char const* resource;
+
+    if (http_internal_parse_url(url, address, sizeof(address), port, sizeof(port), &resource) == 0)
+        return NULL;
+
+    HTTP_SOCKET socket = http_internal_connect(address, port);
+    if (socket == HTTP_INVALID_SOCKET)
+        return NULL;
+
+    http_internal_t* internal = http_internal_create(0, memctx);
+    internal->socket = socket;
+
+    char* request_header;
+    size_t request_header_len = 64 + strlen(resource) + strlen(address) + strlen(port);
+    if (request_header_len < sizeof(internal->request_header))
+    {
+        internal->request_header_large = NULL;
+        request_header = internal->request_header;
+    }
+    else
+    {
+        internal->request_header_large = (char*)HTTP_MALLOC(memctx, request_header_len + 1);
+        request_header = internal->request_header_large;
+    }
+    sprintf(request_header, "DELETE %s HTTP/1.0\r\nHost: %s:%s\r\n\r\n", resource, address, port);
 
     return &internal->http;
 }

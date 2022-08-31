@@ -71,6 +71,12 @@ struct EngineBarbell
     uint32_t minClientDownlinkBandwidth;
 
     static const char* barbellTag;
+
+    struct
+    {
+        uint64_t timestamp = 0;
+        uint64_t count = -1;
+    } inboundPackets;
 };
 
 } // namespace bridge

@@ -165,6 +165,7 @@ public: // Transport
     PacketCounters getAudioSendCounters(uint64_t idleTimestamp) const override;
     PacketCounters getVideoSendCounters(uint64_t idleTimestamp) const override;
     void getReportSummary(std::unordered_map<uint32_t, ReportSummary>& outReportSummary) const override;
+    uint64_t getInboundPacketCount() const override;
 
     void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) override;
     void setAbsSendTimeExtensionId(uint8_t extensionId) override;

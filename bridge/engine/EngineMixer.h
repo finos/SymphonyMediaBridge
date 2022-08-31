@@ -70,7 +70,6 @@ public:
     static constexpr size_t preBufferSamples = samplesPerIteration * 50; // 500 ms
     static constexpr size_t minimumSamplesInBuffer = samplesPerIteration * 25; // 250 ms
     static constexpr size_t audioBufferSamples = preBufferSamples * 2; // 1000 ms
-    static constexpr size_t ticksPerSSRCCheck = 100; // 1000 ms
 
     static constexpr size_t maxNumBarbells = 16;
 
@@ -91,6 +90,7 @@ public:
     const std::string& getId() const { return _id; }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
+    // -- methods executed on engine thread
     void addAudioStream(EngineAudioStream* engineAudioStream);
     void removeAudioStream(EngineAudioStream* engineAudioStream);
     void addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
@@ -124,10 +124,13 @@ public:
     void removeTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
     void addBarbell(EngineBarbell* barbell);
     void removeBarbell(size_t idHash);
-
+    void forwardPackets(const uint64_t engineTimestamp);
     void clear();
+    EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
 
-    memory::PacketPoolAllocator& getSendAllocator() { return _sendAllocator; }
+    void run(const uint64_t engineIterationStartTimestamp);
+    // --
+
     memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
     size_t getDominantSpeakerId() const;
     std::map<size_t, ActiveTalker> getActiveTalkers() const;
@@ -139,20 +142,12 @@ public:
      */
     void flush();
 
-    void run(const uint64_t engineIterationStartTimestamp);
-
-    void processIncomingSctp(const uint64_t timestamp);
-    void forwardPackets(const uint64_t engineTimestamp);
-
-    EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
-
+    // -- executed on Transport thread context
     void onRtpPacketReceived(transport::RtcTransport* sender,
         memory::UniquePacket packet,
         uint32_t extendedSequenceNumber,
         uint64_t timestamp) override;
-
     void onConnected(transport::RtcTransport* sender) override;
-
     bool onSctpConnectionRequest(transport::RtcTransport* sender, uint16_t remotePort) override;
     void onSctpEstablished(transport::RtcTransport* sender) override;
     void onSctpMessage(transport::RtcTransport* sender,
@@ -165,23 +160,21 @@ public:
     void onRecControlReceived(transport::RecordingTransport* sender,
         memory::UniquePacket packet,
         uint64_t timestamp) override;
-
     void onForwarderAudioRtpPacketDecrypted(SsrcInboundContext& inboundContext,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
-
     void onForwarderVideoRtpPacketDecrypted(SsrcInboundContext& inboundContext,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
-
     void onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet);
-
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
+    void internalRemoveBarbell(size_t idHash);
+    void internalRemoveInboundSsrc(uint32_t ssrc);
+    // --
 
     jobmanager::JobManager& getJobManager() { return _jobManager; }
 
-    // call only on related Transport serialjob context
-    void tryRemoveInboundSsrc(uint32_t ssrc);
+    // call only on related Transport thread context
 
 private:
     static const size_t maxPendingPackets = 4096;
@@ -267,6 +260,7 @@ private:
         inline SsrcInboundContext* inboundContext() { return _inboundContext; }
         inline transport::RtcTransport* transport() { return _transport; }
         inline PacketT& packet() { return _packet; }
+        inline const PacketT& packet() const { return _packet; }
         inline uint32_t extendedSequenceNumber() const { return _extendedSequenceNumber; }
 
     private:
@@ -321,7 +315,10 @@ private:
     concurrency::MpmcHashmap32<size_t, EngineRecordingStream*> _engineRecordingStreams;
     concurrency::MpmcHashmap32<size_t, EngineBarbell*> _engineBarbells;
 
-    concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext> _ssrcInboundContexts;
+    // active contexts
+    concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext*> _ssrcInboundContexts;
+    // active and decommissioned contexts
+    concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext> _allSsrcInboundContexts;
     concurrency::MpmcHashmap32<uint32_t, uint32_t> _audioSsrcToUserIdMap;
 
     uint32_t _localVideoSsrc;
@@ -334,8 +331,7 @@ private:
 
     uint64_t _lastReceiveTime;
 
-    size_t _noTicks;
-    const size_t _ticksPerSSRCCheck;
+    uint64_t _lastCounterCheck;
 
     std::unique_ptr<EngineStreamDirector> _engineStreamDirector;
     std::unique_ptr<ActiveMediaList> _activeMediaList;
@@ -351,7 +347,10 @@ private:
 
     uint32_t getMinRemoteClientDownlinkBandwidth() const;
     void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;
+
+    //  -- methods executed on engine thread
     bool needToUpdateMinUplinkEstimate(const uint32_t curEstimate, const uint32_t oldEstimate) const;
+
     void processBarbellSctp(const uint64_t timestamp);
     void processIncomingRtpPackets(const uint64_t timestamp);
     void forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const uint64_t timestamp);
@@ -360,6 +359,8 @@ private:
     void forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+    void addPacketToMixerBuffers(const IncomingAudioPacketInfo& packet, const uint64_t timestamp, bool logSpamGuard);
+
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket,
@@ -378,29 +379,8 @@ private:
     void checkPacketCounters(const uint64_t timestamp);
     void checkIfRateControlIsNeeded(const uint64_t timestamp);
     bool isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const;
-    void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
-        transport::RtcTransport* sender,
-        memory::UniquePacket packet,
-        const uint32_t extendedSequenceNumber,
-        const uint64_t timestamp);
-    void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
-        transport::RtcTransport* sender,
-        memory::UniquePacket packet,
-        const uint32_t extendedSequenceNumber,
-        const uint64_t timestamp);
-
-    SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,
-        transport::RtcTransport* sender,
-        const uint32_t payloadType,
-        const uint64_t timestamp);
-
-    SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
-        concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
-        const uint32_t ssrc,
-        const RtpMap& rtpMap);
 
     void onPliRequestFromReceiver(size_t endpointIdHash, uint32_t ssrc, uint64_t timestamp);
-
     void sendLastNListMessage(const size_t endpointIdHash);
     void sendLastNListMessageToAll();
     void sendMessagesToNewDataStreams();
@@ -418,7 +398,7 @@ private:
     void markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
         const uint32_t ssrc,
         const uint32_t feedbackSsrc);
-    void markInboundContextForDeletion(const uint32_t ssrc);
+    void decommissionInboundContext(const uint32_t ssrc);
 
     void startRecordingAllCurrentStreams(EngineRecordingStream& recordingStream);
 
@@ -455,8 +435,33 @@ private:
         webrtc::SctpStreamMessageHeader& header,
         size_t packetSize);
 
+    ////
+
+    // -- methods executed on Transport thread context
+    void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
+        transport::RtcTransport* sender,
+        memory::UniquePacket packet,
+        const uint32_t extendedSequenceNumber,
+        const uint64_t timestamp);
+    void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
+        transport::RtcTransport* sender,
+        memory::UniquePacket packet,
+        const uint32_t extendedSequenceNumber,
+        const uint64_t timestamp);
+
+    SsrcInboundContext* emplaceInboundSsrcContext(const uint32_t ssrc,
+        transport::RtcTransport* sender,
+        const uint32_t payloadType,
+        const uint64_t timestamp);
+
+    SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
+        concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
+        const uint32_t ssrc,
+        const RtpMap& rtpMap);
+
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
     utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);
+    // --
 };
 
 } // namespace bridge
