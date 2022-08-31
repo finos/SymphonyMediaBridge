@@ -77,8 +77,6 @@ void IntegrationTest::SetUp()
 {
     using namespace std;
 
-    utils::Time::initialize();
-
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
 }
 
