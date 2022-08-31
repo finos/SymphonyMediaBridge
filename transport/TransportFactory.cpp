@@ -6,7 +6,7 @@
 #include "transport/RtcTransport.h"
 #include "transport/TcpEndpoint.h"
 #include "transport/TcpServerEndpoint.h"
-#include "transport/UdpEndpoint.h"
+#include "transport/UdpEndpointImpl.h"
 #include "utils/MersienneRandom.h"
 
 namespace transport
@@ -48,7 +48,8 @@ public:
         const bwe::RateControllerConfig& rateControllerConfig,
         const std::vector<SocketAddress>& interfaces,
         transport::RtcePoll& rtcePoll,
-        memory::PacketPoolAllocator& mainAllocator)
+        memory::PacketPoolAllocator& mainAllocator,
+        std::shared_ptr<transport::EndpointFactory>& endpointFactory)
         : _deleter(this),
           _jobManager(jobManager),
           _garbageQueue(jobManager),
@@ -64,7 +65,8 @@ public:
           _mainAllocator(mainAllocator),
           _pendingTasks(0),
           _sharedRecordingEndpointListIndex(0),
-          _good(true)
+          _good(true),
+          _endpointFactory(endpointFactory)
     {
 #ifdef __APPLE__
         const size_t receiveBufferSize = 5 * 1024 * 1024;
@@ -80,7 +82,8 @@ public:
                 {
                     portAddress.setPort(config.ice.singlePort + portOffset);
                     auto endPoint = std::shared_ptr<UdpEndpoint>(
-                        new UdpEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
+                        _endpointFactory
+                            ->createUdpEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
                         getDeleter());
 
                     if (endPoint->isGood())
@@ -190,11 +193,16 @@ public:
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
         auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(
-            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
+            _endpointFactory
+                ->createUdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
             getDeleter());
 
-        auto rtcpEndpoint = std::shared_ptr<UdpEndpoint>(
-            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort + 1), _rtcePoll, false),
+        auto rtcpEndpoint = std::shared_ptr<UdpEndpoint>(_endpointFactory->createUdpEndpoint(_jobManager,
+                                                             32,
+                                                             _mainAllocator,
+                                                             SocketAddress(ip, firstPort + 1),
+                                                             _rtcePoll,
+                                                             false),
             getDeleter());
 
         for (int i = 2; i < portCount && (!rtpEndpoint->isGood() || !rtcpEndpoint->isGood()); i += 2)
@@ -233,7 +241,8 @@ public:
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
         auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(
-            new UdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
+            _endpointFactory
+                ->createUdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
             getDeleter());
 
         for (int i = 2; i < portCount && !rtpEndpoint->isGood(); i += 2)
@@ -547,6 +556,7 @@ private:
     std::vector<std::vector<std::shared_ptr<RecordingEndpoint>>> _sharedRecordingEndpoints;
     std::atomic_uint32_t _sharedRecordingEndpointListIndex;
     bool _good;
+    std::shared_ptr<transport::EndpointFactory> _endpointFactory;
     static const char* _name;
 };
 
@@ -561,7 +571,8 @@ std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager&
     const bwe::RateControllerConfig& rateControllerConfig,
     const std::vector<SocketAddress>& interfaces,
     transport::RtcePoll& rtcePoll,
-    memory::PacketPoolAllocator& mainAllocator)
+    memory::PacketPoolAllocator& mainAllocator,
+    std::shared_ptr<EndpointFactory> endpointFactory)
 {
     return std::make_unique<TransportFactoryImpl>(jobManager,
         srtpClientFactory,
@@ -572,7 +583,8 @@ std::unique_ptr<TransportFactory> createTransportFactory(jobmanager::JobManager&
         rateControllerConfig,
         interfaces,
         rtcePoll,
-        mainAllocator);
+        mainAllocator,
+        endpointFactory);
 }
 
 } // namespace transport

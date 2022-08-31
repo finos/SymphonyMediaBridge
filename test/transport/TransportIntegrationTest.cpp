@@ -1,5 +1,6 @@
 #include "TransportIntegrationTest.h"
 #include "jobmanager/WorkerThread.h"
+#include "transport/EndpointFactoryImpl.h"
 #include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
@@ -56,7 +57,8 @@ bool TransportIntegrationTest::init(std::string configJson1, std::string configJ
         _rateControlConfig,
         interfaces,
         *_network,
-        *_mainPoolAllocator);
+        *_mainPoolAllocator,
+        std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl()));
     {
         std::vector<transport::SocketAddress> interfaces;
         interfaces.push_back(transport::SocketAddress::parse(_config2.ice.preferredIp, 0));
@@ -69,7 +71,8 @@ bool TransportIntegrationTest::init(std::string configJson1, std::string configJ
             _rateControlConfig,
             interfaces,
             *_network,
-            *_mainPoolAllocator);
+            *_mainPoolAllocator,
+            std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl()));
     }
 
     return _transportFactory1->isGood() && _transportFactory2->isGood();

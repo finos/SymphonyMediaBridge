@@ -1,5 +1,6 @@
 #pragma once
 
+#include "UdpEndpoint.h"
 #include "concurrency/MpmcQueue.h"
 #include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
@@ -10,7 +11,7 @@
 
 namespace transport
 {
-class BaseUdpEndpoint : public Endpoint, RtcePoll::IEventListener
+class BaseUdpEndpoint : public UdpEndpoint
 {
 public:
     BaseUdpEndpoint(const char* name,
@@ -25,7 +26,7 @@ public:
 
     void registerDefaultListener(IEvents* defaultListener) override;
     void start() override;
-    bool openPort(uint16_t port);
+    bool openPort(uint16_t port) override;
     void stop(Endpoint::IStopEvents* listener) override;
 
     SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
@@ -36,13 +37,13 @@ public:
 
     const char* getName() const override { return _name.c_str(); }
 
-    bool isGood() const { return _socket.isGood(); }
+    bool isGood() const override { return _socket.isGood(); }
 
     Endpoint::State getState() const override { return _state; }
 
     ice::TransportType getTransportType() const override { return ice::TransportType::UDP; }
 
-    EndpointMetrics getMetrics(uint64_t timestamp) const final;
+    EndpointMetrics getMetrics(uint64_t timestamp) const override final;
 
 public: // internal job interface
     // called on receiveJobs threads

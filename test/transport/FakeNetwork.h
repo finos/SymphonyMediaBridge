@@ -1,6 +1,10 @@
 #pragma once
 #include "utils/SocketAddress.h"
+#include <atomic>
+#include <memory>
 #include <queue>
+#include <thread>
+
 namespace fakenet
 {
 
@@ -95,5 +99,26 @@ private:
     std::vector<NetworkNode*> _publicEndpoints;
     Gateway& _internet;
     int _portCount = 1000;
+};
+
+class InternetRunner
+{
+public:
+    InternetRunner(uint64_t sleepTime);
+    ~InternetRunner();
+    void start();
+    void stop();
+    std::shared_ptr<Internet> get();
+    bool isRunning() { return _isRunning; };
+
+private:
+    void internetThreadRun();
+    std::shared_ptr<Internet> _internet;
+    std::atomic_bool _isRunning;
+    std::atomic_bool _shouldStop;
+    std::unique_ptr<std::thread> _thread;
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    const uint64_t _sleepTime;
 };
 } // namespace fakenet

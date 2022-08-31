@@ -7,6 +7,7 @@
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtcpHeader.h"
+#include "test/transport/FakeNetwork.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
 #include "transport/TransportFactory.h"
@@ -17,6 +18,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
+
 namespace emulator
 {
 class MediaSendJob : public jobmanager::Job
@@ -591,7 +593,8 @@ public:
             client->connect();
         }
 
-        while (utils::Time::getAbsoluteTime() - start < timeout)
+        auto currTime = utils::Time::getAbsoluteTime();
+        while (currTime - start < timeout)
         {
             auto it =
                 std::find_if_not(_clients.begin(), _clients.end(), [](auto c) { return c->_transport->isConnected(); });
@@ -602,8 +605,9 @@ public:
                 return true;
             }
 
-            utils::Time::nanoSleep(1 * utils::Time::sec);
+            utils::Time::nanoSleep(10 * utils::Time::ms);
             logger::debug("waiting for connect...", "test");
+            currTime = utils::Time::getAbsoluteTime();
         }
 
         return false;

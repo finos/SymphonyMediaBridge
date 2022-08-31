@@ -14,6 +14,7 @@
 #include "test/bwe/FakeVideoSource.h"
 #include "test/transport/SendJob.h"
 #include "transport/DataReceiver.h"
+#include "transport/EndpointFactoryImpl.h"
 #include "transport/RtcePoll.h"
 #include "transport/Transport.h"
 #include "transport/TransportFactory.h"
@@ -285,7 +286,8 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
             _rateControlConfig,
             interfaces,
             *_network,
-            *_mainPoolAllocator);
+            *_mainPoolAllocator,
+            std::shared_ptr<EndpointFactory>(new transport::EndpointFactoryImpl()));
     }
 
     void TearDown() override

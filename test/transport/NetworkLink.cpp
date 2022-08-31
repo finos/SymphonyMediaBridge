@@ -7,6 +7,8 @@ namespace fakenet
 {
 bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp)
 {
+    const std::lock_guard<std::mutex> lock(_pushMutex);
+
     if (_lossRate > 0 && rand() % 1000 < _lossRate * 1000)
     {
         logger::debug("dropping packet", "");

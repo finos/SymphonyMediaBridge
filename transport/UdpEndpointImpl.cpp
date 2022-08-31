@@ -1,4 +1,4 @@
-#include "UdpEndpoint.h"
+#include "UdpEndpointImpl.h"
 #include "dtls/SslDtls.h"
 #include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
@@ -17,21 +17,23 @@ using namespace transport;
 class UnRegisterListenerJob : public jobmanager::Job
 {
 public:
-    UnRegisterListenerJob(UdpEndpoint& endpoint, Endpoint::IEvents* listener) : _endpoint(endpoint), _listener(listener)
+    UnRegisterListenerJob(UdpEndpointImpl& endpoint, Endpoint::IEvents* listener)
+        : _endpoint(endpoint),
+          _listener(listener)
     {
     }
 
     void run() override { _endpoint.internalUnregisterListener(_listener); }
 
 private:
-    UdpEndpoint& _endpoint;
+    UdpEndpointImpl& _endpoint;
     Endpoint::IEvents* _listener;
 };
 
 class UnRegisterNotifyListenerJob : public jobmanager::Job
 {
 public:
-    UnRegisterNotifyListenerJob(UdpEndpoint& endpoint, Endpoint::IEvents& listener)
+    UnRegisterNotifyListenerJob(UdpEndpointImpl& endpoint, Endpoint::IEvents& listener)
         : _endpoint(endpoint),
           _listener(listener)
     {
@@ -40,7 +42,7 @@ public:
     void run() override { _listener.onUnregistered(_endpoint); }
 
 private:
-    UdpEndpoint& _endpoint;
+    UdpEndpointImpl& _endpoint;
     Endpoint::IEvents& _listener;
 };
 
@@ -48,7 +50,7 @@ private:
 
 // When this endpoint is shared the number of registration jobs and packets in queue will be plenty
 // and the data structures are therefore larger
-UdpEndpoint::UdpEndpoint(jobmanager::JobManager& jobManager,
+UdpEndpointImpl::UdpEndpointImpl(jobmanager::JobManager& jobManager,
     size_t maxSessionCount,
     memory::PacketPoolAllocator& allocator,
     const SocketAddress& localPort,
@@ -61,12 +63,12 @@ UdpEndpoint::UdpEndpoint(jobmanager::JobManager& jobManager,
 {
 }
 
-UdpEndpoint::~UdpEndpoint()
+UdpEndpointImpl::~UdpEndpointImpl()
 {
     logger::debug("removed", _name.c_str());
 }
 
-void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
+void UdpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
     __uint128_t transactionId,
     const void* data,
     size_t len,
@@ -99,7 +101,7 @@ void UdpEndpoint::sendStunTo(const transport::SocketAddress& target,
     sendTo(target, memory::makeUniquePacket(_allocator, data, len));
 }
 
-void UdpEndpoint::unregisterListener(IEvents* listener)
+void UdpEndpointImpl::unregisterListener(IEvents* listener)
 {
     if (!_receiveJobs.addJob<UnRegisterListenerJob>(*this, listener))
     {
@@ -107,7 +109,7 @@ void UdpEndpoint::unregisterListener(IEvents* listener)
     }
 }
 
-void UdpEndpoint::cancelStunTransaction(__uint128_t transactionId)
+void UdpEndpointImpl::cancelStunTransaction(__uint128_t transactionId)
 {
     // Hashmap allows erasing elements while iterating.
     auto itPair = _iceResponseListeners.find(transactionId);
@@ -117,7 +119,7 @@ void UdpEndpoint::cancelStunTransaction(__uint128_t transactionId)
     }
 }
 
-void UdpEndpoint::internalUnregisterListener(IEvents* listener)
+void UdpEndpointImpl::internalUnregisterListener(IEvents* listener)
 {
     // Hashmap allows erasing elements while iterating.
     logger::debug("unregister %p", _name.c_str(), listener);
@@ -152,7 +154,8 @@ void UdpEndpoint::internalUnregisterListener(IEvents* listener)
 namespace
 {
 template <typename KeyType>
-UdpEndpoint::IEvents* findListener(concurrency::MpmcHashmap32<KeyType, UdpEndpoint::IEvents*>& map, const KeyType& key)
+UdpEndpointImpl::IEvents* findListener(concurrency::MpmcHashmap32<KeyType, UdpEndpointImpl::IEvents*>& map,
+    const KeyType& key)
 {
     auto it = map.find(key);
     if (it != map.cend())
@@ -163,9 +166,9 @@ UdpEndpoint::IEvents* findListener(concurrency::MpmcHashmap32<KeyType, UdpEndpoi
 }
 } // namespace
 
-void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet)
+void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet)
 {
-    UdpEndpoint::IEvents* listener = _defaultListener;
+    UdpEndpointImpl::IEvents* listener = _defaultListener;
 
     if (ice::isStunMessage(packet->get(), packet->getLength()))
     {
@@ -248,7 +251,7 @@ void UdpEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress, memory
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
 }
 
-void UdpEndpoint::registerListener(const std::string& stunUserName, IEvents* listener)
+void UdpEndpointImpl::registerListener(const std::string& stunUserName, IEvents* listener)
 {
     if (_iceListeners.contains(stunUserName))
     {
@@ -260,7 +263,7 @@ void UdpEndpoint::registerListener(const std::string& stunUserName, IEvents* lis
 }
 
 /** If using ICE, must be called from receive job queue to sync unregister */
-void UdpEndpoint::registerListener(const SocketAddress& srcAddress, IEvents* listener)
+void UdpEndpointImpl::registerListener(const SocketAddress& srcAddress, IEvents* listener)
 {
     auto dtlsIt = _dtlsListeners.find(srcAddress);
     if (dtlsIt != _dtlsListeners.end())
