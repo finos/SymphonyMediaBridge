@@ -44,7 +44,5 @@ struct IntegrationTest : public ::testing::Test
     void initBridge(config::Config& config);
 
 protected:
-    void startInternet();
-    void stopInternet();
     bool _internetStartedAtLeastOnce;
 };

@@ -79,7 +79,6 @@ void IntegrationTest::SetUp()
 
     utils::Time::initialize();
 
-    _internetStartedAtLeastOnce = false;
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
 }
 
@@ -93,20 +92,9 @@ void IntegrationTest::TearDown()
         worker->stop();
     }
 
-    assert(!_internet->isRunning() && _internetStartedAtLeastOnce);
+    assert(!_internet->isRunning());
 
     logger::info("IntegrationTest torn down", "IntegrationTest");
-}
-
-void IntegrationTest::startInternet()
-{
-    _internetStartedAtLeastOnce = true;
-    _internet->start();
-}
-
-void IntegrationTest::stopInternet()
-{
-    _internet->stop();
 }
 
 void IntegrationTest::initBridge(config::Config& config)
@@ -289,7 +277,7 @@ TEST_F(IntegrationTest, plain)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     const std::string baseUrl = "http://127.0.0.1:8080";
@@ -327,7 +315,7 @@ TEST_F(IntegrationTest, plain)
     client3._transport->stop();
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
-    stopInternet();
+    _internet->stop();
 
     const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
     {
@@ -464,7 +452,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
     _config.readFromString("{\"ip\":\"127.0.0.1\", "
                            "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     const std::string baseUrl = "http://127.0.0.1:8080";
@@ -490,7 +478,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 
     const auto& rData1 = client1.getAudioReceiveStats();
     const auto& rData2 = client2.getAudioReceiveStats();
@@ -515,7 +503,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
     _config.readFromString("{\"ip\":\"127.0.0.1\", "
                            "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     const std::string baseUrl = "http://127.0.0.1:8080";
@@ -545,7 +533,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 
     const auto& rData1 = client1.getAudioReceiveStats();
     const auto& rData2 = client2.getAudioReceiveStats();
@@ -619,7 +607,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         "{\"ip\":\"127.0.0.1\", "
         "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"rctl.cooldownInterval\":1}");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     const std::string baseUrl = "http://127.0.0.1:8080";
@@ -700,7 +688,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 
     const auto& rData1 = client1.getAudioReceiveStats();
     const auto& rData2 = client2.getAudioReceiveStats();
@@ -728,7 +716,7 @@ TEST_F(IntegrationTest, plainNewApi)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     const auto baseUrl = "http://127.0.0.1:8080";
@@ -763,7 +751,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 
     const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
     {
@@ -915,7 +903,7 @@ TEST_F(IntegrationTest, ptime10)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     const auto baseUrl = "http://127.0.0.1:8080";
@@ -955,7 +943,7 @@ TEST_F(IntegrationTest, ptime10)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 
     const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
     {
@@ -1142,7 +1130,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         "bwe.enable":false
         })");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     config::Config config1;
@@ -1221,7 +1209,7 @@ TEST_F(IntegrationTest, simpleBarbell)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 
     logVideoSent("client1", client1);
     logVideoSent("client2", client2);
@@ -1326,7 +1314,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         "bwe.enable":false
         })");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     config::Config config1;
@@ -1416,7 +1404,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 
     logVideoSent("client1", client1);
     logVideoSent("client2", client2);
@@ -1511,7 +1499,7 @@ TEST_F(IntegrationTest, detectIsPtt)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-    startInternet();
+    _internet->start();
     initBridge(_config);
 
     const auto baseUrl = "http://127.0.0.1:8080";
@@ -1629,7 +1617,7 @@ TEST_F(IntegrationTest, detectIsPtt)
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
 
-    stopInternet();
+    _internet->stop();
 }
 
 #undef DEFINE_3_CLIENT_CONFERENCE
