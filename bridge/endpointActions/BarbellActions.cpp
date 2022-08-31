@@ -225,7 +225,7 @@ httpd::Response deleteBarbell(ActionContext* context,
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
     mixer->removeBarbell(barbellId);
-    auto response = httpd::Response(httpd::StatusCode::OK, "");
+    auto response = httpd::Response(httpd::StatusCode::NO_CONTENT);
     return response;
 }
 
