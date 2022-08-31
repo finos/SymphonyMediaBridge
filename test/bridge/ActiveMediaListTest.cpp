@@ -20,12 +20,15 @@ static const uint32_t audioLastN = 3;
 
 void threadFunction(jobmanager::JobManager* jobManager)
 {
-    auto job = jobManager->wait();
+    auto job = jobManager->pop();
     while (job)
     {
-        job->run();
+        while (job->runStep())
+        {
+            utils::Time::nanoSleep(100 * utils::Time::us);
+        }
         jobManager->freeJob(job);
-        job = jobManager->wait();
+        job = jobManager->pop();
     }
 }
 

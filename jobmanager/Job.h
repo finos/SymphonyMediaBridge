@@ -6,13 +6,34 @@
 namespace jobmanager
 {
 
-class Job
+// Job that can be run multiple times until it returns false.
+// Use this to implement long running jobs that can continue where it left off.
+// Track the state inside your job to execute the next step when run again.
+class MultiStepJob
+{
+public:
+    MultiStepJob() = default;
+    virtual ~MultiStepJob() {}
+
+    // return true if job needs to be run again
+    virtual bool runStep() = 0;
+};
+
+// Job that can only run once
+class Job : public MultiStepJob
 {
 public:
     Job() {}
 
     virtual void run() = 0;
     virtual ~Job() = default;
+
+private:
+    bool runStep() override
+    {
+        run();
+        return false; // do not run again
+    }
 };
 
 /**

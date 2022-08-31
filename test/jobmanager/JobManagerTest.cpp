@@ -279,3 +279,112 @@ TEST_F(JobManagerTest, timers)
     end = utils::Time::getAbsoluteTime();
     EXPECT_NEAR(end - start, timeout * 3, 30 * ms);
 }
+
+namespace
+{
+class YieldJob : public MultiStepJob
+{
+public:
+    YieldJob(std::atomic_int& counter) : _start(utils::Time::getAbsoluteTime()), _counter(counter) { ++counter; }
+
+    bool runStep() override
+    {
+        if (utils::Time::diffLT(_start, utils::Time::getAbsoluteTime(), utils::Time::sec))
+        {
+            return true;
+        }
+        --_counter;
+        return false;
+    }
+
+private:
+    uint64_t _start;
+    std::atomic_int& _counter;
+};
+} // namespace
+
+TEST_F(JobManagerTest, yieldingJobs)
+{
+    std::atomic_int counter(0);
+    std::atomic_int yieldJobCounter(0);
+    for (int i = 0; i < 600; ++i)
+    {
+        jobManager.addJob<YieldJob>(yieldJobCounter);
+        jobManager.addJob<NoJob>(counter);
+        utils::Time::nanoSleep(utils::Time::ms);
+    }
+
+    while (jobManager.getCount() > 0)
+    {
+        utils::Time::nanoSleep(utils::Time::ms);
+    }
+
+    utils::Time::nanoSleep(utils::Time::ms * 1050);
+
+    EXPECT_EQ(yieldJobCounter.load(), 0);
+    EXPECT_EQ(counter.load(), 0);
+}
+
+class QueueDeleteJob : public jobmanager::Job
+{
+public:
+    QueueDeleteJob(jobmanager::JobQueue* queue) : _queue(queue) {}
+    void run() override
+    {
+        logger::info("deleting queue", "QueueDeleteJob");
+        delete _queue;
+        logger::info("deleted queue", "QueueDeleteJob");
+    }
+
+private:
+    jobmanager::JobQueue* _queue;
+};
+
+class SleepJob : public jobmanager::Job
+{
+public:
+    SleepJob(uint64_t timeout) : _timeout(timeout) {}
+
+    void run() override
+    {
+        logger::info("start sleep ", "SleepJob");
+        utils::Time::nanoSleep(_timeout);
+        logger::info("slept ", "SleepJob");
+    }
+
+private:
+    uint64_t _timeout;
+};
+
+// this test relies on workerthread yield.
+TEST_F(JobManagerTest, jobQueueDeletion)
+{
+    jobmanager::JobQueue* owners[numWorkers];
+    for (int i = 0; i < numWorkers; ++i)
+    {
+        owners[i] = new jobmanager::JobQueue(jobManager);
+    }
+
+    // make all workers busy
+    for (int i = 0; i < numWorkers; ++i)
+    {
+        jobManager.addJob<SleepJob>(utils::Time::ms * 5);
+    }
+
+    // place delete jobs for each worker
+    for (int i = 0; i < numWorkers; ++i)
+    {
+        jobManager.addJob<QueueDeleteJob>(owners[i]);
+    }
+
+    // post on job queues so they cannot be deleted until jobs have been processed
+    for (int i = 0; i < numWorkers; ++i)
+    {
+        owners[i]->addJob<SleepJob>(utils::Time::ms * 1);
+        owners[i]->addJob<SleepJob>(utils::Time::ms * 1);
+    }
+
+    // this test will wait indefinitely if the workerthreads are not able to yield
+    // in the ~JobQueue and process the remaining queued jobs.
+    utils::Time::nanoSleep(utils::Time::ms * 30);
+}

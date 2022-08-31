@@ -78,7 +78,7 @@ public:
         return true;
     }
 
-    bool addJobItem(Job* job)
+    bool addJobItem(MultiStepJob* job)
     {
         if (!_jobQueue.push(job))
         {
@@ -89,29 +89,24 @@ public:
         return true;
     }
 
-    void freeJob(Job* job)
+    void freeJob(MultiStepJob* job)
     {
         assert(job);
-        job->~Job();
+        job->~MultiStepJob();
         _jobPool.free(job);
     }
 
-    Job* wait()
+    MultiStepJob* pop()
     {
-        const int maxWait2ms = 15;
-        for (int i = 0; _running.load(std::memory_order::memory_order_relaxed); i = std::min(maxWait2ms, i + 1))
+        MultiStepJob* job;
+        if (_running.load(std::memory_order::memory_order_relaxed) && _jobQueue.pop(job))
         {
-            Job* job;
-            if (_jobQueue.pop(job))
-            {
-                return job;
-            }
-            else
-            {
-                utils::Time::nanoSleep(int64_t(64) << i);
-            }
+            return job;
         }
-        return nullptr;
+        else
+        {
+            return nullptr;
+        }
     }
 
     void stop()
@@ -120,7 +115,7 @@ public:
         _running = false;
     }
 
-    int32_t getCount() const { return _jobQueue.size(); }
+    int32_t getCount() const { return _jobPool.countAllocatedItems(); }
 
     void abortTimedJobs(const uint64_t groupId) { _timers.abortTimers(groupId); }
     void abortTimedJob(const uint64_t groupId, const uint32_t id) { _timers.abortTimer(groupId, id); }
@@ -129,7 +124,7 @@ public:
     static const auto maxJobSize = 14 * 8;
 
 private:
-    concurrency::MpmcQueue<Job*> _jobQueue;
+    concurrency::MpmcQueue<MultiStepJob*> _jobQueue;
     memory::PoolAllocator<maxJobSize> _jobPool;
     std::atomic<bool> _running;
 
