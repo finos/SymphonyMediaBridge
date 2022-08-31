@@ -223,8 +223,8 @@ set(FILES
         concurrency/ScopedSpinLocker.h
         concurrency/Semaphore.cpp
         concurrency/Semaphore.h
-        concurrency/DebtSemaphore.cpp
-        concurrency/DebtSemaphore.h
+        concurrency/CountdownEvent.cpp
+        concurrency/CountdownEvent.h
         concurrency/ThreadUtils.cpp
         concurrency/ThreadUtils.h
         concurrency/WaitFreeStack.cpp

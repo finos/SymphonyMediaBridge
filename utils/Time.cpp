@@ -28,17 +28,7 @@ utils::TimeSource* _timeSource = nullptr;
 class TimeSourceImpl final : public utils::TimeSource
 {
 public:
-    uint64_t getAbsoluteTime() override
-    {
-#ifdef __APPLE__
-        assert(machTimeBase.denom);
-        return mach_absolute_time() * machTimeBase.numer / machTimeBase.denom;
-#else
-        timespec timeSpec = {};
-        clock_gettime(CLOCK_MONOTONIC, &timeSpec);
-        return static_cast<uint64_t>(timeSpec.tv_sec) * 1000000000ULL + static_cast<uint64_t>(timeSpec.tv_nsec);
-#endif
-    }
+    uint64_t getAbsoluteTime() override { return rawAbsoluteTime(); }
 
     uint64_t getApproximateTime() override
     {
@@ -50,12 +40,7 @@ public:
 #endif
     }
 
-    void nanoSleep(uint64_t ns) override
-    {
-        ns = std::min(ns, static_cast<uint64_t>(std::numeric_limits<int32_t>::max()) * uint64_t(1000'000'000));
-        const timespec sleepTime = {static_cast<long>(ns / 1000'000'000UL), static_cast<long>(ns % 1000000000UL)};
-        ::nanosleep(&sleepTime, nullptr);
-    }
+    void nanoSleep(uint64_t ns) override { rawNanoSleep(ns); }
 
     std::chrono::system_clock::time_point wallClock() override { return std::chrono::system_clock::now(); }
 };
@@ -138,6 +123,18 @@ void rawNanoSleep(int64_t ns)
     ns = std::min(ns, static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * int64_t(1000'000'000));
     const timespec sleepTime = {static_cast<long>(ns / 1000'000'000UL), static_cast<long>(ns % 1000000000UL)};
     ::nanosleep(&sleepTime, nullptr);
+}
+
+uint64_t rawAbsoluteTime()
+{
+#ifdef __APPLE__
+    assert(machTimeBase.denom);
+    return mach_absolute_time() * machTimeBase.numer / machTimeBase.denom;
+#else
+    timespec timeSpec = {};
+    clock_gettime(CLOCK_MONOTONIC, &timeSpec);
+    return static_cast<uint64_t>(timeSpec.tv_sec) * 1000000000ULL + static_cast<uint64_t>(timeSpec.tv_nsec);
+#endif
 }
 
 uint64_t toNtp(const std::chrono::system_clock::time_point timestamp)

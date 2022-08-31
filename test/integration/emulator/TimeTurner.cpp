@@ -23,8 +23,8 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
         if (slot.state.compare_exchange_strong(expectedState, State::Allocated))
         {
             slot.expireTimestamp = timerExpires;
-            slot.state.store(State::Committed);
-            _sleeperCount.post();
+            slot.state.store(State::Sleeping);
+            --_sleeperCountdown;
             slot.semaphore.wait();
 
             slot.state.store(State::Empty);
@@ -46,12 +46,25 @@ std::chrono::system_clock::time_point TimeTurner::wallClock()
  */
 void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutNs)
 {
-    for (uint32_t i = 0; i < expectedCount - 1; ++i)
+    const int MAX_ITERATIONS = 1000;
+    const auto interval = timeoutNs / MAX_ITERATIONS;
+    for (int i = 0; i < MAX_ITERATIONS; ++i)
     {
-        _sleeperCount.decrement();
-    }
+        uint32_t count = 0;
+        for (auto& slot : _sleepers)
+        {
+            if (slot.state.load() == State::Sleeping)
+            {
+                ++count;
+            }
+        }
+        if (count == expectedCount)
+        {
+            return;
+        }
 
-    _sleeperCount.wait(timeoutNs);
+        utils::Time::rawNanoSleep(interval);
+    }
 }
 
 /**
@@ -60,20 +73,17 @@ void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutN
  */
 void TimeTurner::runFor(uint64_t durationNs)
 {
-    _sleeperCount.reset(1);
     const auto startTime = getAbsoluteTime();
 
     for (auto timestamp = getAbsoluteTime(); utils::Time::diffLE(startTime, timestamp, durationNs);
          timestamp = getAbsoluteTime())
     {
         logger::awaitLogDrained(0.75);
-        _sleeperCount.wait();
+        _sleeperCountdown.wait();
         advance();
-        _sleeperCount.post();
-        assert(_sleeperCount.getCount() < 2);
     }
 
-    _sleeperCount.wait();
+    _sleeperCountdown.wait();
 }
 
 void TimeTurner::advance()
@@ -84,7 +94,7 @@ void TimeTurner::advance()
     Sleeper* minItem = nullptr;
     for (auto& slot : _sleepers)
     {
-        if (slot.state.load() == State::Committed)
+        if (slot.state.load() == State::Sleeping)
         {
             const auto expiresIn = utils::Time::diff(timestamp, slot.expireTimestamp);
             if (expiresIn < minDuration)
@@ -107,10 +117,10 @@ void TimeTurner::advance(uint64_t nanoSeconds)
 
     for (auto& slot : _sleepers)
     {
-        if (slot.state.load() == State::Committed && utils::Time::diffGE(slot.expireTimestamp, _timestamp, 0))
+        if (slot.state.load() == State::Sleeping && utils::Time::diffGE(slot.expireTimestamp, _timestamp, 0))
         {
             slot.state = State::Fired;
-            _sleeperCount.decrement();
+            ++_sleeperCountdown;
             slot.semaphore.post();
         }
     }
@@ -123,7 +133,7 @@ void TimeTurner::shutdown()
     uint64_t maxTimeout = 0;
     for (auto& slot : _sleepers)
     {
-        if (slot.state.load() == State::Committed)
+        if (slot.state.load() == State::Sleeping)
         {
             maxTimeout = std::max(maxTimeout, slot.expireTimestamp);
         }
@@ -132,7 +142,7 @@ void TimeTurner::shutdown()
 
     for (auto& slot : _sleepers)
     {
-        if (slot.state.load() == State::Committed)
+        if (slot.state.load() == State::Sleeping)
         {
             slot.state = State::Fired;
             slot.semaphore.post();

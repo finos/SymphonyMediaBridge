@@ -1,5 +1,6 @@
 #pragma once
-#include "concurrency/DebtSemaphore.h"
+#include "concurrency/CountdownEvent.h"
+#include "concurrency/Semaphore.h"
 #include "concurrency/WaitFreeStack.h"
 #include "utils/Time.h"
 #include <array>
@@ -41,7 +42,7 @@ private:
     {
         Empty = 0,
         Allocated,
-        Committed,
+        Sleeping,
         Fired
     };
 
@@ -51,13 +52,12 @@ private:
 
         std::atomic<State> state;
         uint64_t expireTimestamp;
-        concurrency::DebtSemaphore semaphore;
+        concurrency::Semaphore semaphore;
     };
 
     std::array<Sleeper, MAX_THREAD_COUNT> _sleepers;
     bool _running;
 
-    // equals 1 when all threads are asleep.
-    concurrency::DebtSemaphore _sleeperCount;
+    concurrency::CountdownEvent _sleeperCountdown;
 };
 } // namespace emulator

@@ -43,6 +43,7 @@ void mSleep(int64_t milliSeconds);
 std::chrono::system_clock::time_point now();
 
 void rawNanoSleep(int64_t ns);
+uint64_t rawAbsoluteTime();
 
 uint64_t toNtp(std::chrono::system_clock::time_point timestamp);
 inline uint32_t toNtp32(const std::chrono::system_clock::time_point timestamp)
