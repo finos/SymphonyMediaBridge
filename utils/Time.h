@@ -66,6 +66,26 @@ constexpr bool diffGE(const uint64_t a, const uint64_t b, const uint64_t value)
     return static_cast<int64_t>(b - a) >= static_cast<int64_t>(value);
 }
 
+constexpr bool lt(const uint64_t a, const uint64_t b)
+{
+    return diffLT(a, b, 0);
+}
+
+constexpr bool le(const uint64_t a, const uint64_t b)
+{
+    return diffLE(a, b, 0);
+}
+
+constexpr bool gt(const uint64_t a, const uint64_t b)
+{
+    return diffGT(a, b, 0);
+}
+
+constexpr bool ge(const uint64_t a, const uint64_t b)
+{
+    return diffGE(a, b, 0);
+}
+
 } // namespace Time
 
 } // namespace utils

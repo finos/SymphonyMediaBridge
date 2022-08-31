@@ -118,7 +118,7 @@ inline void AsyncWaiter::runCheck()
     for (auto it = _tasks.begin(); it != itEnd;)
     {
         const bool hasCompleted = this->hasCompleted(*it->task);
-        const bool isEnded = hasCompleted || timestamp >= it->endTime;
+        const bool isEnded = hasCompleted || utils::Time::ge(it->endTime, timestamp);
         if (isEnded)
         {
             logger::info("isEnded", "AsyncWaiter");
@@ -132,7 +132,8 @@ inline void AsyncWaiter::runCheck()
         }
         else
         {
-            nextTimeout = std::min(nextTimeout, it->endTime - timestamp);
+            nextTimeout =
+                std::min(nextTimeout, static_cast<uint64_t>(std::abs(utils::Time::diff(timestamp, it->endTime))));
             ++it;
         }
     }
