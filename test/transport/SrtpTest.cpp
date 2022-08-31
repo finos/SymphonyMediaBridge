@@ -180,3 +180,46 @@ TEST_F(SrtpTest, seqDuplicate)
     EXPECT_TRUE(_srtp2->unprotect(*packet));
     EXPECT_FALSE(_srtp2->unprotect(*packetCopy));
 }
+
+TEST_F(SrtpTest, sendOutOfOrder)
+{
+    connect();
+
+    for (int i = 0; i < 50; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = 5678 + i;
+
+        EXPECT_TRUE(_srtp1->protect(*packet));
+
+        EXPECT_TRUE(_srtp2->unprotect(*packet));
+    }
+
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = 5678 + 55;
+
+        EXPECT_TRUE(_srtp1->protect(*packet));
+
+        EXPECT_TRUE(_srtp2->unprotect(*packet));
+    }
+
+    for (int i = 51; i < 55; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = 5678 + i;
+
+        EXPECT_TRUE(_srtp1->protect(*packet));
+
+        EXPECT_TRUE(_srtp2->unprotect(*packet));
+    }
+}

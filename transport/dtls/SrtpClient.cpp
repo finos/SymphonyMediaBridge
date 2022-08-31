@@ -306,6 +306,11 @@ bool SrtpClient::unprotect(memory::Packet& packet)
             return false;
         }
     }
+    else
+    {
+        return false;
+    }
+
     packet.setLength(utils::checkedCast<size_t>(bufferLength));
     return true;
 }
@@ -362,6 +367,10 @@ bool SrtpClient::protect(memory::Packet& packet)
             }
             return false;
         }
+    }
+    else
+    {
+        return false;
     }
 
     packet.setLength(utils::checkedCast<size_t>(bufferLength));

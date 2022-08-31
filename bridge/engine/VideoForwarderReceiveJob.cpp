@@ -176,8 +176,9 @@ void VideoForwarderReceiveJob::run()
             const auto rttMs = _ssrcContext.sender->getRtt() / utils::Time::ms;
             if (_ssrcContext.pliScheduler.shouldSendPli(_timestamp, rttMs) && _sender->isConnected())
             {
-                logger::debug("shouldSendPli for inbound ssrc %u, rtt %ums",
+                logger::debug("%s shouldSendPli for inbound ssrc %u, rtt %ums",
                     "VideoForwarderReceiveJob",
+                    _sender->getLoggableId().c_str(),
                     _ssrcContext.ssrc,
                     static_cast<uint32_t>(rttMs));
 
@@ -202,6 +203,16 @@ void VideoForwarderReceiveJob::run()
     if (videoDumpFile != nullptr)
     {
         dumpPacket(videoDumpFile, *_packet, std::min(size_t(36), _packet->getLength()));
+    }
+
+    if (_extendedSequenceNumber <= _ssrcContext.lastReceivedExtendedSequenceNumber)
+    {
+        logger::info("%s received out of order on %u, seqno %u, last received %u",
+            "VideoForwarderReceiveJob",
+            _sender->getLoggableId().c_str(),
+            _ssrcContext.ssrc,
+            _extendedSequenceNumber,
+            _ssrcContext.lastReceivedExtendedSequenceNumber);
     }
 
     assert(_ssrcContext.videoMissingPacketsTracker.get());

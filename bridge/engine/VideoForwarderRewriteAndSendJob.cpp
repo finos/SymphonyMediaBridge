@@ -109,10 +109,11 @@ void VideoForwarderRewriteAndSendJob::run()
             _outboundContext.pli.keyFrameTimestamp = timestamp;
             _outboundContext.needsKeyframe = false;
 
-            logger::debug("%s requested key frame from %u fwd after %" PRIu64 "ms",
+            logger::debug("%s requested key frame from %u on ssrc %u fwd after %" PRIu64 "ms",
                 "VideoForwarderRewriteAndSendJob",
                 _transport.getLoggableId().c_str(),
                 _senderInboundContext.ssrc,
+                _outboundContext.ssrc,
                 delay / utils::Time::ms);
         }
     }
