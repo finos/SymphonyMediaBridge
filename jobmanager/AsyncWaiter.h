@@ -77,7 +77,10 @@ public:
     };
 
 public:
-    explicit AsyncWaiter(JobManager& jobManager, size_t maxCheckInterval, size_t jobQueueSize = 128);
+    explicit AsyncWaiter(JobManager& jobManager,
+        size_t maxCheckInterval,
+        size_t jobQueueSize = 128,
+        size_t initialTasksContainerSize = 16);
 
     template <class Task, class... Args>
     void emplaceTask(uint64_t timeout, Args&&... args);
@@ -100,13 +103,17 @@ private:
     uint64_t _timerId;
 };
 
-inline AsyncWaiter::AsyncWaiter(JobManager& jobManager, size_t maxCheckInterval, size_t jobQueueSize)
+inline AsyncWaiter::AsyncWaiter(JobManager& jobManager,
+    size_t maxCheckInterval,
+    size_t jobQueueSize,
+    size_t initialTasksContainerSize)
     : _jobQueue(jobManager, jobQueueSize),
       _tasks(),
       _jobCounter(0),
       _maxCheckInterval(maxCheckInterval),
       _timerId(reinterpret_cast<uint64_t>(this))
 {
+    _tasks.reserve(initialTasksContainerSize);
 }
 
 inline void AsyncWaiter::runCheck()
