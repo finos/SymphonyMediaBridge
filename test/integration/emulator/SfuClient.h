@@ -67,7 +67,7 @@ public:
         }
         while (_transport && _transport->hasPendingJobs())
         {
-            utils::Time::nanoSleep(utils::Time::sec * 1);
+            utils::Time::rawNanoSleep(utils::Time::sec * 1);
         }
 
         for (auto& item : _audioReceivers)

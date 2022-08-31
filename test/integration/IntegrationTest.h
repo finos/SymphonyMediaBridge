@@ -2,6 +2,7 @@
 
 #include "bridge/Bridge.h"
 #include "config/Config.h"
+#include "emulator/TimeTurner.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/EndpointFactory.h"
 #include "utils/Pacer.h"
@@ -43,6 +44,9 @@ struct IntegrationTest : public ::testing::Test
 
     void initBridge(config::Config& config);
 
+    void testPlain();
+
 protected:
     bool _internetStartedAtLeastOnce;
+    emulator::TimeTurner _timeSource;
 };

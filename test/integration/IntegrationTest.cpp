@@ -40,7 +40,7 @@
     Conference conf;                                                                                                   \
     conf.create(BASE_URL);                                                                                             \
     EXPECT_TRUE(conf.isSuccess());                                                                                     \
-    utils::Time::nanoSleep(1 * utils::Time::sec);                                                                      \
+    utils::Time::rawNanoSleep(1 * utils::Time::sec);                                                                   \
     SfuClient<TChannel> client1(++_instanceCounter,                                                                    \
         *_mainPoolAllocator,                                                                                           \
         _audioAllocator,                                                                                               \
@@ -260,6 +260,27 @@ bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const
 }
 
 TEST_F(IntegrationTest, plain)
+{
+
+#if USE_FAKENETWORK
+    utils::Time::initialize(_timeSource);
+#endif
+
+    std::thread runner([this] {
+        utils::Time::nanoSleep(10 * utils::Time::ms);
+        this->testPlain();
+    });
+
+    _timeSource.waitForThreadsToSleep(14, 200 * utils::Time::sec);
+
+#if USE_FAKENETWORK
+    _timeSource.runFor(20 * utils::Time::sec);
+#endif
+
+    runner.join();
+}
+
+void IntegrationTest::testPlain()
 {
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
