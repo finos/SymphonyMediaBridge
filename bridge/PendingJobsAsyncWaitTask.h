@@ -49,13 +49,13 @@ public:
 
 private:
     template <AsyncWaitTaskLogPolicy Policy1, AsyncWaitTaskLogPolicy Policy2, AsyncWaitTaskLogPolicy... PolicyArgs>
-    static bool isLogPolicyIsOneOf()
+    static bool isLogPolicyOneOf()
     {
-        return LogPolicy == Policy1 || TThis::isLogPolicyIsOneOf<Policy2, PolicyArgs...>();
+        return LogPolicy == Policy1 || TThis::isLogPolicyOneOf<Policy2, PolicyArgs...>();
     }
 
     template <AsyncWaitTaskLogPolicy Policy1>
-    static bool isLogPolicyIsOneOf()
+    static bool isLogPolicyOneOf()
     {
         return LogPolicy == Policy1;
     }
@@ -89,7 +89,7 @@ bool PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::canComplete()
 template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
 void PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::onComplete()
 {
-    if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::INFO,
+    if (TThis::isLogPolicyOneOf<AsyncWaitTaskLogPolicy::INFO,
             AsyncWaitTaskLogPolicy::INFO_WARN,
             AsyncWaitTaskLogPolicy::INFO_ERROR>())
     {
@@ -104,15 +104,15 @@ void PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::onComplete()
 template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
 void PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::onTimeout()
 {
-    if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::DEB_ERROR, AsyncWaitTaskLogPolicy::INFO_ERROR>())
+    if (TThis::isLogPolicyOneOf<AsyncWaitTaskLogPolicy::DEB_ERROR, AsyncWaitTaskLogPolicy::INFO_ERROR>())
     {
         logger::error("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
     }
-    else if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::DEB_WARN, AsyncWaitTaskLogPolicy::INFO_WARN>())
+    else if (TThis::isLogPolicyOneOf<AsyncWaitTaskLogPolicy::DEB_WARN, AsyncWaitTaskLogPolicy::INFO_WARN>())
     {
         logger::warn("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
     }
-    else if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::INFO, AsyncWaitTaskLogPolicy::DEB_INFO>())
+    else if (TThis::isLogPolicyOneOf<AsyncWaitTaskLogPolicy::INFO, AsyncWaitTaskLogPolicy::DEB_INFO>())
     {
         logger::info("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
     }
