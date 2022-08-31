@@ -29,7 +29,7 @@ public:
         T&& pendingJobsChecker,
         UTypes&&... memoryToHold);
 
-    bool checkCompletion() final;
+    bool canComplete() final;
     void onComplete() final;
     void onTimeout() final;
 
@@ -54,7 +54,7 @@ PendingJobsAsyncWaitTask<T, Args...>::PendingJobsAsyncWaitTask(const char* logga
 }
 
 template <class T, class... Args>
-bool PendingJobsAsyncWaitTask<T, Args...>::checkCompletion()
+bool PendingJobsAsyncWaitTask<T, Args...>::canComplete()
 {
     return !_pendingJobsChecker->hasPendingJobs();
 }
