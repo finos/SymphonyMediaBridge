@@ -264,14 +264,16 @@ TEST_F(IntegrationTest, plain)
 
 #if USE_FAKENETWORK
     utils::Time::initialize(_timeSource);
+    // Start internet here, before runFor(...) so it goes into "nanoSleep".
+    _internet->start();
 #endif
 
     std::thread runner([this] {
-        utils::Time::nanoSleep(10 * utils::Time::ms);
+        utils::Time::nanoSleep(1 * utils::Time::sec);
         this->testPlain();
     });
 
-    _timeSource.waitForThreadsToSleep(14, 200 * utils::Time::sec);
+    _timeSource.waitForThreadsToSleep(15, 200 * utils::Time::sec);
 
 #if USE_FAKENETWORK
     _timeSource.runFor(20 * utils::Time::sec);
