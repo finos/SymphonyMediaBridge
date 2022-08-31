@@ -74,12 +74,12 @@ void consistencyTest(const int threadCount, const int elementCount)
         list.push(&data[i]);
         if (i % 100 == 0)
         {
-            utils::Time::usleep(1000);
+            utils::Time::uSleep(1000);
         }
     }
 
     const uint64_t ms = 1000;
-    utils::Time::usleep(10000 * ms);
+    utils::Time::uSleep(10000 * ms);
     running = false;
     for (int i = 0; i < threadCount; ++i)
     {

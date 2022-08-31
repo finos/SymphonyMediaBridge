@@ -1,15 +1,15 @@
+#include "utils/Time.h"
+#include <algorithm>
 #include <cassert>
+#include <time.h>
+
 #ifdef __APPLE__
 #include <mach/mach_time.h>
 #include <mach/thread_act.h>
 #else
 #include <ctime>
 #include <pthread.h>
-
 #endif
-#include "utils/Time.h"
-#include <time.h>
-
 namespace
 {
 #ifdef __APPLE__
@@ -22,15 +22,110 @@ namespace utils
 
 namespace Time
 {
+// global time source
+utils::TimeSource* _timeSource = nullptr;
+
+class TimeSourceImpl final : public utils::TimeSource
+{
+public:
+    uint64_t getAbsoluteTime() override { return rawAbsoluteTime(); }
+
+    uint64_t getApproximateTime() override
+    {
+#ifdef __APPLE__
+        assert(machTimeBase.denom);
+        return mach_continuous_approximate_time() * machTimeBase.numer / machTimeBase.denom;
+#else
+        return getAbsoluteTime();
+#endif
+    }
+
+    void nanoSleep(uint64_t ns) override { rawNanoSleep(ns); }
+
+    std::chrono::system_clock::time_point wallClock() override { return std::chrono::system_clock::now(); }
+};
+TimeSourceImpl _defaultTimeSource;
 
 void initialize()
 {
+    if (!_timeSource)
+    {
 #ifdef __APPLE__
-    mach_timebase_info(&machTimeBase);
+        mach_timebase_info(&machTimeBase);
 #endif
+    }
+
+    _timeSource = &_defaultTimeSource;
+}
+
+void initialize(TimeSource& timeSource)
+{
+    if (!_timeSource)
+    {
+#ifdef __APPLE__
+        mach_timebase_info(&machTimeBase);
+#endif
+    }
+
+    _timeSource = &timeSource;
 }
 
 uint64_t getAbsoluteTime()
+{
+    return _timeSource->getAbsoluteTime();
+}
+
+// faster on Mac
+uint64_t getApproximateTime()
+{
+    return _timeSource->getApproximateTime();
+}
+
+std::chrono::system_clock::time_point now()
+{
+    return _timeSource->wallClock();
+}
+
+void nanoSleep(int64_t ns)
+{
+    _timeSource->nanoSleep(ns > 0 ? ns : 0);
+}
+
+void nanoSleep(uint64_t ns)
+{
+    _timeSource->nanoSleep(ns);
+}
+
+void nanoSleep(int32_t ns)
+{
+    _timeSource->nanoSleep(ns > 0 ? ns : 0);
+}
+
+void nanoSleep(uint32_t ns)
+{
+    _timeSource->nanoSleep(ns);
+}
+
+void uSleep(int64_t uSec)
+{
+    _timeSource->nanoSleep((uSec > 0 ? uSec : 0) * 1000);
+}
+
+void mSleep(int64_t milliSeconds)
+{
+    _timeSource->nanoSleep((milliSeconds > 0 ? milliSeconds : 0) * 1000000);
+}
+
+// OS sleep bypass TimeSource
+void rawNanoSleep(int64_t ns)
+{
+    ns = (ns > 0 ? ns : 0);
+    ns = std::min(ns, static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * int64_t(1000'000'000));
+    const timespec sleepTime = {static_cast<long>(ns / 1000'000'000UL), static_cast<long>(ns % 1000000000UL)};
+    ::nanosleep(&sleepTime, nullptr);
+}
+
+uint64_t rawAbsoluteTime()
 {
 #ifdef __APPLE__
     assert(machTimeBase.denom);
@@ -40,29 +135,6 @@ uint64_t getAbsoluteTime()
     clock_gettime(CLOCK_MONOTONIC, &timeSpec);
     return static_cast<uint64_t>(timeSpec.tv_sec) * 1000000000ULL + static_cast<uint64_t>(timeSpec.tv_nsec);
 #endif
-}
-
-// faster on Mac
-uint64_t getApproximateTime()
-{
-#ifdef __APPLE__
-    assert(machTimeBase.denom);
-    return mach_continuous_approximate_time() * machTimeBase.numer / machTimeBase.denom;
-#else
-    return getAbsoluteTime();
-#endif
-}
-
-void nanoSleep(int64_t ns)
-{
-    ns = (ns > 0 ? ns : 0);
-    const timespec sleepTime = {static_cast<long>(ns / 1000000000UL), static_cast<long>(ns % 1000000000UL)};
-    ::nanosleep(&sleepTime, nullptr);
-}
-
-void usleep(long uSec)
-{
-    nanoSleep(static_cast<uint64_t>(uSec) * 1000);
 }
 
 uint64_t toNtp(const std::chrono::system_clock::time_point timestamp)

@@ -270,7 +270,6 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
 
     void SetUp() override
     {
-        utils::Time::initialize();
         _bweConfig.sanitize();
 
         std::string configJson = "{\"rtc.ip\": \"127.0.0.1\", \"ice.singlePort\": 10008}";
@@ -443,7 +442,7 @@ TEST(TransportStats, outboundLoss)
     auto report = rtp::RtcpReceiverReport::create(packet.get());
 
     auto timestamp = utils::Time::getAbsoluteTime();
-    auto wallClock = std::chrono::system_clock::now();
+    auto wallClock = utils::Time::now();
     report->ssrc = 101;
 
     auto& block = report->addReportBlock(6000);
@@ -498,7 +497,7 @@ TEST(TransportStats, MpmcPublish)
             while (running)
             {
                 EXPECT_TRUE(board.write(data));
-                utils::Time::usleep(10);
+                utils::Time::uSleep(10);
             }
         });
     }
@@ -514,7 +513,7 @@ TEST(TransportStats, MpmcPublish)
         });
     }
 
-    utils::Time::usleep(5000000);
+    utils::Time::uSleep(5000000);
     running = false;
     for (int i = 0; i < THREAD_COUNT; ++i)
     {

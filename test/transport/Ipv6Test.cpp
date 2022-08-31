@@ -72,7 +72,7 @@ TEST_F(Ipv6Test, send1stBad)
 
     int rcSend = sender.sendMultiple(packets.data(), 2);
     EXPECT_EQ(rcSend, 1);
-    utils::Time::usleep(50000);
+    utils::Time::uSleep(50000);
 
     mmsghdr messageHeader[2];
     ReceivedMessage recvMessages[2];
@@ -108,7 +108,7 @@ TEST_F(Ipv6Test, send2ndBad)
 
     int rcSend = sender.sendMultiple(packets.data(), 3);
     EXPECT_EQ(rcSend, 1);
-    utils::Time::usleep(50000);
+    utils::Time::uSleep(50000);
 
     mmsghdr messageHeader[2];
     ReceivedMessage recvMessages[2];
@@ -147,7 +147,7 @@ TEST_F(Ipv6Test, sendLastBad)
     int rcSend = sender.sendMultiple(packets.data(), 4);
     EXPECT_EQ(rcSend, 2);
 
-    utils::Time::usleep(50000);
+    utils::Time::uSleep(50000);
 
     mmsghdr messageHeader[2];
     ReceivedMessage recvMessages[2];

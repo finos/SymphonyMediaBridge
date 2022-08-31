@@ -1,6 +1,6 @@
 #include "Logger.h"
 #include "LoggerThread.h"
-#include <chrono>
+#include "utils/Time.h"
 
 namespace logger
 {
@@ -31,7 +31,7 @@ void logv(const char* logLevel, const char* logGroup, const bool immediate, cons
     if (_logThread)
     {
         LogItem item;
-        item.timestamp = std::chrono::system_clock::now();
+        item.timestamp = utils::Time::now();
         item.logLevel = logLevel;
         item.threadId = (void*)pthread_self();
         int consumed = snprintf(item.message, LogItem::maxLineLength, "[%s] ", logGroup);
@@ -54,7 +54,7 @@ void logStack(const void* stack, int frames, const char* logGroup)
     if (_logThread)
     {
         LogItem item;
-        item.timestamp = std::chrono::system_clock::now();
+        item.timestamp = utils::Time::now();
         item.logLevel = "_STK_";
         item.threadId = (void*)pthread_self();
         const int byteCount = sizeof(void*) * frames;
@@ -72,6 +72,11 @@ void flushLog()
         return;
     }
     _logThread->flush();
+}
+
+void awaitLogDrained(float level)
+{
+    _logThread->awaitLogDrained(level);
 }
 
 } // namespace logger

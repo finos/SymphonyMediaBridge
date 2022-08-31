@@ -75,7 +75,7 @@ TEST_F(RtcpTest, NTP)
     p.setLength(320);
     state.onRtpSent(start, p);
 
-    const auto wallClockNtp = utils::Time::toNtp(std::chrono::system_clock::now());
+    const auto wallClockNtp = utils::Time::toNtp(utils::Time::now());
     rtp::RtcpSenderReport report;
     report.ssrc = 110;
     state.fillInReport(report, start + utils::Time::ms * 15, wallClockNtp);
@@ -87,7 +87,7 @@ TEST_F(RtcpTest, SenderReport)
 {
     transport::RtpSenderState state(8000, _config);
     const auto start = utils::Time::getAbsoluteTime();
-    const auto timepoint = std::chrono::system_clock::now();
+    const auto timepoint = utils::Time::now();
     memory::Packet p;
     auto* header = rtp::RtpHeader::create(p);
     header->timestamp = 45000;
@@ -131,7 +131,7 @@ TEST_F(RtcpTest, SenderReport)
 TEST_F(RtcpTest, padding)
 {
     transport::RtpSenderState state(8000, _config);
-    const auto timepoint = std::chrono::system_clock::now();
+    const auto timepoint = utils::Time::now();
     const auto start = utils::Time::getAbsoluteTime();
     memory::Packet p;
     auto* header = rtp::RtpHeader::create(p);

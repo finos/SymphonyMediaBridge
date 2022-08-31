@@ -27,13 +27,15 @@ public:
     virtual void OnEnvironmentsSetUpEnd(const UnitTest& unit_test) override {}
     virtual void OnTestStart(const TestInfo& test_info) override
     {
+        utils::Time::initialize();
         logger::info(">>> Starting test %s.%s", "gtest", test_info.test_case_name(), test_info.name());
         srand(0xfb3b61a);
     }
     virtual void OnTestEnd(const TestInfo& test_info) override
     {
+        utils::Time::initialize(); // the time source may be deleted by now
         logger::info("Test Ended %s.%s <<<", "gtest", test_info.test_case_name(), test_info.name());
-        utils::Time::nanoSleep(50 * utils::Time::ms); // TODO replace with call to logger flush
+        logger::awaitLogDrained();
     }
     virtual void OnEnvironmentsTearDownStart(const UnitTest& unit_test) override {}
     virtual void OnEnvironmentsTearDownEnd(const UnitTest& unit_test) override {}

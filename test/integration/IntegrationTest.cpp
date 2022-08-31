@@ -71,8 +71,6 @@ IntegrationTest::IntegrationTest()
 void IntegrationTest::SetUp()
 {
     using namespace std;
-
-    utils::Time::initialize();
 }
 
 void IntegrationTest::initBridge(config::Config& config)

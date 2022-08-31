@@ -42,11 +42,7 @@ struct RecordingTransportTest : public testing::Test
         }
     }
 
-    void SetUp() override
-    {
-        utils::Time::initialize();
-        _config->readFromString(R"({"rtc.ip": "127.0.0.1", "ice.singlePort": 100010})");
-    }
+    void SetUp() override { _config->readFromString(R"({"rtc.ip": "127.0.0.1", "ice.singlePort": 100010})"); }
 
     void TearDown() override
     {
@@ -117,7 +113,7 @@ private:
             .setRtpPayloadType(rtpPayload)
             .setPayloadFormat(rtpPayloadFormat)
             .setEndpoint("test")
-            .setWallClock(std::chrono::system_clock::now())
+            .setWallClock(utils::Time::now())
             .build();
     }
 

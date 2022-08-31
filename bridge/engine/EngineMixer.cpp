@@ -3208,7 +3208,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
                          .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap.payloadType))
                          .setPayloadFormat(audioStream.rtpMap.format)
                          .setEndpoint(audioStream.endpointId)
-                         .setWallClock(std::chrono::system_clock::now())
+                         .setWallClock(utils::Time::now())
                          .build();
 
             auto emplaceResult =
@@ -3344,7 +3344,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
                          .setRtpPayloadType(static_cast<uint8_t>(videoStream.rtpMap.payloadType))
                          .setPayloadFormat(videoStream.rtpMap.format)
                          .setEndpoint(videoStream.endpointId)
-                         .setWallClock(std::chrono::system_clock::now())
+                         .setWallClock(utils::Time::now())
                          .build();
 
             auto emplaceResult =

@@ -18,12 +18,10 @@ public:
     void post();
     void reset();
 
-    void decrement();
-
 private:
-    std::mutex _lock;
+    mutable std::mutex _lock;
     std::condition_variable _conditionVariable;
-    std::atomic_int32_t _count;
+    uint32_t _count;
 };
 
-}
+} // namespace concurrency

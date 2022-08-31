@@ -5,11 +5,11 @@
 TEST(DISABLED_TimeSource, Comparison)
 {
     auto startAbs = utils::Time::getAbsoluteTime();
-    auto startNtp = std::chrono::system_clock::now();
+    auto startNtp = utils::Time::now();
     auto startSteady = std::chrono::steady_clock::now();
     utils::Time::nanoSleep(30 * utils::Time::sec);
     auto endAbs = utils::Time::getAbsoluteTime();
-    auto endNtp = std::chrono::system_clock::now();
+    auto endNtp = utils::Time::now();
     auto endSteady = std::chrono::steady_clock::now();
 
     logger::info("abs diff %" PRIu64, "", (endAbs - startAbs) / utils::Time::us);

@@ -977,7 +977,7 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
 
     _bwe->onUnmarkedTraffic(packet->getLength(), timestamp);
 
-    const auto now = std::chrono::system_clock::now();
+    const auto now = utils::Time::now();
     if (unprotect(*packet) && rtp::isValidRtcpPacket(*packet))
     {
         rtp::CompoundRtcpPacket compound(packet->get(), packet->getLength());
@@ -1625,7 +1625,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
         return;
     }
 
-    const auto wallClock = utils::Time::toNtp(std::chrono::system_clock::now());
+    const auto wallClock = utils::Time::toNtp(utils::Time::now());
     const uint64_t ntp32Tick = 0x10000u; // 1/65536 sec
 
     bool rembAdded = false;

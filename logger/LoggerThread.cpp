@@ -101,7 +101,7 @@ void LoggerThread::run()
             {
                 break;
             }
-            utils::Time::nanoSleep(50 * utils::Time::ms);
+            utils::Time::rawNanoSleep(50 * utils::Time::ms);
         }
     }
 
@@ -193,6 +193,20 @@ void LoggerThread::formatTime(const LogItem& item, char* output)
         currentLocalTime.tm_min,
         currentLocalTime.tm_sec,
         static_cast<int>(ms % 1000));
+}
+
+void LoggerThread::awaitLogDrained(float level)
+{
+    level = std::max(0.0f, std::min(1.0f, level));
+    if (_logQueue.size() <= _logQueue.capacity() * level)
+    {
+        return;
+    }
+
+    while (!_logQueue.empty())
+    {
+        utils::Time::rawNanoSleep(100000);
+    }
 }
 
 } // namespace logger

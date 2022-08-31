@@ -1,15 +1,31 @@
 #pragma once
-
 #include <chrono>
 #include <cstdint>
+#include <memory>
 
 namespace utils
 {
+
+// Override this and provide implementation in initialize.
+// Call cleanup if you passed ownership of the object to Time
+class TimeSource
+{
+public:
+    virtual ~TimeSource() = default;
+
+    virtual uint64_t getAbsoluteTime() = 0;
+    virtual uint64_t getApproximateTime() { return getAbsoluteTime(); };
+
+    virtual void nanoSleep(uint64_t nanoSeconds) = 0;
+
+    virtual std::chrono::system_clock::time_point wallClock() = 0;
+};
 
 namespace Time
 {
 
 void initialize();
+void initialize(TimeSource& timeSource);
 
 /**
  * Returns absolute time since some machine specific point in time in nanoseconds.
@@ -17,8 +33,17 @@ void initialize();
 uint64_t getAbsoluteTime();
 uint64_t getApproximateTime();
 void nanoSleep(int64_t ns);
+void nanoSleep(int32_t ns);
+void nanoSleep(uint64_t ns);
+void nanoSleep(uint32_t ns);
 
-void usleep(long uSec);
+void uSleep(int64_t uSec);
+void mSleep(int64_t milliSeconds);
+
+std::chrono::system_clock::time_point now();
+
+void rawNanoSleep(int64_t ns);
+uint64_t rawAbsoluteTime();
 
 uint64_t toNtp(std::chrono::system_clock::time_point timestamp);
 inline uint32_t toNtp32(const std::chrono::system_clock::time_point timestamp)

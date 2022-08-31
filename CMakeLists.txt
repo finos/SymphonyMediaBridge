@@ -57,6 +57,8 @@ elseif(UNIX)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt")
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
     set(CMAKE_EXE_LINKER_FLAGS_SYMRELEASE "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+    set(CMAKE_EXE_LINKER_FLAGS_DCHECK "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
+    set(CMAKE_EXE_LINKER_FLAGS_TCHECK "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
 else()
     message(FATAL_ERROR "Building on this platform is not supported.")
 endif()
@@ -221,6 +223,8 @@ set(FILES
         concurrency/ScopedSpinLocker.h
         concurrency/Semaphore.cpp
         concurrency/Semaphore.h
+        concurrency/CountdownEvent.cpp
+        concurrency/CountdownEvent.h
         concurrency/ThreadUtils.cpp
         concurrency/ThreadUtils.h
         concurrency/WaitFreeStack.cpp
@@ -480,6 +484,9 @@ set(TEST_FILES
     test/integration/emulator/SfuClient.h
     test/integration/emulator/HttpRequests.h
     test/integration/emulator/HttpRequests.cpp
+    test/integration/emulator/TimeTurner.h
+    test/integration/emulator/TimeTurner.cpp
+    test/integration/TimeTurnerTest.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
     test/gtest_main.cpp

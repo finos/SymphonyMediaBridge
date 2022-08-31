@@ -26,6 +26,8 @@ public:
     void flush();
     void stop();
 
+    void awaitLogDrained(float level);
+
 private:
     void run();
     void formatTime(const LogItem& item, char* output);

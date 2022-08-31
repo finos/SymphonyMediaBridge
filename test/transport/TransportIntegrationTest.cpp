@@ -26,8 +26,6 @@ TransportIntegrationTest::TransportIntegrationTest()
 
 void TransportIntegrationTest::SetUp()
 {
-    utils::Time::initialize();
-
     std::string configJson1 = "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":0, \"recording.singlePort\":0}";
     std::string configJson2 =
         "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10010, \"recording.singlePort\":0}";
