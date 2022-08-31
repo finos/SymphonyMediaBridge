@@ -116,7 +116,7 @@ public:
 
     Job* tryFetchNoWait()
     {
-        bool isRunning = _running.load(std::memory_order::memory_order_relaxed);
+        const bool isRunning = _running.load(std::memory_order::memory_order_relaxed);
         Job* job;
         if (isRunning && _jobQueue.pop(job))
         {
