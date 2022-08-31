@@ -108,7 +108,7 @@ private:
     uint32_t _asyncWaiterTaskCount;
 
     friend struct MixerDeleteTask;
-    void onMixerReadyToDeletion(std::unique_ptr<Mixer>&& mixer);
+    void onMixerReadyForDeletion(std::unique_ptr<Mixer>&& mixer);
     void engineMessageMixerRemoved(const EngineMessage::Message& message);
     void engineMessageAllocateAudioBuffer(const EngineMessage::Message& message);
     void engineMessageAudioStreamRemoved(const EngineMessage::Message& message);

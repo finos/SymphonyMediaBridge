@@ -88,7 +88,7 @@ struct MixerDeleteTask
         {
             logger::info("Removing EngineMixer %s", "MixerManager", _engineMixer->getLoggableId().c_str());
             _engineMixer.reset();
-            _mixerManger->onMixerReadyToDeletion(std::move(_mixer));
+            _mixerManger->onMixerReadyForDeletion(std::move(_mixer));
         }
 
         _mixerManger = nullptr;
@@ -413,7 +413,7 @@ bool MixerManager::onMessage(EngineMessage::Message&& message)
 
 void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& message)
 {
-    // When this task execute it will call onMixerReadyToDeletion
+    // When this task execute it will call onMixerReadyForDeletion
     // and acquired the _configurationLock again
     MixerDeleteTask mixerDeleteTask;
 
@@ -455,7 +455,7 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
     }
 }
 
-void MixerManager::onMixerReadyToDeletion(std::unique_ptr<Mixer>&& mixer)
+void MixerManager::onMixerReadyForDeletion(std::unique_ptr<Mixer>&& mixer)
 {
 
     std::string mixerId = mixer->getId();
