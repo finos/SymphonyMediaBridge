@@ -17,16 +17,30 @@ class Transport;
 namespace bridge
 {
 
-template <class T, class... Args>
+enum class AsyncWaitTaskLogPolicy
+{
+    DEB,
+    DEB_INFO,
+    DEB_WARN,
+    DEB_ERROR,
+    INFO,
+    INFO_WARN,
+    INFO_ERROR,
+
+};
+
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
 class PendingJobsAsyncWaitTask : public jobmanager::AsyncWaitTask
 {
+    using TThis = PendingJobsAsyncWaitTask<LogPolicy, T, Args...>;
+
 public:
     using OnTaskEndHandler = std::function<void()>;
 
     template <class... UTypes>
     PendingJobsAsyncWaitTask(const char* loggableId,
         uint32_t _taskId,
-        T&& pendingJobsChecker,
+        T&& pendingJobsMonitor,
         UTypes&&... memoryToHold);
 
     bool canComplete() final;
@@ -34,76 +48,113 @@ public:
     void onTimeout() final;
 
 private:
+    template <AsyncWaitTaskLogPolicy Policy1, AsyncWaitTaskLogPolicy Policy2, AsyncWaitTaskLogPolicy... PolicyArgs>
+    static bool isLogPolicyIsOneOf()
+    {
+        return LogPolicy == Policy1 || TThis::isLogPolicyIsOneOf<Policy2, PolicyArgs...>();
+    }
+
+    template <AsyncWaitTaskLogPolicy Policy1>
+    static bool isLogPolicyIsOneOf()
+    {
+        return LogPolicy == Policy1;
+    }
+
+private:
     const char* _loggableId;
     uint32_t _taskId;
-    T _pendingJobsChecker;
+    T _pendingJobsMonitor;
     std::tuple<Args...> _memoryToHold;
 };
 
-template <class T, class... Args>
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
 template <class... UTypes>
-PendingJobsAsyncWaitTask<T, Args...>::PendingJobsAsyncWaitTask(const char* loggableId,
+PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::PendingJobsAsyncWaitTask(const char* loggableId,
     uint32_t _taskId,
-    T&& pendingJobsChecker,
+    T&& pendingJobsMonitor,
     UTypes&&... memoryToHold)
     : _loggableId(loggableId),
       _taskId(_taskId),
-      _pendingJobsChecker(std::move(pendingJobsChecker)),
+      _pendingJobsMonitor(std::move(pendingJobsMonitor)),
       _memoryToHold(std::forward<UTypes>(memoryToHold)...)
 {
 }
 
-template <class T, class... Args>
-bool PendingJobsAsyncWaitTask<T, Args...>::canComplete()
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
+bool PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::canComplete()
 {
-    return !_pendingJobsChecker->hasPendingJobs();
+    return !_pendingJobsMonitor->hasPendingJobs();
 }
 
-template <class T, class... Args>
-void PendingJobsAsyncWaitTask<T, Args...>::onComplete()
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
+void PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::onComplete()
 {
-    logger::info("PendingJobsAsyncWaitTask %u has completed", _loggableId, _taskId);
+    if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::INFO,
+            AsyncWaitTaskLogPolicy::INFO_WARN,
+            AsyncWaitTaskLogPolicy::INFO_ERROR>())
+    {
+        logger::info("PendingJobsAsyncWaitTask %u has completed", _loggableId, _taskId);
+    }
+    else
+    {
+        logger::debug("PendingJobsAsyncWaitTask %u has completed", _loggableId, _taskId);
+    }
 }
 
-template <class T, class... Args>
-void PendingJobsAsyncWaitTask<T, Args...>::onTimeout()
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
+void PendingJobsAsyncWaitTask<LogPolicy, T, Args...>::onTimeout()
 {
-    logger::error("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
+    if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::DEB_ERROR, AsyncWaitTaskLogPolicy::INFO_ERROR>())
+    {
+        logger::error("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
+    }
+    else if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::DEB_WARN, AsyncWaitTaskLogPolicy::INFO_WARN>())
+    {
+        logger::warn("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
+    }
+    else if (TThis::isLogPolicyIsOneOf<AsyncWaitTaskLogPolicy::INFO, AsyncWaitTaskLogPolicy::DEB_INFO>())
+    {
+        logger::info("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
+    }
+    else
+    {
+        logger::debug("PendingJobsAsyncWaitTask %u has timed out", _loggableId, _taskId);
+    }
 }
 
-template <class T, class... Args>
-PendingJobsAsyncWaitTask<std::shared_ptr<T>, Args...> makePendingJobsAsyncTask(const char* loggableId,
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
+PendingJobsAsyncWaitTask<LogPolicy, std::shared_ptr<T>, Args...> makePendingJobsAsyncTask(const char* loggableId,
     uint32_t _taskId,
-    std::shared_ptr<T> pendingJobsChecker,
+    std::shared_ptr<T> pendingJobsMonitor,
     Args&&... memoryToHold)
 {
-    return PendingJobsAsyncWaitTask<std::shared_ptr<T>, Args...>(loggableId,
+    return PendingJobsAsyncWaitTask<LogPolicy, std::shared_ptr<T>, Args...>(loggableId,
         _taskId,
-        std::move(pendingJobsChecker),
+        std::move(pendingJobsMonitor),
         std::forward<Args>(memoryToHold)...);
 }
 
-template <class T, class... Args>
-PendingJobsAsyncWaitTask<std::unique_ptr<T>, Args...> makePendingJobsAsyncTask(const char* loggableId,
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
+PendingJobsAsyncWaitTask<LogPolicy, std::unique_ptr<T>, Args...> makePendingJobsAsyncTask(const char* loggableId,
     uint32_t _taskId,
-    std::unique_ptr<T>&& pendingJobsChecker,
+    std::unique_ptr<T>&& pendingJobsMonitor,
     Args&&... memoryToHold)
 {
-    return PendingJobsAsyncWaitTask<std::shared_ptr<T>, Args...>(loggableId,
+    return PendingJobsAsyncWaitTask<LogPolicy, std::shared_ptr<T>, Args...>(loggableId,
         _taskId,
-        std::move(pendingJobsChecker),
+        std::move(pendingJobsMonitor),
         std::forward<Args>(memoryToHold)...);
 }
 
-template <class T, class... Args>
-PendingJobsAsyncWaitTask<T*, Args...> makePendingJobsAsyncTask(const char* loggableId,
+template <AsyncWaitTaskLogPolicy LogPolicy, class T, class... Args>
+PendingJobsAsyncWaitTask<LogPolicy, T*, Args...> makePendingJobsAsyncTask(const char* loggableId,
     uint32_t _taskId,
-    T* pendingJobsChecker,
+    T* pendingJobsMonitor,
     Args&&... memoryToHold)
 {
-    return PendingJobsAsyncWaitTask<T*, Args...>(loggableId,
+    return PendingJobsAsyncWaitTask<LogPolicy, T*, Args...>(loggableId,
         _taskId,
-        std::move(pendingJobsChecker), // It expects a rvalue, so move the pointer which does not move the object
+        std::move(pendingJobsMonitor), // It expects a rvalue, so move the pointer which does not move the object
         std::forward<Args>(memoryToHold)...);
 }
 

@@ -1896,7 +1896,10 @@ void Mixer::stopTransportAndRemoveStream(const std::shared_ptr<transport::RtcTra
             taskId);
 
         _transportShutdownTasks.addTask(timeout,
-            makePendingJobsAsyncTask(_loggableId.c_str(), taskId, transport, std::move(streamToRemove)));
+            makePendingJobsAsyncTask<AsyncWaitTaskLogPolicy::DEB_WARN>(_loggableId.c_str(),
+                taskId,
+                transport,
+                std::move(streamToRemove)));
     }
 }
 
@@ -2249,7 +2252,7 @@ void Mixer::engineRecordingStreamRemoved(EngineRecordingStream* engineStream)
                 taskId);
 
             _transportShutdownTasks.addTask(timeout,
-                makePendingJobsAsyncTask(_loggableId.c_str(),
+                makePendingJobsAsyncTask<AsyncWaitTaskLogPolicy::DEB_WARN>(_loggableId.c_str(),
                     taskId,
                     std::move(transportEntry.second),
                     engineRecordingStream,
@@ -2343,7 +2346,7 @@ void Mixer::removeRecordingTransport(const std::string& streamId, const size_t e
             taskId);
 
         _transportShutdownTasks.addTask(timeout,
-            makePendingJobsAsyncTask(_loggableId.c_str(),
+            makePendingJobsAsyncTask<AsyncWaitTaskLogPolicy::DEB_WARN>(_loggableId.c_str(),
                 taskId,
                 transport,
                 RemoveRecordingTransportPostTask(streamId, endpointIdHash, _configurationLock, _recordingStreams)));
@@ -2545,7 +2548,10 @@ void Mixer::engineBarbellRemoved(EngineBarbell* engineBarbell)
                 taskId);
 
             _transportShutdownTasks.addTask(timeout,
-                makePendingJobsAsyncTask(_loggableId.c_str(), taskId, transport, std::move(engineBarbellUniquePtr)));
+                makePendingJobsAsyncTask<AsyncWaitTaskLogPolicy::INFO>(_loggableId.c_str(),
+                    taskId,
+                    transport,
+                    std::move(engineBarbellUniquePtr)));
         }
     }
 }

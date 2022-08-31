@@ -443,7 +443,10 @@ void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& messa
 
             auto* mixerManagerRawPointer = mixerDeleteTask._mixer.get();
             _asyncWaiter.addTask(timeout,
-                makePendingJobsAsyncTask("MixerManager", taskId, mixerManagerRawPointer, std::move(mixerDeleteTask)));
+                makePendingJobsAsyncTask<AsyncWaitTaskLogPolicy::INFO_ERROR>("MixerManager",
+                    taskId,
+                    mixerManagerRawPointer,
+                    std::move(mixerDeleteTask)));
         }
     }
     else
