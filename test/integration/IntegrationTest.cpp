@@ -1326,6 +1326,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         "bwe.enable":false
         })");
 
+    startInternet();
     initBridge(_config);
 
     config::Config config1;
@@ -1349,7 +1350,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         })");
 
     auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-    bridge2->initialize();
+    bridge2->initialize(_endpointFacory);
 
     const auto baseUrl = "http://127.0.0.1:8080";
     const auto baseUrl2 = "http://127.0.0.1:8090";
@@ -1414,6 +1415,8 @@ TEST_F(IntegrationTest, barbellAfterClients)
     client2._transport->stop();
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
+
+    stopInternet();
 
     logVideoSent("client1", client1);
     logVideoSent("client2", client2);
