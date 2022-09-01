@@ -15,11 +15,11 @@ namespace jobmanager
 WorkerThread::WorkerThread(jobmanager::JobManager& jobManager)
     : _running(true),
       _jobManager(jobManager),
-      _backgroundJobs{0},
-      _backgroundJobMax(0),
       _backgroundJobCount(0),
       _thread([this] { this->run(); })
 {
+    _backgroundJobs.reserve(512);
+    std::fill(_backgroundJobs.begin(), _backgroundJobs.end(), nullptr);
 }
 
 WorkerThread::~WorkerThread()
@@ -42,26 +42,26 @@ void WorkerThread::stop()
 uint32_t WorkerThread::processBackgroundJobs()
 {
     uint32_t pendingJobCount = 0;
-    for (uint32_t i = 0; i < _backgroundJobMax; ++i)
+    for (auto& job : _backgroundJobs)
     {
-        if (_backgroundJobs[i])
+        if (job)
         {
-            const bool runAgain = _backgroundJobs[i]->runStep();
+            const bool runAgain = job->runStep();
             if (runAgain)
             {
                 ++pendingJobCount;
             }
             else
             {
-                _jobManager.freeJob(_backgroundJobs[i]);
-                _backgroundJobs[i] = nullptr;
+                _jobManager.freeJob(job);
+                job = nullptr;
             }
         }
     }
 
     if (pendingJobCount == 0)
     {
-        _backgroundJobMax = 0;
+        _backgroundJobs.clear();
     }
 
     return pendingJobCount;
@@ -80,10 +80,14 @@ void WorkerThread::run()
         while (_running)
         {
             auto jobProcessed = processJobs();
-            if (!jobProcessed || _backgroundJobCount == _backgroundJobs.size())
+            if (jobProcessed)
             {
-                pollInterval = std::min(maxWait2ms, pollInterval * 2);
+                pollInterval = 64;
+            }
+            else
+            {
                 utils::Time::nanoSleep(pollInterval);
+                pollInterval = std::min(maxWait2ms, pollInterval * 2);
             }
         }
     }
@@ -101,16 +105,6 @@ void WorkerThread::run()
 // return true if any new jobs were processed
 bool WorkerThread::processJobs()
 {
-    if (_backgroundJobCount == _backgroundJobs.size())
-    {
-        _backgroundJobCount = processBackgroundJobs();
-        if (_backgroundJobCount == _backgroundJobs.size())
-        {
-            // do not take on more jobs as we cannot store them if in case they are be multi-step job
-            return false;
-        }
-    }
-
     uint32_t processedJobs = 0;
     for (processedJobs = 0; processedJobs < 10; ++processedJobs)
     {
@@ -127,13 +121,21 @@ bool WorkerThread::processJobs()
         }
         else
         {
-            for (uint32_t i = 0; i < _backgroundJobs.size(); ++i)
+            if (_backgroundJobCount == _backgroundJobs.size())
             {
-                if (!_backgroundJobs[i])
+                _backgroundJobs.push_back(job);
+                ++_backgroundJobCount;
+            }
+            else
+            {
+                for (auto& slot : _backgroundJobs)
                 {
-                    _backgroundJobs[i] = job;
-                    _backgroundJobMax = std::max(i + 1, _backgroundJobMax);
-                    break;
+                    if (!slot)
+                    {
+                        slot = job;
+                        ++_backgroundJobCount;
+                        break;
+                    }
                 }
             }
         }

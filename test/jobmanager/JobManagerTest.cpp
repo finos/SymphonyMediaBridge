@@ -174,31 +174,34 @@ TEST_F(JobManagerTest, serialJobs)
 class NoJob : public Job
 {
 public:
-    explicit NoJob(std::atomic_int& counter) : decremented(false), counter(counter) { ++counter; }
+    explicit NoJob(std::atomic_int& counter) : decremented(false), _counter(counter) { ++counter; }
     ~NoJob()
     {
         if (!decremented)
         {
-            --counter;
+            --_counter;
         }
     }
     void run() override
     {
-        --counter;
+        --_counter;
         decremented = true;
     }
 
     bool decremented;
-    std::atomic_int& counter;
+
+private:
+    std::atomic_int& _counter;
 };
 
 class BlockingJob : public Job
 {
 public:
-    BlockingJob(Semaphore& sem) : sem(sem) {}
-    void run() { sem.wait(); }
+    BlockingJob(Semaphore& sem) : _sem(sem) {}
+    void run() { _sem.wait(); }
 
-    Semaphore& sem;
+private:
+    Semaphore& _sem;
 };
 
 TEST_F(JobManagerTest, serialJobQueueFull)

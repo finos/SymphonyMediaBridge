@@ -1,8 +1,8 @@
 #pragma once
 
 #include "jobmanager/Job.h"
-#include <array>
 #include <thread>
+#include <vector>
 
 namespace jobmanager
 {
@@ -33,8 +33,7 @@ private:
     static void threadEntry(WorkerThread* instance);
     uint32_t processBackgroundJobs();
 
-    std::array<MultiStepJob*, 512> _backgroundJobs;
-    uint32_t _backgroundJobMax;
+    std::vector<MultiStepJob*> _backgroundJobs;
     uint32_t _backgroundJobCount;
     std::thread _thread; // must be last
 };

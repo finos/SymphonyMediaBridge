@@ -280,6 +280,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _numMixedAudioStreams(0),
       _lastVideoBandwidthCheck(0),
       _lastVideoPacketProcessed(0),
+      _hasSentTimeout(false),
       _probingVideoStreams(false),
       _minUplinkEstimate(0)
 {
@@ -2327,11 +2328,13 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
     if (numRtpPackets == 0)
     {
-        if (utils::Time::diffGE(_lastReceiveTime, timestamp, _config.mixerInactivityTimeoutMs * utils::Time::ms))
+        const bool isIdle =
+            utils::Time::diffGE(_lastReceiveTime, timestamp, _config.mixerInactivityTimeoutMs * utils::Time::ms);
+        if (isIdle && !_hasSentTimeout)
         {
             EngineMessage::Message message(EngineMessage::Type::MixerTimedOut);
             message.command.mixerTimedOut.mixer = this;
-            _messageListener.onMessage(std::move(message));
+            _hasSentTimeout = _messageListener.onMessage(std::move(message));
         }
     }
     else
@@ -3687,7 +3690,7 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
 
 bool EngineMixer::needToUpdateMinUplinkEstimate(const uint32_t curEstimate, const uint32_t oldEstimate) const
 {
-    // For screensharing (a.k.a. 'slides') we have a minumum allowed bitrate of 900 kbps,
+    // For screen sharing (a.k.a. 'slides') we have a minimum allowed bitrate of 900 kbps,
     // so it does not worth to react on the fluctuation below ~10% of this value.
     return abs((int64_t)oldEstimate - (int64_t)curEstimate) > 100;
 }
@@ -4040,13 +4043,13 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         message);
 
     auto videoEndpointsArray = mediaMapJson["video-endpoints"].getArray();
-    auto audioEnpointsArray = mediaMapJson["audio-endpoints"].getArray();
+    auto audioEndpointsArray = mediaMapJson["audio-endpoints"].getArray();
 
     memory::Array<BarbellMapItem, 12> videoSsrcs;
     memory::Array<BarbellMapItem, 8> audioSsrcs;
 
     copyToBarbellMapItemArray(videoEndpointsArray, videoSsrcs);
-    copyToBarbellMapItemArray(audioEnpointsArray, audioSsrcs);
+    copyToBarbellMapItemArray(audioEndpointsArray, audioSsrcs);
 
     memory::Map<size_t, size_t, 32> fwdVideoEndpoints;
     for (auto& item : videoSsrcs)
@@ -4203,7 +4206,7 @@ void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* m
         message);
 
     barbell->minClientDownlinkBandwidth =
-        api::DataChannelMessageParser::getMinUplinkBirate(utils::SimpleJson::create(message, strlen(message)));
+        api::DataChannelMessageParser::getMinUplinkBitrate(utils::SimpleJson::create(message, strlen(message)));
 }
 
 void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
