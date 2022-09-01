@@ -273,10 +273,10 @@ TEST_F(IntegrationTest, plain)
         this->testPlain();
     });
 
-    _timeSource.waitForThreadsToSleep(15, 200 * utils::Time::sec);
+    _timeSource.waitForThreadsToSleep(15, 5 * utils::Time::sec);
 
 #if USE_FAKENETWORK
-    _timeSource.runFor(20 * utils::Time::sec);
+    _timeSource.runFor(80 * utils::Time::sec);
 #endif
 
     runner.join();
@@ -337,6 +337,9 @@ void IntegrationTest::testPlain()
 
     groupCall.awaitPendingJobs(utils::Time::sec * 4);
     _internet->stop();
+
+    utils::Time::initialize();
+    _timeSource.shutdown();
 
     const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
     {

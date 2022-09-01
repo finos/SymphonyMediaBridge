@@ -21,10 +21,12 @@ bool CountdownEvent::wait(uint32_t timeoutMs)
 {
     auto timeoutAt = utils::Time::getAbsoluteTime() + timeoutMs * 1000000ull;
     std::unique_lock<std::mutex> locker(_lock);
-    while (_count > 0)
+    if (_count > 0)
     {
         int64_t timeLeftMs = std::max(int64_t(0), int64_t(timeoutAt - utils::Time::getAbsoluteTime())) / 1000000ll;
-        if (std::cv_status::timeout == _conditionVariable.wait_for(locker, std::chrono::milliseconds(timeLeftMs)))
+        if (!_conditionVariable.wait_for(locker, std::chrono::milliseconds(timeLeftMs), [this]() {
+                return this->_count == 0;
+            }))
         {
             return false;
         }

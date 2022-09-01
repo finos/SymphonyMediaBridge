@@ -1,4 +1,5 @@
 #include "TimeTurner.h"
+#include "concurrency/ThreadUtils.h"
 #include "logger/Logger.h"
 #include <thread>
 
@@ -27,6 +28,11 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
             --_sleeperCountdown;
             slot.semaphore.wait();
 
+            /*char threadName[90];
+            size_t nameLength = 89;
+            concurrency::getThreadName(threadName, nameLength);
+             logger::debug("%s woke up", "TimeTurner", threadName);
+*/
             slot.state.store(State::Empty);
             return;
         }
@@ -79,7 +85,14 @@ void TimeTurner::runFor(uint64_t durationNs)
          timestamp = getAbsoluteTime())
     {
         logger::awaitLogDrained(0.75);
-        _sleeperCountdown.wait();
+        if (!_sleeperCountdown.wait(1000))
+        {
+            logger::warn("Timeout waiting for threads to check", "TimeTurner");
+            if (!_running)
+            {
+                return;
+            }
+        }
         advance();
     }
 
