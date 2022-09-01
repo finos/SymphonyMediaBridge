@@ -291,6 +291,7 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
 void IntegrationTest::startSimulation()
 {
 #if USE_FAKENETWORK
+    _internet->start();
     utils::Time::nanoSleep(1 * utils::Time::sec);
 #endif
 }
@@ -319,7 +320,6 @@ TEST_F(IntegrationTest, plain)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-        _internet->start();
         initBridge(_config);
 
         startSimulation();
@@ -498,7 +498,6 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
-        _internet->start();
         initBridge(_config);
 
         startSimulation();
@@ -552,7 +551,6 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
-        _internet->start();
         initBridge(_config);
 
         startSimulation();
@@ -660,7 +658,6 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             "{\"ip\":\"127.0.0.1\", "
             "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"rctl.cooldownInterval\":1}");
 
-        _internet->start();
         initBridge(_config);
 
         startSimulation();
@@ -772,7 +769,6 @@ TEST_F(IntegrationTest, plainNewApi)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-        _internet->start();
         initBridge(_config);
 
         startSimulation();
@@ -974,7 +970,6 @@ TEST_F(IntegrationTest, ptime10)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-        _internet->start();
         initBridge(_config);
 
         startSimulation();
@@ -1212,7 +1207,6 @@ TEST_F(IntegrationTest, simpleBarbell)
         "bwe.enable":false
         })");
 
-        _internet->start();
         initBridge(_config);
 
         config::Config config1;
@@ -1411,7 +1405,6 @@ TEST_F(IntegrationTest, barbellAfterClients)
         "bwe.enable":false
         })");
 
-        _internet->start();
         initBridge(_config);
 
         config::Config config1;
@@ -1608,7 +1601,6 @@ TEST_F(IntegrationTest, detectIsPtt)
         "ice.publicIpv4":"127.0.0.1"
         })");
 
-        _internet->start();
         initBridge(_config);
 
         startSimulation();
