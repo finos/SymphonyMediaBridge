@@ -38,15 +38,22 @@ struct IntegrationTest : public ::testing::Test
     std::shared_ptr<transport::EndpointFactory> _endpointFacory;
 
     uint32_t _instanceCounter;
+    const size_t _numWorkerThreads;
 
     void SetUp() override;
     void TearDown() override;
 
     void initBridge(config::Config& config);
 
-    void testPlain();
+protected:
+    void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
+    void startSimulation();
+    void finalizeSimulation();
 
 protected:
     bool _internetStartedAtLeastOnce;
     emulator::TimeTurner _timeSource;
+
+private:
+    size_t getNumWorkerThreads();
 };

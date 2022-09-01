@@ -11,7 +11,7 @@ namespace emulator
 class TimeTurner : public utils::TimeSource
 {
 public:
-    static const size_t MAX_THREAD_COUNT = 30;
+    static const size_t MAX_THREAD_COUNT = 60;
 
     TimeTurner();
 

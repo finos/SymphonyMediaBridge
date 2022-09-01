@@ -126,6 +126,7 @@ void TimeTurner::advance()
 
 void TimeTurner::advance(uint64_t nanoSeconds)
 {
+    nanoSeconds = std::max(nanoSeconds, 500 * utils::Time::us);
     _timestamp += nanoSeconds;
 
     for (auto& slot : _sleepers)
