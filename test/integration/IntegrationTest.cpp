@@ -68,21 +68,43 @@ IntegrationTest::IntegrationTest()
       _instanceCounter(0),
       _numWorkerThreads(getNumWorkerThreads())
 {
+}
+
+void IntegrationTest::SetUp()
+{
+
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        GTEST_SKIP();
+    }
+#if !ENABLE_LEGACY_API
+    GTEST_SKIP();
+#endif
+
+    using namespace std;
+
+    _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
+
+#if USE_FAKENETWORK
+    utils::Time::initialize(_timeSource);
+#endif
+
     for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
     }
 }
 
-void IntegrationTest::SetUp()
-{
-    using namespace std;
-
-    _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
-}
-
 void IntegrationTest::TearDown()
 {
+    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    {
+        GTEST_SKIP();
+    }
+#if !ENABLE_LEGACY_API
+    GTEST_SKIP();
+#endif
+
     _bridge.reset();
     _transportFactory.reset();
     _jobManager->stop();
@@ -273,7 +295,6 @@ bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const
 void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::function<void()> test)
 {
 #if USE_FAKENETWORK
-    utils::Time::initialize(_timeSource);
     // Start internet here, before runFor(...) so it goes into "nanoSleep".
     _internet->start();
 #endif
@@ -306,14 +327,6 @@ void IntegrationTest::finalizeSimulation()
 TEST_F(IntegrationTest, plain)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -488,14 +501,6 @@ TEST_F(IntegrationTest, plain)
 TEST_F(IntegrationTest, audioOnlyNoPadding)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
         initBridge(_config);
@@ -540,14 +545,6 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
@@ -646,13 +643,6 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
            Test checks that after video is off and cooldown interval passed, no padding will be sent for the
            call that became audio-only.
         */
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
 
         _config.readFromString(
             "{\"ip\":\"127.0.0.1\", "
@@ -755,14 +745,6 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 TEST_F(IntegrationTest, plainNewApi)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -956,14 +938,6 @@ TEST_F(IntegrationTest, plainNewApi)
 TEST_F(IntegrationTest, ptime10)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1191,14 +1165,6 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
 TEST_F(IntegrationTest, simpleBarbell)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1389,14 +1355,6 @@ TEST_F(IntegrationTest, simpleBarbell)
 TEST_F(IntegrationTest, barbellAfterClients)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1587,14 +1545,6 @@ TEST_F(IntegrationTest, barbellAfterClients)
 TEST_F(IntegrationTest, detectIsPtt)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-        {
-            return;
-        }
-#if !ENABLE_LEGACY_API
-        return;
-#endif
-
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
