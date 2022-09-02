@@ -2,6 +2,7 @@
 
 #include "bridge/Bridge.h"
 #include "config/Config.h"
+#include "emulator/TimeTurner.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/EndpointFactory.h"
 #include "utils/Pacer.h"
@@ -37,6 +38,7 @@ struct IntegrationTest : public ::testing::Test
     std::shared_ptr<transport::EndpointFactory> _endpointFacory;
 
     uint32_t _instanceCounter;
+    const size_t _numWorkerThreads;
 
     void SetUp() override;
     void TearDown() override;
@@ -44,5 +46,14 @@ struct IntegrationTest : public ::testing::Test
     void initBridge(config::Config& config);
 
 protected:
+    void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
+    void startSimulation();
+    void finalizeSimulation();
+
+protected:
     bool _internetStartedAtLeastOnce;
+    emulator::TimeTurner _timeSource;
+
+private:
+    size_t getNumWorkerThreads();
 };

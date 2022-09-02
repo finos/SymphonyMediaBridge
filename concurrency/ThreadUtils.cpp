@@ -100,4 +100,30 @@ void setThreadName(const char* name)
     pthread_setname_np(pthread_self(), name);
 #endif
 }
+
+void getThreadName(char* name, size_t& length)
+{
+    return getThreadName(pthread_self(), name, length);
+}
+
+void getThreadName(pthread_t threadId, char* name, size_t& length)
+{
+#ifdef __APPLE__
+    auto rc = pthread_getname_np(name, length);
+#else
+    auto rc = pthread_getname_np(threadId, name, length);
+#endif
+    if (rc < 0)
+    {
+        name[0] = '\0';
+        return;
+    }
+
+    if (static_cast<size_t>(rc) > length)
+    {
+        name[0] = '\0';
+        return;
+    }
+    length = rc;
+}
 } // namespace concurrency

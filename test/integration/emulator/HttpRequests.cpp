@@ -34,7 +34,7 @@ void HttpRequest::awaitResponse(uint64_t timeout)
             _status = HTTP_STATUS_FAILED;
             break;
         }
-        utils::Time::nanoSleep(2 * utils::Time::ms);
+        utils::Time::rawNanoSleep(2 * utils::Time::ms);
     }
 }
 
