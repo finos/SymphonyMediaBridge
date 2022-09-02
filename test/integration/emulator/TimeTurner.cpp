@@ -28,11 +28,13 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
             --_sleeperCountdown;
             slot.semaphore.wait();
 
-            /*char threadName[90];
+#if 0
+            char threadName[90];
             size_t nameLength = 89;
             concurrency::getThreadName(threadName, nameLength);
-             logger::debug("%s woke up", "TimeTurner", threadName);
-*/
+            logger::debug("%s woke up", "TimeTurner", threadName);
+#endif
+
             slot.state.store(State::Empty);
             return;
         }

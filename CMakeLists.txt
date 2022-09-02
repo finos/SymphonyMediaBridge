@@ -471,8 +471,6 @@ set(TEST_FILES
     test/transport/FakeNetwork.cpp
     test/transport/NetworkLink.h
     test/transport/NetworkLink.cpp
-    test/transport/FakeUdpEndpoint.h
-    test/transport/FakeUdpEndpoint.cpp
     test/transport/IceIntegrationTest.cpp
     test/transport/SctpIntegrationTest.cpp
     test/transport/TransportIntegrationTest.cpp
