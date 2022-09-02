@@ -19,7 +19,6 @@ WorkerThread::WorkerThread(jobmanager::JobManager& jobManager)
       _thread([this] { this->run(); })
 {
     _backgroundJobs.reserve(512);
-    std::fill(_backgroundJobs.begin(), _backgroundJobs.end(), nullptr);
 }
 
 WorkerThread::~WorkerThread()
