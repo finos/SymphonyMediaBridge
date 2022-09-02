@@ -3698,8 +3698,6 @@ void EngineMixer::internalRemoveBarbell(size_t idHash)
         return;
     }
 
-    barbell->transport.stop();
-
     for (auto& videoStream : barbell->videoStreams)
     {
         for (size_t i = 0; i < videoStream.stream.numLevels; ++i)
@@ -3733,6 +3731,8 @@ void EngineMixer::removeBarbell(size_t idHash)
     {
         return;
     }
+
+    barbell->transport.stop();
 
     for (auto& videoStream : barbell->videoStreams)
     {

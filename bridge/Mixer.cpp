@@ -2440,7 +2440,6 @@ void Mixer::engineBarbellRemoved(EngineBarbell* engineBarbell)
     }
 
     logTransportPacketLoss(barbell->id, *barbell->transport, _loggableId.c_str());
-    barbell->transport->stop();
     if (!waitForPendingJobs(700, 5, *barbell->transport))
     {
         logger::error("Transport for barbell %s did not finish pending jobs in time. Continuing "
