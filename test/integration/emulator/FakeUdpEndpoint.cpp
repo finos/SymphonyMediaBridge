@@ -435,10 +435,11 @@ void FakeUdpEndpoint::internalReceive()
     for (unsigned long i = 0; i < packetCount; ++i)
     {
         InboundPacket packetInfo;
-        _receiveQueue.pop(packetInfo);
-
-        _rateMetrics.receiveTracker.update(packetInfo.packet->getLength(), receiveTime);
-        dispatchReceivedPacket(packetInfo.address, std::move(packetInfo.packet));
+        if (_receiveQueue.pop(packetInfo) && packetInfo.packet)
+        {
+            _rateMetrics.receiveTracker.update(packetInfo.packet->getLength(), receiveTime);
+            dispatchReceivedPacket(packetInfo.address, std::move(packetInfo.packet));
+        }
     }
 }
 
