@@ -3,6 +3,7 @@
 #include "concurrency/MpmcQueue.h"
 #include "concurrency/ScopedMutexGuard.h"
 #include "logger/Logger.h"
+#include "logger/PruneSpam.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/dtls/DtlsMessageListener.h"
 #include <openssl/ssl.h>
@@ -85,6 +86,8 @@ private:
     bool _nullCipher;
 
     IEvents* _eventSink;
+    logger::PruneSpam _rtpAntiSpam;
+    logger::PruneSpam _rtcpAntiSpam;
 
     DBGCHECK_SINGLETHREADED_MUTEX(_mutexGuard);
 
