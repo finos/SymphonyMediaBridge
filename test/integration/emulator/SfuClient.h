@@ -714,7 +714,7 @@ public:
         return false;
     }
 
-    bool startConference(std::string url)
+    static bool startConference(Conference& conf, std::string url)
     {
         conf.create(url);
         auto result = conf.isSuccess();
@@ -729,7 +729,6 @@ public:
     }
 
     std::vector<std::unique_ptr<TClient>> clients;
-    Conference conf;
 
 private:
     uint32_t& _idCounter;
