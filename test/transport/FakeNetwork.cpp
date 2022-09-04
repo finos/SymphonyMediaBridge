@@ -1,6 +1,7 @@
 #include "FakeNetwork.h"
 #include "logger/Logger.h"
 #include "utils/Time.h"
+#include <algorithm>
 
 #define TRACE_FAKENETWORK 0
 
@@ -180,7 +181,10 @@ bool Firewall::addPortMapping(const transport::SocketAddress& source, int public
     return true;
 }
 
-InternetRunner::InternetRunner(const uint64_t sleepTime) : _isRunning(false), _shouldStop(false), _sleepTime(sleepTime)
+InternetRunner::InternetRunner(const uint64_t sleepTime)
+    : _sleepTime(sleepTime),
+      _state(State::paused),
+      _command(State::paused)
 {
     _internet = std::make_shared<Internet>();
     _thread = std::make_unique<std::thread>([this] { this->internetThreadRun(); });
@@ -188,27 +192,29 @@ InternetRunner::InternetRunner(const uint64_t sleepTime) : _isRunning(false), _s
 
 InternetRunner::~InternetRunner()
 {
-    {
-        std::lock_guard<std::mutex> lock(_mutex);
-        _shouldStop = true;
-        _cv.notify_all();
-    }
-
+    exit();
     _thread->join();
 }
 
 void InternetRunner::start()
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    _isRunning = true;
-    _cv.notify_all();
+    _command = running;
+    _commandReady.notify_all();
 }
 
-void InternetRunner::stop()
+void InternetRunner::pause()
 {
     std::lock_guard<std::mutex> lock(_mutex);
-    _isRunning = false;
-    _cv.notify_all();
+    _command = paused;
+    _commandReady.notify_all();
+}
+
+void InternetRunner::exit()
+{
+    std::lock_guard<std::mutex> lock(_mutex);
+    _command = quit;
+    _commandReady.notify_all();
 }
 
 std::shared_ptr<Internet> InternetRunner::get()
@@ -218,22 +224,19 @@ std::shared_ptr<Internet> InternetRunner::get()
 
 void InternetRunner::internetThreadRun()
 {
-    while (true)
+    while (_command != quit)
     {
-        if (_isRunning)
+        if (_command == State::running)
         {
+            _state = running;
             _internet->process(utils::Time::getAbsoluteTime());
             utils::Time::nanoSleep(_sleepTime);
         }
-        else
+        else if (_command == paused)
         {
             std::unique_lock<std::mutex> lock(_mutex);
-            _cv.wait(lock, [this] { return _isRunning.load() || _shouldStop.load(); });
-            if (_shouldStop)
-            {
-                _isRunning = false;
-                return;
-            }
+            _state = paused;
+            _commandReady.wait(lock, [this] { return _command != paused; });
         }
     }
 }

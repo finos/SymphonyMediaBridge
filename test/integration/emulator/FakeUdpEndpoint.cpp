@@ -257,7 +257,7 @@ void FakeUdpEndpoint::stop(IStopEvents* listener)
             _receiveQueue.pop(packet);
         }
 
-        // Woulbe be closing epoll subscription in a job and call a stop callback...
+        // Would be closing epoll subscription in a job and call a stop callback...
         _state = CREATED;
 
         if (listener)

@@ -19,6 +19,7 @@ cores/*
 *.a
 tools/vagrantdev/.vagrant/*
 tools/vagrant/.vagrant/*
+test/include/TestConfig.h
 
 # Docker
 el7/smb/

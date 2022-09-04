@@ -562,16 +562,33 @@ private:
     size_t _instanceId = 0;
 };
 
-template <typename T>
+template <typename TClient>
 class GroupCall
 {
 public:
-    GroupCall(std::initializer_list<T*> clients) : _clients(clients) {}
+    // GroupCall(std::initializer_list<T*> clients) : clients(clients) {}
+    GroupCall(uint32_t& idCounter,
+        memory::PacketPoolAllocator& allocator,
+        memory::AudioPacketPoolAllocator& audioAllocator,
+        transport::TransportFactory& transportFactory,
+        transport::SslDtls& sslDtls,
+        uint32_t callCount)
+        : _idCounter(idCounter),
+          _allocator(allocator),
+          _audioAllocator(audioAllocator),
+          _transportFactory(transportFactory),
+          _sslDtls(sslDtls)
+    {
+        for (uint32_t i = 0; i < callCount; ++i)
+        {
+            add();
+        }
+    }
 
-    bool connect(uint64_t timeout)
+    bool connectAll(uint64_t timeout)
     {
         auto start = utils::Time::getAbsoluteTime();
-        for (auto client : _clients)
+        for (auto& client : clients)
         {
             if (!client->_channel.isSuccess())
             {
@@ -579,8 +596,13 @@ public:
             }
         }
 
-        for (auto client : _clients)
+        for (auto& client : clients)
         {
+            if (client->_transport)
+            {
+                continue; // already connected
+            }
+
             client->processOffer();
             if (!client->_transport || !client->_audioSource)
             {
@@ -588,7 +610,7 @@ public:
             }
         }
 
-        for (auto client : _clients)
+        for (auto& client : clients)
         {
             client->connect();
         }
@@ -597,11 +619,52 @@ public:
         while (currTime - start < timeout)
         {
             auto it =
-                std::find_if_not(_clients.begin(), _clients.end(), [](auto c) { return c->_transport->isConnected(); });
+                std::find_if_not(clients.begin(), clients.end(), [](auto& c) { return c->_transport->isConnected(); });
 
-            if (it == _clients.end())
+            if (it == clients.end())
             {
                 logger::info("all clients connected", "test");
+                return true;
+            }
+
+            utils::Time::nanoSleep(10 * utils::Time::ms);
+            logger::debug("waiting for connect...", "test");
+            currTime = utils::Time::getAbsoluteTime();
+        }
+
+        return false;
+    }
+
+    bool connectSingle(uint32_t clientIndex, uint64_t timeout)
+    {
+        auto start = utils::Time::getAbsoluteTime();
+        auto& client = clients[clientIndex];
+        if (!client->_channel.isSuccess())
+        {
+            return false;
+        }
+
+        if (client->_transport)
+        {
+            return client->_transport->isConnected();
+        }
+
+        client->processOffer();
+        if (!client->_transport || !client->_audioSource)
+        {
+            return false;
+        }
+
+        for (auto& client : clients)
+        {
+            client->connect();
+        }
+
+        auto currTime = utils::Time::getAbsoluteTime();
+        while (currTime - start < timeout)
+        {
+            if (client->_transport->isConnected())
+            {
                 return true;
             }
 
@@ -619,7 +682,7 @@ public:
         utils::Pacer pacer(10 * utils::Time::ms);
         for (auto timestamp = utils::Time::getAbsoluteTime(); timestamp - start < period;)
         {
-            for (auto client : _clients)
+            for (auto& client : clients)
             {
                 client->process(timestamp);
             }
@@ -636,7 +699,7 @@ public:
         {
             runCount = 0;
             utils::Time::nanoSleep(utils::Time::ms * 100);
-            for (auto client : _clients)
+            for (auto& client : clients)
             {
                 if (client->_transport->hasPendingJobs())
                 {
@@ -651,6 +714,30 @@ public:
         return false;
     }
 
-    std::vector<T*> _clients;
+    bool startConference(std::string url)
+    {
+        conf.create(url);
+        auto result = conf.isSuccess();
+        utils::Time::rawNanoSleep(1 * utils::Time::sec);
+        return result;
+    }
+
+    void add()
+    {
+        clients.emplace_back(
+            std::make_unique<TClient>(++_idCounter, _allocator, _audioAllocator, _transportFactory, _sslDtls));
+    }
+
+    std::vector<std::unique_ptr<TClient>> clients;
+    Conference conf;
+
+private:
+    uint32_t& _idCounter;
+    memory::PacketPoolAllocator& _allocator;
+    memory::AudioPacketPoolAllocator& _audioAllocator;
+    transport::TransportFactory& _transportFactory;
+    transport::SslDtls& _sslDtls;
+    std::string _baseUrl;
 };
+
 } // namespace emulator
