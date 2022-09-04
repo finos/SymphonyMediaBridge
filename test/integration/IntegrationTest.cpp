@@ -301,6 +301,19 @@ void IntegrationTest::finalizeSimulation()
     _timeSource.shutdown();
 }
 
+namespace
+{
+class ScopedFinalize
+{
+public:
+    explicit ScopedFinalize(std::function<void()> finalizeMethod) : _method(finalizeMethod) {}
+    ~ScopedFinalize() { _method(); }
+
+private:
+    std::function<void()> _method;
+};
+} // namespace
+
 TEST_F(IntegrationTest, plain)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
@@ -312,6 +325,7 @@ TEST_F(IntegrationTest, plain)
 
         initBridge(_config);
 
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
@@ -489,6 +503,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
         initBridge(_config);
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
 
         startSimulation();
 
@@ -543,6 +558,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
         initBridge(_config);
 
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
@@ -570,7 +586,12 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        auto connectResult = group.connectAll(utils::Time::sec * 5);
+        EXPECT_TRUE(connectResult);
+        if (!connectResult)
+        {
+            return;
+        }
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -602,7 +623,8 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         {
             ASSERT_GT(videoReceiver->videoPacketCount, 0); // It should contain video
             ASSERT_EQ(videoReceiver->rtxPacketCount, 0); // It should NOT contain rtx
-            ASSERT_EQ(videoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
+            ASSERT_EQ(videoReceiver->unknownPayloadPacketCount,
+                0); // It should NOT video have unknown payload types
             ASSERT_EQ(videoReceiver->getContent(), RtpVideoReceiver::VideoContent::VIDEO);
         }
 
@@ -610,7 +632,8 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         {
             ASSERT_GT(videoReceiver->videoPacketCount, 0); // It should contain video
             ASSERT_EQ(videoReceiver->rtxPacketCount, 0); // It should NOT contain rtx
-            ASSERT_EQ(videoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
+            ASSERT_EQ(videoReceiver->unknownPayloadPacketCount,
+                0); // It should NOT video have unknown payload types
             ASSERT_EQ(videoReceiver->getContent(), RtpVideoReceiver::VideoContent::VIDEO);
         }
 
@@ -633,7 +656,8 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         ASSERT_NE(localVideoReceiver, nullptr);
         ASSERT_GT(localVideoReceiver->rtxPacketCount, 0); // It should contain rtx
         ASSERT_EQ(localVideoReceiver->videoPacketCount, 0); // It should NOT video packets
-        ASSERT_EQ(localVideoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
+        ASSERT_EQ(localVideoReceiver->unknownPayloadPacketCount,
+            0); // It should NOT video have unknown payload types
     });
 }
 
@@ -650,7 +674,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"rctl.cooldownInterval\":1}");
 
         initBridge(_config);
-
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
@@ -752,7 +776,7 @@ TEST_F(IntegrationTest, plainNewApi)
         })");
 
         initBridge(_config);
-
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const auto baseUrl = "http://127.0.0.1:8080";
@@ -934,7 +958,7 @@ TEST_F(IntegrationTest, ptime10)
         })");
 
         initBridge(_config);
-
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const auto baseUrl = "http://127.0.0.1:8080";
@@ -1175,6 +1199,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_endpointFacory);
 
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const auto baseUrl = "http://127.0.0.1:8080";
@@ -1352,6 +1377,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_endpointFacory);
 
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const auto baseUrl = "http://127.0.0.1:8080";
@@ -1509,6 +1535,7 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         initBridge(_config);
 
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
         const auto baseUrl = "http://127.0.0.1:8080";
