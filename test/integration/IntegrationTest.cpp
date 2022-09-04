@@ -279,13 +279,9 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
 #if USE_FAKENETWORK
     _timeSource.runFor(80 * utils::Time::sec);
 #endif
-    _internet->pause();
-    while (!_internet->isPaused())
-    {
-        utils::Time::rawNanoSleep(utils::Time::ms);
-    }
     runner.join();
 }
+
 void IntegrationTest::startSimulation()
 {
 #if USE_FAKENETWORK
@@ -538,7 +534,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         EXPECT_EQ(rData3.size(), 1);
     });
 }
-/*
+
 TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
@@ -551,13 +547,15 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-           GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
+        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
             *_transportFactory,
             *_sslDtls,
             3);
 
+        Conference conf;
+        group.startConference(conf, baseUrl + "/colibri");
 
         using RtpVideoReceiver = typename SfuClient<ColibriChannel>::RtpVideoReceiver;
 
@@ -568,11 +566,13 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         group.clients[1]->_channel.setAnswerOptions(answerOptionNoRtx);
 
         // Audio only for all three participants.
-        group.clients[0]->initiateCall(baseUrl, group.conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, group.conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, group.conf.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        make5secCallWithDefaultAudioProfile(client1, client2, client3, group);
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+
+        make5secCallWithDefaultAudioProfile(group);
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
@@ -636,7 +636,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         ASSERT_EQ(localVideoReceiver->unknownPayloadPacketCount, 0); // It should NOT video have unknown payload types
     });
 }
-*/
+
 TEST_F(IntegrationTest, videoOffPaddingOff)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
@@ -741,7 +741,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         EXPECT_EQ(rData3.size(), 1);
     });
 }
-/*
+
 TEST_F(IntegrationTest, plainNewApi)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
@@ -757,24 +757,23 @@ TEST_F(IntegrationTest, plainNewApi)
 
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        Conference conf;
-        conf.create(baseUrl);
-        EXPECT_TRUE(conf.isSuccess());
-        utils::Time::nanoSleep(1 * utils::Time::sec);
-
-           GroupCall<SfuClient<Channel>> group(_instanceCounter,
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
             *_transportFactory,
             *_sslDtls,
             3);
 
+        Conference conf;
+        group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, group.conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, group.conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, group.conf.getId(), false, true, true, false);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        make5secCallWithDefaultAudioProfile(client1, client2, client3, group);
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+
+        make5secCallWithDefaultAudioProfile(group);
 
         HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
         statsRequest.awaitResponse(1500 * utils::Time::ms);
@@ -940,35 +939,23 @@ TEST_F(IntegrationTest, ptime10)
 
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        Conference conf;
-        conf.create(baseUrl);
-        EXPECT_TRUE(conf.isSuccess());
-        utils::Time::nanoSleep(1 * utils::Time::sec);
-
-        SfuClient<Channel> client1(++_instanceCounter,
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
             *_transportFactory,
             *_sslDtls,
-            10);
-        SfuClient<Channel> client2(++_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls);
-        SfuClient<Channel> client3(++_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls);
+            3);
 
-        GroupCall<SfuClient<Channel>> group({&client1, &client2, &client3});
+        Conference conf;
+        group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, group.conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, group.conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, group.conf.getId(), false, true, true, false);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        make5secCallWithDefaultAudioProfile(client1, client2, client3, group);
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+
+        make5secCallWithDefaultAudioProfile(group);
 
         HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
         statsRequest.awaitResponse(1500 * utils::Time::ms);
@@ -1193,20 +1180,23 @@ TEST_F(IntegrationTest, simpleBarbell)
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            3);
+
         Conference conf;
-        conf.create(baseUrl);
-        EXPECT_TRUE(conf.isSuccess());
+        group.startConference(conf, baseUrl);
 
         Conference conf2;
-        conf2.create(baseUrl2);
-        EXPECT_TRUE(conf2.isSuccess());
-
-        utils::Time::nanoSleep(1 * utils::Time::sec);
+        group.startConference(conf2, baseUrl2);
 
         Barbell bb1;
         Barbell bb2;
 
-        auto sdp1 = bb1.allocate(baseUrl, group.conf.getId(), true);
+        auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
         auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
 
         bb1.configure(sdp2);
@@ -1214,29 +1204,13 @@ TEST_F(IntegrationTest, simpleBarbell)
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
 
-        SfuClient<Channel> client1(++_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls);
-        SfuClient<Channel> client2(++_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls);
-        SfuClient<Channel> client3(++_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls);
-
-        GroupCall<SfuClient<Channel>> group({&client1, &client2, &client3});
-
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        make5secCallWithDefaultAudioProfile(client1, client2, client3, group);
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+
+        make5secCallWithDefaultAudioProfile(group);
 
         HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
         statsRequest.awaitResponse(1500 * utils::Time::ms);
@@ -1256,9 +1230,9 @@ TEST_F(IntegrationTest, simpleBarbell)
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
-        logVideoSent("client1", client1);
-        logVideoSent("client2", client2);
-        logVideoSent("client3", client3);
+        logVideoSent("client1", *group.clients[0]);
+        logVideoSent("client2", *group.clients[1]);
+        logVideoSent("client3", *group.clients[2]);
 
         const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
         {
@@ -1383,33 +1357,25 @@ TEST_F(IntegrationTest, barbellAfterClients)
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
-        Conference conf;
-        conf.create(baseUrl);
-        EXPECT_TRUE(conf.isSuccess());
-
-        Conference conf2;
-        conf2.create(baseUrl2);
-        EXPECT_TRUE(conf2.isSuccess());
-
         utils::Time::nanoSleep(1 * utils::Time::sec);
 
-        SfuClient<Channel> client1(++_instanceCounter,
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
             *_transportFactory,
-            *_sslDtls);
-        SfuClient<Channel> client2(++_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls);
+            *_sslDtls,
+            2);
 
-        GroupCall<SfuClient<Channel>> group({&client1, &client2});
+        Conference conf;
+        group.startConference(conf, baseUrl);
+
+        Conference conf2;
+        group.startConference(conf2, baseUrl2);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        if (!group.connect(utils::Time::sec * 8))
+        if (!group.connectAll(utils::Time::sec * 8))
         {
             EXPECT_TRUE(false);
             return;
@@ -1454,8 +1420,8 @@ TEST_F(IntegrationTest, barbellAfterClients)
 
         finalizeSimulation();
 
-        logVideoSent("client1", client1);
-        logVideoSent("client2", client2);
+        logVideoSent("client1", *group.clients[0]);
+        logVideoSent("client2", *group.clients[1]);
 
         const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
         {
@@ -1547,15 +1513,21 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        DEFINE_3_CLIENT_CONFERENCE(Channel, baseUrl)
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            3);
 
-        GroupCall<SfuClient<Channel>> group({&client1, &client2, &client3});
+        Conference conf;
+        group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        auto connectResult = group.connect(utils::Time::sec * 5);
+        auto connectResult = group.connectAll(utils::Time::sec * 5);
         ASSERT_TRUE(connectResult);
         if (!connectResult)
         {
@@ -1662,7 +1634,4 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         finalizeSimulation();
     });
-}
-;
-*/
-#undef DEFINE_3_CLIENT_CONFERENCE
+};
