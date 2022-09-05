@@ -84,6 +84,9 @@ TEST_F(PoolAllocatorTest, singleThreaded)
 
 TEST_F(PoolAllocatorTest, multiThreaded)
 {
+#ifdef LCOV_BUILD
+    GTEST_SKIP();
+#endif
     auto allocator = std::make_unique<TestAllocator>(1024, "PoolAllocatorTest");
     std::vector<std::unique_ptr<std::thread>> threads;
     for (size_t i = 0; i < numThreads; ++i)

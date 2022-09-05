@@ -18,7 +18,6 @@ WorkerThread::WorkerThread(jobmanager::JobManager& jobManager)
       _backgroundJobCount(0),
       _thread([this] { this->run(); })
 {
-    _backgroundJobs.reserve(512);
 }
 
 WorkerThread::~WorkerThread()
@@ -70,6 +69,7 @@ void WorkerThread::run()
 {
     concurrency::setThreadName("Worker");
     workerThreadHandler = this;
+    _backgroundJobs.reserve(512);
 
     try
     {
