@@ -18,7 +18,8 @@ struct AudioStream
         const uint32_t localSsrc,
         std::shared_ptr<transport::RtcTransport>& transport,
         const bool audioMixed,
-        bool ssrcRewrite)
+        bool ssrcRewrite,
+        bool isDtlsLocalEnabled)
         : id(id),
           endpointId(endpointId),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
@@ -27,6 +28,7 @@ struct AudioStream
           audioMixed(audioMixed),
           markedForDeletion(false),
           ssrcRewrite(ssrcRewrite),
+          isDtlsLocalEnabled(isDtlsLocalEnabled),
           isConfigured(false)
     {
     }
@@ -44,6 +46,7 @@ struct AudioStream
 
     bool markedForDeletion;
     bool ssrcRewrite;
+    bool isDtlsLocalEnabled;
     bool isConfigured;
 };
 

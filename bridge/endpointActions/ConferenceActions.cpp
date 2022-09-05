@@ -349,9 +349,10 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         : ice::IceRole::CONTROLLING);
             }
             const auto mixed = audio._relayType.compare("mixed") == 0;
+            const auto isDtlsEnabled = transport._dtls;
 
             std::string outChannelId;
-            if (!mixer->addAudioStream(outChannelId, endpointId, iceRole, mixed, false))
+            if (!mixer->addAudioStream(outChannelId, endpointId, iceRole, mixed, false, isDtlsEnabled))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding audio stream has failed");
@@ -377,8 +378,10 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         : ice::IceRole::CONTROLLING);
             }
 
+            const auto isDtlsEnabled = transport._dtls;
+
             std::string outChannelId;
-            if (!mixer->addVideoStream(outChannelId, endpointId, iceRole, false))
+            if (!mixer->addVideoStream(outChannelId, endpointId, iceRole, false, isDtlsEnabled))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding video stream has failed");

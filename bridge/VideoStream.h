@@ -18,7 +18,8 @@ struct VideoStream
         const std::string& endpointId,
         const uint32_t localSsrc,
         std::shared_ptr<transport::RtcTransport>& transport,
-        bool ssrcRewrite)
+        bool ssrcRewrite,
+        bool isDtlsLocalEnabled)
         : id(id),
           endpointId(endpointId),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
@@ -27,6 +28,7 @@ struct VideoStream
           transport(transport),
           markedForDeletion(false),
           ssrcRewrite(ssrcRewrite),
+          isDtlsLocalEnabled(isDtlsLocalEnabled),
           isConfigured(false)
     {
     }
@@ -46,6 +48,7 @@ struct VideoStream
 
     bool markedForDeletion;
     bool ssrcRewrite;
+    bool isDtlsLocalEnabled;
     bool isConfigured;
 };
 

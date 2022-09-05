@@ -327,7 +327,8 @@ bool Mixer::addAudioStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
     const bool audioMixed,
-    bool rewriteSsrcs)
+    bool rewriteSsrcs,
+    bool isDtlsEnabled)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_audioStreams.find(endpointId) != _audioStreams.end())
@@ -350,7 +351,14 @@ bool Mixer::addAudioStream(std::string& outId,
     }
 
     const auto streamItr = _audioStreams.emplace(endpointId,
-        std::make_unique<AudioStream>(outId, endpointId, _ssrcGenerator.next(), transport, audioMixed, rewriteSsrcs));
+        std::make_unique<AudioStream>(outId,
+            endpointId,
+            _ssrcGenerator.next(),
+            transport,
+            audioMixed,
+            rewriteSsrcs,
+            isDtlsEnabled));
+
     if (!streamItr.second)
     {
         return false;
@@ -369,7 +377,8 @@ bool Mixer::addAudioStream(std::string& outId,
 bool Mixer::addVideoStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
-    bool rewriteSsrcs)
+    bool rewriteSsrcs,
+    bool isDtlsEnabled)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_videoStreams.find(endpointId) != _videoStreams.end())
@@ -392,7 +401,13 @@ bool Mixer::addVideoStream(std::string& outId,
     }
 
     const auto emplaceResult = _videoStreams.emplace(endpointId,
-        std::make_unique<VideoStream>(outId, endpointId, _ssrcGenerator.next(), transport, rewriteSsrcs));
+        std::make_unique<VideoStream>(outId,
+            endpointId,
+            _ssrcGenerator.next(),
+            transport,
+            rewriteSsrcs,
+            isDtlsEnabled));
+
     if (!emplaceResult.second)
     {
         return false;
@@ -437,7 +452,9 @@ bool Mixer::addBundledAudioStream(std::string& outId,
             _ssrcGenerator.next(),
             transportItr->second._transport,
             audioMixed,
-            ssrcRewrite));
+            ssrcRewrite,
+            true));
+
     if (!streamItr.second)
     {
         return false;
@@ -478,7 +495,9 @@ bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpoin
             endpointId,
             _ssrcGenerator.next(),
             transportItr->second._transport,
-            ssrcRewrite));
+            ssrcRewrite,
+            true));
+
     if (!streamItr.second)
     {
         return false;
@@ -1035,17 +1054,21 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
         return false;
     }
 
-    if (transport->isIceEnabled() && transport->isDtlsEnabled())
+    const bool isAudioConfigured = audioStreamItr->second->isConfigured;
+    const bool isDtlsEnabled =
+        (isAudioConfigured ? transport->isDtlsEnabled() : audioStreamItr->second->isDtlsLocalEnabled);
+
+    if (transport->isIceEnabled() && isDtlsEnabled)
     {
         outTransportDescription = TransportDescription(transport->getLocalCandidates(),
             transport->getLocalCredentials(),
             transport->isDtlsClient());
     }
-    else if (!transport->isIceEnabled() && transport->isDtlsEnabled())
+    else if (!transport->isIceEnabled() && isDtlsEnabled)
     {
         outTransportDescription = TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient());
     }
-    else if (!transport->isIceEnabled() && !transport->isDtlsEnabled())
+    else if (!transport->isIceEnabled() && !isDtlsEnabled)
     {
         outTransportDescription = TransportDescription(transport->getLocalRtpPort());
     }
@@ -1069,17 +1092,21 @@ bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
         return false;
     }
 
-    if (transport->isIceEnabled() && transport->isDtlsEnabled())
+    const bool isVideoConfigured = videoStreamItr->second->isConfigured;
+    const bool isDtlsEnabled =
+        (isVideoConfigured ? transport->isDtlsEnabled() : videoStreamItr->second->isDtlsLocalEnabled);
+
+    if (transport->isIceEnabled() && isDtlsEnabled)
     {
         outTransportDescription = TransportDescription(transport->getLocalCandidates(),
             transport->getLocalCredentials(),
             transport->isDtlsClient());
     }
-    else if (!transport->isIceEnabled() && transport->isDtlsEnabled())
+    else if (!transport->isIceEnabled() && isDtlsEnabled)
     {
         outTransportDescription = TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient());
     }
-    else if (!transport->isIceEnabled() && !transport->isDtlsEnabled())
+    else if (!transport->isIceEnabled() && !isDtlsEnabled)
     {
         outTransportDescription = TransportDescription(transport->getLocalRtpPort());
     }

@@ -102,11 +102,13 @@ public:
         const std::string& endpointId,
         const utils::Optional<ice::IceRole>& iceRole,
         const bool audioMixed,
-        bool rewriteSsrcs);
+        bool rewriteSsrcs,
+        bool isDtlsEnabled);
     bool addVideoStream(std::string& outId,
         const std::string& endpointId,
         const utils::Optional<ice::IceRole>& iceRole,
-        bool rewriteSsrcs);
+        bool rewriteSsrcs,
+        bool isDtlsEnabled);
 
     bool addBundledAudioStream(std::string& outId,
         const std::string& endpointId,
