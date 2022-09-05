@@ -52,10 +52,6 @@ IntegrationTest::IntegrationTest()
 void IntegrationTest::SetUp()
 {
 
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-    {
-        GTEST_SKIP();
-    }
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
 #endif
@@ -76,10 +72,7 @@ void IntegrationTest::SetUp()
 
 void IntegrationTest::TearDown()
 {
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-    {
-        GTEST_SKIP();
-    }
+
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
 #endif
@@ -111,11 +104,11 @@ void IntegrationTest::initBridge(config::Config& config)
 {
     _bridge = std::make_unique<bridge::Bridge>(config);
 #if USE_FAKENETWORK
-    _endpointFacory = std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get()));
+    _endpointFactory = std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get()));
 #else
-    _endpointFacory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
+    _endpointFactory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
 #endif
-    _bridge->initialize(_endpointFacory);
+    _bridge->initialize(_endpointFactory);
 
     _sslDtls = &_bridge->getSslDtls();
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
@@ -136,7 +129,7 @@ void IntegrationTest::initBridge(config::Config& config)
         interfaces,
         *_network,
         *_mainPoolAllocator,
-        _endpointFacory);
+        _endpointFactory);
 }
 
 namespace
@@ -1211,7 +1204,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         })");
 
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_endpointFacory);
+        bridge2->initialize(_endpointFactory);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -1389,7 +1382,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         })");
 
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_endpointFacory);
+        bridge2->initialize(_endpointFactory);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
