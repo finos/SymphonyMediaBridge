@@ -2,6 +2,8 @@
 
 #include "AudioSource.h"
 #include "api/SimulcastGroup.h"
+#include "bridge/engine/VideoMissingPacketsTracker.h"
+#include "codec/Vp8Header.h"
 #include "memory/Array.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
@@ -351,9 +353,11 @@ public:
             }
 
             auto& inboundContext = it->second;
+            ++inboundContext.packetsProcessed;
 
-            if (!inboundContext.videoMissingPacketsTracker)
+            if (inboundContext.packetsProcessed == 1)
             {
+                inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
                 inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>(10);
             }
 
@@ -380,6 +384,77 @@ public:
                     _loggableId.c_str(),
                     rtpHeader->ssrc.get(),
                     rtpHeader->payloadType);
+            }
+
+            const auto payload = rtpHeader->getPayload();
+            const auto payloadSize = packet.getLength() - rtpHeader->headerLength();
+            const auto payloadDescriptorSize = codec::Vp8Header::getPayloadDescriptorSize(payload, payloadSize);
+            const bool isKeyframe = codec::Vp8Header::isKeyFrame(payload, payloadDescriptorSize);
+            const auto timestampMs = timestamp / utils::Time::ms;
+            const auto sequenceNumber = rtpHeader->sequenceNumber.get();
+            bool missingPacketsTrackerReset = false;
+
+            if (isKeyframe)
+            {
+                inboundContext.videoMissingPacketsTracker->reset(timestampMs);
+                missingPacketsTrackerReset = true;
+            }
+
+            if (extendedSequenceNumber > inboundContext.lastReceivedExtendedSequenceNumber)
+            {
+                if (extendedSequenceNumber - inboundContext.lastReceivedExtendedSequenceNumber >=
+                    bridge::VideoMissingPacketsTracker::maxMissingPackets)
+                {
+                    logger::info("Resetting full missing packet tracker for %s, ssrc %u",
+                        "SfuClient",
+                        sender->getLoggableId().c_str(),
+                        inboundContext.ssrc);
+                    inboundContext.videoMissingPacketsTracker->reset(timestampMs);
+                }
+                else if (!missingPacketsTrackerReset)
+                {
+                    for (uint32_t missingSequenceNumber = inboundContext.lastReceivedExtendedSequenceNumber + 1;
+                         missingSequenceNumber != extendedSequenceNumber;
+                         ++missingSequenceNumber)
+                    {
+                        inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
+                    }
+                }
+
+                inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
+            }
+            else if (extendedSequenceNumber != inboundContext.lastReceivedExtendedSequenceNumber)
+            {
+                uint32_t esn = 0;
+                if (!inboundContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, esn) ||
+                    esn != extendedSequenceNumber)
+                {
+                    logger::debug("%s Not waiting for packet seq %u ssrc %u, dropping",
+                        "SfuClient",
+                        sender->getLoggableId().c_str(),
+                        sequenceNumber,
+                        inboundContext.ssrc);
+                    return;
+                }
+            }
+
+            if (inboundContext.videoMissingPacketsTracker)
+            {
+                if (inboundContext.videoMissingPacketsTracker->shouldProcess(timestampMs))
+                {
+                    std::array<uint16_t, bridge::VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
+                    const auto numMissingSequenceNumbers =
+                        inboundContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime() / 1000000ULL,
+                            inboundContext.sender->getRtt() / utils::Time::ms,
+                            missingSequenceNumbers);
+
+                    if (numMissingSequenceNumbers)
+                    {
+                        logger::debug("Video missing packet tracker: %zu packets missing",
+                            "SfuClient",
+                            numMissingSequenceNumbers);
+                    }
+                }
             }
         }
 
