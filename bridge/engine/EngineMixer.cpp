@@ -137,6 +137,44 @@ private:
     size_t _barbellIdHash;
 };
 
+class RemovePacketCacheJob : public jobmanager::CountedJob
+{
+public:
+    RemovePacketCacheJob(bridge::EngineMixer& mixer,
+        transport::RtcTransport& transport,
+        bridge::SsrcOutboundContext& outboundContext,
+        bridge::EngineMessageListener& mixerManager)
+        : CountedJob(transport.getJobCounter()),
+          _mixer(mixer),
+          _outboundContext(outboundContext),
+          _mixerManager(mixerManager),
+          _endpointIdHash(transport.getEndpointIdHash())
+    {
+    }
+
+    void run() override
+    {
+        if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
+        {
+            bridge::EngineMessage::Message message(bridge::EngineMessage::Type::FreeVideoPacketCache);
+            message.command.freeVideoPacketCache.mixer = &_mixer;
+            message.command.freeVideoPacketCache.ssrc = _outboundContext.ssrc;
+            message.command.freeVideoPacketCache.endpointIdHash = _endpointIdHash;
+
+            if (_mixerManager.onMessage(std::move(message)))
+            {
+                _outboundContext.packetCache.set(nullptr);
+            }
+        }
+    }
+
+private:
+    bridge::EngineMixer& _mixer;
+    bridge::SsrcOutboundContext& _outboundContext;
+    bridge::EngineMessageListener& _mixerManager;
+    size_t _endpointIdHash;
+};
+
 /**
  * @return true if this ssrc should be skipped and not forwarded to the videoStream.
  */
@@ -1019,8 +1057,8 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                 _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false);
                 inboundContext.inactiveCount++;
 
-                // The reason for checking if the ssrc is equal to inboundContext._rewriteSsrc, is because that is the
-                // default simulcast level. We don't want to drop the default level even if it's unstable.
+                // The reason for checking if the ssrc is equal to inboundContext._rewriteSsrc, is because that is
+                // the default simulcast level. We don't want to drop the default level even if it's unstable.
                 if (inboundContext.inactiveCount >= _config.dropInboundAfterInactive.get() &&
                     ssrc != inboundContext.rewriteSsrc)
                 {
@@ -1078,18 +1116,14 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                     videoStreamEntry.second->transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
                         videoStreamEntry.second->transport,
                         feedbackSsrc);
-                    videoStreamEntry.second->ssrcOutboundContexts.erase(feedbackSsrc);
                 }
 
                 // Pending jobs with reference to this ssrc context has had 30s to complete.
                 // Removing the video packet cache can crash unfinished jobs.
-                {
-                    EngineMessage::Message message(EngineMessage::Type::FreeVideoPacketCache);
-                    message.command.freeVideoPacketCache.mixer = this;
-                    message.command.freeVideoPacketCache.ssrc = outboundContextEntry.first;
-                    message.command.freeVideoPacketCache.endpointIdHash = videoStreamEntry.first;
-                    _messageListener.onMessage(std::move(message));
-                }
+                videoStreamEntry.second->transport.getJobQueue().addJob<RemovePacketCacheJob>(*this,
+                    videoStreamEntry.second->transport,
+                    outboundContext,
+                    _messageListener);
 
                 logger::info("Removing idle outbound context ssrc %u, endpointIdHash %lu",
                     _loggableId.c_str(),
@@ -1098,7 +1132,6 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                 videoStreamEntry.second->transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
                     videoStreamEntry.second->transport,
                     outboundContextEntry.first);
-                videoStreamEntry.second->ssrcOutboundContexts.erase(outboundContextEntry.first);
             }
         }
     }
@@ -1259,7 +1292,8 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
         _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrcContext->ssrc, true);
     }
 
-    // This must happen after checking ssrcContext->_activeMedia above, so that we can detect streamActiveStateChanged
+    // This must happen after checking ssrcContext->_activeMedia above, so that we can detect
+    // streamActiveStateChanged
     ssrcContext->onRtpPacket(timestamp);
 
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
@@ -1924,9 +1958,9 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
         _ssrcInboundContexts.emplace(ssrc, &emplaceResult.first->second);
 
-        logger::info(
-            "Created new inbound context for video stream ssrc %u, level %u, rewrite ssrc %u, endpointIdHash %lu, rtp "
-            "format %u, %s",
+        logger::info("Created new inbound context for video stream ssrc %u, level %u, rewrite ssrc %u, "
+                     "endpointIdHash %lu, rtp "
+                     "format %u, %s",
             _loggableId.c_str(),
             ssrc,
             level,
@@ -3688,8 +3722,8 @@ void EngineMixer::addBarbell(EngineBarbell* barbell)
 }
 
 // executed on transport thread context
-// occupying the transport thread context assures inbound ssrc contexts are not used by transport while removing them
-// we also assure all ssrcs are removed before erasing the barbell
+// occupying the transport thread context assures inbound ssrc contexts are not used by transport while removing
+// them we also assure all ssrcs are removed before erasing the barbell
 void EngineMixer::internalRemoveBarbell(size_t idHash)
 {
     auto barbell = _engineBarbells.getItem(idHash);
@@ -3697,8 +3731,6 @@ void EngineMixer::internalRemoveBarbell(size_t idHash)
     {
         return;
     }
-
-    barbell->transport.stop();
 
     for (auto& videoStream : barbell->videoStreams)
     {
@@ -3733,6 +3765,8 @@ void EngineMixer::removeBarbell(size_t idHash)
     {
         return;
     }
+
+    barbell->transport.stop();
 
     for (auto& videoStream : barbell->videoStreams)
     {

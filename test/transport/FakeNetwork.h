@@ -2,6 +2,7 @@
 #include "utils/SocketAddress.h"
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <queue>
 #include <thread>
 
@@ -104,21 +105,31 @@ private:
 class InternetRunner
 {
 public:
+    enum State
+    {
+        running = 1,
+        paused,
+        quit
+    };
+
     InternetRunner(uint64_t sleepTime);
     ~InternetRunner();
     void start();
-    void stop();
+    void pause();
+    void shutdown();
     std::shared_ptr<Internet> get();
-    bool isRunning() { return _isRunning; };
+    bool isRunning() const { return _state == running; };
+    bool isPaused() const { return _state == paused; }
+    State getState() const { return _state.load(); }
 
 private:
     void internetThreadRun();
     std::shared_ptr<Internet> _internet;
-    std::atomic_bool _isRunning;
-    std::atomic_bool _shouldStop;
-    std::unique_ptr<std::thread> _thread;
     std::mutex _mutex;
-    std::condition_variable _cv;
+    std::condition_variable _commandReady;
     const uint64_t _sleepTime;
+    std::atomic<State> _state;
+    std::atomic<State> _command;
+    std::unique_ptr<std::thread> _thread;
 };
 } // namespace fakenet

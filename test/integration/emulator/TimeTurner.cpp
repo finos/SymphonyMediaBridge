@@ -89,7 +89,7 @@ void TimeTurner::runFor(uint64_t durationNs)
         logger::awaitLogDrained(0.75);
         if (!_sleeperCountdown.wait(1000))
         {
-            logger::warn("Timeout waiting for threads to check", "TimeTurner");
+            logger::warn("Timeout waiting for threads to sleep", "TimeTurner");
             if (!_running)
             {
                 return;

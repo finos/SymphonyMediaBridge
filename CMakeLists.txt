@@ -33,7 +33,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "-stdlib=libc++ -O3 -DNDEBUG ${ADDITIONAL_CXX_FLAGS}
 set(CMAKE_C_FLAGS_DEBUG "-glldb -O0 -DDEBUG -Wall")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
 set(CMAKE_CXX_FLAGS_SYMRELEASE "-stdlib=libc++ -glldb -O2 -DNDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -fno-omit-frame-pointer -Wall -Wno-missing-braces -Wuninitialized -Wsign-compare")
-set(CMAKE_CXX_FLAGS_LCOV "-stdlib=libc++ -glldb -O0 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fno-omit-frame-pointer \
+set(CMAKE_CXX_FLAGS_LCOV "-stdlib=libc++ -glldb -O0 -DDEBUG -DLCOV_BUILD ${ADDITIONAL_CXX_FLAGS} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fno-omit-frame-pointer \
                           -fprofile-arcs -ftest-coverage -fprofile-instr-generate -fcoverage-mapping")
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)

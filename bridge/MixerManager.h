@@ -66,7 +66,7 @@ public:
 
     void stop();
     void run();
-    void onMessage(EngineMessage::Message&& message) override;
+    bool onMessage(EngineMessage::Message&& message) override;
     Stats::MixerManagerStats getStats();
 
 private:

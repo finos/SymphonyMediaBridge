@@ -45,10 +45,12 @@ struct IntegrationTest : public ::testing::Test
 
     void initBridge(config::Config& config);
 
+    void finalizeSimulationWithTimeout(uint64_t rampdownTimeout);
+    void finalizeSimulation();
+
 protected:
     void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
     void startSimulation();
-    void finalizeSimulation();
 
 protected:
     bool _internetStartedAtLeastOnce;
