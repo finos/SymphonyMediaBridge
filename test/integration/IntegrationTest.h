@@ -45,6 +45,7 @@ struct IntegrationTest : public ::testing::Test
 
     void initBridge(config::Config& config);
 
+    void finalizeSimulationWithTimeout(uint64_t rampdownTimeout);
     void finalizeSimulation();
 
 protected:
