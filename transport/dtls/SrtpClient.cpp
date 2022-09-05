@@ -51,6 +51,8 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
       _localSrtp(nullptr),
       _nullCipher(true),
       _eventSink(eventListener),
+      _rtpAntiSpam(10, 100),
+      _rtcpAntiSpam(10, 100),
       _pendingPackets(32)
 {
     assert(_ssl);
@@ -278,13 +280,16 @@ bool SrtpClient::unprotect(memory::Packet& packet)
         const auto result = srtp_unprotect(_remoteSrtp, packet.get(), &bufferLength);
         if (result != srtp_err_status_ok)
         {
-            const auto header = rtp::RtpHeader::fromPacket(packet);
-            logger::warn("Srtp unprotect error: %d, ssrc %u, seq %u, ts %u",
-                _loggableId.c_str(),
-                static_cast<int32_t>(result),
-                header != nullptr ? header->ssrc.get() : 0,
-                header != nullptr ? header->sequenceNumber.get() : 0,
-                header != nullptr ? header->timestamp.get() : 0);
+            if (_rtpAntiSpam.canLog())
+            {
+                const auto header = rtp::RtpHeader::fromPacket(packet);
+                logger::warn("srtp unprotect error: %d, ssrc %u, seq %u, ts %u",
+                    _loggableId.c_str(),
+                    static_cast<int32_t>(result),
+                    header != nullptr ? header->ssrc.get() : 0,
+                    header != nullptr ? header->sequenceNumber.get() : 0,
+                    header != nullptr ? header->timestamp.get() : 0);
+            }
             return false;
         }
     }
@@ -293,19 +298,29 @@ bool SrtpClient::unprotect(memory::Packet& packet)
         const auto result = srtp_unprotect_rtcp(_remoteSrtp, packet.get(), &bufferLength);
         if (result != srtp_err_status_ok)
         {
-            auto header = rtp::RtcpHeader::fromPacket(packet);
-            logger::warn("srtcp unprotect error type %u, %d",
-                _loggableId.c_str(),
-                header ? header->packetType : 0,
-                result);
-            if (header->packetType == rtp::RtcpPacketType::SENDER_REPORT)
+            if (_rtcpAntiSpam.canLog())
             {
-                auto sr = reinterpret_cast<rtp::RtcpSenderReport*>(header);
-                logger::warn("failed to decrypt SR %u", _loggableId.c_str(), static_cast<uint32_t>(sr->ssrc));
+                auto header = rtp::RtcpHeader::fromPacket(packet);
+                logger::warn("srtp unprotect error type %u, %d",
+                    _loggableId.c_str(),
+                    header ? header->packetType : 0,
+                    result);
+                if (header->packetType == rtp::RtcpPacketType::SENDER_REPORT)
+                {
+                    auto sr = reinterpret_cast<rtp::RtcpSenderReport*>(header);
+                    logger::warn("failed to decrypt SR %u", _loggableId.c_str(), static_cast<uint32_t>(sr->ssrc));
+                }
             }
             return false;
         }
     }
+    else
+    {
+        assert(false);
+        logger::error("packet is neither RTP nor RTCP. unprotect", _loggableId.c_str());
+        return false;
+    }
+
     packet.setLength(utils::checkedCast<size_t>(bufferLength));
     return true;
 }
@@ -360,8 +375,15 @@ bool SrtpClient::protect(memory::Packet& packet)
                 auto sr = reinterpret_cast<rtp::RtcpSenderReport*>(header);
                 logger::info("SR pkts %u", _loggableId.c_str(), static_cast<uint32_t>(sr->packetCount));
             }
+
             return false;
         }
+    }
+    else
+    {
+        assert(false);
+        logger::error("packet is neither RTP nor RTCP. protect", _loggableId.c_str());
+        return false;
     }
 
     packet.setLength(utils::checkedCast<size_t>(bufferLength));
