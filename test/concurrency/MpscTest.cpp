@@ -186,6 +186,9 @@ const int PRODUCER_COUNT = 5;
 
 TEST(Mpsc, DISABLED_mutexqueue)
 {
+#if LCOV_BUILD
+    GTEST_SKIP();
+#endif
     TransmissionReport reports[PRODUCER_COUNT];
     auto queue = new LockFullMpscQueue<Simple, 262144>();
     runQueueTest(1, PRODUCER_COUNT, *queue, reports, 4000);
@@ -205,6 +208,9 @@ TEST(Mpsc, DISABLED_mutexqueue)
 
 TEST(Mpsc, freequeue)
 {
+#if LCOV_BUILD
+    GTEST_SKIP();
+#endif
     TransmissionReport reports[PRODUCER_COUNT];
     auto queue = new MpmcQueue<Simple>(262144);
     runQueueTest(1, PRODUCER_COUNT, *queue, reports, 4000);
@@ -223,6 +229,9 @@ TEST(Mpsc, freequeue)
 
 TEST(Mpsc, freequeueSmall)
 {
+#if LCOV_BUILD
+    GTEST_SKIP();
+#endif
     TransmissionReport reports[PRODUCER_COUNT];
     auto queue = new MpmcQueue<SimpleSmall>(262144);
     runQueueTest(1, PRODUCER_COUNT, *queue, reports, 4000);
@@ -241,6 +250,9 @@ TEST(Mpsc, freequeueSmall)
 
 TEST(Mpmc, DISABLED_mutexqueue)
 {
+#if LCOV_BUILD
+    GTEST_SKIP();
+#endif
     TransmissionReport reports[PRODUCER_COUNT];
     auto queue = new LockFullMpscQueue<Simple, 262144>();
     runQueueTest(3, PRODUCER_COUNT, *queue, reports, 4000);
@@ -260,6 +272,9 @@ TEST(Mpmc, DISABLED_mutexqueue)
 
 TEST(Mpmc, freequeue)
 {
+#if LCOV_BUILD
+    GTEST_SKIP();
+#endif
     TransmissionReport reports[PRODUCER_COUNT];
     auto queue = new MpmcQueue<Simple>(262144 * 2);
     runQueueTest(3, PRODUCER_COUNT, *queue, reports, 4000);
@@ -277,6 +292,9 @@ TEST(Mpmc, freequeue)
 
 TEST(Mpmc, freequeueSmall)
 {
+#if LCOV_BUILD
+    GTEST_SKIP();
+#endif
     TransmissionReport reports[PRODUCER_COUNT];
     auto queue = new MpmcQueue<SimpleSmall>(262144);
     runQueueTest(3, PRODUCER_COUNT, *queue, reports, 4000);
