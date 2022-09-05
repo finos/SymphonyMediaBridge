@@ -90,16 +90,16 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
       _defaultListener(nullptr),
       _network(network),
       _networkLinkAllocator(8092, "networkLink"),
-      _networkLink(9000, 1950 * 1024, 3000)
+      _networkLink(std::make_shared<fakenet::NetworkLink>(_name.c_str(), 9000, 1950 * 1024, 3000))
 {
     _state = Endpoint::CREATED;
     _pendingRead.clear();
-    _networkLink.setStaticDelay(0);
+    _networkLink->setStaticDelay(0);
 }
 
 FakeUdpEndpoint::~FakeUdpEndpoint()
 {
-    logger::warn("~FakeUdpEndpoint, pending packets in the network link %zu", _name.c_str(), _networkLink.count());
+    logger::warn("~FakeUdpEndpoint, pending packets in the network link %zu", _name.c_str(), _networkLink->count());
 }
 
 // ice::IceEndpoint
@@ -371,7 +371,7 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& source,
 {
     assert(hasIp(target));
 
-    _networkLink.push(serializeInbound(source, data, length), timestamp);
+    _networkLink->push(serializeInbound(source, data, length), timestamp);
 }
 
 bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
@@ -390,7 +390,7 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
     }
 
     // Retrieve those packets that are due to releasing after delay.
-    for (auto packet = _networkLink.pop(timestamp); packet; packet = _networkLink.pop(timestamp))
+    for (auto packet = _networkLink->pop(timestamp); packet; packet = _networkLink->pop(timestamp))
     {
         _receiveQueue.push(deserializeInbound(std::move(packet)));
 

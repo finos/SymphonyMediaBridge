@@ -453,6 +453,8 @@ set(TEST_FILES
     test/integration/SampleDataUtils.cpp
     test/integration/IntegrationTest.cpp
     test/integration/IntegrationTest.h
+    test/integration/BarbellTest.cpp
+    test/integration/BarbellTest.h
 #    test/integration/MixerTimeoutTest.cpp
 #    test/integration/StatsTest.cpp
     test/sctp/SctpEndpoint.h

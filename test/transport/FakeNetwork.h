@@ -1,9 +1,12 @@
 #pragma once
+#include "NetworkLink.h"
 #include "utils/SocketAddress.h"
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <thread>
 
 namespace fakenet
@@ -21,6 +24,7 @@ public:
         uint64_t timestamp) = 0;
     virtual bool hasIp(const transport::SocketAddress& target) = 0;
     virtual void process(uint64_t timestamp){};
+    virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() { return nullptr; }
 };
 
 struct Packet
@@ -48,6 +52,8 @@ class Gateway : public NetworkNode
 public:
     virtual void addLocal(NetworkNode* node) = 0;
     virtual void addPublic(NetworkNode* endpoint) = 0;
+    virtual std::vector<NetworkNode*>& getLocalNodes() = 0;
+    virtual std::vector<NetworkNode*>& getPublicNodes() = 0;
 
     virtual void sendTo(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
@@ -68,6 +74,9 @@ public:
     void addPublic(NetworkNode* node) override { _nodes.push_back(node); }
     void process(uint64_t timestamp) override;
 
+    virtual std::vector<NetworkNode*>& getLocalNodes() override { return _nodes; };
+    virtual std::vector<NetworkNode*>& getPublicNodes() override { return _nodes; };
+
 private:
     std::vector<NetworkNode*> _nodes;
 };
@@ -86,6 +95,9 @@ public:
     void process(uint64_t timestamp) override;
 
     bool addPortMapping(const transport::SocketAddress& source, int publicPort);
+
+    virtual std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
+    virtual std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
 
 private:
     void sendToPublic(const transport::SocketAddress& source,
@@ -132,4 +144,7 @@ private:
     std::atomic<State> _command;
     std::unique_ptr<std::thread> _thread;
 };
+
+std::map<std::string, std::shared_ptr<NetworkLink>> getMapOfInternet(std::shared_ptr<Gateway> internet);
+
 } // namespace fakenet

@@ -330,7 +330,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
 
     std::array<std::string, 56> trace = {"Transport-5", "Transport-20", "Transport-17"};
     memory::PacketPoolAllocator allocator(8092, "rerun");
-    fakenet::NetworkLink link(GetParam(), 1950 * 1024, 3000);
+    fakenet::NetworkLink link("EstimatorReRunLink", GetParam(), 1950 * 1024, 3000);
     link.setLossRate(0);
     uint64_t wallClock = 0;
     const char* formatLine = "%u, %.1f,%.1f,%.f,%.3f,%.3f,%u,%u,%.6f, %.2f";

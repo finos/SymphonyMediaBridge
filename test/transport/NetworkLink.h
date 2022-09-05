@@ -7,6 +7,7 @@
 #include <inttypes.h>
 #include <mutex>
 #include <queue>
+#include <string>
 #include <unistd.h>
 
 namespace memory
@@ -18,8 +19,9 @@ namespace fakenet
 class NetworkLink
 {
 public:
-    explicit NetworkLink(uint32_t bandwidthKbps, size_t bufferSize, size_t mtu)
-        : _releaseTime(0),
+    explicit NetworkLink(std::string name, uint32_t bandwidthKbps, size_t bufferSize, size_t mtu)
+        : _name(name),
+          _releaseTime(0),
           _bandwidthKbps(bandwidthKbps),
           _staticDelay(0),
           _mtu(mtu),
@@ -56,11 +58,14 @@ public:
     uint32_t getBandwidthKbps() const { return _bandwidthKbps; }
     void setBandwidthKbps(uint32_t bandwidth) { _bandwidthKbps = bandwidth; }
 
+    std::string getName() const { return _name; }
+
     static const int IPOVERHEAD = 20 + 14; // IP and DTLS header
 private:
     void addBurstDelay();
     memory::UniquePacket popDelayQueue(uint64_t timestamp);
 
+    std::string _name;
     std::queue<memory::UniquePacket> _queue;
     uint64_t _releaseTime;
     uint32_t _bandwidthKbps;

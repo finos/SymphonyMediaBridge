@@ -1,5 +1,6 @@
 #pragma once
 
+#include "api/ConferenceEndpoint.h"
 #include "bridge/Bridge.h"
 #include "config/Config.h"
 #include "emulator/TimeTurner.h"
@@ -12,6 +13,27 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <mutex>
+
+#define DEFINE_3_CLIENT_CONFERENCE(TChannel, BASE_URL)                                                                 \
+    Conference conf;                                                                                                   \
+    conf.create(BASE_URL);                                                                                             \
+    EXPECT_TRUE(conf.isSuccess());                                                                                     \
+    utils::Time::rawNanoSleep(1 * utils::Time::sec);                                                                   \
+    SfuClient<TChannel> client1(++_instanceCounter,                                                                    \
+        *_mainPoolAllocator,                                                                                           \
+        _audioAllocator,                                                                                               \
+        *_transportFactory,                                                                                            \
+        *_sslDtls);                                                                                                    \
+    SfuClient<TChannel> client2(++_instanceCounter,                                                                    \
+        *_mainPoolAllocator,                                                                                           \
+        _audioAllocator,                                                                                               \
+        *_transportFactory,                                                                                            \
+        *_sslDtls);                                                                                                    \
+    SfuClient<TChannel> client3(++_instanceCounter,                                                                    \
+        *_mainPoolAllocator,                                                                                           \
+        _audioAllocator,                                                                                               \
+        *_transportFactory,                                                                                            \
+        *_sslDtls);
 
 struct IntegrationTest : public ::testing::Test
 {
@@ -35,7 +57,8 @@ struct IntegrationTest : public ::testing::Test
 
     std::unique_ptr<transport::TransportFactory> _transportFactory;
     std::shared_ptr<fakenet::InternetRunner> _internet;
-    std::shared_ptr<transport::EndpointFactory> _endpointFacory;
+    std::shared_ptr<transport::EndpointFactory> _bridgeEndpointFactory;
+    std::shared_ptr<transport::EndpointFactory> _clientsEndpointFacory;
 
     uint32_t _instanceCounter;
     const size_t _numWorkerThreads;
@@ -48,6 +71,17 @@ struct IntegrationTest : public ::testing::Test
     void finalizeSimulationWithTimeout(uint64_t rampdownTimeout);
     void finalizeSimulation();
 
+public:
+    static bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint);
+    static std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(const char* baseUrl);
+    static api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(const char* baseUrl,
+        const std::string& endpointId);
+    static void analyzeRecording(const std::vector<int16_t>& recording,
+        std::vector<double>& frequencyPeaks,
+        std::vector<std::pair<uint64_t, double>>& amplitudeProfile,
+        const char* logId,
+        uint64_t cutAtTime = 0);
+
 protected:
     void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
     void startSimulation();
@@ -56,6 +90,27 @@ protected:
     bool _internetStartedAtLeastOnce;
     emulator::TimeTurner _timeSource;
 
+    struct NetworkLinkInfo
+    {
+        fakenet::NetworkLink* ptrLink;
+        transport::SocketAddress address;
+    };
+
+    std::map<std::string, NetworkLinkInfo> _endpointNetworkLinkMap;
+
 private:
     size_t getNumWorkerThreads();
 };
+
+namespace
+{
+class ScopedFinalize
+{
+public:
+    explicit ScopedFinalize(std::function<void()> finalizeMethod) : _method(finalizeMethod) {}
+    ~ScopedFinalize() { _method(); }
+
+private:
+    std::function<void()> _method;
+};
+} // namespace

@@ -351,6 +351,12 @@ public:
             }
 
             auto& inboundContext = it->second;
+
+            if (!inboundContext.videoMissingPacketsTracker)
+            {
+                inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>(10);
+            }
+
             inboundContext.onRtpPacket(timestamp);
 
             if (!sender->unprotect(packet))

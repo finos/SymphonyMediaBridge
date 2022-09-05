@@ -240,4 +240,20 @@ void InternetRunner::internetThreadRun()
         }
     }
 }
+
+std::map<std::string, std::shared_ptr<NetworkLink>> getMapOfInternet(std::shared_ptr<Gateway> internet)
+{
+    std::map<std::string, std::shared_ptr<NetworkLink>> internetMap;
+    for (const auto& node : internet->getLocalNodes())
+    {
+        const auto downlink = node->getDownlink();
+        internetMap.emplace(downlink->getName(), downlink);
+    }
+    for (const auto& node : internet->getPublicNodes())
+    {
+        const auto downlink = node->getDownlink();
+        internetMap.emplace(downlink->getName(), downlink);
+    }
+    return internetMap;
+}
 } // namespace fakenet

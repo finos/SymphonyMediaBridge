@@ -4,7 +4,11 @@
 
 namespace emulator
 {
-FakeEndpointFactory::FakeEndpointFactory(std::shared_ptr<fakenet::Gateway> network) : _network(network) {}
+FakeEndpointFactory::FakeEndpointFactory(std::shared_ptr<fakenet::Gateway> network, EndpointCallback callback)
+    : _network(network),
+      _callback(callback)
+{
+}
 
 transport::UdpEndpoint* FakeEndpointFactory::createUdpEndpoint(jobmanager::JobManager& jobManager,
     size_t maxSessionCount,
@@ -16,6 +20,8 @@ transport::UdpEndpoint* FakeEndpointFactory::createUdpEndpoint(jobmanager::JobMa
     auto endpoint =
         new emulator::FakeUdpEndpoint(jobManager, maxSessionCount, allocator, localPort, epoll, isShared, _network);
     _network->addLocal(static_cast<fakenet::NetworkNode*>(endpoint));
+
+    _callback(endpoint->getDownlink(), localPort, endpoint->getName());
 
     return static_cast<transport::UdpEndpoint*>(endpoint);
 }
