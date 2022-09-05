@@ -116,7 +116,7 @@ public:
     ~InternetRunner();
     void start();
     void pause();
-    void exit();
+    void shutdown();
     std::shared_ptr<Internet> get();
     bool isRunning() const { return _state == running; };
     bool isPaused() const { return _state == paused; }

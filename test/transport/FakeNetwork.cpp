@@ -192,7 +192,7 @@ InternetRunner::InternetRunner(const uint64_t sleepTime)
 
 InternetRunner::~InternetRunner()
 {
-    exit();
+    shutdown();
     _thread->join();
 }
 
@@ -210,7 +210,7 @@ void InternetRunner::pause()
     _commandReady.notify_all();
 }
 
-void InternetRunner::exit()
+void InternetRunner::shutdown()
 {
     std::lock_guard<std::mutex> lock(_mutex);
     _command = quit;
