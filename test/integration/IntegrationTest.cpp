@@ -290,15 +290,29 @@ void IntegrationTest::startSimulation()
 #endif
 }
 
-void IntegrationTest::finalizeSimulation()
+void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
 {
     _internet->pause();
+
+    // Stopped the internet, but allow some process to finish.
+    const auto now = _timeSource.getAbsoluteTime();
+    const auto step = 500 * utils::Time::us;
+    for (auto t = now; t < now + rampdownTimeout; t += step)
+    {
+        utils::Time::nanoSleep(step);
+    }
+    // And switch to real time source.
     utils::Time::initialize();
     while (!_internet->isPaused())
     {
         utils::Time::rawNanoSleep(utils::Time::ms);
     }
     _timeSource.shutdown();
+}
+
+void IntegrationTest::finalizeSimulation()
+{
+    finalizeSimulationWithTimeout(0);
 }
 
 namespace
@@ -1535,7 +1549,7 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         initBridge(_config);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulationWithTimeout, this, utils::Time::sec));
         startSimulation();
 
         const auto baseUrl = "http://127.0.0.1:8080";
