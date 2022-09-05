@@ -985,7 +985,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
     {
         if (contentType == ContentType::Audio)
         {
-            if (!mixer.addAudioStream(channelId, endpointId, iceRole, mixed, channel.isRelayTypeRewrite()))
+            if (!mixer.addAudioStream(channelId, endpointId, iceRole, mixed, channel.isRelayTypeRewrite(), true))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
@@ -993,7 +993,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
         }
         else if (contentType == ContentType::Video)
         {
-            if (!mixer.addVideoStream(channelId, endpointId, iceRole, channel.isRelayTypeRewrite()))
+            if (!mixer.addVideoStream(channelId, endpointId, iceRole, channel.isRelayTypeRewrite(), true))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;

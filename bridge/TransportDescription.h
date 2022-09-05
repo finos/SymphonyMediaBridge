@@ -31,7 +31,9 @@ struct TransportDescription
     {
     }
 
-    TransportDescription(const transport::SocketAddress& localPeer, const bool isDtlsClient) : dtls(Dtls{isDtlsClient})
+    TransportDescription(const transport::SocketAddress& localPeer, const bool isDtlsClient)
+        : localPeer(localPeer),
+          dtls(Dtls{isDtlsClient})
     {
     }
 
