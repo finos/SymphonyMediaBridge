@@ -336,10 +336,11 @@ void MixerManager::run()
     }
 }
 
-void MixerManager::onMessage(EngineMessage::Message&& message)
+bool MixerManager::onMessage(EngineMessage::Message&& message)
 {
-    auto rc = _engineMessages.push(std::move(message));
-    assert(rc);
+    auto messagePosted = _engineMessages.push(std::move(message));
+    assert(messagePosted);
+    return messagePosted;
 }
 
 void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& message)
