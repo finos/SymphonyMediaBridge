@@ -1389,7 +1389,8 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
     const bool mustBeForwardedOnBarbells = isSenderInLastNList && !_engineBarbells.empty() && !isFromBarbell;
 
-    if (!mustBeForwardedOnBarbells &&
+    // Optmization with isSsrcUsed is not need for barbell (barbell sends only necessary streams).
+    if (videoStream && !mustBeForwardedOnBarbells &&
         !_engineStreamDirector->isSsrcUsed(mainSsrc,
             videoStream->endpointIdHash,
             isSenderInLastNList,
@@ -1397,6 +1398,11 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     {
         return;
     }
+
+    logger::debug("!!! onVideoRtpRtxPacketReceived : %c sender %s",
+        _loggableId.c_str(),
+        isFromBarbell ? 't' : 'f',
+        sender->getLoggableId().c_str());
 
     sender->getJobQueue().addJob<bridge::VideoForwarderRtxReceiveJob>(std::move(packet),
         sender,
@@ -2622,11 +2628,55 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         return;
     }
 
+    const auto fromBarbell = EngineBarbell::isFromBarbell(transport->getTag());
     logger::debug("!!! processIncomingTransportFbRtcpPacket NACK received: %c",
         _loggableId.c_str(),
-        EngineBarbell::isFromBarbell(transport->getTag()) ? 't' : 'f');
+        fromBarbell ? 't' : 'f');
 
     const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
+
+    if (fromBarbell)
+    {
+        const auto bb = _engineBarbells.getItem(transport->getEndpointIdHash());
+        if (bb)
+        {
+            uint32_t feedbackSsrc;
+            _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc);
+
+            auto& bbTransport = bb->transport;
+            auto* mediaSsrcOutboundContext =
+                obtainOutboundSsrcContext(bb->idHash, bb->ssrcOutboundContexts, mediaSsrc, bb->audioRtpMap);
+            if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
+                !mediaSsrcOutboundContext->packetCache.get())
+            {
+                return;
+            }
+
+            auto* feedbackSsrcOutboundContext =
+                obtainOutboundSsrcContext(bb->idHash, bb->ssrcOutboundContexts, feedbackSsrc, bb->audioRtpMap);
+            if (feedbackSsrcOutboundContext)
+            {
+                mediaSsrcOutboundContext->onRtpSent(timestamp);
+                const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
+                uint16_t pid = 0;
+                uint16_t blp = 0;
+                for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+                {
+                    feedbackSsrcOutboundContext->onRtpSent(timestamp);
+                    rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+                    bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+                        bbTransport,
+                        *(mediaSsrcOutboundContext->packetCache.get()),
+                        pid,
+                        blp,
+                        feedbackSsrc,
+                        timestamp,
+                        transport->getRtt());
+                }
+            }
+        }
+        return;
+    }
 
     auto rtcpSenderVideoStreamItr = _engineVideoStreams.find(transport->getEndpointIdHash());
     if (rtcpSenderVideoStreamItr == _engineVideoStreams.end())
