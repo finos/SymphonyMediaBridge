@@ -921,18 +921,11 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
         {
             continue;
         }
-        auto videoMissingPacketsTracker = ssrcInboundContext.videoMissingPacketsTracker.get();
-        if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp / 1000000ULL))
+        auto videoStream = _engineVideoStreams.getItem(ssrcInboundContext.sender->getEndpointIdHash());
+        if (!videoStream)
         {
             continue;
         }
-
-        auto videoStreamItr = _engineVideoStreams.find(ssrcInboundContext.sender->getEndpointIdHash());
-        if (videoStreamItr == _engineVideoStreams.end())
-        {
-            continue;
-        }
-        auto videoStream = videoStreamItr->second;
 
         videoStream->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
             videoStream->localSsrc,
