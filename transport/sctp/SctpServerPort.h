@@ -2,8 +2,10 @@
 
 #include "logger/Logger.h"
 #include "utils/ByteOrder.h"
+#include "utils/MersienneRandom.h"
 #include <cstddef>
 #include <cstdint>
+
 namespace crypto
 {
 class HMAC;
@@ -84,6 +86,7 @@ private:
     uint8_t _key1[20];
     uint8_t _key2[20];
     uint64_t _nextKeyRotation;
+    utils::MersienneRandom<uint32_t> _randomGenerator;
 };
 
 class SctpCookie

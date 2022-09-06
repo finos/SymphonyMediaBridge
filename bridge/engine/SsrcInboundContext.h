@@ -47,7 +47,8 @@ public:
           lastReceiveTime(timestamp),
           shouldDropPackets(false),
           inactiveCount(0),
-          simulcastLevel(0)
+          simulcastLevel(0),
+          isSsrcUsed(true)
     {
     }
 
@@ -60,7 +61,7 @@ public:
     uint32_t ssrc;
     const bridge::RtpMap rtpMap;
     transport::RtcTransport* sender;
-   
+
     std::unique_ptr<codec::OpusDecoder> opusDecoder;
 
     bool markNextPacket;
@@ -83,6 +84,8 @@ public:
 
     PliScheduler pliScheduler;
     uint32_t simulcastLevel;
+    std::atomic_bool isSsrcUsed; // for early discarding of video
+    std::atomic_size_t endpointIdHash;
 };
 
 } // namespace bridge

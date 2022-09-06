@@ -39,22 +39,22 @@
 IntegrationTest::IntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
       _audioAllocator(memory::packetPoolSize, "IntegrationTestAudio"),
-      _jobManager(std::make_unique<jobmanager::JobManager>()),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(nullptr),
       _network(transport::createRtcePoll()),
       _pacer(10 * utils::Time::ms),
       _instanceCounter(0),
-      _numWorkerThreads(getNumWorkerThreads())
+      _numWorkerThreads(2 * getNumWorkerThreads())
 {
 }
 
+// TimeTurner time source must be set before starting any threads.
+// Fake internet thread, JobManager timer thread, worker threads.
 void IntegrationTest::SetUp()
 {
-
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
-        GTEST_SKIP();
+        // GTEST_SKIP();
     }
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
@@ -62,12 +62,12 @@ void IntegrationTest::SetUp()
 
     using namespace std;
 
-    _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
-
 #if USE_FAKENETWORK
     utils::Time::initialize(_timeSource);
 #endif
 
+    _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
+    _jobManager = std::make_unique<jobmanager::JobManager>();
     for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
@@ -78,7 +78,7 @@ void IntegrationTest::TearDown()
 {
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
-        GTEST_SKIP();
+        // GTEST_SKIP();
     }
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
@@ -93,6 +93,7 @@ void IntegrationTest::TearDown()
     }
 
     assert(!_internet->isRunning());
+    _internet.reset();
 
     logger::info("IntegrationTest torn down", "IntegrationTest");
 }
@@ -267,17 +268,25 @@ bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const
 
 void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::function<void()> test)
 {
+    // allow internet thread to forward packets next time it wakes up.
 #if USE_FAKENETWORK
-    // Start internet here, before runFor(...) so it goes into "nanoSleep".
     _internet->start();
 #endif
 
+    // run test in thread that will also sleep at TimeTurner
     std::thread runner([test] { test(); });
 
-    _timeSource.waitForThreadsToSleep(expectedNumThreads, 5 * utils::Time::sec);
+    _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
 
 #if USE_FAKENETWORK
+    // run for 80s or until test runner thread stops the time run
     _timeSource.runFor(80 * utils::Time::sec);
+
+    // all threads are asleep. Switch to real time
+    utils::Time::initialize();
+
+    // release all sleeping threads into real time to finish the test
+    _timeSource.shutdown();
 #endif
     runner.join();
 }
@@ -301,13 +310,15 @@ void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
     {
         utils::Time::nanoSleep(step);
     }
-    // And switch to real time source.
-    utils::Time::initialize();
+
     while (!_internet->isPaused())
     {
-        utils::Time::rawNanoSleep(utils::Time::ms);
+        utils::Time::nanoSleep(utils::Time::ms * 10);
     }
-    _timeSource.shutdown();
+
+    // stop time turner and it will await all threads to fall asleep, including me
+    _timeSource.stop();
+    utils::Time::nanoSleep(utils::Time::ms * 10);
 }
 
 void IntegrationTest::finalizeSimulation()
@@ -330,7 +341,7 @@ private:
 
 TEST_F(IntegrationTest, plain)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(_numWorkerThreads + 6, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -340,7 +351,7 @@ TEST_F(IntegrationTest, plain)
         initBridge(_config);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
+        // startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 

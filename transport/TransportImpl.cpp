@@ -1427,12 +1427,12 @@ uint32_t TransportImpl::getDownlinkEstimateKbps() const
 
 uint32_t TransportImpl::getPacingQueueCount() const
 {
-    return _pacingQueue.size();
+    return _pacingQueueStats.pacingQueueSize;
 }
 
 uint32_t TransportImpl::getRtxPacingQueueCount() const
 {
-    return _rtxPacingQueue.size();
+    return _pacingQueueStats.rtxPacingQueueSize;
 }
 
 void TransportImpl::doProtectAndSend(uint64_t timestamp,
@@ -2462,6 +2462,8 @@ void TransportImpl::doRunTick(const uint64_t timestamp)
         sendPadding(timestamp);
     }
     _pacingInUse = !_pacingQueue.empty() || !_rtxPacingQueue.empty();
+    _pacingQueueStats.pacingQueueSize = _pacingQueue.size();
+    _pacingQueueStats.rtxPacingQueueSize = _rtxPacingQueue.size();
 }
 
 memory::UniquePacket TransportImpl::tryFetchPriorityPacket(size_t budget)

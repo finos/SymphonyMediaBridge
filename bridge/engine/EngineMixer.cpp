@@ -896,6 +896,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     runDominantSpeakerCheck(engineIterationStartTimestamp);
     sendMessagesToNewDataStreams();
+    markSsrcsInUse();
     processMissingPackets(engineIterationStartTimestamp); // must run after checkPacketCounters
 
     // 3. Update bandwidth estimates
@@ -963,6 +964,20 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
     if (audioMapChanged || videoMapChanged)
     {
         sendUserMediaMapMessageOverBarbells();
+    }
+}
+
+void EngineMixer::markSsrcsInUse()
+{
+    for (auto& it : _ssrcInboundContexts)
+    {
+        auto inboundContext = it.second;
+        const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(inboundContext->endpointIdHash);
+
+        inboundContext->isSsrcUsed = !_engineStreamDirector->isSsrcUsed(inboundContext->ssrc,
+            inboundContext->endpointIdHash,
+            isSenderInLastNList,
+            _engineRecordingStreams.size());
     }
 }
 
@@ -1299,14 +1314,12 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
     const bool mustBeForwardedOnBarbells = isSenderInLastNList && !_engineBarbells.empty() && !isFromBarbell;
 
-    if (!mustBeForwardedOnBarbells &&
-        !_engineStreamDirector->isSsrcUsed(ssrcContext->ssrc,
-            endpointIdHash,
-            isSenderInLastNList,
-            _engineRecordingStreams.size()))
+    if (!mustBeForwardedOnBarbells && !ssrcContext->isSsrcUsed.load())
     {
         return;
     }
+
+    ssrcContext->endpointIdHash = packet->endpointIdHash;
 
     sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(std::move(packet),
         _sendAllocator,

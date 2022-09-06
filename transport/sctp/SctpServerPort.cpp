@@ -8,10 +8,6 @@
 #include "utils/MersienneRandom.h"
 namespace sctp
 {
-namespace
-{
-utils::MersienneRandom<uint32_t> g_randomGenerator;
-}
 
 SctpCookie::SctpCookie()
     : outboundStreams(0),
@@ -86,10 +82,10 @@ SctpServerPort::SctpServerPort(size_t logId,
 void SctpServerPort::rotateKeys()
 {
     std::memcpy(_key2, _key1, sizeof(_key2));
-    const auto dummyFragment = g_randomGenerator.next();
+    const auto dummyFragment = _randomGenerator.next();
     for (size_t i = 0; i < sizeof(_key1); i += sizeof(dummyFragment))
     {
-        auto keyFragment = g_randomGenerator.next();
+        auto keyFragment = _randomGenerator.next();
         for (size_t j = 0; j < sizeof(keyFragment); ++j)
         {
             _key1[j + i] = keyFragment;
@@ -166,7 +162,7 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
             }
             logger::debug("INIT contains param %x, %u", "sctp", param.type.get(), param.length.get());
         }
-        auto localTag = g_randomGenerator.next();
+        auto localTag = _randomGenerator.next();
         uint16_t inboundStreams = 0;
         uint16_t outboundStreams = 0;
         if (_listener
