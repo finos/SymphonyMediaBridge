@@ -108,11 +108,7 @@ void getThreadName(char* name, size_t& length)
 
 void getThreadName(pthread_t threadId, char* name, size_t& length)
 {
-#ifdef __APPLE__
-    auto rc = pthread_getname_np(name, length);
-#else
-    auto rc = pthread_getname_np(threadId, name, length);
-#endif
+    const auto rc = pthread_getname_np(threadId, name, length);
     if (rc < 0)
     {
         name[0] = '\0';
