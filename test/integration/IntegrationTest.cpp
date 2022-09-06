@@ -44,7 +44,7 @@ IntegrationTest::IntegrationTest()
       _network(transport::createRtcePoll()),
       _pacer(10 * utils::Time::ms),
       _instanceCounter(0),
-      _numWorkerThreads(2 * getNumWorkerThreads())
+      _numWorkerThreads(getNumWorkerThreads())
 {
 }
 
@@ -289,6 +289,7 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     _timeSource.shutdown();
 #endif
     runner.join();
+    logger::debug("test out", "");
 }
 
 void IntegrationTest::startSimulation()
@@ -341,7 +342,7 @@ private:
 
 TEST_F(IntegrationTest, plain)
 {
-    runTestInThread(_numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -524,7 +525,7 @@ TEST_F(IntegrationTest, plain)
 
 TEST_F(IntegrationTest, audioOnlyNoPadding)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(_numWorkerThreads + 6, [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
         initBridge(_config);
@@ -577,7 +578,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
 TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
@@ -688,7 +689,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
 TEST_F(IntegrationTest, videoOffPaddingOff)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         /*
            Test checks that after video is off and cooldown interval passed, no padding will be sent for the
            call that became audio-only.
@@ -793,7 +794,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
 TEST_F(IntegrationTest, plainNewApi)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -975,7 +976,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
 TEST_F(IntegrationTest, ptime10)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1190,7 +1191,7 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
 
 TEST_F(IntegrationTest, simpleBarbell)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 8, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1368,7 +1369,7 @@ TEST_F(IntegrationTest, simpleBarbell)
 
 TEST_F(IntegrationTest, barbellAfterClients)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 8, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1551,7 +1552,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
 
 TEST_F(IntegrationTest, detectIsPtt)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 4, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
