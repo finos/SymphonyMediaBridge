@@ -6,7 +6,9 @@
 namespace emulator
 {
 
-TimeTurner::TimeTurner() : _timestamp(100), _startTime(std::chrono::system_clock::now()), _running(true) {}
+TimeTurner::TimeTurner() : _timestamp(100), _startTime(std::chrono::system_clock::now()), _running(true), _abort(false)
+{
+}
 
 void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
 {
@@ -45,7 +47,8 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
 
 std::chrono::system_clock::time_point TimeTurner::wallClock()
 {
-    return _startTime + std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(_timestamp));
+    return _startTime +
+        std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(_timestamp.load()));
 }
 
 /**
@@ -56,9 +59,10 @@ void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutN
 {
     const int MAX_ITERATIONS = 1000;
     const auto interval = timeoutNs / MAX_ITERATIONS;
+    uint32_t count = 0;
     for (int i = 0; i < MAX_ITERATIONS; ++i)
     {
-        uint32_t count = 0;
+        count = 0;
         for (auto& slot : _sleepers)
         {
             if (slot.state.load() == State::Sleeping)
@@ -73,6 +77,7 @@ void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutN
 
         utils::Time::rawNanoSleep(interval);
     }
+    logger::warn("%u threads asleep. Expected %u", "TimeTurner", count, expectedCount);
 }
 
 /**
@@ -83,7 +88,7 @@ void TimeTurner::runFor(uint64_t durationNs)
 {
     const auto startTime = getAbsoluteTime();
 
-    for (auto timestamp = getAbsoluteTime(); utils::Time::diffLE(startTime, timestamp, durationNs);
+    for (auto timestamp = getAbsoluteTime(); !_abort && utils::Time::diffLE(startTime, timestamp, durationNs);
          timestamp = getAbsoluteTime())
     {
         logger::awaitLogDrained(0.75);
@@ -92,6 +97,7 @@ void TimeTurner::runFor(uint64_t durationNs)
             logger::warn("Timeout waiting for threads to sleep", "TimeTurner");
             if (!_running)
             {
+                _abortSemaphore.post();
                 return;
             }
         }
@@ -101,10 +107,15 @@ void TimeTurner::runFor(uint64_t durationNs)
     _sleeperCountdown.wait();
 }
 
+void TimeTurner::stop()
+{
+    _abort = true;
+}
+
 void TimeTurner::advance()
 {
     int64_t minDuration = std::numeric_limits<int64_t>::max();
-    const auto timestamp = _timestamp;
+    const auto timestamp = _timestamp.load();
 
     Sleeper* minItem = nullptr;
     for (auto& slot : _sleepers)

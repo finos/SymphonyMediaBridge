@@ -3,6 +3,7 @@
 #include "Sctprotocol.h"
 #include "logger/Logger.h"
 #include "memory/RingAllocator.h"
+#include "utils/MersienneRandom.h"
 #include <list>
 #include <map>
 #include <unordered_map>
@@ -170,6 +171,7 @@ private:
     void onHeartbeatResponse(const SctpPacket& sctpPacket, uint64_t timestamp);
 
     logger::LoggableId _loggableId;
+    utils::MersienneRandom<uint32_t> _randomGenerator;
     const SctpConfig& _config;
     SctpServerPort& _transport;
     IEvents* _listener;

@@ -268,6 +268,8 @@ public:
         _transport->connect();
     }
 
+    void disconnect() { _channel.disconnect(); }
+
     void process(uint64_t timestamp) { process(timestamp, true); }
 
     void process(uint64_t timestamp, bool sendVideo)
@@ -1028,6 +1030,14 @@ public:
     {
         clients.emplace_back(
             std::make_unique<TClient>(++_idCounter, _allocator, _audioAllocator, _transportFactory, _sslDtls));
+    }
+
+    void disconnectClients()
+    {
+        for (auto& client : clients)
+        {
+            client->disconnect();
+        }
     }
 
     std::vector<std::unique_ptr<TClient>> clients;

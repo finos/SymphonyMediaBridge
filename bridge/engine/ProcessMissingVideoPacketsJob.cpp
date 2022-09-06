@@ -21,19 +21,21 @@ ProcessMissingVideoPacketsJob::ProcessMissingVideoPacketsJob(SsrcInboundContext&
 {
 }
 
+// We check existence of packet tracker here because we run on the transport thread context, which is the context
+// that also adds the packet tracker
 void ProcessMissingVideoPacketsJob::run()
 {
-    if (!_ssrcContext.videoMissingPacketsTracker.get())
+    auto timestamp = utils::Time::getAbsoluteTime();
+    auto videoMissingPacketsTracker = _ssrcContext.videoMissingPacketsTracker.get();
+    if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp / 1000000ULL))
     {
-        assert(false);
         return;
     }
 
     std::array<uint16_t, VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
-    const auto numMissingSequenceNumbers =
-        _ssrcContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime() / 1000000ULL,
-            _ssrcContext.sender->getRtt() / utils::Time::ms,
-            missingSequenceNumbers);
+    const auto numMissingSequenceNumbers = _ssrcContext.videoMissingPacketsTracker->process(timestamp / 1000000ULL,
+        _ssrcContext.sender->getRtt() / utils::Time::ms,
+        missingSequenceNumbers);
 
     if (numMissingSequenceNumbers == 0)
     {

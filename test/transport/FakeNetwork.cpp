@@ -14,6 +14,10 @@
 namespace fakenet
 {
 
+Gateway::Gateway() : _packets(2048) {}
+
+Gateway::~Gateway() {}
+
 void Gateway::sendTo(const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
@@ -28,38 +32,43 @@ void Gateway::sendTo(const transport::SocketAddress& source,
         target.toString().c_str(),
         len);
 
-    _packets.push(Packet(data, len, source, target));
+    _packets.push(std::make_unique<Packet>(data, len, source, target));
 }
 
 void Internet::process(const uint64_t timestamp)
 {
-    for (auto* node : _nodes)
     {
-        node->process(timestamp);
+        std::lock_guard<std::mutex> lock(_nodesMutex);
+        for (auto* node : _nodes)
+        {
+            node->process(timestamp);
+        }
     }
-    while (!_packets.empty())
+    for (std::unique_ptr<Packet> packet; _packets.pop(packet);)
     {
-        auto& packet = _packets.front();
+        std::lock_guard<std::mutex> lock(_nodesMutex);
         for (auto node : _nodes)
         {
-            if (node->hasIp(packet.target))
+            if (node->hasIp(packet->target))
             {
                 NETWORK_LOG("process from: %s  to: %s bytes: %lu",
                     "Fakenetwork",
-                    packet.source.toString().c_str(),
-                    packet.target.toString().c_str(),
-                    packet.length);
+                    packet->source.toString().c_str(),
+                    packet->target.toString().c_str(),
+                    packet->length);
 
-                node->sendTo(packet.source, packet.target, packet.data, packet.length, timestamp);
+                node->sendTo(packet->source, packet->target, packet->data, packet->length, timestamp);
                 break;
             }
         }
-        _packets.pop();
     }
 
-    for (auto* node : _nodes)
     {
-        node->process(timestamp);
+        std::lock_guard<std::mutex> lock(_nodesMutex);
+        for (auto* node : _nodes)
+        {
+            node->process(timestamp);
+        }
     }
 }
 
@@ -73,19 +82,17 @@ Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet)
 
 void Firewall::process(const uint64_t timestamp)
 {
-    while (!_packets.empty())
+    for (std::unique_ptr<Packet> packet; _packets.pop(packet);)
     {
-        Packet packet = _packets.front();
-        _packets.pop();
-        assert(!packet.source.empty());
-        assert(!packet.target.empty());
-        assert(packet.source.getFamily() == _publicInterface.getFamily());
+        assert(!packet->source.empty());
+        assert(!packet->target.empty());
+        assert(packet->source.getFamily() == _publicInterface.getFamily());
 
-        if (_publicInterface.equalsIp(packet.target))
+        if (_publicInterface.equalsIp(packet->target))
         {
             for (auto mapping : _portMappings)
             {
-                if (mapping.second == packet.target)
+                if (mapping.second == packet->target)
                 {
                     for (auto endpoint : _endpoints)
                     {
@@ -93,9 +100,9 @@ void Firewall::process(const uint64_t timestamp)
                         {
                             logger::info("inbound %s -> %s",
                                 "firewall",
-                                packet.source.toString().c_str(),
-                                packet.target.toString().c_str());
-                            endpoint->sendTo(packet.source, mapping.first, packet.data, packet.length, timestamp);
+                                packet->source.toString().c_str(),
+                                packet->target.toString().c_str());
+                            endpoint->sendTo(packet->source, mapping.first, packet->data, packet->length, timestamp);
                             return;
                         }
                     }
@@ -107,38 +114,38 @@ void Firewall::process(const uint64_t timestamp)
 
         for (auto ep : _endpoints)
         {
-            if (ep->hasIp(packet.target))
+            if (ep->hasIp(packet->target))
             {
                 logger::info("local %s -> %s",
                     "firewall",
-                    packet.source.toString().c_str(),
-                    packet.target.toString().c_str());
-                ep->sendTo(packet.source, packet.target, packet.data, packet.length, timestamp);
+                    packet->source.toString().c_str(),
+                    packet->target.toString().c_str());
+                ep->sendTo(packet->source, packet->target, packet->data, packet->length, timestamp);
                 return;
             }
         }
-        if (packet.target.getFamily() == AF_INET && (ntohl(packet.target.getIpv4()->sin_addr.s_addr) >> 24 == 172))
+        if (packet->target.getFamily() == AF_INET && (ntohl(packet->target.getIpv4()->sin_addr.s_addr) >> 24 == 172))
         {
             continue;
         }
-        else if (packet.target.getFamily() == AF_INET6 &&
-            reinterpret_cast<const uint16_t*>(&packet.target.getIpv6()->sin6_addr)[0] == 0xfe80)
+        else if (packet->target.getFamily() == AF_INET6 &&
+            reinterpret_cast<const uint16_t*>(&packet->target.getIpv6()->sin6_addr)[0] == 0xfe80)
         {
             continue;
         }
 
         for (auto mapping : _portMappings)
         {
-            if (mapping.first == packet.source)
+            if (mapping.first == packet->source)
             {
-                sendToPublic(mapping.second, packet.target, packet.data, packet.length, timestamp);
+                sendToPublic(mapping.second, packet->target, packet->data, packet->length, timestamp);
                 return;
             }
         }
 
-        while (!addPortMapping(packet.source, _portCount++)) {}
+        while (!addPortMapping(packet->source, _portCount++)) {}
 
-        sendToPublic(_portMappings.back().second, packet.target, packet.data, packet.length, timestamp);
+        sendToPublic(_portMappings.back().second, packet->target, packet->data, packet->length, timestamp);
     }
 }
 
@@ -198,23 +205,17 @@ InternetRunner::~InternetRunner()
 
 void InternetRunner::start()
 {
-    std::lock_guard<std::mutex> lock(_mutex);
     _command = running;
-    _commandReady.notify_all();
 }
 
 void InternetRunner::pause()
 {
-    std::lock_guard<std::mutex> lock(_mutex);
     _command = paused;
-    _commandReady.notify_all();
 }
 
 void InternetRunner::shutdown()
 {
-    std::lock_guard<std::mutex> lock(_mutex);
     _command = quit;
-    _commandReady.notify_all();
 }
 
 std::shared_ptr<Internet> InternetRunner::get()
@@ -234,9 +235,12 @@ void InternetRunner::internetThreadRun()
         }
         else if (_command == paused)
         {
-            std::unique_lock<std::mutex> lock(_mutex);
             _state = paused;
-            _commandReady.wait(lock, [this] { return _command != paused; });
+            while (_command == paused)
+            {
+                // check in to TimeTurner if enabled
+                utils::Time::nanoSleep(utils::Time::ms * 10);
+            }
         }
     }
 }

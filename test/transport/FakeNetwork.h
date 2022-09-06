@@ -1,5 +1,6 @@
 #pragma once
 #include "NetworkLink.h"
+#include "concurrency/MpmcQueue.h"
 #include "utils/SocketAddress.h"
 #include <atomic>
 #include <map>
@@ -50,6 +51,9 @@ struct Packet
 class Gateway : public NetworkNode
 {
 public:
+    Gateway();
+    ~Gateway();
+
     virtual void addLocal(NetworkNode* node) = 0;
     virtual void addPublic(NetworkNode* endpoint) = 0;
     virtual std::vector<NetworkNode*>& getLocalNodes() = 0;
@@ -62,7 +66,7 @@ public:
         uint64_t timestamp) override;
 
 protected:
-    std::queue<Packet> _packets;
+    concurrency::MpmcQueue<std::unique_ptr<Packet>> _packets;
 };
 
 class Internet : public Gateway
@@ -70,14 +74,25 @@ class Internet : public Gateway
 public:
     virtual bool hasIp(const transport::SocketAddress& target) override { return true; }
 
-    void addLocal(NetworkNode* node) override { _nodes.push_back(node); }
-    void addPublic(NetworkNode* node) override { _nodes.push_back(node); }
+    void addLocal(NetworkNode* node) override
+    {
+        std::lock_guard<std::mutex> lock(_nodesMutex);
+        _nodes.push_back(node);
+    }
+
+    void addPublic(NetworkNode* node) override
+    {
+        std::lock_guard<std::mutex> lock(_nodesMutex);
+        _nodes.push_back(node);
+    }
+
     void process(uint64_t timestamp) override;
 
     virtual std::vector<NetworkNode*>& getLocalNodes() override { return _nodes; };
     virtual std::vector<NetworkNode*>& getPublicNodes() override { return _nodes; };
 
 private:
+    mutable std::mutex _nodesMutex;
     std::vector<NetworkNode*> _nodes;
 };
 // private nextwork is 172.x.x.x and fe80:....
@@ -137,8 +152,6 @@ public:
 private:
     void internetThreadRun();
     std::shared_ptr<Internet> _internet;
-    std::mutex _mutex;
-    std::condition_variable _commandReady;
     const uint64_t _sleepTime;
     std::atomic<State> _state;
     std::atomic<State> _command;

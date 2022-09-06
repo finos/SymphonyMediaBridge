@@ -175,6 +175,32 @@ private:
     size_t _endpointIdHash;
 };
 
+class AddPacketCacheJob : public jobmanager::CountedJob
+{
+public:
+    AddPacketCacheJob(transport::RtcTransport& transport,
+        bridge::SsrcOutboundContext& outboundContext,
+        bridge::PacketCache* packetCache)
+        : CountedJob(transport.getJobCounter()),
+          _outboundContext(outboundContext),
+          _packetCache(packetCache)
+    {
+    }
+
+    void run() override
+    {
+        if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
+        {
+            return;
+        }
+        _outboundContext.packetCache.set(_packetCache);
+    }
+
+private:
+    bridge::SsrcOutboundContext& _outboundContext;
+    bridge::PacketCache* _packetCache;
+};
+
 /**
  * @return true if this ssrc should be skipped and not forwarded to the videoStream.
  */
@@ -693,28 +719,35 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
 
 void EngineMixer::addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache)
 {
-    bridge::SsrcOutboundContext* ssrcOutboundContext = nullptr;
-
+    transport::RtcTransport* transport = nullptr;
+    bridge::SsrcOutboundContext* ssrcContext = nullptr;
     auto* videoStream = _engineVideoStreams.getItem(endpointIdHash);
     if (videoStream)
     {
-        ssrcOutboundContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
+        ssrcContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
+        transport = &videoStream->transport;
     }
     else
     {
         auto* barbell = _engineBarbells.getItem(endpointIdHash);
         if (barbell)
         {
-            ssrcOutboundContext = barbell->ssrcOutboundContexts.getItem(ssrc);
+            ssrcContext = barbell->ssrcOutboundContexts.getItem(ssrc);
+            transport = &barbell->transport;
         }
     }
 
-    if (!ssrcOutboundContext || (ssrcOutboundContext->packetCache.isSet() && ssrcOutboundContext->packetCache.get()))
+    if (ssrcContext && transport)
     {
-        return;
+        if (!transport->getJobQueue().addJob<AddPacketCacheJob>(*transport, *ssrcContext, videoPacketCache))
+        {
+            logger::warn("JobQueue full. Failed to add packet cache to %zu, ssrc %u, %s",
+                _loggableId.c_str(),
+                endpointIdHash,
+                ssrc,
+                transport->getLoggableId().c_str());
+        }
     }
-
-    ssrcOutboundContext->packetCache.set(videoPacketCache);
 }
 
 void EngineMixer::addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer)
@@ -896,6 +929,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     runDominantSpeakerCheck(engineIterationStartTimestamp);
     sendMessagesToNewDataStreams();
+    markSsrcsInUse();
     processMissingPackets(engineIterationStartTimestamp); // must run after checkPacketCounters
 
     // 3. Update bandwidth estimates
@@ -917,12 +951,6 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
     {
         auto& ssrcInboundContext = *ssrcInboundContextEntry.second;
         if (ssrcInboundContext.rtpMap.format != RtpMap::Format::VP8)
-        {
-            continue;
-        }
-
-        auto videoMissingPacketsTracker = ssrcInboundContext.videoMissingPacketsTracker.get();
-        if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp / 1000000ULL))
         {
             continue;
         }
@@ -961,6 +989,20 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
     if (audioMapChanged || videoMapChanged)
     {
         sendUserMediaMapMessageOverBarbells();
+    }
+}
+
+void EngineMixer::markSsrcsInUse()
+{
+    for (auto& it : _ssrcInboundContexts)
+    {
+        auto inboundContext = it.second;
+        const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(inboundContext->endpointIdHash);
+
+        inboundContext->isSsrcUsed = _engineStreamDirector->isSsrcUsed(inboundContext->ssrc,
+            inboundContext->endpointIdHash,
+            isSenderInLastNList,
+            _engineRecordingStreams.size());
     }
 }
 
@@ -1297,14 +1339,12 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
     const bool mustBeForwardedOnBarbells = isSenderInLastNList && !_engineBarbells.empty() && !isFromBarbell;
 
-    if (!mustBeForwardedOnBarbells &&
-        !_engineStreamDirector->isSsrcUsed(ssrcContext->ssrc,
-            endpointIdHash,
-            isSenderInLastNList,
-            _engineRecordingStreams.size()))
+    if (!mustBeForwardedOnBarbells && !ssrcContext->isSsrcUsed.load())
     {
         return;
     }
+
+    ssrcContext->endpointIdHash = packet->endpointIdHash;
 
     sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(std::move(packet),
         _sendAllocator,
@@ -3081,9 +3121,14 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     utils::StringBuilder<1024> userMediaMapMessage;
     _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessage);
 
-    for (auto& barbell : _engineBarbells)
+    if (!_engineBarbells.empty())
     {
         logger::debug("send BB msg %s", _loggableId.c_str(), userMediaMapMessage.get());
+    }
+
+    for (auto& barbell : _engineBarbells)
+    {
+
         barbell.second->dataChannel.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
     }
 }
@@ -3646,7 +3691,10 @@ void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_
     utils::StringBuilder<1024> message;
     api::DataChannelMessage::makeMinUplinkBitrate(message, minUplinkEstimate);
 
-    logger::debug("send BB msg %s", _loggableId.c_str(), message.get());
+    if (!_engineBarbells.empty())
+    {
+        logger::debug("send BB msg %s", _loggableId.c_str(), message.get());
+    }
     for (const auto& itBb : _engineBarbells)
     {
         itBb.second->dataChannel.sendString(message.get(), message.getLength());

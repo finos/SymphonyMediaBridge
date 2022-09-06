@@ -16,11 +16,6 @@
 #define SCTP_LOG(fmt, logId, ...) (void)logId;
 #endif
 
-namespace
-{
-utils::MersienneRandom<uint32_t> g_randomGenerator;
-
-} // namespace
 namespace sctp
 {
 const char* toString(sctp::SctpAssociation::State state)
@@ -312,7 +307,7 @@ SctpAssociationImpl::SctpAssociationImpl(size_t logId,
       _transport(transport),
       _listener(listener),
       _state(State::CLOSED),
-      _local(transport.getPort(), g_randomGenerator.next(), _config.receiveWindow.initial, 1, 1),
+      _local(transport.getPort(), _randomGenerator.next(), _config.receiveWindow.initial, 1, 1),
       _peer(remotePort, 0, 0, 0, 0),
       _connect(config),
       _rtt(config),
@@ -470,7 +465,7 @@ void SctpAssociationImpl::sendMtuProbe(const uint64_t timestamp)
     info.timestamp = timestamp;
     info.mtu = *_mtu.selectedProbe;
     info.sequenceNumber = 0;
-    info.nonce = g_randomGenerator.next();
+    info.nonce = _randomGenerator.next();
     heartbeat.commitAppendedParameter();
 
     auto padding = *_mtu.selectedProbe - probe.size() - heartbeat.size();

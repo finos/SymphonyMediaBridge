@@ -38,7 +38,6 @@
 IntegrationTest::IntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
       _audioAllocator(memory::packetPoolSize, "IntegrationTestAudio"),
-      _jobManager(std::make_unique<jobmanager::JobManager>()),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(nullptr),
       _network(transport::createRtcePoll()),
@@ -48,12 +47,13 @@ IntegrationTest::IntegrationTest()
 {
 }
 
+// TimeTurner time source must be set before starting any threads.
+// Fake internet thread, JobManager timer thread, worker threads.
 void IntegrationTest::SetUp()
 {
-
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
-        GTEST_SKIP();
+        // GTEST_SKIP();
     }
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
@@ -61,12 +61,12 @@ void IntegrationTest::SetUp()
 
     using namespace std;
 
-    _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
-
 #if USE_FAKENETWORK
     utils::Time::initialize(_timeSource);
 #endif
 
+    _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
+    _jobManager = std::make_unique<jobmanager::JobManager>();
     for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
@@ -90,7 +90,7 @@ void IntegrationTest::TearDown()
 {
     if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
     {
-        GTEST_SKIP();
+        // GTEST_SKIP();
     }
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
@@ -105,6 +105,7 @@ void IntegrationTest::TearDown()
     }
 
     assert(!_internet->isRunning());
+    _internet.reset();
 
     logger::info("IntegrationTest torn down", "IntegrationTest");
 }
@@ -288,19 +289,28 @@ bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>&
 
 void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::function<void()> test)
 {
+    // allow internet thread to forward packets next time it wakes up.
 #if USE_FAKENETWORK
-    // Start internet here, before runFor(...) so it goes into "nanoSleep".
     _internet->start();
 #endif
 
+    // run test in thread that will also sleep at TimeTurner
     std::thread runner([test] { test(); });
 
-    _timeSource.waitForThreadsToSleep(expectedNumThreads, 5 * utils::Time::sec);
+    _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
 
 #if USE_FAKENETWORK
+    // run for 80s or until test runner thread stops the time run
     _timeSource.runFor(80 * utils::Time::sec);
+
+    // all threads are asleep. Switch to real time
+    utils::Time::initialize();
+
+    // release all sleeping threads into real time to finish the test
+    _timeSource.shutdown();
 #endif
     runner.join();
+    logger::debug("test out", "");
 }
 
 void IntegrationTest::startSimulation()
@@ -322,13 +332,15 @@ void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
     {
         utils::Time::nanoSleep(step);
     }
-    // And switch to real time source.
-    utils::Time::initialize();
+
     while (!_internet->isPaused())
     {
-        utils::Time::rawNanoSleep(utils::Time::ms);
+        utils::Time::nanoSleep(utils::Time::ms * 10);
     }
-    _timeSource.shutdown();
+
+    // stop time turner and it will await all threads to fall asleep, including me
+    _timeSource.stop();
+    utils::Time::nanoSleep(utils::Time::ms * 10);
 }
 
 void IntegrationTest::finalizeSimulation()
@@ -338,7 +350,7 @@ void IntegrationTest::finalizeSimulation()
 
 TEST_F(IntegrationTest, plain)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -346,9 +358,6 @@ TEST_F(IntegrationTest, plain)
         })");
 
         initBridge(_config);
-
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
@@ -360,6 +369,10 @@ TEST_F(IntegrationTest, plain)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -393,6 +406,7 @@ TEST_F(IntegrationTest, plain)
         group.clients[2]->_transport->stop();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
+
         finalizeSimulation();
 
         const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
@@ -521,13 +535,10 @@ TEST_F(IntegrationTest, plain)
 
 TEST_F(IntegrationTest, audioOnlyNoPadding)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-
-        startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
@@ -539,6 +550,10 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         // Audio only for all three participants.
@@ -574,15 +589,11 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
 TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
         initBridge(_config);
-
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const std::string baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
@@ -593,6 +604,10 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         using RtpVideoReceiver = typename SfuClient<ColibriChannel>::RtpVideoReceiver;
@@ -685,7 +700,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
 TEST_F(IntegrationTest, videoOffPaddingOff)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         /*
            Test checks that after video is off and cooldown interval passed, no padding will be sent for the
            call that became audio-only.
@@ -696,8 +711,6 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"rctl.cooldownInterval\":1}");
 
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
@@ -709,6 +722,10 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             2);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         // Audio only for all three participants.
@@ -790,7 +807,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
 TEST_F(IntegrationTest, plainNewApi)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -798,9 +815,6 @@ TEST_F(IntegrationTest, plainNewApi)
         })");
 
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<Channel>> group(_instanceCounter,
@@ -811,6 +825,10 @@ TEST_F(IntegrationTest, plainNewApi)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -972,7 +990,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
 TEST_F(IntegrationTest, ptime10)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -980,9 +998,6 @@ TEST_F(IntegrationTest, ptime10)
         })");
 
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<Channel>> group(_instanceCounter,
@@ -993,6 +1008,10 @@ TEST_F(IntegrationTest, ptime10)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -1187,7 +1206,7 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
 
 TEST_F(IntegrationTest, simpleBarbell)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 10, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1221,9 +1240,6 @@ TEST_F(IntegrationTest, simpleBarbell)
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_bridgeEndpointFactory);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
@@ -1235,13 +1251,16 @@ TEST_F(IntegrationTest, simpleBarbell)
             3);
 
         Conference conf;
-        group.startConference(conf, baseUrl);
-
         Conference conf2;
-        group.startConference(conf2, baseUrl2);
 
         Barbell bb1;
         Barbell bb2;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+        group.startConference(conf2, baseUrl2);
 
         auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
         auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
@@ -1365,7 +1384,7 @@ TEST_F(IntegrationTest, simpleBarbell)
 
 TEST_F(IntegrationTest, barbellAfterClients)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 10, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1399,9 +1418,6 @@ TEST_F(IntegrationTest, barbellAfterClients)
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_bridgeEndpointFactory);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
@@ -1415,9 +1431,12 @@ TEST_F(IntegrationTest, barbellAfterClients)
             2);
 
         Conference conf;
-        group.startConference(conf, baseUrl);
-
         Conference conf2;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
         group.startConference(conf2, baseUrl2);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -1548,7 +1567,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
 
 TEST_F(IntegrationTest, detectIsPtt)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1556,9 +1575,6 @@ TEST_F(IntegrationTest, detectIsPtt)
         })");
 
         initBridge(_config);
-
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulationWithTimeout, this, utils::Time::sec));
-        startSimulation();
 
         const auto baseUrl = "http://127.0.0.1:8080";
 
@@ -1570,6 +1586,10 @@ TEST_F(IntegrationTest, detectIsPtt)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulationWithTimeout, this, utils::Time::sec));
+        startSimulation();
+
         group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
