@@ -351,9 +351,6 @@ TEST_F(IntegrationTest, plain)
 
         initBridge(_config);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        // startSimulation();
-
         const std::string baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
@@ -364,6 +361,10 @@ TEST_F(IntegrationTest, plain)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -529,9 +530,6 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-
-        startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
@@ -543,6 +541,10 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         // Audio only for all three participants.
@@ -583,10 +585,6 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
         initBridge(_config);
-
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const std::string baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
@@ -597,6 +595,10 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         using RtpVideoReceiver = typename SfuClient<ColibriChannel>::RtpVideoReceiver;
@@ -700,8 +702,6 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"rctl.cooldownInterval\":1}");
 
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
@@ -713,6 +713,10 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             2);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         // Audio only for all three participants.
@@ -802,9 +806,6 @@ TEST_F(IntegrationTest, plainNewApi)
         })");
 
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<Channel>> group(_instanceCounter,
@@ -815,6 +816,10 @@ TEST_F(IntegrationTest, plainNewApi)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -984,9 +989,6 @@ TEST_F(IntegrationTest, ptime10)
         })");
 
         initBridge(_config);
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<Channel>> group(_instanceCounter,
@@ -997,6 +999,10 @@ TEST_F(IntegrationTest, ptime10)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -1225,9 +1231,6 @@ TEST_F(IntegrationTest, simpleBarbell)
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_endpointFacory);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
@@ -1239,13 +1242,16 @@ TEST_F(IntegrationTest, simpleBarbell)
             3);
 
         Conference conf;
-        group.startConference(conf, baseUrl);
-
         Conference conf2;
-        group.startConference(conf2, baseUrl2);
 
         Barbell bb1;
         Barbell bb2;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+        group.startConference(conf2, baseUrl2);
 
         auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
         auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
@@ -1403,9 +1409,6 @@ TEST_F(IntegrationTest, barbellAfterClients)
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_endpointFacory);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
@@ -1419,9 +1422,12 @@ TEST_F(IntegrationTest, barbellAfterClients)
             2);
 
         Conference conf;
-        group.startConference(conf, baseUrl);
-
         Conference conf2;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
         group.startConference(conf2, baseUrl2);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
@@ -1561,9 +1567,6 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         initBridge(_config);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulationWithTimeout, this, utils::Time::sec));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<Channel>> group(_instanceCounter,
@@ -1574,6 +1577,10 @@ TEST_F(IntegrationTest, detectIsPtt)
             3);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulationWithTimeout, this, utils::Time::sec));
+        startSimulation();
+
         group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
