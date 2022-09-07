@@ -223,10 +223,12 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         logVideoSent("client2", *group.clients[1]);
         logVideoSent("client3", *group.clients[2]);
 
-        const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
         {
             auto videoCounters = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
             EXPECT_EQ(videoCounters.lostPackets, 0);
+
+            auto autioCounters = group.clients[0]->_transport->getCumulativeAudioReceiveCounters();
+            EXPECT_NE(autioCounters.lostPackets, 0);
 
             const auto& rData1 = group.clients[0]->getAudioReceiveStats();
             std::vector<double> allFreq;
@@ -243,11 +245,6 @@ TEST_F(BarbellTest, packetLossViaBarbell)
                 std::vector<std::pair<uint64_t, double>> amplitudeProfile;
                 auto rec = item.second->getRecording();
                 analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-
-                const auto expectedLostPacketCount = PACKET_LOSS_RATE * 5 * codec::Opus::packetsPerSecond;
-                EXPECT_NEAR(rec.size(),
-                    5 * codec::Opus::sampleRate - expectedLostPacketCount * audioPacketSampleCount,
-                    3 * audioPacketSampleCount);
 
                 allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
 
