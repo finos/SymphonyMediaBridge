@@ -1684,3 +1684,61 @@ TEST_F(IntegrationTest, detectIsPtt)
         finalizeSimulation();
     });
 };
+
+TEST_F(IntegrationTest, packetLoss)
+{
+    runTestInThread(_numWorkerThreads + 4, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        initBridge(_config);
+
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            linkInfo.second.ptrLink->setLossRate(0.01);
+        }
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        const std::string baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            2);
+
+        Conference conf;
+        group.startConference(conf, baseUrl + "/colibri");
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        group.clients[0]->_transport->stop();
+        group.clients[1]->_transport->stop();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        {
+            for (auto id : {0, 1})
+            {
+                auto audioCounters =
+                    group.clients[id]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+                EXPECT_NE(audioCounters.lostPackets, 0);
+
+                auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+                EXPECT_EQ(videoCounters.lostPackets, 0);
+            }
+        }
+    });
+}

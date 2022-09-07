@@ -2,6 +2,7 @@
 
 #include "AudioSource.h"
 #include "api/SimulcastGroup.h"
+#include "bridge/engine/PacketCache.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "codec/Vp8Header.h"
 #include "memory/Array.h"
@@ -92,6 +93,7 @@ public:
     void processOffer()
     {
         auto offer = _channel.getOffer();
+
         _transport =
             _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, 256 * 1024, _channel.getEndpointIdHash());
         _transport->setDataReceiver(this);
@@ -174,17 +176,20 @@ public:
 
     void connect()
     {
-        uint32_t videoSsrcs[7];
         if (_channel.isVideoEnabled())
         {
-            videoSsrcs[6] = 0;
+            _videoSsrcs[6] = 0;
             for (int i = 0; i < 6; ++i)
             {
-                videoSsrcs[i] = _idGenerator.next();
+                _videoSsrcs[i] = _idGenerator.next();
                 if (0 == i % 2)
                 {
-                    _videoSources.emplace(videoSsrcs[i],
-                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
+                    _videoSources.emplace(_videoSsrcs[i],
+                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, _videoSsrcs[i]));
+                    _videoCaches.emplace(_videoSsrcs[i],
+                        std::make_unique<bridge::PacketCache>(
+                            (std::string("VideoCache_") + std::to_string(_videoSsrcs[i])).c_str(),
+                            _videoSsrcs[i]));
                 }
             }
         }
@@ -195,7 +200,7 @@ public:
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),
-            _channel.isVideoEnabled() ? videoSsrcs : nullptr);
+            _channel.isVideoEnabled() ? _videoSsrcs : nullptr);
 
         _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();
@@ -229,6 +234,13 @@ public:
                 {
                     // auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
                     // logger::debug("sending video %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+
+                    auto cache = _videoCaches.find(videoSource.second->getSsrc());
+                    if (cache != _videoCaches.end())
+                    {
+                        auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+                        cache->second->add(*packet, rtpHeader->sequenceNumber);
+                    }
                     if (!_transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp))
                     {
                         logger::warn("failed to add SendMediaJob", "SfuClient");
@@ -567,7 +579,35 @@ public:
                     }
                 }
             }
+            else
+            {
+                if (rtcpPacket.packetType == rtp::RtcpPacketType::RTPTRANSPORT_FB &&
+                    rtcpFeedback->header.fmtCount == rtp::TransportLayerFeedbackType::PacketNack)
+                {
+                    const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
+                    const auto feedbackSsrc = getFeedbackSsrc(mediaSsrc);
+                    if (feedbackSsrc)
+                    {
+                        logger::warn("!!! RTX SfuClient received NACK, ssrc %u feedback %u",
+                            sender->getLoggableId().c_str(),
+                            mediaSsrc,
+                            feedbackSsrc);
+                    }
+                }
+            }
         }
+    }
+
+    uint32_t getFeedbackSsrc(uint32_t ssrc)
+    {
+        for (auto i : {0, 2, 4})
+        {
+            if (_videoSsrcs[i] == ssrc)
+            {
+                return _videoSsrcs[i + 1];
+            }
+        }
+        return 0;
     }
 
     void onConnected(transport::RtcTransport* sender) override
@@ -609,6 +649,7 @@ public:
     std::unique_ptr<emulator::AudioSource> _audioSource;
     // Video source that produces fake VP8
     std::unordered_map<uint32_t, std::unique_ptr<fakenet::FakeVideoSource>> _videoSources;
+    std::unordered_map<uint32_t, std::unique_ptr<bridge::PacketCache>> _videoCaches;
 
     const concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*>& getAudioReceiveStats() const
     {
@@ -632,6 +673,7 @@ public:
 
 private:
     utils::IdGenerator _idGenerator;
+    uint32_t _videoSsrcs[7];
     memory::PacketPoolAllocator& _allocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
     transport::TransportFactory& _transportFactory;
