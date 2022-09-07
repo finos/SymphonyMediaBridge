@@ -1685,7 +1685,7 @@ TEST_F(IntegrationTest, detectIsPtt)
     });
 };
 
-TEST_F(IntegrationTest, packetLoss)
+TEST_F(IntegrationTest, whenPacketLossVideoIsResentAudioIsNot)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
         _config.readFromString(R"({
@@ -1732,8 +1732,7 @@ TEST_F(IntegrationTest, packetLoss)
         {
             for (auto id : {0, 1})
             {
-                auto audioCounters =
-                    group.clients[id]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+                auto audioCounters = group.clients[id]->_transport->getCumulativeAudioReceiveCounters();
                 EXPECT_NE(audioCounters.lostPackets, 0);
 
                 auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();

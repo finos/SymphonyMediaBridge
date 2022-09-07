@@ -190,6 +190,7 @@ public:
                         std::make_unique<bridge::PacketCache>(
                             (std::string("VideoCache_") + std::to_string(_videoSsrcs[i])).c_str(),
                             _videoSsrcs[i]));
+                    _videoFeedbackSequenceCounter.emplace(_videoSsrcs[i], 0);
                 }
             }
         }
@@ -585,13 +586,33 @@ public:
                     rtcpFeedback->header.fmtCount == rtp::TransportLayerFeedbackType::PacketNack)
                 {
                     const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
-                    const auto feedbackSsrc = getFeedbackSsrc(mediaSsrc);
-                    if (feedbackSsrc)
+                    if (mediaSsrc)
                     {
-                        logger::warn("!!! RTX SfuClient received NACK, ssrc %u feedback %u",
-                            sender->getLoggableId().c_str(),
-                            mediaSsrc,
-                            feedbackSsrc);
+                        logger::warn("SfuClient received NACK, ssrc %u", sender->getLoggableId().c_str(), mediaSsrc);
+
+                        const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
+                        uint16_t pid = 0;
+                        uint16_t blp = 0;
+
+                        for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+                        {
+                            rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+
+                            auto sequenceNumber = pid;
+                            sendIfCached(mediaSsrc, sequenceNumber);
+
+                            while (blp != 0)
+                            {
+                                ++sequenceNumber;
+
+                                if ((blp & 0x1) == 0x1)
+                                {
+                                    sendIfCached(mediaSsrc, sequenceNumber);
+                                }
+
+                                blp = blp >> 1;
+                            }
+                        }
                     }
                 }
             }
@@ -608,6 +629,84 @@ public:
             }
         }
         return 0;
+    }
+
+    void sendIfCached(const uint32_t ssrc, const uint16_t sequenceNumber)
+    {
+        const auto feedbackSsrc = getFeedbackSsrc(ssrc);
+        auto cache = _videoCaches.find(ssrc);
+        auto videoSource = _videoSources.find(ssrc);
+
+        if (cache == _videoCaches.end() || videoSource == _videoSources.end())
+        {
+            assert(false);
+        }
+
+        if (videoSource->second->isKeyFrameRequested())
+        {
+            logger::info("Ignoring NACK for pre key frame packet %u, key frame at %u",
+                "SfuClient",
+                ssrc,
+                sequenceNumber);
+            return;
+        }
+
+        const auto cachedPacket = cache->second->get(sequenceNumber);
+        if (!cachedPacket)
+        {
+            return;
+        }
+
+        const auto cachedRtpHeader = rtp::RtpHeader::fromPacket(*cachedPacket);
+        if (!cachedRtpHeader)
+        {
+            return;
+        }
+
+        auto packet = memory::makeUniquePacket(_allocator);
+        if (!packet)
+        {
+            return;
+        }
+
+        const auto cachedRtpHeaderLength = cachedRtpHeader->headerLength();
+        const auto cachedPayload = cachedRtpHeader->getPayload();
+        const auto cachedSequenceNumber = cachedRtpHeader->sequenceNumber.get();
+
+        memcpy(packet->get(), cachedPacket->get(), cachedRtpHeaderLength);
+        auto copyHead = packet->get() + cachedRtpHeaderLength;
+        reinterpret_cast<uint16_t*>(copyHead)[0] = hton<uint16_t>(cachedSequenceNumber);
+        copyHead += sizeof(uint16_t);
+        memcpy(copyHead, cachedPayload, cachedPacket->getLength() - cachedRtpHeaderLength);
+        packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
+
+        auto videoFeedbackSequenceCounterItr = _videoFeedbackSequenceCounter.find(ssrc);
+        if (videoFeedbackSequenceCounterItr == _videoFeedbackSequenceCounter.end())
+        {
+            assert(false);
+        }
+        const auto sequenceCounter = videoFeedbackSequenceCounterItr->second;
+
+        auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+        if (!rtpHeader)
+        {
+            return;
+        }
+
+        rtpHeader->ssrc = feedbackSsrc;
+        rtpHeader->payloadType = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX).payloadType;
+        rtpHeader->sequenceNumber = sequenceCounter & 0xFFFF;
+
+        videoFeedbackSequenceCounterItr->second++;
+
+        logger::info("Sending cached packet seq %u, ssrc %u, feedbackSsrc %u, seq %u",
+            "SfuClient",
+            sequenceNumber,
+            ssrc,
+            feedbackSsrc,
+            sequenceCounter & 0xFFFFu);
+
+        _transport->protectAndSend(std::move(packet));
     }
 
     void onConnected(transport::RtcTransport* sender) override
@@ -650,6 +749,7 @@ public:
     // Video source that produces fake VP8
     std::unordered_map<uint32_t, std::unique_ptr<fakenet::FakeVideoSource>> _videoSources;
     std::unordered_map<uint32_t, std::unique_ptr<bridge::PacketCache>> _videoCaches;
+    std::unordered_map<uint32_t, uint32_t> _videoFeedbackSequenceCounter;
 
     const concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*>& getAudioReceiveStats() const
     {
