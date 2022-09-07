@@ -26,6 +26,7 @@ public:
     VideoForwarderRtxReceiveJob(memory::UniquePacket packet,
         transport::RtcTransport* sender,
         bridge::EngineMixer& engineMixer,
+        bridge::SsrcInboundContext& ssrcFeedbackContext,
         bridge::SsrcInboundContext& ssrcContext,
         const uint32_t mainSsrc,
         const uint32_t extendedSequenceNumber);
@@ -36,6 +37,7 @@ private:
     memory::UniquePacket _packet;
     bridge::EngineMixer& _engineMixer;
     transport::RtcTransport* _sender;
+    bridge::SsrcInboundContext& _ssrcFeedbackContext;
     bridge::SsrcInboundContext& _ssrcContext;
     uint32_t _mainSsrc;
     uint32_t _extendedSequenceNumber;

@@ -1399,15 +1399,11 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         return;
     }
 
-    logger::debug("!!! onVideoRtpRtxPacketReceived : %c sender %s",
-        _loggableId.c_str(),
-        isFromBarbell ? 't' : 'f',
-        sender->getLoggableId().c_str());
-
     sender->getJobQueue().addJob<bridge::VideoForwarderRtxReceiveJob>(std::move(packet),
         sender,
         *this,
         *ssrcContext,
+        *mainSsrcContext,
         mainSsrc,
         extendedSequenceNumber);
 }
@@ -1879,7 +1875,8 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
             auto videoStream = barbell->videoSsrcMap.getItem(ssrc);
             assert(videoStream);
-            if (!videoStream->stream.getLevelOf(ssrc, inboundContext.simulcastLevel))
+            if (barbell->videoRtpMap.payloadType == payloadType &&
+                !videoStream->stream.getLevelOf(ssrc, inboundContext.simulcastLevel))
             {
                 logger::error("ssrc %u is not in simulcast group of barbell video stream %zu",
                     _loggableId.c_str(),
@@ -2629,10 +2626,6 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     }
 
     const auto fromBarbell = EngineBarbell::isFromBarbell(transport->getTag());
-    logger::debug("!!! processIncomingTransportFbRtcpPacket NACK received: %c",
-        _loggableId.c_str(),
-        fromBarbell ? 't' : 'f');
-
     const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
 
     if (fromBarbell)
@@ -2640,7 +2633,7 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         const auto bb = _engineBarbells.getItem(transport->getEndpointIdHash());
         if (bb)
         {
-            uint32_t feedbackSsrc;
+            uint32_t feedbackSsrc = 0;
             _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc);
 
             auto& bbTransport = bb->transport;
@@ -2654,25 +2647,27 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
 
             auto* feedbackSsrcOutboundContext =
                 obtainOutboundSsrcContext(bb->idHash, bb->ssrcOutboundContexts, feedbackSsrc, bb->audioRtpMap);
-            if (feedbackSsrcOutboundContext)
+            if (!feedbackSsrcOutboundContext)
             {
-                mediaSsrcOutboundContext->onRtpSent(timestamp);
-                const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
-                uint16_t pid = 0;
-                uint16_t blp = 0;
-                for (size_t i = 0; i < numFeedbackControlInfos; ++i)
-                {
-                    feedbackSsrcOutboundContext->onRtpSent(timestamp);
-                    rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
-                    bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
-                        bbTransport,
-                        *(mediaSsrcOutboundContext->packetCache.get()),
-                        pid,
-                        blp,
-                        feedbackSsrc,
-                        timestamp,
-                        transport->getRtt());
-                }
+                return;
+            }
+
+            mediaSsrcOutboundContext->onRtpSent(timestamp);
+            const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
+            uint16_t pid = 0;
+            uint16_t blp = 0;
+            for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+            {
+                feedbackSsrcOutboundContext->onRtpSent(timestamp);
+                rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+                bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+                    bbTransport,
+                    *(mediaSsrcOutboundContext->packetCache.get()),
+                    pid,
+                    blp,
+                    feedbackSsrc,
+                    timestamp,
+                    transport->getRtt());
             }
         }
         return;

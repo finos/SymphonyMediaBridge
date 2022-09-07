@@ -343,6 +343,7 @@ public:
             uint64_t timestamp)
         {
             auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
+
             auto it = contexts.find(rtpHeader->ssrc.get());
             if (it == contexts.end())
             {
@@ -451,8 +452,12 @@ public:
                     if (numMissingSequenceNumbers)
                     {
                         logger::debug("Video missing packet tracker: %zu packets missing",
-                            "SfuClient",
+                            sender->getLoggableId().c_str(),
                             numMissingSequenceNumbers);
+                        for (size_t i = 0; i < numMissingSequenceNumbers; i++)
+                        {
+                            logger::debug("\n missing sequence number: %u", "SfuClient", missingSequenceNumbers[i]);
+                        }
                     }
                 }
             }

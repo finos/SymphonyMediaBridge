@@ -103,9 +103,23 @@ void make5secCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCa
     }
 }
 
+/*
+Test setup:
+1. Topology:
+                                                          /<----> Client-2
+            Client-1 <----> Barbell-1 <------> Barbell-2 <
+                                                          \<----> Client-3
+2. Control:
+   Barbell-1 inbound networklink is set to lose packets (e.g. 1%) that comes from Barbell-2.
+3. Expectations:
+   - Client-1 have audio packet loss, because they are NOT retransmitted.
+   - Client-1 have NO video packet loss, because they ARE retransmitted.
+*/
 TEST_F(BarbellTest, packetLossViaBarbell)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
+        constexpr auto PACKET_LOSS_RATE = 0.01;
+
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -161,20 +175,20 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         Barbell bb1;
         Barbell bb2;
 
+        // This map: _endpointNetworkLinkMap is populated automatically on endpoint creation.
+        // Following it's evolution allows to find Endpoint/NetworkLink for paritcular component.
         _endpointNetworkLinkMap.clear();
         auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
         auto interBridgeEndpoints1 = _endpointNetworkLinkMap;
 
-        _endpointNetworkLinkMap.clear();
         auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
-        auto interBridgeEndpoints2 = _endpointNetworkLinkMap;
 
         bb1.configure(sdp2);
         bb2.configure(sdp1);
 
         for (const auto& linkInfo : interBridgeEndpoints1)
         {
-            linkInfo.second.ptrLink->setLossRate(0.01);
+            linkInfo.second.ptrLink->setLossRate(PACKET_LOSS_RATE);
         }
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
@@ -211,8 +225,9 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
         const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
         {
-            auto audioCounters = group.clients[0]->_transport->getCumulativeAudioReceiveCounters();
-            EXPECT_EQ(audioCounters.lostPackets, 0);
+            auto videoCounters = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
+            EXPECT_EQ(videoCounters.lostPackets, 0);
+
             const auto& rData1 = group.clients[0]->getAudioReceiveStats();
             std::vector<double> allFreq;
             EXPECT_EQ(rData1.size(), 2);
@@ -228,7 +243,12 @@ TEST_F(BarbellTest, packetLossViaBarbell)
                 std::vector<std::pair<uint64_t, double>> amplitudeProfile;
                 auto rec = item.second->getRecording();
                 analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+
+                const auto expectedLostPacketCount = PACKET_LOSS_RATE * 5 * codec::Opus::packetsPerSecond;
+                EXPECT_NEAR(rec.size(),
+                    5 * codec::Opus::sampleRate - expectedLostPacketCount * audioPacketSampleCount,
+                    3 * audioPacketSampleCount);
+
                 allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
 
                 EXPECT_EQ(amplitudeProfile.size(), 2);
@@ -258,35 +278,6 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             EXPECT_NEAR(videoReceiveStats.packets,
                 transportSummary2.begin()->second.packetsSent + transportSummary3.begin()->second.packetsSent,
                 25);
-        }
-        {
-            auto audioCounters = group.clients[1]->_transport->getCumulativeAudioReceiveCounters();
-            EXPECT_EQ(audioCounters.lostPackets, 0);
-
-            const auto& rData1 = group.clients[1]->getAudioReceiveStats();
-            std::vector<double> allFreq;
-            for (const auto& item : rData1)
-            {
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
-                EXPECT_EQ(freqVector.size(), 1);
-                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
-
-                EXPECT_EQ(amplitudeProfile.size(), 2);
-                if (amplitudeProfile.size() > 1)
-                {
-                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                }
-
-                // item.second->dumpPcmData();
-            }
-
-            std::sort(allFreq.begin(), allFreq.end());
-            EXPECT_NEAR(allFreq[0], 600.0, 25.0);
-            EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
         }
     });
 }
