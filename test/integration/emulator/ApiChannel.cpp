@@ -232,6 +232,16 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     }
 }
 
+void Channel::disconnect()
+{
+    HttpDeleteRequest request((_baseUrl + "/conferences/" + _conferenceId + "/" + _id).c_str());
+    request.awaitResponse(3000 * utils::Time::ms);
+    if (!request.isSuccess())
+    {
+        logger::error("failed to delete channel %d", "Test", request.getCode());
+    }
+}
+
 void Channel::configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator)
 {
     auto bundle = _offer["bundle-transport"];
@@ -557,6 +567,33 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
     else
     {
         logger::error("failed to patch channel %d", "Test", request.getCode());
+    }
+}
+
+void ColibriChannel::disconnect()
+{
+    using namespace nlohmann;
+    json body = {{"id", _conferenceId},
+        {"contents", json::array()},
+        {"channel-bundles", json::array({json::object({{"id", _id}, {"transport", json::object()}})})}};
+
+    auto audioContent = json::object({{"name", "audio"},
+        {"channels", json::array({json::object({{"endpoint", _id}, {"expire", 0}, {"id", _audioId}})})}});
+    body["contents"].push_back(audioContent);
+
+    auto videoContent = json::object({{"name", "video"}, {"channels", json::array()}});
+    auto videoChannel = json::object({{"endpoint", _id}, {"expire", 0}, {"id", _videoId}});
+    videoContent["channels"].push_back(videoChannel);
+    body["contents"].push_back(videoContent);
+
+    logger::debug("expire %s", "ColibriChannel", body.dump().c_str());
+    HttpPatchRequest request((_baseUrl + "/colibri/conferences/" + _conferenceId).c_str(), body.dump().c_str());
+    request.awaitResponse(3000 * utils::Time::ms);
+
+    if (!request.isSuccess())
+    {
+
+        logger::error("failed to expire channel %d", "Test", request.getCode());
     }
 }
 

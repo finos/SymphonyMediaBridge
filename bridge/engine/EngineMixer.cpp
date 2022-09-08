@@ -3032,9 +3032,14 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     utils::StringBuilder<1024> userMediaMapMessage;
     _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessage);
 
-    for (auto& barbell : _engineBarbells)
+    if (!_engineBarbells.empty())
     {
         logger::debug("send BB msg %s", _loggableId.c_str(), userMediaMapMessage.get());
+    }
+
+    for (auto& barbell : _engineBarbells)
+    {
+
         barbell.second->dataChannel.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
     }
 }
@@ -3567,7 +3572,10 @@ void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_
     utils::StringBuilder<1024> message;
     api::DataChannelMessage::makeMinUplinkBitrate(message, minUplinkEstimate);
 
-    logger::debug("send BB msg %s", _loggableId.c_str(), message.get());
+    if (!_engineBarbells.empty())
+    {
+        logger::debug("send BB msg %s", _loggableId.c_str(), message.get());
+    }
     for (const auto& itBb : _engineBarbells)
     {
         itBb.second->dataChannel.sendString(message.get(), message.getLength());

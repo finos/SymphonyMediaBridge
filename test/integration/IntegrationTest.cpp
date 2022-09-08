@@ -398,6 +398,7 @@ TEST_F(IntegrationTest, plain)
         group.clients[2]->_transport->stop();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
+        group.disconnectClients();
         finalizeSimulation();
 
         const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
@@ -1283,7 +1284,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
         group.clients[2]->_transport->stop();
-
+        group.disconnectClients();
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
