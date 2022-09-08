@@ -6,7 +6,9 @@
 namespace emulator
 {
 
-TimeTurner::TimeTurner() : _timestamp(100), _startTime(std::chrono::system_clock::now()), _running(true) {}
+TimeTurner::TimeTurner() : _timestamp(100), _startTime(std::chrono::system_clock::now()), _running(true), _abort(false)
+{
+}
 
 void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
 {
