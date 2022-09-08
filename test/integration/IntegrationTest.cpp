@@ -1711,9 +1711,6 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
             linkInfo.second.ptrLink->setLossRate(0.01);
         }
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const std::string baseUrl = "http://127.0.0.1:8080";
 
         GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
@@ -1724,6 +1721,10 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
             2);
 
         Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
         group.startConference(conf, baseUrl + "/colibri");
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);

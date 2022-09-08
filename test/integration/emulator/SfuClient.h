@@ -693,11 +693,6 @@ public:
 
         _rtxStats.sndPacketsMissingAsked++;
 
-        if (cache == _videoCaches.end() || videoSource == _videoSources.end())
-        {
-            assert(false);
-        }
-
         if (videoSource->second->isKeyFrameRequested())
         {
             logger::info("Ignoring NACK for pre key frame packet %u, key frame at %u",
@@ -737,10 +732,7 @@ public:
         packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
 
         auto videoFeedbackSequenceCounterItr = _videoFeedbackSequenceCounter.find(ssrc);
-        if (videoFeedbackSequenceCounterItr == _videoFeedbackSequenceCounter.end())
-        {
-            assert(false);
-        }
+
         const auto sequenceCounter = videoFeedbackSequenceCounterItr->second;
 
         auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
