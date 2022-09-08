@@ -153,9 +153,6 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_bridgeEndpointFactory);
 
-        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
-        startSimulation();
-
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
@@ -171,6 +168,9 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
         Conference conf2;
         group.startConference(conf2, baseUrl2);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
 
         Barbell bb1;
         Barbell bb2;
