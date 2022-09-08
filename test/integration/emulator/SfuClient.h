@@ -40,6 +40,39 @@ private:
     memory::UniquePacket _packet;
 };
 
+struct RtxStats
+{
+    // Receiver's stats: how much we missed, recovered and complained.
+    size_t rcvPacketsMissing = 0;
+    size_t rcvPacketsRecovered = 0;
+    size_t rcvNackRequestSent = 0; //  Not implemented: SfuClient does not sent NACK yet.
+
+    // Sender's stats: how much complains we got, attempted to serve and served.
+    size_t sndNackRequestsReceived = 0;
+    size_t sndPacketsMissingAsked = 0;
+    size_t sndPacketsMissingSent = 0;
+
+    RtxStats& operator+=(const RtxStats& other)
+    {
+        rcvPacketsMissing += other.rcvPacketsMissing;
+        rcvPacketsRecovered += other.rcvPacketsRecovered;
+        rcvNackRequestSent += other.rcvNackRequestSent;
+
+        sndNackRequestsReceived += other.sndNackRequestsReceived;
+        sndPacketsMissingAsked += other.sndPacketsMissingAsked;
+        sndPacketsMissingSent += other.sndPacketsMissingSent;
+
+        return *this;
+    }
+
+    RtxStats operator+(const RtxStats& other)
+    {
+        RtxStats sum = *this;
+        sum += other;
+        return sum;
+    }
+};
+
 template <typename ChannelType>
 class SfuClient : public transport::DataReceiver
 {
@@ -77,6 +110,16 @@ public:
         {
             delete item.second;
         }
+    }
+
+    RtxStats getCumulativeRtxStats() const
+    {
+        auto stats = _rtxStats;
+        for (const auto& rcv : _videoReceivers)
+        {
+            stats += rcv->getRtxStats();
+        }
+        return stats;
     }
 
     void initiateCall(const std::string& baseUrl,
@@ -340,6 +383,7 @@ public:
             VideoContent content,
             uint64_t timestamp)
             : contexts(256),
+
               _rtpMap(rtpMap),
               _rtxRtpMap(rtxRtpMap),
               _loggableId("rtprcv", instanceId),
@@ -349,6 +393,8 @@ public:
             _recording.reserve(256 * 1024);
             logger::info("video offered ssrc %u, payload %u", _loggableId.c_str(), _ssrcs[0].main, _rtpMap.payloadType);
         }
+
+        RtxStats getRtxStats() const { return _rtxStats; }
 
         void onRtpPacketReceived(transport::RtcTransport* sender,
             memory::Packet& packet,
@@ -431,6 +477,7 @@ public:
                          missingSequenceNumber != extendedSequenceNumber;
                          ++missingSequenceNumber)
                     {
+                        _rtxStats.rcvPacketsMissing++;
                         inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
                     }
                 }
@@ -449,6 +496,10 @@ public:
                         sequenceNumber,
                         inboundContext.ssrc);
                     return;
+                }
+                else
+                {
+                    _rtxStats.rcvPacketsRecovered++;
                 }
             }
 
@@ -497,6 +548,7 @@ public:
         std::vector<int16_t> _recording;
         api::SimulcastGroup _ssrcs;
         VideoContent _videoContent;
+        RtxStats _rtxStats;
     };
 
 public:
@@ -585,6 +637,8 @@ public:
                 if (rtcpPacket.packetType == rtp::RtcpPacketType::RTPTRANSPORT_FB &&
                     rtcpFeedback->header.fmtCount == rtp::TransportLayerFeedbackType::PacketNack)
                 {
+                    _rtxStats.sndNackRequestsReceived++;
+
                     const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
                     if (mediaSsrc)
                     {
@@ -636,6 +690,8 @@ public:
         const auto feedbackSsrc = getFeedbackSsrc(ssrc);
         auto cache = _videoCaches.find(ssrc);
         auto videoSource = _videoSources.find(ssrc);
+
+        _rtxStats.sndPacketsMissingAsked++;
 
         if (cache == _videoCaches.end() || videoSource == _videoSources.end())
         {
@@ -705,6 +761,8 @@ public:
             ssrc,
             feedbackSsrc,
             sequenceCounter & 0xFFFFu);
+
+        _rtxStats.sndPacketsMissingSent++;
 
         _transport->protectAndSend(std::move(packet));
     }
@@ -788,6 +846,7 @@ private:
     uint32_t _ptime;
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
     size_t _instanceId = 0;
+    RtxStats _rtxStats;
 };
 
 template <typename TClient>

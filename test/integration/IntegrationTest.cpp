@@ -76,7 +76,7 @@ void IntegrationTest::SetUp()
     _clientsEndpointFacory =
         std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get(),
             [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
-                logger::info("!!! Client %s endpoint uses address %s",
+                logger::info("Client %s endpoint uses address %s",
                     "IntegrationTest",
                     name.c_str(),
                     addr.toString().c_str());
@@ -128,7 +128,7 @@ void IntegrationTest::initBridge(config::Config& config)
             [this](std::shared_ptr<fakenet::NetworkLink> netLink,
                 const transport::SocketAddress& addr,
                 const std::string& name) {
-                logger::info("!!! Bridge: %s endpoint uses address %s",
+                logger::info("Bridge: %s endpoint uses address %s",
                     "IntegrationTest",
                     name.c_str(),
                     addr.toString().c_str());
@@ -1685,7 +1685,17 @@ TEST_F(IntegrationTest, detectIsPtt)
     });
 };
 
-TEST_F(IntegrationTest, whenPacketLossVideoIsResentAudioIsNot)
+/*
+Test setup:
+1. Topology:
+              Client-1 <----> SFU <------> Client-2
+2. Control:
+   SFU inbound networklink is set to lose packets (e.g. 1%) that comes from both clients.
+3. Expectations:
+   - both clients receive and serve NACK requests;
+   - both clients have NO video packet loss, because they ARE retransmitted.
+*/
+TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
         _config.readFromString(R"({
@@ -1732,11 +1742,24 @@ TEST_F(IntegrationTest, whenPacketLossVideoIsResentAudioIsNot)
         {
             for (auto id : {0, 1})
             {
-                auto audioCounters = group.clients[id]->_transport->getCumulativeAudioReceiveCounters();
-                EXPECT_NE(audioCounters.lostPackets, 0);
-
                 auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
                 EXPECT_EQ(videoCounters.lostPackets, 0);
+
+                // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
+                // video streams only. So let's check SfuClient NACK-related stats instead:
+
+                const auto stats = group.clients[id]->getCumulativeRtxStats();
+
+                // Expect, "as sender" we received several NACK request from SFU, and we served them all.
+                EXPECT_NE(stats.sndNackRequestsReceived, 0);
+                EXPECT_NE(stats.sndPacketsMissingAsked, 0);
+                EXPECT_NE(stats.sndPacketsMissingSent, 0);
+                EXPECT_EQ(stats.sndPacketsMissingAsked, stats.sndPacketsMissingSent);
+
+                EXPECT_EQ(stats.rcvNackRequestSent, 0); // Expected as it's is not implemented yet.
+                EXPECT_NE(stats.rcvPacketsMissing, 0);
+                EXPECT_NE(stats.rcvPacketsRecovered, 0);
+                EXPECT_EQ(stats.rcvPacketsMissing, stats.rcvPacketsRecovered);
             }
         }
     });
