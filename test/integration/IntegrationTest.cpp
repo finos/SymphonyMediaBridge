@@ -527,7 +527,7 @@ TEST_F(IntegrationTest, plain)
 
 TEST_F(IntegrationTest, audioOnlyNoPadding)
 {
-    runTestInThread(_numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
         initBridge(_config);
@@ -1559,7 +1559,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
 
 TEST_F(IntegrationTest, detectIsPtt)
 {
-    runTestInThread(2 * _numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",

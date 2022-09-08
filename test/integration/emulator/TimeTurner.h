@@ -35,8 +35,6 @@ public:
     }
 
     void stop();
-    // void enable() { _enabled = true; }
-    // void disable() { _enabled = false; }
 
     void resetTime(uint64_t timestamp) { _timestamp = timestamp; }
 
