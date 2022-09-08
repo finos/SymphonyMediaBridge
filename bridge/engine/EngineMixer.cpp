@@ -967,7 +967,7 @@ void EngineMixer::markSsrcsInUse()
         auto inboundContext = it.second;
         const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(inboundContext->endpointIdHash);
 
-        inboundContext->isSsrcUsed = !_engineStreamDirector->isSsrcUsed(inboundContext->ssrc,
+        inboundContext->isSsrcUsed = _engineStreamDirector->isSsrcUsed(inboundContext->ssrc,
             inboundContext->endpointIdHash,
             isSenderInLastNList,
             _engineRecordingStreams.size());
