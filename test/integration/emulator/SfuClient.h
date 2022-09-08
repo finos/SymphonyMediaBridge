@@ -51,6 +51,7 @@ struct RtxStats
     size_t sndNackRequestsReceived = 0;
     size_t sndPacketsMissingAsked = 0;
     size_t sndPacketsMissingSent = 0;
+    size_t sndPacketsSent = 0;
 
     RtxStats& operator+=(const RtxStats& other)
     {
@@ -61,6 +62,7 @@ struct RtxStats
         sndNackRequestsReceived += other.sndNackRequestsReceived;
         sndPacketsMissingAsked += other.sndPacketsMissingAsked;
         sndPacketsMissingSent += other.sndPacketsMissingSent;
+        sndPacketsSent += other.sndPacketsSent;
 
         return *this;
     }
@@ -285,6 +287,7 @@ public:
                         auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
                         cache->second->add(*packet, rtpHeader->sequenceNumber);
                     }
+                    _rtxStats.sndPacketsSent++;
                     if (!_transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp))
                     {
                         logger::warn("failed to add SendMediaJob", "SfuClient");
@@ -490,7 +493,7 @@ public:
                 if (!inboundContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, esn) ||
                     esn != extendedSequenceNumber)
                 {
-                    logger::debug("%s Not waiting for packet seq %u ssrc %u, dropping",
+                    logger::debug("%s Unexpected retranmsission packet seq %u ssrc %u, dropping",
                         "SfuClient",
                         sender->getLoggableId().c_str(),
                         sequenceNumber,
@@ -611,63 +614,68 @@ public:
             if (rtcpPacket.packetType == rtp::RtcpPacketType::PAYLOADSPECIFIC_FB &&
                 rtcpFeedback->header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
             {
-                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
-                auto it = _videoSources.find(rtcpFeedback->mediaSsrc.get());
-                if (it != _videoSources.end())
-                {
-                    auto& videoSource = it->second;
-                    if (videoSource->getSsrc() == rtcpFeedback->mediaSsrc.get())
-                    {
-                        videoSource->requestKeyFrame();
-                    }
-                }
-                else
-                {
-                    logger::warn("cannot find video ssrc for PLI %u",
-                        _loggableId.c_str(),
-                        rtcpFeedback->mediaSsrc.get());
-                    for (auto& it : _videoSources)
-                    {
-                        logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
-                    }
-                }
+                processRtcpPli(sender, rtcpFeedback);
             }
-            else
+            if (rtcpPacket.packetType == rtp::RtcpPacketType::RTPTRANSPORT_FB &&
+                rtcpFeedback->header.fmtCount == rtp::TransportLayerFeedbackType::PacketNack)
             {
-                if (rtcpPacket.packetType == rtp::RtcpPacketType::RTPTRANSPORT_FB &&
-                    rtcpFeedback->header.fmtCount == rtp::TransportLayerFeedbackType::PacketNack)
+                processRtcpNack(sender, rtcpFeedback);
+            }
+        }
+    }
+
+    void processRtcpPli(transport::RtcTransport* sender, const rtp::RtcpFeedback* rtcpFeedback)
+    {
+        logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
+        auto it = _videoSources.find(rtcpFeedback->mediaSsrc.get());
+        if (it != _videoSources.end())
+        {
+            auto& videoSource = it->second;
+            if (videoSource->getSsrc() == rtcpFeedback->mediaSsrc.get())
+            {
+                videoSource->requestKeyFrame();
+            }
+        }
+        else
+        {
+            logger::warn("cannot find video ssrc for PLI %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
+            for (auto& it : _videoSources)
+            {
+                logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
+            }
+        }
+    }
+
+    void processRtcpNack(transport::RtcTransport* sender, const rtp::RtcpFeedback* rtcpFeedback)
+    {
+        _rtxStats.sndNackRequestsReceived++;
+
+        const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
+        if (mediaSsrc)
+        {
+            logger::warn("SfuClient received NACK, ssrc %u", sender->getLoggableId().c_str(), mediaSsrc);
+
+            const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
+            uint16_t pid = 0;
+            uint16_t blp = 0;
+
+            for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+            {
+                rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+
+                auto sequenceNumber = pid;
+                sendIfCached(mediaSsrc, sequenceNumber);
+
+                while (blp != 0)
                 {
-                    _rtxStats.sndNackRequestsReceived++;
+                    ++sequenceNumber;
 
-                    const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
-                    if (mediaSsrc)
+                    if ((blp & 0x1) == 0x1)
                     {
-                        logger::warn("SfuClient received NACK, ssrc %u", sender->getLoggableId().c_str(), mediaSsrc);
-
-                        const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
-                        uint16_t pid = 0;
-                        uint16_t blp = 0;
-
-                        for (size_t i = 0; i < numFeedbackControlInfos; ++i)
-                        {
-                            rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
-
-                            auto sequenceNumber = pid;
-                            sendIfCached(mediaSsrc, sequenceNumber);
-
-                            while (blp != 0)
-                            {
-                                ++sequenceNumber;
-
-                                if ((blp & 0x1) == 0x1)
-                                {
-                                    sendIfCached(mediaSsrc, sequenceNumber);
-                                }
-
-                                blp = blp >> 1;
-                            }
-                        }
+                        sendIfCached(mediaSsrc, sequenceNumber);
                     }
+
+                    blp = blp >> 1;
                 }
             }
         }

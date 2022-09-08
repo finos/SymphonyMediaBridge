@@ -1698,6 +1698,8 @@ Test setup:
 TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
+        constexpr auto PACKET_LOSS_RATE = 0.01;
+
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1743,13 +1745,21 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
         {
             for (auto id : {0, 1})
             {
-                auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
-                EXPECT_EQ(videoCounters.lostPackets, 0);
-
                 // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
                 // video streams only. So let's check SfuClient NACK-related stats instead:
 
                 const auto stats = group.clients[id]->getCumulativeRtxStats();
+                auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+
+                // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
+                // have been ignored. So we might expect small number of videoCounters.lostPackets.
+                if (videoCounters.lostPackets != 0)
+                {
+                    ASSERT_TRUE(stats.rcvPacketsMissing >= stats.rcvPacketsRecovered);
+                    // Expect number of non-recovered packet to be smaller than
+                    ASSERT_TRUE(
+                        stats.rcvPacketsMissing - stats.rcvPacketsRecovered < stats.sndPacketsSent * PACKET_LOSS_RATE);
+                }
 
                 // Expect, "as sender" we received several NACK request from SFU, and we served them all.
                 EXPECT_NE(stats.sndNackRequestsReceived, 0);
@@ -1760,7 +1770,6 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                 EXPECT_EQ(stats.rcvNackRequestSent, 0); // Expected as it's is not implemented yet.
                 EXPECT_NE(stats.rcvPacketsMissing, 0);
                 EXPECT_NE(stats.rcvPacketsRecovered, 0);
-                EXPECT_EQ(stats.rcvPacketsMissing, stats.rcvPacketsRecovered);
             }
         }
     });

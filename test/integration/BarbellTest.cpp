@@ -225,6 +225,11 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
         {
             auto videoCounters = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
+
+            // The worst case, we should loose about PACKET_LOSS_RATE (1%) * 5 sec * 30 fps around 15 frames.
+            // Sometimes videoCounters.lostPackets > 0 if I-frame is transmiited right after the "loss".
+            // But than, if we ask client->...->VideoMissingPacketsTracker.process() - should return 0 lost sequence
+            // numbers.
             EXPECT_EQ(videoCounters.lostPackets, 0);
 
             auto autioCounters = group.clients[0]->_transport->getCumulativeAudioReceiveCounters();
