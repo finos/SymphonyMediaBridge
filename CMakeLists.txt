@@ -124,18 +124,19 @@ set(FILES
         bridge/VideoStreamDescription.h
         bridge/TransportDescription.h
         bridge/VideoStream.h
-        bridge/endpointActions/ActionContext.h
-        bridge/endpointActions/ApiActions.h
-        bridge/endpointActions/GetConferenceInfo.cpp
-        bridge/endpointActions/GetEndpointInfo.cpp
-        bridge/endpointActions/AllocateConference.cpp
-        bridge/endpointActions/ConferenceActions.cpp
-        bridge/endpointActions/GetConferences.cpp
-        bridge/endpointActions/About.cpp
-        bridge/endpointActions/GetStats.cpp
-        bridge/endpointActions/ApiHelpers.cpp
-        bridge/endpointActions/ApiHelpers.h
-        bridge/endpointActions/BarbellActions.cpp
+        bridge/requestHandlers/ActionContext.h
+        bridge/requestHandlers/ApiActions.h
+        bridge/requestHandlers/GetConferenceInfo.cpp
+        bridge/requestHandlers/GetEndpointInfo.cpp
+        bridge/requestHandlers/AllocateConference.cpp
+        bridge/requestHandlers/ConferenceActions.cpp
+        bridge/requestHandlers/GetConferences.cpp
+        bridge/requestHandlers/About.cpp
+        bridge/requestHandlers/GetStats.cpp
+        bridge/requestHandlers/ApiHelpers.cpp
+        bridge/requestHandlers/ApiHelpers.h
+        bridge/requestHandlers/BarbellActions.cpp
+        bridge/requestHandlers/DeleteEndpoint.cpp
         bridge/engine/ActiveMediaList.cpp
         bridge/engine/ActiveMediaList.h
         bridge/engine/ActiveTalker.h

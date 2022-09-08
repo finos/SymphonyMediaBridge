@@ -158,6 +158,11 @@ public:
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
     utils::Optional<uint32_t> getOfferedScreensharingSsrc() const override;
     utils::Optional<uint32_t> getOfferedLocalSsrc() const override;
+
+private:
+    std::string _audioId;
+    std::string _videoId;
+    std::string _dataId;
 };
 
 class Barbell

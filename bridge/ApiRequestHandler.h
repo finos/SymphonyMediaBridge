@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bridge/endpointActions/ActionContext.h"
+#include "bridge/requestHandlers/ActionContext.h"
 #include "httpd/HttpRequestHandler.h"
 #include <functional>
 #include <map>

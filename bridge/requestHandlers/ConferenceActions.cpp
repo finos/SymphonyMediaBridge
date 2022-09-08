@@ -8,7 +8,7 @@
 #include "bridge/RequestLogger.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/VideoStreamDescription.h"
-#include "bridge/endpointActions/ApiHelpers.h"
+#include "bridge/requestHandlers/ApiHelpers.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "transport/dtls/SslDtls.h"

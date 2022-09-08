@@ -1,8 +1,8 @@
 #include "bridge/ApiRequestHandler.h"
 #include "bridge/RequestLogger.h"
-#include "endpointActions/ApiHelpers.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
+#include "requestHandlers/ApiHelpers.h"
 #include "utils/Format.h"
 
 namespace
@@ -38,10 +38,14 @@ httpd::Response ApiRequestHandler::callEndpointAction(RequestLogger& requestLogg
 {
     auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
     if (utils::StringTokenizer::isEqual(token, "about") && token.next && request._method == httpd::Method::GET)
+    {
         return handleAbout(this, requestLogger, request, token);
+    }
 
     if (utils::StringTokenizer::isEqual(token, "stats") && request._method == httpd::Method::GET)
+    {
         return handleStats(this, requestLogger, request, token);
+    }
 
     if (utils::StringTokenizer::isEqual(token, "conferences"))
     {
@@ -51,25 +55,45 @@ httpd::Response ApiRequestHandler::callEndpointAction(RequestLogger& requestLogg
             {
                 auto nextToken = utils::StringTokenizer::tokenize(token, '/');
                 if (nextToken.next)
+                {
                     return getEndpointInfo(this, requestLogger, request, token);
+                }
                 else
+                {
                     return getConferenceInfo(this, requestLogger, request, token);
+                }
             }
-            if (request._method == httpd::Method::POST)
+            else if (request._method == httpd::Method::POST)
+            {
                 return processConferenceAction(this, requestLogger, request, token);
+            }
+            else if (request._method == httpd::Method::DELETE)
+            {
+                auto nextToken = utils::StringTokenizer::tokenize(token, '/');
+                if (nextToken.next)
+                {
+                    return deleteEndpoint(this, requestLogger, request, token);
+                }
+            }
         }
         else
         {
             if (request._method == httpd::Method::GET)
+            {
                 return getConferences(this, requestLogger, request, token);
+            }
             else if (request._method == httpd::Method::POST)
+            {
                 return allocateConference(this, requestLogger, request, token);
+            }
         }
     }
 
     if (utils::StringTokenizer::isEqual(token, "barbell") && token.next &&
         (request._method == httpd::Method::POST || request._method == httpd::Method::DELETE))
+    {
         return processBarbellAction(this, requestLogger, request, token);
+    }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
         utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));

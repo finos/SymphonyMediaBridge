@@ -45,4 +45,9 @@ httpd::Response processBarbellAction(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
     const ::utils::StringTokenizer::Token&);
+
+httpd::Response deleteEndpoint(ActionContext* context,
+    RequestLogger& requestLogger,
+    const httpd::Request&,
+    const ::utils::StringTokenizer::Token& incomingToken);
 } // namespace bridge

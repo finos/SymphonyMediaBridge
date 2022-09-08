@@ -405,6 +405,23 @@ void ColibriChannel::create(const std::string& baseUrl,
     if (request.isSuccess())
     {
         _offer = request.getJsonBody();
+        logger::debug("offer is %s", "ColibriChannel", _offer.dump().c_str());
+        for (auto& content : _offer["contents"])
+        {
+            if (content["name"].get<std::string>() == "audio")
+            {
+                _audioId = content["channels"].front()["id"].get<std::string>();
+            }
+            else if (content["name"].get<std::string>() == "video")
+            {
+                _videoId = content["channels"].front()["id"].get<std::string>();
+            }
+            else if (content["name"].get<std::string>() == "data")
+            {
+                _dataId = content["sctpconnections"].front()["id"].get<std::string>();
+            }
+        }
+
         raw = request.getResponse();
     }
     else
@@ -585,6 +602,11 @@ void ColibriChannel::disconnect()
     auto videoChannel = json::object({{"endpoint", _id}, {"expire", 0}, {"id", _videoId}});
     videoContent["channels"].push_back(videoChannel);
     body["contents"].push_back(videoContent);
+
+    auto dataContent = json::object({{"name", "data"}, {"sctpconnections", json::array()}});
+    auto dataChannel = json::object({{"endpoint", _id}, {"expire", 0}, {"id", _dataId}});
+    dataContent["sctpconnections"].push_back(dataChannel);
+    body["contents"].push_back(dataContent);
 
     logger::debug("expire %s", "ColibriChannel", body.dump().c_str());
     HttpPatchRequest request((_baseUrl + "/colibri/conferences/" + _conferenceId).c_str(), body.dump().c_str());

@@ -396,6 +396,7 @@ TEST_F(IntegrationTest, plain)
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
         group.clients[2]->_transport->stop();
+        group.disconnectClients();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
 
@@ -565,6 +566,8 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         group.clients[1]->_transport->stop();
         group.clients[2]->_transport->stop();
 
+        group.disconnectClients();
+
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
@@ -627,6 +630,8 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
         group.clients[2]->_transport->stop();
+
+        group.disconnectClients();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -783,6 +788,8 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         group.clients[0]->_transport->stop();
         group.clients[2]->_transport->stop();
 
+        group.disconnectClients();
+
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
@@ -841,7 +848,7 @@ TEST_F(IntegrationTest, plainNewApi)
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
         group.clients[2]->_transport->stop();
-
+        group.disconnectClients();
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
@@ -1285,6 +1292,8 @@ TEST_F(IntegrationTest, simpleBarbell)
         group.clients[1]->_transport->stop();
         group.clients[2]->_transport->stop();
 
+        group.disconnectClients();
+
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
@@ -1474,6 +1483,8 @@ TEST_F(IntegrationTest, barbellAfterClients)
         utils::Time::nanoSleep(utils::Time::ms * 200); // let pending packets be sent and received
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
+
+        group.disconnectClients();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
 
