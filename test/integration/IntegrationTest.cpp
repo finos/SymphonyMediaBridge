@@ -1198,7 +1198,7 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
 
 TEST_F(IntegrationTest, simpleBarbell)
 {
-    runTestInThread(3 * _numWorkerThreads + 8, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 10, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1376,7 +1376,7 @@ TEST_F(IntegrationTest, simpleBarbell)
 
 TEST_F(IntegrationTest, barbellAfterClients)
 {
-    runTestInThread(3 * _numWorkerThreads + 8, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 10, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",

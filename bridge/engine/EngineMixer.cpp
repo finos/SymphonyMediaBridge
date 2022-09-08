@@ -175,6 +175,32 @@ private:
     size_t _endpointIdHash;
 };
 
+class AddPacketCacheJob : public jobmanager::CountedJob
+{
+public:
+    AddPacketCacheJob(transport::RtcTransport& transport,
+        bridge::SsrcOutboundContext& outboundContext,
+        bridge::PacketCache* packetCache)
+        : CountedJob(transport.getJobCounter()),
+          _outboundContext(outboundContext),
+          _packetCache(packetCache)
+    {
+    }
+
+    void run() override
+    {
+        if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
+        {
+            return;
+        }
+        _outboundContext.packetCache.set(_packetCache);
+    }
+
+private:
+    bridge::SsrcOutboundContext& _outboundContext;
+    bridge::PacketCache* _packetCache;
+};
+
 /**
  * @return true if this ssrc should be skipped and not forwarded to the videoStream.
  */
@@ -693,28 +719,35 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
 
 void EngineMixer::addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache)
 {
-    bridge::SsrcOutboundContext* ssrcOutboundContext = nullptr;
-
+    transport::RtcTransport* transport = nullptr;
+    bridge::SsrcOutboundContext* ssrcContext = nullptr;
     auto* videoStream = _engineVideoStreams.getItem(endpointIdHash);
     if (videoStream)
     {
-        ssrcOutboundContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
+        ssrcContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
+        transport = &videoStream->transport;
     }
     else
     {
         auto* barbell = _engineBarbells.getItem(endpointIdHash);
         if (barbell)
         {
-            ssrcOutboundContext = barbell->ssrcOutboundContexts.getItem(ssrc);
+            ssrcContext = barbell->ssrcOutboundContexts.getItem(ssrc);
+            transport = &barbell->transport;
         }
     }
 
-    if (!ssrcOutboundContext || (ssrcOutboundContext->packetCache.isSet() && ssrcOutboundContext->packetCache.get()))
+    if (ssrcContext && transport)
     {
-        return;
+        if (!transport->getJobQueue().addJob<AddPacketCacheJob>(*transport, *ssrcContext, videoPacketCache))
+        {
+            logger::warn("JobQueue full. Failed to add packet cache to %zu, ssrc %u, %s",
+                _loggableId.c_str(),
+                endpointIdHash,
+                ssrc,
+                transport->getLoggableId().c_str());
+        }
     }
-
-    ssrcOutboundContext->packetCache.set(videoPacketCache);
 }
 
 void EngineMixer::addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer)
