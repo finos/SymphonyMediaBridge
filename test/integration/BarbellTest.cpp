@@ -224,16 +224,25 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         logVideoSent("client3", *group.clients[2]);
 
         {
+            // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
+            // video streams only. So let's check SfuClient NACK-related stats instead:
+
+            const auto stats = group.clients[0]->getCumulativeRtxStats();
             auto videoCounters = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
 
-            // The worst case, we should loose about PACKET_LOSS_RATE (1%) * 5 sec * 30 fps around 15 frames.
-            // Sometimes videoCounters.lostPackets > 0 if I-frame is transmiited right after the "loss".
-            // But than, if we ask client->...->VideoMissingPacketsTracker.process() - should return 0 lost sequence
-            // numbers.
-            EXPECT_EQ(videoCounters.lostPackets, 0);
+            // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
+            // have been ignored. So we might expect small number of videoCounters.lostPackets.
+            if (videoCounters.lostPackets != 0)
+            {
+                ASSERT_TRUE(stats.rcvPacketsMissing >= stats.rcvPacketsRecovered);
+                // Expect number of non-recovered packet to be smaller than half the loss rate.
+                ASSERT_TRUE(
+                    stats.rcvPacketsMissing - stats.rcvPacketsRecovered < stats.sndPacketsSent * PACKET_LOSS_RATE / 2);
+            }
 
-            auto autioCounters = group.clients[0]->_transport->getCumulativeAudioReceiveCounters();
-            EXPECT_NE(autioCounters.lostPackets, 0);
+            // Assure that losses indeed happenned.
+            EXPECT_NE(stats.rcvPacketsMissing, 0);
+            EXPECT_NE(stats.rcvPacketsRecovered, 0);
 
             const auto& rData1 = group.clients[0]->getAudioReceiveStats();
             std::vector<double> allFreq;

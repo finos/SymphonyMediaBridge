@@ -1756,9 +1756,9 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                 if (videoCounters.lostPackets != 0)
                 {
                     ASSERT_TRUE(stats.rcvPacketsMissing >= stats.rcvPacketsRecovered);
-                    // Expect number of non-recovered packet to be smaller than
-                    ASSERT_TRUE(
-                        stats.rcvPacketsMissing - stats.rcvPacketsRecovered < stats.sndPacketsSent * PACKET_LOSS_RATE);
+                    // Expect number of non-recovered packet to be smaller than half the loss rate.
+                    ASSERT_TRUE(stats.rcvPacketsMissing - stats.rcvPacketsRecovered <
+                        stats.sndPacketsSent * PACKET_LOSS_RATE / 2);
                 }
 
                 // Expect, "as sender" we received several NACK request from SFU, and we served them all.
