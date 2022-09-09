@@ -42,27 +42,42 @@ private:
 
 struct RtxStats
 {
-    // Receiver's stats: how much we missed, recovered and complained.
-    size_t rcvPacketsMissing = 0;
-    size_t rcvPacketsRecovered = 0;
-    size_t rcvNackRequestSent = 0; //  Not implemented: SfuClient does not sent NACK yet.
+    struct Receiver
+    {
+        size_t packetsMissing = 0;
+        size_t packetsRecovered = 0;
+        size_t nackRequests = 0; // Not implemented: SfuClient does not sent NACK yet.
 
-    // Sender's stats: how much complains we got, attempted to serve and served.
-    size_t sndNackRequestsReceived = 0;
-    size_t sndPacketsMissingAsked = 0;
-    size_t sndPacketsMissingSent = 0;
-    size_t sndPacketsSent = 0;
+        Receiver& operator+=(const Receiver& other)
+        {
+            packetsMissing += other.packetsMissing;
+            packetsRecovered += other.packetsRecovered;
+            nackRequests += other.nackRequests;
+            return *this;
+        }
+    } receiver;
+
+    struct Sender
+    {
+        size_t nacksReceived = 0;
+        size_t retransmissionRequests = 0;
+        size_t retransmissions = 0;
+        size_t packetsSent = 0;
+
+        Sender& operator+=(const Sender& other)
+        {
+            nacksReceived += other.nacksReceived;
+            retransmissionRequests += other.retransmissionRequests;
+            retransmissions += other.retransmissions;
+            packetsSent += other.packetsSent;
+            return *this;
+        }
+    } sender;
 
     RtxStats& operator+=(const RtxStats& other)
     {
-        rcvPacketsMissing += other.rcvPacketsMissing;
-        rcvPacketsRecovered += other.rcvPacketsRecovered;
-        rcvNackRequestSent += other.rcvNackRequestSent;
-
-        sndNackRequestsReceived += other.sndNackRequestsReceived;
-        sndPacketsMissingAsked += other.sndPacketsMissingAsked;
-        sndPacketsMissingSent += other.sndPacketsMissingSent;
-        sndPacketsSent += other.sndPacketsSent;
+        receiver += other.receiver;
+        sender += other.sender;
 
         return *this;
     }
@@ -287,7 +302,7 @@ public:
                         auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
                         cache->second->add(*packet, rtpHeader->sequenceNumber);
                     }
-                    _rtxStats.sndPacketsSent++;
+                    _rtxStats.sender.packetsSent++;
                     if (!_transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp))
                     {
                         logger::warn("failed to add SendMediaJob", "SfuClient");
@@ -480,7 +495,7 @@ public:
                          missingSequenceNumber != extendedSequenceNumber;
                          ++missingSequenceNumber)
                     {
-                        _rtxStats.rcvPacketsMissing++;
+                        _rtxStats.receiver.packetsMissing++;
                         inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
                     }
                 }
@@ -493,7 +508,7 @@ public:
                 if (!inboundContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, esn) ||
                     esn != extendedSequenceNumber)
                 {
-                    logger::debug("%s Unexpected retranmsission packet seq %u ssrc %u, dropping",
+                    logger::debug("%s Unexpected re-transmission of packet seq %u ssrc %u, dropping",
                         "SfuClient",
                         sender->getLoggableId().c_str(),
                         sequenceNumber,
@@ -502,7 +517,7 @@ public:
                 }
                 else
                 {
-                    _rtxStats.rcvPacketsRecovered++;
+                    _rtxStats.receiver.packetsRecovered++;
                 }
             }
 
@@ -648,7 +663,7 @@ public:
 
     void processRtcpNack(transport::RtcTransport* sender, const rtp::RtcpFeedback* rtcpFeedback)
     {
-        _rtxStats.sndNackRequestsReceived++;
+        _rtxStats.sender.nacksReceived++;
 
         const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
         if (mediaSsrc)
@@ -699,7 +714,7 @@ public:
         auto cache = _videoCaches.find(ssrc);
         auto videoSource = _videoSources.find(ssrc);
 
-        _rtxStats.sndPacketsMissingAsked++;
+        _rtxStats.sender.retransmissionRequests++;
 
         if (videoSource->second->isKeyFrameRequested())
         {
@@ -762,7 +777,7 @@ public:
             feedbackSsrc,
             sequenceCounter & 0xFFFFu);
 
-        _rtxStats.sndPacketsMissingSent++;
+        _rtxStats.sender.retransmissions++;
 
         _transport->protectAndSend(std::move(packet));
     }

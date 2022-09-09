@@ -234,15 +234,15 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             // have been ignored. So we might expect small number of videoCounters.lostPackets.
             if (videoCounters.lostPackets != 0)
             {
-                ASSERT_TRUE(stats.rcvPacketsMissing >= stats.rcvPacketsRecovered);
+                ASSERT_TRUE(stats.receiver.packetsMissing >= stats.receiver.packetsRecovered);
                 // Expect number of non-recovered packet to be smaller than half the loss rate.
-                ASSERT_TRUE(
-                    stats.rcvPacketsMissing - stats.rcvPacketsRecovered < stats.sndPacketsSent * PACKET_LOSS_RATE / 2);
+                ASSERT_TRUE(stats.receiver.packetsMissing - stats.receiver.packetsRecovered <
+                    stats.sender.packetsSent * PACKET_LOSS_RATE / 2);
             }
 
             // Assure that losses indeed happenned.
-            EXPECT_NE(stats.rcvPacketsMissing, 0);
-            EXPECT_NE(stats.rcvPacketsRecovered, 0);
+            EXPECT_NE(stats.receiver.packetsMissing, 0);
+            EXPECT_NE(stats.receiver.packetsRecovered, 0);
 
             const auto& rData1 = group.clients[0]->getAudioReceiveStats();
             std::vector<double> allFreq;
@@ -292,5 +292,3 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         }
     });
 }
-
-#undef DEFINE_3_CLIENT_CONFERENCE

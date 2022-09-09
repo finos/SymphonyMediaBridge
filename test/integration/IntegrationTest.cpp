@@ -1755,21 +1755,21 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                 // have been ignored. So we might expect small number of videoCounters.lostPackets.
                 if (videoCounters.lostPackets != 0)
                 {
-                    ASSERT_TRUE(stats.rcvPacketsMissing >= stats.rcvPacketsRecovered);
+                    ASSERT_TRUE(stats.receiver.packetsMissing >= stats.receiver.packetsRecovered);
                     // Expect number of non-recovered packet to be smaller than half the loss rate.
-                    ASSERT_TRUE(stats.rcvPacketsMissing - stats.rcvPacketsRecovered <
-                        stats.sndPacketsSent * PACKET_LOSS_RATE / 2);
+                    ASSERT_TRUE(stats.receiver.packetsMissing - stats.receiver.packetsRecovered <
+                        stats.sender.packetsSent * PACKET_LOSS_RATE / 2);
                 }
 
                 // Expect, "as sender" we received several NACK request from SFU, and we served them all.
-                EXPECT_NE(stats.sndNackRequestsReceived, 0);
-                EXPECT_NE(stats.sndPacketsMissingAsked, 0);
-                EXPECT_NE(stats.sndPacketsMissingSent, 0);
-                EXPECT_EQ(stats.sndPacketsMissingAsked, stats.sndPacketsMissingSent);
+                EXPECT_NE(stats.sender.nacksReceived, 0);
+                EXPECT_NE(stats.sender.retransmissionRequests, 0);
+                EXPECT_NE(stats.sender.retransmissions, 0);
+                EXPECT_EQ(stats.sender.retransmissionRequests, stats.sender.retransmissions);
 
-                EXPECT_EQ(stats.rcvNackRequestSent, 0); // Expected as it's is not implemented yet.
-                EXPECT_NE(stats.rcvPacketsMissing, 0);
-                EXPECT_NE(stats.rcvPacketsRecovered, 0);
+                EXPECT_EQ(stats.receiver.nackRequests, 0); // Expected as it's is not implemented yet.
+                EXPECT_NE(stats.receiver.packetsMissing, 0);
+                EXPECT_NE(stats.receiver.packetsRecovered, 0);
             }
         }
     });

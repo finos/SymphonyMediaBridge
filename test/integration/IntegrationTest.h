@@ -14,27 +14,6 @@
 #include <gtest/gtest.h>
 #include <mutex>
 
-#define DEFINE_3_CLIENT_CONFERENCE(TChannel, BASE_URL)                                                                 \
-    Conference conf;                                                                                                   \
-    conf.create(BASE_URL);                                                                                             \
-    EXPECT_TRUE(conf.isSuccess());                                                                                     \
-    utils::Time::rawNanoSleep(1 * utils::Time::sec);                                                                   \
-    SfuClient<TChannel> client1(++_instanceCounter,                                                                    \
-        *_mainPoolAllocator,                                                                                           \
-        _audioAllocator,                                                                                               \
-        *_transportFactory,                                                                                            \
-        *_sslDtls);                                                                                                    \
-    SfuClient<TChannel> client2(++_instanceCounter,                                                                    \
-        *_mainPoolAllocator,                                                                                           \
-        _audioAllocator,                                                                                               \
-        *_transportFactory,                                                                                            \
-        *_sslDtls);                                                                                                    \
-    SfuClient<TChannel> client3(++_instanceCounter,                                                                    \
-        *_mainPoolAllocator,                                                                                           \
-        _audioAllocator,                                                                                               \
-        *_transportFactory,                                                                                            \
-        *_sslDtls);
-
 struct IntegrationTest : public ::testing::Test
 {
     IntegrationTest();

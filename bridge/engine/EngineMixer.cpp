@@ -2630,23 +2630,27 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
 
     if (fromBarbell)
     {
-        const auto bb = _engineBarbells.getItem(transport->getEndpointIdHash());
-        if (bb)
+        const auto barbell = _engineBarbells.getItem(transport->getEndpointIdHash());
+        if (barbell)
         {
             uint32_t feedbackSsrc = 0;
             _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc);
 
-            auto& bbTransport = bb->transport;
-            auto* mediaSsrcOutboundContext =
-                obtainOutboundSsrcContext(bb->idHash, bb->ssrcOutboundContexts, mediaSsrc, bb->audioRtpMap);
+            auto& bbTransport = barbell->transport;
+            auto* mediaSsrcOutboundContext = obtainOutboundSsrcContext(barbell->idHash,
+                barbell->ssrcOutboundContexts,
+                mediaSsrc,
+                barbell->audioRtpMap);
             if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
                 !mediaSsrcOutboundContext->packetCache.get())
             {
                 return;
             }
 
-            auto* feedbackSsrcOutboundContext =
-                obtainOutboundSsrcContext(bb->idHash, bb->ssrcOutboundContexts, feedbackSsrc, bb->audioRtpMap);
+            auto* feedbackSsrcOutboundContext = obtainOutboundSsrcContext(barbell->idHash,
+                barbell->ssrcOutboundContexts,
+                feedbackSsrc,
+                barbell->audioRtpMap);
             if (!feedbackSsrcOutboundContext)
             {
                 return;
@@ -3572,15 +3576,15 @@ void EngineMixer::processEngineMissingPackets(bridge::SsrcInboundContext& ssrcIn
 
 void EngineMixer::processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext)
 {
-    const auto bb = _engineBarbells.getItem(ssrcInboundContext.sender->getEndpointIdHash());
-    if (bb)
+    const auto barbell = _engineBarbells.getItem(ssrcInboundContext.sender->getEndpointIdHash());
+    if (barbell)
     {
-        auto videoStream = bb->videoSsrcMap.getItem(ssrcInboundContext.ssrc);
+        auto videoStream = barbell->videoSsrcMap.getItem(ssrcInboundContext.ssrc);
         if (videoStream)
         {
-            bb->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
+            barbell->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
                 0,
-                bb->transport,
+                barbell->transport,
                 _sendAllocator);
             return;
         }
