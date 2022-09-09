@@ -73,7 +73,7 @@ void IntegrationTest::SetUp()
     }
 
 #if USE_FAKENETWORK
-    _clientsEndpointFacory =
+    _clientsEndpointFactory =
         std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get(),
             [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
                 logger::info("Client %s endpoint uses address %s",
@@ -82,7 +82,7 @@ void IntegrationTest::SetUp()
                     addr.toString().c_str());
             }));
 #else
-    _clientsEndpointFacory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
+    _clientsEndpointFactory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
 #endif
 }
 
@@ -158,7 +158,7 @@ void IntegrationTest::initBridge(config::Config& config)
         interfaces,
         *_network,
         *_mainPoolAllocator,
-        _clientsEndpointFacory);
+        _clientsEndpointFactory);
 }
 
 using namespace emulator;

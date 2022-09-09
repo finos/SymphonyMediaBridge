@@ -2615,6 +2615,49 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     }
 }
 
+void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
+    const rtp::RtcpFeedback& rtcpFeedback,
+    const uint64_t timestamp)
+{
+    uint32_t feedbackSsrc = 0;
+    const auto mediaSsrc = rtcpFeedback.mediaSsrc.get();
+    _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc);
+
+    auto& bbTransport = barbell.transport;
+    auto* mediaSsrcOutboundContext =
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.audioRtpMap);
+    if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
+        !mediaSsrcOutboundContext->packetCache.get())
+    {
+        return;
+    }
+
+    auto* feedbackSsrcOutboundContext =
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, feedbackSsrc, barbell.audioRtpMap);
+    if (!feedbackSsrcOutboundContext)
+    {
+        return;
+    }
+
+    mediaSsrcOutboundContext->onRtpSent(timestamp);
+    const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(&rtcpFeedback);
+    uint16_t pid = 0;
+    uint16_t blp = 0;
+    for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+    {
+        feedbackSsrcOutboundContext->onRtpSent(timestamp);
+        rtp::getFeedbackControlInfo(&rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+        bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+            bbTransport,
+            *(mediaSsrcOutboundContext->packetCache.get()),
+            pid,
+            blp,
+            feedbackSsrc,
+            timestamp,
+            barbell.transport.getRtt());
+    }
+}
+
 void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
     const rtp::RtcpHeader& rtcpPacket,
     const uint64_t timestamp)
@@ -2633,46 +2676,7 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         const auto barbell = _engineBarbells.getItem(transport->getEndpointIdHash());
         if (barbell)
         {
-            uint32_t feedbackSsrc = 0;
-            _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc);
-
-            auto& bbTransport = barbell->transport;
-            auto* mediaSsrcOutboundContext = obtainOutboundSsrcContext(barbell->idHash,
-                barbell->ssrcOutboundContexts,
-                mediaSsrc,
-                barbell->audioRtpMap);
-            if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
-                !mediaSsrcOutboundContext->packetCache.get())
-            {
-                return;
-            }
-
-            auto* feedbackSsrcOutboundContext = obtainOutboundSsrcContext(barbell->idHash,
-                barbell->ssrcOutboundContexts,
-                feedbackSsrc,
-                barbell->audioRtpMap);
-            if (!feedbackSsrcOutboundContext)
-            {
-                return;
-            }
-
-            mediaSsrcOutboundContext->onRtpSent(timestamp);
-            const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
-            uint16_t pid = 0;
-            uint16_t blp = 0;
-            for (size_t i = 0; i < numFeedbackControlInfos; ++i)
-            {
-                feedbackSsrcOutboundContext->onRtpSent(timestamp);
-                rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
-                bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
-                    bbTransport,
-                    *(mediaSsrcOutboundContext->packetCache.get()),
-                    pid,
-                    blp,
-                    feedbackSsrc,
-                    timestamp,
-                    transport->getRtt());
-            }
+            processIncomingBarbellFbRtcpPacket(*barbell, *rtcpFeedback, timestamp);
         }
         return;
     }
@@ -3579,14 +3583,14 @@ void EngineMixer::processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcI
     const auto barbell = _engineBarbells.getItem(ssrcInboundContext.sender->getEndpointIdHash());
     if (barbell)
     {
+        const uint32_t REPORTER_SSRC = 0;
         auto videoStream = barbell->videoSsrcMap.getItem(ssrcInboundContext.ssrc);
         if (videoStream)
         {
             barbell->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
-                0,
+                REPORTER_SSRC,
                 barbell->transport,
                 _sendAllocator);
-            return;
         }
     }
 }

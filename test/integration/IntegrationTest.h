@@ -37,7 +37,7 @@ struct IntegrationTest : public ::testing::Test
     std::unique_ptr<transport::TransportFactory> _transportFactory;
     std::shared_ptr<fakenet::InternetRunner> _internet;
     std::shared_ptr<transport::EndpointFactory> _bridgeEndpointFactory;
-    std::shared_ptr<transport::EndpointFactory> _clientsEndpointFacory;
+    std::shared_ptr<transport::EndpointFactory> _clientsEndpointFactory;
 
     uint32_t _instanceCounter;
     const size_t _numWorkerThreads;
