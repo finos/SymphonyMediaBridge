@@ -41,7 +41,7 @@ SctpEndpoint::SctpEndpoint(uint16_t port,
     uint32_t mtu)
     : _loggableId("SctpEndpoint"),
       _port(std::make_unique<sctp::SctpServerPort>(_loggableId.getInstanceId(), this, this, port, config, timeSource)),
-      _sendQueue(bandwidthKpbs, std::max(bandwidthKpbs * 1000 / 4, mtu * 6u), mtu),
+      _sendQueue(_loggableId.c_str(), bandwidthKpbs, std::max(bandwidthKpbs * 1000 / 4, mtu * 6u), mtu),
       _streamId(0),
       _dataSizeReceived(0),
       _receivedMessageCount(0),

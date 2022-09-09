@@ -920,23 +920,21 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
         {
             continue;
         }
+
         auto videoMissingPacketsTracker = ssrcInboundContext.videoMissingPacketsTracker.get();
         if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp / 1000000ULL))
         {
             continue;
         }
 
-        auto videoStreamItr = _engineVideoStreams.find(ssrcInboundContext.sender->getEndpointIdHash());
-        if (videoStreamItr == _engineVideoStreams.end())
+        if (EngineBarbell::isFromBarbell(ssrcInboundContext.sender->getTag()))
         {
-            continue;
+            processBarbellMissingPackets(ssrcInboundContext);
         }
-        auto videoStream = videoStreamItr->second;
-
-        videoStream->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
-            videoStream->localSsrc,
-            videoStream->transport,
-            _sendAllocator);
+        else
+        {
+            processEngineMissingPackets(ssrcInboundContext);
+        }
     }
 
     processRecordingMissingPackets(timestamp);
@@ -1391,7 +1389,8 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
     const bool mustBeForwardedOnBarbells = isSenderInLastNList && !_engineBarbells.empty() && !isFromBarbell;
 
-    if (!mustBeForwardedOnBarbells &&
+    // Optmization with isSsrcUsed is not need for barbell (barbell sends only necessary streams).
+    if (videoStream && !mustBeForwardedOnBarbells &&
         !_engineStreamDirector->isSsrcUsed(mainSsrc,
             videoStream->endpointIdHash,
             isSenderInLastNList,
@@ -1404,6 +1403,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
         sender,
         *this,
         *ssrcContext,
+        *mainSsrcContext,
         mainSsrc,
         extendedSequenceNumber);
 }
@@ -1875,7 +1875,8 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 
             auto videoStream = barbell->videoSsrcMap.getItem(ssrc);
             assert(videoStream);
-            if (!videoStream->stream.getLevelOf(ssrc, inboundContext.simulcastLevel))
+            if (barbell->videoRtpMap.payloadType == payloadType &&
+                !videoStream->stream.getLevelOf(ssrc, inboundContext.simulcastLevel))
             {
                 logger::error("ssrc %u is not in simulcast group of barbell video stream %zu",
                     _loggableId.c_str(),
@@ -2614,6 +2615,49 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
     }
 }
 
+void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
+    const rtp::RtcpFeedback& rtcpFeedback,
+    const uint64_t timestamp)
+{
+    uint32_t feedbackSsrc = 0;
+    const auto mediaSsrc = rtcpFeedback.mediaSsrc.get();
+    _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc);
+
+    auto& bbTransport = barbell.transport;
+    auto* mediaSsrcOutboundContext =
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.audioRtpMap);
+    if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
+        !mediaSsrcOutboundContext->packetCache.get())
+    {
+        return;
+    }
+
+    auto* feedbackSsrcOutboundContext =
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, feedbackSsrc, barbell.audioRtpMap);
+    if (!feedbackSsrcOutboundContext)
+    {
+        return;
+    }
+
+    mediaSsrcOutboundContext->onRtpSent(timestamp);
+    const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(&rtcpFeedback);
+    uint16_t pid = 0;
+    uint16_t blp = 0;
+    for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+    {
+        feedbackSsrcOutboundContext->onRtpSent(timestamp);
+        rtp::getFeedbackControlInfo(&rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+        bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+            bbTransport,
+            *(mediaSsrcOutboundContext->packetCache.get()),
+            pid,
+            blp,
+            feedbackSsrc,
+            timestamp,
+            barbell.transport.getRtt());
+    }
+}
+
 void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
     const rtp::RtcpHeader& rtcpPacket,
     const uint64_t timestamp)
@@ -2624,7 +2668,18 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         return;
     }
 
+    const auto fromBarbell = EngineBarbell::isFromBarbell(transport->getTag());
     const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
+
+    if (fromBarbell)
+    {
+        const auto barbell = _engineBarbells.getItem(transport->getEndpointIdHash());
+        if (barbell)
+        {
+            processIncomingBarbellFbRtcpPacket(*barbell, *rtcpFeedback, timestamp);
+        }
+        return;
+    }
 
     auto rtcpSenderVideoStreamItr = _engineVideoStreams.find(transport->getEndpointIdHash());
     if (rtcpSenderVideoStreamItr == _engineVideoStreams.end())
@@ -3507,6 +3562,36 @@ void EngineMixer::allocateRecordingRtpPacketCacheIfNecessary(SsrcOutboundContext
         message.command.allocateRecordingRtpPacketCache.ssrc = ssrcOutboundContext.ssrc;
         message.command.allocateRecordingRtpPacketCache.endpointIdHash = recordingStream.endpointIdHash;
         _messageListener.onMessage(std::move(message));
+    }
+}
+
+void EngineMixer::processEngineMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext)
+{
+    auto videoStreamItr = _engineVideoStreams.find(ssrcInboundContext.sender->getEndpointIdHash());
+    if (videoStreamItr != _engineVideoStreams.end())
+    {
+        videoStreamItr->second->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(
+            ssrcInboundContext,
+            videoStreamItr->second->localSsrc,
+            videoStreamItr->second->transport,
+            _sendAllocator);
+    }
+}
+
+void EngineMixer::processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext)
+{
+    const auto barbell = _engineBarbells.getItem(ssrcInboundContext.sender->getEndpointIdHash());
+    if (barbell)
+    {
+        const uint32_t REPORTER_SSRC = 0;
+        auto videoStream = barbell->videoSsrcMap.getItem(ssrcInboundContext.ssrc);
+        if (videoStream)
+        {
+            barbell->transport.getJobQueue().addJob<bridge::ProcessMissingVideoPacketsJob>(ssrcInboundContext,
+                REPORTER_SSRC,
+                barbell->transport,
+                _sendAllocator);
+        }
     }
 }
 

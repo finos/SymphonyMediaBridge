@@ -65,6 +65,7 @@ void ProcessMissingVideoPacketsJob::run()
     {
         return;
     }
+
     _transport.protectAndSend(std::move(packet));
 }
 

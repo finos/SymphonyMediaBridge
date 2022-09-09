@@ -66,7 +66,7 @@ TEST(BweTest, basic)
 {
     bwe::Config config;
 
-    fakenet::NetworkLink* link = new fakenet::NetworkLink(5000, 64 * 1024, 1500);
+    fakenet::NetworkLink* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 5000, 64 * 1024, 1500);
     memory::PacketPoolAllocator allocator(512, "test");
 
     bwe::BandwidthEstimator estimator(config);
@@ -79,7 +79,7 @@ TEST(BweTest, burstDelivery)
 {
     bwe::Config config;
     bwe::BandwidthEstimator estimator(config);
-    fakenet::NetworkLink* link = new fakenet::NetworkLink(200, 64 * 1024, 1500);
+    fakenet::NetworkLink* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 200, 64 * 1024, 1500);
     memory::PacketPoolAllocator allocator(1024, "test");
 
     link->setBurstDeliveryInterval(45);
@@ -94,7 +94,7 @@ TEST(BweTest, plainVideo)
     bwe::Config config;
     bwe::BandwidthEstimator estimator(config);
 
-    auto* link = new fakenet::NetworkLink(4800, 256 * 1024, 1500);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 4800, 256 * 1024, 1500);
     memory::PacketPoolAllocator allocator(1024, "test");
 
     // link->setBurstDeliveryInterval(45);
@@ -115,7 +115,7 @@ TEST(BweTest, plainVideoLong)
     bwe::Config config;
     bwe::BandwidthEstimator estimator(config);
 
-    auto* link = new fakenet::NetworkLink(148000, 256 * 1024, 1500);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 148000, 256 * 1024, 1500);
     memory::PacketPoolAllocator allocator(1024, "test");
 
     // link->setBurstDeliveryInterval(45);
@@ -135,7 +135,7 @@ TEST(BweTest, plainVideoStartLow)
 {
     bwe::Config config;
     bwe::BandwidthEstimator estimator(config);
-    auto* link = new fakenet::NetworkLink(3800, 256 * 1024, 1500);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 3800, 256 * 1024, 1500);
     memory::PacketPoolAllocator allocator(1024, "test");
 
     // link->setBurstDeliveryInterval(5);
@@ -155,7 +155,7 @@ TEST(BweTest, plainVideoBwDrop)
 {
     bwe::Config config;
     bwe::BandwidthEstimator estimator(config);
-    auto* link = new fakenet::NetworkLink(3800, 256 * 1024, 1500);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 3800, 256 * 1024, 1500);
     memory::PacketPoolAllocator allocator(1024, "test");
 
     link->setBurstDeliveryInterval(5);
@@ -182,7 +182,7 @@ TEST(BweTest, startCongested)
 {
     bwe::Config config;
     bwe::BandwidthEstimator estimator(config);
-    auto* link = new fakenet::NetworkLink(800, 256 * 1024, 1500);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 800, 256 * 1024, 1500);
     memory::PacketPoolAllocator allocator(1024, "test");
 
     auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);
@@ -223,7 +223,7 @@ TEST(BweTest, networkPause)
     bwe::Config config;
 
     bwe::BandwidthEstimator estimator(config);
-    auto* link = new fakenet::NetworkLink(2000, 256 * 1024, 1500);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 2000, 256 * 1024, 1500);
     memory::PacketPoolAllocator allocator(1024, "test");
 
     auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);

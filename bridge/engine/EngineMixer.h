@@ -33,6 +33,11 @@ namespace webrtc
 struct SctpStreamMessageHeader;
 }
 
+namespace rtp
+{
+struct RtcpFeedback;
+}
+
 namespace jobmanager
 {
 class JobManager;
@@ -365,6 +370,9 @@ private:
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket,
         uint64_t timestamp);
+    void processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
+        const rtp::RtcpFeedback& rtcpFeedback,
+        const uint64_t timestamp);
     void processIncomingTransportFbRtcpPacket(const transport::RtcTransport* transport,
         const rtp::RtcpHeader& rtcpPacket,
         const uint64_t timestamp);
@@ -425,6 +433,8 @@ private:
     void allocateRecordingRtpPacketCacheIfNecessary(SsrcOutboundContext& ssrcOutboundContext,
         EngineRecordingStream& recordingStream);
 
+    void processEngineMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
+    void processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
     void processRecordingMissingPackets(const uint64_t timestamp);
     void startProbingVideoStream(EngineVideoStream&);
     void stopProbingVideoStream(const EngineVideoStream&);

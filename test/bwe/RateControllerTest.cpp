@@ -26,9 +26,9 @@ TEST_P(RateControllerTestLongRtt, longRtt)
     rcConfig.initialEstimateKbps = 300;
     rcConfig.debugLog = true;
     bwe::RateController rateControl(1, rcConfig);
-    auto* uplink = new fakenet::NetworkLink(capacityKbps, 75000, 1480);
+    auto* uplink = new fakenet::NetworkLink("upLink", capacityKbps, 75000, 1480);
     uplink->setStaticDelay(90);
-    auto* downLink = new fakenet::NetworkLink(6500, 75000, 1480);
+    auto* downLink = new fakenet::NetworkLink("downLink", 6500, 75000, 1480);
     downLink->setStaticDelay(70);
 
     fakenet::RcCall call(_allocator, _config, rateControl, uplink, downLink, true, 24 * utils::Time::sec);
@@ -76,9 +76,9 @@ TEST_P(RateControllerTestShortRtt, shortRtt)
     rcConfig.initialEstimateKbps = 300;
     rcConfig.debugLog = true;
     bwe::RateController rateControl(1, rcConfig);
-    auto* uplink = new fakenet::NetworkLink(capacityKbps, 75000, 1480);
+    auto* uplink = new fakenet::NetworkLink("upLink", capacityKbps, 75000, 1480);
     uplink->setStaticDelay(0);
-    auto* downLink = new fakenet::NetworkLink(6500, 75000, 1480);
+    auto* downLink = new fakenet::NetworkLink("downLink", 6500, 75000, 1480);
     downLink->setStaticDelay(0);
 
     fakenet::RcCall call(_allocator, _config, rateControl, uplink, downLink, true, 24 * utils::Time::sec);

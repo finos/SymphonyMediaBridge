@@ -28,6 +28,7 @@ public:
     uint32_t getSsrc() const override { return _ssrc; }
 
     void requestKeyFrame() { _keyFrame = true; }
+    bool isKeyFrameRequested() { return _keyFrame; }
 
     uint32_t getPacketsSent() const { return _packetsSent; }
 

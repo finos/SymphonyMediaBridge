@@ -1,5 +1,4 @@
 #include "test/integration/IntegrationTest.h"
-#include "api/ConferenceEndpoint.h"
 #include "api/Parser.h"
 #include "api/utils.h"
 #include "bridge/Mixer.h"
@@ -72,6 +71,19 @@ void IntegrationTest::SetUp()
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
     }
+
+#if USE_FAKENETWORK
+    _clientsEndpointFactory =
+        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get(),
+            [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
+                logger::info("Client %s endpoint uses address %s",
+                    "IntegrationTest",
+                    name.c_str(),
+                    addr.toString().c_str());
+            }));
+#else
+    _clientsEndpointFactory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
+#endif
 }
 
 void IntegrationTest::TearDown()
@@ -111,11 +123,21 @@ void IntegrationTest::initBridge(config::Config& config)
 {
     _bridge = std::make_unique<bridge::Bridge>(config);
 #if USE_FAKENETWORK
-    _endpointFacory = std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get()));
+    _bridgeEndpointFactory =
+        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get(),
+            [this](std::shared_ptr<fakenet::NetworkLink> netLink,
+                const transport::SocketAddress& addr,
+                const std::string& name) {
+                logger::info("Bridge: %s endpoint uses address %s",
+                    "IntegrationTest",
+                    name.c_str(),
+                    addr.toString().c_str());
+                this->_endpointNetworkLinkMap.emplace(name, NetworkLinkInfo{netLink.get(), addr});
+            }));
 #else
     _endpointFacory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
 #endif
-    _bridge->initialize(_endpointFacory);
+    _bridge->initialize(_bridgeEndpointFactory);
 
     _sslDtls = &_bridge->getSslDtls();
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
@@ -136,16 +158,75 @@ void IntegrationTest::initBridge(config::Config& config)
         interfaces,
         *_network,
         *_mainPoolAllocator,
-        _endpointFacory);
+        _clientsEndpointFactory);
 }
 
-namespace
+using namespace emulator;
+
+template <typename TChannel>
+void make5secCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall)
 {
-void analyzeRecording(const std::vector<int16_t>& recording,
+    static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
+    for (size_t i = 0; i < groupCall.clients.size(); ++i)
+    {
+        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
+    }
+
+    for (auto& client : groupCall.clients)
+    {
+        client->_audioSource->setVolume(0.6);
+    }
+
+    groupCall.run(utils::Time::sec * 5);
+    utils::Time::nanoSleep(utils::Time::sec * 1);
+
+    for (auto& client : groupCall.clients)
+    {
+        client->stopRecording();
+    }
+}
+
+std::vector<api::ConferenceEndpoint> IntegrationTest::getConferenceEndpointsInfo(const char* baseUrl)
+{
+    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+    confRequest.awaitResponse(500 * utils::Time::ms);
+    EXPECT_TRUE(confRequest.isSuccess());
+
+    EXPECT_TRUE(confRequest.getJsonBody().is_array());
+    std::vector<std::string> confIds;
+    confRequest.getJsonBody().get_to(confIds);
+
+    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0]).c_str());
+    endpointRequest.awaitResponse(50000 * utils::Time::ms);
+    EXPECT_TRUE(endpointRequest.isSuccess());
+    EXPECT_TRUE(endpointRequest.getJsonBody().is_array());
+
+    return api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
+}
+
+api::ConferenceEndpointExtendedInfo IntegrationTest::getEndpointExtendedInfo(const char* baseUrl,
+    const std::string& endpointId)
+{
+    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+    confRequest.awaitResponse(500 * utils::Time::ms);
+    EXPECT_TRUE(confRequest.isSuccess());
+
+    EXPECT_TRUE(confRequest.getJsonBody().is_array());
+    std::vector<std::string> confIds;
+    confRequest.getJsonBody().get_to(confIds);
+
+    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0] + "/" + endpointId).c_str());
+    endpointRequest.awaitResponse(50000 * utils::Time::ms);
+    EXPECT_TRUE(endpointRequest.isSuccess());
+
+    return api::Parser::parseEndpointExtendedInfo(endpointRequest.getJsonBody());
+}
+
+void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
     std::vector<double>& frequencyPeaks,
     std::vector<std::pair<uint64_t, double>>& amplitudeProfile,
     const char* logId,
-    uint64_t cutAtTime = 0)
+    uint64_t cutAtTime)
 {
     utils::RateTracker<5> amplitudeTracker(codec::Opus::sampleRate / 10);
     const size_t fftWindowSize = 2048;
@@ -195,68 +276,8 @@ void analyzeRecording(const std::vector<int16_t>& recording,
         }
     }
 }
-} // namespace
-using namespace emulator;
 
-template <typename TChannel>
-void make5secCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall)
-{
-    static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
-    for (size_t i = 0; i < groupCall.clients.size(); ++i)
-    {
-        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
-    }
-
-    for (auto& client : groupCall.clients)
-    {
-        client->_audioSource->setVolume(0.6);
-    }
-
-    groupCall.run(utils::Time::sec * 5);
-    utils::Time::nanoSleep(utils::Time::sec * 1);
-
-    for (auto& client : groupCall.clients)
-    {
-        client->stopRecording();
-    }
-}
-
-std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(const char* baseUrl)
-{
-    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-    confRequest.awaitResponse(500 * utils::Time::ms);
-    EXPECT_TRUE(confRequest.isSuccess());
-
-    EXPECT_TRUE(confRequest.getJsonBody().is_array());
-    std::vector<std::string> confIds;
-    confRequest.getJsonBody().get_to(confIds);
-
-    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0]).c_str());
-    endpointRequest.awaitResponse(50000 * utils::Time::ms);
-    EXPECT_TRUE(endpointRequest.isSuccess());
-    EXPECT_TRUE(endpointRequest.getJsonBody().is_array());
-
-    return api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
-}
-
-api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(const char* baseUrl, const std::string& endpointId)
-{
-    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-    confRequest.awaitResponse(500 * utils::Time::ms);
-    EXPECT_TRUE(confRequest.isSuccess());
-
-    EXPECT_TRUE(confRequest.getJsonBody().is_array());
-    std::vector<std::string> confIds;
-    confRequest.getJsonBody().get_to(confIds);
-
-    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0] + "/" + endpointId).c_str());
-    endpointRequest.awaitResponse(50000 * utils::Time::ms);
-    EXPECT_TRUE(endpointRequest.isSuccess());
-
-    return api::Parser::parseEndpointExtendedInfo(endpointRequest.getJsonBody());
-}
-
-bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint)
+bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint)
 {
     auto it = std::find_if(endpoints.cbegin(), endpoints.cend(), [&endpoint](const api::ConferenceEndpoint& e) {
         return e.id == endpoint;
@@ -314,19 +335,6 @@ void IntegrationTest::finalizeSimulation()
 {
     finalizeSimulationWithTimeout(0);
 }
-
-namespace
-{
-class ScopedFinalize
-{
-public:
-    explicit ScopedFinalize(std::function<void()> finalizeMethod) : _method(finalizeMethod) {}
-    ~ScopedFinalize() { _method(); }
-
-private:
-    std::function<void()> _method;
-};
-} // namespace
 
 TEST_F(IntegrationTest, plain)
 {
@@ -1211,7 +1219,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         })");
 
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_endpointFacory);
+        bridge2->initialize(_bridgeEndpointFactory);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -1389,7 +1397,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         })");
 
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_endpointFacory);
+        bridge2->initialize(_bridgeEndpointFactory);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -1676,3 +1684,93 @@ TEST_F(IntegrationTest, detectIsPtt)
         finalizeSimulation();
     });
 };
+
+/*
+Test setup:
+1. Topology:
+              Client-1 <----> SFU <------> Client-2
+2. Control:
+   SFU inbound networklink is set to lose packets (e.g. 1%) that comes from both clients.
+3. Expectations:
+   - both clients receive and serve NACK requests;
+   - both clients have NO video packet loss, because they ARE retransmitted.
+*/
+TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
+{
+    runTestInThread(_numWorkerThreads + 4, [this]() {
+        constexpr auto PACKET_LOSS_RATE = 0.01;
+
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        initBridge(_config);
+
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            linkInfo.second.ptrLink->setLossRate(0.01);
+        }
+
+        const std::string baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            2);
+
+        Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl + "/colibri");
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        group.clients[0]->_transport->stop();
+        group.clients[1]->_transport->stop();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        {
+            for (auto id : {0, 1})
+            {
+                // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
+                // video streams only. So let's check SfuClient NACK-related stats instead:
+
+                const auto stats = group.clients[id]->getCumulativeRtxStats();
+                auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+
+                // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
+                // have been ignored. So we might expect small number of videoCounters.lostPackets.
+                if (videoCounters.lostPackets != 0)
+                {
+                    ASSERT_TRUE(stats.receiver.packetsMissing >= stats.receiver.packetsRecovered);
+                    // Expect number of non-recovered packet to be smaller than half the loss rate.
+                    ASSERT_TRUE(stats.receiver.packetsMissing - stats.receiver.packetsRecovered <
+                        stats.sender.packetsSent * PACKET_LOSS_RATE / 2);
+                }
+
+                // Expect, "as sender" we received several NACK request from SFU, and we served them all.
+                EXPECT_NE(stats.sender.nacksReceived, 0);
+                EXPECT_NE(stats.sender.retransmissionRequests, 0);
+                EXPECT_NE(stats.sender.retransmissions, 0);
+                EXPECT_EQ(stats.sender.retransmissionRequests, stats.sender.retransmissions);
+
+                EXPECT_EQ(stats.receiver.nackRequests, 0); // Expected as it's is not implemented yet.
+                EXPECT_NE(stats.receiver.packetsMissing, 0);
+                EXPECT_NE(stats.receiver.packetsRecovered, 0);
+            }
+        }
+    });
+}

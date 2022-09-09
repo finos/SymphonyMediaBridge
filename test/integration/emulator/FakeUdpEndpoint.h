@@ -63,6 +63,7 @@ public:
         uint64_t timestamp) override;
     virtual bool hasIp(const transport::SocketAddress& target) override;
     virtual void process(uint64_t timestamp) override;
+    virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return _networkLink; }
 
     // Internal job interface.
     void internalUnregisterListener(IEvents* listener);
@@ -106,7 +107,7 @@ private:
     std::atomic<IEvents*> _defaultListener;
     std::shared_ptr<fakenet::Gateway> _network;
     memory::PacketPoolAllocator _networkLinkAllocator;
-    fakenet::NetworkLink _networkLink;
+    std::shared_ptr<fakenet::NetworkLink> _networkLink;
 
     struct RateMetrics
     {

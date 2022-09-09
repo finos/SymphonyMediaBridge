@@ -2,6 +2,9 @@
 
 #include "AudioSource.h"
 #include "api/SimulcastGroup.h"
+#include "bridge/engine/PacketCache.h"
+#include "bridge/engine/VideoMissingPacketsTracker.h"
+#include "codec/Vp8Header.h"
 #include "memory/Array.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
@@ -35,6 +38,56 @@ public:
 private:
     transport::Transport& _transport;
     memory::UniquePacket _packet;
+};
+
+struct RtxStats
+{
+    struct Receiver
+    {
+        size_t packetsMissing = 0;
+        size_t packetsRecovered = 0;
+        size_t nackRequests = 0; // Not implemented: SfuClient does not sent NACK yet.
+
+        Receiver& operator+=(const Receiver& other)
+        {
+            packetsMissing += other.packetsMissing;
+            packetsRecovered += other.packetsRecovered;
+            nackRequests += other.nackRequests;
+            return *this;
+        }
+    } receiver;
+
+    struct Sender
+    {
+        size_t nacksReceived = 0;
+        size_t retransmissionRequests = 0;
+        size_t retransmissions = 0;
+        size_t packetsSent = 0;
+
+        Sender& operator+=(const Sender& other)
+        {
+            nacksReceived += other.nacksReceived;
+            retransmissionRequests += other.retransmissionRequests;
+            retransmissions += other.retransmissions;
+            packetsSent += other.packetsSent;
+            return *this;
+        }
+    } sender;
+
+    RtxStats& operator+=(const RtxStats& other)
+    {
+        receiver += other.receiver;
+        sender += other.sender;
+
+        return *this;
+    }
+
+    RtxStats operator+(const RtxStats& other)
+    {
+        RtxStats sum = *this;
+        sum += other;
+        return sum;
+    }
 };
 
 template <typename ChannelType>
@@ -76,6 +129,16 @@ public:
         }
     }
 
+    RtxStats getCumulativeRtxStats() const
+    {
+        auto stats = _rtxStats;
+        for (const auto& rcv : _videoReceivers)
+        {
+            stats += rcv->getRtxStats();
+        }
+        return stats;
+    }
+
     void initiateCall(const std::string& baseUrl,
         std::string conferenceId,
         bool initiator,
@@ -90,6 +153,7 @@ public:
     void processOffer()
     {
         auto offer = _channel.getOffer();
+
         _transport =
             _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, 256 * 1024, _channel.getEndpointIdHash());
         _transport->setDataReceiver(this);
@@ -172,17 +236,21 @@ public:
 
     void connect()
     {
-        uint32_t videoSsrcs[7];
         if (_channel.isVideoEnabled())
         {
-            videoSsrcs[6] = 0;
+            _videoSsrcs[6] = 0;
             for (int i = 0; i < 6; ++i)
             {
-                videoSsrcs[i] = _idGenerator.next();
+                _videoSsrcs[i] = _idGenerator.next();
                 if (0 == i % 2)
                 {
-                    _videoSources.emplace(videoSsrcs[i],
-                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, videoSsrcs[i]));
+                    _videoSources.emplace(_videoSsrcs[i],
+                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, _videoSsrcs[i]));
+                    _videoCaches.emplace(_videoSsrcs[i],
+                        std::make_unique<bridge::PacketCache>(
+                            (std::string("VideoCache_") + std::to_string(_videoSsrcs[i])).c_str(),
+                            _videoSsrcs[i]));
+                    _videoFeedbackSequenceCounter.emplace(_videoSsrcs[i], 0);
                 }
             }
         }
@@ -193,7 +261,7 @@ public:
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),
-            _channel.isVideoEnabled() ? videoSsrcs : nullptr);
+            _channel.isVideoEnabled() ? _videoSsrcs : nullptr);
 
         _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();
@@ -227,6 +295,14 @@ public:
                 {
                     // auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
                     // logger::debug("sending video %u", _loggableId.c_str(), rtpHeader->ssrc.get());
+
+                    auto cache = _videoCaches.find(videoSource.second->getSsrc());
+                    if (cache != _videoCaches.end())
+                    {
+                        auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+                        cache->second->add(*packet, rtpHeader->sequenceNumber);
+                    }
+                    _rtxStats.sender.packetsSent++;
                     if (!_transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp))
                     {
                         logger::warn("failed to add SendMediaJob", "SfuClient");
@@ -325,6 +401,7 @@ public:
             VideoContent content,
             uint64_t timestamp)
             : contexts(256),
+
               _rtpMap(rtpMap),
               _rtxRtpMap(rtxRtpMap),
               _loggableId("rtprcv", instanceId),
@@ -335,12 +412,15 @@ public:
             logger::info("video offered ssrc %u, payload %u", _loggableId.c_str(), _ssrcs[0].main, _rtpMap.payloadType);
         }
 
+        RtxStats getRtxStats() const { return _rtxStats; }
+
         void onRtpPacketReceived(transport::RtcTransport* sender,
             memory::Packet& packet,
             uint32_t extendedSequenceNumber,
             uint64_t timestamp)
         {
             auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
+
             auto it = contexts.find(rtpHeader->ssrc.get());
             if (it == contexts.end())
             {
@@ -351,6 +431,14 @@ public:
             }
 
             auto& inboundContext = it->second;
+            ++inboundContext.packetsProcessed;
+
+            if (inboundContext.packetsProcessed == 1)
+            {
+                inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
+                inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>(10);
+            }
+
             inboundContext.onRtpPacket(timestamp);
 
             if (!sender->unprotect(packet))
@@ -375,6 +463,86 @@ public:
                     rtpHeader->ssrc.get(),
                     rtpHeader->payloadType);
             }
+
+            const auto payload = rtpHeader->getPayload();
+            const auto payloadSize = packet.getLength() - rtpHeader->headerLength();
+            const auto payloadDescriptorSize = codec::Vp8Header::getPayloadDescriptorSize(payload, payloadSize);
+            const bool isKeyframe = codec::Vp8Header::isKeyFrame(payload, payloadDescriptorSize);
+            const auto timestampMs = timestamp / utils::Time::ms;
+            const auto sequenceNumber = rtpHeader->sequenceNumber.get();
+            bool missingPacketsTrackerReset = false;
+
+            if (isKeyframe)
+            {
+                inboundContext.videoMissingPacketsTracker->reset(timestampMs);
+                missingPacketsTrackerReset = true;
+            }
+
+            if (extendedSequenceNumber > inboundContext.lastReceivedExtendedSequenceNumber)
+            {
+                if (extendedSequenceNumber - inboundContext.lastReceivedExtendedSequenceNumber >=
+                    bridge::VideoMissingPacketsTracker::maxMissingPackets)
+                {
+                    logger::info("Resetting full missing packet tracker for %s, ssrc %u",
+                        "SfuClient",
+                        sender->getLoggableId().c_str(),
+                        inboundContext.ssrc);
+                    inboundContext.videoMissingPacketsTracker->reset(timestampMs);
+                }
+                else if (!missingPacketsTrackerReset)
+                {
+                    for (uint32_t missingSequenceNumber = inboundContext.lastReceivedExtendedSequenceNumber + 1;
+                         missingSequenceNumber != extendedSequenceNumber;
+                         ++missingSequenceNumber)
+                    {
+                        _rtxStats.receiver.packetsMissing++;
+                        inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
+                    }
+                }
+
+                inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
+            }
+            else if (extendedSequenceNumber != inboundContext.lastReceivedExtendedSequenceNumber)
+            {
+                uint32_t esn = 0;
+                if (!inboundContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, esn) ||
+                    esn != extendedSequenceNumber)
+                {
+                    logger::debug("%s Unexpected re-transmission of packet seq %u ssrc %u, dropping",
+                        "SfuClient",
+                        sender->getLoggableId().c_str(),
+                        sequenceNumber,
+                        inboundContext.ssrc);
+                    return;
+                }
+                else
+                {
+                    _rtxStats.receiver.packetsRecovered++;
+                }
+            }
+
+            if (inboundContext.videoMissingPacketsTracker)
+            {
+                if (inboundContext.videoMissingPacketsTracker->shouldProcess(timestampMs))
+                {
+                    std::array<uint16_t, bridge::VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
+                    const auto numMissingSequenceNumbers =
+                        inboundContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime() / 1000000ULL,
+                            inboundContext.sender->getRtt() / utils::Time::ms,
+                            missingSequenceNumbers);
+
+                    if (numMissingSequenceNumbers)
+                    {
+                        logger::debug("Video missing packet tracker: %zu packets missing",
+                            sender->getLoggableId().c_str(),
+                            numMissingSequenceNumbers);
+                        for (size_t i = 0; i < numMissingSequenceNumbers; i++)
+                        {
+                            logger::debug("\n missing sequence number: %u", "SfuClient", missingSequenceNumbers[i]);
+                        }
+                    }
+                }
+            }
         }
 
         const logger::LoggableId& getLoggableId() const { return _loggableId; }
@@ -398,6 +566,7 @@ public:
         std::vector<int16_t> _recording;
         api::SimulcastGroup _ssrcs;
         VideoContent _videoContent;
+        RtxStats _rtxStats;
     };
 
 public:
@@ -460,28 +629,157 @@ public:
             if (rtcpPacket.packetType == rtp::RtcpPacketType::PAYLOADSPECIFIC_FB &&
                 rtcpFeedback->header.fmtCount == rtp::PayloadSpecificFeedbackType::Pli)
             {
-                logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
-                auto it = _videoSources.find(rtcpFeedback->mediaSsrc.get());
-                if (it != _videoSources.end())
+                processRtcpPli(sender, rtcpFeedback);
+            }
+            if (rtcpPacket.packetType == rtp::RtcpPacketType::RTPTRANSPORT_FB &&
+                rtcpFeedback->header.fmtCount == rtp::TransportLayerFeedbackType::PacketNack)
+            {
+                processRtcpNack(sender, rtcpFeedback);
+            }
+        }
+    }
+
+    void processRtcpPli(transport::RtcTransport* sender, const rtp::RtcpFeedback* rtcpFeedback)
+    {
+        logger::debug("PLI for %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
+        auto it = _videoSources.find(rtcpFeedback->mediaSsrc.get());
+        if (it != _videoSources.end())
+        {
+            auto& videoSource = it->second;
+            if (videoSource->getSsrc() == rtcpFeedback->mediaSsrc.get())
+            {
+                videoSource->requestKeyFrame();
+            }
+        }
+        else
+        {
+            logger::warn("cannot find video ssrc for PLI %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
+            for (auto& it : _videoSources)
+            {
+                logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
+            }
+        }
+    }
+
+    void processRtcpNack(transport::RtcTransport* sender, const rtp::RtcpFeedback* rtcpFeedback)
+    {
+        _rtxStats.sender.nacksReceived++;
+
+        const auto mediaSsrc = rtcpFeedback->mediaSsrc.get();
+        if (mediaSsrc)
+        {
+            logger::warn("SfuClient received NACK, ssrc %u", sender->getLoggableId().c_str(), mediaSsrc);
+
+            const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
+            uint16_t pid = 0;
+            uint16_t blp = 0;
+
+            for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+            {
+                rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+
+                auto sequenceNumber = pid;
+                sendIfCached(mediaSsrc, sequenceNumber);
+
+                while (blp != 0)
                 {
-                    auto& videoSource = it->second;
-                    if (videoSource->getSsrc() == rtcpFeedback->mediaSsrc.get())
+                    ++sequenceNumber;
+
+                    if ((blp & 0x1) == 0x1)
                     {
-                        videoSource->requestKeyFrame();
+                        sendIfCached(mediaSsrc, sequenceNumber);
                     }
-                }
-                else
-                {
-                    logger::warn("cannot find video ssrc for PLI %u",
-                        _loggableId.c_str(),
-                        rtcpFeedback->mediaSsrc.get());
-                    for (auto& it : _videoSources)
-                    {
-                        logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
-                    }
+
+                    blp = blp >> 1;
                 }
             }
         }
+    }
+
+    uint32_t getFeedbackSsrc(uint32_t ssrc)
+    {
+        for (auto i : {0, 2, 4})
+        {
+            if (_videoSsrcs[i] == ssrc)
+            {
+                return _videoSsrcs[i + 1];
+            }
+        }
+        return 0;
+    }
+
+    void sendIfCached(const uint32_t ssrc, const uint16_t sequenceNumber)
+    {
+        const auto feedbackSsrc = getFeedbackSsrc(ssrc);
+        auto cache = _videoCaches.find(ssrc);
+        auto videoSource = _videoSources.find(ssrc);
+
+        _rtxStats.sender.retransmissionRequests++;
+
+        if (videoSource->second->isKeyFrameRequested())
+        {
+            logger::info("Ignoring NACK for pre key frame packet %u, key frame at %u",
+                "SfuClient",
+                ssrc,
+                sequenceNumber);
+            return;
+        }
+
+        const auto cachedPacket = cache->second->get(sequenceNumber);
+        if (!cachedPacket)
+        {
+            return;
+        }
+
+        const auto cachedRtpHeader = rtp::RtpHeader::fromPacket(*cachedPacket);
+        if (!cachedRtpHeader)
+        {
+            return;
+        }
+
+        auto packet = memory::makeUniquePacket(_allocator);
+        if (!packet)
+        {
+            return;
+        }
+
+        const auto cachedRtpHeaderLength = cachedRtpHeader->headerLength();
+        const auto cachedPayload = cachedRtpHeader->getPayload();
+        const auto cachedSequenceNumber = cachedRtpHeader->sequenceNumber.get();
+
+        memcpy(packet->get(), cachedPacket->get(), cachedRtpHeaderLength);
+        auto copyHead = packet->get() + cachedRtpHeaderLength;
+        reinterpret_cast<uint16_t*>(copyHead)[0] = hton<uint16_t>(cachedSequenceNumber);
+        copyHead += sizeof(uint16_t);
+        memcpy(copyHead, cachedPayload, cachedPacket->getLength() - cachedRtpHeaderLength);
+        packet->setLength(cachedPacket->getLength() + sizeof(uint16_t));
+
+        auto videoFeedbackSequenceCounterItr = _videoFeedbackSequenceCounter.find(ssrc);
+
+        const auto sequenceCounter = videoFeedbackSequenceCounterItr->second;
+
+        auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
+        if (!rtpHeader)
+        {
+            return;
+        }
+
+        rtpHeader->ssrc = feedbackSsrc;
+        rtpHeader->payloadType = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX).payloadType;
+        rtpHeader->sequenceNumber = sequenceCounter & 0xFFFF;
+
+        videoFeedbackSequenceCounterItr->second++;
+
+        logger::info("Sending cached packet seq %u, ssrc %u, feedbackSsrc %u, seq %u",
+            "SfuClient",
+            sequenceNumber,
+            ssrc,
+            feedbackSsrc,
+            sequenceCounter & 0xFFFFu);
+
+        _rtxStats.sender.retransmissions++;
+
+        _transport->protectAndSend(std::move(packet));
     }
 
     void onConnected(transport::RtcTransport* sender) override
@@ -523,6 +821,8 @@ public:
     std::unique_ptr<emulator::AudioSource> _audioSource;
     // Video source that produces fake VP8
     std::unordered_map<uint32_t, std::unique_ptr<fakenet::FakeVideoSource>> _videoSources;
+    std::unordered_map<uint32_t, std::unique_ptr<bridge::PacketCache>> _videoCaches;
+    std::unordered_map<uint32_t, uint32_t> _videoFeedbackSequenceCounter;
 
     const concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*>& getAudioReceiveStats() const
     {
@@ -546,6 +846,7 @@ public:
 
 private:
     utils::IdGenerator _idGenerator;
+    uint32_t _videoSsrcs[7];
     memory::PacketPoolAllocator& _allocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
     transport::TransportFactory& _transportFactory;
@@ -560,6 +861,7 @@ private:
     uint32_t _ptime;
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
     size_t _instanceId = 0;
+    RtxStats _rtxStats;
 };
 
 template <typename TClient>
