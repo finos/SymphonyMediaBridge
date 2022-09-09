@@ -549,13 +549,12 @@ TEST_F(EngineStreamDirectorTest, pinnedHighQualitySsrcNotInLastNListIsUsed)
 TEST_F(EngineStreamDirectorTest, highEstimateUsesHighQualityLevel)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 61 * utils::Time::sec);
 
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(5, 1, true, 0));
 }
@@ -563,13 +562,12 @@ TEST_F(EngineStreamDirectorTest, highEstimateUsesHighQualityLevel)
 TEST_F(EngineStreamDirectorTest, midEstimateUsesMidQualityLevel)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 2000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 2000, 61 * utils::Time::sec);
 
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(3, 1, true, 0));
 }
@@ -577,13 +575,12 @@ TEST_F(EngineStreamDirectorTest, midEstimateUsesMidQualityLevel)
 TEST_F(EngineStreamDirectorTest, lowEstimateUsesLowQualityLevel)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 101, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 101, 61 * utils::Time::sec);
 
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
 }
@@ -591,13 +588,12 @@ TEST_F(EngineStreamDirectorTest, lowEstimateUsesLowQualityLevel)
 TEST_F(EngineStreamDirectorTest, veryLowEstimateDropsVideo)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 1, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 1, 61 * utils::Time::sec);
 
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
 }
@@ -605,7 +601,6 @@ TEST_F(EngineStreamDirectorTest, veryLowEstimateDropsVideo)
 TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreUsed)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
@@ -615,16 +610,16 @@ TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreUse
     _engineStreamDirector->pin(4, 1);
 
     // High estimate
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 61 * utils::Time::sec);
 
     // Mid estimate
+    _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 61 * utils::Time::sec);
 
     // Low estimate
+    _engineStreamDirector->setUplinkEstimateKbps(4, 1, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(4, 1, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(4, 1, 61 * utils::Time::sec);
 
     // Used by 4
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
@@ -637,13 +632,12 @@ TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreUse
 TEST_F(EngineStreamDirectorTest, highEstimateForwardsHighQualityLevel)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 61 * utils::Time::sec);
 
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
@@ -653,13 +647,12 @@ TEST_F(EngineStreamDirectorTest, highEstimateForwardsHighQualityLevel)
 TEST_F(EngineStreamDirectorTest, midEstimateForwardsMidQualityLevel)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 2000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 2000, 61 * utils::Time::sec);
 
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
@@ -669,13 +662,12 @@ TEST_F(EngineStreamDirectorTest, midEstimateForwardsMidQualityLevel)
 TEST_F(EngineStreamDirectorTest, lowEstimateForwardsLowQualityLevel)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 100, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 100, 61 * utils::Time::sec);
 
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 1));
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
@@ -685,13 +677,12 @@ TEST_F(EngineStreamDirectorTest, lowEstimateForwardsLowQualityLevel)
 TEST_F(EngineStreamDirectorTest, lowestEstimateForwardsNoVideo)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
 
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 1, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 1, 61 * utils::Time::sec);
 
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
@@ -701,7 +692,6 @@ TEST_F(EngineStreamDirectorTest, lowestEstimateForwardsNoVideo)
 TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreForwarded)
 {
     _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
 
     _engineStreamDirector->addParticipant(2);
     _engineStreamDirector->pin(2, 1);
@@ -713,16 +703,16 @@ TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreFor
     _engineStreamDirector->pin(5, 1);
 
     // High estimate
+    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(2, 10000, 61 * utils::Time::sec);
 
     // Mid estimate
+    _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 0 * utils::Time::sec);
     _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 61 * utils::Time::sec);
 
     // Low estimate
-    _engineStreamDirector->setUplinkEstimateKbps(4, 100, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(4, 100, 61 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(4, 100, 0 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(4, 100, 6 * utils::Time::sec);
 
     // Very low estimate
     _engineStreamDirector->setUplinkEstimateKbps(5, 99, 60 * utils::Time::sec);

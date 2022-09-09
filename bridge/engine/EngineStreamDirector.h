@@ -267,7 +267,8 @@ public:
         participantStream.estimatedUplinkBandwidth =
             std::max(uplinkEstimateKbps, participantStream.defaultLevelBandwidthLimit);
 
-        size_t pinnedQuality, unpinnedQuality;
+        size_t pinnedQuality = dropQuality;
+        size_t unpinnedQuality = dropQuality;
         getVideoQualityLimits(participantStream, pinnedQuality, unpinnedQuality);
 
         participantStream.desiredHighestEstimatedPinnedLevel = pinnedQuality;
