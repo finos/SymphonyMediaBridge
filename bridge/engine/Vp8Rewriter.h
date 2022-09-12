@@ -19,15 +19,9 @@ namespace bridge
 namespace Vp8Rewriter
 {
 
-constexpr uint32_t applyOffset(const uint32_t extendedSequenceNumber, const int64_t offset)
+constexpr uint32_t applyOffset(const uint32_t extendedSequenceNumber, const int32_t offset)
 {
-    const auto result = static_cast<int64_t>(extendedSequenceNumber) + offset;
-    if (result < 0)
-    {
-        return static_cast<uint32_t>(result) & 0xFFFF;
-    }
-
-    return static_cast<uint32_t>(result);
+    return extendedSequenceNumber + offset;
 }
 
 constexpr uint16_t extractSequenceNumber(const uint32_t extendedSequenceNumber)
@@ -121,7 +115,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
         static_cast<uint32_t>(static_cast<int64_t>(timestamp) + ssrcOutboundContext.timestampOffset);
 
     rtpHeader->ssrc = rewriteSsrc;
-    rtpHeader->sequenceNumber = newExtendedSequenceNumber;
+    rtpHeader->sequenceNumber = newExtendedSequenceNumber & 0xFFFF;
     rtpHeader->timestamp = newTimestamp;
     codec::Vp8Header::setPicId(rtpPayload, newPicId);
     codec::Vp8Header::setTl0PicIdx(rtpPayload, newTl0PicIdx);

@@ -2,6 +2,7 @@
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Vp8Header.h"
 #include "memory/PacketPoolAllocator.h"
+#include "utils/OutboundSequenceNumber.h"
 #include <array>
 #include <gtest/gtest.h>
 #include <memory>
@@ -651,8 +652,12 @@ TEST_F(Vp8RewriterTest, longGapInSequenceNumbersNewSsrc)
     EXPECT_EQ(10001, rewrittenExtendedSequenceNumber);
 }
 
-TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged2)
+TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtx)
 {
+    memory::PacketPoolAllocator packetAllocator(512, "test");
+    bridge::RtpMap map1(bridge::RtpMap::Format::VP8);
+    bridge::SsrcOutboundContext outboundContext1(1, packetAllocator, map1);
+    bridge::SsrcOutboundContext outboundContext2(2, packetAllocator, map1);
 
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
@@ -665,7 +670,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged2)
     uint32_t rewrittenExtendedSequenceNumber = 0;
     uint32_t lastTimestamp = 0;
 
-    auto examine = [&](uint32_t ssrc,
+    auto examine = [&](bridge::SsrcOutboundContext& outboundContext,
                        uint16_t seqNo,
                        uint32_t timestamp,
                        uint16_t expectedSeqNo,
@@ -673,7 +678,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged2)
                        uint16_t picIdx,
                        uint16_t expectedPicId,
                        uint16_t expectedPicIdx) {
-        rtpHeader->ssrc = ssrc;
+        rtpHeader->ssrc = outboundContext.ssrc;
         rtpHeader->sequenceNumber = seqNo;
         rtpHeader->timestamp = timestamp;
         codec::Vp8Header::setPicId(payload, picId);
@@ -686,6 +691,15 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged2)
             "",
             rewrittenExtendedSequenceNumber);
 
+        uint16_t nextSequenceNumber;
+        auto seqConversion = utils::OutboundSequenceNumber::process(rewrittenExtendedSequenceNumber,
+            outboundContext.highestSeenExtendedSequenceNumber,
+            outboundContext.sequenceCounter,
+            nextSequenceNumber);
+        EXPECT_TRUE(seqConversion);
+        printf("seqno %u\n", seqNo);
+        rtpHeader->sequenceNumber = nextSequenceNumber;
+
         EXPECT_EQ(outboundSsrc, rtpHeader->ssrc.get());
         EXPECT_EQ(expectedSeqNo, rtpHeader->sequenceNumber.get());
         EXPECT_EQ(expectedSeqNo, rewrittenExtendedSequenceNumber);
@@ -693,19 +707,22 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged2)
         EXPECT_EQ(expectedPicIdx, codec::Vp8Header::getTl0PicIdx(payload));
     };
 
-    examine(1, 74, 60000, 75, 32764, 255, 32765, 0);
-    examine(1, 75, 60010, 76, 2, 2, 3, 3);
+    examine(outboundContext1, 74, 60000, 75, 32764, 255, 32765, 0);
+    examine(outboundContext1, 75, 60010, 76, 2, 2, 3, 3);
 
+    // change ssrc
     lastTimestamp = rtpHeader->timestamp.get();
-    examine(2, 82, 10000, 77, 10, 10, 4, 4);
+    examine(outboundContext2, 82, 10000, 77, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 
-    examine(2, 3, 10000, 65534, 10, 10, 4, 4);
+    // emulate 2 rtx
+    examine(outboundContext2, 3, 10000, 65534, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 
-    examine(2, 4, 10000, 65535, 10, 10, 4, 4);
+    examine(outboundContext2, 4, 10000, 65535, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 
-    examine(2, 83, 10000, 78, 10, 10, 4, 4);
+    // continue rtp
+    examine(outboundContext2, 83, 10000, 78, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 }

@@ -44,12 +44,17 @@ inline bool process(const uint32_t extendedSequenceNumber,
         return true;
     }
 
-    if (extendedSequenceNumber > highestSeenExtendedSequenceNumber + maxSequenceNumberJump)
+    if (static_cast<int32_t>(extendedSequenceNumber - highestSeenExtendedSequenceNumber) > maxSequenceNumberJump)
     {
         ++highestSentExtendedSequenceNumber;
         highestSeenExtendedSequenceNumber = extendedSequenceNumber;
         outNextSequenceNumber = highestSentExtendedSequenceNumber & 0xFFFF;
         return true;
+    }
+    else if (static_cast<int32_t>(extendedSequenceNumber - highestSeenExtendedSequenceNumber) < -maxSequenceNumberJump)
+    {
+
+        return true
     }
 
     if (extendedSequenceNumber > expectedSequenceNumber)
