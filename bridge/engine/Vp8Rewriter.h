@@ -11,7 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#define DEBUG_REWRITER 0
+#define DEBUG_REWRITER 1
 
 namespace bridge
 {
@@ -65,8 +65,9 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
         ssrcOutboundContext.lastSentPicId = codec::Vp8Header::getPicId(rtpPayload);
         ssrcOutboundContext.lastSentTl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload);
         ssrcOutboundContext.lastSentTimestamp = timestamp;
-        logger::info("Ssrc %u -> %u, sequence %u roc %u",
+        logger::info("%s start ssrc %u -> %u, sequence %u roc %u",
             "Vp8Rewriter",
+            transportName,
             rtpHeader->ssrc.get(),
             rewriteSsrc,
             extractSequenceNumber(extendedSequenceNumber),
@@ -94,7 +95,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             500;
 
 #if DEBUG_REWRITER
-        logger::debug("New offset, %s ssrc %u, oseq %" PRIi64 ", oPicId %d, otl0PicIdx %d, oTimestamp %" PRIi64,
+        logger::debug("%s new offset, ssrc %u, oseq %" PRIi64 ", oPicId %d, otl0PicIdx %d, oTimestamp %" PRIi64,
             "Vp8Rewriter",
             transportName,
             rtpHeader->ssrc.get(),
@@ -103,8 +104,9 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             ssrcOutboundContext.tl0PicIdxOffset,
             ssrcOutboundContext.timestampOffset);
 #endif
-        logger::info("Ssrc %u -> %u, sequence %u",
+        logger::info("%s ssrc %u -> %u, sequence %u",
             "Vp8Rewriter",
+            transportName,
             rtpHeader->ssrc.get(),
             rewriteSsrc,
             applyOffset(extendedSequenceNumber, ssrcOutboundContext.sequenceNumberOffset));
@@ -126,7 +128,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
 
 #if DEBUG_REWRITER
     logger::debug(
-        "Fwd, %s ssrc %u -> %u, seq %u (%u) -> %u (%u), marker %u, picId %d -> %d, tl0PicIdx %d -> %d, ts %u -> %u",
+        "%s fwd ssrc %u -> %u, seq %u (%u) -> %u (%u), marker %u, picId %d -> %d, tl0PicIdx %d -> %d, ts %u -> %u",
         "Vp8Rewriter",
         transportName,
         ssrc,
@@ -156,7 +158,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     return true;
 }
 
-inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc)
+inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc, const char* transportName)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
     assert(rtpHeader->padding == 0);
@@ -171,8 +173,9 @@ inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc
     packet.setLength(packet.getLength() - sizeof(uint16_t));
 
 #if DEBUG_REWRITER
-    logger::debug("rewriteRtxPacket ssrc %u -> %u, seq %u -> %u",
+    logger::debug("%s rewriteRtxPacket ssrc %u -> %u, seq %u -> %u",
         "Vp8Rewriter",
+        transportName,
         rtpHeader->ssrc.get(),
         mainSsrc,
         rtpHeader->sequenceNumber.get(),

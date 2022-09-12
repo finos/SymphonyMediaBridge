@@ -233,5 +233,11 @@ void RtpSenderState::stop()
     summary.packetsSent = _sendCounters.packets;
     summary.rtpTimestamp = _sendCounters.rtpTimestamp;
     _summary.write(summary);
+
+    if (utils::Time::diffGE(_sendCounterSnapshot.timestamp, _sendCounters.timestamp, utils::Time::ms * 250))
+    {
+        auto report = _sendCounters - _sendCounterSnapshot;
+        _recentSent.write(report);
+    }
 }
 } // namespace transport

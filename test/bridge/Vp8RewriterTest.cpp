@@ -121,7 +121,7 @@ TEST_F(Vp8RewriterTest, rewriteRtx)
     rtxHeader->payloadType = rtxRtpMap.payloadType;
 
     // Rewrite RTX
-    const auto originalSequenceNumber = bridge::Vp8Rewriter::rewriteRtxPacket(*rtxPacket, 1);
+    const auto originalSequenceNumber = bridge::Vp8Rewriter::rewriteRtxPacket(*rtxPacket, 1, "transport");
 
     // Validate
     auto rewrittenRtpHeader = rtp::RtpHeader::fromPacket(*rtxPacket);
@@ -649,4 +649,63 @@ TEST_F(Vp8RewriterTest, longGapInSequenceNumbersNewSsrc)
     EXPECT_EQ(outboundSsrc, rtpHeader->ssrc.get());
     EXPECT_EQ(10001, rtpHeader->sequenceNumber.get());
     EXPECT_EQ(10001, rewrittenExtendedSequenceNumber);
+}
+
+TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsChanged2)
+{
+
+    auto packet = memory::makeUniquePacket(*_allocator);
+    packet->setLength(packet->size);
+
+    auto rtpHeader = rtp::RtpHeader::create(*packet);
+    auto payload = rtpHeader->getPayload();
+    std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
+    memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
+
+    uint32_t rewrittenExtendedSequenceNumber = 0;
+    uint32_t lastTimestamp = 0;
+
+    auto examine = [&](uint32_t ssrc,
+                       uint16_t seqNo,
+                       uint32_t timestamp,
+                       uint16_t expectedSeqNo,
+                       uint16_t picId,
+                       uint16_t picIdx,
+                       uint16_t expectedPicId,
+                       uint16_t expectedPicIdx) {
+        rtpHeader->ssrc = ssrc;
+        rtpHeader->sequenceNumber = seqNo;
+        rtpHeader->timestamp = timestamp;
+        codec::Vp8Header::setPicId(payload, picId);
+        codec::Vp8Header::setTl0PicIdx(payload, picIdx);
+
+        bridge::Vp8Rewriter::rewrite(*_ssrcOutboundContext,
+            *packet,
+            outboundSsrc,
+            rtpHeader->sequenceNumber.get(),
+            "",
+            rewrittenExtendedSequenceNumber);
+
+        EXPECT_EQ(outboundSsrc, rtpHeader->ssrc.get());
+        EXPECT_EQ(expectedSeqNo, rtpHeader->sequenceNumber.get());
+        EXPECT_EQ(expectedSeqNo, rewrittenExtendedSequenceNumber);
+        EXPECT_EQ(expectedPicId, codec::Vp8Header::getPicId(payload));
+        EXPECT_EQ(expectedPicIdx, codec::Vp8Header::getTl0PicIdx(payload));
+    };
+
+    examine(1, 74, 60000, 75, 32764, 255, 32765, 0);
+    examine(1, 75, 60010, 76, 2, 2, 3, 3);
+
+    lastTimestamp = rtpHeader->timestamp.get();
+    examine(2, 82, 10000, 77, 10, 10, 4, 4);
+    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+
+    examine(2, 3, 10000, 65534, 10, 10, 4, 4);
+    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+
+    examine(2, 4, 10000, 65535, 10, 10, 4, 4);
+    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+
+    examine(2, 83, 10000, 78, 10, 10, 4, 4);
+    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 }

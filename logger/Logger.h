@@ -136,6 +136,8 @@ public:
     }
     inline const char* c_str() const { return _value; }
     inline size_t getInstanceId() const { return _instanceId; }
+
+    inline static size_t nextInstanceId() { return ++_lastInstanceId; }
 };
 
 } // namespace logger

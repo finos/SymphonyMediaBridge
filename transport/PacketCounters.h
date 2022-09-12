@@ -30,8 +30,8 @@ struct PacketCounters
         return *this;
     }
 
-    uint64_t octets = 0;
-    uint64_t packets = 0;
+    uint64_t octets = 0; // actually sent / actually received
+    uint64_t packets = 0; // actually sent
     uint64_t lostPackets = 0;
 
     uint32_t bitrateKbps = 0;

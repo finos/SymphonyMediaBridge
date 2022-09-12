@@ -12,7 +12,7 @@ namespace bridge
 VideoForwarderRtxReceiveJob::VideoForwarderRtxReceiveJob(memory::UniquePacket packet,
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
-    bridge::SsrcInboundContext& ssrcFeedbackContext,
+    bridge::SsrcInboundContext& rtxSsrcContext,
     bridge::SsrcInboundContext& ssrcContext,
     const uint32_t mainSsrc,
     const uint32_t extendedSequenceNumber)
@@ -20,7 +20,7 @@ VideoForwarderRtxReceiveJob::VideoForwarderRtxReceiveJob(memory::UniquePacket pa
       _packet(std::move(packet)),
       _engineMixer(engineMixer),
       _sender(sender),
-      _ssrcFeedbackContext(ssrcFeedbackContext),
+      _rtxSsrcContext(rtxSsrcContext),
       _ssrcContext(ssrcContext),
       _mainSsrc(mainSsrc),
       _extendedSequenceNumber(extendedSequenceNumber)
@@ -43,18 +43,21 @@ void VideoForwarderRtxReceiveJob::run()
         return;
     }
 
-    const auto oldRolloverCounter = _ssrcFeedbackContext.lastUnprotectedExtendedSequenceNumber >> 16;
+    if (!_ssrcContext.videoMissingPacketsTracker)
+    {
+        return;
+    }
+
+    const auto oldRolloverCounter = _rtxSsrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
     const auto newRolloverCounter = _extendedSequenceNumber >> 16;
     if (newRolloverCounter > oldRolloverCounter)
     {
-        logger::debug("Setting new rollover counter for ssrc %u",
-            "VideoForwarderRtxReceiveJob",
-            _ssrcFeedbackContext.ssrc);
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcFeedbackContext.ssrc, newRolloverCounter))
+        logger::debug("Setting new rollover counter for ssrc %u", "VideoForwarderRtxReceiveJob", _rtxSsrcContext.ssrc);
+        if (!_sender->setSrtpRemoteRolloverCounter(_rtxSsrcContext.ssrc, newRolloverCounter))
         {
             logger::error("Failed to set rollover counter srtp %u, mixer %s",
                 "VideoForwarderReceiveJob",
-                _ssrcFeedbackContext.ssrc,
+                _rtxSsrcContext.ssrc,
                 _engineMixer.getLoggableId().c_str());
             return;
         }
@@ -64,27 +67,26 @@ void VideoForwarderRtxReceiveJob::run()
     {
         logger::error("Failed to unprotect srtp %u, mixer %s",
             "VideoForwarderRtxReceiveJob",
-            _ssrcFeedbackContext.ssrc,
+            _rtxSsrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
         return;
     }
 
-    _ssrcFeedbackContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
-    Vp8Rewriter::rewriteRtxPacket(*_packet, _mainSsrc);
-
-    if (!_ssrcFeedbackContext.videoMissingPacketsTracker.get())
-    {
-        assert(false);
-        return;
-    }
+    _rtxSsrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+    Vp8Rewriter::rewriteRtxPacket(*_packet, _mainSsrc, _sender->getLoggableId().c_str());
 
     uint32_t extendedSequenceNumber = 0;
-    if (!_ssrcFeedbackContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
+    if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
             extendedSequenceNumber))
     {
         return;
     }
 
+    logger::debug("rtx packet pushed %u, seq %u, extSeq %u",
+        "VideoForwarderRtxReceiveJob",
+        rtpHeader->ssrc.get(),
+        rtpHeader->sequenceNumber.get(),
+        extendedSequenceNumber);
     _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), extendedSequenceNumber);
 }
 

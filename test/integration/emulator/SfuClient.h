@@ -442,6 +442,12 @@ public:
             }
 
             inboundContext.onRtpPacket(timestamp);
+            logger::debug("%s received ssrc %u, seq %u, extseq %u",
+                _loggableId.c_str(),
+                sender->getLoggableId().c_str(),
+                inboundContext.ssrc,
+                rtpHeader->sequenceNumber.get(),
+                inboundContext.lastReceivedExtendedSequenceNumber);
 
             if (!sender->unprotect(packet))
             {
@@ -846,6 +852,16 @@ public:
         return v;
     }
 
+    uint32_t getVideoPacketsReceived()
+    {
+        uint32_t count = 0;
+        for (auto& receiver : _videoReceivers)
+        {
+            count += receiver->videoPacketCount;
+        }
+        return count;
+    }
+
 private:
     utils::IdGenerator _idGenerator;
     uint32_t _videoSsrcs[7];
@@ -862,7 +878,7 @@ private:
     std::vector<api::SimulcastGroup> _remoteVideoStreams;
     uint32_t _ptime;
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
-    size_t _instanceId = 0;
+    size_t _instanceId;
     RtxStats _rtxStats;
 };
 

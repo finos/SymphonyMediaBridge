@@ -50,8 +50,9 @@ public:
         uint32_t estimatedUplinkBandwidth;
     };
 
-    EngineStreamDirector(const config::Config& config, uint32_t lastN)
-        : _participantStreams(maxParticipants),
+    EngineStreamDirector(size_t logInstanceId, const config::Config& config, uint32_t lastN)
+        : _loggableId("StreamDirector", logInstanceId),
+          _participantStreams(maxParticipants),
           _pinMap(maxParticipants),
           _reversePinMap(maxParticipants),
           _lowQualitySsrcs(maxParticipants),
@@ -69,12 +70,12 @@ public:
         if (_participantStreams.find(endpointIdHash) != _participantStreams.end())
         {
             logger::debug("addParticipant stream already added, endpointIdHash %lu",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 endpointIdHash);
             return;
         }
 
-        logger::debug("addParticipant, endpointIdHash %lu", "EngineStreamDirector", endpointIdHash);
+        logger::debug("addParticipant, endpointIdHash %lu", _loggableId.c_str(), endpointIdHash);
 
         SimulcastStream emptyStream;
         memset(&emptyStream, 0, sizeof(SimulcastStream));
@@ -89,13 +90,13 @@ public:
         if (_participantStreams.find(endpointIdHash) != _participantStreams.end())
         {
             logger::debug("addParticipant stream already added, endpointIdHash %lu",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 endpointIdHash);
             return;
         }
 
         logger::info("addParticipant primary, endpointIdHash %lu, %u %u %u",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             endpointIdHash,
             primary.levels[0].ssrc,
             primary.levels[1].ssrc,
@@ -120,7 +121,7 @@ public:
             _requiredMidLevelBandwidth += bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
 
             logger::info("addParticipant secondary, endpointIdHash %lu, %u %u %u",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 endpointIdHash,
                 secondary->levels[0].ssrc,
                 secondary->levels[1].ssrc,
@@ -158,7 +159,7 @@ public:
         }
         _participantStreams.erase(endpointIdHash);
 
-        logger::info("removeParticipant, endpointIdHash %lu", "EngineStreamDirector", endpointIdHash);
+        logger::info("removeParticipant, endpointIdHash %lu", _loggableId.c_str(), endpointIdHash);
         return;
     }
 
@@ -189,7 +190,7 @@ public:
             if (pinMapEntry.second == endpointIdHash)
             {
                 logger::debug("removeSimulcastStream, removed reverse pin endpointIdHash %lu target %lu",
-                    "EngineStreamDirector",
+                    _loggableId.c_str(),
                     pinMapEntry.first,
                     endpointIdHash);
                 _pinMap.erase(pinMapEntry.second);
@@ -220,7 +221,7 @@ public:
         }
 
         logger::info("pin, endpointIdHash %lu, targetEndpointIdHash %lu, oldTarget %lu",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             endpointIdHash,
             targetEndpointIdHash,
             oldTarget);
@@ -243,7 +244,7 @@ public:
     {
         _bandwidthFloor = bwe::BandwidthUtils::calcBandwidthFloor(lowQuality, lastN, audioStreams, videoStreams);
         logger::debug("updateBandwidthFloor lastN %u, audioStreams %u, videoStreams %u -> %u",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             lastN,
             audioStreams,
             videoStreams,
@@ -281,7 +282,7 @@ public:
         else if (participantStream.desiredHighestEstimatedPinnedLevel < participantStream.highestEstimatedPinnedLevel)
         {
             logger::info("setUplinkEstimateKbps %u, endpointIdHash %lu, desiredLevel %lu < level %lu, scale down",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
                 participantStream.desiredHighestEstimatedPinnedLevel,
@@ -293,7 +294,7 @@ public:
         }
 
         logger::debug("setUplinkEstimateKbps %u, endpointIdHash %lu desiredLevel %lu > level %lu",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             uplinkEstimateKbps,
             endpointIdHash,
             participantStream.desiredHighestEstimatedPinnedLevel,
@@ -304,7 +305,7 @@ public:
                 timeBeforeScaleUpMs * utils::Time::ms))
         {
             logger::info("setUplinkEstimateKbps %u, endpointIdHash %lu desiredLevel %lu > level %lu, scale up",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
                 participantStream.desiredHighestEstimatedPinnedLevel,
@@ -337,7 +338,7 @@ public:
     {
         if (_participantStreams.find(senderEndpointIdHash) == _participantStreams.end())
         {
-            DIRECTOR_LOG("isSsrcUsed, %u false, endpoint removed", "EngineStreamDirector", ssrc);
+            DIRECTOR_LOG("isSsrcUsed, %u false, endpoint removed", _loggableId.c_str(), ssrc);
             return false;
         }
 
@@ -345,20 +346,20 @@ public:
         const auto highestAvailableQuality = highestActiveQuality(senderEndpointIdHash, ssrc);
         if (highestAvailableQuality == dropQuality)
         {
-            DIRECTOR_LOG("isSsrcUsed, %u false, ssrc not found", "EngineStreamDirector", ssrc);
+            DIRECTOR_LOG("isSsrcUsed, %u false, ssrc not found", _loggableId.c_str(), ssrc);
             return false;
         }
 
         if (isUsedForUnpinnedVideo(quality, highestAvailableQuality, senderEndpointIdHash, isSenderInLastNList))
         {
-            DIRECTOR_LOG("isSsrcUsed, %u default", "EngineStreamDirector", ssrc);
+            DIRECTOR_LOG("isSsrcUsed, %u default", _loggableId.c_str(), ssrc);
             return true;
         }
 
         if (isUsedForPinnedVideo(quality, highestAvailableQuality, senderEndpointIdHash))
         {
             DIRECTOR_LOG("isSsrcUsed, %u pinned %s",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 ssrc,
                 lowQuality == quality       ? "low"
                     : midQuality == quality ? "mid"
@@ -368,11 +369,11 @@ public:
 
         if (isUsedForRecordingSlides(ssrc, senderEndpointIdHash, numRecordingStreams))
         {
-            DIRECTOR_LOG("isSsrcUsed isContentSlides %u: result %c", "EngineStreamDirector", ssrc, result ? 't' : 'f');
+            DIRECTOR_LOG("isSsrcUsed isContentSlides %u: result %c", _loggableId.c_str(), ssrc, result ? 't' : 'f');
             return true;
         }
 
-        DIRECTOR_LOG("isSsrcUsed, %u false", "EngineStreamDirector", ssrc);
+        DIRECTOR_LOG("isSsrcUsed, %u false", _loggableId.c_str(), ssrc);
         return false;
     }
 
@@ -407,7 +408,7 @@ public:
         const auto result = wantedQuality == quality;
 
         DIRECTOR_LOG("shouldRecordSsrc toEndpointIdHash %lu ssrc %u: result %c, dominant speaker: %c, quality: %lu",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             toEndpointIdHash,
             ssrc,
             result ? 't' : 'f',
@@ -428,7 +429,7 @@ public:
         if (isSsrcFromParticipant(toEndpointIdHash, ssrc))
         {
             DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: f - own video packet.",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 toEndpointIdHash,
                 ssrc);
             return false;
@@ -439,7 +440,7 @@ public:
         if (ssrc == _slidesSsrc)
         {
             DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: t - slides.",
-                "EngineStreamDirector",
+                _loggableId.c_str(),
                 toEndpointIdHash,
                 ssrc);
             return true;
@@ -455,7 +456,7 @@ public:
         size_t quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
 
         DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: cur quality: %lu, wanted quality: %lu",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             toEndpointIdHash,
             ssrc,
             quality,
@@ -483,7 +484,7 @@ public:
 
         DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
                      "wantQ %lu, pinned %c",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             toEndpointIdHash,
             ssrc,
             result ? 't' : 'f',
@@ -512,7 +513,7 @@ public:
         auto& secondary = participantStreams.secondary;
 
         logger::info("streamActiveStateChanged, endpointIdHash %lu, ssrc %u, active %c",
-            "EngineStreamDirector",
+            _loggableId.c_str(),
             endpointIdHash,
             ssrc,
             active ? 't' : 'f');
@@ -657,6 +658,7 @@ private:
     static constexpr size_t maxParticipants = 1024 * 2;
     static const uint64_t timeBeforeScaleUpMs = 5000ULL;
 
+    logger::LoggableId _loggableId;
     concurrency::MpmcHashmap32<size_t, ParticipantStreams> _participantStreams;
     concurrency::MpmcHashmap32<size_t, size_t> _pinMap;
     concurrency::MpmcHashmap32<size_t, size_t> _reversePinMap;
@@ -673,7 +675,7 @@ private:
     /** Max number of the video streams forwarded to any particular endpoint. */
     uint32_t _lastN;
 
-    /** Estimated min bandwidth screenshareing/slides will obey based on min of all participants uplink estimates. */
+    /** Estimated min bandwidth screensharing/slides will obey based on min of all participants uplink estimates. */
     uint32_t _slidesBitrateKbps;
 
     /** SSRC for slides. */
@@ -949,8 +951,8 @@ private:
         outPinnedQuality = configLadder[bestConfigId].PinnedQuality;
         outUnpinnedQuality = configLadder[bestConfigId].UnpinnedQuality;
 
-        DIRECTOR_LOG("VQ pinned: %c, unpinned %c, max streams %ld, esimated uplink %d, reserve for slides: %d",
-            "EngineStreamDirector",
+        DIRECTOR_LOG("VQ pinned: %c, unpinned %c, max streams %ld, estimated uplink %d, reserve for slides: %d",
+            _loggableId.c_str(),
             (char)outPinnedQuality + '0',
             (char)outUnpinnedQuality + '0',
             maxVideoStreams,

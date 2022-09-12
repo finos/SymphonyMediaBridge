@@ -65,6 +65,7 @@ void VideoForwarderRewriteAndSendJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
+        assert(false); // should have been checked multiple times
         return;
     }
 
@@ -100,6 +101,11 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (!isKeyFrame)
         {
+            logger::debug("%s dropping packet waiting for key frame. ssrc %u, seq %u",
+                "VideoForwarderRewriteAndSendJob",
+                _transport.getLoggableId().c_str(),
+                _senderInboundContext.ssrc,
+                rtpHeader->sequenceNumber.get());
             return;
         }
         else
@@ -135,6 +141,16 @@ void VideoForwarderRewriteAndSendJob::run()
             _outboundContext.sequenceCounter,
             nextSequenceNumber))
     {
+        logger::warn("%s seq no anomaly. ssrc %u, seq %u, extSeq %u, rwExtSeq %u, seen %u, seqCount %u, nextSeq %u",
+            "VideoForwarderRewriteAndSendJob",
+            _transport.getLoggableId().c_str(),
+            rtpHeader->ssrc.get(),
+            rtpHeader->sequenceNumber.get(),
+            _extendedSequenceNumber,
+            rewrittenExtendedSequenceNumber,
+            _outboundContext.highestSeenExtendedSequenceNumber,
+            _outboundContext.sequenceCounter,
+            nextSequenceNumber);
         return;
     }
     rtpHeader->sequenceNumber = nextSequenceNumber;
@@ -149,6 +165,11 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (!_outboundContext.packetCache.get()->add(*_packet, nextSequenceNumber))
         {
+            logger::warn("%s failed to add packet to cache. ssrc %u, seq %u",
+                "VideoForwarderRewriteAndSendJob",
+                _transport.getLoggableId().c_str(),
+                rtpHeader->ssrc.get(),
+                rtpHeader->sequenceNumber.get());
             return;
         }
     }

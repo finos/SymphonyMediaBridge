@@ -58,7 +58,7 @@ public:
         lastReceiveTime = timestamp;
     }
 
-    uint32_t ssrc;
+    const uint32_t ssrc;
     const bridge::RtpMap rtpMap;
     transport::RtcTransport* sender;
 

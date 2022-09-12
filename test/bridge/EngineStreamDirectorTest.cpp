@@ -50,7 +50,8 @@ class EngineStreamDirectorTest : public ::testing::Test
     void SetUp() override
     {
         const config::Config config;
-        _engineStreamDirector = std::make_unique<bridge::EngineStreamDirector>(config, 9);
+        _engineStreamDirector =
+            std::make_unique<bridge::EngineStreamDirector>(logger::LoggableId::nextInstanceId(), config, 9);
     }
     void TearDown() override { _engineStreamDirector.reset(); }
 

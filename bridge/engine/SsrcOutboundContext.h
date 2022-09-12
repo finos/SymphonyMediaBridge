@@ -52,7 +52,7 @@ public:
         idle = false;
     }
 
-    uint32_t ssrc;
+    const uint32_t ssrc;
 
     std::unique_ptr<codec::OpusEncoder> opusEncoder;
     memory::PacketPoolAllocator& allocator;

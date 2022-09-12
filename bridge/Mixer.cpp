@@ -142,6 +142,7 @@ namespace bridge
 {
 
 Mixer::Mixer(std::string id,
+    size_t logInstanceId,
     transport::TransportFactory& transportFactory,
     Engine& engine,
     EngineMixer& engineMixer,
@@ -153,7 +154,7 @@ Mixer::Mixer(std::string id,
     const std::vector<api::SsrcPair>& videoPinSsrcs)
     : _config(config),
       _id(std::move(id)),
-      _loggableId("Mixer"),
+      _loggableId("Mixer", logInstanceId),
       _markedForDeletion(false),
       _audioSsrcs(audioSsrcs),
       _videoSsrcs(videoSsrcs),
