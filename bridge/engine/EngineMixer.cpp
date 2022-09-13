@@ -2495,22 +2495,24 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             }
         }
 
-        if (videoStream->transport.isConnected())
+        if (!videoStream->transport.isConnected())
         {
-            ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
-            auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-            if (packet)
-            {
-                videoStream->transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                    *(packetInfo.inboundContext()),
-                    std::move(packet),
-                    videoStream->transport,
-                    packetInfo.extendedSequenceNumber());
-            }
-            else
-            {
-                logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
-            }
+            return;
+        }
+
+        ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
+        auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
+        if (packet)
+        {
+            videoStream->transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                *(packetInfo.inboundContext()),
+                std::move(packet),
+                videoStream->transport,
+                packetInfo.extendedSequenceNumber());
+        }
+        else
+        {
+            logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
         }
     }
 }

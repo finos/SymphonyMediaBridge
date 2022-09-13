@@ -419,9 +419,9 @@ public:
 
     inline bool shouldForwardSsrc(const size_t toEndpointIdHash, const uint32_t ssrc)
     {
-        const auto viewedByParticipantStreamItr = _participantStreams.find(toEndpointIdHash);
+        const auto viewer = _participantStreams.getItem(toEndpointIdHash);
 
-        if (viewedByParticipantStreamItr == _participantStreams.end())
+        if (!viewer)
         {
             return false;
         }
@@ -449,8 +449,7 @@ public:
         const auto pinMapItr = _pinMap.find(toEndpointIdHash);
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
         const auto maxWantedQuality =
-            (fromPinnedEndpoint ? viewedByParticipantStreamItr->second.desiredHighestEstimatedPinnedLevel
-                                : viewedByParticipantStreamItr->second.desiredUnpinnedLevel);
+            (fromPinnedEndpoint ? viewer->desiredHighestEstimatedPinnedLevel : viewer->desiredUnpinnedLevel);
 
         size_t fromEndpointId = 0;
         size_t quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
