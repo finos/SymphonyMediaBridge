@@ -4,7 +4,6 @@
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "bridge/engine/Vp8Rewriter.h"
 #include "transport/Transport.h"
-#include "utils/OutboundSequenceNumber.h"
 
 namespace
 {
@@ -80,7 +79,7 @@ void VideoForwarderRewriteAndSendJob::run()
             _packet->getLength() - rtpHeader->headerLength()));
 
     const auto ssrc = rtpHeader->ssrc.get();
-    if (ssrc != _outboundContext.lastRewrittenSsrc)
+    if (ssrc != _outboundContext.rewrite.originalSsrc)
     {
         if (isRetransmittedPacket)
         {
@@ -124,54 +123,15 @@ void VideoForwarderRewriteAndSendJob::run()
         }
     }
 
-    uint32_t rewrittenExtendedSequenceNumber = 0;
-    if (!Vp8Rewriter::rewrite(_outboundContext,
-            *_packet,
-            _outboundContext.ssrc,
-            _extendedSequenceNumber,
-            _transport.getLoggableId().c_str(),
-            rewrittenExtendedSequenceNumber))
+    if (!_outboundContext.rewrite.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
     {
-        return;
-    }
-
-    uint16_t nextSequenceNumber;
-    if (!utils::OutboundSequenceNumber::process(rewrittenExtendedSequenceNumber,
-            _outboundContext.highestSeenExtendedSequenceNumber,
-            _outboundContext.sequenceCounter,
-            nextSequenceNumber))
-    {
-        logger::warn("%s seq no anomaly. ssrc %u, seq %u, extSeq %u, rwExtSeq %u, seen %u, seqCount %u, nextSeq %u",
+        logger::debug("%s dropping packet. Rewrite not suitable ssrc %u, seq %u",
             "VideoForwarderRewriteAndSendJob",
             _transport.getLoggableId().c_str(),
             rtpHeader->ssrc.get(),
-            rtpHeader->sequenceNumber.get(),
-            _extendedSequenceNumber,
-            rewrittenExtendedSequenceNumber,
-            _outboundContext.highestSeenExtendedSequenceNumber,
-            _outboundContext.sequenceCounter,
-            nextSequenceNumber);
-        return;
-    }
-    rtpHeader->sequenceNumber = nextSequenceNumber;
-    if (isKeyFrame)
-    {
-        _outboundContext.lastKeyFrameSequenceNumber = nextSequenceNumber;
-    }
-    rtpHeader->payloadType = _outboundContext.rtpMap.payloadType;
-    rewriteHeaderExtensions(rtpHeader, _senderInboundContext, _outboundContext);
+            _extendedSequenceNumber);
 
-    if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
-    {
-        if (!_outboundContext.packetCache.get()->add(*_packet, nextSequenceNumber))
-        {
-            logger::warn("%s failed to add packet to cache. ssrc %u, seq %u",
-                "VideoForwarderRewriteAndSendJob",
-                _transport.getLoggableId().c_str(),
-                rtpHeader->ssrc.get(),
-                rtpHeader->sequenceNumber.get());
-            return;
-        }
+        return;
     }
 
     if (!_transport.isConnected())
@@ -185,8 +145,37 @@ void VideoForwarderRewriteAndSendJob::run()
         return;
     }
 
+    uint32_t rewrittenExtendedSequenceNumber = 0;
+    if (!Vp8Rewriter::rewrite(_outboundContext,
+            *_packet,
+            _outboundContext.ssrc,
+            _extendedSequenceNumber,
+            _transport.getLoggableId().c_str(),
+            rewrittenExtendedSequenceNumber,
+            isKeyFrame))
+    {
+        return;
+    }
+
+    rtpHeader->payloadType = _outboundContext.rtpMap.payloadType;
+    rewriteHeaderExtensions(rtpHeader, _senderInboundContext, _outboundContext);
+
+    if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
+    {
+        if (!_outboundContext.packetCache.get()->add(*_packet, rtpHeader->sequenceNumber))
+        {
+            logger::warn("%s failed to add packet to cache. ssrc %u, seq %u",
+                "VideoForwarderRewriteAndSendJob",
+                _transport.getLoggableId().c_str(),
+                rtpHeader->ssrc.get(),
+                rtpHeader->sequenceNumber.get());
+            return;
+        }
+    }
+
     if (isRetransmittedPacket)
     {
+        logger::debug("dropping rtx packet before forwarding", "VideoForwarderRewriteAndSendJob");
         return;
     }
 

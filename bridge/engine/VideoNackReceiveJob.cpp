@@ -14,7 +14,6 @@ VideoNackReceiveJob::VideoNackReceiveJob(SsrcOutboundContext& ssrcOutboundContex
     PacketCache& videoPacketCache,
     const uint16_t pid,
     const uint16_t blp,
-    const uint32_t feedbackSsrc,
     const uint64_t timestamp,
     const uint64_t rtt)
     : jobmanager::CountedJob(sender.getJobCounter()),
@@ -23,7 +22,6 @@ VideoNackReceiveJob::VideoNackReceiveJob(SsrcOutboundContext& ssrcOutboundContex
       _videoPacketCache(videoPacketCache),
       _pid(pid),
       _blp(blp),
-      _feedbackSsrc(feedbackSsrc),
       _timestamp(timestamp),
       _rtt(rtt)
 {
@@ -33,7 +31,7 @@ void VideoNackReceiveJob::run()
 {
     NACK_LOG("Incoming rtcp feedback NACK, feedbackSsrc %u, pid %u, blp 0x%x, %s",
         "VideoNackReceiveJob",
-        _feedbackSsrc,
+        _ssrcOutboundContext.ssrc,
         _pid,
         _blp,
         _sender.getLoggableId().c_str());
@@ -122,7 +120,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
     NACK_LOG("Sending cached packet seq %u, feedbackSsrc %u, seq %u",
         "VideoNackReceiveJob",
         sequenceNumber,
-        _feedbackSsrc,
+        _ssrcOutboundContext.ssrc,
         _ssrcOutboundContext.sequenceCounter & 0xFFFFu);
 
     auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
@@ -131,10 +129,9 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
         return;
     }
 
-    rtpHeader->ssrc = _feedbackSsrc;
+    rtpHeader->ssrc = _ssrcOutboundContext.ssrc;
     rtpHeader->payloadType = _ssrcOutboundContext.rtpMap.payloadType;
-    rtpHeader->sequenceNumber = _ssrcOutboundContext.sequenceCounter & 0xFFFF;
-    ++_ssrcOutboundContext.sequenceCounter;
+    rtpHeader->sequenceNumber = ++_ssrcOutboundContext.rewrite.lastSent.sequenceNumber & 0xFFFF;
 
     _sender.protectAndSend(std::move(packet));
 }

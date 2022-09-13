@@ -1,21 +1,19 @@
 #include "bridge/engine/AudioForwarderRewriteAndSendJob.h"
+#include "bridge/engine/AudioRewriter.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Opus.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
-#include "utils/OutboundSequenceNumber.h"
 
 namespace
 {
 
-inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
+inline void rewriteHeaderExtensions(rtp::RtpHeader& rtpHeader,
     const bridge::SsrcInboundContext& senderInboundContext,
     const bridge::SsrcOutboundContext& receiverOutboundContext)
 {
-    assert(rtpHeader);
-
-    const auto headerExtensions = rtpHeader->getExtensionHeader();
+    const auto headerExtensions = rtpHeader.getExtensionHeader();
     if (!headerExtensions)
     {
         return;
@@ -65,20 +63,7 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    bool newSource = _outboundContext.lastRewrittenSsrc != header->ssrc;
-    _outboundContext.lastRewrittenSsrc = header->ssrc;
-    if (newSource)
-    {
-        _outboundContext.timestampOffset = _outboundContext.lastSentTimestamp +
-            codec::Opus::sampleRate / codec::Opus::packetsPerSecond - header->timestamp.get();
-        _outboundContext.highestSeenExtendedSequenceNumber = _extendedSequenceNumber - 1;
-    }
-
-    uint16_t nextSequenceNumber;
-    if (!utils::OutboundSequenceNumber::process(_extendedSequenceNumber,
-            _outboundContext.highestSeenExtendedSequenceNumber,
-            _outboundContext.sequenceCounter,
-            nextSequenceNumber))
+    if (!_outboundContext.rewrite.shouldSend(header->ssrc.get(), header->sequenceNumber.get()))
     {
         logger::warn("%s dropping packet ssrc %u, seq %u, timestamp %u",
             "AudioForwarderRewriteAndSendJob",
@@ -89,16 +74,9 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    header->ssrc = _outboundContext.ssrc;
-    header->sequenceNumber = nextSequenceNumber;
-    header->timestamp = _outboundContext.timestampOffset + header->timestamp;
-    header->payloadType = _outboundContext.rtpMap.payloadType;
-    if (static_cast<int32_t>(header->timestamp - _outboundContext.lastSentTimestamp) > 0)
-    {
-        _outboundContext.lastSentTimestamp = header->timestamp;
-    }
+    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *header);
 
-    rewriteHeaderExtensions(header, _senderInboundContext, _outboundContext);
+    rewriteHeaderExtensions(*header, _senderInboundContext, _outboundContext);
     _transport.protectAndSend(std::move(_packet));
 }
 

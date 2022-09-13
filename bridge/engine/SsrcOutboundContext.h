@@ -9,6 +9,11 @@
 #include <cstdint>
 #include <memory>
 
+namespace rtp
+{
+struct RtpHeader;
+} // namespace rtp
+
 namespace bridge
 {
 
@@ -24,16 +29,6 @@ public:
         : ssrc(ssrc),
           allocator(packetAllocator),
           rtpMap(rtpMap),
-          sequenceCounter(0),
-          lastExtendedSequenceNumber(0xFFFFFFFF),
-          lastSentPicId(0xFFFFFFFF),
-          lastSentTl0PicIdx(0xFFFFFFFF),
-          lastSentTimestamp(0),
-          sequenceNumberOffset(0),
-          picIdOffset(0),
-          tl0PicIdxOffset(0),
-          timestampOffset(0),
-          lastRewrittenSsrc(ssrc),
           needsKeyframe(false),
           lastKeyFrameSequenceNumber(0),
           highestSeenExtendedSequenceNumber(0xFFFFFFFF),
@@ -58,19 +53,44 @@ public:
     memory::PacketPoolAllocator& allocator;
     const bridge::RtpMap& rtpMap;
 
-    // This is the highest sent outbound sequence number
-    uint32_t sequenceCounter;
-
     // These are used by the VP8 forwarder
-    uint32_t lastExtendedSequenceNumber;
-    uint32_t lastSentPicId;
-    uint32_t lastSentTl0PicIdx;
-    uint32_t lastSentTimestamp;
-    int64_t sequenceNumberOffset;
-    int32_t picIdOffset;
-    int32_t tl0PicIdxOffset;
-    int64_t timestampOffset;
-    uint32_t lastRewrittenSsrc;
+    struct SsrcRewrite
+    {
+        bool empty() const { return lastSent.empty() && offset.empty(); }
+        bool shouldSend(uint32_t ssrc, uint32_t extendedSequenceNumber) const;
+
+        uint32_t originalSsrc = ~0u;
+        uint32_t sequenceNumberStart = 0;
+
+        struct Tracker
+        {
+            bool empty() const
+            {
+                return ssrc == ~0u && sequenceNumber == ~0u && 0xFFFFu == picId && 0xFFFFu == tl0PicIdx &&
+                    ~0u == timestamp;
+            }
+
+            uint32_t ssrc = ~0;
+            uint32_t sequenceNumber = ~0;
+            uint32_t timestamp = ~0;
+            uint16_t picId = ~0;
+            uint16_t tl0PicIdx = ~0;
+        } lastSent;
+
+        struct Offset
+        {
+            bool empty() const
+            {
+                return sequenceNumber == 0 && picId == 0 && 0 == timestamp && tl0PicIdx == 0 && 0 == sequenceNumber;
+            }
+
+            int32_t sequenceNumber = 0;
+            int32_t timestamp = 0;
+            int16_t picId = 0;
+            int16_t tl0PicIdx = 0;
+        } offset;
+    } rewrite;
+
     bool needsKeyframe;
     uint32_t lastKeyFrameSequenceNumber;
 

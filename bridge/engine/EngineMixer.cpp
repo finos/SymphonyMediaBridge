@@ -2501,6 +2501,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
         {
             uint32_t fbSsrc = 0;
             _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
+            // TODO incomplete
         }
 
         auto* ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->endpointIdHash,
@@ -2744,7 +2745,6 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
             *(mediaSsrcOutboundContext->packetCache.get()),
             pid,
             blp,
-            feedbackSsrc,
             timestamp,
             barbell.transport.getRtt());
     }
@@ -2817,7 +2817,6 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
             *(mediaSsrcOutboundContext->packetCache.get()),
             pid,
             blp,
-            feedbackSsrc,
             timestamp,
             transport->getRtt());
     }
@@ -2948,7 +2947,7 @@ void EngineMixer::onPliRequestFromReceiver(const size_t endpointIdHash, const ui
         outboundContext->pli.userRequestTimestamp = timestamp;
     }
 
-    const auto sourceSsrc = outboundContext->lastRewrittenSsrc;
+    const auto sourceSsrc = outboundContext->rewrite.originalSsrc;
     auto inboundSsrcContext = _ssrcInboundContexts.getItem(sourceSsrc);
     if (!inboundSsrcContext)
     {
@@ -3832,7 +3831,7 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
     {
         engineVideoStream.transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream.transport,
             engineVideoStream.localSsrc,
-            &outboundContext->sequenceCounter,
+            &outboundContext->rewrite.lastSent.sequenceNumber,
             outboundContext->rtpMap.payloadType);
     }
     _probingVideoStreams = true;

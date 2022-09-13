@@ -85,7 +85,7 @@ void EncodeJob::run()
         opusPacket->setLength(opusHeader->headerLength() + encodedBytes);
         opusHeader->ssrc = _outboundContext.ssrc;
         opusHeader->timestamp = (_rtpTimestamp * 48llu) & 0xFFFFFFFFllu;
-        opusHeader->sequenceNumber = _outboundContext.sequenceCounter++ & 0xFFFFu;
+        opusHeader->sequenceNumber = ++_outboundContext.rewrite.lastSent.sequenceNumber & 0xFFFFu;
         opusHeader->payloadType = targetFormat.payloadType;
         _transport.protectAndSend(std::move(opusPacket));
     }
