@@ -1352,24 +1352,11 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
     if (!mustBeForwardedOnBarbells && !ssrcContext->isSsrcUsed.load())
     {
         sender->getJobQueue().addJob<bridge::DiscardReceivedVideoPacketJob>(std::move(packet), sender, *ssrcContext);
-
-        logger::debug("from %s dropping early fwd on barbells %c, ssrc %u",
-            _loggableId.c_str(),
-            sender->getLoggableId().c_str(),
-            mustBeForwardedOnBarbells ? 't' : 'f',
-            ssrcContext->ssrc);
         return;
     }
 
     ssrcContext->endpointIdHash = packet->endpointIdHash;
-    {
-        auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
-        logger::debug("%s, recv and unprotect from %u, seq %u",
-            _loggableId.c_str(),
-            sender->getLoggableId().c_str(),
-            ssrcContext->ssrc,
-            rtpHeader->sequenceNumber.get());
-    }
+
     sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(std::move(packet),
         _sendAllocator,
         sender,
@@ -2442,23 +2429,11 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
 
         if (!_engineStreamDirector->shouldForwardSsrc(endpointIdHash, packetInfo.inboundContext()->ssrc))
         {
-            logger::debug("%s no fwd packet. no subscription to %s, ssrc %u, seq%u, extSeq %u",
-                _loggableId.c_str(),
-                packetInfo.transport()->getLoggableId().c_str(),
-                videoStream->transport.getLoggableId().c_str(),
-                rtpHeader->ssrc.get(),
-                rtpHeader->sequenceNumber.get(),
-                packetInfo.extendedSequenceNumber());
             continue;
         }
 
         if (shouldSkipBecauseOfWhitelist(*videoStream, packetInfo.inboundContext()->ssrc))
         {
-            logger::debug("%s no fwd packet. not in white list to %s, ssrc %u",
-                _loggableId.c_str(),
-                packetInfo.transport()->getLoggableId().c_str(),
-                videoStream->transport.getLoggableId().c_str(),
-                rtpHeader->ssrc.get());
             continue;
         }
 
@@ -2490,21 +2465,10 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
                 const auto rewriteMapItr = videoSsrcRewriteMap.find(senderEndpointIdHash);
                 if (rewriteMapItr == videoSsrcRewriteMap.end())
                 {
-                    logger::debug("%s no fwd packet. no rewrite mapping %s, ssrc %u",
-                        _loggableId.c_str(),
-                        packetInfo.transport()->getLoggableId().c_str(),
-                        videoStream->transport.getLoggableId().c_str(),
-                        rtpHeader->ssrc.get());
                     continue;
                 }
                 ssrc = rewriteMapItr->second[0].main;
             }
-        }
-        else
-        {
-            uint32_t fbSsrc = 0;
-            _engineStreamDirector->getFeedbackSsrc(ssrc, fbSsrc);
-            // TODO incomplete
         }
 
         auto* ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->endpointIdHash,
@@ -2514,11 +2478,6 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
 
         if (!ssrcOutboundContext)
         {
-            logger::debug("%s no fwd packet. no outbound ssrc context from %s, ssrc %u",
-                _loggableId.c_str(),
-                packetInfo.transport()->getLoggableId().c_str(),
-                videoStream->transport.getLoggableId().c_str(),
-                rtpHeader->ssrc.get());
             continue;
         }
 
@@ -2542,13 +2501,6 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
             if (packet)
             {
-                logger::debug("fwd %u on %s, seq %u, extSeq %u",
-                    _loggableId.c_str(),
-                    rtpHeader->ssrc.get(),
-                    videoStream->transport.getLoggableId().c_str(),
-                    rtpHeader->sequenceNumber.get(),
-                    packetInfo.extendedSequenceNumber());
-
                 videoStream->transport.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
                     *(packetInfo.inboundContext()),
                     std::move(packet),
@@ -2559,14 +2511,6 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             {
                 logger::warn("send allocator depleted FwdRewrite", _loggableId.c_str());
             }
-        }
-        else
-        {
-            logger::debug("%s no fwd packet. dest transport disconnected %s, ssrc %u",
-                _loggableId.c_str(),
-                packetInfo.transport()->getLoggableId().c_str(),
-                videoStream->transport.getLoggableId().c_str(),
-                rtpHeader->ssrc.get());
         }
     }
 }
@@ -2715,9 +2659,9 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     const rtp::RtcpFeedback& rtcpFeedback,
     const uint64_t timestamp)
 {
-    uint32_t feedbackSsrc = 0;
+    uint32_t rtxSsrc = 0;
     const auto mediaSsrc = rtcpFeedback.mediaSsrc.get();
-    _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc);
+    _activeMediaList->getFeedbackSsrc(mediaSsrc, rtxSsrc);
 
     auto& bbTransport = barbell.transport;
     auto* mediaSsrcOutboundContext =
@@ -2728,9 +2672,9 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
         return;
     }
 
-    auto* feedbackSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, feedbackSsrc, barbell.audioRtpMap);
-    if (!feedbackSsrcOutboundContext)
+    auto* rtxSsrcOutboundContext =
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.audioRtpMap);
+    if (!rtxSsrcOutboundContext)
     {
         return;
     }
@@ -2741,9 +2685,9 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     uint16_t blp = 0;
     for (size_t i = 0; i < numFeedbackControlInfos; ++i)
     {
-        feedbackSsrcOutboundContext->onRtpSent(timestamp);
+        rtxSsrcOutboundContext->onRtpSent(timestamp);
         rtp::getFeedbackControlInfo(&rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
-        bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+        bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*rtxSsrcOutboundContext,
             bbTransport,
             *(mediaSsrcOutboundContext->packetCache.get()),
             pid,
@@ -2797,12 +2741,12 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         return;
     }
 
-    auto feedbackSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->endpointIdHash,
+    auto rtxSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->endpointIdHash,
         rtcpSenderVideoStream->ssrcOutboundContexts,
         feedbackSsrc,
         rtcpSenderVideoStream->feedbackRtpMap);
 
-    if (!feedbackSsrcOutboundContext)
+    if (!rtxSsrcOutboundContext)
     {
         return;
     }
@@ -2813,9 +2757,9 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     uint16_t blp = 0;
     for (size_t i = 0; i < numFeedbackControlInfos; ++i)
     {
-        feedbackSsrcOutboundContext->onRtpSent(timestamp);
+        rtxSsrcOutboundContext->onRtpSent(timestamp);
         rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
-        rtcpSenderVideoStream->transport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*feedbackSsrcOutboundContext,
+        rtcpSenderVideoStream->transport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*rtxSsrcOutboundContext,
             rtcpSenderVideoStream->transport,
             *(mediaSsrcOutboundContext->packetCache.get()),
             pid,
@@ -3182,7 +3126,6 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
 
     for (auto& barbell : _engineBarbells)
     {
-
         barbell.second->dataChannel.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
     }
 }

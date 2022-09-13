@@ -82,11 +82,6 @@ void VideoForwarderRtxReceiveJob::run()
         return;
     }
 
-    logger::debug("rtx packet pushed %u, seq %u, extSeq %u",
-        "VideoForwarderRtxReceiveJob",
-        rtpHeader->ssrc.get(),
-        rtpHeader->sequenceNumber.get(),
-        extendedSequenceNumber);
     _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), extendedSequenceNumber);
 }
 

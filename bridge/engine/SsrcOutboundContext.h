@@ -31,7 +31,6 @@ public:
           rtpMap(rtpMap),
           needsKeyframe(false),
           lastKeyFrameSequenceNumber(0),
-          highestSeenExtendedSequenceNumber(0xFFFFFFFF),
           lastRespondedNackPid(0),
           lastRespondedNackBlp(0),
           lastRespondedNackTimestamp(0),
@@ -93,9 +92,6 @@ public:
 
     bool needsKeyframe;
     uint32_t lastKeyFrameSequenceNumber;
-
-    // Used to keep track of offset between inbound and outbound sequence numbers
-    uint32_t highestSeenExtendedSequenceNumber;
 
     // Store the pid and blp of the last nack that was responded to, to avoid resending
     uint16_t lastRespondedNackPid;

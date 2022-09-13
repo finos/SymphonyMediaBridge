@@ -100,11 +100,6 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (!isKeyFrame)
         {
-            logger::debug("%s dropping packet waiting for key frame. ssrc %u, seq %u",
-                "VideoForwarderRewriteAndSendJob",
-                _transport.getLoggableId().c_str(),
-                _senderInboundContext.ssrc,
-                rtpHeader->sequenceNumber.get());
             return;
         }
         else
@@ -136,12 +131,6 @@ void VideoForwarderRewriteAndSendJob::run()
 
     if (!_transport.isConnected())
     {
-        logger::debug("Dropping forwarded packet ssrc %u, seq %u, transport %s not connected",
-            "VideoForwarderRewriteAndSendJob",
-            rtpHeader->ssrc.get(),
-            rtpHeader->sequenceNumber.get(),
-            _transport.getLoggableId().c_str());
-
         return;
     }
 

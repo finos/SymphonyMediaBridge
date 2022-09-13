@@ -17,7 +17,7 @@ class PacketCache;
 class VideoNackReceiveJob : public jobmanager::CountedJob
 {
 public:
-    VideoNackReceiveJob(SsrcOutboundContext& ssrcOutboundContext,
+    VideoNackReceiveJob(SsrcOutboundContext& rtxSsrcOutboundContext,
         transport::RtcTransport& sender,
         PacketCache& videoPacketCache,
         const uint16_t pid,
@@ -28,7 +28,7 @@ public:
     void run() override;
 
 private:
-    SsrcOutboundContext& _ssrcOutboundContext;
+    SsrcOutboundContext& _rtxSsrcOutboundContext;
     transport::RtcTransport& _sender;
     PacketCache& _videoPacketCache;
     uint16_t _pid;

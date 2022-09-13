@@ -94,9 +94,7 @@ void VideoForwarderReceiveJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
-        logger::debug("%s invalid rtp header. dropping",
-            _sender->getLoggableId().c_str(),
-            _sender->getLoggableId().c_str());
+        logger::debug("%s invalid rtp header. dropping", "VideoForwarderReceiveJob", _sender->getLoggableId().c_str());
         return;
     }
 
@@ -256,13 +254,6 @@ void VideoForwarderReceiveJob::run()
             return;
         }
     }
-
-    logger::debug("%s rtp pushed to queue %u, seq %u, extSeq %u",
-        "VideoForwarderReceiveJob",
-        _sender->getLoggableId().c_str(),
-        _ssrcContext.ssrc,
-        sequenceNumber,
-        _extendedSequenceNumber);
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap.payloadType));
     _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), _extendedSequenceNumber);

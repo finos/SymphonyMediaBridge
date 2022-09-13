@@ -12,7 +12,7 @@
 #include <cstddef>
 #include <cstdint>
 
-#define DEBUG_REWRITER 1
+#define DEBUG_REWRITER 0
 
 namespace bridge
 {
