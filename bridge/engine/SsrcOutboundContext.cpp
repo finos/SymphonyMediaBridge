@@ -16,8 +16,11 @@ bool SsrcOutboundContext::SsrcRewrite::shouldSend(uint32_t ssrc, uint32_t sequen
         return true;
     }
 
-    if (static_cast<int32_t>(sequenceNumber - sequenceNumberStart) > 0 &&
-        static_cast<int32_t>(sequenceNumber + offset.sequenceNumber - lastSent.sequenceNumber) > -MAX_REWIND)
+    const bool packetArrivedAfterSsrcSwitch = (static_cast<int32_t>(sequenceNumber - sequenceNumberStart) > 0);
+    const bool packetNotTooOld =
+        (static_cast<int32_t>(sequenceNumber + offset.sequenceNumber - lastSent.sequenceNumber) > -MAX_REWIND);
+
+    if (packetArrivedAfterSsrcSwitch && packetNotTooOld)
     {
         return true;
     }

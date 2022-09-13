@@ -78,6 +78,8 @@ void VideoForwarderRtxReceiveJob::run()
         _ssrcContext.rtpMap.payloadType,
         _sender->getLoggableId().c_str());
 
+    // Missing packet tracker will know which extended sequence number this packet is referring to and if this packet
+    // has already been received and forwarded.
     uint32_t extendedSequenceNumber = 0;
     if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
             extendedSequenceNumber))
