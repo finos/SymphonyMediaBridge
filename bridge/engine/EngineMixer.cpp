@@ -3841,7 +3841,8 @@ void EngineMixer::checkIfRateControlIsNeeded(const uint64_t timestamp)
 
 void EngineMixer::removeIdleStreams(const uint64_t timestamp)
 {
-    if (utils::Time::diffLT(_lastIdleTransportCheck, timestamp, 1ULL * utils::Time::sec))
+    if (0 == _config.endpointAutoRemoveTimeout ||
+        utils::Time::diffLT(_lastIdleTransportCheck, timestamp, 1ULL * utils::Time::sec))
     {
         return;
     }
