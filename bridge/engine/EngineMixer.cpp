@@ -5,6 +5,7 @@
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/AudioForwarderReceiveJob.h"
 #include "bridge/engine/AudioForwarderRewriteAndSendJob.h"
+#include "bridge/engine/DiscardReceivedVideoPacketJob.h"
 #include "bridge/engine/EncodeJob.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineBarbell.h"
@@ -1350,6 +1351,8 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
 
     if (!mustBeForwardedOnBarbells && !ssrcContext->isSsrcUsed.load())
     {
+        sender->getJobQueue().addJob<bridge::DiscardReceivedVideoPacketJob>(std::move(packet), sender, *ssrcContext);
+
         logger::debug("from %s dropping early fwd on barbells %c, ssrc %u",
             _loggableId.c_str(),
             sender->getLoggableId().c_str(),

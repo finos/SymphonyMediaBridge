@@ -195,6 +195,8 @@ set(FILES
         bridge/engine/VideoMissingPacketsTracker.h
         bridge/engine/VideoNackReceiveJob.cpp
         bridge/engine/VideoNackReceiveJob.h
+        bridge/engine/DiscardReceivedVideoPacketJob.h
+        bridge/engine/DiscardReceivedVideoPacketJob.cpp
         bridge/engine/Vp8Rewriter.h
         bridge/engine/SetMaxMediaBitrateJob.h
         bridge/engine/SetMaxMediaBitrateJob.cpp
