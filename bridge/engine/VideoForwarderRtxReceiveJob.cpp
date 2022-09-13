@@ -73,7 +73,10 @@ void VideoForwarderRtxReceiveJob::run()
     }
 
     _rtxSsrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
-    Vp8Rewriter::rewriteRtxPacket(*_packet, _mainSsrc, _sender->getLoggableId().c_str());
+    Vp8Rewriter::rewriteRtxPacket(*_packet,
+        _mainSsrc,
+        _ssrcContext.rtpMap.payloadType,
+        _sender->getLoggableId().c_str());
 
     uint32_t extendedSequenceNumber = 0;
     if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),

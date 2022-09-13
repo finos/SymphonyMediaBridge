@@ -20,6 +20,10 @@ namespace bridge
 class EngineMixer;
 class SsrcInboundContext;
 
+/** Receives, decrypts and pushes rtx packets as original video packet onto queues.
+ * This makes them appear as received out of order, but they
+ * can be stored in packet caches and forwarded to clients.
+ */
 class VideoForwarderRtxReceiveJob : public jobmanager::CountedJob
 {
 public:

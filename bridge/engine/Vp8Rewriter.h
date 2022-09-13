@@ -159,7 +159,10 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     return true;
 }
 
-inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc, const char* transportName)
+inline uint16_t rewriteRtxPacket(memory::Packet& packet,
+    const uint32_t mainSsrc,
+    uint8_t vp8PayloadType,
+    const char* transportName)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
     assert(rtpHeader->padding == 0);
@@ -185,6 +188,7 @@ inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc
 
     rtpHeader->sequenceNumber = originalSequenceNumber;
     rtpHeader->ssrc = mainSsrc;
+    rtpHeader->payloadType = vp8PayloadType;
 
     return originalSequenceNumber;
 }

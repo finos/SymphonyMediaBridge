@@ -101,6 +101,7 @@ TEST_F(Vp8RewriterTest, rewrite)
 
 TEST_F(Vp8RewriterTest, rewriteRtx)
 {
+    const uint8_t vp8PayloadType = 100;
     // Make RTP packet
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size - sizeof(uint16_t));
@@ -131,14 +132,15 @@ TEST_F(Vp8RewriterTest, rewriteRtx)
     rtxHeader->payloadType = rtxRtpMap.payloadType;
 
     // Rewrite RTX
-    const auto originalSequenceNumber = bridge::Vp8Rewriter::rewriteRtxPacket(*rtxPacket, 1, "transport");
+    const auto originalSequenceNumber =
+        bridge::Vp8Rewriter::rewriteRtxPacket(*rtxPacket, 1, vp8PayloadType, "transport");
 
     // Validate
     auto rewrittenRtpHeader = rtp::RtpHeader::fromPacket(*rtxPacket);
     EXPECT_EQ(1, originalSequenceNumber);
     EXPECT_EQ(1, rewrittenRtpHeader->sequenceNumber.get());
     EXPECT_EQ(1, rewrittenRtpHeader->ssrc.get());
-    EXPECT_EQ(rtxRtpMap.payloadType, rewrittenRtpHeader->payloadType);
+    EXPECT_EQ(vp8PayloadType, rewrittenRtpHeader->payloadType);
 }
 
 TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcIsUnchanged)

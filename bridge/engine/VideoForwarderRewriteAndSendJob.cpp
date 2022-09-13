@@ -68,10 +68,14 @@ void VideoForwarderRewriteAndSendJob::run()
         return;
     }
 
-    bool isRetransmittedPacket = false;
     if (_outboundContext.rtpMap.format == RtpMap::Format::VP8RTX)
     {
-        isRetransmittedPacket = true;
+        logger::warn("%s rtx packet should not reach rewrite and send. ssrc %u, seq %u",
+            "VideoForwarderRewriteAndSendJob",
+            _transport.getLoggableId().c_str(),
+            rtpHeader->ssrc.get(),
+            _extendedSequenceNumber);
+        return;
     }
 
     const bool isKeyFrame = codec::Vp8Header::isKeyFrame(rtpHeader->getPayload(),
@@ -81,10 +85,6 @@ void VideoForwarderRewriteAndSendJob::run()
     const auto ssrc = rtpHeader->ssrc.get();
     if (ssrc != _outboundContext.rewrite.originalSsrc)
     {
-        if (isRetransmittedPacket)
-        {
-            return;
-        }
         if (!isKeyFrame)
         {
             _outboundContext.needsKeyframe = true;
@@ -100,6 +100,7 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (!isKeyFrame)
         {
+            // dropping P-frames until key frame appears
             return;
         }
         else
@@ -158,14 +159,7 @@ void VideoForwarderRewriteAndSendJob::run()
                 _transport.getLoggableId().c_str(),
                 rtpHeader->ssrc.get(),
                 rtpHeader->sequenceNumber.get());
-            return;
         }
-    }
-
-    if (isRetransmittedPacket)
-    {
-        logger::debug("dropping rtx packet before forwarding", "VideoForwarderRewriteAndSendJob");
-        return;
     }
 
     _transport.protectAndSend(std::move(_packet));
