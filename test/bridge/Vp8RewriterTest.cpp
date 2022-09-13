@@ -12,6 +12,40 @@ namespace
 
 static const uint32_t outboundSsrc = 12345;
 
+void examine(bridge::SsrcOutboundContext& outboundContext,
+    memory::Packet& packet,
+    uint32_t ssrc,
+    uint16_t seqNo,
+    uint32_t timestamp,
+    uint32_t expectedSeqNo,
+    uint16_t picId,
+    uint16_t picIdx,
+    uint16_t expectedPicId,
+    uint16_t expectedPicIdx)
+{
+    auto rtpHeader = rtp::RtpHeader::create(packet);
+    auto payload = rtpHeader->getPayload();
+    rtpHeader->ssrc = ssrc;
+    rtpHeader->sequenceNumber = seqNo;
+    rtpHeader->timestamp = timestamp;
+    codec::Vp8Header::setPicId(payload, picId);
+    codec::Vp8Header::setTl0PicIdx(payload, picIdx);
+
+    uint32_t sequenceNumberAfterRewrite = 0;
+    bridge::Vp8Rewriter::rewrite(outboundContext,
+        packet,
+        outboundSsrc,
+        rtpHeader->sequenceNumber.get(),
+        "",
+        sequenceNumberAfterRewrite);
+
+    EXPECT_EQ(outboundSsrc, rtpHeader->ssrc.get());
+    EXPECT_EQ(expectedSeqNo & 0xFFFFu, rtpHeader->sequenceNumber.get());
+    EXPECT_EQ(expectedSeqNo, sequenceNumberAfterRewrite);
+    EXPECT_EQ(expectedPicId, codec::Vp8Header::getPicId(payload));
+    EXPECT_EQ(expectedPicIdx, codec::Vp8Header::getTl0PicIdx(payload));
+}
+
 } // namespace
 
 class Vp8RewriterTest : public ::testing::Test
@@ -30,16 +64,31 @@ protected:
     std::unique_ptr<bridge::SsrcOutboundContext> _ssrcOutboundContext;
 };
 
-TEST_F(Vp8RewriterTest, getOffset)
+TEST_F(Vp8RewriterTest, ringDifference)
 {
     uint16_t sequenceNumber0 = 22787;
     uint16_t sequenceNumber1 = 2112;
 
-    const int32_t offset1 = utils::Offset::getOffset<int32_t, 16>(sequenceNumber0, sequenceNumber1);
+    const auto offset1 = math::ringDifference<uint16_t, 16u>(sequenceNumber1, sequenceNumber0);
     EXPECT_EQ(20675, offset1);
 
-    const int32_t offset2 = utils::Offset::getOffset<int32_t, 16>(sequenceNumber1, sequenceNumber0);
+    const auto offset2 = math::ringDifference<uint16_t, 16u>(sequenceNumber0, sequenceNumber1);
     EXPECT_EQ(-20675, offset2);
+
+    {
+        const auto offset = math::ringDifference<uint32_t, 12u>(0xFFF, 444);
+        EXPECT_EQ(offset, 445);
+    }
+
+    {
+        const auto offset = math::ringDifference<uint16_t, 16u>(0xFFFF, 444);
+        EXPECT_EQ(offset, 445);
+    }
+
+    {
+        const auto offset = math::ringDifference<uint16_t, 16u>(888, 444);
+        EXPECT_EQ(offset, -444);
+    }
 }
 
 TEST_F(Vp8RewriterTest, rewrite)
@@ -656,8 +705,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtx)
 {
     memory::PacketPoolAllocator packetAllocator(512, "test");
     bridge::RtpMap map1(bridge::RtpMap::Format::VP8);
-    bridge::SsrcOutboundContext outboundContext1(1, packetAllocator, map1);
-    bridge::SsrcOutboundContext outboundContext2(2, packetAllocator, map1);
+    bridge::SsrcOutboundContext outboundContext(1, packetAllocator, map1);
 
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
@@ -667,62 +715,24 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtx)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    uint32_t rewrittenExtendedSequenceNumber = 0;
     uint32_t lastTimestamp = 0;
 
-    auto examine = [&](bridge::SsrcOutboundContext& outboundContext,
-                       uint16_t seqNo,
-                       uint32_t timestamp,
-                       uint16_t expectedSeqNo,
-                       uint16_t picId,
-                       uint16_t picIdx,
-                       uint16_t expectedPicId,
-                       uint16_t expectedPicIdx) {
-        rtpHeader->ssrc = outboundContext.ssrc;
-        rtpHeader->sequenceNumber = seqNo;
-        rtpHeader->timestamp = timestamp;
-        codec::Vp8Header::setPicId(payload, picId);
-        codec::Vp8Header::setTl0PicIdx(payload, picIdx);
-
-        bridge::Vp8Rewriter::rewrite(*_ssrcOutboundContext,
-            *packet,
-            outboundSsrc,
-            rtpHeader->sequenceNumber.get(),
-            "",
-            rewrittenExtendedSequenceNumber);
-
-        uint16_t nextSequenceNumber;
-        auto seqConversion = utils::OutboundSequenceNumber::process(rewrittenExtendedSequenceNumber,
-            outboundContext.highestSeenExtendedSequenceNumber,
-            outboundContext.sequenceCounter,
-            nextSequenceNumber);
-        EXPECT_TRUE(seqConversion);
-        printf("seqno %u\n", seqNo);
-        rtpHeader->sequenceNumber = nextSequenceNumber;
-
-        EXPECT_EQ(outboundSsrc, rtpHeader->ssrc.get());
-        EXPECT_EQ(expectedSeqNo, rtpHeader->sequenceNumber.get());
-        EXPECT_EQ(expectedSeqNo, rewrittenExtendedSequenceNumber);
-        EXPECT_EQ(expectedPicId, codec::Vp8Header::getPicId(payload));
-        EXPECT_EQ(expectedPicIdx, codec::Vp8Header::getTl0PicIdx(payload));
-    };
-
-    examine(outboundContext1, 74, 60000, 75, 32764, 255, 32765, 0);
-    examine(outboundContext1, 75, 60010, 76, 2, 2, 3, 3);
+    examine(outboundContext, *packet, 1, 74, 60000, 74, 32764, 255, 32765, 0);
+    examine(outboundContext, *packet, 1, 75, 60010, 75, 2, 2, 3, 3);
 
     // change ssrc
     lastTimestamp = rtpHeader->timestamp.get();
-    examine(outboundContext2, 82, 10000, 77, 10, 10, 4, 4);
+    examine(outboundContext, *packet, 2, 82, 10000, 76, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 
     // emulate 2 rtx
-    examine(outboundContext2, 3, 10000, 65534, 10, 10, 4, 4);
+    examine(outboundContext, *packet, 2, 3, 10000, -3, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 
-    examine(outboundContext2, 4, 10000, 65535, 10, 10, 4, 4);
+    examine(outboundContext, *packet, 2, 4, 10000, -2, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 
     // continue rtp
-    examine(outboundContext2, 83, 10000, 78, 10, 10, 4, 4);
+    examine(outboundContext, *packet, 2, 83, 10000, 77, 10, 10, 4, 4);
     EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
 }
