@@ -182,6 +182,8 @@ public: // Transport
     void setTag(const char* tag) override;
     const char* getTag() const override { return _tag; };
 
+    uint64_t getLastReceivedPacketTimestamp() const override { return _lastReceivedPacketTimestamp; }
+
 public: // SslWriteBioListener
     // Called from Transport serial thread
     int32_t sendDtls(const char* buffer, uint32_t length) override;
@@ -282,6 +284,7 @@ private:
     friend class ConnectJob;
     friend class ConnectSctpJob;
     friend class RunTickJob;
+    friend class PacketReceiveJob;
 
     enum class DrainPacingBufferMode
     {
@@ -441,6 +444,7 @@ public:
 
     bool _uplinkEstimationEnabled;
     bool _downlinkEstimationEnabled;
+    std::atomic<uint64_t> _lastReceivedPacketTimestamp;
 };
 
 } // namespace transport

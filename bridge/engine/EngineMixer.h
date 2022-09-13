@@ -341,6 +341,7 @@ private:
     std::unique_ptr<EngineStreamDirector> _engineStreamDirector;
     std::unique_ptr<ActiveMediaList> _activeMediaList;
     uint64_t _lastUplinkEstimateUpdate;
+    uint64_t _lastIdleTransportCheck;
     const config::Config& _config;
     uint32_t _lastN;
     uint32_t _numMixedAudioStreams;
@@ -377,7 +378,7 @@ private:
         const rtp::RtcpHeader& rtcpPacket,
         const uint64_t timestamp);
     void checkVideoBandwidth(const uint64_t timestamp);
-    void runTransportTicks(const uint64_t timestamp);
+    void removeIdleStreams(const uint64_t timestamp);
 
     void mixSsrcBuffers();
     void processAudioStreams();

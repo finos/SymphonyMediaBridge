@@ -24,6 +24,7 @@ public:
 
     CFG_PROP(uint32_t, maxDefaultLevelBandwidthKbps, 3000);
     CFG_PROP(uint32_t, rtpForwardInterval, 10); // ms
+    CFG_PROP(uint32_t, endpointAutoRemoveTimeout, 60); // s
 
     CFG_GROUP()
     CFG_PROP(uint32_t, decommissionTimeout, 300); // s

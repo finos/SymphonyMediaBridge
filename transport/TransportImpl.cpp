@@ -55,7 +55,7 @@ public:
     void run() override
     {
         DBGCHECK_SINGLETHREADED(_transport._singleThreadMutex);
-
+        _transport._lastReceivedPacketTimestamp = _timestamp;
         (_transport.*_receiveMethod)(_endpoint, _source, std::move(_packet), _timestamp);
     }
 
@@ -489,7 +489,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _iceState(ice::IceSession::State::IDLE),
       _dtlsState(SrtpClient::State::IDLE),
       _uplinkEstimationEnabled(false),
-      _downlinkEstimationEnabled(false)
+      _downlinkEstimationEnabled(false),
+      _lastReceivedPacketTimestamp(0)
 {
     assert(endpointIdHash != 0);
     _tag[0] = 0;
