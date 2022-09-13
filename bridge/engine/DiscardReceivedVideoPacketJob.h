@@ -3,11 +3,6 @@
 #include "jobmanager/Job.h"
 #include "memory/PacketPoolAllocator.h"
 
-namespace memory
-{
-class Packet;
-}
-
 namespace transport
 {
 class RtcTransport;
