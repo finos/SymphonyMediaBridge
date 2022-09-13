@@ -403,7 +403,6 @@ public:
             VideoContent content,
             uint64_t timestamp)
             : contexts(256),
-
               _rtpMap(rtpMap),
               _rtxRtpMap(rtxRtpMap),
               _loggableId("rtprcv", instanceId),
@@ -422,6 +421,30 @@ public:
             uint64_t timestamp)
         {
             auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
+
+            bool found = false;
+            api::SsrcPair ssrcLevel;
+            for (const auto& ssrc : _ssrcs)
+            {
+                if (ssrc.feedback == rtpHeader->ssrc || ssrc.main == rtpHeader->ssrc)
+                {
+                    ssrcLevel = ssrc;
+                    found = true;
+                    break;
+                }
+            }
+            assert(found);
+            if (rtpHeader->ssrc == ssrcLevel.main)
+            {
+                if (ssrcLevel.feedback != 0)
+                {
+                    assert(rtpHeader->payloadType == _rtpMap.payloadType);
+                }
+            }
+            else
+            {
+                assert(rtpHeader->payloadType == _rtxRtpMap.payloadType);
+            }
 
             auto it = contexts.find(rtpHeader->ssrc.get());
             if (it == contexts.end())
