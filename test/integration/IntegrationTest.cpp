@@ -1767,8 +1767,19 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
+        RtxStats cumulativeStats;
+
+        for (auto id : {0, 1})
         {
-            for (auto id : {0, 1})
+            // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
+            // video streams only. So let's check SfuClient NACK-related stats instead:
+            const auto stats = group.clients[id]->getCumulativeRtxStats();
+            auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            cumulativeStats += stats;
+
+            // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
+            // have been ignored. So we might expect small number of videoCounters.lostPackets.
+            if (videoCounters.lostPackets != 0)
             {
                 // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
                 // video streams only. So let's check SfuClient NACK-related stats instead:
@@ -1794,18 +1805,18 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                     ASSERT_TRUE(stats.receiver.packetsMissing - stats.receiver.packetsRecovered <
                         stats.sender.packetsSent * PACKET_LOSS_RATE / 2);
                 }
-
-                // Expect, "as sender" we received several NACK request from SFU, and we served them all.
-                EXPECT_NE(stats.sender.nacksReceived, 0);
-                EXPECT_NE(stats.sender.retransmissionRequests, 0);
-                EXPECT_NE(stats.sender.retransmissions, 0);
-                EXPECT_GE(stats.sender.retransmissionRequests, stats.sender.retransmissions);
-
-                EXPECT_EQ(stats.receiver.nackRequests, 0); // Expected as it's is not implemented yet.
-                EXPECT_NE(stats.receiver.packetsMissing, 0);
-                EXPECT_NE(stats.receiver.packetsRecovered, 0);
             }
         }
+
+        // Expect, "as sender" we received several NACK request from SFU, and we served them all.
+        EXPECT_NE(cumulativeStats.sender.nacksReceived, 0);
+        EXPECT_NE(cumulativeStats.sender.retransmissionRequests, 0);
+        EXPECT_NE(cumulativeStats.sender.retransmissions, 0);
+        EXPECT_EQ(cumulativeStats.sender.retransmissionRequests, cumulativeStats.sender.retransmissions);
+
+        EXPECT_EQ(cumulativeStats.receiver.nackRequests, 0); // Expected as it's is not implemented yet.
+        EXPECT_NE(cumulativeStats.receiver.packetsMissing, 0);
+        EXPECT_NE(cumulativeStats.receiver.packetsRecovered, 0);
     });
 }
 
@@ -1839,7 +1850,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 7));
 
         make5secCallWithDefaultAudioProfile(group);
 
