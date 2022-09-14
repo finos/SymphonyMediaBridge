@@ -44,7 +44,8 @@ struct EngineVideoStream
           feedbackRtpMap(feedbackRtpMap),
           ssrcRewrite(ssrcRewrite),
           videoPinSsrcs(SsrcRewrite::ssrcArraySize),
-          idleTimeoutSeconds(idleTimeoutSeconds)
+          idleTimeoutSeconds(idleTimeoutSeconds),
+          createdAt(utils::Time::getAbsoluteTime())
     {
         assert(pinSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
@@ -93,6 +94,7 @@ struct EngineVideoStream
     concurrency::MpmcQueue<SimulcastLevel> videoPinSsrcs;
     utils::Optional<SimulcastLevel> pinSsrc;
     const uint32_t idleTimeoutSeconds;
+    const uint64_t createdAt;
 };
 
 } // namespace bridge

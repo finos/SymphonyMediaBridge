@@ -32,7 +32,8 @@ struct EngineAudioStream
           audioMixed(audioMixed),
           rtpMap(rtpMap),
           ssrcRewrite(ssrcRewrite),
-          idleTimeoutSeconds(idleTimeoutSeconds)
+          idleTimeoutSeconds(idleTimeoutSeconds),
+          createdAt(utils::Time::getAbsoluteTime())
     {
     }
 
@@ -48,6 +49,7 @@ struct EngineAudioStream
     bridge::RtpMap rtpMap;
     bool ssrcRewrite;
     const uint32_t idleTimeoutSeconds;
+    const uint64_t createdAt;
 };
 
 } // namespace bridge

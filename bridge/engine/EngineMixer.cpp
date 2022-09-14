@@ -3851,6 +3851,11 @@ void removeIdleStreams(concurrency::MpmcHashmap32<size_t, TStream*>& streams,
             continue;
         }
 
+        if (utils::Time::diffLT(stream->createdAt, timestamp, stream->idleTimeoutSeconds * utils::Time::sec))
+        {
+            continue;
+        }
+
         const auto lastReceivedTs = stream->transport.getLastReceivedPacketTimestamp();
         if (utils::Time::diffGE(lastReceivedTs, timestamp, stream->idleTimeoutSeconds * utils::Time::sec))
         {

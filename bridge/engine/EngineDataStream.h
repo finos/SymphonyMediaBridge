@@ -21,7 +21,8 @@ struct EngineDataStream
           transport(transport),
           stream(transport.getId(), transport),
           hasSeenInitialSpeakerList(false),
-          idleTimeoutSeconds(idleTimeoutSeconds)
+          idleTimeoutSeconds(idleTimeoutSeconds),
+          createdAt(utils::Time::getAbsoluteTime())
     {
     }
 
@@ -31,6 +32,7 @@ struct EngineDataStream
     webrtc::WebRtcDataStream stream;
     bool hasSeenInitialSpeakerList;
     const uint32_t idleTimeoutSeconds;
+    const uint64_t createdAt;
 };
 
 } // namespace bridge
