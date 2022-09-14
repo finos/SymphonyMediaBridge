@@ -1826,7 +1826,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
         })");
 
         initBridge(_config);
