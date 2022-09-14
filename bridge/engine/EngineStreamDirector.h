@@ -368,7 +368,7 @@ public:
 
         if (isUsedForRecordingSlides(ssrc, senderEndpointIdHash, numRecordingStreams))
         {
-            DIRECTOR_LOG("isSsrcUsed isContentSlides %u: result %c", "EngineStreamDirector", ssrc, result ? 't' : 'f');
+            DIRECTOR_LOG("isSsrcUsed, %u true (content is slides for recording)", "EngineStreamDirector", ssrc);
             return true;
         }
 
@@ -481,27 +481,19 @@ public:
             result = quality == highestActiveQuality(fromEndpointId, ssrc);
         }
 
+#if DEBUG_DIRECTOR
         const auto phaq = highestActiveQuality(fromEndpointId, ssrc);
-
-        logger::info("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
-                     "wantQ %lu, pinned %c",
-            "EngineStreamDirector",
-            toEndpointIdHash,
-            ssrc,
-            result ? 't' : 'f',
-            quality,
-            phaq,
-            maxWantedQuality,
-            fromPinnedEndpoint ? 't' : 'f');
+#endif
 
         DIRECTOR_LOG(
-            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, current quality %lu, "
+            "shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, current quality %lu, phaQ %lu,"
             "maxWantedLevelQuality %lu, requiredMidLevelBandwidth %u, defaultLevelBandwidthLimit %u, pinned %c",
             "EngineStreamDirector",
             toEndpointIdHash,
             ssrc,
             result ? 't' : 'f',
             quality,
+            phaq,
             maxWantedQuality,
             _requiredMidLevelBandwidth,
             viewedByParticipantStreamItr->second.defaultLevelBandwidthLimit,
