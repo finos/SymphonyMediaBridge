@@ -336,7 +336,7 @@ public:
             uint32_t extendedSequenceNumber,
             uint64_t timestamp)
         {
-            _context.onRtpPacket(timestamp);
+            _context.onRtpPacketReceived(timestamp);
             if (!sender->unprotect(packet))
             {
                 return;
@@ -449,7 +449,7 @@ public:
             auto it = contexts.find(rtpHeader->ssrc.get());
             if (it == contexts.end())
             {
-
+                // we should perhaps figure out which simulcastLevel this is among the 3
                 auto result =
                     contexts.emplace(rtpHeader->ssrc.get(), rtpHeader->ssrc.get(), _rtpMap, sender, timestamp);
                 it = result.first;
@@ -464,7 +464,7 @@ public:
                 inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>(10);
             }
 
-            inboundContext.onRtpPacket(timestamp);
+            inboundContext.onRtpPacketReceived(timestamp);
             logger::debug("%s received ssrc %u, seq %u, extseq %u",
                 _loggableId.c_str(),
                 sender->getLoggableId().c_str(),

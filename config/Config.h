@@ -20,9 +20,15 @@ public:
     CFG_PROP(std::string, logFile, "/tmp/smb.log");
 
     CFG_PROP(uint32_t, defaultLastN, 5);
-    CFG_PROP(uint32_t, dropInboundAfterInactive, 3);
+
     CFG_PROP(uint32_t, maxDefaultLevelBandwidthKbps, 3000);
     CFG_PROP(uint32_t, rtpForwardInterval, 10); // ms
+
+    CFG_GROUP()
+    CFG_PROP(uint32_t, decommissionTimeout, 300); // s
+    CFG_PROP(uint32_t, transitionTimeout, 1000); // ms, transitions to idle after this timeout
+    CFG_PROP(uint32_t, dropAfterIdleTransitions, 3);
+    CFG_GROUP_END(idleInbound);
 
     CFG_GROUP()
     // Value between 0 and 127, where 127 is the lowest audio level and 0 the highest.

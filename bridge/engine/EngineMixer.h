@@ -449,12 +449,12 @@ private:
     ////
 
     // -- methods executed on Transport thread context
-    void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
+    void onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
         transport::RtcTransport* sender,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
-    void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
+    void onVideoRtpRtxPacketReceived(SsrcInboundContext& ssrcContext,
         transport::RtcTransport* sender,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
