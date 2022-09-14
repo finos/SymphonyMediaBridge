@@ -104,19 +104,27 @@ public:
         const utils::Optional<ice::IceRole>& iceRole,
         const bool audioMixed,
         bool rewriteSsrcs,
-        bool isDtlsEnabled);
+        bool isDtlsEnabled,
+        utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
     bool addVideoStream(std::string& outId,
         const std::string& endpointId,
         const utils::Optional<ice::IceRole>& iceRole,
         bool rewriteSsrcs,
-        bool isDtlsEnabled);
+        bool isDtlsEnabled,
+        utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
 
     bool addBundledAudioStream(std::string& outId,
         const std::string& endpointId,
         const bool audioMixed,
-        const bool ssrcRewrite);
-    bool addBundledVideoStream(std::string& outId, const std::string& endpointId, const bool ssrcRewrite);
-    bool addBundledDataStream(std::string& outId, const std::string& endpointId);
+        const bool ssrcRewrite,
+        utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
+    bool addBundledVideoStream(std::string& outId,
+        const std::string& endpointId,
+        const bool ssrcRewrite,
+        utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
+    bool addBundledDataStream(std::string& outId,
+        const std::string& endpointId,
+        utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
 
     bool addBarbell(const std::string& barbellId, ice::IceRole iceRole);
 

@@ -25,9 +25,6 @@ public:
     CFG_PROP(uint32_t, maxDefaultLevelBandwidthKbps, 3000);
     CFG_PROP(uint32_t, rtpForwardInterval, 10); // ms
 
-    // Seconds. 0 - special value, disables automatic endpoint removal.
-    CFG_PROP(uint32_t, endpointAutoRemoveTimeout, 0);
-
     CFG_GROUP()
     CFG_PROP(uint32_t, decommissionTimeout, 300); // s
     CFG_PROP(uint32_t, transitionTimeout, 1000); // ms, transitions to idle after this timeout

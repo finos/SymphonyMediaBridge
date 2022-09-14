@@ -12,12 +12,16 @@ namespace bridge
 
 struct EngineDataStream
 {
-    EngineDataStream(const std::string& endpointId, const size_t endpointIdHash, transport::RtcTransport& transport)
+    EngineDataStream(const std::string& endpointId,
+        const size_t endpointIdHash,
+        transport::RtcTransport& transport,
+        const uint32_t idleTimeoutSeconds)
         : endpointId(endpointId),
           endpointIdHash(endpointIdHash),
           transport(transport),
           stream(transport.getId(), transport),
-          hasSeenInitialSpeakerList(false)
+          hasSeenInitialSpeakerList(false),
+          idleTimeoutSeconds(idleTimeoutSeconds)
     {
     }
 
@@ -26,6 +30,7 @@ struct EngineDataStream
     transport::RtcTransport& transport;
     webrtc::WebRtcDataStream stream;
     bool hasSeenInitialSpeakerList;
+    const uint32_t idleTimeoutSeconds;
 };
 
 } // namespace bridge

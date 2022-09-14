@@ -294,6 +294,11 @@ AllocateEndpoint parseAllocateEndpoint(const nlohmann::json& data)
         allocateEndpoint._data.set(AllocateEndpoint::Data());
     }
 
+    if (data.find("idleTimeout") != data.end())
+    {
+        setIfExists(allocateEndpoint._idleTimeoutSeconds, data, "idleTimeout");
+    }
+
     return allocateEndpoint;
 }
 

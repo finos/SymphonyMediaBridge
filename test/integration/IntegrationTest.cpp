@@ -1816,7 +1816,6 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
         "ice.publicIpv4":"127.0.0.1",
-        "endpointAutoRemoveTimeout":10
         })");
 
         initBridge(_config);
@@ -1826,7 +1825,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
             *_transportFactory,
@@ -1836,9 +1835,9 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         Conference conf;
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true, 0);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
 
@@ -1863,7 +1862,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         group.clients[0]->_transport->stop();
         group.run(utils::Time::sec * 11);
         endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
-        EXPECT_EQ(0, endpoints.size());
+        EXPECT_EQ(1, endpoints.size());
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();

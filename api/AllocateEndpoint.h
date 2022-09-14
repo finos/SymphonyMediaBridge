@@ -39,6 +39,7 @@ struct AllocateEndpoint
     utils::Optional<Audio> _audio;
     utils::Optional<Video> _video;
     utils::Optional<Data> _data;
+    utils::Optional<uint32_t> _idleTimeoutSeconds;
 };
 
 } // namespace api

@@ -947,7 +947,6 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     processAudioStreams();
 
     // 5. Check if Transports are alive
-
     removeIdleStreams(engineIterationStartTimestamp);
 }
 
@@ -3841,8 +3840,7 @@ void EngineMixer::checkIfRateControlIsNeeded(const uint64_t timestamp)
 
 void EngineMixer::removeIdleStreams(const uint64_t timestamp)
 {
-    if (0 == _config.endpointAutoRemoveTimeout ||
-        utils::Time::diffLT(_lastIdleTransportCheck, timestamp, 1ULL * utils::Time::sec))
+    if (utils::Time::diffLT(_lastIdleTransportCheck, timestamp, 1ULL * utils::Time::sec))
     {
         return;
     }
@@ -3851,8 +3849,13 @@ void EngineMixer::removeIdleStreams(const uint64_t timestamp)
     for (auto videoIt : _engineVideoStreams)
     {
         auto videoStream = videoIt.second;
+        if (!videoStream->idleTimeoutSeconds)
+        {
+            continue;
+        }
+
         const auto lastReceivedTs = videoStream->transport.getLastReceivedPacketTimestamp();
-        if (utils::Time::diffGE(lastReceivedTs, timestamp, _config.endpointAutoRemoveTimeout * utils::Time::sec))
+        if (utils::Time::diffGE(lastReceivedTs, timestamp, videoStream->idleTimeoutSeconds * utils::Time::sec))
         {
             removeVideoStream(videoStream);
         }
@@ -3860,8 +3863,13 @@ void EngineMixer::removeIdleStreams(const uint64_t timestamp)
     for (auto audioIt : _engineAudioStreams)
     {
         auto audioStream = audioIt.second;
+        if (!audioStream->idleTimeoutSeconds)
+        {
+            continue;
+        }
+
         const auto lastReceivedTs = audioStream->transport.getLastReceivedPacketTimestamp();
-        if (utils::Time::diffGE(lastReceivedTs, timestamp, _config.endpointAutoRemoveTimeout * utils::Time::sec))
+        if (utils::Time::diffGE(lastReceivedTs, timestamp, audioStream->idleTimeoutSeconds * utils::Time::sec))
         {
             removeAudioStream(audioStream);
         }
@@ -3869,8 +3877,13 @@ void EngineMixer::removeIdleStreams(const uint64_t timestamp)
     for (auto dataIt : _engineDataStreams)
     {
         auto dataStream = dataIt.second;
+        if (!dataStream->idleTimeoutSeconds)
+        {
+            continue;
+        }
+
         const auto lastReceivedTs = dataStream->transport.getLastReceivedPacketTimestamp();
-        if (utils::Time::diffGE(lastReceivedTs, timestamp, _config.endpointAutoRemoveTimeout * utils::Time::sec))
+        if (utils::Time::diffGE(lastReceivedTs, timestamp, dataStream->idleTimeoutSeconds * utils::Time::sec))
         {
             removeDataStream(dataStream);
         }

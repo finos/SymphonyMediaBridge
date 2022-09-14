@@ -31,7 +31,8 @@ struct EngineVideoStream
         const bridge::RtpMap& feedbackRtpMap,
         const SsrcWhitelist& whitelist,
         const bool ssrcRewrite,
-        const std::vector<api::SsrcPair>& pinSsrcs)
+        const std::vector<api::SsrcPair>& pinSsrcs,
+        const uint32_t idleTimeoutSeconds)
         : endpointId(endpointId),
           endpointIdHash(endpointIdHash),
           localSsrc(localSsrc),
@@ -42,7 +43,8 @@ struct EngineVideoStream
           rtpMap(rtpMap),
           feedbackRtpMap(feedbackRtpMap),
           ssrcRewrite(ssrcRewrite),
-          videoPinSsrcs(SsrcRewrite::ssrcArraySize)
+          videoPinSsrcs(SsrcRewrite::ssrcArraySize),
+          idleTimeoutSeconds(idleTimeoutSeconds)
     {
         assert(pinSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
@@ -90,6 +92,7 @@ struct EngineVideoStream
 
     concurrency::MpmcQueue<SimulcastLevel> videoPinSsrcs;
     utils::Optional<SimulcastLevel> pinSsrc;
+    const uint32_t idleTimeoutSeconds;
 };
 
 } // namespace bridge

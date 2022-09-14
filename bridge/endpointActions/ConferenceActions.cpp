@@ -295,7 +295,11 @@ httpd::Response allocateEndpoint(ActionContext* context,
             const auto ssrcRewrite = audio._relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
-            if (!mixer->addBundledAudioStream(outChannelId, endpointId, mixed, ssrcRewrite))
+            if (!mixer->addBundledAudioStream(outChannelId,
+                    endpointId,
+                    mixed,
+                    ssrcRewrite,
+                    allocateChannel._idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                     "It was not possible to add bundled audio stream. Usually happens due to an already existing audio "
@@ -310,7 +314,10 @@ httpd::Response allocateEndpoint(ActionContext* context,
             const auto ssrcRewrite = video._relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
-            if (!mixer->addBundledVideoStream(outChannelId, endpointId, ssrcRewrite))
+            if (!mixer->addBundledVideoStream(outChannelId,
+                    endpointId,
+                    ssrcRewrite,
+                    allocateChannel._idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Add bundled video stream has failed");
@@ -321,7 +328,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         if (allocateChannel._data.isSet())
         {
             std::string outChannelId;
-            if (!mixer->addBundledDataStream(outChannelId, endpointId))
+            if (!mixer->addBundledDataStream(outChannelId, endpointId, allocateChannel._idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Add bundled data channel has failed");
@@ -352,7 +359,13 @@ httpd::Response allocateEndpoint(ActionContext* context,
             const auto isDtlsEnabled = transport._dtls;
 
             std::string outChannelId;
-            if (!mixer->addAudioStream(outChannelId, endpointId, iceRole, mixed, false, isDtlsEnabled))
+            if (!mixer->addAudioStream(outChannelId,
+                    endpointId,
+                    iceRole,
+                    mixed,
+                    false,
+                    isDtlsEnabled,
+                    allocateChannel._idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding audio stream has failed");
@@ -381,7 +394,12 @@ httpd::Response allocateEndpoint(ActionContext* context,
             const auto isDtlsEnabled = transport._dtls;
 
             std::string outChannelId;
-            if (!mixer->addVideoStream(outChannelId, endpointId, iceRole, false, isDtlsEnabled))
+            if (!mixer->addVideoStream(outChannelId,
+                    endpointId,
+                    iceRole,
+                    false,
+                    isDtlsEnabled,
+                    allocateChannel._idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding video stream has failed");
