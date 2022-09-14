@@ -2001,6 +2001,12 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         auto emplaceResult =
             _allSsrcInboundContexts
                 .emplace(ssrc, ssrc, videoStream->rtpMap, sender, timestamp, level.get(), defaultLevelSsrc);
+        if (!emplaceResult.second && emplaceResult.first == _allSsrcInboundContexts.end())
+        {
+            logger::error("failed to create inbound ssrc context for video. ssrc %u", _loggableId.c_str(), ssrc);
+            return nullptr;
+        }
+
         auto& inboundContext = emplaceResult.first->second;
 
         _ssrcInboundContexts.emplace(ssrc, &emplaceResult.first->second);
@@ -2020,29 +2026,14 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     }
     else if (payloadType == videoStream->feedbackRtpMap.payloadType)
     {
-        uint32_t defaultLevelSsrc = 0;
-        auto level = videoStream->simulcastStream.getLevelOf(ssrc);
-        if (level.isSet())
+        auto emplaceResult =
+            _allSsrcInboundContexts.emplace(ssrc, ssrc, videoStream->feedbackRtpMap, sender, timestamp);
+        if (!emplaceResult.second && emplaceResult.first == _allSsrcInboundContexts.end())
         {
-            defaultLevelSsrc = videoStream->simulcastStream.levels[0].feedbackSsrc;
-        }
-        else if (videoStream->secondarySimulcastStream.isSet())
-        {
-            level = videoStream->secondarySimulcastStream.get().getLevelOf(ssrc);
-            if (level.isSet())
-            {
-                defaultLevelSsrc = videoStream->secondarySimulcastStream.get().levels[0].feedbackSsrc;
-            }
-        }
-
-        if (defaultLevelSsrc == 0)
-        {
+            logger::error("failed to create inbound ssrc context for video rtx. ssrc %u", _loggableId.c_str(), ssrc);
             return nullptr;
         }
 
-        auto emplaceResult =
-            _allSsrcInboundContexts
-                .emplace(ssrc, ssrc, videoStream->feedbackRtpMap, sender, timestamp, level.get(), defaultLevelSsrc);
         auto& inboundContext = emplaceResult.first->second;
 
         _ssrcInboundContexts.emplace(ssrc, &emplaceResult.first->second);
