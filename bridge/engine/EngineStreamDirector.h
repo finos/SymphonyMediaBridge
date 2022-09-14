@@ -69,7 +69,7 @@ public:
     {
         if (_participantStreams.find(endpointIdHash) != _participantStreams.end())
         {
-            logger::debug("addParticipant stream already added, endpointIdHash %lu",
+            DIRECTOR_LOG("addParticipant stream already added, endpointIdHash %lu",
                 _loggableId.c_str(),
                 endpointIdHash);
             return;
@@ -89,7 +89,7 @@ public:
     {
         if (_participantStreams.find(endpointIdHash) != _participantStreams.end())
         {
-            logger::debug("addParticipant stream already added, endpointIdHash %lu",
+            DIRECTOR_LOG("addParticipant stream already added, endpointIdHash %lu",
                 _loggableId.c_str(),
                 endpointIdHash);
             return;
