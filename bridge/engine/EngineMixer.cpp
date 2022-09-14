@@ -3838,6 +3838,32 @@ void EngineMixer::checkIfRateControlIsNeeded(const uint64_t timestamp)
     _probingVideoStreams = enableBEProbing;
 }
 
+template <typename TStream>
+void removeIdleStreams(concurrency::MpmcHashmap32<size_t, TStream*>& streams,
+    std::function<void(TStream*)> removeMethod,
+    const uint64_t timestamp)
+{
+    for (const auto& it : streams)
+    {
+        auto stream = it.second;
+        if (!stream->idleTimeoutSeconds)
+        {
+            continue;
+        }
+
+        const auto lastReceivedTs = stream->transport.getLastReceivedPacketTimestamp();
+        if (utils::Time::diffGE(lastReceivedTs, timestamp, stream->idleTimeoutSeconds * utils::Time::sec))
+        {
+            removeMethod(stream);
+        }
+    }
+}
+
+#define REMOVE_IDLE_STREAMS(type)                                                                                      \
+    ::bridge::removeIdleStreams<Engine##type##Stream>(_engine##type##Streams,                                          \
+        std::bind(&EngineMixer::remove##type##Stream, this, std::placeholders::_1),                                    \
+        timestamp);
+
 void EngineMixer::removeIdleStreams(const uint64_t timestamp)
 {
     if (utils::Time::diffLT(_lastIdleTransportCheck, timestamp, 1ULL * utils::Time::sec))
@@ -3846,49 +3872,12 @@ void EngineMixer::removeIdleStreams(const uint64_t timestamp)
     }
     _lastIdleTransportCheck = timestamp;
 
-    for (auto videoIt : _engineVideoStreams)
-    {
-        auto videoStream = videoIt.second;
-        if (!videoStream->idleTimeoutSeconds)
-        {
-            continue;
-        }
-
-        const auto lastReceivedTs = videoStream->transport.getLastReceivedPacketTimestamp();
-        if (utils::Time::diffGE(lastReceivedTs, timestamp, videoStream->idleTimeoutSeconds * utils::Time::sec))
-        {
-            removeVideoStream(videoStream);
-        }
-    }
-    for (auto audioIt : _engineAudioStreams)
-    {
-        auto audioStream = audioIt.second;
-        if (!audioStream->idleTimeoutSeconds)
-        {
-            continue;
-        }
-
-        const auto lastReceivedTs = audioStream->transport.getLastReceivedPacketTimestamp();
-        if (utils::Time::diffGE(lastReceivedTs, timestamp, audioStream->idleTimeoutSeconds * utils::Time::sec))
-        {
-            removeAudioStream(audioStream);
-        }
-    }
-    for (auto dataIt : _engineDataStreams)
-    {
-        auto dataStream = dataIt.second;
-        if (!dataStream->idleTimeoutSeconds)
-        {
-            continue;
-        }
-
-        const auto lastReceivedTs = dataStream->transport.getLastReceivedPacketTimestamp();
-        if (utils::Time::diffGE(lastReceivedTs, timestamp, dataStream->idleTimeoutSeconds * utils::Time::sec))
-        {
-            removeDataStream(dataStream);
-        }
-    }
+    REMOVE_IDLE_STREAMS(Video);
+    REMOVE_IDLE_STREAMS(Audio);
+    REMOVE_IDLE_STREAMS(Data);
 }
+
+#undef REMOVE_IDLE_STREAMS
 
 void EngineMixer::addBarbell(EngineBarbell* barbell)
 {
