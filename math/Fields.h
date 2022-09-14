@@ -6,21 +6,24 @@ namespace math
 {
 
 // difference (b - a) mod (1<<BITS)
-template <typename T, size_t BITS>
+template <typename T, size_t BITS = sizeof(T) * 8>
 constexpr typename std::make_signed<T>::type ringDifference(T a, const T b)
 {
-    static_assert(std::is_unsigned<T>::value, "Difference only works on unsigned integers");
     using SignedT = typename std::make_signed<T>::type;
-    if (a & (1 << (BITS - 1)))
+    static_assert(std::is_unsigned<T>::value, "Difference only works on unsigned integers");
+    assert(sizeof(T) * 8 == BITS || a < (T(1) << BITS));
+    assert(sizeof(T) * 8 == BITS || b < (T(1) << BITS));
+
+    constexpr T mask = (T(0) - 1) >> (sizeof(T) * 8 - BITS);
+
+    T v = (b - a) & mask;
+
+    if (v > (mask >> 1))
     {
-        // a has sign bit set. Extend it to negative number in larger ring
-        a = a | (uint64_t(~0) << BITS);
-        return static_cast<SignedT>(b - a);
+        return static_cast<SignedT>(v | ~mask);
     }
-    else
-    {
-        return static_cast<SignedT>(b - a);
-    }
+
+    return static_cast<SignedT>(v);
 }
 
 } // namespace math

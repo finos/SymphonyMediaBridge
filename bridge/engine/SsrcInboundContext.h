@@ -40,6 +40,8 @@ public:
         : ssrc(ssrc),
           rtpMap(rtpMap),
           sender(sender),
+          simulcastLevel(simulcastLevel),
+          defaultLevelSsrc(defaultLevelSsrc),
           markNextPacket(true),
           lastReceivedExtendedSequenceNumber(0),
           packetsProcessed(0),
@@ -48,8 +50,6 @@ public:
           inactiveTransitionCount(0),
           isSsrcUsed(true),
           endpointIdHash(0),
-          simulcastLevel(simulcastLevel),
-          defaultLevelSsrc(defaultLevelSsrc),
           shouldDropPackets(false),
           _lastReceiveTime(timestamp)
     {
