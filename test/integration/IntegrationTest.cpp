@@ -1775,6 +1775,15 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                 // have been ignored. So we might expect small number of videoCounters.lostPackets.
                 if (videoCounters.lostPackets != 0)
                 {
+                    logger::info(
+                        "Client id: %s  packets missing: %zu, recovered: %zu, send: %zu, expected min recovery: %f",
+                        "packetLossVideoRecoveredViaNack",
+                        group.clients[id]->getLoggableId().c_str(),
+                        stats.receiver.packetsMissing,
+                        stats.receiver.packetsRecovered,
+                        stats.sender.packetsSent,
+                        stats.sender.packetsSent * PACKET_LOSS_RATE / 2);
+
                     ASSERT_TRUE(stats.receiver.packetsMissing >= stats.receiver.packetsRecovered);
                     // Expect number of non-recovered packet to be smaller than half the loss rate.
                     ASSERT_TRUE(stats.receiver.packetsMissing - stats.receiver.packetsRecovered <
