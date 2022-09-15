@@ -64,6 +64,7 @@ public:
         memory::AudioPacketPoolAllocator& allocator) = 0;
 
     virtual bool isAudioOffered() const = 0;
+    virtual void disconnect() = 0;
 
     virtual std::unordered_set<uint32_t> getOfferedVideoSsrcs() const = 0;
     virtual std::vector<api::SimulcastGroup> getOfferedVideoStreams() const = 0;
@@ -124,6 +125,7 @@ public:
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
 
     bool isAudioOffered() const override { return _offer.find("audio") != _offer.end(); }
+    void disconnect() override;
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
@@ -150,6 +152,7 @@ public:
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
 
     bool isAudioOffered() const override;
+    void disconnect() override;
 
     std::unordered_set<uint32_t> getOfferedVideoSsrcs() const override;
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;

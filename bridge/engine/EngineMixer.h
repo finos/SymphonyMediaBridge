@@ -387,6 +387,7 @@ private:
     void checkPacketCounters(const uint64_t timestamp);
     void checkIfRateControlIsNeeded(const uint64_t timestamp);
     bool isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const;
+    void markSsrcsInUse();
 
     void onPliRequestFromReceiver(size_t endpointIdHash, uint32_t ssrc, uint64_t timestamp);
     void sendLastNListMessage(const size_t endpointIdHash);
@@ -448,12 +449,12 @@ private:
     ////
 
     // -- methods executed on Transport thread context
-    void onVideoRtpPacketReceived(SsrcInboundContext* ssrcContext,
+    void onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
         transport::RtcTransport* sender,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
         const uint64_t timestamp);
-    void onVideoRtpRtxPacketReceived(SsrcInboundContext* ssrcContext,
+    void onVideoRtpRtxPacketReceived(SsrcInboundContext& ssrcContext,
         transport::RtcTransport* sender,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,

@@ -3,6 +3,7 @@
 #include "memory/PacketPoolAllocator.h"
 #include "utils/Time.h"
 #include "utils/Trackers.h"
+#include <atomic>
 #include <gtest/gtest.h>
 #include <inttypes.h>
 #include <mutex>
@@ -87,7 +88,7 @@ private:
     size_t _mtu;
     size_t _queuedBytes;
     const size_t _bufferCapacity;
-    double _lossRate;
+    std::atomic<double> _lossRate;
     uint64_t _burstIntervalUs;
     utils::RateTracker<10> _bitRate;
     std::mutex _pushMutex;

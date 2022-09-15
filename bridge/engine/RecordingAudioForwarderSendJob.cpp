@@ -1,9 +1,9 @@
 #include "bridge/engine/RecordingAudioForwarderSendJob.h"
+#include "bridge/engine/AudioRewriter.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RecordingTransport.h"
-#include "utils/OutboundSequenceNumber.h"
 
 namespace bridge
 {
@@ -37,17 +37,15 @@ void RecordingAudioForwarderSendJob::run()
         return;
     }
 
-    uint16_t nextSequenceNumber;
-    if (!utils::OutboundSequenceNumber::process(_extendedSequenceNumber,
-            _outboundContext.highestSeenExtendedSequenceNumber,
-            _outboundContext.sequenceCounter,
-            nextSequenceNumber))
+    uint16_t nextSequenceNumber = 0;
+    if (!_outboundContext.rewrite.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
     {
         logger::debug("Dropping rec audio packet - sequence number...", "RecordingAudioForwarderSendJob");
         return;
     }
 
-    rtpHeader->sequenceNumber = nextSequenceNumber;
+    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *rtpHeader);
+
     if (_outboundContext.packetCache.isSet())
     {
         auto packetCache = _outboundContext.packetCache.get();

@@ -4,7 +4,6 @@
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "bridge/engine/Vp8Rewriter.h"
 #include "transport/Transport.h"
-#include "utils/OutboundSequenceNumber.h"
 
 namespace
 {
@@ -65,13 +64,18 @@ void VideoForwarderRewriteAndSendJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
+        assert(false); // should have been checked multiple times
         return;
     }
 
-    bool isRetransmittedPacket = false;
     if (_outboundContext.rtpMap.format == RtpMap::Format::VP8RTX)
     {
-        isRetransmittedPacket = true;
+        logger::warn("%s rtx packet should not reach rewrite and send. ssrc %u, seq %u",
+            "VideoForwarderRewriteAndSendJob",
+            _transport.getLoggableId().c_str(),
+            rtpHeader->ssrc.get(),
+            _extendedSequenceNumber);
+        return;
     }
 
     const bool isKeyFrame = codec::Vp8Header::isKeyFrame(rtpHeader->getPayload(),
@@ -79,12 +83,8 @@ void VideoForwarderRewriteAndSendJob::run()
             _packet->getLength() - rtpHeader->headerLength()));
 
     const auto ssrc = rtpHeader->ssrc.get();
-    if (ssrc != _outboundContext.lastRewrittenSsrc)
+    if (ssrc != _outboundContext.rewrite.originalSsrc)
     {
-        if (isRetransmittedPacket)
-        {
-            return;
-        }
         if (!isKeyFrame)
         {
             _outboundContext.needsKeyframe = true;
@@ -100,6 +100,7 @@ void VideoForwarderRewriteAndSendJob::run()
     {
         if (!isKeyFrame)
         {
+            // dropping P-frames until key frame appears
             return;
         }
         else
@@ -118,55 +119,47 @@ void VideoForwarderRewriteAndSendJob::run()
         }
     }
 
+    if (!_outboundContext.rewrite.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
+    {
+        logger::debug("%s dropping packet. Rewrite not suitable ssrc %u, seq %u",
+            "VideoForwarderRewriteAndSendJob",
+            _transport.getLoggableId().c_str(),
+            rtpHeader->ssrc.get(),
+            _extendedSequenceNumber);
+
+        return;
+    }
+
+    if (!_transport.isConnected())
+    {
+        return;
+    }
+
     uint32_t rewrittenExtendedSequenceNumber = 0;
     if (!Vp8Rewriter::rewrite(_outboundContext,
             *_packet,
             _outboundContext.ssrc,
             _extendedSequenceNumber,
             _transport.getLoggableId().c_str(),
-            rewrittenExtendedSequenceNumber))
+            rewrittenExtendedSequenceNumber,
+            isKeyFrame))
     {
         return;
     }
 
-    uint16_t nextSequenceNumber;
-    if (!utils::OutboundSequenceNumber::process(rewrittenExtendedSequenceNumber,
-            _outboundContext.highestSeenExtendedSequenceNumber,
-            _outboundContext.sequenceCounter,
-            nextSequenceNumber))
-    {
-        return;
-    }
-    rtpHeader->sequenceNumber = nextSequenceNumber;
-    if (isKeyFrame)
-    {
-        _outboundContext.lastKeyFrameSequenceNumber = nextSequenceNumber;
-    }
     rtpHeader->payloadType = _outboundContext.rtpMap.payloadType;
     rewriteHeaderExtensions(rtpHeader, _senderInboundContext, _outboundContext);
 
     if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
     {
-        if (!_outboundContext.packetCache.get()->add(*_packet, nextSequenceNumber))
+        if (!_outboundContext.packetCache.get()->add(*_packet, rtpHeader->sequenceNumber))
         {
-            return;
+            logger::warn("%s failed to add packet to cache. ssrc %u, seq %u",
+                "VideoForwarderRewriteAndSendJob",
+                _transport.getLoggableId().c_str(),
+                rtpHeader->ssrc.get(),
+                rtpHeader->sequenceNumber.get());
         }
-    }
-
-    if (!_transport.isConnected())
-    {
-        logger::debug("Dropping forwarded packet ssrc %u, seq %u, transport %s not connected",
-            "VideoForwarderRewriteAndSendJob",
-            rtpHeader->ssrc.get(),
-            rtpHeader->sequenceNumber.get(),
-            _transport.getLoggableId().c_str());
-
-        return;
-    }
-
-    if (isRetransmittedPacket)
-    {
-        return;
     }
 
     _transport.protectAndSend(std::move(_packet));

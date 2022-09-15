@@ -166,6 +166,16 @@ int64_t RtpReceiveState::timeToReceiveReport(uint64_t timestamp) const
 void RtpReceiveState::stop()
 {
     _cumulativeReport.write(_receiveCounters);
+    if (utils::Time::diffGE(_previousCount.timestamp, _receiveCounters.timestamp, utils::Time::ms * 250))
+    {
+        const auto delta = _receiveCounters - _previousCount;
+        PacketCounters counters;
+        counters.octets = delta.octets + delta.headerOctets;
+        counters.packets = delta.lostPackets + delta.packets;
+        counters.lostPackets = delta.lostPackets;
+        counters.period = delta.timestamp;
+        _counters.write(counters);
+    }
 }
 
 } // namespace transport

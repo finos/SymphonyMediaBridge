@@ -12,7 +12,6 @@ namespace
 {
 
 static const uint32_t outboundSsrc = 12345;
-static const uint32_t outboundFeedbackSsrc = 67890;
 
 void threadFunction(jobmanager::JobManager* jobManager)
 {
@@ -76,7 +75,6 @@ TEST_F(VideoNackReceiveJobTest, nacksNotAlreadyRespondedToAreHandled)
         *_packetCache,
         pid,
         blp,
-        outboundFeedbackSsrc,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
@@ -94,7 +92,6 @@ TEST_F(VideoNackReceiveJobTest, nacksNotAlreadyRespondedToAreHandled)
         *_packetCache,
         pid,
         blp,
-        outboundFeedbackSsrc,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
@@ -116,7 +113,6 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
         *_packetCache,
         pid,
         blp,
-        outboundFeedbackSsrc,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
@@ -126,7 +122,6 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
         *_packetCache,
         pid,
         blp,
-        outboundFeedbackSsrc,
         timestamp + rtt - utils::Time::ms,
         rtt);
     videoNackReceiveJob->run();
@@ -146,7 +141,6 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
         *_packetCache,
         pid,
         blp,
-        outboundFeedbackSsrc,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
@@ -158,7 +152,6 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
         *_packetCache,
         pid,
         blp,
-        outboundFeedbackSsrc,
         timestamp,
         rtt);
     videoNackReceiveJob->run();

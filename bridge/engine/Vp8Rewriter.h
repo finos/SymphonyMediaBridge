@@ -4,6 +4,7 @@
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Vp8Header.h"
 #include "logger/Logger.h"
+#include "math/Fields.h"
 #include "memory/Packet.h"
 #include "rtp/RtpHeader.h"
 #include "utils/Offset.h"
@@ -18,17 +19,7 @@ namespace bridge
 
 namespace Vp8Rewriter
 {
-
-constexpr uint32_t applyOffset(const uint32_t extendedSequenceNumber, const int64_t offset)
-{
-    const auto result = static_cast<int64_t>(extendedSequenceNumber) + offset;
-    if (result < 0)
-    {
-        return static_cast<uint32_t>(result) & 0xFFFF;
-    }
-
-    return static_cast<uint32_t>(result);
-}
+constexpr int32_t MAX_JUMP_AHEAD = 0x10000 / 4;
 
 constexpr uint16_t extractSequenceNumber(const uint32_t extendedSequenceNumber)
 {
@@ -45,96 +36,104 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     const uint32_t rewriteSsrc,
     const uint32_t extendedSequenceNumber,
     const char* transportName,
-    uint32_t& outExtendedSequenceNumber)
+    uint32_t& outExtendedSequenceNumber,
+    bool isKeyFrame = false)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(rewritePacket);
     if (!rtpHeader)
     {
+        assert(false);
         return false;
     }
 
-    auto rtpPayload = rtpHeader->getPayload();
+    const auto rtpPayload = rtpHeader->getPayload();
     const auto timestamp = rtpHeader->timestamp.get();
     const auto ssrc = rtpHeader->ssrc.get();
     const auto picId = codec::Vp8Header::getPicId(rtpPayload);
     const auto tl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload);
 
-    if (ssrcOutboundContext.lastExtendedSequenceNumber == 0xFFFFFFFF)
+    auto& ssrcRewrite = ssrcOutboundContext.rewrite;
+    if (ssrcRewrite.empty())
     {
-        ssrcOutboundContext.lastExtendedSequenceNumber = extendedSequenceNumber;
-        ssrcOutboundContext.lastSentPicId = codec::Vp8Header::getPicId(rtpPayload);
-        ssrcOutboundContext.lastSentTl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload);
-        ssrcOutboundContext.lastSentTimestamp = timestamp;
-        logger::info("Ssrc %u -> %u, sequence %u roc %u",
+        ssrcRewrite.originalSsrc = ssrc - 1;
+        ssrcRewrite.lastSent.sequenceNumber = extendedSequenceNumber - 1;
+        ssrcRewrite.lastSent.picId = (codec::Vp8Header::getPicId(rtpPayload) - 1) & 0x7FFF;
+        ssrcRewrite.lastSent.tl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload) - 1;
+        ssrcRewrite.lastSent.timestamp = timestamp;
+        logger::info("%s start ssrc %u -> %u, sequence %u roc %u",
             "Vp8Rewriter",
+            transportName,
             rtpHeader->ssrc.get(),
             rewriteSsrc,
             extractSequenceNumber(extendedSequenceNumber),
             extractRolloverCounter(extendedSequenceNumber));
     }
 
-    if (ssrcOutboundContext.lastRewrittenSsrc != ssrc)
+    if (ssrcRewrite.originalSsrc != ssrc)
     {
-        ssrcOutboundContext.lastRewrittenSsrc = ssrc;
-        ssrcOutboundContext.sequenceNumberOffset = utils::Offset::getOffset<int64_t, 32>(
-            static_cast<int32_t>(ssrcOutboundContext.lastExtendedSequenceNumber + 1),
-            static_cast<int64_t>(extendedSequenceNumber));
+        ssrcRewrite.originalSsrc = ssrc;
+        ssrcRewrite.offset.sequenceNumber =
+            math::ringDifference<uint32_t, 32>(extendedSequenceNumber, ssrcRewrite.lastSent.sequenceNumber + 1);
+        ssrcRewrite.sequenceNumberStart = extendedSequenceNumber;
 
-        ssrcOutboundContext.picIdOffset =
-            utils::Offset::getOffset<int32_t, 15>(static_cast<int32_t>(ssrcOutboundContext.lastSentPicId + 1),
-                static_cast<int32_t>(picId));
+        ssrcRewrite.offset.picId = math::ringDifference<uint16_t, 15>(picId, ssrcRewrite.lastSent.picId + 1);
 
-        ssrcOutboundContext.tl0PicIdxOffset =
-            utils::Offset::getOffset<int32_t, 8>(static_cast<int32_t>(ssrcOutboundContext.lastSentTl0PicIdx + 1),
-                static_cast<int32_t>(tl0PicIdx));
+        ssrcRewrite.offset.tl0PicIdx = math::ringDifference<uint16_t, 8>(tl0PicIdx, ssrcRewrite.lastSent.tl0PicIdx + 1);
 
-        ssrcOutboundContext.timestampOffset =
-            utils::Offset::getOffset<int64_t, 32>(static_cast<int64_t>(ssrcOutboundContext.lastSentTimestamp + 1),
-                static_cast<int64_t>(timestamp)) +
-            500;
+        ssrcRewrite.offset.timestamp =
+            math::ringDifference<uint32_t, 32>(timestamp, ssrcRewrite.lastSent.timestamp + 500);
 
 #if DEBUG_REWRITER
-        logger::debug("New offset, %s ssrc %u, oseq %" PRIi64 ", oPicId %d, otl0PicIdx %d, oTimestamp %" PRIi64,
+        logger::debug("%s new offset, ssrc %u, oseq %d, oPicId %d, otl0PicIdx %d, oTimestamp %d",
             "Vp8Rewriter",
             transportName,
             rtpHeader->ssrc.get(),
-            ssrcOutboundContext.sequenceNumberOffset,
-            ssrcOutboundContext.picIdOffset,
-            ssrcOutboundContext.tl0PicIdxOffset,
-            ssrcOutboundContext.timestampOffset);
+            ssrcRewrite.offset.sequenceNumber,
+            ssrcRewrite.offset.picId,
+            ssrcRewrite.offset.tl0PicIdx,
+            ssrcRewrite.offset.timestamp);
 #endif
-        logger::info("Ssrc %u -> %u, sequence %u",
+        logger::info("%s ssrc %u -> %u, sequence %u",
             "Vp8Rewriter",
+            transportName,
             rtpHeader->ssrc.get(),
             rewriteSsrc,
-            applyOffset(extendedSequenceNumber, ssrcOutboundContext.sequenceNumberOffset));
+            extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber);
+    }
+    else if (static_cast<int32_t>(extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber -
+                 ssrcRewrite.lastSent.sequenceNumber) > MAX_JUMP_AHEAD)
+    {
+        ssrcRewrite.offset.sequenceNumber =
+            math::ringDifference<uint32_t, 32>(extendedSequenceNumber, ssrcRewrite.lastSent.sequenceNumber + 1);
+        logger::debug("Major sequence number skip ssrc %u, seq %u, sent %u. Adjusting offset to hide it",
+            "Vp8Rewriter",
+            rtpHeader->ssrc.get(),
+            extendedSequenceNumber,
+            ssrcRewrite.lastSent.sequenceNumber);
     }
 
-    const auto newExtendedSequenceNumber =
-        applyOffset(extendedSequenceNumber, ssrcOutboundContext.sequenceNumberOffset);
-    const auto newPicId = static_cast<uint16_t>(static_cast<int32_t>(picId) + ssrcOutboundContext.picIdOffset);
-    const auto newTl0PicIdx =
-        static_cast<uint8_t>(static_cast<int32_t>(tl0PicIdx) + ssrcOutboundContext.tl0PicIdxOffset);
-    const auto newTimestamp =
-        static_cast<uint32_t>(static_cast<int64_t>(timestamp) + ssrcOutboundContext.timestampOffset);
+    outExtendedSequenceNumber = extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber;
+    const auto newPicId = picId + ssrcRewrite.offset.picId;
+    const auto newTl0PicIdx = tl0PicIdx + ssrcRewrite.offset.tl0PicIdx;
+    const auto newTimestamp = timestamp + ssrcRewrite.offset.timestamp;
 
     rtpHeader->ssrc = rewriteSsrc;
-    rtpHeader->sequenceNumber = newExtendedSequenceNumber;
+    rtpHeader->sequenceNumber = outExtendedSequenceNumber & 0xFFFFu;
     rtpHeader->timestamp = newTimestamp;
     codec::Vp8Header::setPicId(rtpPayload, newPicId);
     codec::Vp8Header::setTl0PicIdx(rtpPayload, newTl0PicIdx);
 
 #if DEBUG_REWRITER
     logger::debug(
-        "Fwd, %s ssrc %u -> %u, seq %u (%u) -> %u (%u), marker %u, picId %d -> %d, tl0PicIdx %d -> %d, ts %u -> %u",
+        "%s fwd ssrc %u -> %u, seq %u (%u) -> %u (%u), marker %u, picId %d -> %d, tl0PicIdx %d -> %d, ts %u -> %u",
         "Vp8Rewriter",
         transportName,
         ssrc,
         rtpHeader->ssrc.get(),
         extractSequenceNumber(extendedSequenceNumber),
         extractRolloverCounter(extendedSequenceNumber),
-        extractSequenceNumber(newExtendedSequenceNumber),
-        extractRolloverCounter(newExtendedSequenceNumber),
+        extractSequenceNumber(outExtendedSequenceNumber),
+        extractRolloverCounter(outExtendedSequenceNumber),
         rtpHeader->marker,
         picId,
         newPicId,
@@ -144,19 +143,26 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
         newTimestamp);
 #endif
 
-    if (newExtendedSequenceNumber > ssrcOutboundContext.lastExtendedSequenceNumber)
+    if (static_cast<int32_t>(outExtendedSequenceNumber - ssrcRewrite.lastSent.sequenceNumber) > 0)
     {
-        ssrcOutboundContext.lastExtendedSequenceNumber = newExtendedSequenceNumber;
-        ssrcOutboundContext.lastSentPicId = newPicId;
-        ssrcOutboundContext.lastSentTl0PicIdx = newTl0PicIdx;
-        ssrcOutboundContext.lastSentTimestamp = newTimestamp;
+        ssrcRewrite.lastSent.sequenceNumber = outExtendedSequenceNumber;
+        ssrcRewrite.lastSent.picId = newPicId;
+        ssrcRewrite.lastSent.tl0PicIdx = newTl0PicIdx;
+        ssrcRewrite.lastSent.timestamp = newTimestamp;
     }
 
-    outExtendedSequenceNumber = newExtendedSequenceNumber;
+    if (isKeyFrame)
+    {
+        ssrcOutboundContext.lastKeyFrameSequenceNumber = outExtendedSequenceNumber;
+    }
+
     return true;
 }
 
-inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc)
+inline uint16_t rewriteRtxPacket(memory::Packet& packet,
+    const uint32_t mainSsrc,
+    uint8_t vp8PayloadType,
+    const char* transportName)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
     assert(rtpHeader->padding == 0);
@@ -171,8 +177,9 @@ inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc
     packet.setLength(packet.getLength() - sizeof(uint16_t));
 
 #if DEBUG_REWRITER
-    logger::debug("rewriteRtxPacket ssrc %u -> %u, seq %u -> %u",
+    logger::debug("%s rewriteRtxPacket ssrc %u -> %u, seq %u -> %u",
         "Vp8Rewriter",
+        transportName,
         rtpHeader->ssrc.get(),
         mainSsrc,
         rtpHeader->sequenceNumber.get(),
@@ -181,6 +188,7 @@ inline uint16_t rewriteRtxPacket(memory::Packet& packet, const uint32_t mainSsrc
 
     rtpHeader->sequenceNumber = originalSequenceNumber;
     rtpHeader->ssrc = mainSsrc;
+    rtpHeader->payloadType = vp8PayloadType;
 
     return originalSequenceNumber;
 }

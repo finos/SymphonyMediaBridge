@@ -94,6 +94,7 @@ void VideoForwarderReceiveJob::run()
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {
+        logger::debug("%s invalid rtp header. dropping", "VideoForwarderReceiveJob", _sender->getLoggableId().c_str());
         return;
     }
 
@@ -245,7 +246,7 @@ void VideoForwarderReceiveJob::run()
         if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, extendedSequenceNumber) ||
             extendedSequenceNumber != _extendedSequenceNumber)
         {
-            logger::debug("%s Not waiting for packet seq %u ssrc %u, dropping",
+            logger::debug("%s received unexpected rtp sequence number seq %u ssrc %u, dropping",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
                 sequenceNumber,

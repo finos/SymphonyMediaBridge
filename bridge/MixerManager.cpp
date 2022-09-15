@@ -129,6 +129,7 @@ Mixer* MixerManager::create(uint32_t lastN)
 
     auto mixerEmplaceResult = _mixers.emplace(id,
         std::make_unique<Mixer>(id,
+            engineMixerEmplaceResult.first->second->getLoggableId().getInstanceId(),
             _transportFactory,
             _engine,
             *(engineMixerEmplaceResult.first->second),

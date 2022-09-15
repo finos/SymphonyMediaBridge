@@ -268,6 +268,8 @@ public:
         _transport->connect();
     }
 
+    void disconnect() { _channel.disconnect(); }
+
     void process(uint64_t timestamp) { process(timestamp, true); }
 
     void process(uint64_t timestamp, bool sendVideo)
@@ -334,7 +336,7 @@ public:
             uint32_t extendedSequenceNumber,
             uint64_t timestamp)
         {
-            _context.onRtpPacket(timestamp);
+            _context.onRtpPacketReceived(timestamp);
             if (!sender->unprotect(packet))
             {
                 return;
@@ -401,7 +403,6 @@ public:
             VideoContent content,
             uint64_t timestamp)
             : contexts(256),
-
               _rtpMap(rtpMap),
               _rtxRtpMap(rtxRtpMap),
               _loggableId("rtprcv", instanceId),
@@ -421,10 +422,34 @@ public:
         {
             auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
 
+            bool found = false;
+            api::SsrcPair ssrcLevel;
+            for (const auto& ssrc : _ssrcs)
+            {
+                if (ssrc.feedback == rtpHeader->ssrc || ssrc.main == rtpHeader->ssrc)
+                {
+                    ssrcLevel = ssrc;
+                    found = true;
+                    break;
+                }
+            }
+            assert(found);
+            if (rtpHeader->ssrc == ssrcLevel.main)
+            {
+                if (ssrcLevel.feedback != 0)
+                {
+                    assert(rtpHeader->payloadType == _rtpMap.payloadType);
+                }
+            }
+            else
+            {
+                assert(rtpHeader->payloadType == _rtxRtpMap.payloadType);
+            }
+
             auto it = contexts.find(rtpHeader->ssrc.get());
             if (it == contexts.end())
             {
-
+                // we should perhaps figure out which simulcastLevel this is among the 3
                 auto result =
                     contexts.emplace(rtpHeader->ssrc.get(), rtpHeader->ssrc.get(), _rtpMap, sender, timestamp);
                 it = result.first;
@@ -439,7 +464,13 @@ public:
                 inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>(10);
             }
 
-            inboundContext.onRtpPacket(timestamp);
+            inboundContext.onRtpPacketReceived(timestamp);
+            logger::debug("%s received ssrc %u, seq %u, extseq %u",
+                _loggableId.c_str(),
+                sender->getLoggableId().c_str(),
+                inboundContext.ssrc,
+                rtpHeader->sequenceNumber.get(),
+                inboundContext.lastReceivedExtendedSequenceNumber);
 
             if (!sender->unprotect(packet))
             {
@@ -844,6 +875,16 @@ public:
         return v;
     }
 
+    uint32_t getVideoPacketsReceived()
+    {
+        uint32_t count = 0;
+        for (auto& receiver : _videoReceivers)
+        {
+            count += receiver->videoPacketCount;
+        }
+        return count;
+    }
+
 private:
     utils::IdGenerator _idGenerator;
     uint32_t _videoSsrcs[7];
@@ -860,7 +901,7 @@ private:
     std::vector<api::SimulcastGroup> _remoteVideoStreams;
     uint32_t _ptime;
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
-    size_t _instanceId = 0;
+    size_t _instanceId;
     RtxStats _rtxStats;
 };
 
@@ -1028,6 +1069,14 @@ public:
     {
         clients.emplace_back(
             std::make_unique<TClient>(++_idCounter, _allocator, _audioAllocator, _transportFactory, _sslDtls));
+    }
+
+    void disconnectClients()
+    {
+        for (auto& client : clients)
+        {
+            client->disconnect();
+        }
     }
 
     std::vector<std::unique_ptr<TClient>> clients;

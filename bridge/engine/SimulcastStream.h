@@ -50,18 +50,17 @@ struct SimulcastStream
     bool isSendingVideo() const { return numLevels > 0 && contentType == VideoContentType::VIDEO; }
     bool isSendingSlides() const { return numLevels > 0 && contentType == VideoContentType::SLIDES; }
 
-    bool getLevelOf(uint32_t ssrc, uint32_t& level) const
+    utils::Optional<uint32_t> getLevelOf(uint32_t ssrc) const
     {
         for (size_t i = 0; i < numLevels; ++i)
         {
-            if (levels[i].ssrc == ssrc)
+            if (levels[i].ssrc == ssrc || levels[i].feedbackSsrc == ssrc)
             {
-                level = i;
-                return true;
+                return utils::Optional<uint32_t>(i);
             }
         }
 
-        return false;
+        return utils::Optional<uint32_t>();
     }
 
     size_t numLevels;

@@ -80,6 +80,7 @@ public:
     };
 
     Mixer(std::string id,
+        size_t logInstanceId,
         transport::TransportFactory& transportFactory,
         Engine& engine,
         EngineMixer& engineMixer,

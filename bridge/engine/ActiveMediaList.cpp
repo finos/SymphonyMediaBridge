@@ -816,7 +816,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
 
 void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup)
 {
-    logger::debug("add to ssrcmap %zu", "", endpointIdHash);
+    logger::debug("add to ssrcmap %zu", _logId.c_str(), endpointIdHash);
     _videoSsrcRewriteMap.emplace(endpointIdHash, simulcastGroup);
     for (auto& ssrcPair : simulcastGroup)
     {
@@ -827,7 +827,7 @@ void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup
 
 void ActiveMediaList::removeFromRewriteMap(size_t endpointIdHash)
 {
-    logger::debug("remove from ssrcmap %zu", "", endpointIdHash);
+    logger::debug("remove from ssrcmap %zu", _logId.c_str(), endpointIdHash);
     const auto rewriteMapItr = _videoSsrcRewriteMap.find(endpointIdHash);
     if (rewriteMapItr != _videoSsrcRewriteMap.end())
     {

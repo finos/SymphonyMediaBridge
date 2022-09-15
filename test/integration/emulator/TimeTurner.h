@@ -1,5 +1,6 @@
 #pragma once
 #include "concurrency/CountdownEvent.h"
+#include "concurrency/EventSemaphore.h"
 #include "concurrency/Semaphore.h"
 #include "concurrency/WaitFreeStack.h"
 #include "utils/Time.h"
@@ -33,8 +34,12 @@ public:
         return *this;
     }
 
+    void stop();
+
+    void resetTime(uint64_t timestamp) { _timestamp = timestamp; }
+
 private:
-    uint64_t _timestamp;
+    std::atomic_uint64_t _timestamp;
 
     std::chrono::system_clock::time_point _startTime;
 
@@ -59,5 +64,7 @@ private:
     bool _running;
 
     concurrency::CountdownEvent _sleeperCountdown;
+    concurrency::EventSemaphore _abortSemaphore;
+    std::atomic_bool _abort;
 };
 } // namespace emulator

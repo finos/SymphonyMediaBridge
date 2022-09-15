@@ -376,6 +376,15 @@ private:
     };
     ChannelMetrics _inboundMetrics;
     ChannelMetrics _outboundMetrics;
+
+    struct PacingQueueStats
+    {
+        PacingQueueStats() : pacingQueueSize(0), rtxPacingQueueSize(0) {}
+
+        std::atomic_uint32_t pacingQueueSize;
+        std::atomic_uint32_t rtxPacingQueueSize;
+    } _pacingQueueStats;
+
     uint32_t _outboundRembEstimateKbps;
     utils::RateTracker<10> _sendRateTracker; // B/ns
     uint64_t _lastLogTimestamp;

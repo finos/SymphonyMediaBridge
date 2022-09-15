@@ -182,6 +182,7 @@ set(FILES
         bridge/engine/SimulcastStream.h
         bridge/engine/SsrcInboundContext.h
         bridge/engine/SsrcOutboundContext.h
+        bridge/engine/SsrcOutboundContext.cpp
         bridge/engine/SsrcRewrite.h
         bridge/engine/SsrcWhitelist.h
         bridge/engine/UnackedPacketsTracker.h
@@ -194,6 +195,8 @@ set(FILES
         bridge/engine/VideoMissingPacketsTracker.h
         bridge/engine/VideoNackReceiveJob.cpp
         bridge/engine/VideoNackReceiveJob.h
+        bridge/engine/DiscardReceivedVideoPacketJob.h
+        bridge/engine/DiscardReceivedVideoPacketJob.cpp
         bridge/engine/Vp8Rewriter.h
         bridge/engine/SetMaxMediaBitrateJob.h
         bridge/engine/SetMaxMediaBitrateJob.cpp
@@ -387,7 +390,6 @@ set(FILES
         utils/MersienneRandom.h
         utils/Offset.h
         utils/Optional.h
-        utils/OutboundSequenceNumber.h
         utils/Pacer.cpp
         utils/Pacer.h
         utils/ScopedFileHandle.h
@@ -542,7 +544,6 @@ set(TEST_FILES
     test/rtp/SendTimeTest.cpp
     test/bridge/VideoMissingPacketsTrackerTest.cpp
     test/bwe/BandwidthUtilsTest.cpp
-    test/utils/OutboundSequenceNumberTest.cpp
     test/crypto/AESTest.cpp
     test/utils/Base64Test.cpp
     test/crypto/AesIvGeneratorTest.cpp
