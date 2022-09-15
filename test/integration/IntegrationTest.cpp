@@ -304,6 +304,7 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     _timeSource.runFor(80 * utils::Time::sec);
 
     // all threads are asleep. Switch to real time
+    logger::info("Switching back to real time-space", "");
     utils::Time::initialize();
 
     // release all sleeping threads into real time to finish the test

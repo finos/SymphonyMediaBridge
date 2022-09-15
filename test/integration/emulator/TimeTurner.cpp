@@ -86,13 +86,15 @@ void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutN
  */
 void TimeTurner::runFor(uint64_t durationNs)
 {
-    const auto startTime = getAbsoluteTime();
+    static const auto SLEEPER_WAIT =
+        (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer)) ? 15000 : 2000;
 
-    for (auto timestamp = getAbsoluteTime(); !_abort && utils::Time::diffLE(startTime, timestamp, durationNs);
+    const auto startTime = getAbsoluteTime();
+    for (auto timestamp = startTime; !_abort && utils::Time::diffLE(startTime, timestamp, durationNs);
          timestamp = getAbsoluteTime())
     {
         logger::awaitLogDrained(0.75);
-        if (!_sleeperCountdown.wait(1000))
+        if (!_sleeperCountdown.wait(SLEEPER_WAIT))
         {
             logger::warn("Timeout waiting for threads to sleep", "TimeTurner");
             if (!_running)
