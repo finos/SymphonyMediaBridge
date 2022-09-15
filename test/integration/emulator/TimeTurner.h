@@ -41,7 +41,7 @@ public:
 private:
     std::atomic_uint64_t _timestamp;
 
-    std::chrono::system_clock::time_point _startTime;
+    const std::chrono::system_clock::time_point _startTime;
 
     enum State : uint32_t
     {

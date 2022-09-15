@@ -1,6 +1,7 @@
 #include "utils/Time.h"
 #include <algorithm>
 #include <cassert>
+#include <stdio.h>
 #include <time.h>
 
 #ifdef __APPLE__
@@ -48,18 +49,35 @@ TimeSourceImpl _defaultTimeSource;
 
 void initialize()
 {
-    if (!_timeSource)
-    {
-#ifdef __APPLE__
-        mach_timebase_info(&machTimeBase);
-#endif
-    }
-
-    _timeSource = &_defaultTimeSource;
+    initialize(_defaultTimeSource);
 }
 
 void initialize(TimeSource& timeSource)
 {
+    char localTime[32];
+    using namespace std::chrono;
+    const std::time_t currentTime = system_clock::to_time_t(timeSource.wallClock());
+    tm currentLocalTime = {};
+    localtime_r(&currentTime, &currentLocalTime);
+
+    snprintf(localTime,
+        32,
+        "%04d-%02d-%02d %02d:%02d:%02d",
+        currentLocalTime.tm_year + 1900,
+        currentLocalTime.tm_mon + 1,
+        currentLocalTime.tm_mday,
+        currentLocalTime.tm_hour,
+        currentLocalTime.tm_min,
+        currentLocalTime.tm_sec);
+
+    if (&timeSource == &_defaultTimeSource)
+    {
+        printf("\n Time intialize with timesource (default), %p timestamp: %s \n", &timeSource, localTime);
+    }
+    else
+    {
+        printf("\n Time intialize with timesource (custom), %p timestamp: %s \n", &timeSource, localTime);
+    }
     if (!_timeSource)
     {
 #ifdef __APPLE__
