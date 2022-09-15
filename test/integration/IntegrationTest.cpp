@@ -1723,7 +1723,7 @@ Test setup:
 TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        constexpr auto PACKET_LOSS_RATE = 0.01;
+        constexpr auto PACKET_LOSS_RATE = 0.04;
 
         _config.readFromString(R"({
         "ip":"127.0.0.1",
@@ -1735,7 +1735,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
         for (const auto& linkInfo : _endpointNetworkLinkMap)
         {
-            linkInfo.second.ptrLink->setLossRate(0.04);
+            linkInfo.second.ptrLink->setLossRate(PACKET_LOSS_RATE);
         }
 
         const std::string baseUrl = "http://127.0.0.1:8080";
