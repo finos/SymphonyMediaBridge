@@ -31,7 +31,7 @@ public:
 
 private:
     void run();
-    void formatTime(const LogItem& item, char* output);
+    static void formatTime(const std::chrono::system_clock::time_point timestamp, char* output);
     void reopenLogFile();
     void ensureLogFileExists();
 
