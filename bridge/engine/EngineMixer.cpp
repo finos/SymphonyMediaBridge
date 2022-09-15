@@ -3856,13 +3856,13 @@ void removeIdleStreams(concurrency::MpmcHashmap32<size_t, TStream*>& streams,
             continue;
         }
 
-        const auto lastReceivedTs = stream->transport.getLastReceivedPacketTimestamp();
-        if (utils::Time::diffGE(lastReceivedTs, timestamp, stream->idleTimeoutSeconds * utils::Time::sec))
+        const auto lastReceivedTimestamp = stream->transport.getLastReceivedPacketTimestamp();
+        if (utils::Time::diffGE(lastReceivedTimestamp, timestamp, stream->idleTimeoutSeconds * utils::Time::sec))
         {
             logger::info("Removing idle stream for endpoint %zu, last received packet timestamp: %zu, current: %zu",
                 "EngineMixer",
                 stream->endpointIdHash,
-                lastReceivedTs,
+                lastReceivedTimestamp,
                 timestamp);
             removeMethod(stream);
         }
