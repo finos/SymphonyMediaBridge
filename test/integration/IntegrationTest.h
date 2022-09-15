@@ -76,6 +76,7 @@ protected:
     };
 
     std::map<std::string, NetworkLinkInfo> _endpointNetworkLinkMap;
+    const uint32_t _clientsConnectionTimeout;
 
 private:
     size_t getNumWorkerThreads();

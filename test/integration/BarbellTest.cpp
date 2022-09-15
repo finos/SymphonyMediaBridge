@@ -197,7 +197,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
 
