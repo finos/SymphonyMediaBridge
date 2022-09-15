@@ -18,7 +18,7 @@ public:
 
     virtual void nanoSleep(uint64_t nanoSeconds) = 0;
 
-    virtual std::chrono::system_clock::time_point wallClock() = 0;
+    virtual std::chrono::system_clock::time_point wallClock() const = 0;
 };
 
 namespace Time
@@ -91,7 +91,6 @@ constexpr bool diffGE(const uint64_t a, const uint64_t b, const uint64_t value)
 {
     return static_cast<int64_t>(b - a) >= static_cast<int64_t>(value);
 }
-
 } // namespace Time
 
 } // namespace utils

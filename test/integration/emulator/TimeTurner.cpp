@@ -45,7 +45,7 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
     assert(false);
 }
 
-std::chrono::system_clock::time_point TimeTurner::wallClock()
+std::chrono::system_clock::time_point TimeTurner::wallClock() const
 {
     return _startTime +
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(_timestamp.load()));

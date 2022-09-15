@@ -19,7 +19,7 @@ public:
     virtual uint64_t getAbsoluteTime() override { return _timestamp; }
     virtual void nanoSleep(uint64_t nanoSeconds) override;
 
-    virtual std::chrono::system_clock::time_point wallClock() override;
+    virtual std::chrono::system_clock::time_point wallClock() const override;
 
     void shutdown();
 

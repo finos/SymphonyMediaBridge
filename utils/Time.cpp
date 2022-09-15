@@ -43,7 +43,7 @@ public:
 
     void nanoSleep(uint64_t ns) override { rawNanoSleep(ns); }
 
-    std::chrono::system_clock::time_point wallClock() override { return std::chrono::system_clock::now(); }
+    std::chrono::system_clock::time_point wallClock() const override { return std::chrono::system_clock::now(); }
 };
 TimeSourceImpl _defaultTimeSource;
 
@@ -52,15 +52,13 @@ void initialize()
     initialize(_defaultTimeSource);
 }
 
-void initialize(TimeSource& timeSource)
+void formatTime(const TimeSource& timeSource, char out[32])
 {
-    char localTime[32];
-    using namespace std::chrono;
-    const std::time_t currentTime = system_clock::to_time_t(timeSource.wallClock());
+    const std::time_t currentTime = std::chrono::system_clock::to_time_t(timeSource.wallClock());
     tm currentLocalTime = {};
     localtime_r(&currentTime, &currentLocalTime);
 
-    snprintf(localTime,
+    snprintf(out,
         32,
         "%04d-%02d-%02d %02d:%02d:%02d",
         currentLocalTime.tm_year + 1900,
@@ -69,14 +67,37 @@ void initialize(TimeSource& timeSource)
         currentLocalTime.tm_hour,
         currentLocalTime.tm_min,
         currentLocalTime.tm_sec);
+}
 
-    if (&timeSource == &_defaultTimeSource)
+void initialize(TimeSource& timeSource)
+{
+    char oldLocalTime[32];
+    char newLocalTime[32];
+
+    formatTime(timeSource, newLocalTime);
+
+    if (_timeSource)
     {
-        printf("\n Time intialize with timesource (default), %p timestamp: %s \n", &timeSource, localTime);
+        formatTime(*_timeSource, oldLocalTime);
     }
     else
     {
-        printf("\n Time intialize with timesource (custom), %p timestamp: %s \n", &timeSource, localTime);
+        oldLocalTime[0] = 0;
+    }
+
+    if (&timeSource == &_defaultTimeSource)
+    {
+        printf("\n Time intialize with timesource (default), %p, old timestamp: %s new timestamp: %s \n",
+            &timeSource,
+            oldLocalTime,
+            newLocalTime);
+    }
+    else
+    {
+        printf("\n Time intialize with timesource (custom), %p, old timestamp: %s new timestamp: %s \n",
+            &timeSource,
+            oldLocalTime,
+            newLocalTime);
     }
     if (!_timeSource)
     {
