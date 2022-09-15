@@ -11,6 +11,7 @@ class Config : public ConfigReader
 public:
     CFG_PROP(std::string, ip, "");
     CFG_PROP(uint16_t, port, 8080);
+    CFG_PROP(std::string, address, "127.0.0.1");
     CFG_PROP(bool, logStdOut, true);
     CFG_PROP(std::string, logLevel, "INFO");
 

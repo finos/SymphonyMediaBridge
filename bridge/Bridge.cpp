@@ -164,8 +164,9 @@ void Bridge::initialize()
 
     _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls);
 
+    const auto httpAddress = transport::SocketAddress::parse(_config.address, _config.port);
     _httpd = std::make_unique<httpd::Httpd>(*_requestHandler);
-    if (!_httpd->start(_config.port.get()))
+    if (!_httpd->start(httpAddress))
     {
         return;
     }
