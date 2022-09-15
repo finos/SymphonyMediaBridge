@@ -2,6 +2,11 @@
 
 #include <cstdint>
 
+namespace transport
+{
+class SocketAddress;
+} // namespace transport
+
 namespace httpd
 {
 
@@ -13,7 +18,7 @@ public:
     explicit Httpd(HttpRequestHandler& httpRequestHandler);
     ~Httpd();
 
-    bool start(const uint32_t port);
+    bool start(const transport::SocketAddress& socketAddress);
 
 private:
     struct OpaqueDaemon;
