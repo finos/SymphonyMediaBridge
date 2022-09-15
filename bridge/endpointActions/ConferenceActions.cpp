@@ -507,7 +507,7 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
             }
         }
 
-        if (!transport._dtls.isSet())
+        if (transport._dtls.isSet())
         {
             const auto& dtls = transport._dtls.get();
             const bool isRemoteSideDtlsClient = dtls.isClient();
@@ -619,7 +619,7 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
             }
         }
 
-        if (!transport._dtls.isSet())
+        if (transport._dtls.isSet())
         {
             const auto& dtls = transport._dtls.get();
             const bool isRemoteSideDtlsClient = dtls.isClient() == 0;
