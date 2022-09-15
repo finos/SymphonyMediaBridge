@@ -18,7 +18,7 @@ public:
 
     virtual void nanoSleep(uint64_t nanoSeconds) = 0;
 
-    virtual std::chrono::system_clock::time_point wallClock() = 0;
+    virtual std::chrono::system_clock::time_point wallClock() const = 0;
 };
 
 namespace Time
@@ -31,6 +31,7 @@ void initialize(TimeSource& timeSource);
  * Returns absolute time since some machine specific point in time in nanoseconds.
  */
 uint64_t getAbsoluteTime();
+uint64_t getRawAbsoluteTime();
 uint64_t getApproximateTime();
 void nanoSleep(int64_t ns);
 void nanoSleep(int32_t ns);
@@ -90,7 +91,6 @@ constexpr bool diffGE(const uint64_t a, const uint64_t b, const uint64_t value)
 {
     return static_cast<int64_t>(b - a) >= static_cast<int64_t>(value);
 }
-
 } // namespace Time
 
 } // namespace utils

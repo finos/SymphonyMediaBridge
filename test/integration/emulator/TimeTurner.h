@@ -19,7 +19,7 @@ public:
     virtual uint64_t getAbsoluteTime() override { return _timestamp; }
     virtual void nanoSleep(uint64_t nanoSeconds) override;
 
-    virtual std::chrono::system_clock::time_point wallClock() override;
+    virtual std::chrono::system_clock::time_point wallClock() const override;
 
     void shutdown();
 
@@ -41,7 +41,7 @@ public:
 private:
     std::atomic_uint64_t _timestamp;
 
-    std::chrono::system_clock::time_point _startTime;
+    const std::chrono::system_clock::time_point _startTime;
 
     enum State : uint32_t
     {

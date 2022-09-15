@@ -1,6 +1,7 @@
 #include "utils/Time.h"
 #include <algorithm>
 #include <cassert>
+#include <stdio.h>
 #include <time.h>
 
 #ifdef __APPLE__
@@ -42,24 +43,62 @@ public:
 
     void nanoSleep(uint64_t ns) override { rawNanoSleep(ns); }
 
-    std::chrono::system_clock::time_point wallClock() override { return std::chrono::system_clock::now(); }
+    std::chrono::system_clock::time_point wallClock() const override { return std::chrono::system_clock::now(); }
 };
 TimeSourceImpl _defaultTimeSource;
 
 void initialize()
 {
-    if (!_timeSource)
-    {
-#ifdef __APPLE__
-        mach_timebase_info(&machTimeBase);
-#endif
-    }
+    initialize(_defaultTimeSource);
+}
 
-    _timeSource = &_defaultTimeSource;
+void formatTime(const TimeSource& timeSource, char out[32])
+{
+    const std::time_t currentTime = std::chrono::system_clock::to_time_t(timeSource.wallClock());
+    tm currentLocalTime = {};
+    localtime_r(&currentTime, &currentLocalTime);
+
+    snprintf(out,
+        32,
+        "%04d-%02d-%02d %02d:%02d:%02d",
+        currentLocalTime.tm_year + 1900,
+        currentLocalTime.tm_mon + 1,
+        currentLocalTime.tm_mday,
+        currentLocalTime.tm_hour,
+        currentLocalTime.tm_min,
+        currentLocalTime.tm_sec);
 }
 
 void initialize(TimeSource& timeSource)
 {
+    char oldLocalTime[32];
+    char newLocalTime[32];
+
+    formatTime(timeSource, newLocalTime);
+
+    if (_timeSource)
+    {
+        formatTime(*_timeSource, oldLocalTime);
+    }
+    else
+    {
+        oldLocalTime[0] = 0;
+    }
+
+    if (&timeSource == &_defaultTimeSource)
+    {
+        printf("\n Time intialize with timesource (default), %p, old timestamp: %s new timestamp: %s \n",
+            &timeSource,
+            oldLocalTime,
+            newLocalTime);
+    }
+    else
+    {
+        printf("\n Time intialize with timesource (custom), %p, old timestamp: %s new timestamp: %s \n",
+            &timeSource,
+            oldLocalTime,
+            newLocalTime);
+    }
     if (!_timeSource)
     {
 #ifdef __APPLE__
@@ -73,6 +112,11 @@ void initialize(TimeSource& timeSource)
 uint64_t getAbsoluteTime()
 {
     return _timeSource->getAbsoluteTime();
+}
+
+uint64_t getRawAbsoluteTime()
+{
+    return _defaultTimeSource.getAbsoluteTime();
 }
 
 // faster on Mac

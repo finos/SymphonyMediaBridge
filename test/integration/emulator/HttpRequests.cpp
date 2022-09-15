@@ -18,7 +18,7 @@ HttpRequest::~HttpRequest()
 
 void HttpRequest::awaitResponse(uint64_t timeout)
 {
-    const auto startTime = utils::Time::getAbsoluteTime();
+    const auto startTime = utils::Time::getRawAbsoluteTime();
 
     while (_status == HTTP_STATUS_PENDING)
     {
@@ -28,7 +28,7 @@ void HttpRequest::awaitResponse(uint64_t timeout)
             logger::debug("%zu byte(s) received.", "HttpPostRequest", _request->response_size);
             _prevSize = _request->response_size;
         }
-        if (utils::Time::getAbsoluteTime() - startTime > timeout)
+        if (utils::Time::getRawAbsoluteTime() - startTime > timeout)
         {
             logger::error("Timeout waiting for response", "HttpPostRequest");
             _status = HTTP_STATUS_FAILED;

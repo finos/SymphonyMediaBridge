@@ -300,10 +300,15 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
 
 #if USE_FAKENETWORK
+
+    static const auto TEST_RUN_TIMEOUT =
+        (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer)) ? 8000 : 80;
+
     // run for 80s or until test runner thread stops the time run
-    _timeSource.runFor(80 * utils::Time::sec);
+    _timeSource.runFor(TEST_RUN_TIMEOUT * utils::Time::sec);
 
     // all threads are asleep. Switch to real time
+    logger::info("Switching back to real time-space", "");
     utils::Time::initialize();
 
     // release all sleeping threads into real time to finish the test
@@ -379,7 +384,7 @@ TEST_F(IntegrationTest, plain)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -561,7 +566,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -623,7 +628,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        auto connectResult = group.connectAll(utils::Time::sec * 5);
+        auto connectResult = group.connectAll(utils::Time::sec * 15);
         EXPECT_TRUE(connectResult);
         if (!connectResult)
         {
@@ -733,7 +738,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         // Client 3 will join after client 2, which produce video, will leave.
 
-        if (!group.connectAll(utils::Time::sec * 8))
+        if (!group.connectAll(utils::Time::sec * 15))
         {
             EXPECT_TRUE(false);
             return;
@@ -835,7 +840,7 @@ TEST_F(IntegrationTest, plainNewApi)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1018,7 +1023,7 @@ TEST_F(IntegrationTest, ptime10)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1274,7 +1279,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1442,7 +1447,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        if (!group.connectAll(utils::Time::sec * 8))
+        if (!group.connectAll(utils::Time::sec * 15))
         {
             EXPECT_TRUE(false);
             return;
@@ -1596,7 +1601,7 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        auto connectResult = group.connectAll(utils::Time::sec * 5);
+        auto connectResult = group.connectAll(utils::Time::sec * 15);
         ASSERT_TRUE(connectResult);
         if (!connectResult)
         {
@@ -1718,7 +1723,7 @@ Test setup:
 TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 {
     runTestInThread(_numWorkerThreads + 4, [this]() {
-        constexpr auto PACKET_LOSS_RATE = 0.01;
+        constexpr auto PACKET_LOSS_RATE = 0.04;
 
         _config.readFromString(R"({
         "ip":"127.0.0.1",
@@ -1730,7 +1735,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
         for (const auto& linkInfo : _endpointNetworkLinkMap)
         {
-            linkInfo.second.ptrLink->setLossRate(0.04);
+            linkInfo.second.ptrLink->setLossRate(PACKET_LOSS_RATE);
         }
 
         const std::string baseUrl = "http://127.0.0.1:8080";
@@ -1752,7 +1757,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 5));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1775,6 +1780,15 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                 // have been ignored. So we might expect small number of videoCounters.lostPackets.
                 if (videoCounters.lostPackets != 0)
                 {
+                    logger::info(
+                        "Client id: %s  packets missing: %zu, recovered: %zu, send: %zu, expected min recovery: %f",
+                        "packetLossVideoRecoveredViaNack",
+                        group.clients[id]->getLoggableId().c_str(),
+                        stats.receiver.packetsMissing,
+                        stats.receiver.packetsRecovered,
+                        stats.sender.packetsSent,
+                        stats.sender.packetsSent * PACKET_LOSS_RATE / 2);
+
                     ASSERT_TRUE(stats.receiver.packetsMissing >= stats.receiver.packetsRecovered);
                     // Expect number of non-recovered packet to be smaller than half the loss rate.
                     ASSERT_TRUE(stats.receiver.packetsMissing - stats.receiver.packetsRecovered <

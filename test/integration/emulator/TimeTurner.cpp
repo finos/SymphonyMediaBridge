@@ -45,7 +45,7 @@ void TimeTurner::nanoSleep(const uint64_t nanoSeconds)
     assert(false);
 }
 
-std::chrono::system_clock::time_point TimeTurner::wallClock()
+std::chrono::system_clock::time_point TimeTurner::wallClock() const
 {
     return _startTime +
         std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::nanoseconds(_timestamp.load()));
@@ -88,7 +88,7 @@ void TimeTurner::runFor(uint64_t durationNs)
 {
     const auto startTime = getAbsoluteTime();
 
-    for (auto timestamp = getAbsoluteTime(); !_abort && utils::Time::diffLE(startTime, timestamp, durationNs);
+    for (auto timestamp = startTime; !_abort && utils::Time::diffLE(startTime, timestamp, durationNs);
          timestamp = getAbsoluteTime())
     {
         logger::awaitLogDrained(0.75);
