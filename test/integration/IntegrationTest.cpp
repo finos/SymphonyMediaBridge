@@ -1812,7 +1812,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
         EXPECT_NE(cumulativeStats.sender.nacksReceived, 0);
         EXPECT_NE(cumulativeStats.sender.retransmissionRequests, 0);
         EXPECT_NE(cumulativeStats.sender.retransmissions, 0);
-        EXPECT_EQ(cumulativeStats.sender.retransmissionRequests, cumulativeStats.sender.retransmissions);
+        EXPECT_GE(cumulativeStats.sender.retransmissionRequests, cumulativeStats.sender.retransmissions);
 
         EXPECT_EQ(cumulativeStats.receiver.nackRequests, 0); // Expected as it's is not implemented yet.
         EXPECT_NE(cumulativeStats.receiver.packetsMissing, 0);
