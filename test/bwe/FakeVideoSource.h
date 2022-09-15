@@ -27,8 +27,8 @@ public:
     double getBitRate() const { return _avgRate.get() / 1000; }
     uint32_t getSsrc() const override { return _ssrc; }
 
-    void requestKeyFrame() { _keyFrame = true; }
-    bool isKeyFrameRequested() { return _keyFrame; }
+    void requestKeyFrame() { _keyFrame.store(true); }
+    bool isKeyFrameRequested() { return _keyFrame.load(); }
 
     uint32_t getPacketsSent() const { return _packetsSent; }
 
@@ -49,7 +49,7 @@ private:
     uint32_t _sequenceCounter;
     utils::AvgRateTracker _avgRate;
     uint32_t _rtpTimestamp;
-    bool _keyFrame;
+    std::atomic_bool _keyFrame;
     uint32_t _packetsSent;
 };
 
