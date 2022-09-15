@@ -300,8 +300,12 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
 
 #if USE_FAKENETWORK
+
+    static const auto TEST_RUN_TIMEOUT =
+        (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer)) ? 8000 : 80;
+
     // run for 80s or until test runner thread stops the time run
-    _timeSource.runFor(80 * utils::Time::sec);
+    _timeSource.runFor(TEST_RUN_TIMEOUT * utils::Time::sec);
 
     // all threads are asleep. Switch to real time
     logger::info("Switching back to real time-space", "");
