@@ -379,7 +379,7 @@ TEST_F(IntegrationTest, plain)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 8));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -561,7 +561,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 8));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -623,7 +623,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        auto connectResult = group.connectAll(utils::Time::sec * 8);
+        auto connectResult = group.connectAll(utils::Time::sec * 15);
         EXPECT_TRUE(connectResult);
         if (!connectResult)
         {
@@ -733,7 +733,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         // Client 3 will join after client 2, which produce video, will leave.
 
-        if (!group.connectAll(utils::Time::sec * 8))
+        if (!group.connectAll(utils::Time::sec * 15))
         {
             EXPECT_TRUE(false);
             return;
@@ -835,7 +835,7 @@ TEST_F(IntegrationTest, plainNewApi)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 8));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1018,7 +1018,7 @@ TEST_F(IntegrationTest, ptime10)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 8));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1274,7 +1274,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 8));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1442,7 +1442,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        if (!group.connectAll(utils::Time::sec * 8))
+        if (!group.connectAll(utils::Time::sec * 15))
         {
             EXPECT_TRUE(false);
             return;
@@ -1596,7 +1596,7 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        auto connectResult = group.connectAll(utils::Time::sec * 8);
+        auto connectResult = group.connectAll(utils::Time::sec * 15);
         ASSERT_TRUE(connectResult);
         if (!connectResult)
         {
@@ -1752,7 +1752,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 8));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
 
         make5secCallWithDefaultAudioProfile(group);
 
