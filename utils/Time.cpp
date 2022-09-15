@@ -75,6 +75,11 @@ uint64_t getAbsoluteTime()
     return _timeSource->getAbsoluteTime();
 }
 
+uint64_t getRawAbsoluteTime()
+{
+    return _defaultTimeSource.getAbsoluteTime();
+}
+
 // faster on Mac
 uint64_t getApproximateTime()
 {

@@ -31,6 +31,7 @@ void initialize(TimeSource& timeSource);
  * Returns absolute time since some machine specific point in time in nanoseconds.
  */
 uint64_t getAbsoluteTime();
+uint64_t getRawAbsoluteTime();
 uint64_t getApproximateTime();
 void nanoSleep(int64_t ns);
 void nanoSleep(int32_t ns);
