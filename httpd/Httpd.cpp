@@ -2,6 +2,7 @@
 #include "httpd/HttpRequestHandler.h"
 #include "httpd/Request.h"
 #include "logger/Logger.h"
+#include "utils/SocketAddress.h"
 #include <cstring>
 #include <microhttpd.h>
 
@@ -260,7 +261,7 @@ Httpd::~Httpd()
     delete _daemon;
 }
 
-bool Httpd::start(const uint32_t port)
+bool Httpd::start(const transport::SocketAddress& socketAddress)
 {
 #ifdef __APPLE__
     const uint32_t flags = MHD_USE_POLL_INTERNAL_THREAD | MHD_USE_ERROR_LOG;
@@ -268,12 +269,16 @@ bool Httpd::start(const uint32_t port)
     const uint32_t flags = MHD_USE_EPOLL_INTERNAL_THREAD | MHD_USE_ERROR_LOG;
 #endif
 
+    static const uint16_t discardPort = 9;
+
     auto daemon = MHD_start_daemon(flags,
-        static_cast<uint16_t>(port),
+        discardPort,
         nullptr,
         nullptr,
         (MHD_AccessHandlerCallback)&answerCallback,
         &_httpRequestHandler,
+        MHD_OPTION_SOCK_ADDR,
+        socketAddress.getIpv4(),
         MHD_OPTION_EXTERNAL_LOGGER,
         errorLogger,
         this,
