@@ -111,6 +111,9 @@ struct ClientPair : public TransportClientPair
 
 TEST_F(SctpIntegrationTest, connectUdp)
 {
+#if NOPERF_TEST
+    GTEST_SKIP();
+#endif
     ASSERT_TRUE(_transportFactory1->isGood());
     ASSERT_TRUE(_transportFactory2->isGood());
 
@@ -147,7 +150,7 @@ TEST_F(SctpIntegrationTest, connectUdp)
     }
     ASSERT_EQ(clients._sctpEstablished, 2);
 
-    const uint32_t messageCount = (__has_feature(thread_sanitizer) ? 10 : 8800);
+    const uint32_t messageCount = 8800;
     for (uint32_t i = 0; i < messageCount; ++i)
     {
         stream1.sendString(sctpMessage.c_str(), sctpMessage.size());

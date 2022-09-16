@@ -318,6 +318,9 @@ bool areAllConnected(std::vector<std::unique_ptr<ClientPair>>& testPairs)
 
 TEST_P(RtcTransportTest, DISABLED_packetLoad)
 {
+#if (NOPERF_TEST)
+    GTEST_SKIP();
+#endif
     const int CLIENT_COUNT = std::get<0>(GetParam());
     const bool enableIce = std::get<1>(GetParam());
 
@@ -387,11 +390,9 @@ TEST_P(RtcTransportTest, DISABLED_packetLoad)
 
     for (auto& clientpair : _testPairs)
     {
-        if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-        {
-            EXPECT_GT(clientpair->_report[clientpair->_transport1.get()].receivedByteCount, 85000);
-            EXPECT_EQ(clientpair->_report[clientpair->_transport1.get()].lossCount, 0);
-        }
+        EXPECT_GT(clientpair->_report[clientpair->_transport1.get()].receivedByteCount, 85000);
+        EXPECT_EQ(clientpair->_report[clientpair->_transport1.get()].lossCount, 0);
+
         clientpair->stop();
     }
 }
