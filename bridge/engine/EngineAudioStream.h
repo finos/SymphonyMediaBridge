@@ -21,7 +21,8 @@ struct EngineAudioStream
         transport::RtcTransport& transport,
         const bool audioMixed,
         const bridge::RtpMap& rtpMap,
-        bool ssrcRewrite)
+        bool ssrcRewrite,
+        const uint32_t idleTimeoutSeconds)
         : endpointId(endpointId),
           endpointIdHash(endpointIdHash),
           localSsrc(localSsrc),
@@ -30,7 +31,9 @@ struct EngineAudioStream
           transport(transport),
           audioMixed(audioMixed),
           rtpMap(rtpMap),
-          ssrcRewrite(ssrcRewrite)
+          ssrcRewrite(ssrcRewrite),
+          idleTimeoutSeconds(idleTimeoutSeconds),
+          createdAt(utils::Time::getAbsoluteTime())
     {
     }
 
@@ -45,6 +48,8 @@ struct EngineAudioStream
 
     bridge::RtpMap rtpMap;
     bool ssrcRewrite;
+    const uint32_t idleTimeoutSeconds;
+    const uint64_t createdAt;
 };
 
 } // namespace bridge

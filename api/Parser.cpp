@@ -294,6 +294,8 @@ AllocateEndpoint parseAllocateEndpoint(const nlohmann::json& data)
         allocateEndpoint._data.set(AllocateEndpoint::Data());
     }
 
+ setIfExists(allocateEndpoint._idleTimeoutSeconds, data, "idleTimeout");
+
     return allocateEndpoint;
 }
 

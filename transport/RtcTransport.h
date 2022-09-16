@@ -104,6 +104,8 @@ public:
 
     virtual void setTag(const char* tag) = 0;
     virtual const char* getTag() const = 0;
+
+    virtual uint64_t getLastReceivedPacketTimestamp() const = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,

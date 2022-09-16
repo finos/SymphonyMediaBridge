@@ -329,7 +329,8 @@ bool Mixer::addAudioStream(std::string& outId,
     const utils::Optional<ice::IceRole>& iceRole,
     const bool audioMixed,
     bool rewriteSsrcs,
-    bool isDtlsEnabled)
+    bool isDtlsEnabled,
+    utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_audioStreams.find(endpointId) != _audioStreams.end())
@@ -358,7 +359,8 @@ bool Mixer::addAudioStream(std::string& outId,
             transport,
             audioMixed,
             rewriteSsrcs,
-            isDtlsEnabled));
+            isDtlsEnabled,
+            idleTimeoutSeconds));
 
     if (!streamItr.second)
     {
@@ -379,7 +381,8 @@ bool Mixer::addVideoStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
     bool rewriteSsrcs,
-    bool isDtlsEnabled)
+    bool isDtlsEnabled,
+    utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_videoStreams.find(endpointId) != _videoStreams.end())
@@ -407,7 +410,8 @@ bool Mixer::addVideoStream(std::string& outId,
             _ssrcGenerator.next(),
             transport,
             rewriteSsrcs,
-            isDtlsEnabled));
+            isDtlsEnabled,
+            idleTimeoutSeconds));
 
     if (!emplaceResult.second)
     {
@@ -427,7 +431,8 @@ bool Mixer::addVideoStream(std::string& outId,
 bool Mixer::addBundledAudioStream(std::string& outId,
     const std::string& endpointId,
     const bool audioMixed,
-    const bool ssrcRewrite)
+    const bool ssrcRewrite,
+    utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_audioStreams.find(endpointId) != _audioStreams.end())
@@ -454,7 +459,8 @@ bool Mixer::addBundledAudioStream(std::string& outId,
             transportItr->second._transport,
             audioMixed,
             ssrcRewrite,
-            true));
+            true,
+            idleTimeoutSeconds));
 
     if (!streamItr.second)
     {
@@ -471,7 +477,10 @@ bool Mixer::addBundledAudioStream(std::string& outId,
     return streamItr.first->second->transport->isInitialized();
 }
 
-bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpointId, const bool ssrcRewrite)
+bool Mixer::addBundledVideoStream(std::string& outId,
+    const std::string& endpointId,
+    const bool ssrcRewrite,
+    utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_videoStreams.find(endpointId) != _videoStreams.end())
@@ -497,7 +506,8 @@ bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpoin
             _ssrcGenerator.next(),
             transportItr->second._transport,
             ssrcRewrite,
-            true));
+            true,
+            idleTimeoutSeconds));
 
     if (!streamItr.second)
     {
@@ -514,7 +524,9 @@ bool Mixer::addBundledVideoStream(std::string& outId, const std::string& endpoin
     return streamItr.first->second->transport->isInitialized();
 }
 
-bool Mixer::addBundledDataStream(std::string& outId, const std::string& endpointId)
+bool Mixer::addBundledDataStream(std::string& outId,
+    const std::string& endpointId,
+    utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_dataStreams.find(endpointId) != _dataStreams.end())
@@ -535,7 +547,7 @@ bool Mixer::addBundledDataStream(std::string& outId, const std::string& endpoint
     }
 
     const auto streamItr = _dataStreams.emplace(endpointId,
-        std::make_unique<DataStream>(outId, endpointId, transportItr->second._transport));
+        std::make_unique<DataStream>(outId, endpointId, transportItr->second._transport, idleTimeoutSeconds));
     if (!streamItr.second)
     {
         return false;
@@ -1624,7 +1636,8 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
             *(audioStream->transport.get()),
             audioStream->audioMixed,
             audioStream->rtpMap,
-            audioStream->ssrcRewrite));
+            audioStream->ssrcRewrite,
+            audioStream->idleTimeoutSeconds));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddAudioStream;
@@ -1663,7 +1676,8 @@ bool Mixer::addVideoStreamToEngine(const std::string& endpointId)
             videoStream->feedbackRtpMap,
             videoStream->ssrcWhitelist,
             videoStream->ssrcRewrite,
-            _videoPinSsrcs));
+            _videoPinSsrcs,
+            videoStream->idleTimeoutSeconds));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddVideoStream;
@@ -1693,7 +1707,8 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
     auto emplaceResult = _dataEngineStreams.emplace(dataStream->endpointId,
         std::make_unique<EngineDataStream>(dataStream->endpointId,
             dataStream->endpointIdHash,
-            *(dataStream->transport.get())));
+            *(dataStream->transport.get()),
+            dataStream->idleTimeoutSeconds));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddDataStream;
@@ -1819,11 +1834,14 @@ void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, cons
     transport::RtcTransport* transport = nullptr;
 
     auto bundleTransportItr = _bundleTransports.find(endpointId);
+
+    bool audioStreamDeleted = _audioStreams.find(endpointId) == _audioStreams.end();
+    bool videoStreamDeleted = _videoStreams.find(endpointId) == _videoStreams.end();
+    bool dataStreamDeleted = _dataStreams.find(endpointId) == _dataStreams.end();
+
     if (bundleTransportItr != _bundleTransports.end())
     {
-        if (_audioStreams.find(endpointId) == _audioStreams.end() &&
-            _videoStreams.find(endpointId) == _videoStreams.end() &&
-            _dataStreams.find(endpointId) == _dataStreams.end())
+        if (audioStreamDeleted && videoStreamDeleted && dataStreamDeleted)
         {
             logger::info("EngineStream removed, endpointId %s. Has bundle transport %s but no other related streams.",
                 _loggableId.c_str(),

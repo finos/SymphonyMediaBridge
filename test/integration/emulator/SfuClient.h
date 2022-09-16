@@ -144,9 +144,10 @@ public:
         bool initiator,
         bool audio,
         bool video,
-        bool forwardMedia)
+        bool forwardMedia,
+        uint32_t idleTimeout = 0)
     {
-        _channel.create(baseUrl, conferenceId, initiator, audio, video, forwardMedia);
+        _channel.create(baseUrl, conferenceId, initiator, audio, video, forwardMedia, idleTimeout);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 

@@ -80,7 +80,8 @@ void Channel::create(const std::string& baseUrl,
     const bool initiator,
     const bool audio,
     const bool video,
-    const bool forwardMedia)
+    const bool forwardMedia,
+    const uint32_t idleTimeout = 0)
 {
     assert(!conferenceId.empty());
     _conferenceId = conferenceId;
@@ -103,6 +104,10 @@ void Channel::create(const std::string& baseUrl,
     if (audio || video)
     {
         body["data"] = json::object();
+    }
+    if (idleTimeout)
+    {
+        body["idleTimeout"] = idleTimeout;
     }
 
     logger::debug("allocate ch with %s", "", body.dump().c_str());
@@ -368,8 +373,12 @@ void ColibriChannel::create(const std::string& baseUrl,
     const bool initiator,
     const bool audio,
     const bool video,
-    const bool forwardMedia)
+    const bool forwardMedia,
+    const uint32_t idleTimeout = 0)
 {
+    // Colibry endpoints do not support idle timeouts.
+    assert(0 == idleTimeout);
+
     _conferenceId = conferenceId;
     _relayType = forwardMedia ? "ssrc-rewrite" : "mixer";
     _baseUrl = baseUrl;

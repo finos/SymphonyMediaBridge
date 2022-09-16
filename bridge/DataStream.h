@@ -14,14 +14,16 @@ struct DataStream
 {
     DataStream(const std::string& id,
         const std::string& endpointId,
-        std::shared_ptr<transport::RtcTransport>& transport)
+        std::shared_ptr<transport::RtcTransport>& transport,
+        utils::Optional<uint32_t> idleTimeout)
         : id(id),
           endpointId(endpointId),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
           localSctpPort(rand() % 19000 + 1000),
           transport(transport),
           markedForDeletion(false),
-          isConfigured(false)
+          isConfigured(false),
+          idleTimeoutSeconds(idleTimeout.isSet() ? idleTimeout.get() : 0)
     {
     }
 
@@ -35,6 +37,7 @@ struct DataStream
 
     bool markedForDeletion;
     bool isConfigured;
+    const uint32_t idleTimeoutSeconds;
 };
 
 } // namespace bridge

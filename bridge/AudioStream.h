@@ -19,7 +19,8 @@ struct AudioStream
         std::shared_ptr<transport::RtcTransport>& transport,
         const bool audioMixed,
         bool ssrcRewrite,
-        bool isDtlsLocalEnabled)
+        bool isDtlsLocalEnabled,
+        utils::Optional<uint32_t> idleTimeout)
         : id(id),
           endpointId(endpointId),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
@@ -29,7 +30,8 @@ struct AudioStream
           markedForDeletion(false),
           ssrcRewrite(ssrcRewrite),
           isDtlsLocalEnabled(isDtlsLocalEnabled),
-          isConfigured(false)
+          isConfigured(false),
+          idleTimeoutSeconds(idleTimeout.isSet() ? idleTimeout.get() : 0)
     {
     }
 
@@ -48,6 +50,7 @@ struct AudioStream
     bool ssrcRewrite;
     bool isDtlsLocalEnabled;
     bool isConfigured;
+    const uint32_t idleTimeoutSeconds;
 };
 
 } // namespace bridge

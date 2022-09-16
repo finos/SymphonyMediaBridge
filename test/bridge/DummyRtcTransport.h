@@ -63,7 +63,7 @@ public:
     }
 
     uint64_t getInboundPacketCount() const override { return 0; }
-    
+
     transport::PacketCounters getCumulativeVideoReceiveCounters() const override { return transport::PacketCounters(); }
     transport::PacketCounters getCumulativeAudioReceiveCounters() const override { return transport::PacketCounters(); }
 
@@ -102,6 +102,8 @@ public:
 
     void setTag(const char* tag) override{};
     const char* getTag() const override { return nullptr; };
+
+    uint64_t getLastReceivedPacketTimestamp() const override { return 0; }
 
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;

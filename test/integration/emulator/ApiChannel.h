@@ -52,7 +52,8 @@ public:
         const bool initiator,
         const bool audio,
         const bool video,
-        const bool forwardMedia) = 0;
+        const bool forwardMedia,
+        const uint32_t idleTimeout) = 0;
 
     virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
@@ -114,7 +115,8 @@ public:
         const bool initiator,
         const bool audio,
         const bool video,
-        const bool forwardMedia) override;
+        const bool forwardMedia,
+        const uint32_t idleTimeout) override;
 
     void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
@@ -141,7 +143,8 @@ public:
         const bool initiator,
         const bool audio,
         const bool video,
-        const bool forwardMedia) override;
+        const bool forwardMedia,
+        const uint32_t idleTimeout) override;
 
     void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,

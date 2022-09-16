@@ -97,14 +97,14 @@ public:
 
     // -- methods executed on engine thread
     void addAudioStream(EngineAudioStream* engineAudioStream);
-    void removeAudioStream(EngineAudioStream* engineAudioStream);
+    void removeStream(EngineAudioStream* engineAudioStream);
     void addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
     void addVideoStream(EngineVideoStream* engineVideoStream);
-    void removeVideoStream(EngineVideoStream* engineVideoStream);
+    void removeStream(EngineVideoStream* engineVideoStream);
     void addRecordingStream(EngineRecordingStream* engineRecordingStream);
     void removeRecordingStream(EngineRecordingStream* engineRecordingStream);
     void addDataSteam(EngineDataStream* engineDataStream);
-    void removeDataStream(EngineDataStream* engineDataStream);
+    void removeStream(EngineDataStream* engineDataStream);
     void startTransport(transport::RtcTransport* transport);
     void startRecordingTransport(transport::RecordingTransport* transport);
     void reconfigureAudioStream(const transport::RtcTransport* transport, const uint32_t remoteSsrc);
@@ -341,6 +341,7 @@ private:
     std::unique_ptr<EngineStreamDirector> _engineStreamDirector;
     std::unique_ptr<ActiveMediaList> _activeMediaList;
     uint64_t _lastUplinkEstimateUpdate;
+    uint64_t _lastIdleTransportCheck;
     const config::Config& _config;
     uint32_t _lastN;
     uint32_t _numMixedAudioStreams;
@@ -377,7 +378,7 @@ private:
         const rtp::RtcpHeader& rtcpPacket,
         const uint64_t timestamp);
     void checkVideoBandwidth(const uint64_t timestamp);
-    void runTransportTicks(const uint64_t timestamp);
+    void removeIdleStreams(const uint64_t timestamp);
 
     void mixSsrcBuffers();
     void processAudioStreams();

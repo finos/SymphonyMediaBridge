@@ -161,7 +161,8 @@ protected:
             bridge::RtpMap(),
             bridge::SsrcWhitelist({false, 0, {0, 0}}),
             true,
-            _videoPinSsrcs);
+            _videoPinSsrcs,
+            0);
 
         _engineVideoStreams.emplace(id, engineVideoStream);
         return engineVideoStream;
@@ -176,7 +177,8 @@ protected:
             *_transport,
             false,
             bridge::RtpMap(),
-            true);
+            true,
+            0);
 
         _engineAudioStreams.emplace(id, engineAudioStream.release());
     }

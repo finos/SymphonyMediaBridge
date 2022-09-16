@@ -43,7 +43,8 @@ IntegrationTest::IntegrationTest()
       _network(transport::createRtcePoll()),
       _pacer(10 * utils::Time::ms),
       _instanceCounter(0),
-      _numWorkerThreads(getNumWorkerThreads())
+      _numWorkerThreads(getNumWorkerThreads()),
+      _clientsConnectionTimeout((__has_feature(address_sanitizer) || __has_feature(thread_sanitizer)) ? 1500 : 15)
 {
 }
 
@@ -384,7 +385,7 @@ TEST_F(IntegrationTest, plain)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -566,7 +567,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -628,7 +629,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        auto connectResult = group.connectAll(utils::Time::sec * 15);
+        auto connectResult = group.connectAll(utils::Time::sec * _clientsConnectionTimeout);
         EXPECT_TRUE(connectResult);
         if (!connectResult)
         {
@@ -738,7 +739,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         // Client 3 will join after client 2, which produce video, will leave.
 
-        if (!group.connectAll(utils::Time::sec * 15))
+        if (!group.connectAll(utils::Time::sec * _clientsConnectionTimeout))
         {
             EXPECT_TRUE(false);
             return;
@@ -840,7 +841,7 @@ TEST_F(IntegrationTest, plainNewApi)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1023,7 +1024,7 @@ TEST_F(IntegrationTest, ptime10)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1279,7 +1280,7 @@ TEST_F(IntegrationTest, simpleBarbell)
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1447,7 +1448,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
 
-        if (!group.connectAll(utils::Time::sec * 15))
+        if (!group.connectAll(utils::Time::sec * _clientsConnectionTimeout))
         {
             EXPECT_TRUE(false);
             return;
@@ -1601,7 +1602,7 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        auto connectResult = group.connectAll(utils::Time::sec * 15);
+        auto connectResult = group.connectAll(utils::Time::sec * _clientsConnectionTimeout);
         ASSERT_TRUE(connectResult);
         if (!connectResult)
         {
@@ -1757,7 +1758,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
 
-        ASSERT_TRUE(group.connectAll(utils::Time::sec * 15));
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
 
@@ -1767,8 +1768,19 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
+        RtxStats cumulativeStats;
+
+        for (auto id : {0, 1})
         {
-            for (auto id : {0, 1})
+            // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
+            // video streams only. So let's check SfuClient NACK-related stats instead:
+            const auto stats = group.clients[id]->getCumulativeRtxStats();
+            auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            cumulativeStats += stats;
+
+            // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
+            // have been ignored. So we might expect small number of videoCounters.lostPackets.
+            if (videoCounters.lostPackets != 0)
             {
                 // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
                 // video streams only. So let's check SfuClient NACK-related stats instead:
@@ -1794,17 +1806,77 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                     ASSERT_TRUE(stats.receiver.packetsMissing - stats.receiver.packetsRecovered <
                         stats.sender.packetsSent * PACKET_LOSS_RATE / 2);
                 }
-
-                // Expect, "as sender" we received several NACK request from SFU, and we served them all.
-                EXPECT_NE(stats.sender.nacksReceived, 0);
-                EXPECT_NE(stats.sender.retransmissionRequests, 0);
-                EXPECT_NE(stats.sender.retransmissions, 0);
-                EXPECT_GE(stats.sender.retransmissionRequests, stats.sender.retransmissions);
-
-                EXPECT_EQ(stats.receiver.nackRequests, 0); // Expected as it's is not implemented yet.
-                EXPECT_NE(stats.receiver.packetsMissing, 0);
-                EXPECT_NE(stats.receiver.packetsRecovered, 0);
             }
         }
+
+        // Expect, "as sender" we received several NACK request from SFU, and we served them all.
+        EXPECT_NE(cumulativeStats.sender.nacksReceived, 0);
+        EXPECT_NE(cumulativeStats.sender.retransmissionRequests, 0);
+        EXPECT_NE(cumulativeStats.sender.retransmissions, 0);
+        EXPECT_GE(cumulativeStats.sender.retransmissionRequests, cumulativeStats.sender.retransmissions);
+
+        EXPECT_EQ(cumulativeStats.receiver.nackRequests, 0); // Expected as it's is not implemented yet.
+        EXPECT_NE(cumulativeStats.receiver.packetsMissing, 0);
+        EXPECT_NE(cumulativeStats.receiver.packetsRecovered, 0);
+    });
+}
+
+TEST_F(IntegrationTest, endpointAutoRemove)
+{
+    runTestInThread(_numWorkerThreads + 4, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        initBridge(_config);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        const std::string baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            3);
+
+        Conference conf;
+        group.startConference(conf, baseUrl + "/colibri");
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true, 0);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
+        statsRequest.awaitResponse(1500 * utils::Time::ms);
+        EXPECT_TRUE(statsRequest.isSuccess());
+        auto endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        EXPECT_EQ(3, endpoints.size());
+
+        group.clients[2]->_transport->stop();
+        group.run(utils::Time::sec * 11);
+        endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        EXPECT_EQ(2, endpoints.size());
+
+        group.clients[1]->_transport->stop();
+        group.run(utils::Time::sec * 11);
+        endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        EXPECT_EQ(1, endpoints.size());
+
+        group.clients[0]->_transport->stop();
+        group.run(utils::Time::sec * 11);
+        endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        EXPECT_EQ(1, endpoints.size());
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
     });
 }
