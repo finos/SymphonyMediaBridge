@@ -52,10 +52,9 @@ IntegrationTest::IntegrationTest()
 // Fake internet thread, JobManager timer thread, worker threads.
 void IntegrationTest::SetUp()
 {
-    if (NOPERF_TEST)
-    {
-        GTEST_SKIP();
-    }
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
 #endif
@@ -89,10 +88,9 @@ void IntegrationTest::SetUp()
 
 void IntegrationTest::TearDown()
 {
-    if (NOPERF_TEST)
-    {
-        GTEST_SKIP();
-    }
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
 #endif

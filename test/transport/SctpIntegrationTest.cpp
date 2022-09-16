@@ -111,7 +111,7 @@ struct ClientPair : public TransportClientPair
 
 TEST_F(SctpIntegrationTest, connectUdp)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     ASSERT_TRUE(_transportFactory1->isGood());

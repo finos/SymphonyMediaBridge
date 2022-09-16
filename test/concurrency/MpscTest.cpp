@@ -186,7 +186,7 @@ const int PRODUCER_COUNT = 5;
 
 TEST(Mpsc, DISABLED_mutexqueue)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -205,7 +205,7 @@ TEST(Mpsc, DISABLED_mutexqueue)
 
 TEST(Mpsc, freequeue)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -223,7 +223,7 @@ TEST(Mpsc, freequeue)
 
 TEST(Mpsc, freequeueSmall)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -241,7 +241,7 @@ TEST(Mpsc, freequeueSmall)
 
 TEST(Mpmc, DISABLED_mutexqueue)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -260,7 +260,7 @@ TEST(Mpmc, DISABLED_mutexqueue)
 
 TEST(Mpmc, freequeue)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -277,7 +277,7 @@ TEST(Mpmc, freequeue)
 
 TEST(Mpmc, freequeueSmall)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];

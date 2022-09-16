@@ -14,8 +14,11 @@ namespace
 {
 
 const size_t numThreads = 32;
-const size_t iterations = NOPERF_TEST ? 500 : 10000;
-
+#ifdef NOPERF_TEST
+const size_t iterations = 500;
+#else
+const size_t iterations = 10000;
+#endif
 struct Data
 {
     char data[4096];
@@ -127,7 +130,7 @@ void performanceTest(TestAllocator* allocator, int id, std::atomic_bool* running
 
 TEST_F(PoolAllocatorTest, performance)
 {
-#if NOPERF_TEST
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     const int THREADS = 8;

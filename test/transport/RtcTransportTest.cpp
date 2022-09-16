@@ -318,7 +318,7 @@ bool areAllConnected(std::vector<std::unique_ptr<ClientPair>>& testPairs)
 
 TEST_P(RtcTransportTest, DISABLED_packetLoad)
 {
-#if (NOPERF_TEST)
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     const int CLIENT_COUNT = std::get<0>(GetParam());

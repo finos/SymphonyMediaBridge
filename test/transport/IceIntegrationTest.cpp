@@ -330,7 +330,7 @@ TEST_F(IceIntegrationTest, dtlsRace)
 
 TEST_F(IceIntegrationTest, portReuse)
 {
-#if (NOPERF_TEST)
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     // Connect two sessions from 10010 to 10030. Since client ports have to be unique,
