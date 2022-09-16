@@ -1834,11 +1834,14 @@ void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, cons
     transport::RtcTransport* transport = nullptr;
 
     auto bundleTransportItr = _bundleTransports.find(endpointId);
+
+    bool audioStreamDeleted = _audioStreams.find(endpointId) == _audioStreams.end();
+    bool videoStreamDeleted = _videoStreams.find(endpointId) == _videoStreams.end();
+    bool dataStreamDeleted = _dataStreams.find(endpointId) == _dataStreams.end();
+
     if (bundleTransportItr != _bundleTransports.end())
     {
-        if (_audioStreams.find(endpointId) == _audioStreams.end() &&
-            _videoStreams.find(endpointId) == _videoStreams.end() &&
-            _dataStreams.find(endpointId) == _dataStreams.end())
+        if (audioStreamDeleted && videoStreamDeleted && dataStreamDeleted)
         {
             logger::info("EngineStream removed, endpointId %s. Has bundle transport %s but no other related streams.",
                 _loggableId.c_str(),

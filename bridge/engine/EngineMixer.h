@@ -97,14 +97,14 @@ public:
 
     // -- methods executed on engine thread
     void addAudioStream(EngineAudioStream* engineAudioStream);
-    void removeAudioStream(EngineAudioStream* engineAudioStream);
+    void removeStream(EngineAudioStream* engineAudioStream);
     void addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
     void addVideoStream(EngineVideoStream* engineVideoStream);
-    void removeVideoStream(EngineVideoStream* engineVideoStream);
+    void removeStream(EngineVideoStream* engineVideoStream);
     void addRecordingStream(EngineRecordingStream* engineRecordingStream);
     void removeRecordingStream(EngineRecordingStream* engineRecordingStream);
     void addDataSteam(EngineDataStream* engineDataStream);
-    void removeDataStream(EngineDataStream* engineDataStream);
+    void removeStream(EngineDataStream* engineDataStream);
     void startTransport(transport::RtcTransport* transport);
     void startRecordingTransport(transport::RecordingTransport* transport);
     void reconfigureAudioStream(const transport::RtcTransport* transport, const uint32_t remoteSsrc);

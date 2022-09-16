@@ -298,7 +298,7 @@ void Engine::removeAudioStream(EngineCommand::Command& nextCommand)
         nextCommand.command.removeAudioStream.engineStream->transport.getLoggableId().c_str());
 
     auto mixer = nextCommand.command.removeAudioStream.mixer;
-    mixer->removeAudioStream(nextCommand.command.removeAudioStream.engineStream);
+    mixer->removeStream(nextCommand.command.removeAudioStream.engineStream);
 }
 
 void Engine::addAudioBuffer(EngineCommand::Command& nextCommand)
@@ -337,7 +337,7 @@ void Engine::removeVideoStream(EngineCommand::Command& nextCommand)
         nextCommand.command.removeVideoStream.engineStream->transport.getLoggableId().c_str());
 
     auto mixer = nextCommand.command.removeVideoStream.mixer;
-    mixer->removeVideoStream(nextCommand.command.removeVideoStream.engineStream);
+    mixer->removeStream(nextCommand.command.removeVideoStream.engineStream);
 }
 
 void Engine::addRecordingStream(EngineCommand::Command& command)
@@ -414,7 +414,7 @@ void Engine::removeDataStream(EngineCommand::Command& nextCommand)
         nextCommand.command.removeDataStream.engineStream->transport.getLoggableId().c_str());
 
     auto mixer = nextCommand.command.removeDataStream.mixer;
-    mixer->removeDataStream(nextCommand.command.removeDataStream.engineStream);
+    mixer->removeStream(nextCommand.command.removeDataStream.engineStream);
 
     EngineMessage::Message message = {EngineMessage::Type::DataStreamRemoved};
     message.command.dataStreamRemoved.mixer = nextCommand.command.removeDataStream.mixer;

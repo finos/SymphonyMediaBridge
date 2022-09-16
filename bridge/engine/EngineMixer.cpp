@@ -323,7 +323,7 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
     sendAudioStreamToRecording(*engineAudioStream, true);
 }
 
-void EngineMixer::removeAudioStream(EngineAudioStream* engineAudioStream)
+void EngineMixer::removeStream(EngineAudioStream* engineAudioStream)
 {
     const auto endpointIdHash = engineAudioStream->endpointIdHash;
 
@@ -425,7 +425,7 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     sendVideoStreamToRecording(*engineVideoStream, true);
 }
 
-void EngineMixer::removeVideoStream(EngineVideoStream* engineVideoStream)
+void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
 {
     engineVideoStream->transport.getJobQueue().getJobManager().abortTimedJob(engineVideoStream->transport.getId(),
         engineVideoStream->localSsrc);
@@ -575,7 +575,7 @@ void EngineMixer::addDataSteam(EngineDataStream* engineDataStream)
     _engineDataStreams.emplace(endpointIdHash, engineDataStream);
 }
 
-void EngineMixer::removeDataStream(EngineDataStream* engineDataStream)
+void EngineMixer::removeStream(EngineDataStream* engineDataStream)
 {
     const auto endpointIdHash = engineDataStream->endpointIdHash;
     logger::debug("Remove engineDataStream, transport %s, endpointIdHash %lu",
@@ -584,6 +584,13 @@ void EngineMixer::removeDataStream(EngineDataStream* engineDataStream)
         endpointIdHash);
 
     _engineDataStreams.erase(endpointIdHash);
+
+    EngineMessage::Message message(EngineMessage::Type::DataStreamRemoved);
+    message.command.dataStreamRemoved.mixer = this;
+    message.command.dataStreamRemoved.engineStream = engineDataStream;
+    engineDataStream->transport.getJobQueue().addJob<SendEngineMessageJob>(engineDataStream->transport,
+        _messageListener,
+        std::move(message));
 }
 
 void EngineMixer::startTransport(transport::RtcTransport* transport)
@@ -3840,7 +3847,7 @@ void EngineMixer::checkIfRateControlIsNeeded(const uint64_t timestamp)
 
 template <typename TStream>
 void removeIdleStreams(concurrency::MpmcHashmap32<size_t, TStream*>& streams,
-    std::function<void(TStream*)> removeMethod,
+    EngineMixer* mixer,
     const uint64_t timestamp)
 {
     for (const auto& it : streams)
@@ -3864,15 +3871,10 @@ void removeIdleStreams(concurrency::MpmcHashmap32<size_t, TStream*>& streams,
                 stream->endpointIdHash,
                 lastReceivedTimestamp,
                 timestamp);
-            removeMethod(stream);
+            mixer->removeStream(stream);
         }
     }
 }
-
-#define REMOVE_IDLE_STREAMS(type)                                                                                      \
-    ::bridge::removeIdleStreams<Engine##type##Stream>(_engine##type##Streams,                                          \
-        std::bind(&EngineMixer::remove##type##Stream, this, std::placeholders::_1),                                    \
-        timestamp);
 
 void EngineMixer::removeIdleStreams(const uint64_t timestamp)
 {
@@ -3882,12 +3884,10 @@ void EngineMixer::removeIdleStreams(const uint64_t timestamp)
     }
     _lastIdleTransportCheck = timestamp;
 
-    REMOVE_IDLE_STREAMS(Video);
-    REMOVE_IDLE_STREAMS(Audio);
-    REMOVE_IDLE_STREAMS(Data);
+    ::bridge::removeIdleStreams<EngineVideoStream>(_engineVideoStreams, this, timestamp);
+    ::bridge::removeIdleStreams<EngineAudioStream>(_engineAudioStreams, this, timestamp);
+    ::bridge::removeIdleStreams<EngineDataStream>(_engineDataStreams, this, timestamp);
 }
-
-#undef REMOVE_IDLE_STREAMS
 
 void EngineMixer::addBarbell(EngineBarbell* barbell)
 {
