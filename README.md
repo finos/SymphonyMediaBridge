@@ -64,12 +64,11 @@ The Symphony Media Bridge is a cmake based project that can be built and run for
 
 #### 2. Set Clang as compiler
 
-``` export CC=clang && export CXX=clang++```
+```export CC=clang && export CXX=clang++```
 
 #### 3. Generate the Makefile
 
 ```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .```
-
 
 ### Building for MacOSX
 

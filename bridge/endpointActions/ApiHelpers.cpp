@@ -145,6 +145,12 @@ std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> g
     const api::EndpointDescription::Transport& transport)
 {
     const auto& ice = transport._ice.get();
+    return getIceCandidatesAndCredentials(ice);
+}
+
+std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> getIceCandidatesAndCredentials(
+    const api::EndpointDescription::Ice& ice)
+{
     std::vector<ice::IceCandidate> candidates;
 
     for (const auto& candidate : ice._candidates)

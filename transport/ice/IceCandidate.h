@@ -67,6 +67,11 @@ public:
     const char* getFoundation() const { return _foundation; }
     void setFoundation(const char* f) { std::strncpy(_foundation, f, MAX_FOUNDATION); }
 
+    static uint32_t computeCandidatePriority(IceCandidate::Type type,
+        int localInterfacePreference,
+        IceComponent component,
+        TransportType transportType);
+
     IceComponent component;
     TransportType transportType;
     uint32_t priority;

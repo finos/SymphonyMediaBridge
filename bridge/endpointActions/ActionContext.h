@@ -8,6 +8,7 @@ class MixerManager;
 
 namespace transport
 {
+class ProbeServer;
 class SslDtls;
 } // namespace transport
 
@@ -15,12 +16,14 @@ namespace bridge
 {
 struct ActionContext
 {
-    ActionContext(bridge::MixerManager& mixerManager, transport::SslDtls& sslDtls)
+    ActionContext(bridge::MixerManager& mixerManager, transport::SslDtls& sslDtls, transport::ProbeServer& probeServer)
         : mixerManager(mixerManager),
-          sslDtls(sslDtls)
+          sslDtls(sslDtls),
+          probeServer(probeServer)
     {
     }
     bridge::MixerManager& mixerManager;
     transport::SslDtls& sslDtls;
+    transport::ProbeServer& probeServer;
 };
 } // namespace bridge

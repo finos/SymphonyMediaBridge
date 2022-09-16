@@ -123,7 +123,6 @@ IceCandidate& IceCandidate::operator=(const IceCandidate& b)
     return *this;
 }
 
-
 const std::string& toString(IceCandidate::Type type)
 {
     switch (type)
@@ -154,6 +153,30 @@ const std::string& toString(TransportType type)
     }
 
     return UNKNOWN;
+}
+
+uint32_t IceCandidate::computeCandidatePriority(IceCandidate::Type type,
+    int localInterfacePreference,
+    IceComponent component,
+    TransportType transportType)
+{
+    int typePreference = 0;
+    switch (type)
+    {
+    case IceCandidate::Type::HOST:
+        typePreference = 126;
+        break;
+    case IceCandidate::Type::PRFLX:
+        typePreference = 110;
+        break;
+    case IceCandidate::Type::SRFLX:
+        typePreference = 100;
+        break;
+    case IceCandidate::Type::RELAY:
+        typePreference = 0;
+    }
+    return ((8 - int(transportType)) << 24) + (typePreference << 16) + (localInterfacePreference << 8) +
+        (256 - static_cast<int>(component));
 }
 
 } // namespace ice

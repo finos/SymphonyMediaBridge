@@ -5,33 +5,9 @@
 #include "utils/Time.h"
 namespace ice
 {
-uint32_t computeCandidatePriority(IceCandidate::Type type,
-    int localInterfacePreference,
-    IceComponent component,
-    TransportType transportType)
-{
-    int typePreference = 0;
-    switch (type)
-    {
-    case IceCandidate::Type::HOST:
-        typePreference = 126;
-        break;
-    case IceCandidate::Type::PRFLX:
-        typePreference = 110;
-        break;
-    case IceCandidate::Type::SRFLX:
-        typePreference = 100;
-        break;
-    case IceCandidate::Type::RELAY:
-        typePreference = 0;
-    }
-    return ((8 - int(transportType)) << 24) + (typePreference << 16) + (localInterfacePreference << 8) +
-        (256 - static_cast<int>(component));
-}
-
 uint32_t computeCandidatePriority(IceCandidate candidate, int localInterfacePreference)
 {
-    return computeCandidatePriority(candidate.type,
+    return ice::IceCandidate::computeCandidatePriority(candidate.type,
         localInterfacePreference,
         candidate.component,
         candidate.transportType);
@@ -54,8 +30,8 @@ IceSession::IceSession(size_t sessionId,
     char ufrag[14 + 1];
     char pwd[24 + 1]; // length selected to make attribute *4 length
 
-    generateCredentialString(ufrag, sizeof(ufrag) - 1);
-    generateCredentialString(pwd, sizeof(pwd) - 1);
+    generateCredentialString(_idGenerator, ufrag, sizeof(ufrag) - 1);
+    generateCredentialString(_idGenerator, pwd, sizeof(pwd) - 1);
     _credentials.local = std::make_pair<std::string, std::string>(ufrag, pwd);
 }
 
@@ -77,7 +53,10 @@ void IceSession::attachLocalEndpoint(IceEndpoint* endpoint)
     {
         _localCandidates.emplace_back(IceCandidate(_component,
             endpoint->getTransportType(),
-            computeCandidatePriority(IceCandidate::Type::HOST, preference, _component, endpoint->getTransportType()),
+            ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::HOST,
+                preference,
+                _component,
+                endpoint->getTransportType()),
             address,
             address,
             IceCandidate::Type::HOST));
@@ -241,7 +220,7 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
             endpoint,
             IceCandidate(IceComponent::RTP,
                 TransportType::TCP,
-                computeCandidatePriority(IceCandidate::Type::HOST,
+                ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::HOST,
                     endpoint.preference,
                     IceComponent::RTP,
                     TransportType::TCP),
@@ -260,10 +239,11 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
     iceProbe.header.transactionId.set(_idGenerator.next());
     iceProbe.header.setMethod(StunHeader::BindingRequest);
     iceProbe.add(StunGenericAttribute(StunAttribute::SOFTWARE, _config.software));
-    iceProbe.add(StunPriority(static_cast<uint32_t>(computeCandidatePriority(IceCandidate::Type::PRFLX,
-        endpoint.preference,
-        _component,
-        remoteCandidate.transportType))));
+    iceProbe.add(
+        StunPriority(static_cast<uint32_t>(ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::PRFLX,
+            endpoint.preference,
+            _component,
+            remoteCandidate.transportType))));
 
     logger::debug("added candidate pair %s-%s",
         _logId.c_str(),
@@ -294,7 +274,7 @@ void IceSession::addLocalTcpCandidate(IceCandidate::Type type,
 {
     IceCandidate candidate(_component,
         TransportType::TCP,
-        computeCandidatePriority(type, 128 - interfaceIndex, _component, TransportType::TCP),
+        ice::IceCandidate::computeCandidatePriority(type, 128 - interfaceIndex, _component, TransportType::TCP),
         address,
         baseAddress,
         type,
@@ -311,7 +291,7 @@ void IceSession::addLocalCandidate(const transport::SocketAddress& publicAddress
         {
             addLocalCandidate(IceCandidate(_component,
                 endpoint->getTransportType(),
-                computeCandidatePriority(IceCandidate::Type::SRFLX,
+                ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::SRFLX,
                     endpointInfo.preference,
                     _component,
                     endpoint->getTransportType()),
@@ -619,7 +599,7 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
         {
             addLocalCandidate(IceCandidate(_component,
                 endpoint->getTransportType(),
-                computeCandidatePriority(IceCandidate::Type::SRFLX,
+                ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::SRFLX,
                     candidatePair->localEndpoint.preference,
                     _component,
                     endpoint->getTransportType()),
@@ -631,10 +611,11 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
         {
             candidatePair->localCandidate.address = mappedAddress;
             candidatePair->localCandidate.type = IceCandidate::Type::PRFLX;
-            candidatePair->localCandidate.priority = computeCandidatePriority(IceCandidate::Type::PRFLX,
-                candidatePair->localEndpoint.preference,
-                _component,
-                endpoint->getTransportType());
+            candidatePair->localCandidate.priority =
+                ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::PRFLX,
+                    candidatePair->localEndpoint.preference,
+                    _component,
+                    endpoint->getTransportType());
             addLocalCandidate(candidatePair->localCandidate);
         }
     }
@@ -1013,7 +994,7 @@ void IceSession::setRemoteCredentials(const std::pair<std::string, std::string>&
 };
 
 // targetBuffer must be length + 1 for null termination
-void IceSession::generateCredentialString(char* targetBuffer, int length)
+void IceSession::generateCredentialString(StunTransactionIdGenerator& idGenerator, char* targetBuffer, int length)
 {
     const char* approvedLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                                   "abcdefghijklmnopqrstuvwxyz"
@@ -1025,7 +1006,7 @@ void IceSession::generateCredentialString(char* targetBuffer, int length)
     {
         if (i % 10 == 0)
         {
-            id = _idGenerator.next();
+            id = idGenerator.next();
         }
         else
         {
@@ -1150,8 +1131,8 @@ void IceSession::CandidatePair::send(const uint64_t now)
     transaction.id = stunMessage.header.transactionId;
     stunMessage.add(
         StunGenericAttribute(StunAttribute::USERNAME, _credentials.remote.first + ":" + _credentials.local.first));
-    stunMessage.add(StunAttribute64(_credentials.role == IceRole::CONTROLLING ? StunAttribute::ICE_CONTROLLING
-                                                                              : StunAttribute::ICE_CONTROLLED,
+    stunMessage.add(StunAttribute64(
+        _credentials.role == IceRole::CONTROLLING ? StunAttribute::ICE_CONTROLLING : StunAttribute::ICE_CONTROLLED,
         _credentials.tieBreaker));
 
     if (!gatheringProbe)

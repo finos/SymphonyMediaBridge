@@ -45,4 +45,8 @@ httpd::Response processBarbellAction(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
     const ::utils::StringTokenizer::Token&);
+httpd::Response getProbingInfo(ActionContext*,
+    RequestLogger&,
+    const httpd::Request&,
+    const ::utils::StringTokenizer::Token&);
 } // namespace bridge

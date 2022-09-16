@@ -1,4 +1,5 @@
 #include "FakeNetwork.h"
+#include "concurrency/ThreadUtils.h"
 #include "logger/Logger.h"
 #include "utils/Time.h"
 #include <algorithm>
@@ -225,6 +226,7 @@ std::shared_ptr<Internet> InternetRunner::get()
 
 void InternetRunner::internetThreadRun()
 {
+    concurrency::setThreadName("Internet");
     while (_command != quit)
     {
         if (_command == State::running)
