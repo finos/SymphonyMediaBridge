@@ -94,7 +94,13 @@ private:
     {
     public:
         explicit RunJob(JobQueue& owner) : _owner(owner) {}
-        ~RunJob() { freeJob(); }
+        ~RunJob()
+        {
+            if (_actualWork)
+            {
+                freeJob();
+            }
+        }
 
         bool runStep() override
         {
@@ -123,9 +129,11 @@ private:
                     }
                     else
                     {
-                        // must be in ~JobQueue. Do not touch jobqueue.
+                        // must be in ~JobQueue. Do not touch jobqueue after sem release
                         assert(_owner._jobQueue.empty());
-                        freeJob();
+                        _owner._jobPool.free(_actualWork);
+                        _actualWork->~MultiStepJob();
+                        _actualWork = nullptr;
                         return false;
                     }
                 }
@@ -143,12 +151,9 @@ private:
     private:
         void freeJob()
         {
-            if (_actualWork)
-            {
-                _actualWork->~MultiStepJob();
-                _owner._jobPool.free(_actualWork);
-                _actualWork = nullptr;
-            }
+            _actualWork->~MultiStepJob();
+            _owner._jobPool.free(_actualWork);
+            _actualWork = nullptr;
         }
 
         uint32_t _processedCount = 0;

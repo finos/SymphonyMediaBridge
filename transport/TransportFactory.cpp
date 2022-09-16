@@ -52,7 +52,6 @@ public:
         std::shared_ptr<transport::EndpointFactory>& endpointFactory)
         : _deleter(this),
           _jobManager(jobManager),
-          _garbageQueue(jobManager),
           _srtpClientFactory(srtpClientFactory),
           _config(config),
           _sctpConfig(sctpConfig),
@@ -66,7 +65,8 @@ public:
           _pendingTasks(0),
           _sharedRecordingEndpointListIndex(0),
           _good(true),
-          _endpointFactory(endpointFactory)
+          _endpointFactory(endpointFactory),
+          _garbageQueue(jobManager)
     {
 #ifdef __APPLE__
         const size_t receiveBufferSize = 5 * 1024 * 1024;
@@ -174,7 +174,8 @@ public:
         _sharedEndpoints.clear();
         _sharedRecordingEndpoints.clear();
         auto start = utils::Time::getAbsoluteTime();
-        while (_pendingTasks > 0 && utils::Time::diffLE(start, utils::Time::getAbsoluteTime(), utils::Time::sec * 10))
+        while ((_pendingTasks > 0 || _garbageQueue.getCount() > 0) &&
+            utils::Time::diffLE(start, utils::Time::getAbsoluteTime(), utils::Time::sec * 10))
         {
             std::this_thread::yield();
         }
@@ -572,7 +573,6 @@ private:
     }
 
     jobmanager::JobManager& _jobManager;
-    jobmanager::JobQueue _garbageQueue;
     SrtpClientFactory& _srtpClientFactory;
     const config::Config& _config;
     const sctp::SctpConfig& _sctpConfig;
@@ -593,6 +593,7 @@ private:
     bool _good;
     std::shared_ptr<transport::EndpointFactory> _endpointFactory;
     static const char* _name;
+    jobmanager::JobQueue _garbageQueue; // must be last
 };
 
 const char* TransportFactoryImpl::_name = "TransportFactory";
