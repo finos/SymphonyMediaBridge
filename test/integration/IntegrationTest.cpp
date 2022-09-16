@@ -35,6 +35,12 @@
 
 #define USE_FAKENETWORK 1
 
+#if (DEBUG || !(__has_feature(address_sanitizer) || __has_feature(thread_sanitizer) || LCOV_BUILD))
+#define ENABLE_INT_TESTS 1
+#else
+#define ENABLE_INT_TESTS 0
+#endif
+
 IntegrationTest::IntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
       _audioAllocator(memory::packetPoolSize, "IntegrationTestAudio"),
@@ -52,9 +58,9 @@ IntegrationTest::IntegrationTest()
 // Fake internet thread, JobManager timer thread, worker threads.
 void IntegrationTest::SetUp()
 {
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    if (!ENABLE_INT_TESTS)
     {
-        // GTEST_SKIP();
+        GTEST_SKIP();
     }
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
@@ -89,9 +95,9 @@ void IntegrationTest::SetUp()
 
 void IntegrationTest::TearDown()
 {
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
+    if (!ENABLE_INT_TESTS)
     {
-        // GTEST_SKIP();
+        GTEST_SKIP();
     }
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
