@@ -44,7 +44,7 @@ IntegrationTest::IntegrationTest()
       _pacer(10 * utils::Time::ms),
       _instanceCounter(0),
       _numWorkerThreads(getNumWorkerThreads()),
-      _clientsConnectionTimeout((__has_feature(address_sanitizer) || __has_feature(thread_sanitizer)) ? 1500 : 15)
+      _clientsConnectionTimeout(15)
 {
 }
 
@@ -52,10 +52,9 @@ IntegrationTest::IntegrationTest()
 // Fake internet thread, JobManager timer thread, worker threads.
 void IntegrationTest::SetUp()
 {
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-    {
-        // GTEST_SKIP();
-    }
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
 #endif
@@ -89,10 +88,9 @@ void IntegrationTest::SetUp()
 
 void IntegrationTest::TearDown()
 {
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-    {
-        // GTEST_SKIP();
-    }
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
 #endif
@@ -302,11 +300,8 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
 
 #if USE_FAKENETWORK
 
-    static const auto TEST_RUN_TIMEOUT =
-        (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer)) ? 8000 : 80;
-
     // run for 80s or until test runner thread stops the time run
-    _timeSource.runFor(TEST_RUN_TIMEOUT * utils::Time::sec);
+    _timeSource.runFor(80 * utils::Time::sec);
 
     // all threads are asleep. Switch to real time
     logger::info("Switching back to real time-space", "");

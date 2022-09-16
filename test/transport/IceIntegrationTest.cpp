@@ -330,6 +330,9 @@ TEST_F(IceIntegrationTest, dtlsRace)
 
 TEST_F(IceIntegrationTest, portReuse)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     // Connect two sessions from 10010 to 10030. Since client ports have to be unique,
     // the second session should take over and DTLS can succeed in second session
     // Mimics the case where an RTT probe is made and left unconnected,
@@ -371,11 +374,8 @@ TEST_F(IceIntegrationTest, portReuse)
         utils::Time::nanoSleep(10 * utils::Time::ms);
     }
 
-    if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-    {
-        EXPECT_TRUE(clients2->isConnected());
-        EXPECT_FALSE(clients1->isConnected());
-    }
+    EXPECT_TRUE(clients2->isConnected());
+    EXPECT_FALSE(clients1->isConnected());
 
     clients1->stop();
     clients2->stop();

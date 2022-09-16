@@ -186,7 +186,7 @@ const int PRODUCER_COUNT = 5;
 
 TEST(Mpsc, DISABLED_mutexqueue)
 {
-#if LCOV_BUILD
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -197,18 +197,15 @@ TEST(Mpsc, DISABLED_mutexqueue)
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
         TransmissionReport& report = reports[i];
-        if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-        {
-            EXPECT_GT(report.received, 300000);
-            EXPECT_EQ(report.disordered, 0);
-            EXPECT_EQ(report.sent, report.received);
-        }
+        EXPECT_GT(report.received, 300000);
+        EXPECT_EQ(report.disordered, 0);
+        EXPECT_EQ(report.sent, report.received);
     }
 }
 
 TEST(Mpsc, freequeue)
 {
-#if LCOV_BUILD
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -218,18 +215,15 @@ TEST(Mpsc, freequeue)
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
         TransmissionReport& report = reports[i];
-        if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-        {
-            EXPECT_GT(report.received, 400000);
-            EXPECT_EQ(report.disordered, 0);
-            EXPECT_EQ(report.sent, report.received);
-        }
+        EXPECT_GT(report.received, 400000);
+        EXPECT_EQ(report.disordered, 0);
+        EXPECT_EQ(report.sent, report.received);
     }
 }
 
 TEST(Mpsc, freequeueSmall)
 {
-#if LCOV_BUILD
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -239,18 +233,15 @@ TEST(Mpsc, freequeueSmall)
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
         TransmissionReport& report = reports[i];
-        if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-        {
-            EXPECT_GT(report.received, 400000);
-            EXPECT_EQ(report.disordered, 0);
-            EXPECT_EQ(report.sent, report.received);
-        }
+        EXPECT_GT(report.received, 400000);
+        EXPECT_EQ(report.disordered, 0);
+        EXPECT_EQ(report.sent, report.received);
     }
 }
 
 TEST(Mpmc, DISABLED_mutexqueue)
 {
-#if LCOV_BUILD
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -261,18 +252,15 @@ TEST(Mpmc, DISABLED_mutexqueue)
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
         TransmissionReport& report = reports[i];
-        if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-        {
-            EXPECT_GT(report.received, 300000);
-            EXPECT_LT(report.fullHits, 130000);
-            EXPECT_EQ(report.sent, report.received);
-        }
+        EXPECT_GT(report.received, 300000);
+        EXPECT_LT(report.fullHits, 130000);
+        EXPECT_EQ(report.sent, report.received);
     }
 }
 
 TEST(Mpmc, freequeue)
 {
-#if LCOV_BUILD
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -282,17 +270,14 @@ TEST(Mpmc, freequeue)
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
         TransmissionReport& report = reports[i];
-        if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-        {
-            EXPECT_GT(report.received, 400000);
-            EXPECT_EQ(report.sent, report.received);
-        }
+        EXPECT_GT(report.received, 400000);
+        EXPECT_EQ(report.sent, report.received);
     }
 }
 
 TEST(Mpmc, freequeueSmall)
 {
-#if LCOV_BUILD
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     TransmissionReport reports[PRODUCER_COUNT];
@@ -302,11 +287,8 @@ TEST(Mpmc, freequeueSmall)
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
         TransmissionReport& report = reports[i];
-        if (!__has_feature(thread_sanitizer) && !__has_feature(address_sanitizer))
-        {
-            EXPECT_GT(report.received, 400000);
-            EXPECT_EQ(report.sent, report.received);
-        }
+        EXPECT_GT(report.received, 400000);
+        EXPECT_EQ(report.sent, report.received);
     }
 }
 

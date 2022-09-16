@@ -14,8 +14,11 @@ namespace
 {
 
 const size_t numThreads = 32;
-const size_t iterations = (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer)) ? 500 : 10000;
-
+#ifdef NOPERF_TEST
+const size_t iterations = 500;
+#else
+const size_t iterations = 10000;
+#endif
 struct Data
 {
     char data[4096];
@@ -127,6 +130,9 @@ void performanceTest(TestAllocator* allocator, int id, std::atomic_bool* running
 
 TEST_F(PoolAllocatorTest, performance)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     const int THREADS = 8;
     TestAllocator allocator1(4096 * 40, "PoolAllocatorTest");
     std::vector<std::unique_ptr<std::thread>> threads;
