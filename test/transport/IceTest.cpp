@@ -921,6 +921,44 @@ TEST(IceTest, timerNoCandidates)
     EXPECT_TRUE(rc);
 }
 
+// ice must work also if one endpoint cannot acquire public candidates using stun
+TEST(IceTest, timerNoPublicCandidates)
+{
+    fakenet::Internet internet;
+
+    fakenet::Firewall firewall2(transport::SocketAddress::parse("216.93.24.11", 0), internet);
+
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("216.93.24.38", 2001), internet);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.0.20", 3000), firewall2);
+
+    ice::IceConfig config;
+    IceSessions sessions;
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr));
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(2, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLED, nullptr));
+
+    endpoint1.attach(sessions[0]);
+    endpoint2.attach(sessions[1]);
+
+    uint64_t timeSource = utils::Time::getAbsoluteTime();
+    setRemoteCandidates(*sessions[1], *sessions[0]);
+    // session[0] will not have remote candidates
+    sessions[1]->setRemoteCredentials(sessions[0]->getLocalCredentials());
+    sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
+    sessions[0]->probeRemoteCandidates(ice::IceRole::CONTROLLED, timeSource);
+
+    auto rc = establishIce(internet, sessions, timeSource, utils::Time::sec * 2);
+
+    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource);
+
+    EXPECT_LE(sessions[1]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
+    EXPECT_EQ(sessions[0]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
+
+    rc = establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
+    EXPECT_TRUE(rc);
+}
+
 // client1 behind 2 firewalls. fw2 has private stun server
 // fw1 has two public stun servers
 // client2 directly on internet
