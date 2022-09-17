@@ -36,7 +36,7 @@ private:
 };
 
 /**
- * Job that counts itseft in a counter help by job's owner.
+ * Job that counts itself in a counter help by job's owner.
  * This allows the job owner know if there are in-flight jobs.
  */
 class CountedJob : public Job

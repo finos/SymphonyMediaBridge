@@ -3691,7 +3691,7 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
 bool EngineMixer::needToUpdateMinUplinkEstimate(const uint32_t curEstimate, const uint32_t oldEstimate) const
 {
     // For screen sharing (a.k.a. 'slides') we have a minimum allowed bitrate of 900 kbps,
-    // so it does not worth to react on the fluctuation below ~10% of this value.
+    // so it is not worth to react on the fluctuation below ~10% of this value.
     return abs((int64_t)oldEstimate - (int64_t)curEstimate) > 100;
 }
 

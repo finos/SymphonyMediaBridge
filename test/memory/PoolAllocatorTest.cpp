@@ -26,7 +26,7 @@ struct Data
 
 using TestAllocator = memory::PoolAllocator<sizeof(Data)>;
 
-void threadFunction(TestAllocator* allocator, const uint32_t id)
+void doRandomAllocations(TestAllocator* allocator, const uint32_t id)
 {
     std::default_random_engine generator(id);
     std::uniform_int_distribution<useconds_t> distribution(0, 10);
@@ -84,14 +84,14 @@ TEST_F(PoolAllocatorTest, singleThreaded)
 
 TEST_F(PoolAllocatorTest, multiThreaded)
 {
-#ifdef LCOV_BUILD
+#ifdef NOPERF_TEST
     GTEST_SKIP();
 #endif
     auto allocator = std::make_unique<TestAllocator>(1024, "PoolAllocatorTest");
     std::vector<std::unique_ptr<std::thread>> threads;
     for (size_t i = 0; i < numThreads; ++i)
     {
-        threads.emplace_back(std::make_unique<std::thread>(threadFunction, allocator.get(), i));
+        threads.emplace_back(std::make_unique<std::thread>(doRandomAllocations, allocator.get(), i));
     }
 
     for (size_t i = 0; i < numThreads; ++i)
