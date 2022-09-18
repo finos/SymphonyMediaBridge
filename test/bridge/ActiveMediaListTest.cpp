@@ -18,17 +18,6 @@ namespace
 static const uint32_t defaultLastN = 2;
 static const uint32_t audioLastN = 3;
 
-void threadFunction(jobmanager::JobManager* jobManager)
-{
-    auto job = jobManager->wait();
-    while (job)
-    {
-        job->run();
-        jobManager->freeJob(job);
-        job = jobManager->wait();
-    }
-}
-
 bool endpointsContainsId(const nlohmann::json& messageJson, const char* id)
 {
     const auto& endpoints = messageJson["endpoints"];
@@ -123,10 +112,10 @@ private:
         _engineAudioStreams.clear();
         _engineVideoStreams.clear();
 
-        auto thread = std::make_unique<std::thread>(threadFunction, _jobManager.get());
+        auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager);
         _jobQueue.reset();
         _jobManager->stop();
-        thread->join();
+        thread->stop();
         _jobManager.reset();
     }
 

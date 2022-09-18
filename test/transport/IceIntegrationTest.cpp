@@ -267,6 +267,9 @@ TEST_F(IceIntegrationTest, dosAttackTcpConnect)
 
 TEST_F(IceIntegrationTest, dtlsRace)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     ASSERT_TRUE(_transportFactory1->isGood());
     ASSERT_TRUE(_transportFactory2->isGood());
 

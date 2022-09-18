@@ -3,12 +3,14 @@
 #include "concurrency/Semaphore.h"
 #include "jobmanager/Job.h"
 #include "jobmanager/JobManager.h"
+#include "jobmanager/WorkerThread.h"
 #include "logger/Logger.h"
 #include "memory/PoolAllocator.h"
 #include "utils/Trackers.h"
 #include <list>
 #include <memory>
 #include <unistd.h>
+
 namespace jobmanager
 {
 
@@ -42,7 +44,7 @@ public:
             {
                 startProcessing();
             }
-            job->~Job();
+            job->~MultiStepJob();
             _jobPool.free(job);
             return false;
         }
@@ -59,7 +61,19 @@ public:
     {
         concurrency::Semaphore sema;
         addJob<StopJob>(sema, _running);
-        sema.wait();
+
+        if (WorkerThread::isWorkerThread())
+        {
+            for (bool running = true; running;)
+            {
+                const bool jobProcessed = WorkerThread::yield();
+                running = !sema.wait(jobProcessed ? 0 : 1);
+            }
+        }
+        else
+        {
+            sema.wait();
+        }
     }
 
     JobManager& getJobManager() { return _jobManager; }
@@ -68,7 +82,7 @@ public:
 private:
     void startProcessing()
     {
-        if (!_jobManager.addJob<RunJob>(this))
+        if (!_jobManager.addJob<RunJob>(*this))
         {
             _noNeedToRecover.clear();
         }
@@ -76,52 +90,93 @@ private:
 
     inline bool needToRecover() { return !_noNeedToRecover.test_and_set(); }
 
-    struct RunJob : public jobmanager::Job
+    class RunJob : public jobmanager::MultiStepJob
     {
-        explicit RunJob(JobQueue* owner) : _owner(owner) {}
+    public:
+        explicit RunJob(JobQueue& owner) : _owner(owner) {}
+        ~RunJob()
+        {
+            if (_actualWork)
+            {
+                freeJob();
+            }
+        }
 
-        void run() override { _owner->run(); }
+        bool runStep() override
+        {
+            if (_actualWork)
+            {
+                auto runAgain = _actualWork->runStep();
+                if (runAgain)
+                {
+                    return true;
+                }
+                freeJob();
+            }
 
-        JobQueue* _owner;
+            for (; _processedCount < 10 && _owner._jobQueue.pop(_actualWork); ++_processedCount)
+            {
+                auto runAgain = _actualWork->runStep();
+                if (runAgain)
+                {
+                    return true;
+                }
+                else
+                {
+                    if (_owner._running)
+                    {
+                        freeJob();
+                    }
+                    else
+                    {
+                        // must be in ~JobQueue. Do not touch jobqueue after sem release
+                        assert(_owner._jobQueue.empty());
+                        _owner._jobPool.free(_actualWork);
+                        _actualWork->~MultiStepJob();
+                        _actualWork = nullptr;
+                        return false;
+                    }
+                }
+            }
+
+            auto count = _owner._jobCount.fetch_sub(_processedCount);
+            if (count > _processedCount)
+            {
+                _owner.startProcessing();
+            }
+
+            return false;
+        }
+
+    private:
+        void freeJob()
+        {
+            _actualWork->~MultiStepJob();
+            _owner._jobPool.free(_actualWork);
+            _actualWork = nullptr;
+        }
+
+        uint32_t _processedCount = 0;
+        JobQueue& _owner;
+        MultiStepJob* _actualWork = nullptr;
     };
 
-    struct StopJob : public jobmanager::Job
+    friend class RunJob;
+
+    struct StopJob : public jobmanager::MultiStepJob
     {
         explicit StopJob(concurrency::Semaphore& sema, bool& runFlag) : _sema(sema), _running(runFlag) {}
         ~StopJob() { _sema.post(); }
 
-        void run() override { _running = false; }
+        bool runStep() override
+        {
+            _running = false;
+            return false;
+        }
 
         concurrency::Semaphore& _sema;
         bool& _running;
     };
-
-    void run()
-    {
-        uint32_t processedCount = 0;
-        for (Job* job = nullptr; processedCount < 10 && _jobQueue.pop(job); ++processedCount)
-        {
-            job->run();
-            if (_running)
-            {
-                job->~Job();
-                _jobPool.free(job);
-            }
-            else
-            {
-                assert(_jobQueue.empty());
-                _jobPool.free(job);
-                job->~Job(); // semaphore is set and we cannot touch JobQueue anymore
-                return;
-            }
-        }
-
-        auto count = _jobCount.fetch_sub(processedCount);
-        if (count > processedCount)
-        {
-            startProcessing();
-        }
-    }
 
 private:
     static const auto maxJobSize = JobManager::maxJobSize;
@@ -132,7 +187,7 @@ private:
     std::atomic_uint32_t _jobCount;
     bool _running;
 
-    concurrency::MpmcQueue<Job*> _jobQueue;
+    concurrency::MpmcQueue<MultiStepJob*> _jobQueue;
     memory::PoolAllocator<maxJobSize> _jobPool;
 };
 

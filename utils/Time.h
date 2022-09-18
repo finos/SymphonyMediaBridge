@@ -74,22 +74,22 @@ constexpr int64_t diff(const uint64_t a, const uint64_t b)
 
 constexpr bool diffLT(const uint64_t a, const uint64_t b, const uint64_t value)
 {
-    return static_cast<int64_t>(b - a) < static_cast<int64_t>(value);
+    return diff(a, b) < static_cast<int64_t>(value);
 }
 
 constexpr bool diffLE(const uint64_t a, const uint64_t b, const uint64_t value)
 {
-    return static_cast<int64_t>(b - a) <= static_cast<int64_t>(value);
+    return diff(a, b) <= static_cast<int64_t>(value);
 }
 
 constexpr bool diffGT(const uint64_t a, const uint64_t b, const uint64_t value)
 {
-    return static_cast<int64_t>(b - a) > static_cast<int64_t>(value);
+    return diff(a, b) > static_cast<int64_t>(value);
 }
 
 constexpr bool diffGE(const uint64_t a, const uint64_t b, const uint64_t value)
 {
-    return static_cast<int64_t>(b - a) >= static_cast<int64_t>(value);
+    return diff(a, b) >= static_cast<int64_t>(value);
 }
 } // namespace Time
 

@@ -19,7 +19,7 @@ nlohmann::json::const_iterator getEndpointMessagePayload(const nlohmann::json& m
 bool isUserMediaMap(const utils::SimpleJson&);
 
 bool isMinUplinkBitrate(const utils::SimpleJson&);
-uint32_t getMinUplinkBirate(const utils::SimpleJson&);
+uint32_t getMinUplinkBitrate(const utils::SimpleJson&);
 
 } // namespace DataChannelMessageParser
 

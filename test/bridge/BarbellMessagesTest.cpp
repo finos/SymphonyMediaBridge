@@ -17,7 +17,7 @@ TEST_F(BarbellMessagesTest, parseValidMinUplinkMessage)
     const auto json = utils::SimpleJson::create(message);
 
     ASSERT_TRUE(api::DataChannelMessageParser::isMinUplinkBitrate(json));
-    ASSERT_EQ(api::DataChannelMessageParser::getMinUplinkBirate(json), 123456);
+    ASSERT_EQ(api::DataChannelMessageParser::getMinUplinkBitrate(json), 123456);
 }
 
 TEST_F(BarbellMessagesTest, makeValidMinUplinkMessage)
@@ -27,5 +27,5 @@ TEST_F(BarbellMessagesTest, makeValidMinUplinkMessage)
     const auto json = utils::SimpleJson::create(message.get());
 
     ASSERT_TRUE(api::DataChannelMessageParser::isMinUplinkBitrate(json));
-    ASSERT_EQ(api::DataChannelMessageParser::getMinUplinkBirate(json), 654321);
+    ASSERT_EQ(api::DataChannelMessageParser::getMinUplinkBitrate(json), 654321);
 }

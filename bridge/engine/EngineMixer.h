@@ -348,6 +348,7 @@ private:
 
     uint64_t _lastVideoBandwidthCheck;
     uint64_t _lastVideoPacketProcessed;
+    bool _hasSentTimeout;
     bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
 

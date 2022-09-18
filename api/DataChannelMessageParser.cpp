@@ -86,7 +86,7 @@ bool isMinUplinkBitrate(const utils::SimpleJson& json)
     return json["type"].getString(messageType) && 0 == std::strcmp(messageType, "min-uplink-bitrate");
 }
 
-uint32_t getMinUplinkBirate(const utils::SimpleJson& json)
+uint32_t getMinUplinkBitrate(const utils::SimpleJson& json)
 {
     return json["bitrateKbps"].getInt(100000);
 }

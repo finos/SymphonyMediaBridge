@@ -11,6 +11,24 @@
 namespace jobmanager
 {
 
+/**
+ * JobManager provides means for a pool of worker threads to do collaborative multitasking without overflowing the
+ * system with threads.
+ * @see WorkerThread. There are two ways to handle long running jobs.
+ * 1. Inherit MultiStep job and return true in runStep method to indicate that job is not completed. WorkerThread will
+ * process other jobs and then call runStep again on your MultiStep job.
+ * 2. Call WorkerThread::yield from within your run method. That will allow the worker thread to process other jobs off
+ * the main job queue and then return from yield. Note that this builds call stack.
+ *
+ * Note that a long running job at the front of a jobmanager::JobQueue will still block other jobs on that queue despite
+ * yielding or using MultiStepJob. It is only when the jobs reach JobManager main queue that yielding cause more jobs to
+ * run "simultaneously".
+ *
+ * JobManager facilitates timer jobs. Use addTimedJob to post a job that will be run after a specific timeout.
+ * You have to handle re-triggering yourself. You can abort a specific timer by id, or a group of related timers using a
+ * group id.
+ *
+ */
 class JobManager
 {
 public:
@@ -78,7 +96,7 @@ public:
         return true;
     }
 
-    bool addJobItem(Job* job)
+    bool addJobItem(MultiStepJob* job)
     {
         if (!_jobQueue.push(job))
         {
@@ -89,29 +107,24 @@ public:
         return true;
     }
 
-    void freeJob(Job* job)
+    void freeJob(MultiStepJob* job)
     {
         assert(job);
-        job->~Job();
+        job->~MultiStepJob();
         _jobPool.free(job);
     }
 
-    Job* wait()
+    MultiStepJob* pop()
     {
-        const int maxWait2ms = 15;
-        for (int i = 0; _running.load(std::memory_order::memory_order_relaxed); i = std::min(maxWait2ms, i + 1))
+        MultiStepJob* job;
+        if (_running.load(std::memory_order::memory_order_relaxed) && _jobQueue.pop(job))
         {
-            Job* job;
-            if (_jobQueue.pop(job))
-            {
-                return job;
-            }
-            else
-            {
-                utils::Time::nanoSleep(int64_t(64) << i);
-            }
+            return job;
         }
-        return nullptr;
+        else
+        {
+            return nullptr;
+        }
     }
 
     void stop()
@@ -120,7 +133,7 @@ public:
         _running = false;
     }
 
-    int32_t getCount() const { return _jobQueue.size(); }
+    int32_t getCount() const { return _jobPool.countAllocatedItems(); }
 
     void abortTimedJobs(const uint64_t groupId) { _timers.abortTimers(groupId); }
     void abortTimedJob(const uint64_t groupId, const uint32_t id) { _timers.abortTimer(groupId, id); }
@@ -129,7 +142,7 @@ public:
     static const auto maxJobSize = 14 * 8;
 
 private:
-    concurrency::MpmcQueue<Job*> _jobQueue;
+    concurrency::MpmcQueue<MultiStepJob*> _jobQueue;
     memory::PoolAllocator<maxJobSize> _jobPool;
     std::atomic<bool> _running;
 
