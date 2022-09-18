@@ -12,7 +12,7 @@ class MultiStepJob
 {
 public:
     MultiStepJob() = default;
-    virtual ~MultiStepJob() {}
+    virtual ~MultiStepJob() = default;
 
     // return true if job needs to be run again
     virtual bool runStep() = 0;

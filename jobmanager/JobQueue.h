@@ -44,7 +44,7 @@ public:
             {
                 startProcessing();
             }
-            job->~Job();
+            job->~MultiStepJob();
             _jobPool.free(job);
             return false;
         }
@@ -163,12 +163,16 @@ private:
 
     friend class RunJob;
 
-    struct StopJob : public jobmanager::Job
+    struct StopJob : public jobmanager::MultiStepJob
     {
         explicit StopJob(concurrency::Semaphore& sema, bool& runFlag) : _sema(sema), _running(runFlag) {}
         ~StopJob() { _sema.post(); }
 
-        void run() override { _running = false; }
+        bool runStep() override
+        {
+            _running = false;
+            return false;
+        }
 
         concurrency::Semaphore& _sema;
         bool& _running;

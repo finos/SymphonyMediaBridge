@@ -15,7 +15,7 @@ namespace
 
 const size_t numThreads = 32;
 #ifdef NOPERF_TEST
-const size_t iterations = 500;
+const size_t iterations = 25;
 #else
 const size_t iterations = 10000;
 #endif
@@ -85,7 +85,7 @@ TEST_F(PoolAllocatorTest, singleThreaded)
 TEST_F(PoolAllocatorTest, multiThreaded)
 {
 #ifdef NOPERF_TEST
-    GTEST_SKIP();
+    // GTEST_SKIP();
 #endif
     auto allocator = std::make_unique<TestAllocator>(1024, "PoolAllocatorTest");
     std::vector<std::unique_ptr<std::thread>> threads;

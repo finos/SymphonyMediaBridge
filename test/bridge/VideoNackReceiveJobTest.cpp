@@ -13,20 +13,6 @@ namespace
 
 static const uint32_t outboundSsrc = 12345;
 
-void threadFunction(jobmanager::JobManager* jobManager)
-{
-    auto job = jobManager->pop();
-    while (job)
-    {
-        while (job->runStep())
-        {
-            utils::Time::nanoSleep(100 * utils::Time::us);
-        }
-        jobManager->freeJob(job);
-        job = jobManager->pop();
-    }
-}
-
 } // namespace
 
 class VideoNackReceiveJobTest : public ::testing::Test
@@ -49,10 +35,10 @@ class VideoNackReceiveJobTest : public ::testing::Test
     {
         _ssrcOutboundContext.reset();
 
-        auto thread = std::make_unique<std::thread>(threadFunction, _jobManager.get());
+        auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager);
         _jobQueue.reset();
         _jobManager->stop();
-        thread->join();
+        thread->stop();
         _jobManager.reset();
     }
 
