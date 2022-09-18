@@ -415,12 +415,6 @@ void Engine::removeDataStream(EngineCommand::Command& nextCommand)
 
     auto mixer = nextCommand.command.removeDataStream.mixer;
     mixer->removeStream(nextCommand.command.removeDataStream.engineStream);
-
-    EngineMessage::Message message = {EngineMessage::Type::DataStreamRemoved};
-    message.command.dataStreamRemoved.mixer = nextCommand.command.removeDataStream.mixer;
-    message.command.dataStreamRemoved.engineStream = nextCommand.command.removeDataStream.engineStream;
-
-    _messageListener->onMessage(std::move(message));
 }
 
 void Engine::startTransport(EngineCommand::Command& nextCommand)

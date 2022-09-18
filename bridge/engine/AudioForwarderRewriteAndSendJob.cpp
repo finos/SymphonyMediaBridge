@@ -63,14 +63,16 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    if (!_outboundContext.rewrite.shouldSend(header->ssrc.get(), header->sequenceNumber.get()))
+    if (!_outboundContext.rewrite.shouldSend(header->ssrc.get(), _extendedSequenceNumber))
     {
-        logger::warn("%s dropping packet ssrc %u, seq %u, timestamp %u",
+        logger::warn("%s dropping packet ssrc %u, seq %u, timestamp %u, last sent seq %u, offset %d",
             "AudioForwarderRewriteAndSendJob",
             _transport.getLoggableId().c_str(),
             header->ssrc.get(),
-            header->sequenceNumber.get(),
-            header->timestamp.get());
+            _extendedSequenceNumber,
+            header->timestamp.get(),
+            _outboundContext.rewrite.lastSent.sequenceNumber,
+            _outboundContext.rewrite.offset.sequenceNumber);
         return;
     }
 
