@@ -344,19 +344,9 @@ public:
         }
 
         auto mainSsrc = participantsStreams->primary.getMainSsrcFor(ssrc);
-        auto feedbackSsrc = participantsStreams->primary.getFeedbackSsrcFor(ssrc);
-
-        if (!mainSsrc.isSet() && !feedbackSsrc.isSet() && participantsStreams->secondary.isSet())
+        if (!mainSsrc.isSet() && participantsStreams->secondary.isSet())
         {
             mainSsrc = participantsStreams->secondary.get().getMainSsrcFor(ssrc);
-            feedbackSsrc = participantsStreams->secondary.get().getFeedbackSsrcFor(ssrc);
-        }
-
-        if (!mainSsrc.isSet() && !feedbackSsrc.isSet())
-        {
-            assert(false);
-            DIRECTOR_LOG("isSsrcUsed, %u false, should not happen!", _loggableId.c_str(), ssrc);
-            return false;
         }
 
         if (mainSsrc.isSet())
