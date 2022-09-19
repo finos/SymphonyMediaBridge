@@ -31,9 +31,9 @@ void examine(bridge::SsrcOutboundContext& outboundContext,
     codec::Vp8Header::setTl0PicIdx(payload, picIdx);
 
     uint32_t sequenceNumberAfterRewrite = 0;
-    bridge::Vp8Rewriter::rewrite(outboundContext, packet, outboundSsrc, seqNo, "", sequenceNumberAfterRewrite);
+    bridge::Vp8Rewriter::rewrite(outboundContext, packet, seqNo, "", sequenceNumberAfterRewrite);
 
-    EXPECT_EQ(outboundSsrc, rtpHeader->ssrc.get());
+    EXPECT_EQ(outboundContext.ssrc, rtpHeader->ssrc.get());
     EXPECT_EQ(expectedSeqNo & 0xFFFFu, rtpHeader->sequenceNumber.get());
     EXPECT_EQ(expectedSeqNo, sequenceNumberAfterRewrite);
     EXPECT_EQ(expectedPicId, codec::Vp8Header::getPicId(payload));
@@ -308,7 +308,7 @@ TEST_F(Vp8RewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtx)
 {
     memory::PacketPoolAllocator packetAllocator(512, "test");
     bridge::RtpMap map1(bridge::RtpMap::Format::VP8);
-    bridge::SsrcOutboundContext outboundContext(1, packetAllocator, map1);
+    bridge::SsrcOutboundContext outboundContext(outboundSsrc, packetAllocator, map1);
 
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);

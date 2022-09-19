@@ -1010,9 +1010,15 @@ void EngineMixer::markSsrcsInUse()
     for (auto& it : _ssrcInboundContexts)
     {
         auto inboundContext = it.second;
-        const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(inboundContext->endpointIdHash);
+        if (inboundContext->rtpMap.format == bridge::RtpMap::Format::OPUS)
+        {
+            inboundContext->isSsrcUsed = _activeMediaList->isInActiveTalkerList(inboundContext->endpointIdHash);
+            continue;
+        }
 
+        const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(inboundContext->endpointIdHash);
         const auto previousUse = inboundContext->isSsrcUsed.load();
+
         inboundContext->isSsrcUsed = _engineStreamDirector->isSsrcUsed(inboundContext->ssrc,
             inboundContext->endpointIdHash,
             isSenderInLastNList,
@@ -2457,7 +2463,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
         {
             const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
             if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
-                screenShareSsrcMapping.get().second.ssrc == ssrc)
+                screenShareSsrcMapping.get().second.ssrc == packetInfo.inboundContext()->ssrc)
             {
                 ssrc = screenShareSsrcMapping.get().second.rewriteSsrc;
             }

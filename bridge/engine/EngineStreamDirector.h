@@ -331,15 +331,27 @@ public:
      * @return true if a participant is likely to be interested in the ssrc (do not drop packet) or false if
      * no participant is interested in the ssrc (packet should be dropped).
      */
-    inline bool isSsrcUsed(const uint32_t ssrc,
+    inline bool isSsrcUsed(uint32_t ssrc,
         const size_t senderEndpointIdHash,
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
-        if (_participantStreams.find(senderEndpointIdHash) == _participantStreams.end())
+        auto participantsStreams = _participantStreams.getItem(senderEndpointIdHash);
+        if (!participantsStreams)
         {
             DIRECTOR_LOG("isSsrcUsed, %u false, endpoint removed", _loggableId.c_str(), ssrc);
             return false;
+        }
+
+        auto mainSsrc = participantsStreams->primary.getMainSsrcFor(ssrc);
+        if (!mainSsrc.isSet() && participantsStreams->secondary.isSet())
+        {
+            mainSsrc = participantsStreams->secondary.get().getMainSsrcFor(ssrc);
+        }
+
+        if (mainSsrc.isSet())
+        {
+            ssrc = mainSsrc.get();
         }
 
         const auto quality = getQualityLevel(ssrc);
@@ -369,7 +381,7 @@ public:
 
         if (isUsedForRecordingSlides(ssrc, senderEndpointIdHash, numRecordingStreams))
         {
-            DIRECTOR_LOG("isSsrcUsed isContentSlides %u: result %c", _loggableId.c_str(), ssrc, result ? 't' : 'f');
+            DIRECTOR_LOG("isSsrcUsed isContentSlides %u: result f", _loggableId.c_str(), ssrc);
             return true;
         }
 
