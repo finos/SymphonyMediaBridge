@@ -1,6 +1,5 @@
 package com.symphony.simpleserver;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,17 +17,14 @@ import org.springframework.web.bind.annotation.*;
 public final class ConferenceRequestHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(ConferenceRequestHandler.class);
 
-    private final ObjectMapper objectMapper;
     private final Conferences conferences;
-
 
     @Autowired
     public ConferenceRequestHandler(Conferences conferences) {
         this.conferences = conferences;
-        this.objectMapper = new ObjectMapper();
     }
 
-    @RequestMapping(value = "**/conferences/endpoints", method = RequestMethod.POST, produces =
+    @RequestMapping(value = "/conferences/endpoints", method = RequestMethod.POST, produces =
             MediaType.APPLICATION_JSON_VALUE)
     @CrossOrigin
     public ResponseEntity<String> handleJoin(
@@ -51,7 +47,7 @@ public final class ConferenceRequestHandler {
      * Handle any other requests besides join. Request types and message formats defined
      * by CommandFactory.createCommand().
      */
-    @RequestMapping(value = "**/conferences/endpoints/{endpointId}/actions", method = RequestMethod.POST)
+    @RequestMapping(value = "/conferences/endpoints/{endpointId}/actions", method = RequestMethod.POST)
     @CrossOrigin
     public ResponseEntity<Void> handleRequest(
             @PathVariable("endpointId") String endpointId, @RequestBody String message)
@@ -69,7 +65,7 @@ public final class ConferenceRequestHandler {
         }
     }
 
-    @RequestMapping(value = "**/conferences/endpoints/{endpointId}/poll", method = RequestMethod.GET, produces =
+    @RequestMapping(value = "/conferences/endpoints/{endpointId}/poll", method = RequestMethod.GET, produces =
             MediaType.APPLICATION_JSON_VALUE)
     @CrossOrigin
     public ResponseEntity<String> handlePoll(

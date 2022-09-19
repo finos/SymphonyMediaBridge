@@ -1,10 +1,11 @@
 package com.symphony.simpleserver.httpClient;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.util.EntityUtils;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.io.entity.StringEntity;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -26,7 +27,7 @@ public class HttpClient {
         this.httpClient = httpClient;
     }
 
-    public ResponsePair post(String url, JsonNode data) throws IOException {
+    public ResponsePair post(String url, JsonNode data) throws IOException, ParseException {
         final var request = new HttpPost(url);
         request.addHeader("Content-Type", "application/json");
 
@@ -35,7 +36,7 @@ public class HttpClient {
 
         try {
             try (var httpResponse = httpClient.execute(request)) {
-                final var statusCode = httpResponse.getStatusLine().getStatusCode();
+                final var statusCode = httpResponse.getCode();
                 if (statusCode == 204) {
                     return new ResponsePair(statusCode, null);
                 }
