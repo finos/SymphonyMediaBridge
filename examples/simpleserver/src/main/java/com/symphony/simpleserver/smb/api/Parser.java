@@ -388,7 +388,7 @@ public class Parser {
                             key -> {
                                 final var value = new SmbVideoStream();
                                 value.id = ssrc.mslabel;
-                                value.content = "video";
+                                value.content = "slides".equals(mediaDescription.content)?  "slides" : "video";
                                 value.sources = new ArrayList<>();
                                 return value;
                             });
