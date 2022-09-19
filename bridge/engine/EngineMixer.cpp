@@ -2463,7 +2463,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
         {
             const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
             if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
-                screenShareSsrcMapping.get().second.ssrc == ssrc)
+                screenShareSsrcMapping.get().second.ssrc == packetInfo.inboundContext()->ssrc)
             {
                 ssrc = screenShareSsrcMapping.get().second.rewriteSsrc;
             }
