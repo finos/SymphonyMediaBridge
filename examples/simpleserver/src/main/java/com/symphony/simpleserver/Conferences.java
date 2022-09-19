@@ -13,6 +13,7 @@ import com.symphony.simpleserver.smb.api.EndpointMediaStreams;
 import com.symphony.simpleserver.smb.api.MediaStream;
 import com.symphony.simpleserver.smb.api.Parser;
 import com.symphony.simpleserver.smb.api.SmbEndpointDescription;
+import org.apache.hc.core5.http.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -63,12 +64,13 @@ public class Conferences {
         this.conferenceId = null;
     }
 
+    @SuppressWarnings("unused")
     @PreDestroy
     public void preDestroy() {
         timerCheckerSchedule.cancel(true);
     }
 
-    public synchronized String join() throws IOException, ParserFailedException, InterruptedException {
+    public synchronized String join() throws IOException, ParserFailedException, InterruptedException, ParseException {
         final var endpointId = UUID.randomUUID().toString();
 
         messageQueues.put(endpointId, new LinkedBlockingQueue<>());
@@ -91,7 +93,8 @@ public class Conferences {
     public synchronized boolean message(String endpointId, String messageString) throws
             IOException,
             ParserFailedException,
-            InterruptedException
+            InterruptedException,
+            ParseException
     {
         final var message = objectMapper.readValue(messageString, Message.class);
         LOGGER.info("Message type {} from {}", message.type, endpointId);
@@ -106,7 +109,7 @@ public class Conferences {
     private boolean onAnswer(String endpointId, Message message) throws
             ParserFailedException,
             IOException,
-            InterruptedException
+            InterruptedException, ParseException
     {
         final var endpoint = endpoints.get(endpointId);
         if (endpoint.isConfigured) {
@@ -200,7 +203,7 @@ public class Conferences {
             messageQueues.remove(endpointId);
             try {
                 symphonyMediaBridge.deleteEndpoint(conferenceId, endpointId);
-            } catch (IOException e) {
+            } catch (IOException | ParseException e) {
                 LOGGER.error("Error deleting endpoint ", e);
             }
         }

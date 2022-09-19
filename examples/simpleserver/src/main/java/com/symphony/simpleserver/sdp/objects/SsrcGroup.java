@@ -36,4 +36,26 @@ public class SsrcGroup {
 
         return stringBuilder.toString();
     }
+
+    public boolean isFeedback() {
+        return semantics.equals("FID");
+    }
+
+    public boolean isSimulcast() {
+        return semantics.equals("SIM");
+    }
+
+    public boolean isMainSsrc(Ssrc ssrc) {
+        if (!isFeedback()) {
+            throw new AssertionError();
+        }
+        return ssrcs.size() == 2 && ssrc.ssrc.equals(ssrcs.get(0));
+    }
+
+    public boolean isFeedbackSsrc(Ssrc ssrc) {
+        if (!isFeedback()) {
+            throw new AssertionError();
+        }
+        return ssrcs.size() == 2 && ssrc.ssrc.equals(ssrcs.get(0));
+    }
 }

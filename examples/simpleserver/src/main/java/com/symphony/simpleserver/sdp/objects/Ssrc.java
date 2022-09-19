@@ -15,6 +15,14 @@ public class Ssrc {
         this.content = null;
     }
 
+    public Ssrc(long ssrc) {
+        this.ssrc = Long.toString(ssrc);
+        this.cname = null;
+        this.label = null;
+        this.mslabel = null;
+        this.content = null;
+    }
+
     public Ssrc(Ssrc other) {
         this.ssrc = other.ssrc;
         this.cname = other.cname;

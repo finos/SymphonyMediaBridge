@@ -1,8 +1,7 @@
 package com.symphony.simpleserver.httpClient;
 
-import org.apache.http.impl.client.HttpClientBuilder;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +15,7 @@ public class HttpClientFactory {
     }
 
     public HttpClient createClient() {
-        final HttpClientBuilder httpClientBuilder = HttpClients.custom();
+        final var httpClientBuilder = HttpClients.custom();
         httpClientBuilder.setConnectionManager(connectionManager);
         httpClientBuilder.setConnectionManagerShared(true);
         return new HttpClient(httpClientBuilder.build());

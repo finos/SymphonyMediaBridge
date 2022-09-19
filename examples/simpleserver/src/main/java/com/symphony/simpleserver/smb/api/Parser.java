@@ -7,6 +7,7 @@ import com.symphony.simpleserver.sdp.objects.*;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 @Component
@@ -148,7 +149,9 @@ public class Parser {
         offer.msidSemantic.ids.add(smbAudioSsrc.mslabel);
         mediaDescriptionIndex++;
 
-        final var smbVideoSsrc = new Ssrc(endpointDescription.video.ssrcs.get(0));
+        final var smbVideoStream = endpointDescription.video.streams.get(0);
+        final var smbVideoSsrc = new Ssrc(smbVideoStream.sources.get(0).main);
+
         smbVideoSsrc.label = "smbvideolabel";
         smbVideoSsrc.mslabel = "smbvideomslabel";
         smbVideoSsrc.cname = "smbvideocname";
@@ -347,7 +350,7 @@ public class Parser {
                 final var audio = new SmbAudio();
 
                 audio.ssrcs = new ArrayList<>();
-                mediaDescription.ssrcs.forEach(ssrc -> audio.ssrcs.add(ssrc.ssrc));
+                mediaDescription.ssrcs.forEach(ssrc -> audio.ssrcs.add(Long.parseLong(ssrc.ssrc)));
 
                 audio.payloadType = new SmbPayloadType();
                 final var firstPayloadType = mediaDescription.payloadTypes.get(0);
@@ -377,17 +380,38 @@ public class Parser {
 
             } else if (mediaDescription.type == MediaDescription.Type.VIDEO) {
                 final var video = new SmbVideo();
+                final var streamsMap = new HashMap<String, SmbVideoStream>();
 
-                video.ssrcs = new ArrayList<>();
-                mediaDescription.ssrcs.forEach(ssrc -> video.ssrcs.add(ssrc.ssrc));
-                video.ssrcGroups = new ArrayList<>();
-                mediaDescription.ssrcGroups.forEach(ssrcGroup -> {
-                    final var smbSsrcGroup = new SmbSsrcGroup();
-                    smbSsrcGroup.ssrcs = new ArrayList<>(ssrcGroup.ssrcs);
-                    smbSsrcGroup.semantics = ssrcGroup.semantics;
-                    video.ssrcGroups.add(smbSsrcGroup);
+                mediaDescription.ssrcs.forEach(ssrc -> {
+                    final var smbVideoStream = streamsMap.computeIfAbsent(
+                            ssrc.mslabel,
+                            key -> {
+                                final var value = new SmbVideoStream();
+                                value.id = ssrc.mslabel;
+                                value.content = "slides".equals(mediaDescription.content)?  "slides" : "video";
+                                value.sources = new ArrayList<>();
+                                return value;
+                            });
+
+                    final var feedbackGroup = mediaDescription.ssrcGroups.stream()
+                            .filter(SsrcGroup::isFeedback)
+                            .filter(element -> element.ssrcs.contains(ssrc.ssrc))
+                            .findFirst();
+
+                    if (feedbackGroup.isPresent() && feedbackGroup.get().isMainSsrc(ssrc)) {
+                        final var smbVideoSource = new SmbVideoStream.SmbVideoSource();
+                        smbVideoSource.main = Long.parseLong(feedbackGroup.get().ssrcs.get(0));
+                        smbVideoSource.feedback = Long.parseLong(feedbackGroup.get().ssrcs.get(1));
+                        smbVideoStream.sources.add(smbVideoSource);
+
+                    } else if (feedbackGroup.isEmpty()) {
+                        final var smbVideoSource = new SmbVideoStream.SmbVideoSource();
+                        smbVideoSource.main = Long.parseLong(ssrc.ssrc);
+                        smbVideoStream.sources.add(smbVideoSource);
+                    }
                 });
-                video.ssrcAttributes = List.of();
+
+                video.streams = new ArrayList<>(streamsMap.values());
 
                 video.payloadTypes = new ArrayList<>();
                 for (var payloadType : mediaDescription.payloadTypes) {

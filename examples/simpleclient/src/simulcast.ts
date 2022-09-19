@@ -80,7 +80,7 @@ export function addSimulcastSdpLocalDescription(inSessionDescription: RTCSession
             return (inSessionDescription);
         } else {
             // Get SSRC for the mediatrack
-            let regExpMediaTrackPrimarySsrc = new RegExp(".*" + "label:" + mediaTrackId + ".*$", "gmi");
+            let regExpMediaTrackPrimarySsrc = new RegExp(".*" + "msid:.*? " + mediaTrackId + ".*$", "gmi");
             let mediaTrackPrimarySsrcArr = sdpStr.match(regExpMediaTrackPrimarySsrc);
             if (!mediaTrackPrimarySsrcArr) {
                 return (inSessionDescription);
