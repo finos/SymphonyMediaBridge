@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import java.util.List;
 
 public class SmbAudio {
-    public List<String> ssrcs;
+    public List<Long> ssrcs;
 
     public SmbPayloadType payloadType;
 

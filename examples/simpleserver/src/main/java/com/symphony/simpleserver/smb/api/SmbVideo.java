@@ -6,19 +6,7 @@ import com.fasterxml.jackson.annotation.JsonSetter;
 import java.util.List;
 
 public class SmbVideo {
-    public List<String> ssrcs;
-
-    public List<SmbSsrcGroup> ssrcGroups;
-
-    @JsonGetter("ssrc-groups")
-    public List<SmbSsrcGroup> getSsrcGroups() {
-        return ssrcGroups;
-    }
-
-    @JsonSetter("ssrc-groups")
-    public void setSsrcGroups(List<SmbSsrcGroup> ssrcGroups) {
-        this.ssrcGroups = ssrcGroups;
-    }
+    public List<SmbVideoStream> streams;
 
     public List<SmbPayloadType> payloadTypes;
 
@@ -42,17 +30,5 @@ public class SmbVideo {
     @JsonSetter("rtp-hdrexts")
     public void setRtpHeaderExtensions(List<SmbRtpHeaderExtension> rtpHeaderExtensions) {
         this.rtpHeaderExtensions = rtpHeaderExtensions;
-    }
-
-    public List<SmbSsrcAttribute> ssrcAttributes;
-
-    @JsonGetter("ssrc-attributes")
-    public List<SmbSsrcAttribute> getSsrcAttributes() {
-        return ssrcAttributes;
-    }
-
-    @JsonSetter("ssrc-attributes")
-    public void setSsrcAttributes(List<SmbSsrcAttribute> ssrcAttributes) {
-        this.ssrcAttributes = ssrcAttributes;
     }
 }
