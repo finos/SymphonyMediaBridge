@@ -106,6 +106,11 @@ public:
         return _activeVideoListLookupMap.contains(endpointIdHash);
     }
 
+    inline bool isInActiveTalkerList(const size_t endpointIdHash) const
+    {
+        return _audioSsrcRewriteMap.contains(endpointIdHash);
+    }
+
     inline bool isInUserActiveVideoList(const size_t endpointIdHash) const
     {
         const auto activeVideoListLookupMapItr = _activeVideoListLookupMap.find(endpointIdHash);
