@@ -1,5 +1,6 @@
 #include "ApiChannel.h"
 #include "HttpRequests.h"
+#include "test/integration/emulator/Httpd.h"
 #include "utils/IdGenerator.h"
 
 namespace
@@ -36,18 +37,26 @@ namespace emulator
 
 void Conference::create(const std::string& baseUrl)
 {
-    HttpPostRequest request((baseUrl + "/conferences").c_str(), "{\"last-n\":9}");
-    request.awaitResponse(3000 * utils::Time::ms);
+    nlohmann::json responseBody;
 
-    if (request.isSuccess())
+    _success = awaitResponse<HttpPostRequest>(_httpd,
+        baseUrl + "/conferences",
+        "{\"last-n\":9}",
+        3 * utils::Time::sec,
+        responseBody);
+
+    if (_success)
     {
-        auto body = request.getJsonBody();
-        _id = body["id"].get<std::string>();
-        _success = true;
+        _id = responseBody["id"].get<std::string>();
     }
 }
 
-BaseChannel::BaseChannel() : _id(newGuuid()), _audioId(newIdString()), _dataId(newIdString()), _videoId(newIdString())
+BaseChannel::BaseChannel(emulator::HttpdFactory* httpd)
+    : _httpd(httpd),
+      _id(newGuuid()),
+      _audioId(newIdString()),
+      _dataId(newIdString()),
+      _videoId(newIdString())
 {
 }
 
@@ -111,19 +120,21 @@ void Channel::create(const std::string& baseUrl,
     }
 
     logger::debug("allocate ch with %s", "", body.dump().c_str());
-    HttpPostRequest request((std::string(baseUrl) + "/conferences/" + conferenceId + "/" + _id).c_str(),
-        body.dump().c_str());
-    request.awaitResponse(9000 * utils::Time::ms);
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpPostRequest>(_httpd,
+        std::string(baseUrl) + "/conferences/" + conferenceId + "/" + _id,
+        body.dump(),
+        9 * utils::Time::sec,
+        responseBody);
 
-    if (request.isSuccess())
+    if (success)
     {
-        _offer = request.getJsonBody();
-        logger::debug("allocate offer received %s", "Test", request.getJsonBody().dump().c_str());
-        raw = request.getResponse();
+        _offer = responseBody;
+        logger::debug("allocate offer received %s", "Test", responseBody.dump().c_str());
     }
     else
     {
-        logger::error("failed to allocate channel %d", "Test", request.getCode());
+        logger::error("failed to allocate channel", "Test");
     }
 }
 
@@ -223,27 +234,34 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     logger::info("patch channel with %s", "Test", body.dump().c_str());
 
-    HttpPostRequest request((_baseUrl + "/conferences/" + _conferenceId + "/" + _id).c_str(), body.dump().c_str());
-    request.awaitResponse(3000 * utils::Time::ms);
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpPostRequest>(_httpd,
+        _baseUrl + "/conferences/" + _conferenceId + "/" + _id,
+        body.dump(),
+        3 * utils::Time::sec,
+        responseBody);
 
-    if (request.isSuccess())
+    if (success)
     {
-        // _offer = request.getJsonBody();
-        raw = request.getResponse();
+        raw = responseBody.dump();
     }
     else
     {
-        logger::error("failed to patch channel %d", "Test", request.getCode());
+        logger::error("failed to patch channel ", "Test");
     }
 }
 
 void Channel::disconnect()
 {
-    HttpDeleteRequest request((_baseUrl + "/conferences/" + _conferenceId + "/" + _id).c_str());
-    request.awaitResponse(3000 * utils::Time::ms);
-    if (!request.isSuccess())
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpDeleteRequest>(_httpd,
+        _baseUrl + "/conferences/" + _conferenceId + "/" + _id,
+        3 * utils::Time::sec,
+        responseBody);
+
+    if (!success)
     {
-        logger::error("failed to delete channel %d", "Test", request.getCode());
+        logger::error("failed to delete channel ", "Test");
     }
 }
 
@@ -407,18 +425,20 @@ void ColibriChannel::create(const std::string& baseUrl,
     }
 
     logger::debug("allocate ch with %s", "", body.dump().c_str());
-    HttpPatchRequest request((std::string(baseUrl) + "/colibri/conferences/" + conferenceId).c_str(),
-        body.dump().c_str());
-    request.awaitResponse(90000 * utils::Time::ms);
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpPatchRequest>(_httpd,
+        std::string(baseUrl) + "/colibri/conferences/" + conferenceId,
+        body.dump(),
+        90 * utils::Time::sec,
+        responseBody);
 
-    if (request.isSuccess())
+    if (success)
     {
-        _offer = request.getJsonBody();
-        raw = request.getResponse();
+        _offer = responseBody;
     }
     else
     {
-        logger::error("failed to allocate channel %d", "Test", request.getCode());
+        logger::error("failed to allocate channel", "Test");
     }
 }
 
@@ -566,16 +586,20 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
                 {"direction", "sendrecv"}})})}});
     body["contents"].push_back(dataJson);
 
-    HttpPatchRequest request((_baseUrl + "/colibri/conferences/" + _conferenceId).c_str(), body.dump().c_str());
-    request.awaitResponse(3000 * utils::Time::ms);
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpPatchRequest>(_httpd,
+        _baseUrl + "/colibri/conferences/" + _conferenceId,
+        body.dump(),
+        3 * utils::Time::sec,
+        responseBody);
 
-    if (request.isSuccess())
+    if (success)
     {
-        raw = request.getResponse();
+        _offer = responseBody;
     }
     else
     {
-        logger::error("failed to patch channel %d", "Test", request.getCode());
+        logger::error("failed to patch channel", "Test");
     }
 }
 
@@ -596,13 +620,17 @@ void ColibriChannel::disconnect()
     body["contents"].push_back(videoContent);
 
     logger::debug("expire %s", "ColibriChannel", body.dump().c_str());
-    HttpPatchRequest request((_baseUrl + "/colibri/conferences/" + _conferenceId).c_str(), body.dump().c_str());
-    request.awaitResponse(3000 * utils::Time::ms);
 
-    if (!request.isSuccess())
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpPatchRequest>(_httpd,
+        _baseUrl + "/colibri/conferences/" + _conferenceId,
+        body.dump(),
+        3 * utils::Time::sec,
+        responseBody);
+
+    if (!success)
     {
-
-        logger::error("failed to expire channel %d", "Test", request.getCode());
+        logger::error("failed to expire channel ", "Test");
     }
 }
 
@@ -721,7 +749,7 @@ utils::Optional<uint32_t> ColibriChannel::getOfferedLocalSsrc() const
     return utils::Optional<uint32_t>();
 }
 
-Barbell::Barbell() : _id(newIdString()) {}
+Barbell::Barbell(emulator::HttpdFactory* httpd) : _httpd(httpd), _id(newIdString()) {}
 
 std::string Barbell::allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling)
 {
@@ -735,17 +763,22 @@ std::string Barbell::allocate(const std::string& baseUrl, const std::string& con
             }}};
 
     logger::debug("allocate barbell with %s", "", body.dump().c_str());
-    HttpPostRequest request((baseUrl + "/barbell/" + conferenceId + "/" + _id).c_str(), body.dump().c_str());
-    request.awaitResponse(9000 * utils::Time::ms);
 
-    if (request.isSuccess())
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpPostRequest>(_httpd,
+        baseUrl + "/barbell/" + conferenceId + "/" + _id,
+        body.dump(),
+        9 * utils::Time::sec,
+        responseBody);
+
+    if (success)
     {
-        _offer = request.getJsonBody();
+        _offer = responseBody;
         logger::debug("barbell allocated:%s", "Test", _offer.dump().c_str());
     }
     else
     {
-        logger::error("failed to allocate barbell %d", "Test", request.getCode());
+        logger::error("failed to allocate barbell", "Test");
     }
 
     return _offer.dump();
@@ -755,23 +788,36 @@ void Barbell::configure(const std::string& body)
 {
     auto requestBody = nlohmann::json::parse(body);
     requestBody["action"] = "configure";
-    HttpPostRequest request((_baseUrl + "/barbell/" + _conferenceId + "/" + _id).c_str(), requestBody.dump().c_str());
-    request.awaitResponse(9000 * utils::Time::ms);
 
-    if (request.isSuccess())
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpPostRequest>(_httpd,
+        _baseUrl + "/barbell/" + _conferenceId + "/" + _id,
+        requestBody.dump(),
+        9 * utils::Time::sec,
+        responseBody);
+
+    if (success)
     {
-        _offer = request.getJsonBody();
+        _offer = responseBody;
     }
     else
     {
-        logger::error("failed to configure barbell %d", "Test", request.getCode());
+        logger::error("failed to configure barbell", "Test");
     }
 }
 
 void Barbell::remove(const std::string& baseUrl)
 {
-    HttpDeleteRequest request((_baseUrl + "/barbell/" + _conferenceId + "/" + _id).c_str());
-    request.awaitResponse(9000 * utils::Time::ms);
+    nlohmann::json responseBody;
+    auto success = awaitResponse<HttpDeleteRequest>(_httpd,
+        _baseUrl + "/barbell/" + _conferenceId + "/" + _id,
+        9 * utils::Time::sec,
+        responseBody);
+
+    if (!success)
+    {
+        logger::error("Failed to delete barbell", "Test");
+    }
 }
 
 } // namespace emulator

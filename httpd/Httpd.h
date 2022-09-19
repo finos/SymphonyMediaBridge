@@ -1,24 +1,18 @@
 #pragma once
 
+#include "httpd/HttpDaemon.h"
 #include <cstdint>
-
-namespace transport
-{
-class SocketAddress;
-} // namespace transport
 
 namespace httpd
 {
 
-class HttpRequestHandler;
-
-class Httpd
+class Httpd : public HttpDaemon
 {
 public:
     explicit Httpd(HttpRequestHandler& httpRequestHandler);
     ~Httpd();
 
-    bool start(const transport::SocketAddress& socketAddress);
+    bool start(const transport::SocketAddress& socketAddress) override;
 
 private:
     struct OpaqueDaemon;

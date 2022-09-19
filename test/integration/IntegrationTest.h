@@ -4,6 +4,7 @@
 #include "bridge/Bridge.h"
 #include "config/Config.h"
 #include "emulator/TimeTurner.h"
+#include "test/integration/emulator/Httpd.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/EndpointFactory.h"
 #include "utils/Pacer.h"
@@ -25,6 +26,8 @@ struct IntegrationTest : public ::testing::Test
     };
 
     IntegrationTest();
+    ~IntegrationTest();
+    emulator::HttpdFactory* _httpd;
     std::unique_ptr<bridge::Bridge> _bridge;
     config::Config _config;
 
@@ -60,8 +63,10 @@ struct IntegrationTest : public ::testing::Test
 
 public:
     static bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint);
-    static std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(const char* baseUrl);
-    static api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(const char* baseUrl,
+    static std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(emulator::HttpdFactory* httpd,
+        const char* baseUrl);
+    static api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(emulator::HttpdFactory* httpd,
+        const char* baseUrl,
         const std::string& endpointId);
     static void analyzeRecording(const std::vector<int16_t>& recording,
         std::vector<double>& frequencyPeaks,

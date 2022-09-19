@@ -2,6 +2,7 @@
 #include "api/SimulcastGroup.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
+#include "test/integration/emulator/Httpd.h"
 #include "transport/RtcTransport.h"
 #include "utils/StdExtensions.h"
 #include <string>
@@ -9,9 +10,12 @@
 
 namespace emulator
 {
+
 class Conference
 {
 public:
+    explicit Conference(emulator::HttpdFactory* httpd) : _httpd(httpd), _success(false) {}
+
     void create(const std::string& baseUrl);
 
     const std::string& getId() const { return _id; }
@@ -19,8 +23,9 @@ public:
     bool isSuccess() const { return _success; }
 
 private:
+    emulator::HttpdFactory* _httpd;
     std::string _id;
-    bool _success = false;
+    bool _success;
 };
 
 struct SimulcastStream
@@ -45,7 +50,7 @@ struct AnswerOptions
 class BaseChannel
 {
 public:
-    BaseChannel();
+    BaseChannel(emulator::HttpdFactory* httpd);
 
     virtual void create(const std::string& baseUrl,
         const std::string& conferenceId,
@@ -73,7 +78,7 @@ public:
     virtual utils::Optional<uint32_t> getOfferedLocalSsrc() const = 0;
 
 public:
-    bool isSuccess() const { return !raw.empty(); }
+    bool isSuccess() const { return !_offer.empty(); }
     bool isVideoEnabled() const { return _videoEnabled; }
 
     void setAnswerOptions(const AnswerOptions& answerOptions) { _answerOptions = answerOptions; }
@@ -93,6 +98,7 @@ protected:
         memory::AudioPacketPoolAllocator& allocator);
 
 protected:
+    emulator::HttpdFactory* _httpd;
     std::string _id;
     std::string _conferenceId;
 
@@ -110,6 +116,8 @@ protected:
 class Channel : public BaseChannel
 {
 public:
+    Channel(emulator::HttpdFactory* httpd) : BaseChannel(httpd) {}
+
     void create(const std::string& baseUrl,
         const std::string& conferenceId,
         const bool initiator,
@@ -138,6 +146,8 @@ public:
 class ColibriChannel : public BaseChannel
 {
 public:
+    ColibriChannel(emulator::HttpdFactory* httpd) : BaseChannel(httpd) {}
+
     void create(const std::string& baseUrl,
         const std::string& conferenceId,
         const bool initiator,
@@ -166,7 +176,7 @@ public:
 class Barbell
 {
 public:
-    Barbell();
+    Barbell(emulator::HttpdFactory* httpd);
 
     std::string allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling);
     void remove(const std::string& baseUrl);
@@ -174,10 +184,72 @@ public:
     const std::string& getId() const { return _id; }
 
 private:
+    emulator::HttpdFactory* _httpd;
     std::string _id;
     nlohmann::json _offer;
     std::string _baseUrl;
     std::string _conferenceId;
 };
+
+template <typename RequestT>
+bool awaitResponse(HttpdFactory* httpd,
+    const std::string& url,
+    const std::string& body,
+    const uint64_t timeout,
+    nlohmann::json& outBody)
+{
+    if (httpd)
+    {
+        auto response = httpd->sendRequest(RequestT::method, url.c_str(), body.c_str());
+        outBody = nlohmann::json::parse(response._body);
+        return true;
+    }
+    else
+    {
+        RequestT request(url.c_str(), body.c_str());
+        request.awaitResponse(timeout);
+
+        if (request.isSuccess())
+        {
+            outBody = request.getJsonBody();
+            return true;
+        }
+        else
+        {
+            logger::warn("request failed %d", "awaitResponse", request.getCode());
+        }
+        return false;
+    }
+}
+
+template <typename RequestT>
+bool awaitResponse(HttpdFactory* httpd, const std::string& url, const uint64_t timeout, nlohmann::json& outBody)
+{
+    if (httpd)
+    {
+        auto response = httpd->sendRequest(RequestT::method, url.c_str(), "");
+        if (!response._body.empty())
+        {
+            outBody = nlohmann::json::parse(response._body);
+        }
+        return true;
+    }
+    else
+    {
+        RequestT request(url.c_str());
+        request.awaitResponse(timeout);
+
+        if (request.isSuccess())
+        {
+            outBody = request.getJsonBody();
+            return true;
+        }
+        else
+        {
+            logger::warn("request failed %d", "awaitResponse", request.getCode());
+        }
+        return false;
+    }
+}
 
 } // namespace emulator

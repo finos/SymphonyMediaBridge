@@ -72,6 +72,7 @@ void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutN
         }
         if (count == expectedCount)
         {
+            logger::info("%u threads asleep as expected", "TimeTurner", count);
             return;
         }
 
@@ -94,7 +95,7 @@ void TimeTurner::runFor(uint64_t durationNs)
         logger::awaitLogDrained(0.75);
         if (!_sleeperCountdown.wait(1000))
         {
-            logger::warn("Timeout waiting for threads to sleep", "TimeTurner");
+            logger::warn("Timeout waiting for threads to sleep %u", "TimeTurner", _sleeperCountdown.getCount());
             if (!_running)
             {
                 _abortSemaphore.post();
@@ -139,7 +140,7 @@ void TimeTurner::advance()
 
 void TimeTurner::advance(uint64_t nanoSeconds)
 {
-    nanoSeconds = std::max(nanoSeconds, 500 * utils::Time::us);
+    nanoSeconds = std::max(nanoSeconds, 2 * utils::Time::ms);
     _timestamp += nanoSeconds;
 
     for (auto& slot : _sleepers)

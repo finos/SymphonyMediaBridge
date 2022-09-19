@@ -4,6 +4,7 @@
 #include "bridge/MixerManager.h"
 #include "bridge/engine/Engine.h"
 #include "httpd/Httpd.h"
+#include "httpd/HttpdFactory.h"
 #include "jobmanager/JobManager.h"
 #include "jobmanager/WorkerThread.h"
 #include "transport/Endpoint.h"
@@ -100,10 +101,12 @@ Bridge::~Bridge()
 
 void Bridge::initialize()
 {
-    initialize(std::make_shared<transport::EndpointFactoryImpl>());
+    httpd::HttpdFactory httpdFactory;
+    initialize(std::make_shared<transport::EndpointFactoryImpl>(), httpdFactory);
 }
 
-void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory)
+void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory,
+    httpd::HttpDaemonFactory& httpdFactory)
 {
     _localInterfaces = gatherInterfaces(_config);
     if (_localInterfaces.size() == 0)
@@ -189,7 +192,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls, *_probeServer);
 
     const auto httpAddress = transport::SocketAddress::parse(_config.address, _config.port);
-    _httpd = std::make_unique<httpd::Httpd>(*_requestHandler);
+    _httpd = httpdFactory.create(*_requestHandler);
     if (!_httpd->start(httpAddress))
     {
         return;

@@ -247,6 +247,8 @@ set(FILES
         httpd/Request.h
         httpd/RequestErrorException.h
         httpd/Response.h
+        httpd/HttpdFactory.h
+        httpd/HttpdFactory.cpp
         jobmanager/Job.h
         jobmanager/JobManager.h
         jobmanager/JobQueue.h
@@ -500,6 +502,7 @@ set(TEST_FILES
     test/integration/emulator/FakeEndpointFactory.cpp
     test/integration/emulator/FakeUdpEndpoint.h
     test/integration/emulator/FakeUdpEndpoint.cpp
+    test/integration/emulator/Httpd.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
     test/gtest_main.cpp

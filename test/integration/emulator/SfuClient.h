@@ -94,13 +94,16 @@ template <typename ChannelType>
 class SfuClient : public transport::DataReceiver
 {
 public:
-    SfuClient(uint32_t id,
+    SfuClient(emulator::HttpdFactory* httpd,
+        uint32_t id,
         memory::PacketPoolAllocator& allocator,
         memory::AudioPacketPoolAllocator& audioAllocator,
         transport::TransportFactory& transportFactory,
         transport::SslDtls& sslDtls,
         uint32_t ptime = 20)
-        : _allocator(allocator),
+        : _channel(httpd),
+          _httpd(httpd),
+          _allocator(allocator),
           _audioAllocator(audioAllocator),
           _transportFactory(transportFactory),
           _sslDtls(sslDtls),
@@ -120,7 +123,7 @@ public:
         }
         while (_transport && _transport->hasPendingJobs())
         {
-            utils::Time::rawNanoSleep(utils::Time::sec * 1);
+            utils::Time::rawNanoSleep(utils::Time::ms * 20);
         }
 
         for (auto& item : _audioReceivers)
@@ -889,6 +892,7 @@ public:
 private:
     utils::IdGenerator _idGenerator;
     uint32_t _videoSsrcs[7];
+    emulator::HttpdFactory* _httpd;
     memory::PacketPoolAllocator& _allocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
     transport::TransportFactory& _transportFactory;
@@ -910,8 +914,8 @@ template <typename TClient>
 class GroupCall
 {
 public:
-    // GroupCall(std::initializer_list<T*> clients) : clients(clients) {}
-    GroupCall(uint32_t& idCounter,
+    GroupCall(emulator::HttpdFactory* httpd,
+        uint32_t& idCounter,
         memory::PacketPoolAllocator& allocator,
         memory::AudioPacketPoolAllocator& audioAllocator,
         transport::TransportFactory& transportFactory,
@@ -925,7 +929,7 @@ public:
     {
         for (uint32_t i = 0; i < callCount; ++i)
         {
-            add();
+            add(httpd);
         }
     }
 
@@ -1062,14 +1066,14 @@ public:
     {
         conf.create(url);
         auto result = conf.isSuccess();
-        utils::Time::rawNanoSleep(1 * utils::Time::sec);
+        utils::Time::nanoSleep(1 * utils::Time::sec);
         return result;
     }
 
-    void add()
+    void add(emulator::HttpdFactory* httpd)
     {
         clients.emplace_back(
-            std::make_unique<TClient>(++_idCounter, _allocator, _audioAllocator, _transportFactory, _sslDtls));
+            std::make_unique<TClient>(httpd, ++_idCounter, _allocator, _audioAllocator, _transportFactory, _sslDtls));
     }
 
     void disconnectClients()

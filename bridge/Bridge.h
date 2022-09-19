@@ -2,6 +2,7 @@
 #include "bwe/BandwidthEstimator.h"
 #include "bwe/RateController.h"
 #include "config/Config.h"
+#include "httpd/HttpDaemon.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/ice/IceSession.h"
@@ -32,7 +33,8 @@ class ProbeServer;
 namespace httpd
 {
 class Httpd;
-}
+class HttpDaemonFactory;
+} // namespace httpd
 
 namespace bridge
 {
@@ -47,7 +49,8 @@ public:
     ~Bridge();
 
     void initialize();
-    void initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory);
+    void initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory,
+        httpd::HttpDaemonFactory& httpdFactory);
     bool isInitialized() const { return _initialized; }
 
     transport::SslDtls& getSslDtls() { return *_sslDtls; }
@@ -75,7 +78,7 @@ private:
     const std::unique_ptr<bridge::Engine> _engine;
     std::unique_ptr<bridge::MixerManager> _mixerManager;
     std::unique_ptr<bridge::ApiRequestHandler> _requestHandler;
-    std::unique_ptr<httpd::Httpd> _httpd;
+    std::unique_ptr<httpd::HttpDaemon> _httpd;
 
     void startWorkerThreads();
 };

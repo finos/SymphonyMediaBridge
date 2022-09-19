@@ -1,4 +1,5 @@
 #include "external/http.h"
+#include "httpd/Request.h"
 #include "nlohmann/json.hpp"
 #include <string>
 
@@ -33,12 +34,16 @@ private:
 class HttpPostRequest : public HttpRequest
 {
 public:
+    static const httpd::Method method = httpd::Method::POST;
+
     HttpPostRequest(const char* url, const char* body);
 };
 
 class HttpPatchRequest : public HttpRequest
 {
 public:
+    static const httpd::Method method = httpd::Method::PATCH;
+
     HttpPatchRequest(const char* url, const char* body)
     {
         _request = http_patch(url, body, body ? std::strlen(body) : 0, nullptr);
@@ -49,6 +54,7 @@ public:
 class HttpGetRequest : public HttpRequest
 {
 public:
+    static const httpd::Method method = httpd::Method::GET;
     HttpGetRequest(const char* url)
     {
         _request = http_get(url, nullptr);
@@ -59,6 +65,7 @@ public:
 class HttpDeleteRequest : public HttpRequest
 {
 public:
+    static const httpd::Method method = httpd::Method::DELETE;
     HttpDeleteRequest(const char* url)
     {
         _request = http_delete(url, nullptr);
