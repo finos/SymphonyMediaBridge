@@ -138,7 +138,6 @@ void VideoForwarderRewriteAndSendJob::run()
     uint32_t rewrittenExtendedSequenceNumber = 0;
     if (!Vp8Rewriter::rewrite(_outboundContext,
             *_packet,
-            _outboundContext.ssrc,
             _extendedSequenceNumber,
             _transport.getLoggableId().c_str(),
             rewrittenExtendedSequenceNumber,

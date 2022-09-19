@@ -33,7 +33,6 @@ constexpr uint16_t extractRolloverCounter(const uint32_t extendedSequenceNumber)
 
 inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     memory::Packet& rewritePacket,
-    const uint32_t rewriteSsrc,
     const uint32_t extendedSequenceNumber,
     const char* transportName,
     uint32_t& outExtendedSequenceNumber,
@@ -64,7 +63,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             "Vp8Rewriter",
             transportName,
             rtpHeader->ssrc.get(),
-            rewriteSsrc,
+            ssrcOutboundContext.ssrc,
             extractSequenceNumber(extendedSequenceNumber),
             extractRolloverCounter(extendedSequenceNumber));
     }
@@ -97,7 +96,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             "Vp8Rewriter",
             transportName,
             rtpHeader->ssrc.get(),
-            rewriteSsrc,
+            ssrcOutboundContext.ssrc,
             extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber);
     }
     else if (static_cast<int32_t>(extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber -
@@ -117,7 +116,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     const auto newTl0PicIdx = tl0PicIdx + ssrcRewrite.offset.tl0PicIdx;
     const auto newTimestamp = timestamp + ssrcRewrite.offset.timestamp;
 
-    rtpHeader->ssrc = rewriteSsrc;
+    rtpHeader->ssrc = ssrcOutboundContext.ssrc;
     rtpHeader->sequenceNumber = outExtendedSequenceNumber & 0xFFFFu;
     rtpHeader->timestamp = newTimestamp;
     codec::Vp8Header::setPicId(rtpPayload, newPicId);
