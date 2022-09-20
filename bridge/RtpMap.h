@@ -69,6 +69,8 @@ struct RtpMap
     RtpMap(const RtpMap& rtpMap) = default;
 
     bool isEmpty() const { return format == Format::EMPTY; }
+    bool isAudio() const { return format == Format::OPUS; }
+    bool isVideo() const { return format == Format::VP8 || format == Format::VP8RTX; }
 
     Format format;
     uint8_t payloadType;

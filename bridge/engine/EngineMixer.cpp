@@ -1116,7 +1116,10 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         if (!inboundContext.activeMedia && recentActivity)
         {
             inboundContext.activeMedia = true;
-            _engineStreamDirector->streamActiveStateChanged(endpointIdHash, inboundContext.ssrc, true);
+            if (inboundContext.rtpMap.isVideo())
+            {
+                _engineStreamDirector->streamActiveStateChanged(endpointIdHash, inboundContext.ssrc, true);
+            }
             continue;
         }
 
@@ -1126,8 +1129,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         if (!recentActivity && receiveCounters.packets > 5 && inboundContext.activeMedia &&
             inboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
         {
-            auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-            if (videoStreamItr != _engineVideoStreams.end())
+            if (inboundContext.rtpMap.isVideo() && _engineVideoStreams.contains(endpointIdHash))
             {
                 _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false);
                 inboundContext.inactiveTransitionCount++;
