@@ -69,7 +69,7 @@ public:
         const char* logId,
         uint64_t cutAtTime = 0);
     template <typename TClient>
-    static IntegrationTest::AudioAnalysisData analizeRecording(TClient* client,
+    static IntegrationTest::AudioAnalysisData analyzeRecording(TClient* client,
         double expectedDurationSeconds,
         size_t mixedAudioSources = 0,
         bool dumpPcmData = false);

@@ -288,7 +288,7 @@ bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>&
 }
 
 template <typename TClient>
-IntegrationTest::AudioAnalysisData IntegrationTest::analizeRecording(TClient* client,
+IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* client,
     double expectedDurationSeconds,
     size_t mixedAudioSources,
     bool dumpPcmData)
@@ -476,7 +476,7 @@ TEST_F(IntegrationTest, plain)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analizeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            const auto data = analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -566,7 +566,7 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analizeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5);
+            const auto data = analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             EXPECT_EQ(data.amplitudeProfile.size(), 2);
             if (data.amplitudeProfile.size() > 1)
@@ -902,7 +902,7 @@ TEST_F(IntegrationTest, plainNewApi)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analizeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -983,7 +983,7 @@ TEST_F(IntegrationTest, ptime10)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analizeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -1139,85 +1139,29 @@ TEST_F(IntegrationTest, simpleBarbell)
         logVideoSent("client2", *group.clients[1]);
         logVideoSent("client3", *group.clients[2]);
 
-        const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+        const double expectedFrequencies[2][2] = {{1300.0, 2100.0}, {600.0, 2100.0}};
+        size_t freqId = 0;
+        for (auto id : {0, 1})
         {
-            auto audioCounters = group.clients[0]->_transport->getCumulativeAudioReceiveCounters();
-            EXPECT_EQ(audioCounters.lostPackets, 0);
-            const auto& rData1 = group.clients[0]->getAudioReceiveStats();
-            std::vector<double> allFreq;
-            EXPECT_EQ(rData1.size(), 2);
-
-            for (const auto& item : rData1)
-            {
-                if (group.clients[0]->isRemoteVideoSsrc(item.first))
-                {
-                    continue;
-                }
-
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
-                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
-
-                EXPECT_EQ(amplitudeProfile.size(), 2);
-                if (amplitudeProfile.size() > 1)
-                {
-                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                }
-
-                // item.second->dumpPcmData();
-            }
-
-            std::sort(allFreq.begin(), allFreq.end());
-            ASSERT_GE(allFreq.size(), 2);
-            EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
-            EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
-
-            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
-            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary3;
-            auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-            group.clients[1]->_transport->getReportSummary(transportSummary2);
-            group.clients[2]->_transport->getReportSummary(transportSummary3);
-
-            logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
-            logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary2);
-            logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary3);
-
-            EXPECT_NEAR(videoReceiveStats.packets,
-                transportSummary2.begin()->second.packetsSent + transportSummary3.begin()->second.packetsSent,
-                25);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
+            EXPECT_EQ(data.dominantFrequencies.size(), 2);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
         }
-        {
-            auto audioCounters = group.clients[1]->_transport->getCumulativeAudioReceiveCounters();
-            EXPECT_EQ(audioCounters.lostPackets, 0);
 
-            const auto& rData1 = group.clients[1]->getAudioReceiveStats();
-            std::vector<double> allFreq;
-            for (const auto& item : rData1)
-            {
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
-                EXPECT_EQ(freqVector.size(), 1);
-                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
+        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
+        group.clients[1]->_transport->getReportSummary(transportSummary1);
+        group.clients[2]->_transport->getReportSummary(transportSummary2);
 
-                EXPECT_EQ(amplitudeProfile.size(), 2);
-                if (amplitudeProfile.size() > 1)
-                {
-                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                }
+        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
+        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
 
-                // item.second->dumpPcmData();
-            }
-
-            std::sort(allFreq.begin(), allFreq.end());
-            EXPECT_NEAR(allFreq[0], 600.0, 25.0);
-            EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
-        }
+        EXPECT_NEAR(videoReceiveStats.packets,
+            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent,
+            25);
     });
 }
 
@@ -1333,7 +1277,7 @@ TEST_F(IntegrationTest, barbellAfterClients)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analizeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             EXPECT_EQ(data.amplitudeProfile.size(), 2);
             if (data.amplitudeProfile.size() > 1)
