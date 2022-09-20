@@ -1379,6 +1379,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
     }
 
     ssrcContext.onRtpPacketReceived(timestamp);
+    ssrcContext.endpointIdHash = packet->endpointIdHash;
 
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
     const bool mustBeForwardedOnBarbells = isSenderInLastNList && !_engineBarbells.empty() && !isFromBarbell;
@@ -1388,8 +1389,6 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
         sender->getJobQueue().addJob<bridge::DiscardReceivedVideoPacketJob>(std::move(packet), sender, ssrcContext);
         return;
     }
-
-    ssrcContext.endpointIdHash = packet->endpointIdHash;
 
     sender->getJobQueue().addJob<bridge::VideoForwarderReceiveJob>(std::move(packet),
         _sendAllocator,
