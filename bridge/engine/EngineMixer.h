@@ -451,6 +451,11 @@ private:
     ////
 
     // -- methods executed on Transport thread context
+    void onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
+        transport::RtcTransport* sender,
+        memory::UniquePacket packet,
+        const uint32_t extendedSequenceNumber,
+        const uint64_t timestamp);
     void onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
         transport::RtcTransport* sender,
         memory::UniquePacket packet,

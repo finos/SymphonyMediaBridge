@@ -1352,6 +1352,27 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
     return stats;
 }
 
+void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
+    transport::RtcTransport* sender,
+    memory::UniquePacket packet,
+    const uint32_t extendedSequenceNumber,
+    const uint64_t timestamp)
+{
+    // TODO we should also check if this ssrc is in use, mixed clients are present, or it needs to be forwarded over
+    // barbell. If not, we can drop this packet.
+    if (_engineAudioStreams.size() > 0)
+    {
+        sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(std::move(packet),
+            sender,
+            *this,
+            ssrcContext,
+            *_activeMediaList,
+            _config.audio.silenceThresholdLevel,
+            _numMixedAudioStreams != 0,
+            extendedSequenceNumber);
+    }
+}
+
 void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
     transport::RtcTransport* sender,
     memory::UniquePacket packet,
@@ -1365,7 +1386,7 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
     }
 
     const bool isFromBarbell = EngineBarbell::isFromBarbell(sender->getTag());
-    const auto endpointIdHash = packet->endpointIdHash;
+    const size_t endpointIdHash = ssrcContext.endpointIdHash;
 
     EngineVideoStream* videoStream = nullptr;
     auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
@@ -1377,9 +1398,6 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
     {
         return;
     }
-
-    ssrcContext.onRtpPacketReceived(timestamp);
-    ssrcContext.endpointIdHash = packet->endpointIdHash;
 
     const auto isSenderInLastNList = _activeMediaList->isInActiveVideoList(endpointIdHash);
     const bool mustBeForwardedOnBarbells = isSenderInLastNList && !_engineBarbells.empty() && !isFromBarbell;
@@ -1425,7 +1443,7 @@ void EngineMixer::onVideoRtpRtxPacketReceived(SsrcInboundContext& rtxSsrcContext
     const uint64_t timestamp)
 {
     const bool isFromBarbell = EngineBarbell::isFromBarbell(sender->getTag());
-    const auto endpointIdHash = packet->endpointIdHash;
+    const size_t endpointIdHash = rtxSsrcContext.endpointIdHash;
     EngineVideoStream* videoStream = nullptr;
     auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
     if (videoStreamItr != _engineVideoStreams.end())
@@ -1739,6 +1757,12 @@ bool EngineMixer::setPacketSourceEndpointIdHash(memory::Packet& packet,
     return false;
 }
 
+/**
+ * We store source endpointIdHash in the Packet itself, because, after arriving here, the packet goes through decryption
+ * and is ready to be forwarded. At that time we want to know how this source endpoint is mapped to outbound ssrc and
+ * thus need the source endpointIdHash. The source ssrc is insufficient as another endpoint may have taken its place by
+ * then.
+ */
 void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
@@ -1771,32 +1795,20 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
                 isAudio ? "audio" : "video");
             return; // drop packet as we cannot process it
         }
+        ssrcContext->endpointIdHash = packet->endpointIdHash;
     }
 
     switch (ssrcContext->rtpMap.format)
     {
     case bridge::RtpMap::Format::OPUS:
-        if (_engineAudioStreams.size() > 0)
-        {
-            sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(std::move(packet),
-                sender,
-                *this,
-                *ssrcContext,
-                *_activeMediaList,
-                _config.audio.silenceThresholdLevel,
-                _numMixedAudioStreams != 0,
-                extendedSequenceNumber);
-        }
+        onAudioRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
-
     case bridge::RtpMap::Format::VP8:
         onVideoRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
-
     case bridge::RtpMap::Format::VP8RTX:
         onVideoRtpRtxPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
-
     default:
         logger::warn("Unexpected payload format %d onRtpPacketReceived",
             getLoggableId().c_str(),
