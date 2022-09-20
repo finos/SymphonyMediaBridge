@@ -535,6 +535,133 @@ TEST_F(IntegrationTest, plain)
     });
 }
 
+TEST_F(IntegrationTest, twoClientsAudioOnly)
+{
+    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        initBridge(_config);
+
+        const std::string baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            2);
+
+        Conference conf;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl + "/colibri");
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, false, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, false, true);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
+        statsRequest.awaitResponse(1500 * utils::Time::ms);
+        EXPECT_TRUE(statsRequest.isSuccess());
+
+        auto endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        EXPECT_EQ(2, endpoints.size());
+        size_t dominantSpeakerCount = 0;
+        for (const auto& endpoint : endpoints)
+        {
+            if (endpoint.isDominantSpeaker)
+            {
+                dominantSpeakerCount++;
+            }
+            EXPECT_TRUE(endpoint.dtlsState == transport::SrtpClient::State::CONNECTED);
+            EXPECT_TRUE(endpoint.iceState == ice::IceSession::State::CONNECTED);
+        }
+        EXPECT_EQ(1, dominantSpeakerCount);
+
+        group.clients[0]->_transport->stop();
+        group.clients[1]->_transport->stop();
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+        {
+            auto audioCounters = group.clients[0]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+            EXPECT_EQ(audioCounters.lostPackets, 0);
+            const auto& rData1 = group.clients[0]->getAudioReceiveStats();
+            std::vector<double> allFreq;
+
+            for (const auto& item : rData1)
+            {
+                if (group.clients[0]->isRemoteVideoSsrc(item.first))
+                {
+                    continue;
+                }
+
+                std::vector<double> freqVector;
+                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+                auto rec = item.second->getRecording();
+                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+                EXPECT_EQ(freqVector.size(), 1);
+                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+                EXPECT_EQ(amplitudeProfile.size(), 2);
+                if (amplitudeProfile.size() > 1)
+                {
+                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+                }
+
+                // item.second->dumpPcmData();
+            }
+
+            std::sort(allFreq.begin(), allFreq.end());
+            EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
+        }
+        {
+            auto audioCounters = group.clients[1]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+            EXPECT_EQ(audioCounters.lostPackets, 0);
+
+            const auto& rData2 = group.clients[1]->getAudioReceiveStats();
+            std::vector<double> allFreq;
+            for (const auto& item : rData2)
+            {
+                if (group.clients[1]->isRemoteVideoSsrc(item.first))
+                {
+                    continue;
+                }
+
+                std::vector<double> freqVector;
+                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+                auto rec = item.second->getRecording();
+                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+                EXPECT_EQ(freqVector.size(), 1);
+                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+                EXPECT_EQ(amplitudeProfile.size(), 2);
+                if (amplitudeProfile.size() > 1)
+                {
+                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+                }
+
+                // item.second->dumpPcmData();
+            }
+
+            std::sort(allFreq.begin(), allFreq.end());
+            EXPECT_NEAR(allFreq[0], 600.0, 25.0);
+        }
+    });
+}
+
 TEST_F(IntegrationTest, audioOnlyNoPadding)
 {
     runTestInThread(2 * _numWorkerThreads + 7, [this]() {
