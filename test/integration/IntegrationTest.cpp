@@ -1599,78 +1599,29 @@ TEST_F(IntegrationTest, barbellAfterClients)
         logVideoSent("client1", *group.clients[0]);
         logVideoSent("client2", *group.clients[1]);
 
-        const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+        const double expectedFrequencies[2] = {1300.0, 600.0};
+        size_t freqId = 0;
+        for (auto id : {0, 1})
         {
-            auto audioCounters = group.clients[0]->_transport->getCumulativeAudioReceiveCounters();
-            EXPECT_EQ(audioCounters.lostPackets, 0);
-            const auto& rData1 = group.clients[0]->getAudioReceiveStats();
-            std::vector<double> allFreq;
-            EXPECT_EQ(rData1.size(), 1);
-
-            for (const auto& item : rData1)
+            const auto data = analizeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
+            EXPECT_EQ(data.dominantFrequencies.size(), 1);
+            EXPECT_EQ(data.amplitudeProfile.size(), 2);
+            if (data.amplitudeProfile.size() > 1)
             {
-                if (group.clients[0]->isRemoteVideoSsrc(item.first))
-                {
-                    continue;
-                }
-
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
-                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
-
-                EXPECT_EQ(amplitudeProfile.size(), 2);
-                if (amplitudeProfile.size() > 1)
-                {
-                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                }
-
-                // item.second->dumpPcmData();
+                EXPECT_NEAR(data.amplitudeProfile[1].second, 5725, 100);
             }
-
-            std::sort(allFreq.begin(), allFreq.end());
-            ASSERT_GE(allFreq.size(), 1);
-            EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
-
-            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
-            auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-            group.clients[1]->_transport->getReportSummary(transportSummary2);
-
-            logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
-            logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary2);
-
-            EXPECT_NEAR(videoReceiveStats.packets, transportSummary2.begin()->second.packetsSent, 25);
+            ASSERT_GE(data.dominantFrequencies.size(), 1);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId++], 25.0);
         }
-        {
-            auto audioCounters = group.clients[1]->_transport->getCumulativeAudioReceiveCounters();
-            EXPECT_EQ(audioCounters.lostPackets, 0);
 
-            const auto& rData1 = group.clients[1]->getAudioReceiveStats();
-            std::vector<double> allFreq;
-            for (const auto& item : rData1)
-            {
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
-                EXPECT_EQ(freqVector.size(), 1);
-                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
+        group.clients[1]->_transport->getReportSummary(transportSummary);
 
-                EXPECT_EQ(amplitudeProfile.size(), 2);
-                if (amplitudeProfile.size() > 1)
-                {
-                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                }
+        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary);
 
-                // item.second->dumpPcmData();
-            }
-
-            std::sort(allFreq.begin(), allFreq.end());
-            EXPECT_NEAR(allFreq[0], 600.0, 25.0);
-        }
+        EXPECT_NEAR(videoReceiveStats.packets, transportSummary.begin()->second.packetsSent, 25);
     });
 }
 
