@@ -5,15 +5,11 @@
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "codec/OpusDecoder.h"
 #include "jobmanager/JobQueue.h"
+#include "transport/RtcTransport.h"
 #include "transport/RtpReceiveState.h"
 #include "utils/Optional.h"
 #include <cstdint>
 #include <memory>
-
-namespace transport
-{
-class RtcTransport;
-}
 
 namespace jobmanager
 {
@@ -49,7 +45,7 @@ public:
           activeMedia(false),
           inactiveTransitionCount(0),
           isSsrcUsed(true),
-          endpointIdHash(0),
+          endpointIdHash(sender ? sender->getEndpointIdHash() : 0),
           shouldDropPackets(false),
           _lastReceiveTime(timestamp)
     {
@@ -89,7 +85,7 @@ public:
 
     // engine + transport thread access =============================
     std::atomic_bool isSsrcUsed; // for early discarding of video
-    std::atomic_size_t endpointIdHash; // current remote endpoint
+    std::atomic_size_t endpointIdHash; // current remote endpoint. Changes for barbelled streams
     PliScheduler pliScheduler; // mainly transport, trigger by engine
     /** If an inbound stream is considered unstable, we can, in a simulcast scenario, decide to drop an inbound stream
      * early to avoid toggling between quality levels. If this is set to true, all incoming packets will be dropped. */
