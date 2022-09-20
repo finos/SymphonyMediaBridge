@@ -29,6 +29,7 @@
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
 #include "utils/StringBuilder.h"
+#include <chrono>
 #include <complex>
 #include <memory>
 #include <sstream>
@@ -223,6 +224,16 @@ api::ConferenceEndpointExtendedInfo IntegrationTest::getEndpointExtendedInfo(con
     return api::Parser::parseEndpointExtendedInfo(endpointRequest.getJsonBody());
 }
 
+size_t getNumWorkingThreads()
+{
+    static const auto hardwareConcurrency = std::thread::hardware_concurrency();
+    if (hardwareConcurrency == 0)
+    {
+        return 8;
+    }
+    return std::max(hardwareConcurrency, 1U);
+}
+
 void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
     std::vector<double>& frequencyPeaks,
     std::vector<std::pair<uint64_t, double>>& amplitudeProfile,
@@ -231,7 +242,6 @@ void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
 {
     utils::RateTracker<5> amplitudeTracker(codec::Opus::sampleRate / 10);
     const size_t fftWindowSize = 2048;
-    std::valarray<std::complex<double>> testVector(fftWindowSize);
 
     const auto limit = cutAtTime == 0 ? recording.size() : cutAtTime * codec::Opus::sampleRate / utils::Time::ms;
     const auto size = recording.size() > limit ? limit : recording.size();
@@ -256,26 +266,51 @@ void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
         return;
     }
 
-    for (size_t cursor = 0; cursor < size - fftWindowSize; cursor += 256)
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto const numThreads = getNumWorkingThreads();
+    std::vector<std::thread> workers;
+    std::mutex fft_mutex;
+
+    for (size_t threadId = 0; threadId < numThreads; threadId++)
     {
-        for (uint64_t x = 0; x < fftWindowSize; ++x)
-        {
-            testVector[x] = std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
-        }
-
-        SampleDataUtils::fft(testVector);
-
-        std::vector<double> frequencies;
-        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies);
-        for (size_t i = 0; i < frequencies.size() && i < 50; ++i)
-        {
-            if (std::find(frequencyPeaks.begin(), frequencyPeaks.end(), frequencies[i]) == frequencyPeaks.end())
+        workers.push_back(std::thread([&frequencyPeaks, &recording, &fft_mutex, &logId, size, numThreads, threadId]() {
+            for (size_t cursor = 256 * threadId; cursor < size - fftWindowSize; cursor += 256 * numThreads)
             {
-                logger::debug("added new freq %.3f", logId, frequencies[i]);
-                frequencyPeaks.push_back(frequencies[i]);
+                std::valarray<std::complex<double>> testVector(fftWindowSize);
+                for (uint64_t x = 0; x < fftWindowSize; ++x)
+                {
+                    testVector[x] =
+                        std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
+                }
+
+                SampleDataUtils::fft(testVector);
+
+                std::vector<double> frequencies;
+                SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies);
+                {
+                    const std::lock_guard<std::mutex> lock(fft_mutex);
+                    for (size_t i = 0; i < frequencies.size() && i < 50; ++i)
+                    {
+                        if (std::find(frequencyPeaks.begin(), frequencyPeaks.end(), frequencies[i]) ==
+                            frequencyPeaks.end())
+                        {
+                            logger::debug("added new freq %.3f", logId, frequencies[i]);
+                            frequencyPeaks.push_back(frequencies[i]);
+                        }
+                    }
+                }
             }
-        }
+        }));
     }
+    for (size_t i = 0; i < numThreads; i++)
+    {
+        workers[i].join();
+    }
+
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
+    logger::debug("Analysis complete in %lld us", "Threaded FFT", duration.count());
 }
 
 bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint)
