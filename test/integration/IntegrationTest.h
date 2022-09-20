@@ -16,6 +16,13 @@
 
 struct IntegrationTest : public ::testing::Test
 {
+
+    struct AudioAnalysisData
+    {
+        std::vector<double> dominantFrequencies;
+        std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+    };
+
     IntegrationTest();
     std::unique_ptr<bridge::Bridge> _bridge;
     config::Config _config;
@@ -60,6 +67,10 @@ public:
         std::vector<std::pair<uint64_t, double>>& amplitudeProfile,
         const char* logId,
         uint64_t cutAtTime = 0);
+    template <typename TClient>
+    static IntegrationTest::AudioAnalysisData analizeRecording(TClient* client,
+        double expectedDurationSeconds,
+        bool dumpPcmData = false);
 
 protected:
     void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
