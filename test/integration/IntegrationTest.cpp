@@ -290,6 +290,7 @@ bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>&
 template <typename TClient>
 IntegrationTest::AudioAnalysisData IntegrationTest::analizeRecording(TClient* client,
     double expectedDurationSeconds,
+    size_t mixedAudioSources,
     bool dumpPcmData)
 {
     constexpr auto AUDIO_PACKET_SAMPLE_COUNT = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
@@ -305,12 +306,38 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analizeRecording(TClient* cl
             continue;
         }
 
+        result.audioSsrcCount++;
+
         std::vector<double> freqVector;
+        std::vector<std::pair<uint64_t, double>> amplitudeProfile;
         auto rec = item.second->getRecording();
-        analyzeRecording(rec, freqVector, result.amplitudeProfile, item.second->getLoggableId().c_str());
-        EXPECT_NEAR(rec.size(), expectedDurationSeconds * codec::Opus::sampleRate, 3 * AUDIO_PACKET_SAMPLE_COUNT);
+        analyzeRecording(rec,
+            freqVector,
+            amplitudeProfile,
+            item.second->getLoggableId().c_str(),
+            mixedAudioSources ? expectedDurationSeconds * utils::Time::ms : 0);
+
+        if (mixedAudioSources)
+        {
+            EXPECT_EQ(freqVector.size(), mixedAudioSources);
+            EXPECT_GE(rec.size(), expectedDurationSeconds * codec::Opus::sampleRate);
+        }
+        else
+        {
+            EXPECT_EQ(freqVector.size(), 1);
+            EXPECT_NEAR(rec.size(), expectedDurationSeconds * codec::Opus::sampleRate, 3 * AUDIO_PACKET_SAMPLE_COUNT);
+
+            EXPECT_EQ(amplitudeProfile.size(), 2);
+            if (amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+            }
+        }
 
         result.dominantFrequencies.insert(result.dominantFrequencies.begin(), freqVector.begin(), freqVector.end());
+        result.amplitudeProfile.insert(result.amplitudeProfile.begin(),
+            amplitudeProfile.begin(),
+            amplitudeProfile.end());
         if (dumpPcmData)
         {
             item.second->dumpPcmData();
@@ -445,127 +472,161 @@ TEST_F(IntegrationTest, plain)
 
         finalizeSimulation();
 
-        const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+        const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
+        size_t freqId = 0;
+        for (auto id : {0, 1, 2})
         {
-            auto audioCounters = group.clients[0]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
-            EXPECT_EQ(audioCounters.lostPackets, 0);
-            const auto& rData1 = group.clients[0]->getAudioReceiveStats();
-            std::vector<double> allFreq;
+            const auto data = analizeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            EXPECT_EQ(data.dominantFrequencies.size(), 2);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
 
-            for (const auto& item : rData1)
+            if (2 == id)
             {
-                if (group.clients[0]->isRemoteVideoSsrc(item.first))
-                {
-                    continue;
-                }
-
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
-                EXPECT_EQ(freqVector.size(), 1);
-                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
-
-                EXPECT_EQ(amplitudeProfile.size(), 2);
-                if (amplitudeProfile.size() > 1)
-                {
-                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                }
-
-                // item.second->dumpPcmData();
-            }
-
-            std::sort(allFreq.begin(), allFreq.end());
-            EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
-            EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
-        }
-        {
-            auto audioCounters = group.clients[1]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
-            EXPECT_EQ(audioCounters.lostPackets, 0);
-
-            const auto& rData2 = group.clients[1]->getAudioReceiveStats();
-            std::vector<double> allFreq;
-            for (const auto& item : rData2)
-            {
-                if (group.clients[1]->isRemoteVideoSsrc(item.first))
-                {
-                    continue;
-                }
-
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-                EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
-                EXPECT_EQ(freqVector.size(), 1);
-                allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
-
-                EXPECT_EQ(amplitudeProfile.size(), 2);
-                if (amplitudeProfile.size() > 1)
-                {
-                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                }
-
-                // item.second->dumpPcmData();
-            }
-
-            std::sort(allFreq.begin(), allFreq.end());
-            EXPECT_NEAR(allFreq[0], 600.0, 25.0);
-            EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
-        }
-        {
-            auto audioCounters = group.clients[2]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
-            EXPECT_EQ(audioCounters.lostPackets, 0);
-
-            const auto& rData3 = group.clients[2]->getAudioReceiveStats();
-            // We expect one audio ssrc
-            EXPECT_EQ(rData3.size(), 1);
-            size_t audioSsrcCount = 0;
-            for (const auto& item : rData3)
-            {
-                if (group.clients[2]->isRemoteVideoSsrc(item.first))
-                {
-                    continue;
-                }
-
-                ++audioSsrcCount;
-
-                std::vector<double> freqVector;
-                std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                auto rec = item.second->getRecording();
-                analyzeRecording(rec,
-                    freqVector,
-                    amplitudeProfile,
-                    item.second->getLoggableId().c_str(),
-                    5 * utils::Time::ms);
-
-                std::sort(freqVector.begin(), freqVector.end());
-                EXPECT_EQ(freqVector.size(), 2);
-                EXPECT_NEAR(freqVector[0], 600.0, 25.0);
-                EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
-
-                EXPECT_GE(amplitudeProfile.size(), 2);
-                for (auto& item : amplitudeProfile)
+                EXPECT_GE(data.amplitudeProfile.size(), 2);
+                for (auto& item : data.amplitudeProfile)
                 {
                     logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
                 // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
-                if (amplitudeProfile.size() >= 2)
+                if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(amplitudeProfile[0].second, 0);
+                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
 
-                    EXPECT_NEAR(amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(amplitudeProfile.back().first, 48000 * 0.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
+                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 0.79, 48000 * 0.2);
                 }
 
-                // item.second->dumpPcmData();
+                EXPECT_EQ(data.audioSsrcCount, 1);
             }
-
-            EXPECT_EQ(audioSsrcCount, 1);
         }
+
+        // const auto audioPacketSampleCount = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+        // {
+        //     auto audioCounters =
+        //     group.clients[0]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        //     EXPECT_EQ(audioCounters.lostPackets, 0);
+        //     const auto& rData1 = group.clients[0]->getAudioReceiveStats();
+        //     std::vector<double> allFreq;
+
+        //     for (const auto& item : rData1)
+        //     {
+        //         if (group.clients[0]->isRemoteVideoSsrc(item.first))
+        //         {
+        //             continue;
+        //         }
+
+        //         std::vector<double> freqVector;
+        //         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+        //         auto rec = item.second->getRecording();
+        //         analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+        //         EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+        //         EXPECT_EQ(freqVector.size(), 1);
+        //         allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+        //         EXPECT_EQ(amplitudeProfile.size(), 2);
+        //         if (amplitudeProfile.size() > 1)
+        //         {
+        //             EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+        //         }
+
+        //         // item.second->dumpPcmData();
+        //     }
+
+        //     std::sort(allFreq.begin(), allFreq.end());
+        //     EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
+        //     EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
+        // }
+        // {
+        //     auto audioCounters =
+        //     group.clients[1]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        //     EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        //     const auto& rData2 = group.clients[1]->getAudioReceiveStats();
+        //     std::vector<double> allFreq;
+        //     for (const auto& item : rData2)
+        //     {
+        //         if (group.clients[1]->isRemoteVideoSsrc(item.first))
+        //         {
+        //             continue;
+        //         }
+
+        //         std::vector<double> freqVector;
+        //         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+        //         auto rec = item.second->getRecording();
+        //         analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
+        //         EXPECT_NEAR(rec.size(), 5 * codec::Opus::sampleRate, 3 * audioPacketSampleCount);
+        //         EXPECT_EQ(freqVector.size(), 1);
+        //         allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
+
+        //         EXPECT_EQ(amplitudeProfile.size(), 2);
+        //         if (amplitudeProfile.size() > 1)
+        //         {
+        //             EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+        //         }
+
+        //         // item.second->dumpPcmData();
+        //     }
+
+        //     std::sort(allFreq.begin(), allFreq.end());
+        //     EXPECT_NEAR(allFreq[0], 600.0, 25.0);
+        //     EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
+        // }
+        // {
+        //     auto audioCounters =
+        //     group.clients[2]->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        //     EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        //     const auto& rData3 = group.clients[2]->getAudioReceiveStats();
+        //     // We expect one audio ssrc
+        //     EXPECT_EQ(rData3.size(), 1);
+        //     size_t audioSsrcCount = 0;
+        //     for (const auto& item : rData3)
+        //     {
+        //         if (group.clients[2]->isRemoteVideoSsrc(item.first))
+        //         {
+        //             continue;
+        //         }
+
+        //         ++audioSsrcCount;
+
+        //         std::vector<double> freqVector;
+        //         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+        //         auto rec = item.second->getRecording();
+        //         analyzeRecording(rec,
+        //             freqVector,
+        //             amplitudeProfile,
+        //             item.second->getLoggableId().c_str(),
+        //             5 * utils::Time::ms);
+
+        //         std::sort(freqVector.begin(), freqVector.end());
+        //         EXPECT_EQ(freqVector.size(), 2);
+        //         EXPECT_NEAR(freqVector[0], 600.0, 25.0);
+        //         EXPECT_NEAR(freqVector[1], 1300.0, 25.0);
+
+        //         EXPECT_GE(amplitudeProfile.size(), 2);
+        //         for (auto& item : amplitudeProfile)
+        //         {
+        //             logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
+        //         }
+        //         // We expect a ramp-up of volume like this:
+        //         // start from 0;
+        //         // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+        //         if (amplitudeProfile.size() >= 2)
+        //         {
+        //             EXPECT_EQ(amplitudeProfile[0].second, 0);
+
+        //             EXPECT_NEAR(amplitudeProfile.back().second, 1826, 250);
+        //             EXPECT_NEAR(amplitudeProfile.back().first, 48000 * 0.79, 48000 * 0.2);
+        //         }
+
+        //         // item.second->dumpPcmData();
+        //     }
+
+        //     EXPECT_EQ(audioSsrcCount, 1);
+        // }
     });
 }
 
