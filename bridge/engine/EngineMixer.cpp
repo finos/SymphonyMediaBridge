@@ -1010,7 +1010,7 @@ void EngineMixer::markSsrcsInUse()
     for (auto& it : _ssrcInboundContexts)
     {
         auto inboundContext = it.second;
-        if (inboundContext->rtpMap.format == bridge::RtpMap::Format::OPUS)
+        if (inboundContext->rtpMap.isAudio())
         {
             inboundContext->isSsrcUsed = _activeMediaList->isInActiveTalkerList(inboundContext->endpointIdHash);
             continue;
@@ -1764,7 +1764,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
 
     if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
-        const bool isAudio = (ssrcContext->rtpMap.format == bridge::RtpMap::Format::OPUS);
+        const bool isAudio = ssrcContext->rtpMap.isAudio();
         if (!setPacketSourceEndpointIdHash(*packet, sender->getEndpointIdHash(), ssrc, isAudio))
         {
             logger::debug("incoming barbell packet unmapped %zu ssrc %u %s",
