@@ -1010,7 +1010,7 @@ void EngineMixer::markSsrcsInUse()
     for (auto& it : _ssrcInboundContexts)
     {
         auto inboundContext = it.second;
-        if (inboundContext->rtpMap.format == bridge::RtpMap::Format::OPUS)
+        if (inboundContext->rtpMap.isAudio())
         {
             inboundContext->isSsrcUsed = _activeMediaList->isInActiveTalkerList(inboundContext->endpointIdHash);
             continue;
@@ -1116,7 +1116,10 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         if (!inboundContext.activeMedia && recentActivity)
         {
             inboundContext.activeMedia = true;
-            _engineStreamDirector->streamActiveStateChanged(endpointIdHash, inboundContext.ssrc, true);
+            if (inboundContext.rtpMap.isVideo())
+            {
+                _engineStreamDirector->streamActiveStateChanged(endpointIdHash, inboundContext.ssrc, true);
+            }
             continue;
         }
 
@@ -1126,8 +1129,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         if (!recentActivity && receiveCounters.packets > 5 && inboundContext.activeMedia &&
             inboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
         {
-            auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-            if (videoStreamItr != _engineVideoStreams.end())
+            if (inboundContext.rtpMap.isVideo() && _engineVideoStreams.contains(endpointIdHash))
             {
                 _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false);
                 inboundContext.inactiveTransitionCount++;
@@ -1785,7 +1787,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
 
     if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
-        const bool isAudio = (ssrcContext->rtpMap.format == bridge::RtpMap::Format::OPUS);
+        const bool isAudio = ssrcContext->rtpMap.isAudio();
         if (!setPacketSourceEndpointIdHash(*packet, sender->getEndpointIdHash(), ssrc, isAudio))
         {
             logger::debug("incoming barbell packet unmapped %zu ssrc %u %s",
