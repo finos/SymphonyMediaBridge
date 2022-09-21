@@ -250,7 +250,7 @@ api::ConferenceEndpointExtendedInfo IntegrationTest::getEndpointExtendedInfo(emu
 }
 
 void fftThreadRun(const std::vector<int16_t>& recording,
-    std::vector<std::vector<double>>& frequencies,
+    std::vector<double>& frequencies,
     const size_t fftWindowSize,
     size_t size,
     size_t numThreads,
@@ -265,7 +265,7 @@ void fftThreadRun(const std::vector<int16_t>& recording,
         }
 
         SampleDataUtils::fft(testVector);
-        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies[threadId]);
+        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies);
     }
 }
 
@@ -306,13 +306,14 @@ void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
     auto const numThreads = std::max(std::thread::hardware_concurrency(), 4U);
     std::vector<std::thread> workers;
     std::vector<std::vector<double>> frequencies;
+    frequencies.reserve(numThreads);
 
     for (size_t threadId = 0; threadId < numThreads; threadId++)
     {
         frequencies.push_back(std::vector<double>());
         workers.push_back(std::thread(fftThreadRun,
             std::ref(recording),
-            std::ref(frequencies),
+            std::ref(frequencies[threadId]),
             fftWindowSize,
             size,
             numThreads,
