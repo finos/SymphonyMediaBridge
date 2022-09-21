@@ -245,54 +245,278 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         EXPECT_NE(stats.receiver.packetsMissing, 0);
         EXPECT_NE(stats.receiver.packetsRecovered, 0);
 
-        /*        const auto& rData1 = group.clients[0]->getAudioReceiveStats();
-                std::vector<double> allFreq;
-                EXPECT_EQ(rData1.size(), 2);
-
-                for (const auto& item : rData1)
-                {
-                    if (group.clients[0]->isRemoteVideoSsrc(item.first))
-                    {
-                        continue;
-                    }
-
-                    std::vector<double> freqVector;
-                    std::vector<std::pair<uint64_t, double>> amplitudeProfile;
-                    auto rec = item.second->getRecording();
-                    analyzeRecording(rec, freqVector, amplitudeProfile, item.second->getLoggableId().c_str());
-
-                    allFreq.insert(allFreq.begin(), freqVector.begin(), freqVector.end());
-
-                    EXPECT_EQ(amplitudeProfile.size(), 2);
-                    if (amplitudeProfile.size() > 1)
-                    {
-                        EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
-                    }
-
-                    // item.second->dumpPcmData();
-                }
-
-                std::sort(allFreq.begin(), allFreq.end());
-                ASSERT_GE(allFreq.size(), 2);
-                EXPECT_NEAR(allFreq[0], 1300.0, 25.0);
-                EXPECT_NEAR(allFreq[1], 2100.0, 25.0);
-        */
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary3;
         auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-        group.clients[1]->_transport->getReportSummary(transportSummary2);
-        group.clients[2]->_transport->getReportSummary(transportSummary3);
+        group.clients[1]->_transport->getReportSummary(transportSummary1);
+        group.clients[2]->_transport->getReportSummary(transportSummary2);
 
         logger::debug("client1 received video pkts %" PRIu64 " lost %" PRIu64,
             "bbTest",
             videoReceiveStats.packets,
             videoReceiveStats.lostPackets);
-        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary2);
-        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary3);
+        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
+        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
         EXPECT_GE(group.clients[0]->getVideoPacketsReceived(),
-            transportSummary2.begin()->second.packetsSent + transportSummary3.begin()->second.packetsSent - 100);
+            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent - 100);
         EXPECT_NEAR(group.clients[0]->getVideoPacketsReceived(),
-            transportSummary2.begin()->second.packetsSent + transportSummary3.begin()->second.packetsSent,
+            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent,
             200);
+    });
+}
+
+TEST_F(BarbellTest, simpleBarbell)
+{
+    runTestInThread(3 * _numWorkerThreads + 10, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "rctl.enable": false,
+        "bwe.enable":false
+        })");
+
+        initBridge(_config);
+
+        config::Config config1;
+        config1.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "rctl.enable": false
+        })");
+
+        config::Config config2;
+        config2.readFromString(
+            R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "ice.singlePort":12000,
+        "port":8090,
+        "recording.singlePort":12500,
+        "rctl.enable": false
+        })");
+
+        auto bridge2 = std::make_unique<bridge::Bridge>(config2);
+        bridge2->initialize(_bridgeEndpointFactory);
+
+        const auto baseUrl = "http://127.0.0.1:8080";
+        const auto baseUrl2 = "http://127.0.0.1:8090";
+
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            3);
+
+        Conference conf;
+        Conference conf2;
+
+        Barbell bb1;
+        Barbell bb2;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+        group.startConference(conf2, baseUrl2);
+
+        auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
+        auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
+
+        bb1.configure(sdp2);
+        bb2.configure(sdp1);
+
+        utils::Time::nanoSleep(2 * utils::Time::sec);
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
+        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+        group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
+        statsRequest.awaitResponse(1500 * utils::Time::ms);
+        EXPECT_TRUE(statsRequest.isSuccess());
+        HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+        confRequest.awaitResponse(500 * utils::Time::ms);
+        EXPECT_TRUE(confRequest.isSuccess());
+
+        bb1.remove(baseUrl);
+
+        utils::Time::nanoSleep(utils::Time::ms * 1000); // let pending packets be sent and received)
+
+        group.clients[0]->_transport->stop();
+        group.clients[1]->_transport->stop();
+        group.clients[2]->_transport->stop();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        logVideoSent("client1", *group.clients[0]);
+        logVideoSent("client2", *group.clients[1]);
+        logVideoSent("client3", *group.clients[2]);
+
+        const double expectedFrequencies[2][2] = {{1300.0, 2100.0}, {600.0, 2100.0}};
+        size_t freqId = 0;
+        for (auto id : {0, 1})
+        {
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
+            EXPECT_EQ(data.dominantFrequencies.size(), 2);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+        }
+
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
+        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
+        group.clients[1]->_transport->getReportSummary(transportSummary1);
+        group.clients[2]->_transport->getReportSummary(transportSummary2);
+
+        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
+        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
+
+        EXPECT_NEAR(videoReceiveStats.packets,
+            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent,
+            25);
+    });
+}
+
+TEST_F(BarbellTest, barbellAfterClients)
+{
+    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "rctl.enable": false,
+        "bwe.enable":false
+        })");
+
+        initBridge(_config);
+
+        config::Config config1;
+        config1.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "rctl.enable": false
+        })");
+
+        config::Config config2;
+        config2.readFromString(
+            R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "ice.singlePort":12000,
+        "port":8090,
+        "recording.singlePort":12500,
+        "rctl.enable": false
+        })");
+
+        auto bridge2 = std::make_unique<bridge::Bridge>(config2);
+        bridge2->initialize(_bridgeEndpointFactory);
+
+        const auto baseUrl = "http://127.0.0.1:8080";
+        const auto baseUrl2 = "http://127.0.0.1:8090";
+
+        utils::Time::nanoSleep(1 * utils::Time::sec);
+
+        GroupCall<SfuClient<Channel>> group(_instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_transportFactory,
+            *_sslDtls,
+            2);
+
+        Conference conf;
+        Conference conf2;
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+        group.startConference(conf2, baseUrl2);
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
+        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+
+        if (!group.connectAll(utils::Time::sec * _clientsConnectionTimeout))
+        {
+            EXPECT_TRUE(false);
+            return;
+        }
+
+        group.clients[0]->_audioSource->setFrequency(600);
+        group.clients[1]->_audioSource->setFrequency(1300);
+
+        group.clients[0]->_audioSource->setVolume(0.6);
+        group.clients[1]->_audioSource->setVolume(0.6);
+
+        utils::Time::nanoSleep(500 * utils::Time::ms);
+
+        Barbell bb1;
+        Barbell bb2;
+
+        auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
+        auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
+
+        bb1.configure(sdp2);
+        bb2.configure(sdp1);
+
+        utils::Time::nanoSleep(2 * utils::Time::sec);
+
+        group.run(utils::Time::ms * 5000);
+
+        group.clients[1]->stopRecording();
+        group.clients[0]->stopRecording();
+
+        HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
+        statsRequest.awaitResponse(1500 * utils::Time::ms);
+        EXPECT_TRUE(statsRequest.isSuccess());
+        HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
+        confRequest.awaitResponse(500 * utils::Time::ms);
+        EXPECT_TRUE(confRequest.isSuccess());
+
+        utils::Time::nanoSleep(utils::Time::ms * 200); // let pending packets be sent and received
+        group.clients[0]->_transport->stop();
+        group.clients[1]->_transport->stop();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+
+        finalizeSimulation();
+
+        logVideoSent("client1", *group.clients[0]);
+        logVideoSent("client2", *group.clients[1]);
+
+        const double expectedFrequencies[2] = {1300.0, 600.0};
+        size_t freqId = 0;
+        for (auto id : {0, 1})
+        {
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
+            EXPECT_EQ(data.dominantFrequencies.size(), 1);
+            EXPECT_EQ(data.amplitudeProfile.size(), 2);
+            if (data.amplitudeProfile.size() > 1)
+            {
+                EXPECT_NEAR(data.amplitudeProfile[1].second, 5725, 100);
+            }
+            ASSERT_GE(data.dominantFrequencies.size(), 1);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId++], 25.0);
+        }
+
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
+        group.clients[1]->_transport->getReportSummary(transportSummary);
+
+        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary);
+
+        EXPECT_NEAR(videoReceiveStats.packets, transportSummary.begin()->second.packetsSent, 25);
     });
 }
