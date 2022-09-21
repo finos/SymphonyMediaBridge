@@ -224,14 +224,24 @@ api::ConferenceEndpointExtendedInfo IntegrationTest::getEndpointExtendedInfo(con
     return api::Parser::parseEndpointExtendedInfo(endpointRequest.getJsonBody());
 }
 
-size_t getNumWorkingThreads()
+void fftThreadRun(const std::vector<int16_t>& recording,
+    std::vector<std::vector<double>>& frequencies,
+    const size_t fftWindowSize,
+    size_t size,
+    size_t numThreads,
+    size_t threadId)
 {
-    static const auto hardwareConcurrency = std::thread::hardware_concurrency();
-    if (hardwareConcurrency == 0)
+    for (size_t cursor = 256 * threadId; cursor < size - fftWindowSize; cursor += 256 * numThreads)
     {
-        return 8;
+        std::valarray<std::complex<double>> testVector(fftWindowSize);
+        for (uint64_t x = 0; x < fftWindowSize; ++x)
+        {
+            testVector[x] = std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
+        }
+
+        SampleDataUtils::fft(testVector);
+        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies[threadId]);
     }
-    return std::max(hardwareConcurrency, 1U);
 }
 
 void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
@@ -268,44 +278,38 @@ void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto const numThreads = getNumWorkingThreads();
+    auto const numThreads = std::max(std::thread::hardware_concurrency(), 4U);
     std::vector<std::thread> workers;
-    std::mutex fft_mutex;
+    std::vector<std::vector<double>> frequencies;
 
     for (size_t threadId = 0; threadId < numThreads; threadId++)
     {
-        workers.push_back(std::thread([&frequencyPeaks, &recording, &fft_mutex, &logId, size, numThreads, threadId]() {
-            for (size_t cursor = 256 * threadId; cursor < size - fftWindowSize; cursor += 256 * numThreads)
-            {
-                std::valarray<std::complex<double>> testVector(fftWindowSize);
-                for (uint64_t x = 0; x < fftWindowSize; ++x)
-                {
-                    testVector[x] =
-                        std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
-                }
-
-                SampleDataUtils::fft(testVector);
-
-                std::vector<double> frequencies;
-                SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies);
-                {
-                    const std::lock_guard<std::mutex> lock(fft_mutex);
-                    for (size_t i = 0; i < frequencies.size() && i < 50; ++i)
-                    {
-                        if (std::find(frequencyPeaks.begin(), frequencyPeaks.end(), frequencies[i]) ==
-                            frequencyPeaks.end())
-                        {
-                            logger::debug("added new freq %.3f", logId, frequencies[i]);
-                            frequencyPeaks.push_back(frequencies[i]);
-                        }
-                    }
-                }
-            }
-        }));
+        frequencies.push_back(std::vector<double>());
+        workers.push_back(std::thread(fftThreadRun,
+            std::ref(recording),
+            std::ref(frequencies),
+            fftWindowSize,
+            size,
+            numThreads,
+            threadId));
     }
-    for (size_t i = 0; i < numThreads; i++)
+
+    for (size_t threadId = 0; threadId < numThreads; threadId++)
     {
-        workers[i].join();
+        workers[threadId].join();
+    }
+
+    for (size_t threadId = 0; threadId < numThreads; threadId++)
+    {
+        for (size_t i = 0; i < frequencies[threadId].size() && i < 50; ++i)
+        {
+            if (std::find(frequencyPeaks.begin(), frequencyPeaks.end(), frequencies[threadId][i]) ==
+                frequencyPeaks.end())
+            {
+                logger::debug("added new freq %.3f", logId, frequencies[threadId][i]);
+                frequencyPeaks.push_back(frequencies[threadId][i]);
+            }
+        }
     }
 
     auto stop = std::chrono::high_resolution_clock::now();
@@ -385,7 +389,7 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
 
 void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::function<void()> test)
 {
-    // allow internet thread to forward packets next time it wakes up.
+// allow internet thread to forward packets next time it wakes up.
 #if USE_FAKENETWORK
     _internet->start();
 #endif
