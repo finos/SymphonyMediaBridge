@@ -624,8 +624,8 @@ TEST_F(EngineStreamDirectorTest, bandwidthEstimationAllNeededQualityLevelsAreUse
     _engineStreamDirector->setUplinkEstimateKbps(3, 2000, 61 * utils::Time::sec);
 
     // Low estimate
-    _engineStreamDirector->setUplinkEstimateKbps(4, 1, 60 * utils::Time::sec);
-    _engineStreamDirector->setUplinkEstimateKbps(4, 1, 61 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(4, 101, 60 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(4, 101, 61 * utils::Time::sec);
 
     // Used by 4
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));

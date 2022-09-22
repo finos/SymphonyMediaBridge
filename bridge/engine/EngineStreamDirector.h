@@ -936,10 +936,11 @@ private:
         bool sendingVideo = participantStreams.primary.isSendingVideo() ||
             (participantStreams.secondary.isSet() && participantStreams.secondary.get().isSendingVideo());
 
-        // The value of maxReceivingVideoStreams dictates avaible bitrate distribution, but if we are
-        // the only one, or the very first participant sending video, it'll be 0. Since we want to initialize
-        // wanted pinned/unpinned qualities anyway, it's important we assure it's set to 1, to conform
-        // with the configLadder table assumption that at least one stream is present.
+        // We need to divide available bitrate (minus bitrate for slides, if present) to "maxReceivingVideoStreams".
+        // "maxReceivingVideoStreams" can be 0, if we are the only one sending video, or the very first one
+        // - in that case quality limits will be initially overestimated (but would be peridically updated with each
+        // uplink estimation anyway). To lookup "configLadder" we need at least one stream, thus capping to 1 from
+        // below.
         const auto maxReceivingVideoStreams =
             std::max(1ul, std::min(_lowQualitySsrcs.size(), (unsigned long)_lastN) - (sendingVideo ? 1 : 0));
 
