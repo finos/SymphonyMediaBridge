@@ -63,7 +63,7 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    if (!_outboundContext.rewrite.shouldSend(header->ssrc.get(), _extendedSequenceNumber))
+    if (!_outboundContext.shouldSend(header->ssrc.get(), _extendedSequenceNumber))
     {
         logger::warn("%s dropping packet ssrc %u, seq %u, timestamp %u, last sent seq %u, offset %d",
             "AudioForwarderRewriteAndSendJob",

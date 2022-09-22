@@ -1,4 +1,4 @@
-#include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
+#include "bridge/engine/RecordingVideoForwarderSendJob.h"
 #include "bridge/engine/EngineMessageListener.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcInboundContext.h"
@@ -9,7 +9,7 @@
 namespace bridge
 {
 
-VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundContext& outboundContext,
+RecordingVideoForwarderSendJob::RecordingVideoForwarderSendJob(SsrcOutboundContext& outboundContext,
     SsrcInboundContext& senderInboundContext,
     memory::UniquePacket packet,
     transport::Transport& transport,
@@ -31,7 +31,7 @@ VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundCon
     assert(_packet->getLength() > 0);
 }
 
-void VideoForwarderRewriteAndSendJob::run()
+void RecordingVideoForwarderSendJob::run()
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
@@ -43,7 +43,7 @@ void VideoForwarderRewriteAndSendJob::run()
     if (_outboundContext.rtpMap.format == RtpMap::Format::VP8RTX)
     {
         logger::warn("%s rtx packet should not reach rewrite and send. ssrc %u, seq %u",
-            "VideoForwarderRewriteAndSendJob",
+            "RecordingVideoForwarderSendJob",
             _transport.getLoggableId().c_str(),
             rtpHeader->ssrc.get(),
             _extendedSequenceNumber);
@@ -53,13 +53,13 @@ void VideoForwarderRewriteAndSendJob::run()
     if (!_outboundContext.packetCache.isSet())
     {
         logger::debug("New ssrc %u seen on %s, sending request to add videoPacketCache to transport",
-            "VideoForwarderRewriteAndSendJob",
+            "RecordingVideoForwarderSendJob",
             _outboundContext.ssrc,
             _transport.getLoggableId().c_str());
 
         _outboundContext.packetCache.set(nullptr);
 
-        EngineMessage::Message message(EngineMessage::Type::AllocateVideoPacketCache);
+        EngineMessage::Message message(EngineMessage::Type::AllocateRecordingRtpPacketCache);
         message.command.allocateVideoPacketCache.mixer = &_mixer;
         message.command.allocateVideoPacketCache.ssrc = _outboundContext.ssrc;
         message.command.allocateVideoPacketCache.endpointIdHash = _endpointIdHash;
@@ -92,7 +92,7 @@ void VideoForwarderRewriteAndSendJob::run()
             _outboundContext.needsKeyframe = false;
 
             logger::debug("%s requested key frame from %u on ssrc %u",
-                "VideoForwarderRewriteAndSendJob",
+                "RecordingVideoForwarderSendJob",
                 _transport.getLoggableId().c_str(),
                 _senderInboundContext.ssrc,
                 _outboundContext.ssrc);
@@ -102,7 +102,7 @@ void VideoForwarderRewriteAndSendJob::run()
     if (!_outboundContext.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
     {
         logger::debug("%s dropping packet. Rewrite not suitable ssrc %u, seq %u",
-            "VideoForwarderRewriteAndSendJob",
+            "RecordingVideoForwarderSendJob",
             _transport.getLoggableId().c_str(),
             rtpHeader->ssrc.get(),
             _extendedSequenceNumber);
@@ -134,7 +134,7 @@ void VideoForwarderRewriteAndSendJob::run()
         if (!_outboundContext.packetCache.get()->add(*_packet, rtpHeader->sequenceNumber))
         {
             logger::warn("%s failed to add packet to cache. ssrc %u, seq %u",
-                "VideoForwarderRewriteAndSendJob",
+                "RecordingVideoForwarderSendJob",
                 _transport.getLoggableId().c_str(),
                 rtpHeader->ssrc.get(),
                 rtpHeader->sequenceNumber.get());

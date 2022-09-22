@@ -11,7 +11,7 @@ namespace bridge
 
 VideoNackReceiveJob::VideoNackReceiveJob(SsrcOutboundContext& rtxSsrcOutboundContext,
     transport::RtcTransport& sender,
-    PacketCache& videoPacketCache,
+    SsrcOutboundContext& mainOutboundContext,
     const uint16_t pid,
     const uint16_t blp,
     const uint64_t timestamp,
@@ -19,7 +19,7 @@ VideoNackReceiveJob::VideoNackReceiveJob(SsrcOutboundContext& rtxSsrcOutboundCon
     : jobmanager::CountedJob(sender.getJobCounter()),
       _rtxSsrcOutboundContext(rtxSsrcOutboundContext),
       _sender(sender),
-      _videoPacketCache(videoPacketCache),
+      _mainOutboundContext(mainOutboundContext),
       _pid(pid),
       _blp(blp),
       _timestamp(timestamp),
@@ -36,7 +36,8 @@ void VideoNackReceiveJob::run()
         _blp,
         _sender.getLoggableId().c_str());
 
-    if (!_sender.isConnected())
+    // it may be that we post a few of these jobs before cache has been set, but that is ok
+    if (!_sender.isConnected() || !_mainOutboundContext.packetCache.isSet() || !_mainOutboundContext.packetCache.get())
     {
         return;
     }
@@ -88,7 +89,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
         return;
     }
 
-    const auto cachedPacket = _videoPacketCache.get(sequenceNumber);
+    const auto cachedPacket = _mainOutboundContext.packetCache.get()->get(sequenceNumber);
     if (!cachedPacket)
     {
         return;

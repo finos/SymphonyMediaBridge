@@ -11,7 +11,8 @@
 namespace
 {
 
-static const uint32_t outboundSsrc = 12345;
+static const uint32_t mediaSsrc = 12345;
+static const uint32_t rtxSsrc = 54321;
 
 } // namespace
 
@@ -24,16 +25,22 @@ class VideoNackReceiveJobTest : public ::testing::Test
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "VideoNackReceiveJobTest");
-        _ssrcOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc,
+        _mainOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(mediaSsrc,
             *_allocator,
             bridge::RtpMap(bridge::RtpMap::Format::VP8));
 
-        _packetCache = std::make_unique<bridge::PacketCache>("VideoNackReceiveJobTest", outboundSsrc);
+        _rtxOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(rtxSsrc,
+            *_allocator,
+            bridge::RtpMap(bridge::RtpMap::Format::VP8RTX));
+
+        _packetCache = std::make_unique<bridge::PacketCache>("VideoNackReceiveJobTest", mediaSsrc);
+        _mainOutboundContext->packetCache.set(_packetCache.get());
     }
 
     void TearDown() override
     {
-        _ssrcOutboundContext.reset();
+        _mainOutboundContext.reset();
+        _rtxOutboundContext.reset();
 
         auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager);
         _jobQueue.reset();
@@ -48,7 +55,8 @@ protected:
     std::unique_ptr<DummyRtcTransport> _transport;
 
     std::unique_ptr<memory::PacketPoolAllocator> _allocator;
-    std::unique_ptr<bridge::SsrcOutboundContext> _ssrcOutboundContext;
+    std::unique_ptr<bridge::SsrcOutboundContext> _mainOutboundContext;
+    std::unique_ptr<bridge::SsrcOutboundContext> _rtxOutboundContext;
     std::unique_ptr<bridge::PacketCache> _packetCache;
 };
 
@@ -59,35 +67,35 @@ TEST_F(VideoNackReceiveJobTest, nacksNotAlreadyRespondedToAreHandled)
     uint64_t timestamp = 1000;
     const uint64_t rtt = 100 * utils::Time::ms;
 
-    auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
+    auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_rtxOutboundContext,
         *_transport,
-        *_packetCache,
+        *_mainOutboundContext,
         pid,
         blp,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
-    EXPECT_EQ(pid, _ssrcOutboundContext->lastRespondedNackPid);
-    EXPECT_EQ(blp, _ssrcOutboundContext->lastRespondedNackBlp);
+    EXPECT_EQ(timestamp, _rtxOutboundContext->lastRespondedNackTimestamp);
+    EXPECT_EQ(pid, _rtxOutboundContext->lastRespondedNackPid);
+    EXPECT_EQ(blp, _rtxOutboundContext->lastRespondedNackBlp);
 
     pid = 5;
     blp = 7;
     timestamp = 1001;
 
-    videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
+    videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_rtxOutboundContext,
         *_transport,
-        *_packetCache,
+        *_mainOutboundContext,
         pid,
         blp,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
-    EXPECT_EQ(pid, _ssrcOutboundContext->lastRespondedNackPid);
-    EXPECT_EQ(blp, _ssrcOutboundContext->lastRespondedNackBlp);
+    EXPECT_EQ(timestamp, _rtxOutboundContext->lastRespondedNackTimestamp);
+    EXPECT_EQ(pid, _rtxOutboundContext->lastRespondedNackPid);
+    EXPECT_EQ(blp, _rtxOutboundContext->lastRespondedNackBlp);
 }
 
 TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
@@ -97,25 +105,25 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToWithinRttAreIgnored)
     const uint64_t timestamp = 1000;
     const uint64_t rtt = 100 * utils::Time::ms;
 
-    auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
+    auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_rtxOutboundContext,
         *_transport,
-        *_packetCache,
+        *_mainOutboundContext,
         pid,
         blp,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
 
-    videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
+    videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_rtxOutboundContext,
         *_transport,
-        *_packetCache,
+        *_mainOutboundContext,
         pid,
         blp,
         timestamp + rtt - utils::Time::ms,
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
+    EXPECT_EQ(timestamp, _rtxOutboundContext->lastRespondedNackTimestamp);
 }
 
 TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
@@ -125,9 +133,9 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
     uint64_t timestamp = 1000;
     const uint64_t rtt = 100 * utils::Time::ms;
 
-    auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
+    auto videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_rtxOutboundContext,
         *_transport,
-        *_packetCache,
+        *_mainOutboundContext,
         pid,
         blp,
         timestamp,
@@ -136,14 +144,14 @@ TEST_F(VideoNackReceiveJobTest, nacksAlreadyRespondedToOutsideRttAreHandled)
 
     timestamp += rtt + utils::Time::ms;
 
-    videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_ssrcOutboundContext,
+    videoNackReceiveJob = std::make_unique<bridge::VideoNackReceiveJob>(*_rtxOutboundContext,
         *_transport,
-        *_packetCache,
+        *_mainOutboundContext,
         pid,
         blp,
         timestamp,
         rtt);
     videoNackReceiveJob->run();
 
-    EXPECT_EQ(timestamp, _ssrcOutboundContext->lastRespondedNackTimestamp);
+    EXPECT_EQ(timestamp, _rtxOutboundContext->lastRespondedNackTimestamp);
 }

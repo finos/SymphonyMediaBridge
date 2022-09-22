@@ -21,6 +21,7 @@
 #include "bridge/engine/RecordingEventAckReceiveJob.h"
 #include "bridge/engine/RecordingRtpNackReceiveJob.h"
 #include "bridge/engine/RecordingSendEventJob.h"
+#include "bridge/engine/RecordingVideoForwarderSendJob.h"
 #include "bridge/engine/SendEngineMessageJob.h"
 #include "bridge/engine/SendRtcpJob.h"
 #include "bridge/engine/SetMaxMediaBitrateJob.h"
@@ -142,7 +143,7 @@ class RemovePacketCacheJob : public jobmanager::CountedJob
 {
 public:
     RemovePacketCacheJob(bridge::EngineMixer& mixer,
-        transport::RtcTransport& transport,
+        transport::Transport& transport,
         bridge::SsrcOutboundContext& outboundContext,
         bridge::EngineMessageListener& mixerManager)
         : CountedJob(transport.getJobCounter()),
@@ -179,7 +180,7 @@ private:
 class AddPacketCacheJob : public jobmanager::CountedJob
 {
 public:
-    AddPacketCacheJob(transport::RtcTransport& transport,
+    AddPacketCacheJob(transport::Transport& transport,
         bridge::SsrcOutboundContext& outboundContext,
         bridge::PacketCache* packetCache)
         : CountedJob(transport.getJobCounter()),
@@ -849,19 +850,28 @@ void EngineMixer::addRecordingRtpPacketCache(const uint32_t ssrc, const size_t e
 {
     assert(endpointIdHash);
 
-    auto recordingStreamItr = _engineRecordingStreams.find(endpointIdHash);
-    if (recordingStreamItr == _engineRecordingStreams.end())
+    auto recordingStream = _engineRecordingStreams.getItem(endpointIdHash);
+    if (!recordingStream)
     {
         return;
     }
 
-    auto outboundContext = recordingStreamItr->second->ssrcOutboundContexts.getItem(ssrc);
-    if (!outboundContext || (outboundContext->packetCache.isSet() && outboundContext->packetCache.get()))
+    auto outboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
+    if (outboundContext)
     {
-        return;
+        auto* transport = recordingStream->transports.getItem(endpointIdHash);
+        auto* outboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
+        if (transport && outboundContext)
+        {
+            transport->getJobQueue().addJob<AddPacketCacheJob>(*transport, *outboundContext, packetCache);
+        }
+        else
+        {
+            logger::warn("cannot find transport and outbound context for recording video packet cache. ssrc %u",
+                _loggableId.c_str(),
+                ssrc);
+        }
     }
-
-    outboundContext->packetCache.set(packetCache);
 }
 
 void EngineMixer::addTransportToRecordingStream(const size_t streamIdHash,
@@ -2186,8 +2196,6 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
             continue;
         }
 
-        allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
-
         for (const auto& transportEntry : recordingStream->transports)
         {
             ssrcOutboundContext->onRtpSent(timestamp);
@@ -2197,7 +2205,10 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
                 transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
                     std::move(packet),
                     transportEntry.second,
-                    packetInfo.extendedSequenceNumber());
+                    packetInfo.extendedSequenceNumber(),
+                    _messageListener,
+                    transportEntry.first,
+                    *this);
             }
             else
             {
@@ -2401,22 +2412,6 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             continue;
         }
 
-        if (!ssrcOutboundContext->packetCache.isSet())
-        {
-            logger::debug("New ssrc %u seen, sending request to add videoPacketCache to barbell",
-                _loggableId.c_str(),
-                targetSsrc);
-
-            ssrcOutboundContext->packetCache.set(nullptr);
-            {
-                EngineMessage::Message message(EngineMessage::Type::AllocateVideoPacketCache);
-                message.command.allocateVideoPacketCache.mixer = this;
-                message.command.allocateVideoPacketCache.ssrc = targetSsrc;
-                message.command.allocateVideoPacketCache.endpointIdHash = barbell.idHash;
-                _messageListener.onMessage(std::move(message));
-            }
-        }
-
         ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
         auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
         if (packet)
@@ -2425,7 +2420,10 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
                 *(packetInfo.inboundContext()),
                 std::move(packet),
                 barbell.transport,
-                packetInfo.extendedSequenceNumber());
+                packetInfo.extendedSequenceNumber(),
+                _messageListener,
+                barbell.idHash,
+                *this);
         }
         else
         {
@@ -2520,20 +2518,6 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             continue;
         }
 
-        if (!ssrcOutboundContext->packetCache.isSet())
-        {
-            logger::debug("New ssrc %u seen, sending request to add videoPacketCache", _loggableId.c_str(), ssrc);
-
-            ssrcOutboundContext->packetCache.set(nullptr);
-            {
-                EngineMessage::Message message(EngineMessage::Type::AllocateVideoPacketCache);
-                message.command.allocateVideoPacketCache.mixer = this;
-                message.command.allocateVideoPacketCache.ssrc = ssrc;
-                message.command.allocateVideoPacketCache.endpointIdHash = endpointIdHash;
-                _messageListener.onMessage(std::move(message));
-            }
-        }
-
         if (!videoStream->transport.isConnected())
         {
             return;
@@ -2547,7 +2531,10 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
                 *(packetInfo.inboundContext()),
                 std::move(packet),
                 videoStream->transport,
-                packetInfo.extendedSequenceNumber());
+                packetInfo.extendedSequenceNumber(),
+                _messageListener,
+                videoStream->endpointIdHash,
+                *this);
         }
         else
         {
@@ -2579,19 +2566,20 @@ void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo,
             continue;
         }
 
-        allocateRecordingRtpPacketCacheIfNecessary(*ssrcOutboundContext, *recordingStream);
-
         for (const auto& transportEntry : recordingStream->transports)
         {
             ssrcOutboundContext->onRtpSent(timestamp); // active jobs on this ssrc context
             auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
             if (packet)
             {
-                transportEntry.second.getJobQueue().addJob<VideoForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                transportEntry.second.getJobQueue().addJob<RecordingVideoForwarderSendJob>(*ssrcOutboundContext,
                     *(packetInfo.inboundContext()),
                     std::move(packet),
                     transportEntry.second,
-                    packetInfo.extendedSequenceNumber());
+                    packetInfo.extendedSequenceNumber(),
+                    _messageListener,
+                    transportEntry.first,
+                    *this);
             }
             else
             {
@@ -2707,8 +2695,7 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     auto& bbTransport = barbell.transport;
     auto* mediaSsrcOutboundContext =
         obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.audioRtpMap);
-    if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
-        !mediaSsrcOutboundContext->packetCache.get())
+    if (!mediaSsrcOutboundContext)
     {
         return;
     }
@@ -2730,7 +2717,7 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
         rtp::getFeedbackControlInfo(&rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
         bbTransport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*rtxSsrcOutboundContext,
             bbTransport,
-            *(mediaSsrcOutboundContext->packetCache.get()),
+            *mediaSsrcOutboundContext,
             pid,
             blp,
             timestamp,
@@ -2769,8 +2756,7 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     auto rtcpSenderVideoStream = rtcpSenderVideoStreamItr->second;
 
     auto* mediaSsrcOutboundContext = rtcpSenderVideoStream->ssrcOutboundContexts.getItem(mediaSsrc);
-    if (!mediaSsrcOutboundContext || !mediaSsrcOutboundContext->packetCache.isSet() ||
-        !mediaSsrcOutboundContext->packetCache.get())
+    if (!mediaSsrcOutboundContext)
     {
         return;
     }
@@ -2802,7 +2788,7 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         rtp::getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
         rtcpSenderVideoStream->transport.getJobQueue().addJob<bridge::VideoNackReceiveJob>(*rtxSsrcOutboundContext,
             rtcpSenderVideoStream->transport,
-            *(mediaSsrcOutboundContext->packetCache.get()),
+            *mediaSsrcOutboundContext,
             pid,
             blp,
             timestamp,
@@ -2930,19 +2916,12 @@ void EngineMixer::onPliRequestFromReceiver(const size_t endpointIdHash, const ui
         return;
     }
 
-    if (utils::Time::diffGE(outboundContext->pli.userRequestTimestamp, outboundContext->pli.keyFrameTimestamp, 0))
-    {
-        outboundContext->pli.userRequestTimestamp = timestamp;
-    }
-
-    const auto sourceSsrc = outboundContext->rewrite.originalSsrc;
+    const auto sourceSsrc = outboundContext->originalSsrc.load();
     auto inboundSsrcContext = _ssrcInboundContexts.getItem(sourceSsrc);
-    if (!inboundSsrcContext)
+    if (inboundSsrcContext)
     {
-        return;
+        inboundSsrcContext->pliScheduler.triggerPli();
     }
-
-    inboundSsrcContext->pliScheduler.triggerPli();
 }
 
 void EngineMixer::sendLastNListMessage(const size_t endpointIdHash)
@@ -3631,20 +3610,6 @@ void EngineMixer::removeVideoSsrcFromRecording(const EngineVideoStream& videoStr
                 sendRecordingSimulcast(*rec.second, videoStream, videoStream.secondarySimulcastStream.get(), false);
             }
         }
-    }
-}
-
-void EngineMixer::allocateRecordingRtpPacketCacheIfNecessary(SsrcOutboundContext& ssrcOutboundContext,
-    EngineRecordingStream& recordingStream)
-{
-    if (!ssrcOutboundContext.packetCache.isSet())
-    {
-        ssrcOutboundContext.packetCache.set(nullptr);
-        EngineMessage::Message message(EngineMessage::Type::AllocateRecordingRtpPacketCache);
-        message.command.allocateRecordingRtpPacketCache.mixer = this;
-        message.command.allocateRecordingRtpPacketCache.ssrc = ssrcOutboundContext.ssrc;
-        message.command.allocateRecordingRtpPacketCache.endpointIdHash = recordingStream.endpointIdHash;
-        _messageListener.onMessage(std::move(message));
     }
 }
 

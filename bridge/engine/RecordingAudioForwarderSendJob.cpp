@@ -1,5 +1,6 @@
 #include "bridge/engine/RecordingAudioForwarderSendJob.h"
 #include "bridge/engine/AudioRewriter.h"
+#include "bridge/engine/EngineMessageListener.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "rtp/RtpHeader.h"
@@ -10,12 +11,18 @@ namespace bridge
 RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundContext& outboundContext,
     memory::UniquePacket packet,
     transport::RecordingTransport& transport,
-    const uint32_t extendedSequenceNumber)
+    const uint32_t extendedSequenceNumber,
+    EngineMessageListener& mixerManager,
+    size_t endpointIdHash,
+    EngineMixer& mixer)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
       _packet(std::move(packet)),
       _transport(transport),
-      _extendedSequenceNumber(extendedSequenceNumber)
+      _extendedSequenceNumber(extendedSequenceNumber),
+      _mixerManager(mixerManager),
+      _endpointIdHash(endpointIdHash),
+      _mixer(mixer)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -38,7 +45,7 @@ void RecordingAudioForwarderSendJob::run()
     }
 
     uint16_t nextSequenceNumber = 0;
-    if (!_outboundContext.rewrite.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
+    if (!_outboundContext.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
     {
         logger::debug("Dropping rec audio packet - sequence number...", "RecordingAudioForwarderSendJob");
         return;
@@ -57,6 +64,21 @@ void RecordingAudioForwarderSendJob::run()
                 return;
             }
         }
+    }
+    else
+    {
+        logger::debug("New ssrc %u seen on %s, sending request to add AudioPacketCache to transport",
+            "RecordingAudioForwarderSendJob",
+            _outboundContext.ssrc,
+            _transport.getLoggableId().c_str());
+
+        _outboundContext.packetCache.set(nullptr);
+
+        EngineMessage::Message message(EngineMessage::Type::AllocateRecordingRtpPacketCache);
+        message.command.allocateVideoPacketCache.mixer = &_mixer;
+        message.command.allocateVideoPacketCache.ssrc = _outboundContext.ssrc;
+        message.command.allocateVideoPacketCache.endpointIdHash = _endpointIdHash;
+        _mixerManager.onMessage(std::move(message));
     }
 
     _transport.protectAndSend(std::move(_packet));

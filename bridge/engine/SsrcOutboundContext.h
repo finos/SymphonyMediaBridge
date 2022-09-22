@@ -34,31 +34,25 @@ public:
           lastRespondedNackPid(0),
           lastRespondedNackBlp(0),
           lastRespondedNackTimestamp(0),
+          originalSsrc(~0u),
           lastSendTime(utils::Time::getAbsoluteTime()),
           markedForDeletion(false),
           idle(false)
     {
     }
 
-    void onRtpSent(const uint64_t timestamp)
-    {
-        lastSendTime = timestamp;
-        idle = false;
-    }
-
     const uint32_t ssrc;
-
-    std::unique_ptr<codec::OpusEncoder> opusEncoder;
     memory::PacketPoolAllocator& allocator;
     const bridge::RtpMap& rtpMap;
 
-    // These are used by the VP8 forwarder
+    // the following are access only from Transport Jobs
+    std::unique_ptr<codec::OpusEncoder> opusEncoder;
+
+    // These are used by the VP8 forwarder from Transport Jobs only!
     struct SsrcRewrite
     {
         bool empty() const { return lastSent.empty() && offset.empty(); }
-        bool shouldSend(uint32_t ssrc, uint32_t extendedSequenceNumber) const;
 
-        uint32_t originalSsrc = ~0u;
         uint32_t sequenceNumberStart = 0;
 
         struct Tracker
@@ -90,6 +84,8 @@ public:
         } offset;
     } rewrite;
 
+    bool shouldSend(uint32_t ssrc, uint32_t extendedSequenceNumber) const;
+
     bool needsKeyframe;
     uint32_t lastKeyFrameSequenceNumber;
 
@@ -99,32 +95,22 @@ public:
     uint64_t lastRespondedNackTimestamp;
 
     utils::Optional<PacketCache*> packetCache;
+
+    /// ==== both Engine and Transport
+    std::atomic_uint32_t originalSsrc;
+
+    /// ==== Accessed from Engine only!
     uint64_t lastSendTime;
+    void onRtpSent(const uint64_t timestamp)
+    {
+        lastSendTime = timestamp;
+        idle = false;
+    }
 
     // Stream owner is being removed. Stop outbound packets over this context
     bool markedForDeletion;
-
     // Stream is temporarily idle and srtp encryption context is removed. It may be activated again.
     bool idle;
-
-    struct PliMetric
-    {
-        uint64_t userRequestTimestamp = 0;
-        uint64_t triggerTimestamp = 0;
-        uint64_t keyFrameTimestamp = 0;
-
-        uint64_t getDelay(const uint64_t timestamp) const
-        {
-            if (userRequestTimestamp != 0 && static_cast<int64_t>(userRequestTimestamp - keyFrameTimestamp) > 0)
-            {
-                return timestamp - userRequestTimestamp;
-            }
-            else
-            {
-                return timestamp - triggerTimestamp;
-            }
-        }
-    } pli;
 };
 
 } // namespace bridge

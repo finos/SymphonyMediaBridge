@@ -11,7 +11,7 @@ namespace AudioRewriter
 inline void rewrite(bridge::SsrcOutboundContext& outboundContext, const uint32_t sequenceNumber, rtp::RtpHeader& header)
 {
     const uint32_t originalSsrc = header.ssrc;
-    const bool newSource = outboundContext.rewrite.originalSsrc != originalSsrc;
+    const bool newSource = outboundContext.originalSsrc != originalSsrc;
     if (newSource)
     {
         outboundContext.rewrite.offset.timestamp = outboundContext.rewrite.lastSent.timestamp +
@@ -27,7 +27,7 @@ inline void rewrite(bridge::SsrcOutboundContext& outboundContext, const uint32_t
     header.timestamp = outboundContext.rewrite.offset.timestamp + header.timestamp;
     header.payloadType = outboundContext.rtpMap.payloadType;
 
-    outboundContext.rewrite.originalSsrc = originalSsrc;
+    outboundContext.originalSsrc = originalSsrc;
     if (static_cast<int32_t>(newSequenceNumber - outboundContext.rewrite.lastSent.sequenceNumber) > 0)
     {
         outboundContext.rewrite.lastSent.sequenceNumber = newSequenceNumber;
