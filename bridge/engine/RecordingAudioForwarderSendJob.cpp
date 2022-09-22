@@ -60,8 +60,7 @@ void RecordingAudioForwarderSendJob::run()
         {
             if (!packetCache->add(*_packet, nextSequenceNumber))
             {
-                logger::info("Dropping rec audio packet - cache issues...", "RecordingAudioForwarderSendJob");
-                return;
+                logger::warn("Failed to cache rec audio packet", "RecordingAudioForwarderSendJob");
             }
         }
     }
