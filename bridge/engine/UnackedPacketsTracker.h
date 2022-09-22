@@ -11,6 +11,12 @@
 
 #define DEBUG_UNACKED_PACKETS_TRACKER 0
 
+#if DEBUG_UNACKED_PACKETS_TRACKER
+#define UNACK_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define UNACK_LOG(fmt, ...)
+#endif
+
 namespace bridge
 {
 
@@ -42,16 +48,12 @@ public:
 
         if (_unackedPackets.size() >= maxUnackedPackets)
         {
-#if DEBUG_UNACKED_PACKETS_TRACKER
-            logger::debug("Too many unacked packets", _loggableId.c_str());
-#endif
+            UNACK_LOG("Too many unacked packets", _loggableId.c_str());
             _resetTimestampMs = timestampMs;
             return;
         }
 
-#if DEBUG_UNACKED_PACKETS_TRACKER
-        logger::debug("Add unacked packet seq %u", _loggableId.c_str(), extendedSequenceNumber);
-#endif
+        UNACK_LOG("Add unacked packet seq %u", _loggableId.c_str(), extendedSequenceNumber);
         _unackedPackets.emplace(extendedSequenceNumber & 0xFFFF,
             Entry({timestampMs, timestampMs, 0, extendedSequenceNumber, false}));
     }
@@ -65,21 +67,19 @@ public:
         auto missingPacketsItr = _unackedPackets.find(sequenceNumber);
         if (missingPacketsItr == _unackedPackets.end() || missingPacketsItr->second._acked)
         {
-#if DEBUG_UNACKED_PACKETS_TRACKER
-            logger::debug("Late packet ack seq %u already removed", _loggableId.c_str(), sequenceNumber);
-#endif
+            UNACK_LOG("Late packet ack seq %u already removed", _loggableId.c_str(), sequenceNumber);
             return false;
         }
 
         missingPacketsItr->second._acked = true;
         outExtendedSequenceNumber = missingPacketsItr->second._extendedSequenceNumber;
-#if DEBUG_UNACKED_PACKETS_TRACKER
-        logger::debug("Late ack arrived seq %u (seq %u roc %u)",
+
+        UNACK_LOG("Late ack arrived seq %u (seq %u roc %u)",
             _loggableId.c_str(),
             sequenceNumber,
             outExtendedSequenceNumber & 0xFFFF,
             outExtendedSequenceNumber >> 16);
-#endif
+
         return true;
     }
 
@@ -108,11 +108,10 @@ public:
         {
             if (unackedPacketEntry.second._timestampMs <= _resetTimestampMs)
             {
-#if DEBUG_UNACKED_PACKETS_TRACKER
-                logger::debug("No more sends for seq %u, older than reset time",
+                UNACK_LOG("No more sends for seq %u, older than reset time",
                     _loggableId.c_str(),
                     unackedPacketEntry.first);
-#endif
+
                 assert(numEntriesToErase < entriesToErase.size());
                 entriesToErase[numEntriesToErase] = unackedPacketEntry.first;
                 ++numEntriesToErase;
@@ -132,11 +131,9 @@ public:
             {
                 if (unackedPacketEntry.second._sentCount >= maxRetries)
                 {
-#if DEBUG_UNACKED_PACKETS_TRACKER
-                    logger::debug("No more sends for seq %u, max retries hit",
+                    UNACK_LOG("No more sends for seq %u, max retries hit",
                         _loggableId.c_str(),
                         unackedPacketEntry.first);
-#endif
 
                     assert(numEntriesToErase < entriesToErase.size());
                     entriesToErase[numEntriesToErase] = unackedPacketEntry.first;

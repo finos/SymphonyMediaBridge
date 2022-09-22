@@ -30,8 +30,8 @@ struct EngineRecordingStream
     {
     }
 
-    std::string id;
-    size_t endpointIdHash;
+    const std::string id;
+    const size_t endpointIdHash;
     concurrency::MpmcHashmap32<size_t, transport::RecordingTransport&> transports;
     bool isAudioEnabled;
     bool isVideoEnabled;
