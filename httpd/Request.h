@@ -47,6 +47,30 @@ struct Request
         _methodString = methodString;
     }
 
+    explicit Request(Method method) : _method(method)
+    {
+        switch (method)
+        {
+        case Method::GET:
+            _methodString = "GET";
+            break;
+        case Method::POST:
+            _methodString = "POST";
+            break;
+        case Method::DELETE:
+            _methodString = "DELETE";
+            break;
+        case Method::PATCH:
+            _methodString = "PATCH";
+            break;
+        case Method::OPTIONS:
+            _methodString = "OPTIONS";
+            break;
+        default:
+            assert(false);
+        }
+    }
+
     Method _method;
     std::string _methodString;
     std::string _url;

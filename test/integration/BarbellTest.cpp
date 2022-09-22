@@ -20,6 +20,7 @@
 #include "test/integration/emulator/ApiChannel.h"
 #include "test/integration/emulator/AudioSource.h"
 #include "test/integration/emulator/HttpRequests.h"
+#include "test/integration/emulator/Httpd.h"
 #include "test/integration/emulator/SfuClient.h"
 #include "transport/DataReceiver.h"
 #include "transport/EndpointFactoryImpl.h"
@@ -117,7 +118,7 @@ Test setup:
 */
 TEST_F(BarbellTest, packetLossViaBarbell)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
         constexpr auto PACKET_LOSS_RATE = 0.01;
 
         _config.readFromString(R"({
@@ -150,30 +151,30 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         "rctl.enable": false
         })");
 
+        emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_bridgeEndpointFactory);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2);
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
-        GroupCall<SfuClient<Channel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 0);
+        group.add(_httpd);
+        group.add(&httpd2);
+        group.add(&httpd2);
 
-        Conference conf;
+        Conference conf(_httpd);
         group.startConference(conf, baseUrl);
 
-        Conference conf2;
+        Conference conf2(&httpd2);
         group.startConference(conf2, baseUrl2);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
-        Barbell bb1;
-        Barbell bb2;
+        Barbell bb1(_httpd);
+        Barbell bb2(&httpd2);
 
         // This map: _endpointNetworkLinkMap is populated automatically on endpoint creation.
         // Following it's evolution allows to find Endpoint/NetworkLink for paritcular component.
@@ -201,12 +202,18 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
-        HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-        confRequest.awaitResponse(500 * utils::Time::ms);
-        EXPECT_TRUE(confRequest.isSuccess());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
 
         bb1.remove(baseUrl);
 
@@ -267,7 +274,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
 TEST_F(BarbellTest, simpleBarbell)
 {
-    runTestInThread(3 * _numWorkerThreads + 10, [this]() {
+    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -298,24 +305,23 @@ TEST_F(BarbellTest, simpleBarbell)
         "rctl.enable": false
         })");
 
+        emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_bridgeEndpointFactory);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2);
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
-        GroupCall<SfuClient<Channel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 1);
+        group.add(&httpd2);
+        group.add(&httpd2);
 
-        Conference conf;
-        Conference conf2;
+        Conference conf(_httpd);
+        Conference conf2(&httpd2);
 
-        Barbell bb1;
-        Barbell bb2;
+        Barbell bb1(_httpd);
+        Barbell bb2(&httpd2);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -339,12 +345,18 @@ TEST_F(BarbellTest, simpleBarbell)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
-        HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-        confRequest.awaitResponse(500 * utils::Time::ms);
-        EXPECT_TRUE(confRequest.isSuccess());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
 
         bb1.remove(baseUrl);
 
@@ -420,23 +432,21 @@ TEST_F(BarbellTest, barbellAfterClients)
         "rctl.enable": false
         })");
 
+        emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_bridgeEndpointFactory);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2);
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
         utils::Time::nanoSleep(1 * utils::Time::sec);
 
-        GroupCall<SfuClient<Channel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            2);
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 1);
+        group.add(&httpd2);
 
-        Conference conf;
-        Conference conf2;
+        Conference conf(_httpd);
+        Conference conf2(&httpd2);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -461,8 +471,8 @@ TEST_F(BarbellTest, barbellAfterClients)
 
         utils::Time::nanoSleep(500 * utils::Time::ms);
 
-        Barbell bb1;
-        Barbell bb2;
+        Barbell bb1(_httpd);
+        Barbell bb2(&httpd2);
 
         auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
         auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
@@ -477,12 +487,18 @@ TEST_F(BarbellTest, barbellAfterClients)
         group.clients[1]->stopRecording();
         group.clients[0]->stopRecording();
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
-        HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-        confRequest.awaitResponse(500 * utils::Time::ms);
-        EXPECT_TRUE(confRequest.isSuccess());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
 
         utils::Time::nanoSleep(utils::Time::ms * 200); // let pending packets be sent and received
         group.clients[0]->_transport->stop();

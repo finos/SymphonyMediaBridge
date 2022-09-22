@@ -18,6 +18,7 @@
 #include "test/integration/emulator/ApiChannel.h"
 #include "test/integration/emulator/AudioSource.h"
 #include "test/integration/emulator/HttpRequests.h"
+#include "test/integration/emulator/Httpd.h"
 #include "test/integration/emulator/SfuClient.h"
 #include "transport/DataReceiver.h"
 #include "transport/EndpointFactoryImpl.h"
@@ -38,7 +39,8 @@
 #define USE_FAKENETWORK 1
 
 IntegrationTest::IntegrationTest()
-    : _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
+    : _httpd(nullptr),
+      _sendAllocator(memory::packetPoolSize, "IntegrationTest"),
       _audioAllocator(memory::packetPoolSize, "IntegrationTestAudio"),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(nullptr),
@@ -50,12 +52,17 @@ IntegrationTest::IntegrationTest()
 {
 }
 
+IntegrationTest::~IntegrationTest()
+{
+    delete _httpd;
+}
+
 // TimeTurner time source must be set before starting any threads.
 // Fake internet thread, JobManager timer thread, worker threads.
 void IntegrationTest::SetUp()
 {
 #ifdef NOPERF_TEST
-    GTEST_SKIP();
+    // GTEST_SKIP();
 #endif
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
@@ -65,6 +72,7 @@ void IntegrationTest::SetUp()
 
 #if USE_FAKENETWORK
     utils::Time::initialize(_timeSource);
+    _httpd = new emulator::HttpdFactory();
 #endif
 
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
@@ -91,7 +99,7 @@ void IntegrationTest::SetUp()
 void IntegrationTest::TearDown()
 {
 #ifdef NOPERF_TEST
-    GTEST_SKIP();
+    // GTEST_SKIP();
 #endif
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
@@ -136,10 +144,11 @@ void IntegrationTest::initBridge(config::Config& config)
                     addr.toString().c_str());
                 this->_endpointNetworkLinkMap.emplace(name, NetworkLinkInfo{netLink.get(), addr});
             }));
+
+    _bridge->initialize(_bridgeEndpointFactory, *_httpd);
 #else
-    _endpointFacory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
+    _bridge->initialize();
 #endif
-    _bridge->initialize(_bridgeEndpointFactory);
 
     _sslDtls = &_bridge->getSslDtls();
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
@@ -188,44 +197,60 @@ void make5secCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCa
     }
 }
 
-std::vector<api::ConferenceEndpoint> IntegrationTest::getConferenceEndpointsInfo(const char* baseUrl)
+std::vector<api::ConferenceEndpoint> IntegrationTest::getConferenceEndpointsInfo(emulator::HttpdFactory* httpd,
+    const char* baseUrl)
 {
-    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-    confRequest.awaitResponse(500 * utils::Time::ms);
-    EXPECT_TRUE(confRequest.isSuccess());
+    nlohmann::json responseBody;
+    auto httpSuccess = emulator::awaitResponse<HttpGetRequest>(httpd,
+        std::string(baseUrl) + "/conferences",
+        500 * utils::Time::ms,
+        responseBody);
 
-    EXPECT_TRUE(confRequest.getJsonBody().is_array());
+    EXPECT_TRUE(httpSuccess);
+    EXPECT_TRUE(responseBody.is_array());
     std::vector<std::string> confIds;
-    confRequest.getJsonBody().get_to(confIds);
+    responseBody.get_to(confIds);
 
-    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0]).c_str());
-    endpointRequest.awaitResponse(50000 * utils::Time::ms);
-    EXPECT_TRUE(endpointRequest.isSuccess());
-    EXPECT_TRUE(endpointRequest.getJsonBody().is_array());
+    nlohmann::json endpointRequestBody;
+    httpSuccess = emulator::awaitResponse<HttpGetRequest>(httpd,
+        std::string(baseUrl) + "/conferences/" + confIds[0],
+        5000 * utils::Time::ms,
+        endpointRequestBody);
 
-    return api::Parser::parseConferenceEndpoints(endpointRequest.getJsonBody());
+    EXPECT_TRUE(httpSuccess);
+    EXPECT_TRUE(endpointRequestBody.is_array());
+
+    return api::Parser::parseConferenceEndpoints(endpointRequestBody);
 }
 
-api::ConferenceEndpointExtendedInfo IntegrationTest::getEndpointExtendedInfo(const char* baseUrl,
+api::ConferenceEndpointExtendedInfo IntegrationTest::getEndpointExtendedInfo(emulator::HttpdFactory* httpd,
+    const char* baseUrl,
     const std::string& endpointId)
 {
-    HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-    confRequest.awaitResponse(500 * utils::Time::ms);
-    EXPECT_TRUE(confRequest.isSuccess());
+    nlohmann::json responseBody;
+    auto confRequest = emulator::awaitResponse<HttpGetRequest>(httpd,
+        std::string(baseUrl) + "/conferences",
+        500 * utils::Time::ms,
+        responseBody);
 
-    EXPECT_TRUE(confRequest.getJsonBody().is_array());
+    EXPECT_TRUE(confRequest);
+
+    EXPECT_TRUE(responseBody.is_array());
     std::vector<std::string> confIds;
-    confRequest.getJsonBody().get_to(confIds);
+    responseBody.get_to(confIds);
 
-    HttpGetRequest endpointRequest((std::string(baseUrl) + "/conferences/" + confIds[0] + "/" + endpointId).c_str());
-    endpointRequest.awaitResponse(50000 * utils::Time::ms);
-    EXPECT_TRUE(endpointRequest.isSuccess());
+    auto endpointRequest = emulator::awaitResponse<HttpGetRequest>(httpd,
+        std::string(baseUrl) + "/conferences/" + confIds[0] + "/" + endpointId,
+        500 * utils::Time::ms,
+        responseBody);
 
-    return api::Parser::parseEndpointExtendedInfo(endpointRequest.getJsonBody());
+    EXPECT_TRUE(endpointRequest);
+
+    return api::Parser::parseEndpointExtendedInfo(responseBody);
 }
 
 void fftThreadRun(const std::vector<int16_t>& recording,
-    std::vector<std::vector<double>>& frequencies,
+    std::vector<double>& frequencies,
     const size_t fftWindowSize,
     size_t size,
     size_t numThreads,
@@ -240,7 +265,7 @@ void fftThreadRun(const std::vector<int16_t>& recording,
         }
 
         SampleDataUtils::fft(testVector);
-        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies[threadId]);
+        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies);
     }
 }
 
@@ -281,13 +306,14 @@ void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
     auto const numThreads = std::max(std::thread::hardware_concurrency(), 4U);
     std::vector<std::thread> workers;
     std::vector<std::vector<double>> frequencies;
+    frequencies.reserve(numThreads);
 
     for (size_t threadId = 0; threadId < numThreads; threadId++)
     {
         frequencies.push_back(std::vector<double>());
         workers.push_back(std::thread(fftThreadRun,
             std::ref(recording),
-            std::ref(frequencies),
+            std::ref(frequencies[threadId]),
             fftWindowSize,
             size,
             numThreads,
@@ -412,7 +438,6 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     _timeSource.shutdown();
 #endif
     runner.join();
-    logger::debug("test out", "");
 }
 
 void IntegrationTest::startSimulation()
@@ -452,7 +477,7 @@ void IntegrationTest::finalizeSimulation()
 
 TEST_F(IntegrationTest, plain)
 {
-    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -463,14 +488,10 @@ TEST_F(IntegrationTest, plain)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<ColibriChannel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -485,11 +506,14 @@ TEST_F(IntegrationTest, plain)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
 
-        auto endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(3, endpoints.size());
         size_t dominantSpeakerCount = 0;
         for (const auto& endpoint : endpoints)
@@ -546,7 +570,7 @@ TEST_F(IntegrationTest, plain)
 
 TEST_F(IntegrationTest, twoClientsAudioOnly)
 {
-    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -557,14 +581,10 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            2);
+        GroupCall<SfuClient<ColibriChannel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -578,11 +598,14 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
 
-        auto endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(2, endpoints.size());
         size_t dominantSpeakerCount = 0;
         for (const auto& endpoint : endpoints)
@@ -622,24 +645,24 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
     runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+
+        printf("T%" PRIu64 " test running\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
+
         initBridge(_config);
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<ColibriChannel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
-        Conference conf;
-
+        Conference conf(_httpd);
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
+        printf("T%" PRIu64 " starting conf\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
         group.startConference(conf, baseUrl + "/colibri");
 
+        printf("T%" PRIu64 " calling\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
         // Audio only for all three participants.
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, false, false);
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
@@ -647,8 +670,10 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
+        printf("T%" PRIu64 " run for 5s\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
         make5secCallWithDefaultAudioProfile(group);
 
+        printf("T%" PRIu64 " stopping recs\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
         group.clients[2]->stopRecording();
         group.clients[1]->stopRecording();
         group.clients[0]->stopRecording();
@@ -673,21 +698,17 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
 TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 {
-    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
         initBridge(_config);
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<ColibriChannel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -784,7 +805,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
 TEST_F(IntegrationTest, videoOffPaddingOff)
 {
-    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         /*
            Test checks that after video is off and cooldown interval passed, no padding will be sent for the
            call that became audio-only.
@@ -798,14 +819,10 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            2);
+        GroupCall<SfuClient<ColibriChannel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -853,7 +870,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             utils::Time::nanoSleep(_pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
         }
 
-        group.add();
+        group.add(_httpd);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
         ASSERT_TRUE(group.connectSingle(2, utils::Time::sec * 4));
 
@@ -891,7 +908,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
 TEST_F(IntegrationTest, plainNewApi)
 {
-    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -901,14 +918,10 @@ TEST_F(IntegrationTest, plainNewApi)
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -923,12 +936,18 @@ TEST_F(IntegrationTest, plainNewApi)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
-        HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-        confRequest.awaitResponse(500 * utils::Time::ms);
-        EXPECT_TRUE(confRequest.isSuccess());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
@@ -972,7 +991,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
 TEST_F(IntegrationTest, ptime10)
 {
-    runTestInThread(2 * _numWorkerThreads + 6, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -982,14 +1001,10 @@ TEST_F(IntegrationTest, ptime10)
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -1004,12 +1019,18 @@ TEST_F(IntegrationTest, ptime10)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
-        HttpGetRequest confRequest((std::string(baseUrl) + "/conferences").c_str());
-        confRequest.awaitResponse(500 * utils::Time::ms);
-        EXPECT_TRUE(confRequest.isSuccess());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
@@ -1095,14 +1116,10 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulationWithTimeout, this, utils::Time::sec));
         startSimulation();
@@ -1142,14 +1159,14 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         group.run(utils::Time::sec * 2);
 
-        auto endpoints = getConferenceEndpointsInfo(baseUrl);
+        auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
         EXPECT_EQ(3, endpoints.size());
 
         EXPECT_TRUE(isActiveTalker(endpoints, group.clients[0]->_channel.getEndpointId()));
         EXPECT_TRUE(isActiveTalker(endpoints, group.clients[1]->_channel.getEndpointId()));
         EXPECT_FALSE(isActiveTalker(endpoints, group.clients[2]->_channel.getEndpointId()));
 
-        auto endpointExtendedInfo = getEndpointExtendedInfo(baseUrl, endpoints[0].id);
+        auto endpointExtendedInfo = getEndpointExtendedInfo(_httpd, baseUrl, endpoints[0].id);
 
         EXPECT_EQ(endpoints[0], endpointExtendedInfo.basicEndpointInfo);
         EXPECT_EQ(10000, endpointExtendedInfo.localPort);
@@ -1171,7 +1188,7 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.run(utils::Time::sec * 2);
         utils::Time::nanoSleep(utils::Time::sec * 1);
 
-        endpoints = getConferenceEndpointsInfo(baseUrl);
+        endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
         EXPECT_EQ(3, endpoints.size());
 
         EXPECT_FALSE(isActiveTalker(endpoints, group.clients[0]->_channel.getEndpointId()));
@@ -1186,7 +1203,7 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         group.run(utils::Time::sec * 2);
 
-        endpoints = getConferenceEndpointsInfo(baseUrl);
+        endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
         EXPECT_EQ(3, endpoints.size());
 
         EXPECT_FALSE(isActiveTalker(endpoints, group.clients[0]->_channel.getEndpointId()));
@@ -1201,7 +1218,7 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         group.run(utils::Time::sec * 2);
 
-        endpoints = getConferenceEndpointsInfo(baseUrl);
+        endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
         EXPECT_EQ(3, endpoints.size());
 
         EXPECT_FALSE(isActiveTalker(endpoints, group.clients[0]->_channel.getEndpointId()));
@@ -1252,14 +1269,10 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            2);
+        GroupCall<SfuClient<ColibriChannel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
 
-        Conference conf;
+        Conference conf(_httpd);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -1334,7 +1347,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
 TEST_F(IntegrationTest, endpointAutoRemove)
 {
-    runTestInThread(_numWorkerThreads + 4, [this]() {
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1348,14 +1361,10 @@ TEST_F(IntegrationTest, endpointAutoRemove)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>> group(_instanceCounter,
-            *_mainPoolAllocator,
-            _audioAllocator,
-            *_transportFactory,
-            *_sslDtls,
-            3);
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
-        Conference conf;
+        Conference conf(_httpd);
         group.startConference(conf, baseUrl + "/colibri");
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true, 0);
@@ -1366,25 +1375,29 @@ TEST_F(IntegrationTest, endpointAutoRemove)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        HttpGetRequest statsRequest((std::string(baseUrl) + "/colibri/stats").c_str());
-        statsRequest.awaitResponse(1500 * utils::Time::ms);
-        EXPECT_TRUE(statsRequest.isSuccess());
-        auto endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(3, endpoints.size());
 
         group.clients[2]->_transport->stop();
         group.run(utils::Time::sec * 11);
-        endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(2, endpoints.size());
 
         group.clients[1]->_transport->stop();
         group.run(utils::Time::sec * 11);
-        endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(1, endpoints.size());
 
         group.clients[0]->_transport->stop();
         group.run(utils::Time::sec * 11);
-        endpoints = getConferenceEndpointsInfo(baseUrl.c_str());
+        endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(1, endpoints.size());
 
         group.awaitPendingJobs(utils::Time::sec * 4);
@@ -1394,11 +1407,6 @@ TEST_F(IntegrationTest, endpointAutoRemove)
 
 TEST_F(IntegrationTest, probing)
 {
-    if (__has_feature(address_sanitizer) || __has_feature(thread_sanitizer))
-    {
-        return;
-    }
-
     runTestInThread(2 * _numWorkerThreads + 7, [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
@@ -1410,16 +1418,18 @@ TEST_F(IntegrationTest, probing)
 
         // Retrieve probing ICE candidates
         const std::string baseUrl = "http://127.0.0.1:8080";
-        HttpGetRequest candidatesRequest((baseUrl + "/ice-candidates").c_str());
-        candidatesRequest.awaitResponse(5 * utils::Time::sec);
-        EXPECT_TRUE(candidatesRequest.isSuccess());
+
+        nlohmann::json responseBody;
+        auto candidatesSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            baseUrl + "/ice-candidates",
+            5 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(candidatesSuccess);
+
+        const auto& iceJson = responseBody["ice"];
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
-
-        const auto& data = candidatesRequest.getJsonBody();
-        const auto& iceJson = data["ice"];
-
         logger::debug("%s", "", iceJson.dump(4).c_str());
 
         api::EndpointDescription::Ice ice = api::Parser::parseIce(iceJson);
