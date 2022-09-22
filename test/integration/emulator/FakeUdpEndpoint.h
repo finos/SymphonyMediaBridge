@@ -82,7 +82,7 @@ private:
     struct OutboundPacket
     {
         transport::SocketAddress address;
-        memory::Packet packet;
+        memory::UniquePacket packet;
     };
 
 private:
@@ -101,12 +101,12 @@ private:
     jobmanager::JobQueue _receiveJobs;
     jobmanager::JobQueue _sendJobs;
     memory::PacketPoolAllocator& _allocator;
+    memory::PacketPoolAllocator _networkLinkAllocator;
     concurrency::MpmcQueue<OutboundPacket> _sendQueue;
     concurrency::MpmcQueue<InboundPacket> _receiveQueue;
 
     std::atomic<IEvents*> _defaultListener;
     std::shared_ptr<fakenet::Gateway> _network;
-    memory::PacketPoolAllocator _networkLinkAllocator;
     std::shared_ptr<fakenet::NetworkLink> _networkLink;
 
     struct RateMetrics

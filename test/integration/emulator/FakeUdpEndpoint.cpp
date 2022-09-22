@@ -85,11 +85,11 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
       _receiveJobs(jobManager, 16),
       _sendJobs(jobManager, 16),
       _allocator(allocator),
+      _networkLinkAllocator(8092, "networkLink"),
       _sendQueue(maxSessionCount * 256),
       _receiveQueue(maxSessionCount * 256),
       _defaultListener(nullptr),
       _network(network),
-      _networkLinkAllocator(8092, "networkLink"),
       _networkLink(std::make_shared<fakenet::NetworkLink>(_name.c_str(), 9000, 1950 * 1024, 3000))
 {
     _state = Endpoint::CREATED;
@@ -174,9 +174,7 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::Uni
 
     assert(!memory::PacketPoolAllocator::isCorrupt(uniquePacket.get()));
 
-    memory::Packet packet;
-    packet.append(uniquePacket->get(), uniquePacket->getLength());
-    if (!_sendQueue.push({target, packet}))
+    if (!_sendQueue.push({target, memory::makeUniquePacket(_networkLinkAllocator, *uniquePacket)}))
     {
         logger::error("Can't send: send queue is full!", _name.c_str());
     }
@@ -246,16 +244,8 @@ void FakeUdpEndpoint::stop(IStopEvents* listener)
     {
         _state = STOPPING;
 
-        while (_sendQueue.size())
-        {
-            OutboundPacket packet;
-            _sendQueue.pop(packet);
-        }
-        while (_receiveQueue.size())
-        {
-            InboundPacket packet;
-            _receiveQueue.pop(packet);
-        }
+        _sendQueue.clear();
+        _receiveQueue.clear();
 
         // Would be closing epoll subscription in a job and call a stop callback...
         _state = CREATED;
@@ -360,7 +350,7 @@ FakeUdpEndpoint::InboundPacket FakeUdpEndpoint::deserializeInbound(memory::Uniqu
 
     const auto source = transport::SocketAddress::parse(ip, *port);
 
-    return {source, memory::makeUniquePacket(_allocator, packet->get() + prefixLength, dataLength)};
+    return {source, memory::makeUniquePacket(_networkLinkAllocator, packet->get() + prefixLength, dataLength)};
 }
 
 void FakeUdpEndpoint::sendTo(const transport::SocketAddress& source,
@@ -404,19 +394,13 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
     }
 
     size_t byteCount = 0;
-    while (true)
+    for (OutboundPacket packetInfo; _sendQueue.pop(packetInfo);)
     {
-        OutboundPacket packetInfo;
-        if (!_sendQueue.pop(packetInfo))
-        {
-            break;
-        }
-
         ++packetCounter;
         auto& packet = packetInfo.packet;
-        byteCount += packet.getLength();
+        byteCount += packet->getLength();
 
-        _network->sendTo(_localPort, packetInfo.address, packet.get(), packet.getLength(), start);
+        _network->sendTo(_localPort, packetInfo.address, packet->get(), packet->getLength(), start);
     }
 
     const auto sendTimestamp = utils::Time::getAbsoluteTime();
@@ -438,7 +422,7 @@ void FakeUdpEndpoint::internalReceive()
         if (_receiveQueue.pop(packetInfo) && packetInfo.packet)
         {
             _rateMetrics.receiveTracker.update(packetInfo.packet->getLength(), receiveTime);
-            dispatchReceivedPacket(packetInfo.address, std::move(packetInfo.packet));
+            dispatchReceivedPacket(packetInfo.address, memory::makeUniquePacket(_allocator, *packetInfo.packet));
         }
     }
 }
