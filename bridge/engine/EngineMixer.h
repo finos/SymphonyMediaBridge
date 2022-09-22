@@ -379,6 +379,7 @@ private:
         const rtp::RtcpHeader& rtcpPacket,
         const uint64_t timestamp);
     void checkVideoBandwidth(const uint64_t timestamp);
+    void runTransportTicks(const uint64_t timestamp);
     void removeIdleStreams(const uint64_t timestamp);
 
     void mixSsrcBuffers();

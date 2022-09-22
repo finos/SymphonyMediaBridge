@@ -966,6 +966,9 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     // 5. Check if Transports are alive
     removeIdleStreams(engineIterationStartTimestamp);
+
+    // 6. Maintain transports.
+    runTransportTicks(engineIterationStartTimestamp);
 }
 
 void EngineMixer::processMissingPackets(const uint64_t timestamp)
@@ -3877,6 +3880,14 @@ void EngineMixer::removeIdleStreams(const uint64_t timestamp)
     ::bridge::removeIdleStreams<EngineVideoStream>(_engineVideoStreams, this, timestamp);
     ::bridge::removeIdleStreams<EngineAudioStream>(_engineAudioStreams, this, timestamp);
     ::bridge::removeIdleStreams<EngineDataStream>(_engineDataStreams, this, timestamp);
+}
+
+void EngineMixer::runTransportTicks(const uint64_t timestamp)
+{
+    for (auto videoIt : _engineVideoStreams)
+    {
+        videoIt.second->transport.runTick(timestamp);
+    }
 }
 
 void EngineMixer::addBarbell(EngineBarbell* barbell)
