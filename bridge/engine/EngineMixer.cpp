@@ -281,6 +281,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _numMixedAudioStreams(0),
       _lastVideoBandwidthCheck(0),
       _lastVideoPacketProcessed(0),
+      _lastTickJobStartTimestamp(0),
       _hasSentTimeout(false),
       _probingVideoStreams(false),
       _minUplinkEstimate(0)
@@ -3884,6 +3885,11 @@ void EngineMixer::removeIdleStreams(const uint64_t timestamp)
 
 void EngineMixer::runTransportTicks(const uint64_t timestamp)
 {
+    if (utils::Time::diffLT(_lastTickJobStartTimestamp, timestamp, utils::Time::ms * 60))
+    {
+        return;
+    }
+    _lastTickJobStartTimestamp = timestamp;
     for (auto videoIt : _engineVideoStreams)
     {
         videoIt.second->transport.runTick(timestamp);

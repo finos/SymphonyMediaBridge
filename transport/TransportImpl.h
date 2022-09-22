@@ -445,7 +445,7 @@ public:
     bool _uplinkEstimationEnabled;
     bool _downlinkEstimationEnabled;
     std::atomic_uint64_t _lastReceivedPacketTimestamp;
-    std::atomic_uint64_t _lastTickJobStartTimestamp;
+    uint64_t _lastTickJobStartTimestamp;
 };
 
 } // namespace transport

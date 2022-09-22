@@ -388,7 +388,10 @@ public:
 
     void run() override
     {
-        _transport._lastTickJobStartTimestamp = _timestamp;
+        if (utils::Time::diffLT(_transport._lastTickJobStartTimestamp, _timestamp, utils::Time::ms * 10))
+        {
+            return;
+        }
         _transport.doRunTick(utils::Time::getAbsoluteTime());
     }
 
@@ -2459,10 +2462,6 @@ void TransportImpl::setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCou
 
 void TransportImpl::runTick(uint64_t timestamp)
 {
-    if (utils::Time::diffLT(_lastTickJobStartTimestamp, timestamp, utils::Time::ms * 100))
-    {
-        return;
-    }
     if (_pacingInUse.load())
     {
         _jobQueue.addJob<RunTickJob>(*this, timestamp);
@@ -2471,6 +2470,8 @@ void TransportImpl::runTick(uint64_t timestamp)
 
 void TransportImpl::doRunTick(const uint64_t timestamp)
 {
+    _lastTickJobStartTimestamp = timestamp;
+
     auto drainMode = _uplinkEstimationEnabled && _config.rctl.useUplinkEstimate ? DrainPacingBufferMode::UseBudget
                                                                                 : DrainPacingBufferMode::DrainAll;
 
