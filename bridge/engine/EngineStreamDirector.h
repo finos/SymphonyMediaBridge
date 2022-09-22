@@ -930,11 +930,18 @@ private:
         size_t& outPinnedQuality,
         size_t& outUnpinnedQuality) const
     {
-        const auto maxVideoStreams = std::min(std::max(1ul, _lowQualitySsrcs.size()), (unsigned long)_lastN - 1);
-        if (maxVideoStreams < 1)
-        {
-            return;
-        }
+        outPinnedQuality = dropQuality;
+        outUnpinnedQuality = dropQuality;
+
+        bool sendingVideo = participantStreams.primary.isSendingVideo() ||
+            (participantStreams.secondary.isSet() && participantStreams.secondary.get().isSendingVideo());
+
+        // The value of maxReceivingVideoStreams dictates avaible bitrate distribution, but if we are
+        // the only one, or the very first participant sending video, it'll be 0. Since we want to initialize
+        // wanted pinned/unpinned qualities anyway, it's important we assure it's set to 1, to conform
+        // with the configLadder table assumption that at least one stream is present.
+        const auto maxReceivingVideoStreams =
+            std::max(1ul, std::min(_lowQualitySsrcs.size(), (unsigned long)_lastN) - (sendingVideo ? 1 : 0));
 
         int bestConfigId = 0;
         unsigned long bestConfigCost = 0;
@@ -946,7 +953,8 @@ private:
 
         for (const auto& config : configLadder)
         {
-            const auto configCost = config.BaseRate + maxVideoStreams * config.OverheadBitrate + _slidesBitrateKbps;
+            const auto configCost =
+                config.BaseRate + maxReceivingVideoStreams * config.OverheadBitrate + _slidesBitrateKbps;
 
             assert(configCost >= config.MinBitrateMargin + _slidesBitrateKbps);
             assert(configCost <= config.MaxBitrateMargin + _slidesBitrateKbps);
@@ -966,7 +974,7 @@ private:
             _loggableId.c_str(),
             (char)outPinnedQuality + '0',
             (char)outUnpinnedQuality + '0',
-            maxVideoStreams,
+            maxReceivingVideoStreams,
             estimatedUplinkBandwidth,
             _slidesBitrateKbps);
     }
