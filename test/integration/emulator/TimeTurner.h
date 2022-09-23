@@ -61,7 +61,7 @@ private:
     };
 
     std::array<Sleeper, MAX_THREAD_COUNT> _sleepers;
-    bool _running;
+    std::atomic_bool _running;
 
     concurrency::CountdownEvent _sleeperCountdown;
     concurrency::EventSemaphore _abortSemaphore;

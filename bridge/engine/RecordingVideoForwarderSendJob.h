@@ -2,31 +2,26 @@
 
 #include "jobmanager/Job.h"
 #include "memory/PacketPoolAllocator.h"
-#include <cstdint>
-
-namespace memory
-{
-class Packet;
-} // namespace memory
 
 namespace transport
 {
-class RecordingTransport;
-}
+class Transport;
+} // namespace transport
 
 namespace bridge
 {
-
-class SsrcOutboundContext;
 class EngineMessageListener;
+class SsrcOutboundContext;
+class SsrcInboundContext;
 class EngineMixer;
 
-class RecordingAudioForwarderSendJob : public jobmanager::CountedJob
+class RecordingVideoForwarderSendJob : public jobmanager::CountedJob
 {
 public:
-    RecordingAudioForwarderSendJob(SsrcOutboundContext& outboundContext,
+    RecordingVideoForwarderSendJob(SsrcOutboundContext& outboundContext,
+        SsrcInboundContext& senderInboundContext,
         memory::UniquePacket packet,
-        transport::RecordingTransport& transport,
+        transport::Transport& transport,
         const uint32_t extendedSequenceNumber,
         EngineMessageListener& mixerManager,
         size_t endpointIdHash,
@@ -36,8 +31,9 @@ public:
 
 private:
     SsrcOutboundContext& _outboundContext;
+    SsrcInboundContext& _senderInboundContext;
     memory::UniquePacket _packet;
-    transport::RecordingTransport& _transport;
+    transport::Transport& _transport;
     uint32_t _extendedSequenceNumber;
     EngineMessageListener& _mixerManager;
     size_t _endpointIdHash;

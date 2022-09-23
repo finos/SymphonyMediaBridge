@@ -19,7 +19,7 @@ class VideoNackReceiveJob : public jobmanager::CountedJob
 public:
     VideoNackReceiveJob(SsrcOutboundContext& rtxSsrcOutboundContext,
         transport::RtcTransport& sender,
-        PacketCache& videoPacketCache,
+        SsrcOutboundContext& mainOutboundContext,
         const uint16_t pid,
         const uint16_t blp,
         const uint64_t timestamp,
@@ -30,7 +30,7 @@ public:
 private:
     SsrcOutboundContext& _rtxSsrcOutboundContext;
     transport::RtcTransport& _sender;
-    PacketCache& _videoPacketCache;
+    SsrcOutboundContext& _mainOutboundContext;
     uint16_t _pid;
     uint16_t _blp;
     uint64_t _timestamp;

@@ -430,6 +430,9 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     // run for 80s or until test runner thread stops the time run
     _timeSource.runFor(80 * utils::Time::sec);
 
+    // wait for all to sleep before switching time source
+    _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
+
     // all threads are asleep. Switch to real time
     logger::info("Switching back to real time-space", "");
     utils::Time::initialize();
@@ -450,8 +453,6 @@ void IntegrationTest::startSimulation()
 
 void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
 {
-    _internet->pause();
-
     // Stopped the internet, but allow some process to finish.
     const auto now = _timeSource.getAbsoluteTime();
     const auto step = 500 * utils::Time::us;
@@ -460,10 +461,7 @@ void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
         utils::Time::nanoSleep(step);
     }
 
-    while (!_internet->isPaused())
-    {
-        utils::Time::nanoSleep(utils::Time::ms * 10);
-    }
+    _internet->pause();
 
     // stop time turner and it will await all threads to fall asleep, including me
     _timeSource.stop();

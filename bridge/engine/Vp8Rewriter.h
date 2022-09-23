@@ -1,13 +1,13 @@
 #pragma once
 
 #include "bridge/RtpMap.h"
+#include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Vp8Header.h"
 #include "logger/Logger.h"
 #include "math/Fields.h"
 #include "memory/Packet.h"
 #include "rtp/RtpHeader.h"
-#include "utils/Offset.h"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -54,7 +54,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     auto& ssrcRewrite = ssrcOutboundContext.rewrite;
     if (ssrcRewrite.empty())
     {
-        ssrcRewrite.originalSsrc = ssrc - 1;
+        ssrcOutboundContext.originalSsrc = ssrc - 1; // to make it differ in next check
         ssrcRewrite.lastSent.sequenceNumber = extendedSequenceNumber - 1;
         ssrcRewrite.lastSent.picId = (codec::Vp8Header::getPicId(rtpPayload) - 1) & 0x7FFF;
         ssrcRewrite.lastSent.tl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload) - 1;
@@ -68,9 +68,9 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             extractRolloverCounter(extendedSequenceNumber));
     }
 
-    if (ssrcRewrite.originalSsrc != ssrc)
+    if (ssrcOutboundContext.originalSsrc != ssrc)
     {
-        ssrcRewrite.originalSsrc = ssrc;
+        ssrcOutboundContext.originalSsrc = ssrc;
         ssrcRewrite.offset.sequenceNumber =
             math::ringDifference<uint32_t, 32>(extendedSequenceNumber, ssrcRewrite.lastSent.sequenceNumber + 1);
         ssrcRewrite.sequenceNumberStart = extendedSequenceNumber;
@@ -193,5 +193,35 @@ inline uint16_t rewriteRtxPacket(memory::Packet& packet,
 }
 
 } // namespace Vp8Rewriter
+
+inline void rewriteHeaderExtensions(rtp::RtpHeader* rtpHeader,
+    const bridge::SsrcInboundContext& senderInboundContext,
+    const bridge::SsrcOutboundContext& receiverOutboundContext)
+{
+    assert(rtpHeader);
+
+    const auto headerExtensions = rtpHeader->getExtensionHeader();
+    if (!headerExtensions)
+    {
+        return;
+    }
+
+    const bool senderHasAbsSendTimeEx = senderInboundContext.rtpMap.absSendTimeExtId.isSet();
+    const bool receiverHasAbsSendTimeEx = receiverOutboundContext.rtpMap.absSendTimeExtId.isSet();
+    const bool absSendTimeExNeedToBeRewritten = senderHasAbsSendTimeEx && receiverHasAbsSendTimeEx &&
+        senderInboundContext.rtpMap.absSendTimeExtId.get() != receiverOutboundContext.rtpMap.absSendTimeExtId.get();
+
+    if (absSendTimeExNeedToBeRewritten)
+    {
+        for (auto& rtpHeaderExtension : headerExtensions->extensions())
+        {
+            if (rtpHeaderExtension.getId() == senderInboundContext.rtpMap.absSendTimeExtId.get())
+            {
+                rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.absSendTimeExtId.get());
+                return;
+            }
+        }
+    }
+}
 
 } // namespace bridge

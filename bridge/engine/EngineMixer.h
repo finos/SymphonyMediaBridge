@@ -433,9 +433,6 @@ private:
     void sendVideoStreamToRecording(const EngineVideoStream& videoStream, bool isAdded);
     void removeVideoSsrcFromRecording(const EngineVideoStream& videoStream, uint32_t ssrc);
 
-    void allocateRecordingRtpPacketCacheIfNecessary(SsrcOutboundContext& ssrcOutboundContext,
-        EngineRecordingStream& recordingStream);
-
     void processEngineMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
     void processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
     void processRecordingMissingPackets(const uint64_t timestamp);

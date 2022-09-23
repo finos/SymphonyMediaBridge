@@ -169,6 +169,8 @@ set(FILES
         bridge/engine/ProcessUnackedRecordingEventPacketsJob.h
         bridge/engine/RecordingAudioForwarderSendJob.cpp
         bridge/engine/RecordingAudioForwarderSendJob.h
+        bridge/engine/RecordingVideoForwarderSendJob.h
+        bridge/engine/RecordingVideoForwarderSendJob.cpp
         bridge/engine/RecordingEventAckReceiveJob.cpp
         bridge/engine/RecordingEventAckReceiveJob.h
         bridge/engine/RecordingRtpNackReceiveJob.cpp
@@ -393,7 +395,6 @@ set(FILES
         utils/FowlerNollHash.h
         utils/IdGenerator.h
         utils/MersienneRandom.h
-        utils/Offset.h
         utils/Optional.h
         utils/Pacer.cpp
         utils/Pacer.h

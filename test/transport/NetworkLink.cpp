@@ -5,6 +5,7 @@
 
 namespace fakenet
 {
+
 bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp)
 {
     const std::lock_guard<std::mutex> lock(_pushMutex);

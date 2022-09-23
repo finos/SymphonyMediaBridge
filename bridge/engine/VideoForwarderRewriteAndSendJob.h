@@ -10,9 +10,10 @@ class Transport;
 
 namespace bridge
 {
-
+class EngineMessageListener;
 class SsrcOutboundContext;
 class SsrcInboundContext;
+class EngineMixer;
 
 class VideoForwarderRewriteAndSendJob : public jobmanager::CountedJob
 {
@@ -21,7 +22,10 @@ public:
         SsrcInboundContext& senderInboundContext,
         memory::UniquePacket packet,
         transport::Transport& transport,
-        const uint32_t extendedSequenceNumber);
+        const uint32_t extendedSequenceNumber,
+        EngineMessageListener& mixerManager,
+        size_t endpointIdHash,
+        EngineMixer& mixer);
 
     void run() override;
 
@@ -31,6 +35,9 @@ private:
     memory::UniquePacket _packet;
     transport::Transport& _transport;
     uint32_t _extendedSequenceNumber;
+    EngineMessageListener& _mixerManager;
+    size_t _endpointIdHash;
+    EngineMixer& _mixer;
 };
 
 } // namespace bridge
