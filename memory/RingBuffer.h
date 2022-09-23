@@ -1,14 +1,11 @@
 #pragma once
 
+#include "utils/ScopedReentrancyBlocker.h"
 #include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <sys/mman.h>
 #include <unistd.h>
-#ifdef DEBUG
-#include "utils/ScopedReentrancyBlocker.h"
-
-#endif
 
 namespace memory
 {
@@ -55,7 +52,7 @@ public:
     {
         assert(outData);
         REENTRANCE_CHECK(_reentrancyCount);
-#
+
         const auto currentLength = _length;
         if (currentLength == 0 || currentLength < size)
         {
