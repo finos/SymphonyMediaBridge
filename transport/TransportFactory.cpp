@@ -512,6 +512,11 @@ public:
 
     void registerIceListener(Endpoint::IEvents& listener, const std::string& ufrag) override
     {
+        if (_sharedEndpoints.empty())
+        {
+            return;
+        }
+
         for (auto& endpoint : _sharedEndpoints[0])
         {
             endpoint->registerListener(ufrag, &listener);
