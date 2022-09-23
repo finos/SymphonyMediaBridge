@@ -62,7 +62,11 @@ public:
 #endif
 
         auto missingPacketsItr = _missingPackets.find(sequenceNumber);
-        if (missingPacketsItr == _missingPackets.end() || missingPacketsItr->second._arrived)
+        if (missingPacketsItr == _missingPackets.end())
+        {
+            return false;
+        }
+        else if (missingPacketsItr->second._arrived)
         {
 #if DEBUG_MISSING_PACKETS_TRACKER
             logger::debug("Late packet arrived seq %u already removed", _loggableId.c_str(), sequenceNumber);

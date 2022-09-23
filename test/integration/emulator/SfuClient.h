@@ -469,12 +469,14 @@ public:
             }
 
             inboundContext.onRtpPacketReceived(timestamp);
+#if 0
             logger::debug("%s received ssrc %u, seq %u, extseq %u",
                 _loggableId.c_str(),
                 sender->getLoggableId().c_str(),
                 inboundContext.ssrc,
                 rtpHeader->sequenceNumber.get(),
                 inboundContext.lastReceivedExtendedSequenceNumber);
+#endif
 
             if (!sender->unprotect(packet))
             {

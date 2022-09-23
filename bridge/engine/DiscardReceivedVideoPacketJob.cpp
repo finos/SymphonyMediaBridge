@@ -9,11 +9,13 @@ namespace bridge
 
 DiscardReceivedVideoPacketJob::DiscardReceivedVideoPacketJob(memory::UniquePacket packet,
     transport::RtcTransport* sender,
-    bridge::SsrcInboundContext& ssrcContext)
+    bridge::SsrcInboundContext& ssrcContext,
+    const uint32_t extendedSequenceNumber)
     : CountedJob(sender->getJobCounter()),
       _packet(std::move(packet)),
       _sender(sender),
-      _ssrcContext(ssrcContext)
+      _ssrcContext(ssrcContext),
+      _extendedSequenceNumber(extendedSequenceNumber)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -30,6 +32,7 @@ void DiscardReceivedVideoPacketJob::run()
         return;
     }
 
+    _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
     if (_ssrcContext.videoMissingPacketsTracker)
     {
         uint32_t extSeqno = 0;

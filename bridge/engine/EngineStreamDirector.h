@@ -269,7 +269,7 @@ public:
             std::max(uplinkEstimateKbps, participantStream.defaultLevelBandwidthLimit);
 
         size_t pinnedQuality, unpinnedQuality;
-        getVideoQualityLimits(participantStream, pinnedQuality, unpinnedQuality);
+        getVideoQualityLimits(endpointIdHash, participantStream, pinnedQuality, unpinnedQuality);
 
         participantStream.desiredHighestEstimatedPinnedLevel = pinnedQuality;
         participantStream.desiredUnpinnedLevel = unpinnedQuality;
@@ -926,15 +926,24 @@ private:
         return (numRecordingStreams != 0 && isContentSlides(ssrc, senderEndpointIdHash));
     }
 
-    inline void getVideoQualityLimits(const ParticipantStreams& participantStreams,
+    inline void getVideoQualityLimits(const size_t endpointIdHash,
+        const ParticipantStreams& participantStreams,
         size_t& outPinnedQuality,
         size_t& outUnpinnedQuality) const
     {
-        const auto maxVideoStreams = std::min(std::max(1ul, _lowQualitySsrcs.size()), (unsigned long)_lastN - 1);
-        if (maxVideoStreams < 1)
-        {
-            return;
-        }
+        outPinnedQuality = dropQuality;
+        outUnpinnedQuality = dropQuality;
+
+        // We need to divide available bitrate (minus bitrate for slides, if present) to "maxReceivingVideoStreams".
+        // "maxReceivingVideoStreams" can be 0, if we are the only one sending video, or the very first one in that case
+        // quality limits will be initially overestimated (but would be peridically updated with each uplink estimation
+        // anyway). To lookup "configLadder" we need at least one stream, thus capping to 1 from below.
+
+        bool sendingVideo = participantStreams.primary.isSendingVideo() ||
+            (participantStreams.secondary.isSet() && participantStreams.secondary.get().isSendingVideo());
+
+        const auto maxReceivingVideoStreams = std::max(1ul,
+            std::min(std::max(1ul, _lowQualitySsrcs.size()), (unsigned long)_lastN) - (sendingVideo ? 1 : 0));
 
         int bestConfigId = 0;
         unsigned long bestConfigCost = 0;
@@ -946,7 +955,8 @@ private:
 
         for (const auto& config : configLadder)
         {
-            const auto configCost = config.BaseRate + maxVideoStreams * config.OverheadBitrate + _slidesBitrateKbps;
+            const auto configCost =
+                config.BaseRate + maxReceivingVideoStreams * config.OverheadBitrate + _slidesBitrateKbps;
 
             assert(configCost >= config.MinBitrateMargin + _slidesBitrateKbps);
             assert(configCost <= config.MaxBitrateMargin + _slidesBitrateKbps);
@@ -962,13 +972,15 @@ private:
         outPinnedQuality = configLadder[bestConfigId].PinnedQuality;
         outUnpinnedQuality = configLadder[bestConfigId].UnpinnedQuality;
 
-        DIRECTOR_LOG("VQ pinned: %c, unpinned %c, max streams %ld, estimated uplink %d, reserve for slides: %d",
+        DIRECTOR_LOG("VQ pinned: %c, unpinned %c, max streams %ld, estimated uplink %d, reserve for slides: %d "
+                     "(endpoint %zu)",
             _loggableId.c_str(),
             (char)outPinnedQuality + '0',
             (char)outUnpinnedQuality + '0',
-            maxVideoStreams,
+            maxReceivingVideoStreams,
             estimatedUplinkBandwidth,
-            _slidesBitrateKbps);
+            _slidesBitrateKbps,
+            endpointIdHash);
     }
 };
 
