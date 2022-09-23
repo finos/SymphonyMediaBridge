@@ -2345,6 +2345,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             _engineStreamDirector->streamActiveStateChanged(packetInfo.packet()->endpointIdHash,
                 ssrcContext->ssrc,
                 true);
+            ssrcContext->activeMedia = true;
         }
 
         forwardVideoRtpPacket(packetInfo, timestamp);
@@ -3242,9 +3243,10 @@ void EngineMixer::updateSimulcastLevelActiveState(EngineVideoStream& videoStream
     {
         const auto ssrc = simulcastStream.levels[i].ssrc;
         auto ssrcInboundContext = _ssrcInboundContexts.getItem(ssrc);
-        if (ssrcInboundContext && ssrcInboundContext->activeMedia)
+        if (ssrcInboundContext && !ssrcInboundContext->activeMedia)
         {
             _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
+            ssrcInboundContext->activeMedia = true;
         }
     }
 }

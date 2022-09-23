@@ -942,6 +942,7 @@ public:
         {
             if (!client->_channel.isSuccess())
             {
+                logger::warn("client has not received offer yet", client->getLoggableId().c_str());
                 return false;
             }
         }
@@ -956,6 +957,10 @@ public:
             client->processOffer();
             if (!client->_transport || !client->_audioSource)
             {
+                logger::warn("client did not parse offer successfully transport %s, audio source %s",
+                    client->getLoggableId().c_str(),
+                    client->_transport ? "ok" : "bad",
+                    client->_audioSource ? "ok" : "bad");
                 return false;
             }
         }
@@ -982,6 +987,7 @@ public:
             currTime = utils::Time::getAbsoluteTime();
         }
 
+        logger::warn("client transports failed to connect", "GroupCall.connectAll");
         return false;
     }
 
