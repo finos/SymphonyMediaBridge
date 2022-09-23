@@ -441,7 +441,6 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     _timeSource.shutdown();
 #endif
     runner.join();
-    _internet.reset();
 }
 
 void IntegrationTest::startSimulation()
