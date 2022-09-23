@@ -1416,7 +1416,10 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
 
     if (!mustBeForwardedOnBarbells && !ssrcContext.isSsrcUsed.load())
     {
-        sender->getJobQueue().addJob<bridge::DiscardReceivedVideoPacketJob>(std::move(packet), sender, ssrcContext);
+        sender->getJobQueue().addJob<bridge::DiscardReceivedVideoPacketJob>(std::move(packet),
+            sender,
+            ssrcContext,
+            extendedSequenceNumber);
         return;
     }
 
