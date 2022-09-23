@@ -27,14 +27,14 @@ void ProcessMissingVideoPacketsJob::run()
 {
     auto timestamp = utils::Time::getAbsoluteTime();
     auto* videoMissingPacketsTracker = _ssrcContext.videoMissingPacketsTracker.get();
-    if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp / 1000000ULL))
+    if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp))
     {
         return;
     }
 
     std::array<uint16_t, VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
-    const auto numMissingSequenceNumbers = _ssrcContext.videoMissingPacketsTracker->process(timestamp / 1000000ULL,
-        _ssrcContext.sender->getRtt() / utils::Time::ms,
+    const auto numMissingSequenceNumbers = _ssrcContext.videoMissingPacketsTracker->process(timestamp,
+        _ssrcContext.sender->getRtt(),
         missingSequenceNumbers);
 
     if (numMissingSequenceNumbers == 0)

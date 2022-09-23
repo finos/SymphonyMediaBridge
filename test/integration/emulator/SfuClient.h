@@ -465,7 +465,8 @@ public:
             if (inboundContext.packetsProcessed == 1)
             {
                 inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
-                inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>(10);
+                inboundContext.videoMissingPacketsTracker =
+                    std::make_shared<bridge::VideoMissingPacketsTracker>(10 * utils::Time::ms);
             }
 
             inboundContext.onRtpPacketReceived(timestamp);
@@ -505,13 +506,12 @@ public:
             const auto payloadSize = packet.getLength() - rtpHeader->headerLength();
             const auto payloadDescriptorSize = codec::Vp8Header::getPayloadDescriptorSize(payload, payloadSize);
             const bool isKeyframe = codec::Vp8Header::isKeyFrame(payload, payloadDescriptorSize);
-            const auto timestampMs = timestamp / utils::Time::ms;
             const auto sequenceNumber = rtpHeader->sequenceNumber.get();
             bool missingPacketsTrackerReset = false;
 
             if (isKeyframe)
             {
-                inboundContext.videoMissingPacketsTracker->reset(timestampMs);
+                inboundContext.videoMissingPacketsTracker->reset(timestamp);
                 missingPacketsTrackerReset = true;
             }
 
@@ -524,7 +524,7 @@ public:
                         "SfuClient",
                         sender->getLoggableId().c_str(),
                         inboundContext.ssrc);
-                    inboundContext.videoMissingPacketsTracker->reset(timestampMs);
+                    inboundContext.videoMissingPacketsTracker->reset(timestamp);
                 }
                 else if (!missingPacketsTrackerReset)
                 {
@@ -533,7 +533,7 @@ public:
                          ++missingSequenceNumber)
                     {
                         _rtxStats.receiver.packetsMissing++;
-                        inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
+                        inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestamp);
                     }
                 }
 
@@ -560,12 +560,12 @@ public:
 
             if (inboundContext.videoMissingPacketsTracker)
             {
-                if (inboundContext.videoMissingPacketsTracker->shouldProcess(timestampMs))
+                if (inboundContext.videoMissingPacketsTracker->shouldProcess(timestamp))
                 {
                     std::array<uint16_t, bridge::VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
                     const auto numMissingSequenceNumbers =
-                        inboundContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime() / 1000000ULL,
-                            inboundContext.sender->getRtt() / utils::Time::ms,
+                        inboundContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime(),
+                            inboundContext.sender->getRtt(),
                             missingSequenceNumbers);
 
                     if (numMissingSequenceNumbers)

@@ -435,7 +435,7 @@ private:
 
     void processEngineMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
     void processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
-    void processRecordingMissingPackets(const uint64_t timestamp);
+    void processRecordingUnackedPackets(const uint64_t timestamp);
     void startProbingVideoStream(EngineVideoStream&);
     void stopProbingVideoStream(const EngineVideoStream&);
 

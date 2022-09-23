@@ -60,15 +60,19 @@ public:
     {
         REENTRANCE_CHECK(_producerCounter);
 
-        auto missingPacketsItr = _unackedPackets.find(sequenceNumber);
-        if (missingPacketsItr == _unackedPackets.end() || missingPacketsItr->second._acked)
+        auto* missingPacket = _unackedPackets.getItem(sequenceNumber);
+        if (!missingPacket)
+        {
+            return false;
+        }
+        if (missingPacket->_acked)
         {
             UNACK_LOG("Late packet ack seq %u already removed", _loggableId.c_str(), sequenceNumber);
             return false;
         }
 
-        missingPacketsItr->second._acked = true;
-        outExtendedSequenceNumber = missingPacketsItr->second._extendedSequenceNumber;
+        missingPacket->_acked = true;
+        outExtendedSequenceNumber = missingPacket->_extendedSequenceNumber;
 
         UNACK_LOG("Late ack arrived seq %u (seq %u roc %u)",
             _loggableId.c_str(),
@@ -150,6 +154,7 @@ public:
             _unackedPackets.erase(entriesToErase[i]);
         }
 
+        _lastRunTimestampMs = timestampMs;
         return returnSize;
     }
 

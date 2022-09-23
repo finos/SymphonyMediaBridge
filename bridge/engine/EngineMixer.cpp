@@ -988,7 +988,7 @@ void EngineMixer::processMissingPackets(const uint64_t timestamp)
         }
     }
 
-    processRecordingMissingPackets(timestamp);
+    processRecordingUnackedPackets(timestamp);
 }
 
 void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTimestamp)
@@ -3646,7 +3646,7 @@ void EngineMixer::processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcI
     }
 }
 
-void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
+void EngineMixer::processRecordingUnackedPackets(const uint64_t timestamp)
 {
     for (auto& engineRecordingStreamEntry : _engineRecordingStreams)
     {
@@ -3654,10 +3654,6 @@ void EngineMixer::processRecordingMissingPackets(const uint64_t timestamp)
         for (auto& recEventMissingPacketsTrackerEntry : engineRecordingStream->recEventUnackedPacketsTracker)
         {
             auto& recEventMissingPacketsTracker = recEventMissingPacketsTrackerEntry.second;
-            if (!recEventMissingPacketsTracker.shouldProcess(timestamp / 1000000ULL))
-            {
-                continue;
-            }
 
             auto transportItr = engineRecordingStream->transports.find(recEventMissingPacketsTrackerEntry.first);
             if (transportItr == engineRecordingStream->transports.end())
