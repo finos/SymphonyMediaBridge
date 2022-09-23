@@ -72,7 +72,7 @@ public:
         }
 
         missingPacket->_acked = true;
-        outExtendedSequenceNumber = missingPacket->_extendedSequenceNumber;
+        outExtendedSequenceNumber = missingPacket->extendedSequenceNumber;
 
         UNACK_LOG("Late ack arrived seq %u (seq %u roc %u)",
             _loggableId.c_str(),
@@ -102,7 +102,7 @@ public:
 
         for (auto& unackedPacketEntry : _unackedPackets)
         {
-            if (unackedPacketEntry.second._timestampMs <= _resetTimestampMs)
+            if (unackedPacketEntry.second.timestampMs <= _resetTimestampMs)
             {
                 UNACK_LOG("No more sends for seq %u, older than reset time",
                     _loggableId.c_str(),
@@ -122,10 +122,10 @@ public:
                 continue;
             }
 
-            if ((timestampMs - unackedPacketEntry.second._timestampMs > initialDelay) &&
-                (timestampMs - unackedPacketEntry.second._lastSentTimestampMs > retryDelay))
+            if ((timestampMs - unackedPacketEntry.second.timestampMs > initialDelay) &&
+                (timestampMs - unackedPacketEntry.second.lastSentTimestampMs > retryDelay))
             {
-                if (unackedPacketEntry.second._sentCount >= maxRetries)
+                if (unackedPacketEntry.second.sentCount >= maxRetries)
                 {
                     UNACK_LOG("No more sends for seq %u, max retries hit",
                         _loggableId.c_str(),
@@ -137,10 +137,10 @@ public:
                     continue;
                 }
 
-                unackedPacketEntry.second._lastSentTimestampMs = timestampMs;
+                unackedPacketEntry.second.lastSentTimestampMs = timestampMs;
                 outMissingSequenceNumbers[returnSize] = unackedPacketEntry.first;
                 ++returnSize;
-                ++unackedPacketEntry.second._sentCount;
+                ++unackedPacketEntry.second.sentCount;
 
                 if (returnSize >= maxUnackedPackets)
                 {
@@ -163,11 +163,11 @@ private:
 
     struct Entry
     {
-        uint64_t _timestampMs;
-        uint64_t _lastSentTimestampMs;
-        uint32_t _sentCount;
-        uint32_t _extendedSequenceNumber;
-        bool _acked;
+        uint64_t timestampMs;
+        uint64_t lastSentTimestampMs;
+        uint32_t sentCount;
+        uint32_t extendedSequenceNumber;
+        bool _acked = false;
     };
 
     logger::LoggableId _loggableId;
