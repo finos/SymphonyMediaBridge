@@ -3236,6 +3236,9 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
     }
 }
 
+// This method is called after a video stream has been reconfigured. That has lead to streams being removed and then
+// added again to ActiveMediaList and EngineStreamDirector. If the ssrc is an active inbound ssrc, we will set the
+// stream state again in EngineStreamDirector.
 void EngineMixer::updateSimulcastLevelActiveState(EngineVideoStream& videoStream,
     const SimulcastStream& simulcastStream)
 {
@@ -3243,10 +3246,9 @@ void EngineMixer::updateSimulcastLevelActiveState(EngineVideoStream& videoStream
     {
         const auto ssrc = simulcastStream.levels[i].ssrc;
         auto ssrcInboundContext = _ssrcInboundContexts.getItem(ssrc);
-        if (ssrcInboundContext && !ssrcInboundContext->activeMedia)
+        if (ssrcInboundContext && ssrcInboundContext->activeMedia)
         {
             _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
-            ssrcInboundContext->activeMedia = true;
         }
     }
 }
