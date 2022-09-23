@@ -36,18 +36,14 @@ PacketCache::PacketCache(const char* loggableId, const uint32_t ssrc)
 
 PacketCache::~PacketCache()
 {
-#if DEBUG
-    utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
-#endif
+    REENTRANCE_CHECK(_reentrancyCounter);
     // must clear out content in case PacketAllocator is removed first.
     _cache.reInitialize();
 }
 
 bool PacketCache::add(const memory::Packet& packet, const uint16_t sequenceNumber)
 {
-#if DEBUG
-    utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
-#endif
+    REENTRANCE_CHECK(_reentrancyCounter);
 
     if (_cache.contains(sequenceNumber))
     {

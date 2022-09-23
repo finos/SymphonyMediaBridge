@@ -11,6 +11,12 @@
 
 #define DEBUG_MISSING_PACKETS_TRACKER 0
 
+#if DEBUG_MISSING_PACKETS_TRACKER
+#define TRACKER_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define TRACKER_LOG(fmt, ...)
+#endif
+
 namespace bridge
 {
 
@@ -34,22 +40,17 @@ public:
 
     void onMissingPacket(const uint32_t extendedSequenceNumber, const uint64_t timestampMs)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_producerCounter);
-#endif
+        REENTRANCE_CHECK(_producerCounter);
 
         if (_missingPackets.size() >= maxMissingPackets)
         {
-#if DEBUG_MISSING_PACKETS_TRACKER
-            logger::debug("Too many missing packets", _loggableId.c_str());
-#endif
+            TRACKER_LOG("Too many missing packets", _loggableId.c_str());
             _resetTimestampMs = timestampMs;
             return;
         }
 
-#if DEBUG_MISSING_PACKETS_TRACKER
-        logger::debug("Add missing packet seq %u", _loggableId.c_str(), extendedSequenceNumber);
-#endif
+        TRACKER_LOG("Add missing packet seq %u", _loggableId.c_str(), extendedSequenceNumber);
+
         _missingPackets.emplace(extendedSequenceNumber & 0xFFFF,
             Entry({timestampMs, 0, 0, extendedSequenceNumber, false}));
         return;
@@ -57,9 +58,7 @@ public:
 
     bool onPacketArrived(const uint16_t sequenceNumber, uint32_t& outExtendedSequenceNumber)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_producerCounter);
-#endif
+        REENTRANCE_CHECK(_producerCounter);
 
         auto missingPacketsItr = _missingPackets.find(sequenceNumber);
         if (missingPacketsItr == _missingPackets.end())
@@ -68,29 +67,24 @@ public:
         }
         else if (missingPacketsItr->second._arrived)
         {
-#if DEBUG_MISSING_PACKETS_TRACKER
-            logger::debug("Late packet arrived seq %u already removed", _loggableId.c_str(), sequenceNumber);
-#endif
+            TRACKER_LOG("Late packet arrived seq %u already removed", _loggableId.c_str(), sequenceNumber);
             return false;
         }
 
         missingPacketsItr->second._arrived = true;
         outExtendedSequenceNumber = missingPacketsItr->second._extendedSequenceNumber;
-#if DEBUG_MISSING_PACKETS_TRACKER
-        logger::debug("Late packet arrived seq %u (seq %u roc %u)",
+        TRACKER_LOG("Late packet arrived seq %u (seq %u roc %u)",
             _loggableId.c_str(),
             sequenceNumber,
             outExtendedSequenceNumber & 0xFFFF,
             outExtendedSequenceNumber >> 16);
-#endif
+
         return true;
     }
 
     void reset(const uint64_t timestampMs)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_producerCounter);
-#endif
+        REENTRANCE_CHECK(_producerCounter);
         _resetTimestampMs = timestampMs;
     }
 
@@ -100,9 +94,7 @@ public:
         const uint32_t rttMs,
         std::array<uint16_t, maxMissingPackets>& outMissingSequenceNumbers)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_consumerCounter);
-#endif
+        REENTRANCE_CHECK(_consumerCounter);
 
         size_t returnSize = 0;
 
@@ -117,11 +109,10 @@ public:
         {
             if (missingPacketEntry.second._timestampMs <= _resetTimestampMs)
             {
-#if DEBUG_MISSING_PACKETS_TRACKER
-                logger::debug("No more nack for seq %u, older than reset time",
+                TRACKER_LOG("No more nack for seq %u, older than reset time",
                     _loggableId.c_str(),
                     missingPacketEntry.first);
-#endif
+
                 assert(numEntriesToErase < entriesToErase.size());
                 entriesToErase[numEntriesToErase] = missingPacketEntry.first;
                 ++numEntriesToErase;
@@ -141,11 +132,9 @@ public:
             {
                 if (missingPacketEntry.second._nacksSent >= maxRetries)
                 {
-#if DEBUG_MISSING_PACKETS_TRACKER
-                    logger::debug("No more nack for seq %u, max retries hit",
+                    TRACKER_LOG("No more nack for seq %u, max retries hit",
                         _loggableId.c_str(),
                         missingPacketEntry.first);
-#endif
 
                     assert(numEntriesToErase < entriesToErase.size());
                     entriesToErase[numEntriesToErase] = missingPacketEntry.first;

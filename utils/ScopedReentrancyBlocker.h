@@ -22,4 +22,12 @@ private:
     std::atomic_uint32_t& _counter;
 };
 
+#ifdef DEBUG
+#define REENTRANCE_CHECK(x) utils::ScopedReentrancyBlocker x##ReentranceBlocker(x)
+#else
+#define REENTRANCE_CHECK(x)                                                                                            \
+    do                                                                                                                 \
+    {                                                                                                                  \
+    } while (false)
+#endif
 } // namespace utils

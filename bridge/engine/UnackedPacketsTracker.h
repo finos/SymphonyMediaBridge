@@ -42,9 +42,7 @@ public:
 
     void onPacketSent(const uint32_t extendedSequenceNumber, const uint64_t timestampMs)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_producerCounter);
-#endif
+        REENTRANCE_CHECK(_producerCounter);
 
         if (_unackedPackets.size() >= maxUnackedPackets)
         {
@@ -60,9 +58,7 @@ public:
 
     bool onPacketAcked(const uint16_t sequenceNumber, uint32_t& outExtendedSequenceNumber)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_producerCounter);
-#endif
+        REENTRANCE_CHECK(_producerCounter);
 
         auto missingPacketsItr = _unackedPackets.find(sequenceNumber);
         if (missingPacketsItr == _unackedPackets.end() || missingPacketsItr->second._acked)
@@ -85,9 +81,7 @@ public:
 
     void reset(const uint64_t timestampMs)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_producerCounter);
-#endif
+        REENTRANCE_CHECK(_producerCounter);
         _resetTimestampMs = timestampMs;
     }
 
@@ -95,9 +89,7 @@ public:
 
     size_t process(const uint64_t timestampMs, std::array<uint16_t, maxUnackedPackets>& outMissingSequenceNumbers)
     {
-#if DEBUG
-        utils::ScopedReentrancyBlocker blocker(_consumerCounter);
-#endif
+        REENTRANCE_CHECK(_consumerCounter);
 
         size_t returnSize = 0;
 
