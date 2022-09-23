@@ -2,7 +2,6 @@
 
 namespace bridge
 {
-const int32_t MAX_REWIND = 512;
 
 bool SsrcOutboundContext::shouldSend(uint32_t ssrc, uint32_t sequenceNumber) const
 {
@@ -16,9 +15,12 @@ bool SsrcOutboundContext::shouldSend(uint32_t ssrc, uint32_t sequenceNumber) con
         return true;
     }
 
+    // for video the packet rate can be higher at key frames, allow more rewind
+    const int32_t maxRewind = rtpMap.isVideo() ? 1024 * 3 : 512;
+
     const bool packetArrivedAfterSsrcSwitch = (static_cast<int32_t>(sequenceNumber - rewrite.sequenceNumberStart) > 0);
     const bool packetNotTooOld = (static_cast<int32_t>(sequenceNumber + rewrite.offset.sequenceNumber -
-                                      rewrite.lastSent.sequenceNumber) > -MAX_REWIND);
+                                      rewrite.lastSent.sequenceNumber) > -maxRewind);
 
     if (packetArrivedAfterSsrcSwitch && packetNotTooOld)
     {

@@ -99,17 +99,6 @@ void RecordingVideoForwarderSendJob::run()
         }
     }
 
-    if (!_outboundContext.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
-    {
-        logger::debug("%s dropping packet. Rewrite not suitable ssrc %u, seq %u",
-            "RecordingVideoForwarderSendJob",
-            _transport.getLoggableId().c_str(),
-            rtpHeader->ssrc.get(),
-            _extendedSequenceNumber);
-
-        return;
-    }
-
     if (!_transport.isConnected())
     {
         return;
