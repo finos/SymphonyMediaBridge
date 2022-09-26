@@ -3236,7 +3236,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
     }
 }
 
-// This method is called after a video stream has been reconfigured. That has lead to streams being removed and then
+// This method is called after a video stream has been reconfigured. That has led to streams being removed and then
 // added again to ActiveMediaList and EngineStreamDirector. If the ssrc is an active inbound ssrc, we will set the
 // stream state again in EngineStreamDirector.
 void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStream,
