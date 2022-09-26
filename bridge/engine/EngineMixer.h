@@ -407,7 +407,7 @@ private:
         const std::string& dominantSpeakerEndpoint);
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream);
 
-    void updateSimulcastLevelActiveState(EngineVideoStream& videoStream, const SimulcastStream& simulcastStream);
+    void restoreDirectorStreamActiveState(EngineVideoStream& videoStream, const SimulcastStream& simulcastStream);
     void markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
         const uint32_t ssrc,
         const uint32_t feedbackSsrc);

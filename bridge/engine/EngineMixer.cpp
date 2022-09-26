@@ -707,10 +707,10 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
             engineVideoStream->secondarySimulcastStream,
             engineVideoStream->endpointId.c_str());
 
-        updateSimulcastLevelActiveState(*engineVideoStream, engineVideoStream->simulcastStream);
+        restoreDirectorStreamActiveState(*engineVideoStream, engineVideoStream->simulcastStream);
         if (secondarySimulcastStream && secondarySimulcastStream->numLevels > 0)
         {
-            updateSimulcastLevelActiveState(*engineVideoStream, *secondarySimulcastStream);
+            restoreDirectorStreamActiveState(*engineVideoStream, *secondarySimulcastStream);
         }
     }
     else
@@ -2349,6 +2349,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             _engineStreamDirector->streamActiveStateChanged(packetInfo.packet()->endpointIdHash,
                 ssrcContext->ssrc,
                 true);
+            ssrcContext->activeMedia = true;
         }
 
         forwardVideoRtpPacket(packetInfo, timestamp);
@@ -3239,7 +3240,10 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
     }
 }
 
-void EngineMixer::updateSimulcastLevelActiveState(EngineVideoStream& videoStream,
+// This method is called after a video stream has been reconfigured. That has led to streams being removed and then
+// added again to ActiveMediaList and EngineStreamDirector. If the ssrc is an active inbound ssrc, we will set the
+// stream state again in EngineStreamDirector.
+void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStream,
     const SimulcastStream& simulcastStream)
 {
     for (size_t i = 0; i < simulcastStream.numLevels; ++i)
