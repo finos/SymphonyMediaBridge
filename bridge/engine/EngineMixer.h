@@ -348,6 +348,7 @@ private:
 
     uint64_t _lastVideoBandwidthCheck;
     uint64_t _lastVideoPacketProcessed;
+    uint64_t _lastTickJobStartTimestamp;
     bool _hasSentTimeout;
     bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
@@ -379,6 +380,7 @@ private:
         const rtp::RtcpHeader& rtcpPacket,
         const uint64_t timestamp);
     void checkVideoBandwidth(const uint64_t timestamp);
+    void runTransportTicks(const uint64_t timestamp);
     void removeIdleStreams(const uint64_t timestamp);
 
     void mixSsrcBuffers();

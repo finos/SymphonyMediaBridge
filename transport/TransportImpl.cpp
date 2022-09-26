@@ -379,12 +379,25 @@ private:
 class RunTickJob : public jobmanager::CountedJob
 {
 public:
-    RunTickJob(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
+    RunTickJob(TransportImpl& transport, const uint64_t timestamp)
+        : CountedJob(transport.getJobCounter()),
+          _transport(transport),
+          _timestamp(timestamp)
+    {
+    }
 
-    void run() override { _transport.doRunTick(utils::Time::getAbsoluteTime()); }
+    void run() override
+    {
+        if (utils::Time::diffLT(_transport._lastTickJobStartTimestamp, _timestamp, utils::Time::ms * 10))
+        {
+            return;
+        }
+        _transport.doRunTick(utils::Time::getAbsoluteTime());
+    }
 
 private:
     TransportImpl& _transport;
+    uint64_t _timestamp;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,
@@ -491,7 +504,8 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _dtlsState(SrtpClient::State::IDLE),
       _uplinkEstimationEnabled(false),
       _downlinkEstimationEnabled(false),
-      _lastReceivedPacketTimestamp(0)
+      _lastReceivedPacketTimestamp(0),
+      _lastTickJobStartTimestamp(0)
 {
     assert(endpointIdHash != 0);
     _tag[0] = 0;
@@ -2450,12 +2464,14 @@ void TransportImpl::runTick(uint64_t timestamp)
 {
     if (_pacingInUse.load())
     {
-        _jobQueue.addJob<RunTickJob>(*this);
+        _jobQueue.addJob<RunTickJob>(*this, timestamp);
     }
 }
 
 void TransportImpl::doRunTick(const uint64_t timestamp)
 {
+    _lastTickJobStartTimestamp = timestamp;
+
     auto drainMode = _uplinkEstimationEnabled && _config.rctl.useUplinkEstimate ? DrainPacingBufferMode::UseBudget
                                                                                 : DrainPacingBufferMode::DrainAll;
 
