@@ -4,6 +4,7 @@
 #include "logger/Logger.h"
 #include "memory/List.h"
 #include "utils/ScopedReentrancyBlocker.h"
+#include "utils/Time.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -24,36 +25,36 @@ class UnackedPacketsTracker
 {
 public:
     static const size_t maxUnackedPackets = 64;
-    static const uint64_t initialDelay = 50;
-    static const uint64_t retryDelay = 50;
+    static const uint64_t initialDelay = 50 * utils::Time::ms;
+    static const uint64_t retryDelay = 50 * utils::Time::ms;
 
     explicit UnackedPacketsTracker(const char* name, const uint64_t intervalMs)
         : _loggableId(name),
-          _intervalMs(intervalMs),
+          _intervalNs(intervalMs * utils::Time::ms),
 #if DEBUG
           _producerCounter(0),
           _consumerCounter(0),
 #endif
           _unackedPackets(maxUnackedPackets * 2),
-          _lastRunTimestampMs(0),
-          _resetTimestampMs(0)
+          _lastRunTimestamp(0),
+          _resetTimestamp(0)
     {
     }
 
-    void onPacketSent(const uint32_t extendedSequenceNumber, const uint64_t timestampMs)
+    void onPacketSent(const uint32_t extendedSequenceNumber, const uint64_t timestamp)
     {
         REENTRANCE_CHECK(_producerCounter);
 
         if (_unackedPackets.size() >= maxUnackedPackets)
         {
             UNACK_LOG("Too many unacked packets", _loggableId.c_str());
-            _resetTimestampMs = timestampMs;
+            _resetTimestamp = timestamp;
             return;
         }
 
         UNACK_LOG("Add unacked packet seq %u", _loggableId.c_str(), extendedSequenceNumber);
         _unackedPackets.emplace(extendedSequenceNumber & 0xFFFF,
-            Entry({timestampMs, timestampMs, 0, extendedSequenceNumber, false}));
+            Entry({timestamp, timestamp, 0, extendedSequenceNumber, false}));
     }
 
     bool onPacketAcked(const uint16_t sequenceNumber, uint32_t& outExtendedSequenceNumber)
@@ -65,13 +66,13 @@ public:
         {
             return false;
         }
-        if (missingPacket->_acked)
+        if (missingPacket->acked)
         {
             UNACK_LOG("Late packet ack seq %u already removed", _loggableId.c_str(), sequenceNumber);
             return false;
         }
 
-        missingPacket->_acked = true;
+        missingPacket->acked = true;
         outExtendedSequenceNumber = missingPacket->extendedSequenceNumber;
 
         UNACK_LOG("Late ack arrived seq %u (seq %u roc %u)",
@@ -83,15 +84,18 @@ public:
         return true;
     }
 
-    void reset(const uint64_t timestampMs)
+    void resetX(const uint64_t timestamp)
     {
         REENTRANCE_CHECK(_producerCounter);
-        _resetTimestampMs = timestampMs;
+        _resetTimestamp = timestamp;
     }
 
-    bool shouldProcess(const uint64_t timestampMs) const { return (timestampMs - _lastRunTimestampMs) >= _intervalMs; }
+    bool shouldProcess(const uint64_t timestamp) const
+    {
+        return utils::Time::diffGE(_lastRunTimestamp, timestamp, _intervalNs);
+    }
 
-    size_t process(const uint64_t timestampMs, std::array<uint16_t, maxUnackedPackets>& outMissingSequenceNumbers)
+    size_t process(const uint64_t timestamp, std::array<uint16_t, maxUnackedPackets>& outMissingSequenceNumbers)
     {
         REENTRANCE_CHECK(_consumerCounter);
 
@@ -102,7 +106,7 @@ public:
 
         for (auto& unackedPacketEntry : _unackedPackets)
         {
-            if (unackedPacketEntry.second.timestampMs <= _resetTimestampMs)
+            if (utils::Time::diffGE(unackedPacketEntry.second.timestamp, _resetTimestamp, 0))
             {
                 UNACK_LOG("No more sends for seq %u, older than reset time",
                     _loggableId.c_str(),
@@ -114,7 +118,7 @@ public:
                 continue;
             }
 
-            if (unackedPacketEntry.second._acked)
+            if (unackedPacketEntry.second.acked)
             {
                 assert(numEntriesToErase < entriesToErase.size());
                 entriesToErase[numEntriesToErase] = unackedPacketEntry.first;
@@ -122,8 +126,8 @@ public:
                 continue;
             }
 
-            if ((timestampMs - unackedPacketEntry.second.timestampMs > initialDelay) &&
-                (timestampMs - unackedPacketEntry.second.lastSentTimestampMs > retryDelay))
+            if ((timestamp - unackedPacketEntry.second.timestamp > initialDelay) &&
+                (timestamp - unackedPacketEntry.second.lastSentTimestamp > retryDelay))
             {
                 if (unackedPacketEntry.second.sentCount >= maxRetries)
                 {
@@ -137,7 +141,7 @@ public:
                     continue;
                 }
 
-                unackedPacketEntry.second.lastSentTimestampMs = timestampMs;
+                unackedPacketEntry.second.lastSentTimestamp = timestamp;
                 outMissingSequenceNumbers[returnSize] = unackedPacketEntry.first;
                 ++returnSize;
                 ++unackedPacketEntry.second.sentCount;
@@ -154,7 +158,7 @@ public:
             _unackedPackets.erase(entriesToErase[i]);
         }
 
-        _lastRunTimestampMs = timestampMs;
+        _lastRunTimestamp = timestamp;
         return returnSize;
     }
 
@@ -163,22 +167,22 @@ private:
 
     struct Entry
     {
-        uint64_t timestampMs;
-        uint64_t lastSentTimestampMs;
+        uint64_t timestamp;
+        uint64_t lastSentTimestamp;
         uint32_t sentCount;
         uint32_t extendedSequenceNumber;
-        bool _acked = false;
+        bool acked = false;
     };
 
     logger::LoggableId _loggableId;
-    uint64_t _intervalMs;
+    uint64_t _intervalNs;
 #if DEBUG
     std::atomic_uint32_t _producerCounter;
     std::atomic_uint32_t _consumerCounter;
 #endif
     concurrency::MpmcHashmap32<uint16_t, Entry> _unackedPackets;
-    uint64_t _lastRunTimestampMs;
-    uint64_t _resetTimestampMs;
+    uint64_t _lastRunTimestamp;
+    uint64_t _resetTimestamp;
 };
 
 } // namespace bridge
