@@ -14,6 +14,7 @@
 #include "memory/PacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
 #include "test/bwe/FakeVideoSource.h"
+#include "test/integration/FFTanalysis.h"
 #include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/ApiChannel.h"
 #include "test/integration/emulator/AudioSource.h"
@@ -35,8 +36,6 @@
 #include <memory>
 #include <sstream>
 #include <unordered_set>
-
-#define USE_FAKENETWORK 1
 
 IntegrationTest::IntegrationTest()
     : _httpd(nullptr),
@@ -70,30 +69,15 @@ void IntegrationTest::SetUp()
 
     using namespace std;
 
-#if USE_FAKENETWORK
     utils::Time::initialize(_timeSource);
     _httpd = new emulator::HttpdFactory();
-#endif
-
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
+
     _jobManager = std::make_unique<jobmanager::JobManager>();
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
     }
-
-#if USE_FAKENETWORK
-    _clientsEndpointFactory =
-        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->getNetwork(),
-            [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
-                logger::info("Client %s endpoint uses address %s",
-                    "IntegrationTest",
-                    name.c_str(),
-                    addr.toString().c_str());
-            }));
-#else
-    _clientsEndpointFactory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
-#endif
 }
 
 void IntegrationTest::TearDown()
@@ -113,8 +97,11 @@ void IntegrationTest::TearDown()
         worker->stop();
     }
 
-    assert(!_internet->isRunning());
-    _internet.reset();
+    if (_internet)
+    {
+        assert(!_internet->isRunning());
+        _internet.reset();
+    }
 
     logger::info("IntegrationTest torn down", "IntegrationTest");
 }
@@ -131,8 +118,16 @@ size_t IntegrationTest::getNumWorkerThreads()
 
 void IntegrationTest::initBridge(config::Config& config)
 {
+    _clientsEndpointFactory =
+        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->getNetwork(),
+            [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
+                logger::info("Client %s endpoint uses address %s",
+                    "IntegrationTest",
+                    name.c_str(),
+                    addr.toString().c_str());
+            }));
+
     _bridge = std::make_unique<bridge::Bridge>(config);
-#if USE_FAKENETWORK
     _bridgeEndpointFactory =
         std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->getNetwork(),
             [this](std::shared_ptr<fakenet::NetworkLink> netLink,
@@ -146,10 +141,12 @@ void IntegrationTest::initBridge(config::Config& config)
             }));
 
     _bridge->initialize(_bridgeEndpointFactory, *_httpd);
-#else
-    _bridge->initialize();
-#endif
 
+    initLocalTransports();
+}
+
+void IntegrationTest::initLocalTransports()
+{
     _sslDtls = &_bridge->getSslDtls();
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
 
@@ -255,100 +252,6 @@ api::ConferenceEndpointExtendedInfo IntegrationTest::getEndpointExtendedInfo(emu
     return api::Parser::parseEndpointExtendedInfo(responseBody);
 }
 
-void fftThreadRun(const std::vector<int16_t>& recording,
-    std::vector<double>& frequencies,
-    const size_t fftWindowSize,
-    size_t size,
-    size_t numThreads,
-    size_t threadId)
-{
-    for (size_t cursor = 256 * threadId; cursor < size - fftWindowSize; cursor += 256 * numThreads)
-    {
-        std::valarray<std::complex<double>> testVector(fftWindowSize);
-        for (uint64_t x = 0; x < fftWindowSize; ++x)
-        {
-            testVector[x] = std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
-        }
-
-        SampleDataUtils::fft(testVector);
-        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies);
-    }
-}
-
-void IntegrationTest::analyzeRecording(const std::vector<int16_t>& recording,
-    std::vector<double>& frequencyPeaks,
-    std::vector<std::pair<uint64_t, double>>& amplitudeProfile,
-    const char* logId,
-    uint64_t cutAtTime)
-{
-    utils::RateTracker<5> amplitudeTracker(codec::Opus::sampleRate / 10);
-    const size_t fftWindowSize = 2048;
-
-    const auto limit = cutAtTime == 0 ? recording.size() : cutAtTime * codec::Opus::sampleRate / utils::Time::ms;
-    const auto size = recording.size() > limit ? limit : recording.size();
-
-    for (size_t t = 0; t < size; ++t)
-    {
-        amplitudeTracker.update(std::abs(recording[t]), t);
-        if (t > codec::Opus::sampleRate / 10)
-        {
-            if (amplitudeProfile.empty() ||
-                (t - amplitudeProfile.back().first > codec::Opus::sampleRate / 10 &&
-                    std::abs(amplitudeProfile.back().second - amplitudeTracker.get(t, codec::Opus::sampleRate / 5)) >
-                        100))
-            {
-                amplitudeProfile.push_back(std::make_pair(t, amplitudeTracker.get(t, codec::Opus::sampleRate / 5)));
-            }
-        }
-    }
-
-    if (size < fftWindowSize)
-    {
-        return;
-    }
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    auto const numThreads = std::max(std::thread::hardware_concurrency(), 4U);
-    std::vector<std::thread> workers;
-    std::vector<std::vector<double>> frequencies;
-    frequencies.reserve(numThreads);
-
-    for (size_t threadId = 0; threadId < numThreads; threadId++)
-    {
-        frequencies.push_back(std::vector<double>());
-        workers.push_back(std::thread(fftThreadRun,
-            std::ref(recording),
-            std::ref(frequencies[threadId]),
-            fftWindowSize,
-            size,
-            numThreads,
-            threadId));
-    }
-
-    for (size_t threadId = 0; threadId < numThreads; threadId++)
-    {
-        workers[threadId].join();
-    }
-
-    for (size_t threadId = 0; threadId < numThreads; threadId++)
-    {
-        for (size_t i = 0; i < frequencies[threadId].size() && i < 50; ++i)
-        {
-            if (std::find(frequencyPeaks.begin(), frequencyPeaks.end(), frequencies[threadId][i]) ==
-                frequencyPeaks.end())
-            {
-                logger::debug("added new freq %.3f", logId, frequencies[threadId][i]);
-                frequencyPeaks.push_back(frequencies[threadId][i]);
-            }
-        }
-    }
-
-    auto stop = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
-    logger::debug("Analysis complete in %lld us", "Threaded FFT", duration.count());
-}
-
 bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint)
 {
     auto it = std::find_if(endpoints.cbegin(), endpoints.cend(), [&endpoint](const api::ConferenceEndpoint& e) {
@@ -382,7 +285,7 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
         std::vector<double> freqVector;
         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
         auto rec = item.second->getRecording();
-        analyzeRecording(rec,
+        ::analyzeRecording(rec,
             freqVector,
             amplitudeProfile,
             item.second->getLoggableId().c_str(),
@@ -421,40 +324,40 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
 
 void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::function<void()> test)
 {
-// allow internet thread to forward packets next time it wakes up.
-#if USE_FAKENETWORK
-    _internet->start();
-#endif
+    // allow internet thread to forward packets next time it wakes up.
+    if (_internet)
+    {
+        _internet->start();
+    }
 
     // run test in thread that will also sleep at TimeTurner
     std::thread runner([test] { test(); });
 
     _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
 
-#if USE_FAKENETWORK
+    if (_internet)
+    {
+        // run for 80s or until test runner thread stops the time run
+        _timeSource.runFor(80 * utils::Time::sec);
 
-    // run for 80s or until test runner thread stops the time run
-    _timeSource.runFor(80 * utils::Time::sec);
+        // wait for all to sleep before switching time source
+        _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
 
-    // wait for all to sleep before switching time source
-    _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);
+        // all threads are asleep. Switch to real time
+        logger::info("Switching back to real time-space", "");
+        utils::Time::initialize();
 
-    // all threads are asleep. Switch to real time
-    logger::info("Switching back to real time-space", "");
-    utils::Time::initialize();
+        // release all sleeping threads into real time to finish the test
+        _timeSource.shutdown();
+    }
 
-    // release all sleeping threads into real time to finish the test
-    _timeSource.shutdown();
-#endif
     runner.join();
 }
 
 void IntegrationTest::startSimulation()
 {
-#if USE_FAKENETWORK
     _internet->start();
     utils::Time::nanoSleep(1 * utils::Time::sec);
-#endif
 }
 
 void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
@@ -502,9 +405,9 @@ TEST_F(IntegrationTest, plain)
 
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -595,8 +498,8 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
 
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, false, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, false, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -668,9 +571,9 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
         printf("T%" PRIu64 " calling\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
         // Audio only for all three participants.
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, false, false);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, false, false);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, false);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, false);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, false);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -728,9 +631,9 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
         group.clients[1]->_channel.setAnswerOptions(answerOptionNoRtx);
 
         // Audio only for all three participants.
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
 
         auto connectResult = group.connectAll(utils::Time::sec * _clientsConnectionTimeout);
         EXPECT_TRUE(connectResult);
@@ -834,8 +737,8 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         group.startConference(conf, baseUrl + "/colibri");
 
         // Audio only for all three participants.
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
         // Client 3 will join after client 2, which produce video, will leave.
 
         if (!group.connectAll(utils::Time::sec * _clientsConnectionTimeout))
@@ -875,7 +778,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         }
 
         group.add(_httpd);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
         ASSERT_TRUE(group.connectSingle(2, utils::Time::sec * 4));
 
         group.clients[2]->_audioSource->setFrequency(2100);
@@ -932,9 +835,9 @@ TEST_F(IntegrationTest, plainNewApi)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -1023,9 +926,9 @@ TEST_F(IntegrationTest, ptime10)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, false);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -1107,9 +1010,9 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
 
         auto connectResult = group.connectAll(utils::Time::sec * _clientsConnectionTimeout);
         ASSERT_TRUE(connectResult);
@@ -1260,8 +1163,8 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -1348,9 +1251,9 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         Conference conf(_httpd);
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true, 0);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, true, true, true, 10);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true, 0);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, 10);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, 10);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 

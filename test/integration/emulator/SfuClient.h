@@ -25,6 +25,7 @@
 
 namespace emulator
 {
+
 class MediaSendJob : public jobmanager::Job
 {
 public:
@@ -112,7 +113,8 @@ public:
           _videoSsrcMap(128),
           _loggableId("client", id),
           _recordingActive(true),
-          _ptime(ptime)
+          _ptime(ptime),
+          _audioType(Audio::None)
     {
     }
 
@@ -146,12 +148,13 @@ public:
     void initiateCall(const std::string& baseUrl,
         std::string conferenceId,
         bool initiator,
-        bool audio,
+        Audio audio,
         bool video,
         bool forwardMedia,
         uint32_t idleTimeout = 0)
     {
-        _channel.create(baseUrl, conferenceId, initiator, audio, video, forwardMedia, idleTimeout);
+        _audioType = audio;
+        _channel.create(baseUrl, conferenceId, initiator, audio != Audio::None, video, forwardMedia, idleTimeout);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
@@ -170,7 +173,7 @@ public:
 
         if (_channel.isAudioOffered())
         {
-            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next());
+            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _audioType);
             _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
         }
 
@@ -350,10 +353,12 @@ public:
             uint32_t ssrc,
             const bridge::RtpMap& rtpMap,
             transport::RtcTransport* transport,
+            emulator::Audio fakeAudio,
             uint64_t timestamp)
             : _rtpMap(rtpMap),
               _context(ssrc, _rtpMap, transport, timestamp),
-              _loggableId("rtprcv", instanceId)
+              _loggableId("rtprcv", instanceId),
+              _fakeAudio(fakeAudio)
         {
             _recording.reserve(256 * 1024);
         }
@@ -370,9 +375,12 @@ public:
             }
 
             auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-            addOpus(reinterpret_cast<unsigned char*>(rtpHeader->getPayload()),
-                packet.getLength() - rtpHeader->headerLength(),
-                extendedSequenceNumber);
+            if (_fakeAudio == Audio::Opus)
+            {
+                addOpus(reinterpret_cast<unsigned char*>(rtpHeader->getPayload()),
+                    packet.getLength() - rtpHeader->headerLength(),
+                    extendedSequenceNumber);
+            }
         }
 
         void addOpus(const unsigned char* opusData, int32_t payloadLength, uint32_t extendedSequenceNumber)
@@ -410,6 +418,7 @@ public:
         codec::OpusDecoder _decoder;
         logger::LoggableId _loggableId;
         std::vector<int16_t> _recording;
+        const Audio _fakeAudio;
     };
 
     class RtpVideoReceiver
@@ -629,6 +638,7 @@ public:
         concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext> contexts;
 
     private:
+        Audio _audioType;
         bridge::RtpMap _rtpMap;
         bridge::RtpMap _rtxRtpMap;
         codec::OpusDecoder _decoder;
@@ -661,6 +671,7 @@ public:
                         rtpHeader->ssrc.get(),
                         rtpMap,
                         sender,
+                        _audioType,
                         timestamp));
                 it = _audioReceivers.find(rtpHeader->ssrc.get());
             }
@@ -944,6 +955,7 @@ private:
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
     size_t _instanceId;
     RtxStats _rtxStats;
+    Audio _audioType;
 };
 
 template <typename TClient>

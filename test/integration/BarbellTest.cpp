@@ -169,9 +169,9 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -330,9 +330,9 @@ TEST_F(BarbellTest, simpleBarbell)
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
-        group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -459,8 +459,8 @@ TEST_F(BarbellTest, barbellAfterClients)
         group.startConference(conf, baseUrl);
         group.startConference(conf2, baseUrl2);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, true, true, true);
-        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, true, true, true);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
 
         if (!group.connectAll(utils::Time::sec * _clientsConnectionTimeout))
         {

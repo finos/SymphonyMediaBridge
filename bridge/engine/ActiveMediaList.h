@@ -32,7 +32,7 @@ struct EngineAudioStream;
 class ActiveMediaList
 {
 public:
-    static constexpr size_t maxParticipants = 1024;
+    static constexpr size_t maxParticipants = 2048;
 
     struct VideoScreenShareSsrcMapping
     {

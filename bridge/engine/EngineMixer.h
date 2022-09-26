@@ -182,7 +182,7 @@ public:
     // call only on related Transport thread context
 
 private:
-    static const size_t maxPendingPackets = 4096;
+    static const size_t maxPendingPackets = 8192;
     static const size_t maxPendingRtcpPackets = 2048;
     static const size_t maxSsrcs = 8192;
     static const size_t maxStreamsPerModality = 4096;
