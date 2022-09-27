@@ -24,7 +24,6 @@
 #include "test/integration/emulator/SfuClient.h"
 #include "transport/DataReceiver.h"
 #include "transport/EndpointFactoryImpl.h"
-#include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
 #include "transport/Transport.h"
 #include "transport/TransportFactory.h"
@@ -47,37 +46,6 @@ void BarbellTest::TearDown()
 {
     IntegrationTest::TearDown();
 }
-
-namespace
-{
-template <typename T>
-void logVideoSent(const char* clientName, T& client)
-{
-    for (auto& itPair : client._videoSources)
-    {
-        auto& videoSource = itPair.second;
-        logger::info("%s video source %u, sent %u packets",
-            "bbTest",
-            clientName,
-            videoSource->getSsrc(),
-            videoSource->getPacketsSent());
-    }
-}
-
-template <typename T>
-void logTransportSummary(const char* clientName, transport::RtcTransport* transport, T& summary)
-{
-    for (auto& report : summary)
-    {
-        logger::debug("%s %s ssrc %u sent video pkts %u",
-            "bbTest",
-            clientName,
-            transport->getLoggableId().c_str(),
-            report.first,
-            report.second.packetsSent);
-    }
-}
-} // namespace
 
 using namespace emulator;
 

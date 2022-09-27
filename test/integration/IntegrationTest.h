@@ -7,6 +7,7 @@
 #include "test/integration/emulator/Httpd.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/EndpointFactory.h"
+#include "transport/RtcTransport.h"
 #include "utils/Pacer.h"
 #include <atomic>
 #include <condition_variable>
@@ -14,6 +15,42 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <mutex>
+
+namespace
+{
+template <typename T>
+void logVideoSent(const char* clientName, T& client)
+{
+    for (auto& itPair : client._videoSources)
+    {
+        auto& videoSource = itPair.second;
+        logger::info("%s video source %u, sent %u packets, bitrate %f",
+            "Test",
+            clientName,
+            videoSource->getSsrc(),
+            videoSource->getPacketsSent(),
+            videoSource->getBitRate());
+    }
+}
+
+template <typename T>
+void logTransportSummary(const char* clientName, transport::RtcTransport* transport, T& summary)
+{
+    for (auto& report : summary)
+    {
+        auto bitrate = report.second.rtpFrequency * report.second.octets /
+            (125 * (report.second.rtpTimestamp - report.second.initialRtpTimestamp));
+
+        logger::debug("%s %s ssrc %u sent video pkts %u, %lu kbps",
+            "Test",
+            clientName,
+            transport->getLoggableId().c_str(),
+            report.first,
+            report.second.packetsSent,
+            bitrate);
+    }
+}
+} // namespace
 
 struct IntegrationTest : public ::testing::Test
 {

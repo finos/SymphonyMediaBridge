@@ -983,6 +983,13 @@ TEST_F(IntegrationTest, plainNewApi)
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
             }
+
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            std::string clientName = "client_" + std::to_string(id);
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            logVideoSent(clientName.c_str(), *group.clients[id]);
         }
     });
 }
@@ -1070,37 +1077,6 @@ TEST_F(IntegrationTest, ptime10)
     });
 }
 
-namespace
-{
-template <typename T>
-void logVideoSent(const char* clientName, T& client)
-{
-    for (auto& itPair : client._videoSources)
-    {
-        auto& videoSource = itPair.second;
-        logger::info("%s video source %u, sent %u packets",
-            "bbTest",
-            clientName,
-            videoSource->getSsrc(),
-            videoSource->getPacketsSent());
-    }
-}
-
-template <typename T>
-void logTransportSummary(const char* clientName, transport::RtcTransport* transport, T& summary)
-{
-    for (auto& report : summary)
-    {
-        logger::debug("%s %s ssrc %u sent video pkts %u",
-            "bbTest",
-            clientName,
-            transport->getLoggableId().c_str(),
-            report.first,
-            report.second.packetsSent);
-    }
-}
-} // namespace
-
 TEST_F(IntegrationTest, detectIsPtt)
 {
     runTestInThread(2 * _numWorkerThreads + 7, [this]() {
@@ -1143,8 +1119,8 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.clients[1]->_audioSource->setVolume(0.6);
         group.clients[2]->_audioSource->setVolume(0.6);
 
-        // Disable audio level extension, otherwise constant signal will lead to the 'noise leve' equal to the signal
-        // and detection would fail
+        // Disable audio level extension, otherwise constant signal will lead to the 'noise leve' equal to the
+        // signal and detection would fail
         group.clients[0]->_audioSource->setUseAudioLevel(false);
         group.clients[1]->_audioSource->setUseAudioLevel(false);
         group.clients[2]->_audioSource->setUseAudioLevel(false);
@@ -1310,8 +1286,8 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                 const auto stats = group.clients[id]->getCumulativeRtxStats();
                 auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
 
-                // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
-                // have been ignored. So we might expect small number of videoCounters.lostPackets.
+                // Could happen that a key frame was sent after the packet that would be lost, in this case NACK
+                // would have been ignored. So we might expect small number of videoCounters.lostPackets.
                 if (videoCounters.lostPackets != 0)
                 {
                     logger::info(

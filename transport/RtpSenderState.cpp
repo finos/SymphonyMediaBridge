@@ -53,6 +53,7 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
         summary.sequenceNumberSent = header->sequenceNumber;
         summary.packetsSent = 1;
         summary.rtpTimestamp = summary.initialRtpTimestamp;
+        summary.rtpFrequency = _rtpFrequency;
         _summary.write(summary);
     }
     _sendCounters.payloadOctets += packet.getLength() - header->headerLength();
@@ -76,6 +77,7 @@ void RtpSenderState::onRtpSent(uint64_t timestamp, memory::Packet& packet)
         summary.sequenceNumberSent = _sendCounters.sequenceNumber;
         summary.packetsSent = _sendCounters.packets;
         summary.rtpTimestamp = _sendCounters.rtpTimestamp;
+        summary.octets = _sendCounters.payloadOctets + _sendCounters.rtpHeaderOctets;
         _summary.write(summary);
     }
 }
@@ -160,6 +162,8 @@ void RtpSenderState::onReceiverBlockReceived(uint64_t timestamp,
     s.rttNtp = newReport.rttNtp;
     s.initialRtpTimestamp = _initialRtpTimestamp;
     s.rtpTimestamp = _sendCounters.rtpTimestamp;
+    s.octets = _sendCounters.payloadOctets + _sendCounters.rtpHeaderOctets;
+    s.rtpFrequency = _rtpFrequency;
     _summary.write(s);
 
     _remoteReport = newReport;
@@ -232,6 +236,8 @@ void RtpSenderState::stop()
     summary.sequenceNumberSent = _sendCounters.sequenceNumber;
     summary.packetsSent = _sendCounters.packets;
     summary.rtpTimestamp = _sendCounters.rtpTimestamp;
+    summary.octets = _sendCounters.payloadOctets + _sendCounters.rtpHeaderOctets;
+    summary.rtpFrequency = _rtpFrequency;
     _summary.write(summary);
 
     if (utils::Time::diffGE(_sendCounterSnapshot.timestamp, _sendCounters.timestamp, utils::Time::ms * 250))

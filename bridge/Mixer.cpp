@@ -51,9 +51,9 @@ void logTransportPacketLoss(const std::string& endpointId, transport::RtcTranspo
         const auto ssrc = reportSummaryEntry.first;
         const auto& reportSummary = reportSummaryEntry.second;
 
-        logger::info(
-            "EndpointId %s %s, outbound ssrc %u, packets %u"
-            ", last sent seq %u, last received %u, reported loss count %u, initial RTP timestamp %u, RTP timestamp %u",
+        logger::info("EndpointId %s %s, outbound ssrc %u, packets %u"
+                     ", last sent seq %u, last received %u, reported loss count %u, initial RTP timestamp %u, RTP "
+                     "timestamp %u, brutto octets sent: %lu",
             mixerId,
             endpointId.c_str(),
             transport.getLoggableId().c_str(),
@@ -63,7 +63,8 @@ void logTransportPacketLoss(const std::string& endpointId, transport::RtcTranspo
             reportSummary.extendedSeqNoReceived,
             reportSummary.lostPackets,
             reportSummary.initialRtpTimestamp,
-            reportSummary.rtpTimestamp);
+            reportSummary.rtpTimestamp,
+            reportSummary.octets);
     }
 
     auto audioStats = transport.getCumulativeAudioReceiveCounters();

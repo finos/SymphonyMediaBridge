@@ -34,6 +34,8 @@ struct ReportSummary
     uint32_t packetsSent = 0;
     uint32_t initialRtpTimestamp = 0;
     uint32_t rtpTimestamp = 0;
+    uint64_t octets = 0;
+    uint32_t rtpFrequency;
 };
 
 class RtpSenderState
