@@ -82,12 +82,6 @@ public:
         return true;
     }
 
-    void resetX(const uint64_t timestamp)
-    {
-        REENTRANCE_CHECK(_producerCounter);
-        _resetTimestamp = timestamp;
-    }
-
     size_t process(const uint64_t timestamp, std::array<uint16_t, maxUnackedPackets>& outMissingSequenceNumbers)
     {
         REENTRANCE_CHECK(_consumerCounter);
