@@ -30,7 +30,7 @@ void RecordingSendEventJob::run()
     const auto sequenceNumber = recHeader->sequenceNumber.get();
     _recEventPacketCache.add(*_packet, sequenceNumber);
     _transport.protectAndSend(std::move(_packet));
-    _unackedPacketsTracker.onPacketSent(sequenceNumber, utils::Time::getAbsoluteTime() / 1000000ULL);
+    _unackedPacketsTracker.onPacketSent(sequenceNumber, utils::Time::getAbsoluteTime());
 }
 
 } // namespace bridge

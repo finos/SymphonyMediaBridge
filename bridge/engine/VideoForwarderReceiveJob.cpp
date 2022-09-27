@@ -15,7 +15,6 @@ namespace
 {
 
 FILE* videoDumpFile = nullptr;
-const uint64_t missingPacketsTrackerIntervalMs = 10;
 
 } // namespace
 
@@ -104,7 +103,6 @@ void VideoForwarderReceiveJob::run()
 
     const auto payloadDescriptorSize = codec::Vp8Header::getPayloadDescriptorSize(payload, payloadSize);
     const bool isKeyframe = codec::Vp8Header::isKeyFrame(payload, payloadDescriptorSize);
-    const auto timestampMs = _timestamp / utils::Time::ms;
 
     ++_ssrcContext.packetsProcessed;
     bool missingPacketsTrackerReset = false;
@@ -112,8 +110,7 @@ void VideoForwarderReceiveJob::run()
     if (_ssrcContext.packetsProcessed == 1)
     {
         _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
-        _ssrcContext.videoMissingPacketsTracker =
-            std::make_shared<VideoMissingPacketsTracker>(missingPacketsTrackerIntervalMs);
+        _ssrcContext.videoMissingPacketsTracker = std::make_shared<VideoMissingPacketsTracker>();
 
         logger::info("Adding missing packet tracker for %s, ssrc %u",
             "VideoForwarderReceiveJob",
@@ -169,7 +166,7 @@ void VideoForwarderReceiveJob::run()
                 codec::Vp8Header::getTl0PicIdx(payload));
 
             _ssrcContext.pliScheduler.onKeyFrameReceived();
-            _ssrcContext.videoMissingPacketsTracker->reset(timestampMs);
+            _ssrcContext.videoMissingPacketsTracker->reset(_timestamp);
             missingPacketsTrackerReset = true;
         }
         else
@@ -226,7 +223,7 @@ void VideoForwarderReceiveJob::run()
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
                 _ssrcContext.ssrc);
-            _ssrcContext.videoMissingPacketsTracker->reset(timestampMs);
+            _ssrcContext.videoMissingPacketsTracker->reset(_timestamp);
         }
         else if (!missingPacketsTrackerReset)
         {
@@ -234,7 +231,7 @@ void VideoForwarderReceiveJob::run()
                  missingSequenceNumber != _extendedSequenceNumber;
                  ++missingSequenceNumber)
             {
-                _ssrcContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestampMs);
+                _ssrcContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, _timestamp);
             }
         }
 

@@ -1,14 +1,11 @@
 #pragma once
 
+#include "utils/ScopedReentrancyBlocker.h"
 #include <cassert>
 #include <cstddef>
 #include <cstring>
 #include <sys/mman.h>
 #include <unistd.h>
-#ifdef DEBUG
-#include "utils/ScopedReentrancyBlocker.h"
-
-#endif
 
 namespace memory
 {
@@ -54,9 +51,7 @@ public:
     bool read(T* outData, const size_t size)
     {
         assert(outData);
-#ifdef DEBUG
-        utils::ScopedReentrancyBlocker reentrancyBlocker(_reentrancyCount);
-#endif
+        REENTRANCE_CHECK(_reentrancyCount);
 
         const auto currentLength = _length;
         if (currentLength == 0 || currentLength < size)
@@ -83,9 +78,7 @@ public:
      */
     void drop(const size_t size)
     {
-#ifdef DEBUG
-        utils::ScopedReentrancyBlocker reentrancyBlocker(_reentrancyCount);
-#endif
+        REENTRANCE_CHECK(_reentrancyCount);
 
         const auto currentLength = _length;
         if (currentLength == 0 || currentLength < size)
@@ -114,9 +107,7 @@ public:
     {
         assert(mixedData);
         assert(scaleFactor != 0);
-#ifdef DEBUG
-        utils::ScopedReentrancyBlocker reentrancyBlocker(_reentrancyCount);
-#endif
+        REENTRANCE_CHECK(_reentrancyCount);
 
         const auto currentLength = _length;
         if (currentLength == 0 || currentLength < size)
@@ -155,9 +146,7 @@ public:
     {
         assert(mixedData);
         assert(scaleFactor != 0);
-#ifdef DEBUG
-        utils::ScopedReentrancyBlocker reentrancyBlocker(_reentrancyCount);
-#endif
+        REENTRANCE_CHECK(_reentrancyCount);
 
         const auto currentLength = _length;
         if (currentLength == 0 || currentLength < size)
@@ -194,9 +183,7 @@ public:
     bool write(const T* data, const size_t size)
     {
         assert(data);
-#ifdef DEBUG
-        utils::ScopedReentrancyBlocker reentrancyBlocker(_reentrancyCount);
-#endif
+        REENTRANCE_CHECK(_reentrancyCount);
 
         if (_length + size > S)
         {
@@ -213,10 +200,7 @@ public:
     void insertSilence(const size_t size)
     {
         assert(size <= silenceBufferSize);
-
-#ifdef DEBUG
-        utils::ScopedReentrancyBlocker reentrancyBlocker(_reentrancyCount);
-#endif
+        REENTRANCE_CHECK(_reentrancyCount);
 
         if (_length + size > S)
         {

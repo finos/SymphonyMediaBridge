@@ -13,6 +13,11 @@
 #include <cstdint>
 
 #define DEBUG_REWRITER 0
+#if DEBUG_REWRITER
+#define REWRITER_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define REWRITER_LOG(fmt, ...)
+#endif
 
 namespace bridge
 {
@@ -82,8 +87,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
         ssrcRewrite.offset.timestamp =
             math::ringDifference<uint32_t, 32>(timestamp, ssrcRewrite.lastSent.timestamp + 500);
 
-#if DEBUG_REWRITER
-        logger::debug("%s new offset, ssrc %u, oseq %d, oPicId %d, otl0PicIdx %d, oTimestamp %d",
+        REWRITER_LOG("%s new offset, ssrc %u, oseq %d, oPicId %d, otl0PicIdx %d, oTimestamp %d",
             "Vp8Rewriter",
             transportName,
             rtpHeader->ssrc.get(),
@@ -91,7 +95,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
             ssrcRewrite.offset.picId,
             ssrcRewrite.offset.tl0PicIdx,
             ssrcRewrite.offset.timestamp);
-#endif
+
         logger::info("%s ssrc %u -> %u, sequence %u",
             "Vp8Rewriter",
             transportName,
@@ -122,8 +126,7 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
     codec::Vp8Header::setPicId(rtpPayload, newPicId);
     codec::Vp8Header::setTl0PicIdx(rtpPayload, newTl0PicIdx);
 
-#if DEBUG_REWRITER
-    logger::debug(
+    REWRITER_LOG(
         "%s fwd ssrc %u -> %u, seq %u (%u) -> %u (%u), marker %u, picId %d -> %d, tl0PicIdx %d -> %d, ts %u -> %u",
         "Vp8Rewriter",
         transportName,
@@ -140,7 +143,6 @@ inline bool rewrite(SsrcOutboundContext& ssrcOutboundContext,
         newTl0PicIdx,
         timestamp,
         newTimestamp);
-#endif
 
     if (static_cast<int32_t>(outExtendedSequenceNumber - ssrcRewrite.lastSent.sequenceNumber) > 0)
     {
@@ -175,15 +177,13 @@ inline uint16_t rewriteRtxPacket(memory::Packet& packet,
     memmove(payload, payload + sizeof(uint16_t), packet.getLength() - headerLength - sizeof(uint16_t));
     packet.setLength(packet.getLength() - sizeof(uint16_t));
 
-#if DEBUG_REWRITER
-    logger::debug("%s rewriteRtxPacket ssrc %u -> %u, seq %u -> %u",
+    REWRITER_LOG("%s rewriteRtxPacket ssrc %u -> %u, seq %u -> %u",
         "Vp8Rewriter",
         transportName,
         rtpHeader->ssrc.get(),
         mainSsrc,
         rtpHeader->sequenceNumber.get(),
         originalSequenceNumber);
-#endif
 
     rtpHeader->sequenceNumber = originalSequenceNumber;
     rtpHeader->ssrc = mainSsrc;

@@ -353,6 +353,8 @@ private:
     bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
 
+    uint64_t _lastRecordingAckProcessed;
+
     uint32_t getMinRemoteClientDownlinkBandwidth() const;
     void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;
 
@@ -437,7 +439,7 @@ private:
 
     void processEngineMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
     void processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcInboundContext);
-    void processRecordingMissingPackets(const uint64_t timestamp);
+    void processRecordingUnackedPackets(const uint64_t timestamp);
     void startProbingVideoStream(EngineVideoStream&);
     void stopProbingVideoStream(const EngineVideoStream&);
 

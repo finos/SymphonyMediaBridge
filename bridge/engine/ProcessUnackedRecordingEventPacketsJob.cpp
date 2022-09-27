@@ -26,9 +26,10 @@ ProcessUnackedRecordingEventPacketsJob::ProcessUnackedRecordingEventPacketsJob(
 
 void ProcessUnackedRecordingEventPacketsJob::run()
 {
+    uint64_t timestamp = utils::Time::getAbsoluteTime();
+
     std::array<uint16_t, UnackedPacketsTracker::maxUnackedPackets> unackedSequenceNumbers{};
-    const auto numMissingSequenceNumbers =
-        _unackedPacketsTracker.process(utils::Time::getAbsoluteTime() / 1000000ULL, unackedSequenceNumbers);
+    const auto numMissingSequenceNumbers = _unackedPacketsTracker.process(timestamp, unackedSequenceNumbers);
 
     if (numMissingSequenceNumbers == 0)
     {
