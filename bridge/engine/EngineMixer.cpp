@@ -52,7 +52,7 @@ namespace
 {
 
 const int16_t mixSampleScaleFactor = 4;
-const uint64_t RECUNACK_PROCESS_INTERVAL = 50 * utils::Time::ms;
+const uint64_t RECUNACK_PROCESS_INTERVAL = 25 * utils::Time::ms;
 
 memory::UniquePacket createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator)
 {
