@@ -15,7 +15,6 @@ namespace
 {
 
 FILE* videoDumpFile = nullptr;
-const uint64_t missingPacketsTrackerIntervalMs = 10;
 
 } // namespace
 
@@ -111,8 +110,7 @@ void VideoForwarderReceiveJob::run()
     if (_ssrcContext.packetsProcessed == 1)
     {
         _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
-        _ssrcContext.videoMissingPacketsTracker =
-            std::make_shared<VideoMissingPacketsTracker>(missingPacketsTrackerIntervalMs * utils::Time::ms);
+        _ssrcContext.videoMissingPacketsTracker = std::make_shared<VideoMissingPacketsTracker>();
 
         logger::info("Adding missing packet tracker for %s, ssrc %u",
             "VideoForwarderReceiveJob",

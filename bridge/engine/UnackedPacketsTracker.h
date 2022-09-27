@@ -28,15 +28,13 @@ public:
     static const uint64_t initialDelay = 50 * utils::Time::ms;
     static const uint64_t retryDelay = 50 * utils::Time::ms;
 
-    explicit UnackedPacketsTracker(const char* name, const uint64_t intervalMs)
+    explicit UnackedPacketsTracker(const char* name)
         : _loggableId(name),
-          _intervalNs(intervalMs * utils::Time::ms),
 #if DEBUG
           _producerCounter(0),
           _consumerCounter(0),
 #endif
           _unackedPackets(maxUnackedPackets * 2),
-          _lastRunTimestamp(0),
           _resetTimestamp(0)
     {
     }
@@ -88,11 +86,6 @@ public:
     {
         REENTRANCE_CHECK(_producerCounter);
         _resetTimestamp = timestamp;
-    }
-
-    bool shouldProcess(const uint64_t timestamp) const
-    {
-        return utils::Time::diffGE(_lastRunTimestamp, timestamp, _intervalNs);
     }
 
     size_t process(const uint64_t timestamp, std::array<uint16_t, maxUnackedPackets>& outMissingSequenceNumbers)
@@ -158,7 +151,6 @@ public:
             _unackedPackets.erase(entriesToErase[i]);
         }
 
-        _lastRunTimestamp = timestamp;
         return returnSize;
     }
 
@@ -175,13 +167,11 @@ private:
     };
 
     logger::LoggableId _loggableId;
-    uint64_t _intervalNs;
 #if DEBUG
     std::atomic_uint32_t _producerCounter;
     std::atomic_uint32_t _consumerCounter;
 #endif
     concurrency::MpmcHashmap32<uint16_t, Entry> _unackedPackets;
-    uint64_t _lastRunTimestamp;
     uint64_t _resetTimestamp;
 };
 

@@ -27,7 +27,7 @@ void ProcessMissingVideoPacketsJob::run()
 {
     auto timestamp = utils::Time::getAbsoluteTime();
     auto* videoMissingPacketsTracker = _ssrcContext.videoMissingPacketsTracker.get();
-    if (!videoMissingPacketsTracker || !videoMissingPacketsTracker->shouldProcess(timestamp))
+    if (!videoMissingPacketsTracker)
     {
         return;
     }

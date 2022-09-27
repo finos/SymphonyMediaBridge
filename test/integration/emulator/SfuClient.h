@@ -465,8 +465,7 @@ public:
             if (inboundContext.packetsProcessed == 1)
             {
                 inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
-                inboundContext.videoMissingPacketsTracker =
-                    std::make_shared<bridge::VideoMissingPacketsTracker>(10 * utils::Time::ms);
+                inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>();
             }
 
             inboundContext.onRtpPacketReceived(timestamp);
@@ -560,23 +559,20 @@ public:
 
             if (inboundContext.videoMissingPacketsTracker)
             {
-                if (inboundContext.videoMissingPacketsTracker->shouldProcess(timestamp))
-                {
-                    std::array<uint16_t, bridge::VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
-                    const auto numMissingSequenceNumbers =
-                        inboundContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime(),
-                            inboundContext.sender->getRtt(),
-                            missingSequenceNumbers);
+                std::array<uint16_t, bridge::VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
+                const auto numMissingSequenceNumbers =
+                    inboundContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime(),
+                        inboundContext.sender->getRtt(),
+                        missingSequenceNumbers);
 
-                    if (numMissingSequenceNumbers)
+                if (numMissingSequenceNumbers)
+                {
+                    logger::debug("Video missing packet tracker: %zu packets missing",
+                        sender->getLoggableId().c_str(),
+                        numMissingSequenceNumbers);
+                    for (size_t i = 0; i < numMissingSequenceNumbers; i++)
                     {
-                        logger::debug("Video missing packet tracker: %zu packets missing",
-                            sender->getLoggableId().c_str(),
-                            numMissingSequenceNumbers);
-                        for (size_t i = 0; i < numMissingSequenceNumbers; i++)
-                        {
-                            logger::debug("\n missing sequence number: %u", "SfuClient", missingSequenceNumbers[i]);
-                        }
+                        logger::debug("\n missing sequence number: %u", "SfuClient", missingSequenceNumbers[i]);
                     }
                 }
             }

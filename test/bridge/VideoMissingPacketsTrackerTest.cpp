@@ -7,7 +7,7 @@
 
 class VideoMissingPacketsTrackerTest : public ::testing::Test
 {
-    void SetUp() override { _videoMissingPacketsTracker = std::make_unique<bridge::VideoMissingPacketsTracker>(0); }
+    void SetUp() override { _videoMissingPacketsTracker = std::make_unique<bridge::VideoMissingPacketsTracker>(); }
 
     void TearDown() override { _videoMissingPacketsTracker.reset(); }
 

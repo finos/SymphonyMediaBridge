@@ -26,15 +26,13 @@ class VideoMissingPacketsTracker
 public:
     static const size_t maxMissingPackets = 128;
 
-    explicit VideoMissingPacketsTracker(const uint64_t interval)
+    explicit VideoMissingPacketsTracker()
         : _loggableId("VideoMissingPacketsTracker"),
-          _interval(interval),
 #if DEBUG
           _producerCounter(0),
           _consumerCounter(0),
 #endif
           _missingPackets(maxMissingPackets * 2),
-          _lastRunTimestamp(0),
           _resetTimestamp(0)
     {
     }
@@ -89,8 +87,6 @@ public:
         REENTRANCE_CHECK(_producerCounter);
         _resetTimestamp = timestamp;
     }
-
-    bool shouldProcess(const uint64_t timestamp) const { return (timestamp - _lastRunTimestamp) >= _interval; }
 
     size_t process(const uint64_t timestamp,
         const uint32_t rttNs,
@@ -161,7 +157,6 @@ public:
             _missingPackets.erase(entriesToErase[i]);
         }
 
-        _lastRunTimestamp = timestamp;
         return returnSize;
     }
 
@@ -178,13 +173,11 @@ private:
     };
 
     logger::LoggableId _loggableId;
-    uint64_t _interval;
 #if DEBUG
     std::atomic_uint32_t _producerCounter;
     std::atomic_uint32_t _consumerCounter;
 #endif
     concurrency::MpmcHashmap32<uint16_t, Entry> _missingPackets;
-    uint64_t _lastRunTimestamp;
     uint64_t _resetTimestamp;
 };
 

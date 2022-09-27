@@ -8,7 +8,7 @@ class UnackedPacketsTrackerTest : public ::testing::Test
 {
     void SetUp() override
     {
-        _unackedPacketsTracker = std::make_unique<bridge::UnackedPacketsTracker>("UnackedPacketsTrackerTest", 0);
+        _unackedPacketsTracker = std::make_unique<bridge::UnackedPacketsTracker>("UnackedPacketsTrackerTest");
     }
 
     void TearDown() override { _unackedPacketsTracker.reset(); }

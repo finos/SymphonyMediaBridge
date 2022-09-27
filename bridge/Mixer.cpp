@@ -2063,7 +2063,7 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
 
                 recordingStream->_transports.emplace(endpointIdHash, std::move(transport));
                 recordingStream->_recEventUnackedPacketsTracker.emplace(endpointIdHash,
-                    std::make_unique<UnackedPacketsTracker>("RecEventUnackedPacketsTracker", 50));
+                    std::make_unique<UnackedPacketsTracker>("RecEventUnackedPacketsTracker"));
 
                 _engine.pushCommand(std::move(command));
             }

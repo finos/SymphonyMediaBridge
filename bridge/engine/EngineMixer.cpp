@@ -52,6 +52,7 @@ namespace
 {
 
 const int16_t mixSampleScaleFactor = 4;
+const uint64_t RECUNACK_PROCESS_INTERVAL = 50 * utils::Time::ms;
 
 memory::UniquePacket createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator)
 {
@@ -283,7 +284,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _lastVideoPacketProcessed(0),
       _hasSentTimeout(false),
       _probingVideoStreams(false),
-      _minUplinkEstimate(0)
+      _minUplinkEstimate(0),
+      _lastRecordingAckProcessed(utils::Time::getAbsoluteTime())
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -3648,6 +3650,12 @@ void EngineMixer::processBarbellMissingPackets(bridge::SsrcInboundContext& ssrcI
 
 void EngineMixer::processRecordingUnackedPackets(const uint64_t timestamp)
 {
+    if (utils::Time::diffLT(_lastRecordingAckProcessed, timestamp, RECUNACK_PROCESS_INTERVAL))
+    {
+        return;
+    }
+    _lastRecordingAckProcessed = timestamp;
+
     for (auto& engineRecordingStreamEntry : _engineRecordingStreams)
     {
         auto engineRecordingStream = engineRecordingStreamEntry.second;

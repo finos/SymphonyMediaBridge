@@ -352,6 +352,8 @@ private:
     bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
 
+    uint64_t _lastRecordingAckProcessed;
+
     uint32_t getMinRemoteClientDownlinkBandwidth() const;
     void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;
 
