@@ -1718,10 +1718,10 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
     const uint32_t maxBlocksToSend = 15;
     while (receiverReportCount > 0 || (rembReady && !rembAdded))
     {
-        assert(rtcpPacket->getLength() <= packetLimit);
+        assert(!rtcpPacket || rtcpPacket->getLength() <= packetLimit);
 
         const auto spaceNeeded = MINIMUM_RR + std::min(receiverReportCount, maxBlocksToSend) * sizeof(rtp::ReportBlock);
-        if (rtcpPacket->getLength() + spaceNeeded > packetLimit)
+        if (rtcpPacket && rtcpPacket->getLength() + spaceNeeded > packetLimit)
         {
             sendRtcp(std::move(rtcpPacket), timestamp);
         }
