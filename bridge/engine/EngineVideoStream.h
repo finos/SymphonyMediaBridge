@@ -76,20 +76,20 @@ struct EngineVideoStream
         return mainSsrc;
     }
 
-    std::string endpointId;
-    size_t endpointIdHash;
-    uint32_t localSsrc;
+    const std::string endpointId;
+    const size_t endpointIdHash;
+    const uint32_t localSsrc;
     SimulcastStream simulcastStream;
     utils::Optional<SimulcastStream> secondarySimulcastStream;
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
     transport::RtcTransport& transport;
 
-    bridge::RtpMap rtpMap;
-    bridge::RtpMap feedbackRtpMap;
+    const bridge::RtpMap rtpMap;
+    const bridge::RtpMap feedbackRtpMap;
 
     SsrcWhitelist ssrcWhitelist;
-    bool ssrcRewrite;
+    const bool ssrcRewrite;
 
     concurrency::MpmcQueue<SimulcastLevel> videoPinSsrcs;
     utils::Optional<SimulcastLevel> pinSsrc;

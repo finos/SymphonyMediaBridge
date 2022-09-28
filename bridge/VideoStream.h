@@ -35,10 +35,10 @@ struct VideoStream
     {
     }
 
-    std::string id;
-    std::string endpointId;
-    size_t endpointIdHash;
-    uint32_t localSsrc;
+    const std::string id;
+    const std::string endpointId;
+    const size_t endpointIdHash;
+    const uint32_t localSsrc;
     SimulcastStream simulcastStream;
     utils::Optional<SimulcastStream> secondarySimulcastStream;
     std::shared_ptr<transport::RtcTransport> transport;
@@ -50,7 +50,7 @@ struct VideoStream
 
     bool markedForDeletion;
     const bool ssrcRewrite;
-    bool isDtlsLocalEnabled;
+    const bool isDtlsLocalEnabled;
     bool isConfigured;
     const uint32_t idleTimeoutSeconds;
 };
