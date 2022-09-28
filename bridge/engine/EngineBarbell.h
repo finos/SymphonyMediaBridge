@@ -61,7 +61,7 @@ struct EngineBarbell
     std::vector<AudioStream> audioStreams;
     VideoStream slideStream;
 
-    memory::Map<uint32_t, VideoStream*, 32> videoSsrcMap;
+    memory::Map<uint32_t, VideoStream*, 128> videoSsrcMap;
     memory::Map<uint32_t, AudioStream*, 16> audioSsrcMap;
 
     bridge::RtpMap audioRtpMap;
