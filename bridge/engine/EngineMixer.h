@@ -391,6 +391,9 @@ private:
     void updateDirectorUplinkEstimates(const uint64_t engineIterationStartTimestamp);
     void processMissingPackets(const uint64_t timestamp);
     void checkPacketCounters(const uint64_t timestamp);
+    void checkInboundPacketCounters(const uint64_t timestamp);
+    void checkRecordingPacketCounters(const uint64_t timestamp);
+    void checkBarbellPacketCounters(const uint64_t timestamp);
     void checkIfRateControlIsNeeded(const uint64_t timestamp);
     bool isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const;
     void markSsrcsInUse();

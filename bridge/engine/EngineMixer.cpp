@@ -1122,7 +1122,13 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         return;
     }
     _lastCounterCheck = timestamp;
+    checkInboundPacketCounters(timestamp);
+    checkRecordingPacketCounters(timestamp);
+    checkBarbellPacketCounters(timestamp);
+}
 
+void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
+{
     for (auto& inboundContextEntry : _ssrcInboundContexts)
     {
         auto& inboundContext = *inboundContextEntry.second;
@@ -1190,80 +1196,23 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
             }
         }
     }
+}
 
-    for (auto& videoStreamEntry : _engineVideoStreams)
-    {
-        const auto endpointIdHash = videoStreamEntry.first;
-        for (auto& outboundContextEntry : videoStreamEntry.second->ssrcOutboundContexts)
-        {
-            auto& outboundContext = outboundContextEntry.second;
-            if (!outboundContext.markedForDeletion)
-            {
-                continue;
-            }
-
-            if (!outboundContext.idle &&
-                utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 30) &&
-                outboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
-            {
-                logger::info("Outbound context ssrc %u, endpointIdHash %lu has been idle for 30 seconds",
-                    _loggableId.c_str(),
-                    outboundContextEntry.first,
-                    endpointIdHash);
-
-                outboundContext.idle = true;
-
-                uint32_t feedbackSsrc;
-                if (_engineStreamDirector->getFeedbackSsrc(outboundContext.ssrc, feedbackSsrc))
-                {
-                    logger::info("Removing idle outbound context feedback ssrc %u, main ssrc %u, endpointIdHash %lu",
-                        _loggableId.c_str(),
-                        feedbackSsrc,
-                        outboundContextEntry.first,
-                        endpointIdHash);
-                    videoStreamEntry.second->transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
-                        videoStreamEntry.second->transport,
-                        feedbackSsrc);
-                }
-
-                // Pending jobs with reference to this ssrc context has had 30s to complete.
-                // Removing the video packet cache can crash unfinished jobs.
-                videoStreamEntry.second->transport.getJobQueue().addJob<RemovePacketCacheJob>(*this,
-                    videoStreamEntry.second->transport,
-                    outboundContext,
-                    _messageListener);
-
-                logger::info("Removing idle outbound context ssrc %u, endpointIdHash %lu",
-                    _loggableId.c_str(),
-                    outboundContextEntry.first,
-                    endpointIdHash);
-                videoStreamEntry.second->transport.getJobQueue().addJob<RemoveSrtpSsrcJob>(
-                    videoStreamEntry.second->transport,
-                    outboundContextEntry.first);
-            }
-        }
-    }
-
+void EngineMixer::checkRecordingPacketCounters(const uint64_t timestamp)
+{
     for (auto& recordingStreamEntry : _engineRecordingStreams)
     {
         const auto endpointIdHash = recordingStreamEntry.first;
         for (auto& outboundContextEntry : recordingStreamEntry.second->ssrcOutboundContexts)
         {
             auto& outboundContext = outboundContextEntry.second;
-            if (!outboundContext.markedForDeletion)
+            if (outboundContext.markedForDeletion &&
+                utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 300))
             {
-                continue;
-            }
-
-            if (!outboundContext.idle &&
-                utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 30))
-            {
-                logger::info("Outbound context ssrc %u, rec endpointIdHash %lu has been idle for 30 seconds",
+                logger::info("Removing marked and idle recording outbound context ssrc %u, rec endpointIdHash %lu",
                     _loggableId.c_str(),
                     outboundContextEntry.first,
                     endpointIdHash);
-
-                outboundContext.idle = true;
 
                 EngineMessage::Message message(EngineMessage::Type::FreeRecordingRtpPacketCache);
                 message.command.freeRecordingRtpPacketCache.mixer = this;
@@ -1271,15 +1220,14 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
                 message.command.freeRecordingRtpPacketCache.endpointIdHash = recordingStreamEntry.first;
                 _messageListener.onMessage(std::move(message));
 
-                logger::info("Removing idle outbound context ssrc %u, rec endpointIdHash %lu",
-                    _loggableId.c_str(),
-                    outboundContextEntry.first,
-                    endpointIdHash);
                 recordingStreamEntry.second->ssrcOutboundContexts.erase(outboundContextEntry.first);
             }
         }
     }
+}
 
+void EngineMixer::checkBarbellPacketCounters(const uint64_t timestamp)
+{
     for (auto& barbellIt : _engineBarbells)
     {
         auto barbell = barbellIt.second;
@@ -1779,10 +1727,10 @@ bool EngineMixer::setPacketSourceEndpointIdHash(memory::Packet& packet,
 }
 
 /**
- * We store source endpointIdHash in the Packet itself, because, after arriving here, the packet goes through decryption
- * and is ready to be forwarded. At that time we want to know how this source endpoint is mapped to outbound ssrc and
- * thus need the source endpointIdHash. The source ssrc is insufficient as another endpoint may have taken its place by
- * then.
+ * We store source endpointIdHash in the Packet itself, because, after arriving here, the packet goes through
+ * decryption and is ready to be forwarded. At that time we want to know how this source endpoint is mapped to
+ * outbound ssrc and thus need the source endpointIdHash. The source ssrc is insufficient as another endpoint may
+ * have taken its place by then.
  */
 void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     memory::UniquePacket packet,
@@ -3265,9 +3213,10 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
 {
     for (auto& videoStreamEntry : _engineVideoStreams)
     {
-        auto videoStream = videoStreamEntry.second;
-        if (videoStream == senderVideoStream)
+        auto* videoStream = videoStreamEntry.second;
+        if (videoStream == senderVideoStream || videoStream->ssrcRewrite)
         {
+            // If we use ssrc rewrite there is no need to remove the outbound context as it is not there
             continue;
         }
         const auto endpointIdHash = videoStreamEntry.first;

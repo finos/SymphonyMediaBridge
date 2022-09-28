@@ -49,7 +49,7 @@ struct VideoStream
     SsrcWhitelist ssrcWhitelist;
 
     bool markedForDeletion;
-    bool ssrcRewrite;
+    const bool ssrcRewrite;
     bool isDtlsLocalEnabled;
     bool isConfigured;
     const uint32_t idleTimeoutSeconds;
