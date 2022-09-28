@@ -1606,8 +1606,8 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
 // after receive blocks arrive as they reference the SR by ntp timestamp
 void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 {
-    const int MINIMUM_SR = 7 * sizeof(uint32_t);
-    const int MINIMUM_RR = 2 * sizeof(uint32_t);
+    const uint32_t MINIMUM_SR = 7 * sizeof(uint32_t);
+    const uint32_t MINIMUM_RR = 2 * sizeof(uint32_t);
 
     uint32_t senderReportCount = 0;
     uint32_t senderReportSsrcs[_outboundSsrcCounters.capacity()];
@@ -1649,8 +1649,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
     memory::UniquePacket rtcpPacket;
     uint32_t senderSsrc = 0;
     const size_t packetLimit = std::min(static_cast<size_t>(_config.mtu), memory::Packet::maxLength());
-    const size_t maxReceiveReportsBySenderReport = 15;
-    size_t nextMaxReportBlocks = maxReceiveReportsBySenderReport;
+    size_t nextMaxReportBlocks = rtp::RtcpHeader::MAX_REPORT_BLOCKS;
     for (uint32_t i = 0; i < senderReportCount; ++i)
     {
         const uint32_t ssrc = senderReportSsrcs[i];
@@ -1696,17 +1695,17 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
         assert(rtcpPacket->getLength() <= packetLimit);
 
-        const auto spaceAvailable = packetLimit - rtcpPacket->getLength();
-        const auto availableSlotsForRR = (spaceAvailable - MINIMUM_SR) / sizeof(rtp::ReportBlock);
+        const uint32_t spaceAvailable = packetLimit - rtcpPacket->getLength();
+        const uint32_t availableSlotsForRR = (spaceAvailable - MINIMUM_SR) / sizeof(rtp::ReportBlock);
 
         if (spaceAvailable < MINIMUM_SR || availableSlotsForRR < std::min(receiverReportCount, 4u))
         {
             sendRtcp(std::move(rtcpPacket), timestamp);
-            nextMaxReportBlocks = maxReceiveReportsBySenderReport;
+            nextMaxReportBlocks = rtp::RtcpHeader::MAX_REPORT_BLOCKS;
         }
         else
         {
-            nextMaxReportBlocks = std::min(maxReceiveReportsBySenderReport, availableSlotsForRR);
+            nextMaxReportBlocks = std::min(rtp::RtcpHeader::MAX_REPORT_BLOCKS, availableSlotsForRR);
         }
     }
 
@@ -1715,12 +1714,12 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
         senderSsrc = _outboundSsrcCounters.begin()->first;
     }
 
-    const uint32_t maxBlocksToSend = 15;
     while (receiverReportCount > 0 || (rembReady && !rembAdded))
     {
         assert(!rtcpPacket || rtcpPacket->getLength() <= packetLimit);
 
-        const auto spaceNeeded = MINIMUM_RR + std::min(receiverReportCount, maxBlocksToSend) * sizeof(rtp::ReportBlock);
+        const auto spaceNeeded =
+            MINIMUM_RR + std::min(receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS) * sizeof(rtp::ReportBlock);
         if (rtcpPacket && rtcpPacket->getLength() + spaceNeeded > packetLimit)
         {
             sendRtcp(std::move(rtcpPacket), timestamp);
@@ -1738,7 +1737,7 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
 
         auto* receiverReport = rtp::RtcpReceiverReport::create(rtcpPacket->get() + rtcpPacket->getLength());
         receiverReport->ssrc = senderSsrc;
-        for (uint32_t k = 0; k < maxBlocksToSend && receiverReportCount > 0; ++k)
+        for (uint32_t k = 0; k < rtp::RtcpHeader::MAX_REPORT_BLOCKS && receiverReportCount > 0; ++k)
         {
             auto receiveIt = _inboundSsrcCounters.find(receiverReportSsrcs[--receiverReportCount]);
             if (receiveIt == _inboundSsrcCounters.end())
