@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AudioSource.h"
+#include "FakeVideoDecoder.h"
 #include "api/SimulcastGroup.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
@@ -537,6 +538,7 @@ public:
                 }
 
                 inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
+                _videoDecoder.process(payload, payloadSize, timestampMs);
             }
             else if (extendedSequenceNumber != inboundContext.lastReceivedExtendedSequenceNumber)
             {
@@ -554,6 +556,7 @@ public:
                 else
                 {
                     _rtxStats.receiver.packetsRecovered++;
+                    _videoDecoder.process(payload, payloadSize, timestampMs);
                 }
             }
 
@@ -600,6 +603,7 @@ public:
         api::SimulcastGroup _ssrcs;
         VideoContent _videoContent;
         RtxStats _rtxStats;
+        FakeVideoDecoder _videoDecoder;
     };
 
 public:

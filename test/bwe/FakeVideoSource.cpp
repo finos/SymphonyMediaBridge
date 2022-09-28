@@ -21,12 +21,13 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
       _avgRate(0.0005),
       _rtpTimestamp(5000),
       _keyFrame(true),
-      _packetsSent(0)
+      _packetsSent(0),
+      _packetsInFrame(0)
 {
     logger::info("created fake video source %u", "FakeVideoSource", ssrc);
 }
 
-void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, bool keyFrame) const
+void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, bool lastInFrame, bool keyFrame) const
 {
     auto rtpHeader = rtp::RtpHeader::fromPtr(packet, length);
     if (rtpHeader->headerLength() + 1 < length)
@@ -41,6 +42,14 @@ void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, 
             payload[0] = 0;
         }
         payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
+
+        bool hasSpaceForPayload = rtpHeader->headerLength() + 1 + sizeof(FakeVideoFrameData) <= length;
+        assert(hasSpaceForPayload);
+        if (hasSpaceForPayload)
+        {
+            FakeVideoFrameData frameData = {_ssrc, _counter, _packetsInFrame, lastInFrame, keyFrame};
+            memcpy(payload + 1, &frameData, sizeof(frameData));
+        }
     }
 }
 
@@ -86,6 +95,7 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             rtpHeader->setExtensions(extensionHead);
 
             _frameSize -= packetSize;
+            bool lastInFrame = false;
             if (_frameSize > 0)
             {
                 _releaseTime += _counter % 2 == 0 ? 0 : _pacing;
@@ -93,10 +103,12 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             else
             {
                 _releaseTime = _frameReleaseTime;
+                lastInFrame = true;
             }
             _avgRate.update(packet->getLength() * 8, timestamp);
+            _packetsInFrame++;
 
-            tryFillFramePayload(packet->get(), packet->getLength(), _keyFrame);
+            tryFillFramePayload(packet->get(), packet->getLength(), lastInFrame, _keyFrame);
             _keyFrame = false;
 
             ++_packetsSent;
@@ -129,6 +141,7 @@ void FakeVideoSource::setNextFrameSize()
         _keyFrame = true;
     }
     ++_counter;
+    _packetsInFrame = 0;
     _frameSize = randomSize(meanSize, 0.2);
     _pacing = (utils::Time::sec / _fps) * _mtu / (2 * (_frameSize + _mtu));
 }

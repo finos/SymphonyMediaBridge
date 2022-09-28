@@ -4,6 +4,16 @@
 #include "utils/Trackers.h"
 namespace fakenet
 {
+
+struct FakeVideoFrameData
+{
+    uint32_t ssrc;
+    uint32_t frameNum;
+    uint32_t numPacketsInFrameSoFar;
+    bool keyFrame;
+    bool lastPacketInFrame;
+};
+
 class FakeVideoSource : public MediaSource
 {
 public:
@@ -33,7 +43,7 @@ public:
     uint32_t getPacketsSent() const { return _packetsSent; }
 
 private:
-    void tryFillFramePayload(unsigned char*, size_t, bool) const;
+    void tryFillFramePayload(unsigned char* packet, size_t length, bool lastInFrame, bool keyFrame) const;
     void setNextFrameSize();
 
     memory::PacketPoolAllocator& _allocator;
@@ -51,6 +61,7 @@ private:
     uint32_t _rtpTimestamp;
     std::atomic_bool _keyFrame;
     uint32_t _packetsSent;
+    uint32_t _packetsInFrame;
 };
 
 } // namespace fakenet
