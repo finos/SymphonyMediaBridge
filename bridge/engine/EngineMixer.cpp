@@ -1207,7 +1207,7 @@ void EngineMixer::checkRecordingPacketCounters(const uint64_t timestamp)
         {
             auto& outboundContext = outboundContextEntry.second;
             if (outboundContext.markedForDeletion &&
-                utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 300))
+                utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 30))
             {
                 logger::info("Removing marked and idle recording outbound context ssrc %u, rec endpointIdHash %lu",
                     _loggableId.c_str(),
