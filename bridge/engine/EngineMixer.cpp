@@ -1197,7 +1197,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         for (auto& outboundContextEntry : videoStreamEntry.second->ssrcOutboundContexts)
         {
             auto& outboundContext = outboundContextEntry.second;
-            if (outboundContext.markedForDeletion)
+            if (!outboundContext.markedForDeletion)
             {
                 continue;
             }
@@ -1250,7 +1250,7 @@ void EngineMixer::checkPacketCounters(const uint64_t timestamp)
         for (auto& outboundContextEntry : recordingStreamEntry.second->ssrcOutboundContexts)
         {
             auto& outboundContext = outboundContextEntry.second;
-            if (outboundContext.markedForDeletion)
+            if (!outboundContext.markedForDeletion)
             {
                 continue;
             }
