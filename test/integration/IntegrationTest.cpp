@@ -170,6 +170,12 @@ void IntegrationTest::initBridge(config::Config& config)
         *_network,
         *_mainPoolAllocator,
         _clientsEndpointFactory);
+
+    for (const auto& linkInfo : _endpointNetworkLinkMap)
+    {
+        // SFU's default downlinks is good (1 Gbps).
+        linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+    }
 }
 
 using namespace emulator;

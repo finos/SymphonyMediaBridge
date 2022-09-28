@@ -126,6 +126,12 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            // SFU's default downlinks is good (1 Gbps).
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+        }
+
         GroupCall<SfuClient<Channel>>
             group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 0);
         group.add(_httpd);
@@ -158,6 +164,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         for (const auto& linkInfo : interBridgeEndpoints1)
         {
             linkInfo.second.ptrLink->setLossRate(PACKET_LOSS_RATE);
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
         }
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
@@ -234,9 +241,8 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
         EXPECT_GE(group.clients[0]->getVideoPacketsReceived(),
             transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent - 100);
-        EXPECT_NEAR(group.clients[0]->getVideoPacketsReceived(),
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent,
-            200);
+        EXPECT_GT(group.clients[0]->getVideoPacketsReceived(),
+            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent);
     });
 }
 
@@ -276,6 +282,12 @@ TEST_F(BarbellTest, simpleBarbell)
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_bridgeEndpointFactory, httpd2);
+
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            // SFU's default downlinks is good (1 Gbps).
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+        }
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
@@ -361,9 +373,8 @@ TEST_F(BarbellTest, simpleBarbell)
         logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
         logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
 
-        EXPECT_NEAR(videoReceiveStats.packets,
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent,
-            25);
+        EXPECT_GT(videoReceiveStats.packets,
+            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent);
     });
 }
 
@@ -403,6 +414,12 @@ TEST_F(BarbellTest, barbellAfterClients)
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_bridgeEndpointFactory, httpd2);
+
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            // SFU's default downlinks is good (1 Gbps).
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+        }
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
@@ -501,6 +518,6 @@ TEST_F(BarbellTest, barbellAfterClients)
         logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
         logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary);
 
-        EXPECT_NEAR(videoReceiveStats.packets, transportSummary.begin()->second.packetsSent, 25);
+        EXPECT_GT(videoReceiveStats.packets, transportSummary.begin()->second.packetsSent);
     });
 }

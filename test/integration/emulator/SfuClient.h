@@ -243,13 +243,14 @@ public:
         if (_channel.isVideoEnabled())
         {
             _videoSsrcs[6] = 0;
+            const size_t bitrates[] = {100, 500, 2500};
             for (int i = 0; i < 6; ++i)
             {
                 _videoSsrcs[i] = _idGenerator.next();
                 if (0 == i % 2)
                 {
                     _videoSources.emplace(_videoSsrcs[i],
-                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, _videoSsrcs[i]));
+                        std::make_unique<fakenet::FakeVideoSource>(_allocator, bitrates[i / 2], _videoSsrcs[i]));
                     _videoCaches.emplace(_videoSsrcs[i],
                         std::make_unique<bridge::PacketCache>(
                             (std::string("VideoCache_") + std::to_string(_videoSsrcs[i])).c_str(),
@@ -296,8 +297,7 @@ public:
         {
             for (const auto& videoSource : _videoSources)
             {
-                auto packet = videoSource.second->getPacket(timestamp);
-                if (packet)
+                while (auto packet = videoSource.second->getPacket(timestamp))
                 {
                     // auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
                     // logger::debug("sending video %u", _loggableId.c_str(), rtpHeader->ssrc.get());
