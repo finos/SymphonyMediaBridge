@@ -203,7 +203,8 @@ void VideoForwarderReceiveJob::run()
         dumpPacket(videoDumpFile, *_packet, std::min(size_t(36), _packet->getLength()));
     }
 
-    if (_extendedSequenceNumber <= _ssrcContext.lastReceivedExtendedSequenceNumber)
+    if (_extendedSequenceNumber <= _ssrcContext.lastReceivedExtendedSequenceNumber &&
+        _ssrcContext.packetsProcessed != 1)
     {
         logger::info("%s received out of order on %u, seqno %u, last received %u",
             "VideoForwarderReceiveJob",

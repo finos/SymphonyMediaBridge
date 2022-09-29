@@ -1875,6 +1875,12 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         }
     }
 
+    if (_allSsrcInboundContexts.contains(ssrc))
+    {
+        // being removed
+        return nullptr;
+    }
+
     const auto endpointIdHash = sender->getEndpointIdHash();
     auto* audioStream = _engineAudioStreams.getItem(endpointIdHash);
 

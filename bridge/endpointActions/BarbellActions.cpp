@@ -103,7 +103,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
     response._headers["Content-type"] = "text/json";
 
-    logger::debug("barbell response %s", "", response._body.c_str());
+    logger::debug("barbell response %s", "BarbellActions", response._body.c_str());
     return response;
 }
 
