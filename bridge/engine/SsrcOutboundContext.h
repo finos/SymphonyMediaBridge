@@ -36,8 +36,7 @@ public:
           lastRespondedNackTimestamp(0),
           originalSsrc(~0u),
           lastSendTime(utils::Time::getAbsoluteTime()),
-          markedForDeletion(false),
-          idle(false)
+          markedForDeletion(false)
     {
     }
 
@@ -101,16 +100,10 @@ public:
 
     /// ==== Accessed from Engine only!
     uint64_t lastSendTime;
-    void onRtpSent(const uint64_t timestamp)
-    {
-        lastSendTime = timestamp;
-        idle = false;
-    }
+    void onRtpSent(const uint64_t timestamp) { lastSendTime = timestamp; }
 
     // Stream owner is being removed. Stop outbound packets over this context
     bool markedForDeletion;
-    // Stream is temporarily idle and srtp encryption context is removed. It may be activated again.
-    bool idle;
 };
 
 } // namespace bridge
