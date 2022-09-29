@@ -9,10 +9,7 @@
 namespace bridge
 {
 
-httpd::Response allocateConference(ActionContext* context,
-    RequestLogger& requestLogger,
-    const httpd::Request& request,
-    const ::utils::StringTokenizer::Token& token)
+httpd::Response allocateConference(ActionContext* context, RequestLogger& requestLogger, const httpd::Request& request)
 {
     const auto requestBody = request._body.build();
     const auto requestBodyJson = nlohmann::json::parse(requestBody);

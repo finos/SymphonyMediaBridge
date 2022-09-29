@@ -4,16 +4,21 @@
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
+#include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "transport/ProbeServer.h"
+#include "utils/Format.h"
 
 namespace bridge
 {
-httpd::Response getProbingInfo(ActionContext* context,
-    RequestLogger& requestLogger,
-    const httpd::Request&,
-    const utils::StringTokenizer::Token&)
+httpd::Response getProbingInfo(ActionContext* context, RequestLogger& requestLogger, const httpd::Request& request)
 {
+    if (request._method != httpd::Method::GET)
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+            utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
+    }
+
     nlohmann::json responseBodyJson;
     nlohmann::json iceJson;
 

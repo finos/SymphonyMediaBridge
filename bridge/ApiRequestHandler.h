@@ -54,10 +54,16 @@ private:
     std::unique_ptr<LegacyApiRequestHandler> _legacyApiRequestHandler;
 #endif
 
-    httpd::Response callEndpointAction(RequestLogger&, const httpd::Request&);
+    httpd::Response handleConferenceRequest(RequestLogger& requestLogger, const httpd::Request& request);
 
-    using RequestAction = std::function<
-        httpd::Response(ActionContext*, RequestLogger&, const httpd::Request&, const utils::StringTokenizer::Token&)>;
+    httpd::Response handleConferenceRequest(RequestLogger& requestLogger,
+        const httpd::Request& request,
+        const std::string& conferenceId);
+
+    httpd::Response handleEndpointRequest(RequestLogger& requestLogger,
+        const httpd::Request& request,
+        const std::string& conferenceId,
+        const std::string& endpointId);
 };
 
 } // namespace bridge

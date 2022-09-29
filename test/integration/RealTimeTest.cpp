@@ -168,9 +168,9 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
     return it->isActiveTalker;
 }
 
-TEST_F(RealTimeTest, megaHoot)
+TEST_F(RealTimeTest, smbMegaHoot)
 {
-    // GTEST_SKIP();
+    GTEST_SKIP();
     utils::Time::initialize(); // run in real time
     _bridgeConfig.readFromString(R"({
         "ip":"127.0.0.1",
@@ -211,6 +211,103 @@ TEST_F(RealTimeTest, megaHoot)
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
     makeCallWithDefaultAudioProfile(group, 20 * utils::Time::sec);
+
+    for (auto& client : group.clients)
+    {
+        client->_transport->stop();
+    }
+
+    group.awaitPendingJobs(utils::Time::sec * 4);
+}
+
+TEST_F(RealTimeTest, DISABLED_localMiniHoot)
+{
+    utils::Time::initialize(); // run in real time
+    _bridgeConfig.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "log.level": "INFO"
+        })");
+
+    initRealBridge(_bridgeConfig);
+
+    const auto baseUrl = "http://127.0.0.1:8080";
+
+    GroupCall<SfuClient<Channel>>
+        group(nullptr, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_clientTransportFactory, *_sslDtls, 50);
+
+    Conference conf(nullptr);
+
+    group.startConference(conf, baseUrl);
+
+    uint32_t count = 0;
+    for (auto& client : group.clients)
+    {
+        if (count++ == 0)
+        {
+            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, false, true);
+        }
+        else
+        {
+            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Muted, false, true);
+        }
+    }
+
+    ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+    makeCallWithDefaultAudioProfile(group, 20 * utils::Time::sec);
+
+    group.disconnectClients();
+
+    for (auto& client : group.clients)
+    {
+        client->_transport->stop();
+    }
+
+    group.awaitPendingJobs(utils::Time::sec * 4);
+}
+
+TEST_F(RealTimeTest, localVideoMeeting)
+{
+    // GTEST_SKIP();
+    utils::Time::initialize(); // run in real time
+    _bridgeConfig.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "log.level": "INFO"
+        })");
+
+    initRealBridge(_bridgeConfig);
+
+    const auto baseUrl = "http://127.0.0.1:8080";
+
+    GroupCall<SfuClient<Channel>>
+        group(nullptr, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_clientTransportFactory, *_sslDtls, 50);
+
+    Conference conf(nullptr);
+
+    group.startConference(conf, baseUrl);
+
+    uint32_t count = 0;
+    for (auto& client : group.clients)
+    {
+        if (count++ == 0)
+        {
+            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, true, true);
+        }
+        else
+        {
+            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, count < 11, true);
+        }
+    }
+
+    ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+    makeCallWithDefaultAudioProfile(group, 20 * utils::Time::sec);
+
+    group.disconnectClients();
 
     for (auto& client : group.clients)
     {
