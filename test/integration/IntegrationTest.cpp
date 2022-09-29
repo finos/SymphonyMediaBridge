@@ -996,6 +996,7 @@ TEST_F(IntegrationTest, plainNewApi)
             logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
         }
     });
 }

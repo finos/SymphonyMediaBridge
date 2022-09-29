@@ -34,6 +34,42 @@ void logVideoSent(const char* clientName, T& client)
 }
 
 template <typename T>
+void logVideoReceive(const char* clientName, T& client)
+{
+    auto allStreamsVideoStats = client.getActiveVideoDecoderStats();
+    uint32_t streamId = 0;
+    std::ostringstream logLine;
+    for (const auto& videoStats : allStreamsVideoStats)
+    {
+        std::ostringstream table;
+        table << "\n"
+              << clientName << " (ID hash: " << client.getEndpointIdHash() << ")"
+              << " stream-" << streamId++ << " video stats:";
+
+        table << "\n----------------------------------------------";
+        table << "\n\tEndpoint ID Hash \t\t Tag \tFrames";
+        table << "\n";
+        for (const auto& sequence : videoStats.frameSequences)
+        {
+            table << "\n\t" << std::setw(16) << sequence.endpointHashId << "\t" << std::setw(6) << sequence.tag
+                  << "\t\t" << sequence.numFrames;
+        }
+        table << "\n----------------------------------------------";
+        table << "\n\tDecoded frames: " << std::setw(13) << videoStats.numDecodedFrames;
+        table << "\n\tLast frame num: " << std::setw(13) << videoStats.lastDecodedFrameNum;
+        table << "\n\tAverage FPS: " << std::setw(16)
+              << (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+        table << "\n\tMax inter-frame delta: " << std::setw(6) << videoStats.maxFrameRateDelta / utils::Time::ms
+              << " ms";
+        table << "\n\tMax frame reorder: " << std::setw(10) << videoStats.maxReorderFrameCount;
+        table << "\n\tMax packet reorder: " << std::setw(9) << videoStats.maxReorderPacketCount;
+        table << "\n\tReceived packets: " << std::setw(11) << videoStats.numReceivedPackets;
+        logLine << table.str() << "\n";
+    }
+    logger::info("%s\n", "VideoDecoderInfo", logLine.str().c_str());
+}
+
+template <typename T>
 void logTransportSummary(const char* clientName, transport::RtcTransport* transport, T& summary)
 {
     for (auto& report : summary)

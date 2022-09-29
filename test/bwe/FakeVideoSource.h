@@ -9,15 +9,21 @@ struct FakeVideoFrameData
 {
     uint32_t ssrc;
     uint32_t frameNum;
-    uint32_t numPacketsInFrameSoFar;
-    bool keyFrame;
+    uint32_t packetId;
     bool lastPacketInFrame;
+    bool keyFrame;
+    size_t endpointIdHash;
+    uint16_t tag;
 };
 
 class FakeVideoSource : public MediaSource
 {
 public:
-    FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_t kbps, uint32_t ssrc);
+    FakeVideoSource(memory::PacketPoolAllocator& allocator,
+        uint32_t kbps,
+        uint32_t ssrc,
+        const size_t endpointIdHash = 0,
+        const uint16_t tag = 0);
     ~FakeVideoSource() {}
 
     memory::UniquePacket getPacket(uint64_t timestamp) override;
@@ -42,6 +48,8 @@ public:
 
     uint32_t getPacketsSent() const { return _packetsSent; }
 
+    uint16_t getTag() const { return _tag; }
+
 private:
     void tryFillFramePayload(unsigned char* packet, size_t length, bool lastInFrame, bool keyFrame) const;
     void setNextFrameSize();
@@ -62,6 +70,8 @@ private:
     std::atomic_bool _keyFrame;
     uint32_t _packetsSent;
     uint32_t _packetsInFrame;
+    const size_t _endpointIdHash;
+    const uint16_t _tag;
 };
 
 } // namespace fakenet

@@ -6,7 +6,11 @@
 namespace fakenet
 {
 
-FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_t kbps, uint32_t ssrc)
+FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator,
+    uint32_t kbps,
+    uint32_t ssrc,
+    const size_t endpointIdHash,
+    const uint16_t tag)
     : _allocator(allocator),
       _releaseTime(0),
       _frameReleaseTime(0),
@@ -22,35 +26,43 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
       _rtpTimestamp(5000),
       _keyFrame(true),
       _packetsSent(0),
-      _packetsInFrame(0)
+      _packetsInFrame(0),
+      _endpointIdHash(endpointIdHash),
+      _tag(tag)
 {
     logger::info("created fake video source %u", "FakeVideoSource", ssrc);
 }
 
 void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, bool lastInFrame, bool keyFrame) const
 {
+    static constexpr size_t VP8_HEADER_SIZE = 2;
     auto rtpHeader = rtp::RtpHeader::fromPtr(packet, length);
-    if (rtpHeader->headerLength() + 1 < length)
-    {
-        auto payload = rtpHeader->getPayload();
-        if (keyFrame)
-        {
-            payload[0] = 1 << 4; // Partition ID: 0, payloadDescriptorSize: 1
-        }
-        else
-        {
-            payload[0] = 0;
-        }
-        payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
+    assert(rtpHeader->headerLength() + VP8_HEADER_SIZE < length);
 
-        bool hasSpaceForPayload = rtpHeader->headerLength() + 1 + sizeof(FakeVideoFrameData) <= length;
-        assert(hasSpaceForPayload);
-        if (hasSpaceForPayload)
-        {
-            FakeVideoFrameData frameData = {_ssrc, _counter, _packetsInFrame, lastInFrame, keyFrame};
-            memcpy(payload + 1, &frameData, sizeof(frameData));
-        }
+    auto payload = rtpHeader->getPayload();
+    if (keyFrame)
+    {
+        payload[0] = 1 << 4; // Partition ID: 0, payloadDescriptorSize: 1
     }
+    else
+    {
+        payload[0] = 0;
+    }
+    payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
+
+    bool hasSpaceForPayload = rtpHeader->headerLength() + VP8_HEADER_SIZE + sizeof(FakeVideoFrameData) <= length;
+    assert(hasSpaceForPayload);
+
+    FakeVideoFrameData frameData;
+    frameData.frameNum = _counter;
+    frameData.keyFrame = keyFrame;
+    frameData.lastPacketInFrame = lastInFrame;
+    frameData.packetId = _packetsInFrame;
+    frameData.ssrc = _ssrc;
+    frameData.endpointIdHash = _endpointIdHash;
+    frameData.tag = _tag;
+
+    memcpy(payload + VP8_HEADER_SIZE, &frameData, sizeof(frameData));
 }
 
 memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)

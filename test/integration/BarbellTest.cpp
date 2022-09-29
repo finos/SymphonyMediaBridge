@@ -87,7 +87,7 @@ Test setup:
 TEST_F(BarbellTest, packetLossViaBarbell)
 {
     runTestInThread(3 * _numWorkerThreads + 11, [this]() {
-        constexpr auto PACKET_LOSS_RATE = 0.01;
+        constexpr auto PACKET_LOSS_RATE = 0.03;
 
         _config.readFromString(R"({
         "ip":"127.0.0.1",
@@ -227,22 +227,34 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         EXPECT_NE(stats.receiver.packetsMissing, 0);
         EXPECT_NE(stats.receiver.packetsRecovered, 0);
 
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
-        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-        group.clients[1]->_transport->getReportSummary(transportSummary1);
-        group.clients[2]->_transport->getReportSummary(transportSummary2);
+        for (auto id : {0, 1, 2})
+        {
+            std::string clientName = "Client-" + std::to_string(id + 1);
 
-        logger::debug("client1 received video pkts %" PRIu64 " lost %" PRIu64,
-            "bbTest",
-            videoReceiveStats.packets,
-            videoReceiveStats.lostPackets);
-        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
-        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
-        EXPECT_GE(group.clients[0]->getVideoPacketsReceived(),
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent - 100);
-        EXPECT_GT(group.clients[0]->getVideoPacketsReceived(),
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent);
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+
+            logger::debug("%s received video pkts %" PRIu64, "bbTest", clientName.c_str(), videoReceiveStats.packets);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            auto allStreamsVideoStats = group.clients[id]->getActiveVideoDecoderStats();
+            EXPECT_EQ(allStreamsVideoStats.size(), 2);
+            for (const auto& videoStats : allStreamsVideoStats)
+            {
+                double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+                EXPECT_NEAR(fps, 30.0, 1.0);
+                if (id == 0)
+                {
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 146, 5);
+                }
+                else
+                {
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+                }
+            }
+        }
     });
 }
 
@@ -370,11 +382,18 @@ TEST_F(BarbellTest, simpleBarbell)
         group.clients[2]->_transport->getReportSummary(transportSummary2);
 
         logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logVideoReceive("client1", *group.clients[0]);
         logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
         logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
 
-        EXPECT_GT(videoReceiveStats.packets,
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent);
+        auto allStreamsVideoStats = group.clients[0]->getActiveVideoDecoderStats();
+        EXPECT_EQ(allStreamsVideoStats.size(), 2);
+        for (const auto& videoStats : allStreamsVideoStats)
+        {
+            double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+            EXPECT_NEAR(fps, 30.0, 1.0);
+            EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+        }
     });
 }
 
@@ -509,15 +528,25 @@ TEST_F(BarbellTest, barbellAfterClients)
             }
             ASSERT_GE(data.dominantFrequencies.size(), 1);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId++], 25.0);
+
+            std::string clientName = "Client-" + std::to_string(id + 1);
+
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+
+            logger::debug("%s received video pkts %" PRIu64, "bbTest", clientName.c_str(), videoReceiveStats.packets);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            auto allStreamsVideoStats = group.clients[id]->getActiveVideoDecoderStats();
+            EXPECT_EQ(allStreamsVideoStats.size(), 1);
+            for (const auto& videoStats : allStreamsVideoStats)
+            {
+                double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+                EXPECT_NEAR(fps, 30.0, 1.0);
+                EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+            }
         }
-
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
-        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-        group.clients[1]->_transport->getReportSummary(transportSummary);
-
-        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
-        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary);
-
-        EXPECT_GT(videoReceiveStats.packets, transportSummary.begin()->second.packetsSent);
     });
 }
