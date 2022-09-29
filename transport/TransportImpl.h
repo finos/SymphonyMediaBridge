@@ -12,6 +12,7 @@
 #include "sctp/SctpServerPort.h"
 #include "transport/Endpoint.h"
 #include "transport/RtcTransport.h"
+#include "transport/RtcpReportProducer.h"
 #include "transport/RtpReceiveState.h"
 #include "transport/RtpSenderState.h"
 #include "utils/Optional.h"
@@ -50,7 +51,8 @@ class TransportImpl : public RtcTransport,
                       public sctp::DatagramTransport,
                       public sctp::SctpServerPort::IEvents,
                       public sctp::SctpAssociation::IEvents,
-                      public ServerEndpoint::IEvents
+                      public ServerEndpoint::IEvents,
+                      private RtcpReportProducer::RtcpSender
 {
 public:
     TransportImpl(jobmanager::JobManager& jobmanager,
@@ -239,7 +241,7 @@ public: // end point callbacks
     virtual void onSctpCookieEchoReceived(sctp::SctpServerPort* serverPort,
         uint16_t srcPort,
         const sctp::SctpPacket& packet,
-        uint64_t timetamp) override;
+        uint64_t timestamp) override;
     virtual void onSctpReceived(sctp::SctpServerPort* serverPort,
         uint16_t srcPort,
         const sctp::SctpPacket& sctpPacket,
@@ -321,7 +323,7 @@ private:
         int activeInboundCount);
 
     void sendReports(uint64_t timestamp, bool rembReady = false);
-    void sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp);
+    void sendRtcp(memory::UniquePacket&& rtcpPacket, const uint64_t timestamp) override;
 
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 
@@ -435,6 +437,8 @@ private:
     std::atomic<ice::IceSession::State> _iceState;
     std::atomic<SrtpClient::State> _dtlsState;
     std::atomic<utils::Optional<ice::TransportType>> _transportType;
+
+    RtcpReportProducer _rtcpProducer;
 #ifdef DEBUG
 public:
     concurrency::MutexGuard _singleThreadMutex;

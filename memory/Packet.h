@@ -45,6 +45,8 @@ public:
         }
     }
 
+    void append(FixedPacket<PacketSize>& packetToAppend) { append(packetToAppend.get(), packetToAppend.getLength()); }
+
     void clear() { std::memset(_data, 0, size); }
 
     size_t endpointIdHash = 0;

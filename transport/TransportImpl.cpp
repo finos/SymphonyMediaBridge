@@ -502,6 +502,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _pacingInUse(false),
       _iceState(ice::IceSession::State::IDLE),
       _dtlsState(SrtpClient::State::IDLE),
+      _rtcpProducer(_loggableId, _config, _outboundSsrcCounters, _inboundSsrcCounters, _mainAllocator, *this),
       _uplinkEstimationEnabled(false),
       _downlinkEstimationEnabled(false),
       _lastReceivedPacketTimestamp(0),
@@ -603,6 +604,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _rtxProbeSsrc(0),
       _rtxProbeSequenceCounter(nullptr),
       _pacingInUse(false),
+      _rtcpProducer(_loggableId, _config, _outboundSsrcCounters, _inboundSsrcCounters, _mainAllocator, *this),
       _uplinkEstimationEnabled(enableUplinkEstimation && _config.rctl.enable),
       _downlinkEstimationEnabled(enableDownlinkEstimation && _config.bwe.enable)
 {
@@ -1570,6 +1572,46 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
     }
 }
 
+void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
+{
+    if (_config.bwe.logDownlinkEstimates && timestamp - _lastLogTimestamp >= utils::Time::sec * 5)
+    {
+        const auto oldMin = _inboundMetrics.estimatedKbpsMin.load();
+        const auto oldMax = _inboundMetrics.estimatedKbpsMax.load();
+
+        logger::info("Estimates 5s, Downlink %u - %ukbps, rate %.1fkbps, Uplink rctl %.0fkbps, rate %.1fkbps, remb "
+                     "%ukbps, rtt %.1fms, pacingQ %zu , rtpProbingEnabled %s",
+            _loggableId.c_str(),
+            oldMin,
+            oldMax,
+            _bwe->getReceiveRate(timestamp),
+            _rateController.getTargetRate(),
+            _sendRateTracker.get(timestamp, utils::Time::ms * 600) * 8 * utils::Time::ms,
+            _outboundRembEstimateKbps,
+            _rttNtp * 1000.0 / 0x10000,
+            _pacingQueue.size() + _rtxPacingQueue.size(),
+            _rateController.isRtpProbingEnabled() ? "t" : "f");
+
+        _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
+        _inboundMetrics.estimatedKbpsMax = 0;
+        _lastLogTimestamp = timestamp;
+    }
+
+    utils::Optional<uint64_t> rembMediaBps;
+    if (rembReady)
+    {
+        rembMediaBps.set(_inboundMetrics.estimatedKbps * 1000 * (1.0 - _config.bwe.packetOverhead));
+    }
+
+    const bool isRembSent = _rtcpProducer.sendReports(timestamp, rembMediaBps);
+    if (isRembSent)
+    {
+        assert(rembMediaBps.isSet());
+        assert(rembReady);
+        _rtcp.lastReportedEstimateKbps = _inboundMetrics.estimatedKbps;
+    }
+}
+
 void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket packet)
 {
     const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
@@ -1601,221 +1643,7 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
     doProtectAndSend(timestamp, std::move(packet), _peerRtpPort, _selectedRtp);
 }
 
-// Send sender reports and receiver reports as needed for the inbound and outbound ssrcs.
-// each sender report send time is offset 1/65536 sec to make them unique when we look them up
-// after receive blocks arrive as they reference the SR by ntp timestamp
-void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
-{
-    const uint32_t MINIMUM_SR = 7 * sizeof(uint32_t);
-    const uint32_t MINIMUM_RR = 2 * sizeof(uint32_t);
-
-    uint32_t senderReportCount = 0;
-    uint32_t senderReportSsrcs[_outboundSsrcCounters.capacity()];
-    for (auto& it : _outboundSsrcCounters)
-    {
-        const auto remainingTime = it.second.timeToSenderReport(timestamp);
-        if (remainingTime == 0)
-        {
-            senderReportSsrcs[senderReportCount++] = it.first;
-        }
-    }
-
-    uint32_t receiverReportCount = 0;
-    uint32_t receiverReportSsrcs[_inboundSsrcCounters.capacity()];
-    uint32_t activeCount = 0;
-    uint32_t activeSsrcs[_inboundSsrcCounters.capacity()];
-    for (auto& it : _inboundSsrcCounters)
-    {
-        const auto remainingTime = it.second.timeToReceiveReport(timestamp);
-        if (remainingTime == 0)
-        {
-            receiverReportSsrcs[receiverReportCount++] = it.first;
-        }
-        if (utils::Time::diffLE(it.second.getLastActive(), timestamp, 5 * utils::Time::sec))
-        {
-            activeSsrcs[activeCount++] = it.first;
-        }
-    }
-
-    if (senderReportCount == 0 && receiverReportCount <= activeCount / 2 && !rembReady)
-    {
-        return;
-    }
-
-    const auto wallClock = utils::Time::toNtp(utils::Time::now());
-    const uint64_t ntp32Tick = 0x10000u; // 1/65536 sec
-
-    bool rembAdded = false;
-    memory::UniquePacket rtcpPacket;
-    static const uint32_t MAX_RECEIVE_REPORT_COUNT = 15;
-    const size_t packetLimit = std::min(static_cast<size_t>(_config.mtu), memory::Packet::maxLength());
-    uint32_t nextReportBlocksCount = std::min(receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS);
-    for (uint32_t i = 0; i < senderReportCount; ++i)
-    {
-        const uint32_t ssrc = senderReportSsrcs[i];
-        auto it = _outboundSsrcCounters.find(ssrc);
-        if (it == _outboundSsrcCounters.end())
-        {
-            assert(false); // we should be alone on this context
-            continue;
-        }
-
-        if (!rtcpPacket)
-        {
-            rtcpPacket = memory::makeUniquePacket(_mainAllocator);
-            if (!rtcpPacket)
-            {
-                logger::warn("No space available to send SR", _loggableId.c_str());
-                break;
-            }
-        }
-
-        auto* senderReport = rtp::RtcpSenderReport::create(rtcpPacket->get() + rtcpPacket->getLength());
-        senderReport->ssrc = it->first;
-        it->second.fillInReport(*senderReport, timestamp, wallClock + i * ntp32Tick);
-        for (; nextReportBlocksCount; --nextReportBlocksCount)
-        {
-            auto receiveIt = _inboundSsrcCounters.find(receiverReportSsrcs[--receiverReportCount]);
-            if (receiveIt == _inboundSsrcCounters.end())
-            {
-                assert(false);
-                continue;
-            }
-            auto& block = senderReport->addReportBlock(receiveIt->first);
-            receiveIt->second.fillInReportBlock(timestamp, block, wallClock);
-        }
-        rtcpPacket->setLength(rtcpPacket->getLength() + senderReport->header.size());
-        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
-
-        if (!rembAdded)
-        {
-            appendRemb(*rtcpPacket, timestamp, it->first, activeSsrcs, activeCount);
-            rembAdded = true;
-        }
-
-        assert(rtcpPacket->getLength() <= packetLimit);
-
-        const uint32_t spaceAvailable = packetLimit - rtcpPacket->getLength();
-        const uint32_t availableSlotsForRR = (spaceAvailable - MINIMUM_SR) / sizeof(rtp::ReportBlock);
-        nextReportBlocksCount = std::min(receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS);
-
-        if (spaceAvailable < MINIMUM_SR || availableSlotsForRR < std::min(receiverReportCount, 4u))
-        {
-            sendRtcp(std::move(rtcpPacket), timestamp);
-        }
-        else if (nextReportBlocksCount > availableSlotsForRR)
-        {
-            nextReportBlocksCount = availableSlotsForRR;
-        }
-    }
-
-    uint32_t senderSsrc = 0;
-    if (_outboundSsrcCounters.size() > 0)
-    {
-        senderSsrc = _outboundSsrcCounters.begin()->first;
-    }
-
-    while (receiverReportCount > 0 || (rembReady && !rembAdded))
-    {
-        assert(!rtcpPacket || rtcpPacket->getLength() <= packetLimit);
-
-        const auto spaceNeeded =
-            MINIMUM_RR + std::min(receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS) * sizeof(rtp::ReportBlock);
-        if (rtcpPacket && rtcpPacket->getLength() + spaceNeeded > packetLimit)
-        {
-            sendRtcp(std::move(rtcpPacket), timestamp);
-        }
-
-        if (!rtcpPacket)
-        {
-            rtcpPacket = memory::makeUniquePacket(_mainAllocator);
-            if (!rtcpPacket)
-            {
-                logger::warn("No space available to send RR", _loggableId.c_str());
-                break;
-            }
-        }
-
-        auto* receiverReport = rtp::RtcpReceiverReport::create(rtcpPacket->get() + rtcpPacket->getLength());
-        receiverReport->ssrc = senderSsrc;
-        for (; nextPacketsToSend; --nextPacketsToSend)
-        {
-            auto receiveIt = _inboundSsrcCounters.find(receiverReportSsrcs[--receiverReportCount]);
-            if (receiveIt == _inboundSsrcCounters.end())
-            {
-                assert(false);
-                continue;
-            }
-            auto& block = receiverReport->addReportBlock(receiveIt->first);
-            receiveIt->second.fillInReportBlock(timestamp, block, wallClock);
-        }
-        rtcpPacket->setLength(receiverReport->header.size());
-        assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket.get()));
-
-        if (!rembAdded)
-        {
-            appendRemb(*rtcpPacket, timestamp, senderSsrc, activeSsrcs, activeCount);
-            rembAdded = true;
-        }
-    }
-
-    if (rtcpPacket)
-    {
-        sendRtcp(std::move(rtcpPacket), timestamp);
-    }
-}
-
-// always add REMB right after SR/RR when there is still space in the packet
-void TransportImpl::appendRemb(memory::Packet& rtcpPacket,
-    const uint64_t timestamp,
-    uint32_t senderSsrc,
-    const uint32_t* activeInbound,
-    int activeInboundCount)
-{
-    if (rtcpPacket.getLength() + sizeof(rtp::RtcpRembFeedback) + sizeof(uint32_t) * activeInboundCount >
-        _config.rtcp.mtu)
-    {
-        assert(false);
-        return;
-    }
-
-    auto& remb = rtp::RtcpRembFeedback::create(rtcpPacket.get() + rtcpPacket.getLength(), senderSsrc);
-
-    if (_config.bwe.logDownlinkEstimates && timestamp - _lastLogTimestamp >= utils::Time::sec * 5)
-    {
-        const auto oldMin = _inboundMetrics.estimatedKbpsMin.load();
-        const auto oldMax = _inboundMetrics.estimatedKbpsMax.load();
-
-        logger::info("Estimates 5s, Downlink %u - %ukbps, rate %.1fkbps, Uplink rctl %.0fkbps, rate %.1fkbps, remb "
-                     "%ukbps, rtt %.1fms, pacingQ %zu , rtpProbingEnabled %s",
-            _loggableId.c_str(),
-            oldMin,
-            oldMax,
-            _bwe->getReceiveRate(timestamp),
-            _rateController.getTargetRate(),
-            _sendRateTracker.get(timestamp, utils::Time::ms * 600) * 8 * utils::Time::ms,
-            _outboundRembEstimateKbps,
-            _rttNtp * 1000.0 / 0x10000,
-            _pacingQueue.size() + _rtxPacingQueue.size(),
-            _rateController.isRtpProbingEnabled() ? "t" : "f");
-
-        _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
-        _inboundMetrics.estimatedKbpsMax = 0;
-        _lastLogTimestamp = timestamp;
-    }
-
-    const uint64_t mediaBps = _inboundMetrics.estimatedKbps * 1000 * (1.0 - _config.bwe.packetOverhead);
-    remb.setBitrate(mediaBps);
-    _rtcp.lastReportedEstimateKbps = _inboundMetrics.estimatedKbps;
-    for (int i = 0; i < activeInboundCount; ++i)
-    {
-        remb.addSsrc(activeInbound[i]);
-    }
-    rtcpPacket.setLength(rtcpPacket.getLength() + remb.header.size());
-    assert(!memory::PacketPoolAllocator::isCorrupt(rtcpPacket));
-}
-
-void TransportImpl::sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp)
+void TransportImpl::sendRtcp(memory::UniquePacket&& rtcpPacket, const uint64_t timestamp)
 {
     auto* report = rtp::RtcpReport::fromPacket(*rtcpPacket);
 
