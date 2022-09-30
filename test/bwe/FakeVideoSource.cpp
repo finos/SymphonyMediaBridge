@@ -120,8 +120,12 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             _avgRate.update(packet->getLength() * 8, timestamp);
             _packetsInFrame++;
 
-            tryFillFramePayload(packet->get(), packet->getLength(), lastInFrame, _keyFrame);
-            _keyFrame = false;
+            bool markFirstPacketOfKeyFrame = _keyFrame && (1 == _packetsInFrame);
+            tryFillFramePayload(packet->get(), packet->getLength(), lastInFrame, markFirstPacketOfKeyFrame);
+            if (markFirstPacketOfKeyFrame)
+            {
+                _keyFrame = false;
+            }
 
             ++_packetsSent;
             return packet;
