@@ -244,13 +244,14 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             for (const auto& videoStats : allStreamsVideoStats)
             {
                 const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
-                EXPECT_NEAR(fps, 30.0, 1.0);
                 if (id == 0)
                 {
+                    EXPECT_NEAR(fps, 30.0, 5.0);
                     EXPECT_NEAR(videoStats.numDecodedFrames, 146, 5);
                 }
                 else
                 {
+                    EXPECT_NEAR(fps, 30.0, 1.0);
                     EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
                 }
             }
