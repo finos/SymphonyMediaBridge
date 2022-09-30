@@ -232,7 +232,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             std::string clientName = "Client-" + std::to_string(id + 1);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
-            auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            const auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
             group.clients[id]->_transport->getReportSummary(transportSummary);
 
             logger::debug("%s received video pkts %" PRIu64, "bbTest", clientName.c_str(), videoReceiveStats.packets);
@@ -243,7 +243,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             EXPECT_EQ(allStreamsVideoStats.size(), 2);
             for (const auto& videoStats : allStreamsVideoStats)
             {
-                double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+                const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
                 EXPECT_NEAR(fps, 30.0, 1.0);
                 if (id == 0)
                 {
@@ -390,7 +390,7 @@ TEST_F(BarbellTest, simpleBarbell)
         EXPECT_EQ(allStreamsVideoStats.size(), 2);
         for (const auto& videoStats : allStreamsVideoStats)
         {
-            double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+            const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
             EXPECT_NEAR(fps, 30.0, 1.0);
             EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
         }

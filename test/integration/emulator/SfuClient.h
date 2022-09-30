@@ -609,6 +609,7 @@ public:
 
             if (rtpHeader->padding == 1)
             {
+                assert(rtpHeader->payloadType == _rtpMap.payloadType);
                 return;
             }
             _videoDecoder.process(payload, payloadSize, timestamp);

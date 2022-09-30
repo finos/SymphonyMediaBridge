@@ -74,7 +74,7 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
 {
     for (auto& report : summary)
     {
-        auto bitrate = report.second.rtpFrequency * report.second.octets /
+        const auto bitrate = report.second.rtpFrequency * report.second.octets /
             (125 * (report.second.rtpTimestamp - report.second.initialRtpTimestamp));
 
         logger::debug("%s %s ssrc %u sent video pkts %u, %lu kbps",

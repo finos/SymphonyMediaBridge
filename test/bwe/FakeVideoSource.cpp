@@ -62,7 +62,7 @@ void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, 
     frameData.endpointIdHash = _endpointIdHash;
     frameData.tag = _tag;
 
-    memcpy(payload + VP8_HEADER_SIZE, &frameData, sizeof(frameData));
+    std::memcpy(payload + VP8_HEADER_SIZE, &frameData, sizeof(frameData));
 }
 
 memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)

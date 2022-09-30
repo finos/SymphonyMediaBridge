@@ -62,6 +62,7 @@ public:
           _loggableId((std::string("FakeVideoDecoder-") + std::to_string(endpointIdHash)).c_str(), instanceId)
     {
     }
+
     void process(const uint8_t* packet, uint32_t length, const uint64_t timestamp)
     {
         static constexpr size_t VP8_HEADER_SIZE = 2;
@@ -113,7 +114,7 @@ public:
 private:
     void decodeAssembledFrames(const uint64_t timestamp)
     {
-        while (_assembledFrames.size())
+        while (!_assembledFrames.empty())
         {
             auto frameNum = _lastDecodedFrameNum + 1;
             auto nextFrame = std::find_if(_assembledFrames.begin(),
@@ -177,10 +178,10 @@ private:
         });
 
         const auto numPackets = framePackets.size();
-        const bool result =
+        const bool frameComplete =
             numPackets && framePackets.rbegin()->lastPacketInFrame && (numPackets == framePackets.rbegin()->packetId);
 
-        if (result)
+        if (frameComplete)
         {
             AssembledFrame frame;
             frame.frameNum = data.frameNum;
@@ -200,7 +201,7 @@ private:
             }
         }
 
-        return result;
+        return frameComplete;
     }
 
     void updateStats(const size_t endpointHashId, const uint16_t tag, size_t reoderQueueSize, const uint64_t timestamp)
