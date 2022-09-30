@@ -24,7 +24,6 @@
 #include "test/integration/emulator/SfuClient.h"
 #include "transport/DataReceiver.h"
 #include "transport/EndpointFactoryImpl.h"
-#include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
 #include "transport/Transport.h"
 #include "transport/TransportFactory.h"
@@ -47,37 +46,6 @@ void BarbellTest::TearDown()
 {
     IntegrationTest::TearDown();
 }
-
-namespace
-{
-template <typename T>
-void logVideoSent(const char* clientName, T& client)
-{
-    for (auto& itPair : client._videoSources)
-    {
-        auto& videoSource = itPair.second;
-        logger::info("%s video source %u, sent %u packets",
-            "bbTest",
-            clientName,
-            videoSource->getSsrc(),
-            videoSource->getPacketsSent());
-    }
-}
-
-template <typename T>
-void logTransportSummary(const char* clientName, transport::RtcTransport* transport, T& summary)
-{
-    for (auto& report : summary)
-    {
-        logger::debug("%s %s ssrc %u sent video pkts %u",
-            "bbTest",
-            clientName,
-            transport->getLoggableId().c_str(),
-            report.first,
-            report.second.packetsSent);
-    }
-}
-} // namespace
 
 using namespace emulator;
 
@@ -119,7 +87,7 @@ Test setup:
 TEST_F(BarbellTest, packetLossViaBarbell)
 {
     runTestInThread(3 * _numWorkerThreads + 11, [this]() {
-        constexpr auto PACKET_LOSS_RATE = 0.01;
+        constexpr auto PACKET_LOSS_RATE = 0.03;
 
         _config.readFromString(R"({
         "ip":"127.0.0.1",
@@ -158,6 +126,12 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            // SFU's default downlinks is good (1 Gbps).
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+        }
+
         GroupCall<SfuClient<Channel>>
             group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 0);
         group.add(_httpd);
@@ -190,6 +164,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         for (const auto& linkInfo : interBridgeEndpoints1)
         {
             linkInfo.second.ptrLink->setLossRate(PACKET_LOSS_RATE);
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
         }
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
@@ -252,23 +227,35 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         EXPECT_NE(stats.receiver.packetsMissing, 0);
         EXPECT_NE(stats.receiver.packetsRecovered, 0);
 
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
-        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-        group.clients[1]->_transport->getReportSummary(transportSummary1);
-        group.clients[2]->_transport->getReportSummary(transportSummary2);
+        for (auto id : {0, 1, 2})
+        {
+            std::string clientName = "Client-" + std::to_string(id + 1);
 
-        logger::debug("client1 received video pkts %" PRIu64 " lost %" PRIu64,
-            "bbTest",
-            videoReceiveStats.packets,
-            videoReceiveStats.lostPackets);
-        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
-        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
-        EXPECT_GE(group.clients[0]->getVideoPacketsReceived(),
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent - 100);
-        EXPECT_NEAR(group.clients[0]->getVideoPacketsReceived(),
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent,
-            200);
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            const auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+
+            logger::debug("%s received video pkts %" PRIu64, "bbTest", clientName.c_str(), videoReceiveStats.packets);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            auto allStreamsVideoStats = group.clients[id]->getActiveVideoDecoderStats();
+            EXPECT_EQ(allStreamsVideoStats.size(), 2);
+            for (const auto& videoStats : allStreamsVideoStats)
+            {
+                const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+                if (id == 0)
+                {
+                    EXPECT_NEAR(fps, 30.0, 5.0);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 146, 5);
+                }
+                else
+                {
+                    EXPECT_NEAR(fps, 30.0, 1.0);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+                }
+            }
+        }
     });
 }
 
@@ -308,6 +295,12 @@ TEST_F(BarbellTest, simpleBarbell)
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_bridgeEndpointFactory, httpd2);
+
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            // SFU's default downlinks is good (1 Gbps).
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+        }
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
@@ -390,12 +383,18 @@ TEST_F(BarbellTest, simpleBarbell)
         group.clients[2]->_transport->getReportSummary(transportSummary2);
 
         logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logVideoReceive("client1", *group.clients[0]);
         logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
         logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
 
-        EXPECT_NEAR(videoReceiveStats.packets,
-            transportSummary1.begin()->second.packetsSent + transportSummary2.begin()->second.packetsSent,
-            25);
+        auto allStreamsVideoStats = group.clients[0]->getActiveVideoDecoderStats();
+        EXPECT_EQ(allStreamsVideoStats.size(), 2);
+        for (const auto& videoStats : allStreamsVideoStats)
+        {
+            const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+            EXPECT_NEAR(fps, 30.0, 1.0);
+            EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+        }
     });
 }
 
@@ -435,6 +434,12 @@ TEST_F(BarbellTest, barbellAfterClients)
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
         bridge2->initialize(_bridgeEndpointFactory, httpd2);
+
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            // SFU's default downlinks is good (1 Gbps).
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+        }
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
@@ -524,15 +529,25 @@ TEST_F(BarbellTest, barbellAfterClients)
             }
             ASSERT_GE(data.dominantFrequencies.size(), 1);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId++], 25.0);
+
+            std::string clientName = "Client-" + std::to_string(id + 1);
+
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+
+            logger::debug("%s received video pkts %" PRIu64, "bbTest", clientName.c_str(), videoReceiveStats.packets);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            auto allStreamsVideoStats = group.clients[id]->getActiveVideoDecoderStats();
+            EXPECT_EQ(allStreamsVideoStats.size(), 1);
+            for (const auto& videoStats : allStreamsVideoStats)
+            {
+                double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+                EXPECT_NEAR(fps, 30.0, 1.0);
+                EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+            }
         }
-
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
-        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-        group.clients[1]->_transport->getReportSummary(transportSummary);
-
-        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
-        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary);
-
-        EXPECT_NEAR(videoReceiveStats.packets, transportSummary.begin()->second.packetsSent, 25);
     });
 }

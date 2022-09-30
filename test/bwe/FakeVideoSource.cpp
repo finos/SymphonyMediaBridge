@@ -6,7 +6,11 @@
 namespace fakenet
 {
 
-FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_t kbps, uint32_t ssrc)
+FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator,
+    uint32_t kbps,
+    uint32_t ssrc,
+    const size_t endpointIdHash,
+    const uint16_t tag)
     : _allocator(allocator),
       _releaseTime(0),
       _frameReleaseTime(0),
@@ -21,27 +25,44 @@ FakeVideoSource::FakeVideoSource(memory::PacketPoolAllocator& allocator, uint32_
       _avgRate(0.0005),
       _rtpTimestamp(5000),
       _keyFrame(true),
-      _packetsSent(0)
+      _packetsSent(0),
+      _packetsInFrame(0),
+      _endpointIdHash(endpointIdHash),
+      _tag(tag)
 {
     logger::info("created fake video source %u", "FakeVideoSource", ssrc);
 }
 
-void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, bool keyFrame) const
+void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, bool lastInFrame, bool keyFrame) const
 {
+    static constexpr size_t VP8_HEADER_SIZE = 2;
     auto rtpHeader = rtp::RtpHeader::fromPtr(packet, length);
-    if (rtpHeader->headerLength() + 1 < length)
+    assert(rtpHeader->headerLength() + VP8_HEADER_SIZE < length);
+
+    auto payload = rtpHeader->getPayload();
+    if (keyFrame)
     {
-        auto payload = rtpHeader->getPayload();
-        if (keyFrame)
-        {
-            payload[0] = 1 << 4; // Partition ID: 0, payloadDescriptorSize: 1
-        }
-        else
-        {
-            payload[0] = 0;
-        }
-        payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
+        payload[0] = 1 << 4; // Partition ID: 0, payloadDescriptorSize: 1
     }
+    else
+    {
+        payload[0] = 0;
+    }
+    payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
+
+    bool hasSpaceForPayload = rtpHeader->headerLength() + VP8_HEADER_SIZE + sizeof(FakeVideoFrameData) <= length;
+    assert(hasSpaceForPayload);
+
+    FakeVideoFrameData frameData;
+    frameData.frameNum = _counter;
+    frameData.keyFrame = keyFrame;
+    frameData.lastPacketInFrame = lastInFrame;
+    frameData.packetId = _packetsInFrame;
+    frameData.ssrc = _ssrc;
+    frameData.endpointIdHash = _endpointIdHash;
+    frameData.tag = _tag;
+
+    std::memcpy(payload + VP8_HEADER_SIZE, &frameData, sizeof(frameData));
 }
 
 memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
@@ -86,6 +107,7 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             rtpHeader->setExtensions(extensionHead);
 
             _frameSize -= packetSize;
+            bool lastInFrame = false;
             if (_frameSize > 0)
             {
                 _releaseTime += _counter % 2 == 0 ? 0 : _pacing;
@@ -93,11 +115,17 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             else
             {
                 _releaseTime = _frameReleaseTime;
+                lastInFrame = true;
             }
             _avgRate.update(packet->getLength() * 8, timestamp);
+            _packetsInFrame++;
 
-            tryFillFramePayload(packet->get(), packet->getLength(), _keyFrame);
-            _keyFrame = false;
+            bool markFirstPacketOfKeyFrame = _keyFrame && (1 == _packetsInFrame);
+            tryFillFramePayload(packet->get(), packet->getLength(), lastInFrame, markFirstPacketOfKeyFrame);
+            if (markFirstPacketOfKeyFrame)
+            {
+                _keyFrame = false;
+            }
 
             ++_packetsSent;
             return packet;
@@ -129,6 +157,7 @@ void FakeVideoSource::setNextFrameSize()
         _keyFrame = true;
     }
     ++_counter;
+    _packetsInFrame = 0;
     _frameSize = randomSize(meanSize, 0.2);
     _pacing = (utils::Time::sec / _fps) * _mtu / (2 * (_frameSize + _mtu));
 }

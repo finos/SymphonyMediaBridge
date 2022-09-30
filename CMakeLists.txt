@@ -493,6 +493,8 @@ set(TEST_FILES
     test/integration/emulator/AudioSource.h
     test/integration/emulator/ApiChannel.h
     test/integration/emulator/ApiChannel.cpp
+    test/integration/emulator/FakeVideoDecoder.h
+    test/integration/emulator/FakeVideoDecoder.cpp
     test/integration/emulator/SfuClient.h
     test/integration/emulator/HttpRequests.h
     test/integration/emulator/HttpRequests.cpp

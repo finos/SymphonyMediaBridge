@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AudioSource.h"
+#include "FakeVideoDecoder.h"
 #include "api/SimulcastGroup.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
@@ -154,6 +155,8 @@ public:
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
+    size_t getEndpointIdHash() const { return _channel.getEndpointIdHash(); }
+
     void processOffer()
     {
         auto offer = _channel.getOffer();
@@ -194,6 +197,7 @@ public:
             isLocalSsrcFound = isLocalSsrcFound || videoContent == RtpVideoReceiver::VideoContent::LOCAL;
 
             _videoReceivers.emplace_back(std::make_unique<RtpVideoReceiver>(++_instanceId,
+                _channel.getEndpointIdHash(),
                 stream,
                 videoRtpMap,
                 feedbackRtpMap,
@@ -220,6 +224,7 @@ public:
             auto stream = makeSsrcGroup(ssrcPair);
 
             _videoReceivers.emplace_back(std::make_unique<RtpVideoReceiver>(++_instanceId,
+                _channel.getEndpointIdHash(),
                 stream,
                 videoRtpMap,
                 feedbackRtpMap,
@@ -238,18 +243,37 @@ public:
         }
     }
 
+    std::vector<FakeVideoDecoder::Stats> getActiveVideoDecoderStats()
+    {
+        std::vector<FakeVideoDecoder::Stats> result;
+        for (const auto& receiver : _videoReceivers)
+        {
+            const auto stats = receiver->getVideoStats();
+            if (stats.numDecodedFrames)
+            {
+                result.push_back(stats);
+            }
+        }
+        return result;
+    }
+
     void connect()
     {
         if (_channel.isVideoEnabled())
         {
             _videoSsrcs[6] = 0;
+            const size_t bitrates[] = {100, 500, 2500};
             for (int i = 0; i < 6; ++i)
             {
                 _videoSsrcs[i] = _idGenerator.next();
                 if (0 == i % 2)
                 {
                     _videoSources.emplace(_videoSsrcs[i],
-                        std::make_unique<fakenet::FakeVideoSource>(_allocator, 1024, _videoSsrcs[i]));
+                        std::make_unique<fakenet::FakeVideoSource>(_allocator,
+                            bitrates[i / 2],
+                            _videoSsrcs[i],
+                            _channel.getEndpointIdHash(),
+                            i / 2));
                     _videoCaches.emplace(_videoSsrcs[i],
                         std::make_unique<bridge::PacketCache>(
                             (std::string("VideoCache_") + std::to_string(_videoSsrcs[i])).c_str(),
@@ -296,8 +320,7 @@ public:
         {
             for (const auto& videoSource : _videoSources)
             {
-                auto packet = videoSource.second->getPacket(timestamp);
-                if (packet)
+                while (auto packet = videoSource.second->getPacket(timestamp))
                 {
                     // auto rtpHeader = rtp::RtpHeader::fromPacket(*packet);
                     // logger::debug("sending video %u", _loggableId.c_str(), rtpHeader->ssrc.get());
@@ -400,6 +423,7 @@ public:
         };
 
         RtpVideoReceiver(size_t instanceId,
+            size_t endpointIdHash,
             api::SimulcastGroup ssrcs,
             const bridge::RtpMap& rtpMap,
             const bridge::RtpMap& rtxRtpMap,
@@ -411,13 +435,16 @@ public:
               _rtxRtpMap(rtxRtpMap),
               _loggableId("rtprcv", instanceId),
               _ssrcs(ssrcs),
-              _videoContent(content)
+              _videoContent(content),
+              _videoDecoder(endpointIdHash, instanceId)
         {
             _recording.reserve(256 * 1024);
             logger::info("video offered ssrc %u, payload %u", _loggableId.c_str(), _ssrcs[0].main, _rtpMap.payloadType);
         }
 
         RtxStats getRtxStats() const { return _rtxStats; }
+
+        const FakeVideoDecoder::Stats getVideoStats() const { return _videoDecoder.getStats(); }
 
         void onRtpPacketReceived(transport::RtcTransport* sender,
             memory::Packet& packet,
@@ -512,6 +539,7 @@ public:
             {
                 inboundContext.videoMissingPacketsTracker->reset(timestamp);
                 missingPacketsTrackerReset = true;
+                _videoDecoder.resetPacketCache();
             }
 
             if (extendedSequenceNumber > inboundContext.lastReceivedExtendedSequenceNumber)
@@ -523,7 +551,9 @@ public:
                         "SfuClient",
                         sender->getLoggableId().c_str(),
                         inboundContext.ssrc);
+
                     inboundContext.videoMissingPacketsTracker->reset(timestamp);
+                    _videoDecoder.resetPacketCache();
                 }
                 else if (!missingPacketsTrackerReset)
                 {
@@ -576,6 +606,13 @@ public:
                     }
                 }
             }
+
+            if (rtpHeader->padding == 1)
+            {
+                assert(rtpHeader->payloadType == _rtxRtpMap.payloadType);
+                return;
+            }
+            _videoDecoder.process(payload, payloadSize, timestamp);
         }
 
         const logger::LoggableId& getLoggableId() const { return _loggableId; }
@@ -600,6 +637,7 @@ public:
         api::SimulcastGroup _ssrcs;
         VideoContent _videoContent;
         RtxStats _rtxStats;
+        FakeVideoDecoder _videoDecoder;
     };
 
 public:
