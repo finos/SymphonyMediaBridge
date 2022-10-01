@@ -1,7 +1,7 @@
 #pragma once
 
+#include <iterator>
 #include <type_traits>
-
 namespace utils
 {
 
@@ -25,6 +25,8 @@ public:
     using const_reference = const T&;
     using iterator = pointer;
     using const_iterator = const_pointer;
+    using reverse_iterator = std::reverse_iterator<iterator>;
+    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
 
     Span() noexcept : _first(nullptr), _last(nullptr) {}
 
@@ -69,6 +71,13 @@ public:
     iterator begin() { return _first; }
     iterator end() { return _last; }
 
+    const_reverse_iterator crbegin() { return reverse_iterator(_last); }
+    const_reverse_iterator crend() { return reverse_iterator(_first); }
+    const_reverse_iterator rbegin() const { return crbegin(); }
+    const_reverse_iterator rend() const { return crend(); }
+    reverse_iterator rbegin() { return reverse_iterator(_last); }
+    reverse_iterator rend() { return reverse_iterator(_first); }
+
     const_reference front() const { return *_first; }
     const_reference back() const { return *(_last - 1); }
     reference front() { return *_first; }
@@ -81,6 +90,9 @@ public:
 
     size_t size() const { return _last - _first; }
     size_t empty() const { return _last == _first; }
+
+    Span subSpan(size_t offset, size_t count) const { return Span(_first + offset, _first + offset + count); }
+    Span subSpan(size_t offset) const { return Span(_first + offset, _last); }
 
 private:
     pointer _first;

@@ -18,6 +18,13 @@ bool ensurePacket(memory::UniquePacket& packet, memory::PacketPoolAllocator& all
     return !!packet;
 }
 
+utils::Span<uint32_t> removeAndGetLastFromReport(utils::Span<uint32_t>& ssrcReport, size_t n)
+{
+    const auto removedSpan = ssrcReport.subSpan(ssrcReport.size() - n);
+    ssrcReport = ssrcReport.subSpan(0, ssrcReport.size() - n);
+    return removedSpan;
+}
+
 } // namespace
 
 RtcpReportProducer::RtcpReportProducer(const logger::LoggableId& loggableId,
@@ -51,8 +58,8 @@ bool RtcpReportProducer::sendReports(uint64_t timestamp, const utils::Optional<u
 
     fillReportContext(reportContext, timestamp);
 
-    if (reportContext.senderReportCount == 0 && reportContext.receiverReportCount <= reportContext.activeCount / 2 &&
-        !rembMediaBps.isSet())
+    if (reportContext.senderReportSsrcs.empty() &&
+        reportContext.receiverReportSsrcs.size() <= reportContext.activeSsrcs.size() / 2 && !rembMediaBps.isSet())
     {
         return false;
     }
@@ -60,7 +67,9 @@ bool RtcpReportProducer::sendReports(uint64_t timestamp, const utils::Optional<u
     const uint32_t receiveReportSsrc = _outboundSsrcCounters.size() > 0 ? _outboundSsrcCounters.begin()->first : 0;
     if (rembMediaBps.isSet())
     {
-        const uint32_t rembSsrc = reportContext.senderReportCount > 0 ? senderReportSsrcs[0] : receiveReportSsrc;
+        const uint32_t rembSsrc =
+            reportContext.senderReportSsrcs.empty() ? receiveReportSsrc : reportContext.senderReportSsrcs[0];
+
         buildRemb(reportContext, timestamp, rembSsrc, rembMediaBps.get());
     }
 
@@ -88,9 +97,9 @@ void RtcpReportProducer::buildRemb(ReportContext& reportContext,
         senderSsrc);
 
     remb.setBitrate(mediaBps);
-    for (uint32_t i = 0; i < reportContext.activeCount; ++i)
+    for (const auto ssrc : reportContext.activeSsrcs)
     {
-        remb.addSsrc(reportContext.activeSsrcs[i]);
+        remb.addSsrc(ssrc);
     }
 
     reportContext.rembPacket.setLength(reportContext.rembPacket.getLength() + remb.header.size());
@@ -99,12 +108,16 @@ void RtcpReportProducer::buildRemb(ReportContext& reportContext,
 
 void RtcpReportProducer::fillReportContext(ReportContext& report, uint64_t timestamp)
 {
+    size_t senderReportCount = 0;
+    size_t receiverReportCount = 0;
+    size_t activeCount = 0;
+
     for (auto& it : _outboundSsrcCounters)
     {
         const auto remainingTime = it.second.timeToSenderReport(timestamp);
         if (remainingTime == 0)
         {
-            report.senderReportSsrcs[report.senderReportCount++] = it.first;
+            report.senderReportSsrcs[senderReportCount++] = it.first;
         }
     }
 
@@ -113,18 +126,22 @@ void RtcpReportProducer::fillReportContext(ReportContext& report, uint64_t times
         const auto remainingTime = it.second.timeToReceiveReport(timestamp);
         if (remainingTime == 0)
         {
-            report.receiverReportSsrcs[report.receiverReportCount++] = it.first;
+            report.receiverReportSsrcs[receiverReportCount++] = it.first;
         }
         if (utils::Time::diffLE(it.second.getLastActive(), timestamp, 5 * utils::Time::sec))
         {
-            report.activeSsrcs[report.activeCount++] = it.first;
+            report.activeSsrcs[activeCount++] = it.first;
         }
     }
+
+    report.senderReportSsrcs = report.senderReportSsrcs.subSpan(0, senderReportCount);
+    report.receiverReportSsrcs = report.senderReportSsrcs.subSpan(0, receiverReportCount);
+    report.activeSsrcs = report.senderReportSsrcs.subSpan(0, activeCount);
 }
 
 bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_t wallClock, int64_t timestamp)
 {
-    if (reportContext.senderReportCount == 0)
+    if (reportContext.senderReportSsrcs.empty())
     {
         // Ensure we will not try to send remb
         return false;
@@ -135,19 +152,22 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
     bool rembSent = false;
     size_t rembSize = reportContext.rembPacket.getLength();
 
-    uint32_t nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
+    size_t nextReportBlocksCount =
+        std::min(reportContext.receiverReportSsrcs.size(), rtp::RtcpHeader::maxReportsBlocks());
+
     if (rembSize > 0)
     {
-        // The assumption is this is the 1st method called then rtcpPacket is still is a null pointer
+        // The assumption is this the 1st method called then rtcpPacket is still is a null pointer
         assert(!reportContext.rtcpPacket);
         size_t remainingSpace = packetLimit - rembSize - rtp::RtcpSenderReport::minimumSize();
-        const uint32_t availableSlotsForRR = remainingSpace / sizeof(rtp::ReportBlock);
+        const size_t availableSlotsForRR = remainingSpace / sizeof(rtp::ReportBlock);
         nextReportBlocksCount = std::min(nextReportBlocksCount, availableSlotsForRR);
     }
 
-    for (uint32_t i = 0; i < reportContext.senderReportCount; ++i)
+    uint64_t wallClockNtpReport = wallClock;
+
+    for (const auto ssrc : reportContext.senderReportSsrcs)
     {
-        const uint32_t ssrc = reportContext.senderReportSsrcs[i];
         auto it = _outboundSsrcCounters.find(ssrc);
         if (it == _outboundSsrcCounters.end())
         {
@@ -164,11 +184,12 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
         auto* senderReport =
             rtp::RtcpSenderReport::create(reportContext.rtcpPacket->get() + reportContext.rtcpPacket->getLength());
         senderReport->ssrc = it->first;
-        it->second.fillInReport(*senderReport, timestamp, wallClock + i * ntp32Tick);
-        for (; nextReportBlocksCount; --nextReportBlocksCount)
+        it->second.fillInReport(*senderReport, timestamp, wallClockNtpReport);
+        wallClockNtpReport += ntp32Tick;
+        auto blocksToSend = removeAndGetLastFromReport(reportContext.receiverReportSsrcs, nextReportBlocksCount);
+        for (auto itSsrc = blocksToSend.rbegin(); itSsrc != blocksToSend.rend(); ++itSsrc)
         {
-            auto receiveIt =
-                _inboundSsrcCounters.find(reportContext.receiverReportSsrcs[--reportContext.receiverReportCount]);
+            auto receiveIt = _inboundSsrcCounters.find(reportContext.receiverReportSsrcs[*itSsrc]);
             if (receiveIt == _inboundSsrcCounters.end())
             {
                 assert(false);
@@ -182,7 +203,6 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
 
         if (rembSize > 0)
         {
-
             if (reportContext.rtcpPacket->getLength() + rembSize > packetLimit)
             {
                 // This must never happen but for some reason it does. we will send the current packet
@@ -209,10 +229,10 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
         const uint32_t availableSlotsForRR =
             (spaceAvailable - rtp::RtcpSenderReport::minimumSize() - rembSize) / sizeof(rtp::ReportBlock);
 
-        nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
+        nextReportBlocksCount = std::min(reportContext.receiverReportSsrcs.size(), rtp::RtcpHeader::maxReportsBlocks());
 
         if (spaceAvailable < rtp::RtcpSenderReport::minimumSize() ||
-            availableSlotsForRR < std::min(reportContext.receiverReportCount, 4u))
+            availableSlotsForRR < std::min(reportContext.receiverReportSsrcs.size(), size_t(4)))
         {
             _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);
         }
@@ -234,7 +254,8 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
     bool rembSent = false;
     size_t rembSize = reportContext.rembPacket.getLength();
 
-    uint32_t nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
+    uint32_t nextReportBlocksCount =
+        std::min(reportContext.receiverReportSsrcs.size(), rtp::RtcpHeader::maxReportsBlocks());
     if (rembSize > 0)
     {
         if (!ensurePacket(reportContext.rtcpPacket, _rtcpPacketAllocator))
@@ -264,7 +285,7 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
         nextReportBlocksCount = std::min(nextReportBlocksCount, maxAvailableReportBlocks);
     }
 
-    while (reportContext.receiverReportCount > 0 || rembSize > 0)
+    while (reportContext.receiverReportSsrcs.size() || rembSize > 0)
     {
         assert(!reportContext.rtcpPacket || reportContext.rtcpPacket->getLength() <= packetLimit);
 
@@ -272,7 +293,8 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
         // calculated to fir REMB
         if (rembSize == 0)
         {
-            nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
+            nextReportBlocksCount =
+                std::min(reportContext.receiverReportSsrcs.size(), rtp::RtcpHeader::maxReportsBlocks());
             const auto spaceNeeded =
                 rtp::RtcpReceiverReport::minimumSize() + nextReportBlocksCount * sizeof(rtp::ReportBlock);
             if (reportContext.rtcpPacket && reportContext.rtcpPacket->getLength() + spaceNeeded > packetLimit)
@@ -290,10 +312,10 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
         auto* receiverReport =
             rtp::RtcpReceiverReport::create(reportContext.rtcpPacket->get() + reportContext.rtcpPacket->getLength());
         receiverReport->ssrc = receiveReportSsrc;
-        for (; nextReportBlocksCount; --nextReportBlocksCount)
+        auto blocksToSend = removeAndGetLastFromReport(reportContext.receiverReportSsrcs, nextReportBlocksCount);
+        for (auto itSsrc = blocksToSend.rbegin(); itSsrc != blocksToSend.rend(); ++itSsrc)
         {
-            auto receiveIt =
-                _inboundSsrcCounters.find(reportContext.receiverReportSsrcs[--reportContext.receiverReportCount]);
+            auto receiveIt = _inboundSsrcCounters.find(*itSsrc);
             if (receiveIt == _inboundSsrcCounters.end())
             {
                 assert(false);

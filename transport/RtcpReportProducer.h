@@ -39,9 +39,6 @@ private:
         utils::Span<uint32_t> activeSsrcs;
         memory::UniquePacket rtcpPacket;
         memory::Packet rembPacket;
-        uint32_t senderReportCount = 0;
-        uint32_t receiverReportCount = 0;
-        uint32_t activeCount = 0;
     };
 
     void buildRemb(ReportContext& reportContext, const uint64_t timestamp, uint32_t senderSsrc, uint64_t mediaBps);

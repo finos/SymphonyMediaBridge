@@ -29,7 +29,7 @@ struct RtcpHeader
     uint8_t packetType : 8;
     nwuint16_t length;
 
-    static constexpr uint32_t maxReportsBlocks() { return 31; }
+    static constexpr size_t maxReportsBlocks() { return 31; }
 
     RtcpHeader() : fmtCount(0), padding(0), version(2), packetType(0), length(0) {}
 
