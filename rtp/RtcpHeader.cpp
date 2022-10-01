@@ -3,8 +3,6 @@
 namespace rtp
 {
 
-const uint32_t RtcpHeader::MAX_REPORT_BLOCKS = 31;
-
 RtcpHeader* RtcpHeader::fromPtr(void* p, const size_t length)
 {
     assert((intptr_t)p % alignof(RtcpHeader) == 0);

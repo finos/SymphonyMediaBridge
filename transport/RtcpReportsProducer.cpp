@@ -124,8 +124,6 @@ void RtcpReportProducer::fillReportContext(ReportContext& report, uint64_t times
 
 bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_t wallClock, int64_t timestamp)
 {
-    const uint32_t MINIMUM_SR = 7 * sizeof(uint32_t);
-
     if (reportContext.senderReportCount == 0)
     {
         // Ensure we will not try to send remb
@@ -137,12 +135,12 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
     bool rembSent = false;
     size_t rembSize = reportContext.rembPacket.getLength();
 
-    uint32_t nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS);
+    uint32_t nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
     if (rembSize > 0)
     {
         // The assumption is this is the 1st method called then rtcpPacket is still is a null pointer
         assert(!reportContext.rtcpPacket);
-        size_t remainingSpace = packetLimit - rembSize - MINIMUM_SR;
+        size_t remainingSpace = packetLimit - rembSize - rtp::RtcpSenderReport::minimumSize();
         const uint32_t availableSlotsForRR = remainingSpace / sizeof(rtp::ReportBlock);
         nextReportBlocksCount = std::min(nextReportBlocksCount, availableSlotsForRR);
     }
@@ -208,11 +206,13 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
 
         // Ensure remb is sent in the after 1st SR
         const uint32_t spaceAvailable = packetLimit - reportContext.rtcpPacket->getLength();
-        const uint32_t availableSlotsForRR = (spaceAvailable - MINIMUM_SR - rembSize) / sizeof(rtp::ReportBlock);
+        const uint32_t availableSlotsForRR =
+            (spaceAvailable - rtp::RtcpSenderReport::minimumSize() - rembSize) / sizeof(rtp::ReportBlock);
 
-        nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS);
+        nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
 
-        if (spaceAvailable < MINIMUM_SR || availableSlotsForRR < std::min(reportContext.receiverReportCount, 4u))
+        if (spaceAvailable < rtp::RtcpSenderReport::minimumSize() ||
+            availableSlotsForRR < std::min(reportContext.receiverReportCount, 4u))
         {
             _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);
         }
@@ -230,12 +230,11 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
     int64_t timestamp,
     uint32_t receiveReportSsrc)
 {
-    const uint32_t MINIMUM_RR = 2 * sizeof(uint32_t);
     const size_t packetLimit = std::min(static_cast<size_t>(_config.mtu), memory::Packet::maxLength());
     bool rembSent = false;
     size_t rembSize = reportContext.rembPacket.getLength();
 
-    uint32_t nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS);
+    uint32_t nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
     if (rembSize > 0)
     {
         if (!ensurePacket(reportContext.rtcpPacket, _rtcpPacketAllocator))
@@ -244,7 +243,7 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
             return false;
         }
 
-        if (reportContext.rtcpPacket->getLength() + rembSize + MINIMUM_RR > packetLimit)
+        if (reportContext.rtcpPacket->getLength() + rembSize + rtp::RtcpReceiverReport::minimumSize() > packetLimit)
         {
             // This must never happen. If it's not fit is because we have already some SR then REMB should it be
             // sent already. Buf if this happen because some bug. Let's flush the packet to network and ensure
@@ -259,7 +258,8 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
             return false;
         }
 
-        const auto availableSpace = packetLimit - (reportContext.rtcpPacket->getLength() + rembSize + MINIMUM_RR);
+        const auto availableSpace =
+            packetLimit - (reportContext.rtcpPacket->getLength() + rembSize + rtp::RtcpReceiverReport::minimumSize());
         const auto maxAvailableReportBlocks = static_cast<uint32_t>(availableSpace / sizeof(rtp::ReportBlock));
         nextReportBlocksCount = std::min(nextReportBlocksCount, maxAvailableReportBlocks);
     }
@@ -272,8 +272,9 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
         // calculated to fir REMB
         if (rembSize == 0)
         {
-            nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::MAX_REPORT_BLOCKS);
-            const auto spaceNeeded = MINIMUM_RR + nextReportBlocksCount * sizeof(rtp::ReportBlock);
+            nextReportBlocksCount = std::min(reportContext.receiverReportCount, rtp::RtcpHeader::maxReportsBlocks());
+            const auto spaceNeeded =
+                rtp::RtcpReceiverReport::minimumSize() + nextReportBlocksCount * sizeof(rtp::ReportBlock);
             if (reportContext.rtcpPacket && reportContext.rtcpPacket->getLength() + spaceNeeded > packetLimit)
             {
                 _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);

@@ -29,7 +29,7 @@ struct RtcpHeader
     uint8_t packetType : 8;
     nwuint16_t length;
 
-    static const uint32_t MAX_REPORT_BLOCKS;
+    static constexpr uint32_t maxReportsBlocks() { return 31; }
 
     RtcpHeader() : fmtCount(0), padding(0), version(2), packetType(0), length(0) {}
 
@@ -182,6 +182,8 @@ public:
 
 struct RtcpReceiverReport
 {
+    static constexpr uint32_t minimumSize() { return 2 * sizeof(uint32_t); }
+
     RtcpHeader header;
     nwuint32_t ssrc;
     ReportBlock reportBlocks[31];
@@ -202,6 +204,8 @@ struct RtcpReceiverReport
 class RtcpSenderReport
 {
 public:
+    static constexpr size_t minimumSize() { return 7 * sizeof(nwuint32_t); }
+
     RtcpHeader header;
     nwuint32_t ssrc;
     nwuint32_t ntpSeconds;
