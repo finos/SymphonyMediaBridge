@@ -49,8 +49,7 @@ bool RtcpReportProducer::sendReports(uint64_t timestamp, const utils::Optional<u
     reportContext.receiverReportSsrcs = utils::Span<uint32_t>(receiverReportSsrcs, _inboundSsrcCounters.capacity());
     reportContext.activeSsrcs = utils::Span<uint32_t>(activeSsrcs, _inboundSsrcCounters.capacity());
 
-    collectSsrcsReadyToSendSenderReports(reportContext, timestamp);
-    collectActiveSsrcsAndReadyToSendReceiveReports(reportContext, timestamp);
+    fillReportContext(reportContext, timestamp);
 
     if (reportContext.senderReportCount == 0 && reportContext.receiverReportCount <= reportContext.activeCount / 2 &&
         !rembMediaBps.isSet())
@@ -98,7 +97,7 @@ void RtcpReportProducer::buildRemb(ReportContext& reportContext,
     assert(!memory::PacketPoolAllocator::isCorrupt(reportContext.rembPacket));
 }
 
-void RtcpReportProducer::collectSsrcsReadyToSendSenderReports(ReportContext& report, uint64_t timestamp)
+void RtcpReportProducer::fillReportContext(ReportContext& report, uint64_t timestamp)
 {
     for (auto& it : _outboundSsrcCounters)
     {
@@ -108,10 +107,7 @@ void RtcpReportProducer::collectSsrcsReadyToSendSenderReports(ReportContext& rep
             report.senderReportSsrcs[report.senderReportCount++] = it.first;
         }
     }
-}
 
-void RtcpReportProducer::collectActiveSsrcsAndReadyToSendReceiveReports(ReportContext& report, uint64_t timestamp)
-{
     for (auto& it : _inboundSsrcCounters)
     {
         const auto remainingTime = it.second.timeToReceiveReport(timestamp);

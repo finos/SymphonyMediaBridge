@@ -45,12 +45,7 @@ private:
     };
 
     void buildRemb(ReportContext& reportContext, const uint64_t timestamp, uint32_t senderSsrc, uint64_t mediaBps);
-
-    /** ssrcsReady MUST have at least _outboundSsrcCounters.size
-     * @return the number of ready ssrcs that were added to  array
-     */
-    void collectSsrcsReadyToSendSenderReports(ReportContext& report, uint64_t timestamp);
-    void collectActiveSsrcsAndReadyToSendReceiveReports(ReportContext& report, uint64_t timestamp);
+    void fillReportContext(ReportContext& report, uint64_t timestamp);
 
     bool sendSenderReports(ReportContext& report, uint64_t wallClock, int64_t timestamp);
     bool sendReceiveReports(ReportContext& report, uint64_t wallClock, int64_t timestamp, uint32_t receiveReportSsrc);
