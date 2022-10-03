@@ -38,9 +38,9 @@ public:
             const uint32_t maxDefaultLevelBandwidthKbps)
             : primary(primary),
               secondary(secondary),
-              highestEstimatedPinnedLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
-              desiredHighestEstimatedPinnedLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
-              desiredUnpinnedLevel(lowQuality),
+              pinQualityLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
+              desiredPinQualityLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
+              unpinQualityLevel(lowQuality),
               lowEstimateTimestamp(lowQuality),
               defaultLevelBandwidthLimit(maxDefaultLevelBandwidthKbps),
               estimatedUplinkBandwidth(0)
@@ -48,9 +48,9 @@ public:
         }
         SimulcastStream primary;
         utils::Optional<SimulcastStream> secondary;
-        QualityLevel highestEstimatedPinnedLevel;
-        QualityLevel desiredHighestEstimatedPinnedLevel;
-        QualityLevel desiredUnpinnedLevel;
+        QualityLevel pinQualityLevel;
+        QualityLevel desiredPinQualityLevel;
+        QualityLevel unpinQualityLevel;
         uint64_t lowEstimateTimestamp;
         /** Min of incoming estimate and EngineStreamDirector::maxDefaultLevelBandwidthKbps */
         uint32_t defaultLevelBandwidthLimit;
@@ -279,53 +279,53 @@ public:
         QualityLevel pinnedQuality, unpinnedQuality;
         getVideoQualityLimits(endpointIdHash, participantStream, pinnedQuality, unpinnedQuality);
 
-        participantStream.desiredHighestEstimatedPinnedLevel = pinnedQuality;
-        participantStream.desiredUnpinnedLevel = unpinnedQuality;
+        participantStream.desiredPinQualityLevel = pinnedQuality;
+        participantStream.unpinQualityLevel = unpinnedQuality;
 
-        if (participantStream.desiredHighestEstimatedPinnedLevel == participantStream.highestEstimatedPinnedLevel)
+        if (participantStream.desiredPinQualityLevel == participantStream.pinQualityLevel)
         {
             participantStream.lowEstimateTimestamp = timestamp;
             return false;
         }
-        else if (participantStream.desiredHighestEstimatedPinnedLevel < participantStream.highestEstimatedPinnedLevel)
+        else if (participantStream.desiredPinQualityLevel < participantStream.pinQualityLevel)
         {
-            logger::info(
-                "setUplinkEstimateKbps %u, endpointIdHash %zu, desired pin %u < level %u, unpinned %u, scale down",
+            logger::info("setUplinkEstimateKbps %u, endpointIdHash %zu, degrade video pin %u -> %u, unpinned %u",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
-                participantStream.desiredHighestEstimatedPinnedLevel,
-                participantStream.highestEstimatedPinnedLevel,
-                participantStream.desiredUnpinnedLevel);
+                participantStream.pinQualityLevel,
+                participantStream.desiredPinQualityLevel,
+                participantStream.unpinQualityLevel);
 
-            participantStream.highestEstimatedPinnedLevel = participantStream.desiredHighestEstimatedPinnedLevel;
+            participantStream.pinQualityLevel = participantStream.desiredPinQualityLevel;
             participantStream.lowEstimateTimestamp = timestamp;
             return true;
         }
-
-        logger::debug("setUplinkEstimateKbps %u, endpointIdHash %zu desired pin %u > level %u",
-            _loggableId.c_str(),
-            uplinkEstimateKbps,
-            endpointIdHash,
-            participantStream.desiredHighestEstimatedPinnedLevel,
-            participantStream.highestEstimatedPinnedLevel);
 
         if (utils::Time::diffGE(participantStream.lowEstimateTimestamp,
                 timestamp,
                 timeBeforeScaleUpMs * utils::Time::ms))
         {
-            logger::info(
-                "setUplinkEstimateKbps %u, endpointIdHash %zu desired pin %u > level %u, unpinned %u, scale up",
+            logger::info("setUplinkEstimateKbps %u, endpointIdHash %zu, upgrade video pin %u -> %u, unpinned %u",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
-                participantStream.desiredHighestEstimatedPinnedLevel,
-                participantStream.highestEstimatedPinnedLevel,
-                participantStream.desiredUnpinnedLevel);
+                participantStream.pinQualityLevel,
+                participantStream.desiredPinQualityLevel,
+                participantStream.unpinQualityLevel);
 
-            participantStream.highestEstimatedPinnedLevel = participantStream.desiredHighestEstimatedPinnedLevel;
+            participantStream.pinQualityLevel = participantStream.desiredPinQualityLevel;
             participantStream.lowEstimateTimestamp = timestamp;
             return true;
+        }
+        else
+        {
+            logger::debug("setUplinkEstimateKbps %u, endpointIdHash %zu, want change pin %u -> %u",
+                _loggableId.c_str(),
+                uplinkEstimateKbps,
+                endpointIdHash,
+                participantStream.pinQualityLevel,
+                participantStream.desiredPinQualityLevel);
         }
 
         return false;
@@ -472,8 +472,7 @@ public:
 
         const auto pinMapItr = _pinMap.find(toEndpointIdHash);
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
-        const auto maxWantedQuality =
-            (fromPinnedEndpoint ? viewer->desiredHighestEstimatedPinnedLevel : viewer->desiredUnpinnedLevel);
+        const auto assignedQuality = (fromPinnedEndpoint ? viewer->pinQualityLevel : viewer->unpinQualityLevel);
 
         size_t fromEndpointId = 0;
         const auto quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
@@ -483,19 +482,19 @@ public:
             toEndpointIdHash,
             ssrc,
             quality,
-            maxWantedQuality);
+            assignedQuality);
 
         // Check against max desired quality.
         bool result = false;
-        if (maxWantedQuality == dropQuality)
+        if (assignedQuality == dropQuality)
         {
             result = false;
         }
-        else if (quality == maxWantedQuality)
+        else if (quality == assignedQuality)
         {
             result = true;
         }
-        else if (quality > maxWantedQuality)
+        else if (quality > assignedQuality)
         {
             result = false;
         }
@@ -513,7 +512,7 @@ public:
             result ? 't' : 'f',
             quality,
             highestActiveQuality(fromEndpointId, ssrc),
-            maxWantedQuality,
+            assignedQuality,
             fromPinnedEndpoint ? 't' : 'f');
 
         return result;
@@ -676,7 +675,7 @@ private:
     logger::LoggableId _loggableId;
     concurrency::MpmcHashmap32<size_t, ParticipantStreams> _participantStreams;
     concurrency::MpmcHashmap32<size_t, size_t> _pinMap;
-    concurrency::MpmcHashmap32<size_t, size_t> _reversePinMap;
+    concurrency::MpmcHashmap32<size_t, size_t> _reversePinMap; // count pinning users
     concurrency::MpmcHashmap32<uint32_t, size_t> _lowQualitySsrcs;
     concurrency::MpmcHashmap32<uint32_t, size_t> _midQualitySsrcs;
     uint32_t _bandwidthFloor;
@@ -854,8 +853,6 @@ private:
         return false;
     }
 
-    inline bool anyParticipantsWithoutPinTarget() const { return _participantStreams.size() != _pinMap.size(); }
-
     /**
      * Checks for ssrcs belonging to a default level if there are participants without pin targets.
      */
@@ -882,7 +879,7 @@ private:
         for (const auto& participant : _participantStreams)
         {
             if (participant.first != senderEndpointIdHash &&
-                quality == std::min(participant.second.desiredUnpinnedLevel, highestAvailableQuality))
+                quality == std::min(participant.second.unpinQualityLevel, highestAvailableQuality))
             {
                 return true;
             }
@@ -916,7 +913,7 @@ private:
             const auto& participant = _participantStreams.find(pinnedBy);
 
             if (participant != _participantStreams.end() &&
-                quality == std::min(participant->second.desiredHighestEstimatedPinnedLevel, highestAvailableQuality))
+                quality == std::min(participant->second.pinQualityLevel, highestAvailableQuality))
             {
                 return true;
             }
