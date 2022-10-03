@@ -1643,7 +1643,7 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
     doProtectAndSend(timestamp, std::move(packet), _peerRtpPort, _selectedRtp);
 }
 
-void TransportImpl::sendRtcp(memory::UniquePacket&& rtcpPacket, const uint64_t timestamp)
+void TransportImpl::sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp)
 {
     auto* report = rtp::RtcpReport::fromPacket(*rtcpPacket);
 

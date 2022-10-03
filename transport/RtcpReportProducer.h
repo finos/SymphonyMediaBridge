@@ -18,7 +18,7 @@ public:
     struct RtcpSender
     {
         virtual ~RtcpSender() = default;
-        virtual void sendRtcp(memory::UniquePacket&& packet, uint64_t timestamp) = 0;
+        virtual void sendRtcp(memory::UniquePacket packet, uint64_t timestamp) = 0;
     };
 
     RtcpReportProducer(const logger::LoggableId& loggableId,

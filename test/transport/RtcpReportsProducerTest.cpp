@@ -145,9 +145,9 @@ private:
 
 struct RtcpSenderMock : public RtcpReportProducer::RtcpSender
 {
-    MOCK_METHOD(void, sendRtcp, (const memory::UniquePacket& packet, uint64_t timestamp));
+    MOCK_METHOD(void, sendRtcpInternal, (const memory::UniquePacket& packet, uint64_t timestamp));
 
-    void sendRtcp(memory::UniquePacket&& packet, uint64_t timestamp) override { sendRtcp(packet, timestamp); }
+    void sendRtcp(memory::UniquePacket packet, uint64_t timestamp) override { sendRtcpInternal(packet, timestamp); }
 };
 
 ::testing::Matcher<const memory::UniquePacket&> packetEq(const memory::Packet& expected)
@@ -170,6 +170,15 @@ rtp::RtcpSenderReport* makeRtpSenderReport(memory::Packet& packet,
     report->ntpSeconds = static_cast<uint32_t>(ntp >> 32);
     report->ntpFractions = static_cast<uint32_t>(ntp & 0xFFFFFFFF);
     packet.setLength(report->size());
+
+    return report;
+}
+
+rtp::RtcpReceiverReport* makeRtpReceiveReport(memory::Packet& packet, uint32_t ssrc)
+{
+    auto* report = rtp::RtcpReceiverReport::create(packet.get());
+    report->ssrc = ssrc;
+    packet.setLength(report->header.size());
 
     return report;
 }
@@ -270,7 +279,7 @@ TEST_F(RtcpReportsProducerTest, shouldNotSendAfterInterval)
     senderState.onRtpSent(time, *packetGenerator.generatePacket(1200, time));
     const auto timestamp = time + interval;
 
-    EXPECT_CALL(*_rtcpSenderMock, sendRtcp(_, _)).Times(0);
+    EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(_, _)).Times(0);
 
     auto rtcpReportsProducer = createReportProducer();
     const bool rembSent = rtcpReportsProducer.sendReports(timestamp, utils::Optional<uint64_t>());
@@ -308,7 +317,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendAfterIntervalWhen5PacketsSent)
         rtpTimestamp,
         wallClock);
 
-    EXPECT_CALL(*_rtcpSenderMock, sendRtcp(packetEq(expectedPacket), Eq(timestamp)));
+    EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(packetEq(expectedPacket), Eq(timestamp)));
 
     auto rtcpReportsProducer = createReportProducer();
     const bool rembSent = rtcpReportsProducer.sendReports(timestamp, utils::Optional<uint64_t>());
@@ -338,7 +347,7 @@ TEST_F(RtcpReportsProducerTest, shouldNotSendAfterIntervalWhenLessThan5PacketsSe
     // Advance timestamp a lot
     timestamp = initialTimestamp + interval * 10;
 
-    EXPECT_CALL(*_rtcpSenderMock, sendRtcp(_, _)).Times(0);
+    EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(_, _)).Times(0);
 
     auto rtcpReportsProducer = createReportProducer();
     ASSERT_EQ(false, rtcpReportsProducer.sendReports(timestamp, utils::Optional<uint64_t>()));
@@ -411,7 +420,128 @@ TEST_F(RtcpReportsProducerTest, shouldSendReceiveReportsWithinSenderReport)
 
     expectedPacket.setLength(senderReport->size());
 
-    EXPECT_CALL(*_rtcpSenderMock, sendRtcp(packetEq(expectedPacket), Eq(timestamp)));
+    EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(packetEq(expectedPacket), Eq(timestamp)));
+
+    auto rtcpReportsProducer = createReportProducer();
+    ASSERT_EQ(false, rtcpReportsProducer.sendReports(timestamp, utils::Optional<uint64_t>()));
+}
+
+TEST_F(RtcpReportsProducerTest, shouldSendSendReportsAndReceive)
+{
+    constexpr uint32_t packetsToSendCount = 30;
+    constexpr uint32_t packetsToReceivePerSsrc = 15;
+    constexpr uint32_t receiveSsrcCount = 63;
+    constexpr uint32_t firstReceiverSSrc = 40000;
+    const uint64_t timeIncrement = 20 * utils::Time::ms;
+
+    std::vector<PacketGenerator> inboundSsrcPacketGenerators;
+
+    auto& senderState = _outboundSsrcCounters.emplace(SSRC_0, 48000, _config).first->second;
+
+    for (uint32_t i = 0; i < receiveSsrcCount; ++i)
+    {
+        _inboundSsrcCounters.emplace(firstReceiverSSrc + i, _config);
+        inboundSsrcPacketGenerators.push_back(createPacketGenerator(firstReceiverSSrc + i, 48000));
+    }
+
+    const uint64_t initialTimestamp = 0xFF886622;
+    const std::chrono::system_clock::time_point wallClock(std::chrono::duration<long>(0xFF001122));
+
+    auto reportBlock = makeEmptyReportBlockFor(SSRC_0);
+    reportBlock.lastSR = 0x00000010 + 0x00000010;
+    reportBlock.delaySinceLastSR = 0x00000010;
+    senderState.onReceiverBlockReceived(initialTimestamp, utils::Time::absToNtp32(initialTimestamp), reportBlock);
+
+    ON_CALL(*_timeSourceMock, wallClock()).WillByDefault(Return(wallClock));
+
+    auto senderPacketGenerator = createPacketGenerator(SSRC_0, 48000);
+
+    senderPacketGenerator.generateAndUpdateSenderState(senderState,
+        packetsToSendCount,
+        initialTimestamp,
+        timeIncrement);
+
+    simulateReceiving(inboundSsrcPacketGenerators, packetsToReceivePerSsrc, initialTimestamp, timeIncrement);
+
+    const auto heightReceiveTimestamp = inboundSsrcPacketGenerators.front().stats.lastTimestamp;
+    const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + interval);
+
+    const auto rtpTimestamp = senderPacketGenerator.currentFrequency +
+        static_cast<uint32_t>(
+            ((timestamp - senderPacketGenerator.stats.lastTimestamp) / utils::Time::ms) * 48000 / 1000);
+
+    memory::Packet packet1;
+    memory::Packet packet2;
+    memory::Packet packet3;
+
+    auto* senderReport = makeRtpSenderReport(packet1,
+        senderPacketGenerator.stats.packetCount,
+        senderPacketGenerator.stats.octets,
+        rtpTimestamp,
+        wallClock);
+
+    // Reports are generated by reverse order of MpmcHashmap32 container
+    auto beginReverseIt = std::make_reverse_iterator(_inboundSsrcCounters.end());
+    auto endReverseIt = std::make_reverse_iterator(_inboundSsrcCounters.begin());
+    auto currentIt = beginReverseIt;
+    for (size_t i = 0; i < 31; ++i)
+    {
+        const auto snapshot = currentIt->second.getCumulativeSnapshot();
+        auto& reportBlock = senderReport->addReportBlock(currentIt->first);
+        reportBlock.ssrc = currentIt->first;
+        reportBlock.extendedSeqNoReceived = snapshot.extendedSequenceNumber;
+        reportBlock.lastSR = 0;
+        reportBlock.delaySinceLastSR = 0;
+        reportBlock.interarrivalJitter = 0;
+
+        ++currentIt;
+    }
+
+    packet1.setLength(senderReport->size());
+
+    const auto receiverReportSsrc = _outboundSsrcCounters.begin()->first;
+    auto* receiverReport = makeRtpReceiveReport(packet2, receiverReportSsrc);
+
+    // On second we only have space to 29 blocks
+    for (size_t i = 0; i < 29; ++i)
+    {
+        const auto snapshot = currentIt->second.getCumulativeSnapshot();
+        auto& reportBlock = receiverReport->addReportBlock(currentIt->first);
+        reportBlock.ssrc = currentIt->first;
+        reportBlock.extendedSeqNoReceived = snapshot.extendedSequenceNumber;
+        reportBlock.lastSR = 0;
+        reportBlock.delaySinceLastSR = 0;
+        reportBlock.interarrivalJitter = 0;
+
+        ++currentIt;
+    }
+
+    packet2.setLength(receiverReport->header.size());
+
+    receiverReport = makeRtpReceiveReport(packet3, receiverReportSsrc);
+    for (; currentIt != endReverseIt; ++currentIt)
+    {
+        const auto snapshot = currentIt->second.getCumulativeSnapshot();
+        auto& reportBlock = receiverReport->addReportBlock(currentIt->first);
+        reportBlock.ssrc = currentIt->first;
+        reportBlock.extendedSeqNoReceived = snapshot.extendedSequenceNumber;
+        reportBlock.lastSR = 0;
+        reportBlock.delaySinceLastSR = 0;
+        reportBlock.interarrivalJitter = 0;
+    }
+
+    packet3.setLength(receiverReport->header.size());
+
+    memory::Packet compoundRtcp;
+    compoundRtcp.append(packet1);
+    compoundRtcp.append(packet2);
+
+    {
+        InSequence seq;
+
+        EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(packetEq(compoundRtcp), Eq(timestamp)));
+        EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(packetEq(packet3), Eq(timestamp)));
+    }
 
     auto rtcpReportsProducer = createReportProducer();
     ASSERT_EQ(false, rtcpReportsProducer.sendReports(timestamp, utils::Optional<uint64_t>()));

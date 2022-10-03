@@ -323,7 +323,7 @@ private:
         int activeInboundCount);
 
     void sendReports(uint64_t timestamp, bool rembReady = false);
-    void sendRtcp(memory::UniquePacket&& rtcpPacket, const uint64_t timestamp) override;
+    void sendRtcp(memory::UniquePacket rtcpPacket, const uint64_t timestamp) override;
 
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 

@@ -297,9 +297,32 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
                 std::min(reportContext.receiverReportSsrcs.size(), rtp::RtcpHeader::maxReportsBlocks());
             const auto spaceNeeded =
                 rtp::RtcpReceiverReport::minimumSize() + nextReportBlocksCount * sizeof(rtp::ReportBlock);
+
             if (reportContext.rtcpPacket && reportContext.rtcpPacket->getLength() + spaceNeeded > packetLimit)
             {
-                _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);
+                bool shouldSendNow = true;
+
+                // If we can't fit everything in the next packet. We will try to fill up this one as much
+                // as we can
+                if (reportContext.receiverReportSsrcs.size() > rtp::RtcpHeader::maxReportsBlocks())
+                {
+                    const size_t spaceAvailable = packetLimit - reportContext.rtcpPacket->getLength();
+                    const size_t availableSlots =
+                        (spaceAvailable - std::min(spaceAvailable, rtp::RtcpReceiverReport::minimumSize())) /
+                        sizeof(rtp::ReportBlock);
+
+                    // Only if space is enough to add at least 4 blocks, otherwise it not worth it
+                    if (availableSlots > 4)
+                    {
+                        nextReportBlocksCount = availableSlots;
+                        shouldSendNow = false;
+                    }
+                }
+
+                if (shouldSendNow)
+                {
+                    _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);
+                }
             }
         }
 
@@ -325,7 +348,7 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
             receiveIt->second.fillInReportBlock(timestamp, block, wallClock);
         }
 
-        reportContext.rtcpPacket->setLength(receiverReport->header.size());
+        reportContext.rtcpPacket->setLength(reportContext.rtcpPacket->getLength() + receiverReport->header.size());
         assert(!memory::PacketPoolAllocator::isCorrupt(*reportContext.rtcpPacket));
 
         if (rembSize > 0)
