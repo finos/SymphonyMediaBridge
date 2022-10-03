@@ -103,7 +103,6 @@ void RtcpReportProducer::buildRemb(ReportContext& reportContext,
     }
 
     reportContext.rembPacket.setLength(reportContext.rembPacket.getLength() + remb.header.size());
-    assert(!memory::PacketPoolAllocator::isCorrupt(reportContext.rembPacket));
 }
 
 void RtcpReportProducer::fillReportContext(ReportContext& report, uint64_t timestamp)
