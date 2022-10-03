@@ -674,7 +674,7 @@ private:
 
     logger::LoggableId _loggableId;
     concurrency::MpmcHashmap32<size_t, ParticipantStreams> _participantStreams;
-    concurrency::MpmcHashmap32<size_t, size_t> _pinMap;
+    concurrency::MpmcHashmap32<size_t, size_t> _pinMap; // less to iterate if fewer use pin
     concurrency::MpmcHashmap32<size_t, size_t> _reversePinMap; // count pinning users
     concurrency::MpmcHashmap32<uint32_t, size_t> _lowQualitySsrcs;
     concurrency::MpmcHashmap32<uint32_t, size_t> _midQualitySsrcs;
@@ -904,8 +904,8 @@ private:
         for (const auto& pinMapEntry : _pinMap)
         {
             auto const& pinnedBy = pinMapEntry.first;
-            auto const& sender = pinMapEntry.second;
-            if (pinnedBy == senderEndpointIdHash || sender != senderEndpointIdHash)
+            auto const& pinTarget = pinMapEntry.second;
+            if (pinnedBy == senderEndpointIdHash || pinTarget != senderEndpointIdHash)
             {
                 continue;
             }
