@@ -289,19 +289,21 @@ public:
         }
         else if (participantStream.desiredHighestEstimatedPinnedLevel < participantStream.highestEstimatedPinnedLevel)
         {
-            logger::info("setUplinkEstimateKbps %u, endpointIdHash %zu, desiredLevel %u < level %u, scale down",
+            logger::info(
+                "setUplinkEstimateKbps %u, endpointIdHash %zu, desired pin %u < level %u, unpinned %u, scale down",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
                 participantStream.desiredHighestEstimatedPinnedLevel,
-                participantStream.highestEstimatedPinnedLevel);
+                participantStream.highestEstimatedPinnedLevel,
+                participantStream.desiredUnpinnedLevel);
 
             participantStream.highestEstimatedPinnedLevel = participantStream.desiredHighestEstimatedPinnedLevel;
             participantStream.lowEstimateTimestamp = timestamp;
             return true;
         }
 
-        logger::debug("setUplinkEstimateKbps %u, endpointIdHash %zu desiredLevel %u > level %u",
+        logger::debug("setUplinkEstimateKbps %u, endpointIdHash %zu desired pin %u > level %u",
             _loggableId.c_str(),
             uplinkEstimateKbps,
             endpointIdHash,
@@ -312,12 +314,14 @@ public:
                 timestamp,
                 timeBeforeScaleUpMs * utils::Time::ms))
         {
-            logger::info("setUplinkEstimateKbps %u, endpointIdHash %zu desiredLevel %u > level %u, scale up",
+            logger::info(
+                "setUplinkEstimateKbps %u, endpointIdHash %zu desired pin %u > level %u, unpinned %u, scale up",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
                 participantStream.desiredHighestEstimatedPinnedLevel,
-                participantStream.highestEstimatedPinnedLevel);
+                participantStream.highestEstimatedPinnedLevel,
+                participantStream.desiredUnpinnedLevel);
 
             participantStream.highestEstimatedPinnedLevel = participantStream.desiredHighestEstimatedPinnedLevel;
             participantStream.lowEstimateTimestamp = timestamp;
@@ -873,7 +877,8 @@ private:
             return false;
         }
 
-        // Unpinned, belogns to lastN and some of the participants needs this quality.
+        // Unpinned, belongs to lastN and some of the participants needs this quality.
+        // TODO this is too heavy in large conference. A subscription count matrix should solve this
         for (const auto& participant : _participantStreams)
         {
             if (participant.first != senderEndpointIdHash &&
@@ -919,7 +924,7 @@ private:
         return false;
     }
 
-    inline bool isUsedForRecordingSlides(const size_t ssrc,
+    inline bool isUsedForRecordingSlides(const uint32_t ssrc,
         const size_t senderEndpointIdHash,
         const size_t numRecordingStreams)
     {
