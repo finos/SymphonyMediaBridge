@@ -135,8 +135,8 @@ void RtcpReportProducer::fillReportContext(ReportContext& report, uint64_t times
     }
 
     report.senderReportSsrcs = report.senderReportSsrcs.subSpan(0, senderReportCount);
-    report.receiverReportSsrcs = report.senderReportSsrcs.subSpan(0, receiverReportCount);
-    report.activeSsrcs = report.senderReportSsrcs.subSpan(0, activeCount);
+    report.receiverReportSsrcs = report.receiverReportSsrcs.subSpan(0, receiverReportCount);
+    report.activeSsrcs = report.activeSsrcs.subSpan(0, activeCount);
 }
 
 bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_t wallClock, int64_t timestamp)
@@ -189,7 +189,7 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
         auto blocksToSend = removeAndGetLastFromReport(reportContext.receiverReportSsrcs, nextReportBlocksCount);
         for (auto itSsrc = blocksToSend.rbegin(); itSsrc != blocksToSend.rend(); ++itSsrc)
         {
-            auto receiveIt = _inboundSsrcCounters.find(reportContext.receiverReportSsrcs[*itSsrc]);
+            auto receiveIt = _inboundSsrcCounters.find(*itSsrc);
             if (receiveIt == _inboundSsrcCounters.end())
             {
                 assert(false);
