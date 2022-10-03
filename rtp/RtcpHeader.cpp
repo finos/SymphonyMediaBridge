@@ -102,7 +102,7 @@ RtcpReceiverReport* RtcpReceiverReport::fromPtr(void* p, size_t length)
 RtcpReceiverReport* RtcpReceiverReport::create(void* p)
 {
     auto report = reinterpret_cast<RtcpReceiverReport*>(p);
-    std::memset(p, 0, sizeof(RtcpReceiverReport));
+    std::memset(p, 0, RtcpReceiverReport::minimumSize());
     report->header.version = 2;
     report->header.packetType = RECEIVER_REPORT;
     report->header.length = 1;
@@ -119,10 +119,11 @@ bool RtcpReceiverReport::isValid() const
 ReportBlock& RtcpReceiverReport::addReportBlock(uint32_t ssrc)
 {
     assert(header.fmtCount < 31);
-    reportBlocks[header.fmtCount++].ssrc = ssrc;
-    uint16_t l = header.length;
-    header.length = l + sizeof(ReportBlock) / sizeof(uint32_t);
-    return reportBlocks[header.fmtCount - 1];
+    ReportBlock& block = reportBlocks[header.fmtCount++];
+    std::memset(&block, 0, sizeof(ReportBlock));
+    block.ssrc = ssrc;
+    header.length += sizeof(ReportBlock) / sizeof(uint32_t);
+    return block;
 }
 
 CompoundRtcpPacket::CompoundRtcpPacket(void* p, const size_t length)
@@ -400,7 +401,7 @@ RtcpSenderReport::RtcpSenderReport() : ssrc(0)
 RtcpSenderReport* RtcpSenderReport::create(void* buffer)
 {
     auto report = reinterpret_cast<RtcpSenderReport*>(buffer);
-    std::memset(report, 0, sizeof(*report));
+    std::memset(report, 0, RtcpSenderReport::minimumSize());
     report->header.version = 2;
     report->header.packetType = SENDER_REPORT;
     report->header.length = 6;
@@ -428,10 +429,11 @@ void RtcpSenderReport::setNtp(const std::chrono::system_clock::time_point timest
 ReportBlock& RtcpSenderReport::addReportBlock(uint32_t ssrc)
 {
     assert(header.fmtCount < 31);
-    reportBlocks[header.fmtCount++].ssrc = ssrc;
-    uint16_t l = header.length;
-    header.length = l + sizeof(ReportBlock) / sizeof(uint32_t);
-    return reportBlocks[header.fmtCount - 1];
+    ReportBlock& block = reportBlocks[header.fmtCount++];
+    std::memset(&block, 0, sizeof(ReportBlock));
+    block.ssrc = ssrc;
+    header.length += sizeof(ReportBlock) / sizeof(uint32_t);
+    return block;
 }
 
 bool RtcpSenderReport::isValid() const

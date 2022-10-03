@@ -182,7 +182,7 @@ public:
 
 struct RtcpReceiverReport
 {
-    static constexpr uint32_t minimumSize() { return 2 * sizeof(uint32_t); }
+    static constexpr size_t minimumSize() { return 2 * sizeof(uint32_t); }
 
     RtcpHeader header;
     nwuint32_t ssrc;
