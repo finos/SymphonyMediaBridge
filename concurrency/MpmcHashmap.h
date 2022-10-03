@@ -110,6 +110,12 @@ public:
     class IterBase
     {
     public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = ValueType;
+        using difference_type = std::size_t;
+        using pointer = ValueType*;
+        using reference = ValueType&;
+
         IterBase(Entry* entries, uint32_t pos, uint32_t endPos) : _elements(entries), _pos(pos), _end(endPos) {}
         IterBase(const IterBase& it) : _elements(it._elements), _pos(it._pos), _end(it._end) {}
 
@@ -124,6 +130,22 @@ public:
             while (_pos != _end && _elements[_pos].state.load() != State::committed)
             {
                 ++_pos;
+            }
+
+            return *this;
+        }
+
+        IterBase& operator--()
+        {
+            if (_pos == 0)
+            {
+                return *this; // cannot advance a logical end iterator
+            }
+
+            --_pos;
+            while (_pos != _end && _elements[_pos].state.load() != State::committed)
+            {
+                --_pos;
             }
 
             return *this;

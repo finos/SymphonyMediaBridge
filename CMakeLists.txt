@@ -472,6 +472,7 @@ set(TEST_FILES
     test/sctp/SctpTransferTests.cpp
     test/transport/ice/IceCandidateTest.cpp
     test/transport/SctpTest.cpp
+    test/transport/RtcpReportsProducerTest.cpp
     test/transport/RtcTransportTest.cpp
     test/transport/RtpTest.cpp
     test/transport/SrtpProtectJob.cpp
@@ -577,7 +578,7 @@ add_executable(UnitTest
     ${FILES}
     ${TEST_FILES})
 
-target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE})
+target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include")
 
 # Copy test Data
 file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
