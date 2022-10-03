@@ -1243,3 +1243,55 @@ TEST_F(EngineStreamDirectorTest, Simulation)
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 9));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 15));
 }
+
+TEST_F(EngineStreamDirectorTest, pinnedHighQualityStreamIsForwardedAfter5s)
+{
+    _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
+    _engineStreamDirector->setUplinkEstimateKbps(1, 800, 1 * utils::Time::sec);
+    _engineStreamDirector->addParticipant(2, makeSimulcastStream(7, 8, 9, 10, 11, 12));
+    _engineStreamDirector->setUplinkEstimateKbps(2, 800, 1 * utils::Time::sec);
+    _engineStreamDirector->addParticipant(3, makeSimulcastStream(20, 21, 22, 23, 24, 25));
+
+    _engineStreamDirector->streamActiveStateChanged(1, 1, true);
+    _engineStreamDirector->streamActiveStateChanged(1, 3, true);
+    _engineStreamDirector->streamActiveStateChanged(1, 5, true);
+    _engineStreamDirector->streamActiveStateChanged(2, 7, true);
+    _engineStreamDirector->streamActiveStateChanged(2, 9, true);
+    _engineStreamDirector->streamActiveStateChanged(2, 11, true);
+
+    _engineStreamDirector->pin(2, 1);
+    _engineStreamDirector->setUplinkEstimateKbps(2, 900, 7 * utils::Time::sec);
+
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(1, 1, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(3, 1, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(5, 1, true, 0));
+
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(7, 2, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(9, 2, true, 0));
+    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(11, 2, true, 0));
+
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+
+    _engineStreamDirector->setUplinkEstimateKbps(2, 3700, 8 * utils::Time::sec);
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+
+    _engineStreamDirector->setUplinkEstimateKbps(2, 3700, 9 * utils::Time::sec);
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+
+    _engineStreamDirector->setUplinkEstimateKbps(2, 3700, 10 * utils::Time::sec);
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(3, 1));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+
+    _engineStreamDirector->setUplinkEstimateKbps(2, 3700, 14 * utils::Time::sec);
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(3, 1));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+}
