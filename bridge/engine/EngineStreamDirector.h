@@ -23,6 +23,14 @@ namespace bridge
 class EngineStreamDirector
 {
 public:
+    enum QualityLevel : uint32_t
+    {
+        lowQuality = 0,
+        midQuality = 1,
+        highQuality = 2,
+        dropQuality = 3
+    };
+
     struct ParticipantStreams
     {
         ParticipantStreams(const SimulcastStream& primary,
@@ -30,19 +38,19 @@ public:
             const uint32_t maxDefaultLevelBandwidthKbps)
             : primary(primary),
               secondary(secondary),
-              highestEstimatedPinnedLevel(SimulcastStream::maxLevels - 1),
-              desiredHighestEstimatedPinnedLevel(SimulcastStream::maxLevels - 1),
-              desiredUnpinnedLevel(0),
-              lowEstimateTimestamp(0),
+              highestEstimatedPinnedLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
+              desiredHighestEstimatedPinnedLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
+              desiredUnpinnedLevel(lowQuality),
+              lowEstimateTimestamp(lowQuality),
               defaultLevelBandwidthLimit(maxDefaultLevelBandwidthKbps),
               estimatedUplinkBandwidth(0)
         {
         }
         SimulcastStream primary;
         utils::Optional<SimulcastStream> secondary;
-        size_t highestEstimatedPinnedLevel;
-        size_t desiredHighestEstimatedPinnedLevel;
-        size_t desiredUnpinnedLevel;
+        QualityLevel highestEstimatedPinnedLevel;
+        QualityLevel desiredHighestEstimatedPinnedLevel;
+        QualityLevel desiredUnpinnedLevel;
         uint64_t lowEstimateTimestamp;
         /** Min of incoming estimate and EngineStreamDirector::maxDefaultLevelBandwidthKbps */
         uint32_t defaultLevelBandwidthLimit;
@@ -268,7 +276,7 @@ public:
         participantStream.estimatedUplinkBandwidth =
             std::max(uplinkEstimateKbps, participantStream.defaultLevelBandwidthLimit);
 
-        size_t pinnedQuality, unpinnedQuality;
+        QualityLevel pinnedQuality, unpinnedQuality;
         getVideoQualityLimits(endpointIdHash, participantStream, pinnedQuality, unpinnedQuality);
 
         participantStream.desiredHighestEstimatedPinnedLevel = pinnedQuality;
@@ -281,7 +289,7 @@ public:
         }
         else if (participantStream.desiredHighestEstimatedPinnedLevel < participantStream.highestEstimatedPinnedLevel)
         {
-            logger::info("setUplinkEstimateKbps %u, endpointIdHash %lu, desiredLevel %lu < level %lu, scale down",
+            logger::info("setUplinkEstimateKbps %u, endpointIdHash %zu, desiredLevel %u < level %u, scale down",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
@@ -293,7 +301,7 @@ public:
             return true;
         }
 
-        logger::debug("setUplinkEstimateKbps %u, endpointIdHash %lu desiredLevel %lu > level %lu",
+        logger::debug("setUplinkEstimateKbps %u, endpointIdHash %zu desiredLevel %u > level %u",
             _loggableId.c_str(),
             uplinkEstimateKbps,
             endpointIdHash,
@@ -304,7 +312,7 @@ public:
                 timestamp,
                 timeBeforeScaleUpMs * utils::Time::ms))
         {
-            logger::info("setUplinkEstimateKbps %u, endpointIdHash %lu desiredLevel %lu > level %lu, scale up",
+            logger::info("setUplinkEstimateKbps %u, endpointIdHash %zu desiredLevel %u > level %u, scale up",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
@@ -319,7 +327,7 @@ public:
         return false;
     }
 
-    inline size_t getQualityLevel(const uint32_t ssrc)
+    inline QualityLevel getQualityLevel(const uint32_t ssrc)
     {
         return (_lowQualitySsrcs.contains(ssrc)   ? lowQuality
                 : _midQualitySsrcs.contains(ssrc) ? midQuality
@@ -389,7 +397,7 @@ public:
         return false;
     }
 
-    inline size_t getCurrentQualityAndEndpointId(const uint32_t ssrc, size_t& outFromEndpointId)
+    inline QualityLevel getCurrentQualityAndEndpointId(const uint32_t ssrc, size_t& outFromEndpointId)
     {
         const auto lowQualitySsrcsItr = _lowQualitySsrcs.find(ssrc);
         const auto midQualitySsrcsItr = _midQualitySsrcs.find(ssrc);
@@ -419,7 +427,7 @@ public:
 
         const auto result = wantedQuality == quality;
 
-        DIRECTOR_LOG("shouldRecordSsrc toEndpointIdHash %lu ssrc %u: result %c, dominant speaker: %c, quality: %lu",
+        DIRECTOR_LOG("shouldRecordSsrc toEndpointIdHash %lu ssrc %u: result %c, dominant speaker: %c, quality: %u",
             _loggableId.c_str(),
             toEndpointIdHash,
             ssrc,
@@ -464,9 +472,9 @@ public:
             (fromPinnedEndpoint ? viewer->desiredHighestEstimatedPinnedLevel : viewer->desiredUnpinnedLevel);
 
         size_t fromEndpointId = 0;
-        size_t quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
+        const auto quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);
 
-        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: cur quality: %lu, wanted quality: %lu",
+        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %zu ssrc %u: cur quality: %u, wanted quality: %u",
             _loggableId.c_str(),
             toEndpointIdHash,
             ssrc,
@@ -493,8 +501,8 @@ public:
             result = quality == highestActiveQuality(fromEndpointId, ssrc);
         }
 
-        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %lu ssrc %u: result %c, curQ %lu, phaQ %lu, "
-                     "wantQ %lu, pinned %c",
+        DIRECTOR_LOG("shouldForwardSsrc toEndpointIdHash %zu ssrc %u: result %c, curQ %u, phaQ %u, "
+                     "wantQ %u, pinned %c",
             _loggableId.c_str(),
             toEndpointIdHash,
             ssrc,
@@ -643,20 +651,12 @@ public:
     }
 
 private:
-    enum QualityLevel
-    {
-        lowQuality = 0,
-        midQuality = 1,
-        highQuality = 2,
-        dropQuality = 3
-    };
-
     /** All bandwidth valuea are in kbps. */
     struct ConfigRow
     {
         const size_t BaseRate;
-        const size_t PinnedQuality;
-        const size_t UnpinnedQuality;
+        const QualityLevel PinnedQuality;
+        const QualityLevel UnpinnedQuality;
         const size_t OverheadBitrate;
         const size_t MinBitrateMargin;
         const size_t MaxBitrateMargin;
@@ -692,12 +692,12 @@ private:
     /** SSRC for slides. */
     size_t _slidesSsrc;
 
-    inline size_t highestActiveQuality(const size_t endpointIdHash, const uint32_t ssrc)
+    inline QualityLevel highestActiveQuality(const size_t endpointIdHash, const uint32_t ssrc)
     {
         const auto participantStreamsItr = _participantStreams.find(endpointIdHash);
         if (participantStreamsItr == _participantStreams.end())
         {
-            return 0;
+            return lowQuality;
         }
 
         auto& participantStreams = participantStreamsItr->second;
@@ -706,7 +706,7 @@ private:
 
         if (ssrc == primary.levels[0].ssrc || ssrc == primary.levels[1].ssrc || ssrc == primary.levels[2].ssrc)
         {
-            return primary.highestActiveLevel;
+            return static_cast<QualityLevel>(primary.highestActiveLevel);
         }
 
         if (secondaryOptional.isSet())
@@ -715,7 +715,7 @@ private:
             if (ssrc == secondary.levels[0].ssrc || ssrc == secondary.levels[1].ssrc ||
                 ssrc == secondary.levels[2].ssrc)
             {
-                return secondary.highestActiveLevel;
+                return static_cast<QualityLevel>(secondary.highestActiveLevel);
             }
         }
 
@@ -856,7 +856,7 @@ private:
      * Checks for ssrcs belonging to a default level if there are participants without pin targets.
      */
     inline bool isUsedForUnpinnedVideo(const size_t quality,
-        const size_t highestAvailableQuality,
+        const QualityLevel highestAvailableQuality,
         const size_t senderEndpointIdHash,
         const bool isSenderInLastNList)
     {
@@ -887,8 +887,8 @@ private:
         return false;
     }
 
-    inline bool isUsedForPinnedVideo(const size_t quality,
-        const size_t highestAvailableQuality,
+    inline bool isUsedForPinnedVideo(const QualityLevel quality,
+        const QualityLevel highestAvailableQuality,
         const size_t senderEndpointIdHash)
     {
         // Fast return, if nobody pins this endpoint.
@@ -928,8 +928,8 @@ private:
 
     inline void getVideoQualityLimits(const size_t endpointIdHash,
         const ParticipantStreams& participantStreams,
-        size_t& outPinnedQuality,
-        size_t& outUnpinnedQuality) const
+        QualityLevel& outPinnedQuality,
+        QualityLevel& outUnpinnedQuality) const
     {
         outPinnedQuality = dropQuality;
         outUnpinnedQuality = dropQuality;
