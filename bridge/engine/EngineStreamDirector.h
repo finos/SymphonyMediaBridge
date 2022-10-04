@@ -39,7 +39,6 @@ public:
             : primary(primary),
               secondary(secondary),
               pinQualityLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
-              desiredPinQualityLevel(static_cast<QualityLevel>(SimulcastStream::maxLevels - 1)),
               unpinQualityLevel(lowQuality),
               lowEstimateTimestamp(lowQuality),
               defaultLevelBandwidthLimit(maxDefaultLevelBandwidthKbps),
@@ -49,7 +48,6 @@ public:
         SimulcastStream primary;
         utils::Optional<SimulcastStream> secondary;
         QualityLevel pinQualityLevel;
-        QualityLevel desiredPinQualityLevel;
         QualityLevel unpinQualityLevel;
         uint64_t lowEstimateTimestamp;
         /** Min of incoming estimate and EngineStreamDirector::maxDefaultLevelBandwidthKbps */
@@ -276,28 +274,27 @@ public:
         participantStream.estimatedUplinkBandwidth =
             std::max(uplinkEstimateKbps, participantStream.defaultLevelBandwidthLimit);
 
-        QualityLevel pinnedQuality, unpinnedQuality;
-        getVideoQualityLimits(endpointIdHash, participantStream, pinnedQuality, unpinnedQuality);
+        QualityLevel desiredPinQuality, unpinnedQuality;
+        getVideoQualityLimits(endpointIdHash, participantStream, desiredPinQuality, unpinnedQuality);
 
-        participantStream.desiredPinQualityLevel = pinnedQuality;
         participantStream.unpinQualityLevel = unpinnedQuality;
 
-        if (participantStream.desiredPinQualityLevel == participantStream.pinQualityLevel)
+        if (desiredPinQuality == participantStream.pinQualityLevel)
         {
             participantStream.lowEstimateTimestamp = timestamp;
             return false;
         }
-        else if (participantStream.desiredPinQualityLevel < participantStream.pinQualityLevel)
+        else if (desiredPinQuality < participantStream.pinQualityLevel)
         {
             logger::info("setUplinkEstimateKbps %u, endpointIdHash %zu, degrade video pin %u -> %u, unpinned %u",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
                 participantStream.pinQualityLevel,
-                participantStream.desiredPinQualityLevel,
+                desiredPinQuality,
                 participantStream.unpinQualityLevel);
 
-            participantStream.pinQualityLevel = participantStream.desiredPinQualityLevel;
+            participantStream.pinQualityLevel = desiredPinQuality;
             participantStream.lowEstimateTimestamp = timestamp;
             return true;
         }
@@ -311,21 +308,21 @@ public:
                 uplinkEstimateKbps,
                 endpointIdHash,
                 participantStream.pinQualityLevel,
-                participantStream.desiredPinQualityLevel,
+                desiredPinQuality,
                 participantStream.unpinQualityLevel);
 
-            participantStream.pinQualityLevel = participantStream.desiredPinQualityLevel;
+            participantStream.pinQualityLevel = desiredPinQuality;
             participantStream.lowEstimateTimestamp = timestamp;
             return true;
         }
         else
         {
-            logger::debug("setUplinkEstimateKbps %u, endpointIdHash %zu, want change pin %u -> %u",
+            logger::debug("setUplinkEstimateKbps %u, endpointIdHash %zu, want pin quality change %u -> %u",
                 _loggableId.c_str(),
                 uplinkEstimateKbps,
                 endpointIdHash,
                 participantStream.pinQualityLevel,
-                participantStream.desiredPinQualityLevel);
+                desiredPinQuality);
         }
 
         return false;
