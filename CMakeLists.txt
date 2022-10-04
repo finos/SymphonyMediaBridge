@@ -347,7 +347,8 @@ set(FILES
         transport/EndpointFactory.h
         transport/EndpointFactoryImpl.h
         transport/EndpointFactoryImpl.cpp
-        transport/RtcpReportsProducer.cpp
+        transport/RtcpReportProducer.cpp
+        transport/RtcpReportProducer.h
         transport/TransportFactory.cpp
         transport/TransportFactory.h
         transport/TransportImpl.cpp

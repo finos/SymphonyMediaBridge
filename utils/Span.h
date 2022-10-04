@@ -71,8 +71,8 @@ public:
     iterator begin() { return _first; }
     iterator end() { return _last; }
 
-    const_reverse_iterator crbegin() { return reverse_iterator(_last); }
-    const_reverse_iterator crend() { return reverse_iterator(_first); }
+    const_reverse_iterator crbegin() const { return reverse_iterator(_last); }
+    const_reverse_iterator crend() const { return reverse_iterator(_first); }
     const_reverse_iterator rbegin() const { return crbegin(); }
     const_reverse_iterator rend() const { return crend(); }
     reverse_iterator rbegin() { return reverse_iterator(_last); }
