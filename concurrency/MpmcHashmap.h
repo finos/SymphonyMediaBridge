@@ -139,7 +139,7 @@ public:
         {
             if (_pos == 0)
             {
-                return *this; // cannot advance a logical end iterator
+                return *this; // cannot retreat a logical begin iterator
             }
 
             --_pos;

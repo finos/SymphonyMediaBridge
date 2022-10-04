@@ -85,7 +85,7 @@ bool RtcpReportProducer::sendReports(uint64_t timestamp, const utils::Optional<u
     return rembSent;
 }
 
-// always add REMB right after SR/RR when there is still space in the packet
+// Always add REMB right after SR/RR when there is still space in the packet
 void RtcpReportProducer::buildRemb(ReportContext& reportContext,
     const uint64_t timestamp,
     uint32_t senderSsrc,
@@ -156,7 +156,7 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
 
     if (rembSize > 0)
     {
-        // The assumption is this the 1st method called then rtcpPacket is still is a null pointer
+        // We assume this is the 1st method called when rtcpPacket is still a null pointer
         assert(!reportContext.rtcpPacket);
         size_t remainingSpace = packetLimit - rembSize - rtp::RtcpSenderReport::minimumSize();
         const size_t availableSlotsForRR = remainingSpace / sizeof(rtp::ReportBlock);
@@ -204,7 +204,7 @@ bool RtcpReportProducer::sendSenderReports(ReportContext& reportContext, uint64_
         {
             if (reportContext.rtcpPacket->getLength() + rembSize > packetLimit)
             {
-                // This must never happen but for some reason it does. we will send the current packet
+                // This must never happen but for some reason it does. We will send the current packet
                 // and add remb on 1s position
                 assert(false);
                 _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);
@@ -265,9 +265,9 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
 
         if (reportContext.rtcpPacket->getLength() + rembSize + rtp::RtcpReceiverReport::minimumSize() > packetLimit)
         {
-            // This must never happen. If it's not fit is because we have already some SR then REMB should it be
-            // sent already. Buf if this happen because some bug. Let's flush the packet to network and ensure
-            // we have enough space
+            // This must never happen. If it does not fit, it is because we have already some SR. Then REMB should have
+            // been sent already. Buf if this happen due to a bug. Let's flush the packet to network and ensure we have
+            // enough space
             assert(false);
         }
 
@@ -288,8 +288,8 @@ bool RtcpReportProducer::sendReceiveReports(ReportContext& reportContext,
     {
         assert(!reportContext.rtcpPacket || reportContext.rtcpPacket->getLength() <= packetLimit);
 
-        // This only can be non-zero on first iteration. And it that case the nextReportBlocksCount was already
-        // calculated to fir REMB
+        // This can only be non-zero on first iteration. If that is the case, the nextReportBlocksCount was already
+        // calculated to fire REMB
         if (rembSize == 0)
         {
             nextReportBlocksCount =
