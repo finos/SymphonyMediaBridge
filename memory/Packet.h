@@ -13,8 +13,10 @@ class FixedPacket
 public:
     FixedPacket() : endpointIdHash(0), _length(0) { _data[0] = 0; }
 
-    static const size_t size = PacketSize;
+    static constexpr size_t size = PacketSize;
     static_assert(PacketSize % 8 == 0, "packet size must be 8B aligned");
+
+    static size_t maxLength() { return PacketSize; }
 
     unsigned char* get() { return _data; }
     const unsigned char* get() const { return _data; }
@@ -42,6 +44,8 @@ public:
             _length += length;
         }
     }
+
+    void append(FixedPacket<PacketSize>& packetToAppend) { append(packetToAppend.get(), packetToAppend.getLength()); }
 
     void clear() { std::memset(_data, 0, size); }
 
