@@ -2240,12 +2240,12 @@ int32_t TransportImpl::sendDtls(const char* buffer, const uint32_t length)
     }
     if (buffer[0] != DTLSContentType::applicationData)
     {
-        logger::debug("sending DTLS protocol message, %d", _loggableId.c_str(), length);
+        logger::debug("sending DTLS protocol message, %dB", _loggableId.c_str(), length);
     }
 
     if (length > memory::Packet::size || length > _config.mtu)
     {
-        logger::error("DTLS message %d exceeds MTU %u", _loggableId.c_str(), length, _config.mtu.get());
+        logger::error("DTLS message %dB exceeds MTU %u", _loggableId.c_str(), length, _config.mtu.get());
         return 0;
     }
 
