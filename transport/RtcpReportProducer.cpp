@@ -274,13 +274,12 @@ bool RtcpReportProducer::sendReceiverReports(ReportContext& reportContext,
             // been sent already. Buf if this happen due to a bug. Let's flush the packet to network and ensure we have
             // enough space
             assert(false);
-        }
-
-        _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);
-        if (!ensurePacket(reportContext.rtcpPacket, _rtcpPacketAllocator))
-        {
-            logger::warn("No space available to send RR", _loggableId.c_str());
-            return false;
+            _rtcpSender.sendRtcp(std::move(reportContext.rtcpPacket), timestamp);
+            if (!ensurePacket(reportContext.rtcpPacket, _rtcpPacketAllocator))
+            {
+                logger::warn("No space available to send RR", _loggableId.c_str());
+                return false;
+            }
         }
 
         const auto availableSpace =
