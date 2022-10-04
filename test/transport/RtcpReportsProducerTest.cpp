@@ -10,7 +10,6 @@ using namespace testing;
 
 namespace
 {
-const uint64_t interval = 600000000;
 
 constexpr uint32_t SSRC_0 = 12345;
 
@@ -232,6 +231,8 @@ protected:
 
     void TearDown() override { utils::Time::initialize(); }
 
+    uint64_t getConfiguredInterval() const { return _config.rtcp.senderReport.interval; }
+
     RtcpReportProducer createReportProducer()
     {
         return RtcpReportProducer(_loggableId,
@@ -288,7 +289,7 @@ TEST_F(RtcpReportsProducerTest, shouldNotSendAfterInterval)
 
     auto packetGenerator = createPacketGenerator(SSRC_0, 48000);
     senderState.onRtpSent(time, *packetGenerator.generatePacket(1200, time));
-    const auto timestamp = time + interval;
+    const auto timestamp = time + getConfiguredInterval();
 
     EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(_, _)).Times(0);
 
@@ -316,7 +317,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendAfterIntervalWhen5PacketsSent)
     packetGenerator.generateAndUpdateSenderState(senderState, 5, initialTimestamp, timeIncrement);
 
     const auto lastPacketTimestamp = packetGenerator.stats.lastTimestamp;
-    const auto timestamp = initialTimestamp + interval;
+    const auto timestamp = initialTimestamp + getConfiguredInterval();
 
     const auto rtpTimestamp = packetGenerator.currentFrequency +
         static_cast<uint32_t>(((timestamp - lastPacketTimestamp) / utils::Time::ms) * 48000 / 1000);
@@ -356,7 +357,7 @@ TEST_F(RtcpReportsProducerTest, shouldNotSendAfterIntervalWhenLessThan5PacketsSe
     packetGenerator.generateAndUpdateSenderState(senderState, 4, initialTimestamp, timeIncrement);
 
     // Advance timestamp a lot
-    timestamp = initialTimestamp + interval * 10;
+    timestamp = initialTimestamp + getConfiguredInterval() * 10;
 
     EXPECT_CALL(*_rtcpSenderMock, sendRtcpInternal(_, _)).Times(0);
 
@@ -402,7 +403,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendReceiveReportsWithinSenderReport)
     simulateReceiving(inboundSsrcPacketGenerators, packetsToReceivePerSsrc, initialTimestamp, timeIncrement);
 
     const auto heightReceiveTimestamp = inboundSsrcPacketGenerators.front().stats.lastTimestamp;
-    const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + interval);
+    const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + getConfiguredInterval());
 
     const auto rtpTimestamp = senderPacketGenerator.currentFrequency +
         static_cast<uint32_t>(
@@ -475,7 +476,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendSendReportsAndReceive)
     simulateReceiving(inboundSsrcPacketGenerators, packetsToReceivePerSsrc, initialTimestamp, timeIncrement);
 
     const auto heightReceiveTimestamp = inboundSsrcPacketGenerators.front().stats.lastTimestamp;
-    const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + interval);
+    const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + getConfiguredInterval());
 
     const auto rtpTimestamp = senderPacketGenerator.currentFrequency +
         static_cast<uint32_t>(
@@ -596,7 +597,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendRembOnThe1stPacket)
     simulateReceiving(inboundSsrcPacketGenerators, packetsToReceivePerSsrc, initialTimestamp, timeIncrement);
 
     const auto heightReceiveTimestamp = inboundSsrcPacketGenerators.front().stats.lastTimestamp;
-    const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + interval);
+    const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + getConfiguredInterval());
 
     const auto rtpTimestamp = senderPacketGenerator.currentFrequency +
         static_cast<uint32_t>(
