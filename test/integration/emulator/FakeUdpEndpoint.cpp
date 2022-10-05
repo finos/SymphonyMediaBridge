@@ -92,7 +92,7 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
       _network(network),
       _networkLink(std::make_shared<fakenet::NetworkLink>(_name.c_str(), 9000, 1950 * 1024, 3000))
 {
-    _state = Endpoint::CREATED;
+    openPort(_localPort.getPort());
     _pendingRead.clear();
     _networkLink->setStaticDelay(0);
 }
@@ -279,6 +279,13 @@ transport::Endpoint::State FakeUdpEndpoint::getState() const
 
 bool FakeUdpEndpoint::openPort(uint16_t port)
 {
+    auto wantedAddress = _localPort;
+    wantedAddress.setPort(port);
+    if (!_network->isLocalPortFree(wantedAddress))
+    {
+        return false;
+    }
+
     _localPort.setPort(port);
     _state = Endpoint::State::CREATED;
     return true;
@@ -286,7 +293,7 @@ bool FakeUdpEndpoint::openPort(uint16_t port)
 
 bool FakeUdpEndpoint::isGood() const
 {
-    return true;
+    return _state != State::CLOSED;
 };
 
 EndpointMetrics FakeUdpEndpoint::getMetrics(uint64_t timestamp) const
@@ -366,6 +373,10 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& source,
 
 bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
 {
+    if (_state != State::CONNECTED)
+    {
+        return false;
+    }
     return target == _localPort;
 }
 

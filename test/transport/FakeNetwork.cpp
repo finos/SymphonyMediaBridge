@@ -36,6 +36,30 @@ void Gateway::sendTo(const transport::SocketAddress& source,
     _packets.push(std::make_unique<Packet>(data, len, source, target));
 }
 
+void Internet::addLocal(NetworkNode* node)
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    _nodes.push_back(node);
+}
+
+void Internet::addPublic(NetworkNode* node)
+{
+    return addLocal(node);
+}
+
+bool Internet::isPublicPortFree(const transport::SocketAddress& ipPort) const
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    for (auto& node : _nodes)
+    {
+        if (node->hasIp(ipPort))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 void Internet::process(const uint64_t timestamp)
 {
     {
@@ -79,6 +103,44 @@ Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet)
 {
     assert(!publicIp.empty());
     internet.addLocal(this);
+}
+
+void Firewall::addLocal(NetworkNode* endpoint)
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    _endpoints.push_back(endpoint);
+}
+
+void Firewall::addPublic(NetworkNode* endpoint)
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    _publicEndpoints.push_back(endpoint);
+}
+
+bool Firewall::isLocalPortFree(const transport::SocketAddress& ipPort) const
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    for (auto& node : _endpoints)
+    {
+        if (node->hasIp(ipPort))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Firewall::isPublicPortFree(const transport::SocketAddress& ipPort) const
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    for (auto& node : _publicEndpoints)
+    {
+        if (node->hasIp(ipPort))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 void Firewall::process(const uint64_t timestamp)
@@ -219,7 +281,7 @@ void InternetRunner::shutdown()
     _command = quit;
 }
 
-std::shared_ptr<Internet> InternetRunner::get()
+std::shared_ptr<Internet> InternetRunner::getNetwork()
 {
     return _internet;
 }
