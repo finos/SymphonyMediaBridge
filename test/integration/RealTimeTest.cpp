@@ -63,6 +63,7 @@ void RealTimeTest::SetUp()
 #endif
 
     using namespace std;
+    utils::Time::initialize(); // run in real time
 
     _jobManager = std::make_unique<jobmanager::JobManager>();
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
@@ -170,7 +171,6 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
 
 TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 {
-    utils::Time::initialize(); // run in real time
     _bridgeConfig.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -221,7 +221,6 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 
 TEST_F(RealTimeTest, DISABLED_localMiniHoot)
 {
-    utils::Time::initialize(); // run in real time
     _bridgeConfig.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -269,7 +268,6 @@ TEST_F(RealTimeTest, DISABLED_localMiniHoot)
 
 TEST_F(RealTimeTest, localVideoMeeting)
 {
-    utils::Time::initialize(); // run in real time
     _bridgeConfig.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
