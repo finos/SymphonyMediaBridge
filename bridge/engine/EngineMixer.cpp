@@ -2689,6 +2689,11 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(&rtcpFeedback);
     uint16_t pid = 0;
     uint16_t blp = 0;
+    logger::info("Barbell NACK for %zu pkts on ssrc %u, %s",
+        _loggableId.c_str(),
+        numFeedbackControlInfos,
+        mediaSsrc,
+        barbell.transport.getLoggableId().c_str());
     for (size_t i = 0; i < numFeedbackControlInfos; ++i)
     {
         rtxSsrcOutboundContext->onRtpSent(timestamp);
@@ -2760,6 +2765,11 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
     uint16_t pid = 0;
     uint16_t blp = 0;
+    logger::debug("Client NACK for %zu pkts on ssrc %u, %s",
+        _loggableId.c_str(),
+        numFeedbackControlInfos,
+        mediaSsrc,
+        transport->getLoggableId().c_str());
     for (size_t i = 0; i < numFeedbackControlInfos; ++i)
     {
         rtxSsrcOutboundContext->onRtpSent(timestamp);
