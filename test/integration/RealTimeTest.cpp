@@ -280,7 +280,7 @@ TEST_F(RealTimeTest, localVideoMeeting)
     const auto baseUrl = "http://127.0.0.1:8080";
 
     GroupCall<SfuClient<Channel>>
-        group(nullptr, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_clientTransportFactory, *_sslDtls, 50);
+        group(nullptr, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_clientTransportFactory, *_sslDtls, 3);
 
     Conference conf(nullptr);
 
