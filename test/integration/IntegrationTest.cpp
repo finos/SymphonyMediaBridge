@@ -84,7 +84,7 @@ void IntegrationTest::SetUp()
 
 #if USE_FAKENETWORK
     _clientsEndpointFactory =
-        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get(),
+        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->getNetwork(),
             [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
                 logger::info("Client %s endpoint uses address %s",
                     "IntegrationTest",
@@ -134,7 +134,7 @@ void IntegrationTest::initBridge(config::Config& config)
     _bridge = std::make_unique<bridge::Bridge>(config);
 #if USE_FAKENETWORK
     _bridgeEndpointFactory =
-        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->get(),
+        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->getNetwork(),
             [this](std::shared_ptr<fakenet::NetworkLink> netLink,
                 const transport::SocketAddress& addr,
                 const std::string& name) {

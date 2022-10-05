@@ -16,54 +16,55 @@ public:
         const transport::SocketAddress& localPort,
         transport::RtcePoll& epoll,
         bool isShared,
-        std::shared_ptr<fakenet::Gateway>);
+        std::shared_ptr<fakenet::Gateway> gateway);
 
     virtual ~FakeUdpEndpoint();
 
     // ice::IceEndpoint
-    virtual void sendStunTo(const transport::SocketAddress& target,
+    void sendStunTo(const transport::SocketAddress& target,
         __uint128_t transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override;
-    virtual ice::TransportType getTransportType() const override;
-    virtual transport::SocketAddress getLocalPort() const override;
-    virtual void cancelStunTransaction(__uint128_t transactionId) override;
+    ice::TransportType getTransportType() const override;
+    transport::SocketAddress getLocalPort() const override;
+    void cancelStunTransaction(__uint128_t transactionId) override;
 
     // transport::Endpoint
-    virtual void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
-    virtual void registerListener(const std::string& stunUserName, IEvents* listener) override;
-    virtual void registerListener(const transport::SocketAddress& remotePort, IEvents* listener) override;
-    virtual void registerDefaultListener(IEvents* defaultListener) override;
-    virtual void unregisterListener(IEvents* listener) override;
-    virtual void start() override;
-    virtual void stop(IStopEvents* listener) override;
-    virtual bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
-    virtual bool isShared() const override;
-    virtual const char* getName() const override;
-    virtual State getState() const override;
+    void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
+    void registerListener(const std::string& stunUserName, IEvents* listener) override;
+    void registerListener(const transport::SocketAddress& remotePort, IEvents* listener) override;
+    void registerDefaultListener(IEvents* defaultListener) override;
+    void unregisterListener(IEvents* listener) override;
+    void start() override;
+    void stop(IStopEvents* listener) override;
+    bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
+    bool isShared() const override;
+    const char* getName() const override;
+    State getState() const override;
 
     // transport::RtcePoll::IEventListener
-    virtual void onSocketPollStarted(int fd) override;
-    virtual void onSocketPollStopped(int fd) override;
-    virtual void onSocketReadable(int fd) override;
-    virtual void onSocketWriteable(int fd) override;
-    virtual void onSocketShutdown(int fd) override;
+    void onSocketPollStarted(int fd) override;
+    void onSocketPollStopped(int fd) override;
+    void onSocketReadable(int fd) override;
+    void onSocketWriteable(int fd) override;
+    void onSocketShutdown(int fd) override;
 
     // UdpEndpoint
-    virtual bool openPort(uint16_t port) override;
-    virtual bool isGood() const override;
-    virtual EndpointMetrics getMetrics(uint64_t timestamp) const override final;
+    bool openPort(uint16_t port) override;
+    bool isGood() const override;
+    EndpointMetrics getMetrics(uint64_t timestamp) const override final;
 
     // NetworkNode
-    virtual void sendTo(const transport::SocketAddress& source,
+    void sendTo(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
         uint64_t timestamp) override;
-    virtual bool hasIp(const transport::SocketAddress& target) override;
-    virtual void process(uint64_t timestamp) override;
-    virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return _networkLink; }
+    bool hasIp(const transport::SocketAddress& target) override;
+
+    void process(uint64_t timestamp) override;
+    std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return _networkLink; }
 
     // Internal job interface.
     void internalUnregisterListener(IEvents* listener);

@@ -59,7 +59,10 @@ public:
     virtual std::vector<NetworkNode*>& getLocalNodes() = 0;
     virtual std::vector<NetworkNode*>& getPublicNodes() = 0;
 
-    virtual void sendTo(const transport::SocketAddress& source,
+    virtual bool isLocalPortFree(const transport::SocketAddress&) const = 0;
+    virtual bool isPublicPortFree(const transport::SocketAddress&) const = 0;
+
+    void sendTo(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -72,24 +75,18 @@ protected:
 class Internet : public Gateway
 {
 public:
-    virtual bool hasIp(const transport::SocketAddress& target) override { return true; }
+    bool hasIp(const transport::SocketAddress& target) override { return true; }
 
-    void addLocal(NetworkNode* node) override
-    {
-        std::lock_guard<std::mutex> lock(_nodesMutex);
-        _nodes.push_back(node);
-    }
+    void addLocal(NetworkNode* node) override;
+    void addPublic(NetworkNode* node) override;
 
-    void addPublic(NetworkNode* node) override
-    {
-        std::lock_guard<std::mutex> lock(_nodesMutex);
-        _nodes.push_back(node);
-    }
+    bool isLocalPortFree(const transport::SocketAddress& ipPort) const override { return isPublicPortFree(ipPort); }
+    bool isPublicPortFree(const transport::SocketAddress& ipPort) const override;
 
     void process(uint64_t timestamp) override;
 
-    virtual std::vector<NetworkNode*>& getLocalNodes() override { return _nodes; };
-    virtual std::vector<NetworkNode*>& getPublicNodes() override { return _nodes; };
+    std::vector<NetworkNode*>& getLocalNodes() override { return _nodes; };
+    std::vector<NetworkNode*>& getPublicNodes() override { return _nodes; };
 
 private:
     mutable std::mutex _nodesMutex;
@@ -102,17 +99,21 @@ public:
     Firewall(const transport::SocketAddress& publicIp, Gateway& internet);
     virtual ~Firewall() = default;
 
-    void addLocal(NetworkNode* endpoint) override { _endpoints.push_back(endpoint); }
-    void addPublic(NetworkNode* endpoint) override { _publicEndpoints.push_back(endpoint); }
+    void addLocal(NetworkNode* endpoint) override;
+    void addPublic(NetworkNode* endpoint) override;
+
+    bool isLocalPortFree(const transport::SocketAddress& ipPort) const override;
+    bool isPublicPortFree(const transport::SocketAddress& ipPort) const override;
+
     bool hasIp(const transport::SocketAddress& port) override { return _publicInterface.equalsIp(port); }
 
-    transport::SocketAddress getPublicIp() { return _publicInterface; }
+    transport::SocketAddress getPublicIp() const { return _publicInterface; }
     void process(uint64_t timestamp) override;
 
     bool addPortMapping(const transport::SocketAddress& source, int publicPort);
 
-    virtual std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
-    virtual std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
+    std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
+    std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
 
 private:
     void sendToPublic(const transport::SocketAddress& source,
@@ -127,6 +128,7 @@ private:
     std::vector<NetworkNode*> _publicEndpoints;
     Gateway& _internet;
     int _portCount = 1000;
+    mutable std::mutex _nodesMutex;
 };
 
 class InternetRunner
@@ -144,7 +146,7 @@ public:
     void start();
     void pause();
     void shutdown();
-    std::shared_ptr<Internet> get();
+    std::shared_ptr<Internet> getNetwork();
     bool isRunning() const { return _state == running; };
     bool isPaused() const { return _state == paused; }
     State getState() const { return _state.load(); }
