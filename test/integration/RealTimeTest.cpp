@@ -168,9 +168,8 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
     return it->isActiveTalker;
 }
 
-TEST_F(RealTimeTest, smbMegaHoot)
+TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 {
-    GTEST_SKIP();
     utils::Time::initialize(); // run in real time
     _bridgeConfig.readFromString(R"({
         "ip":"127.0.0.1",
@@ -270,7 +269,6 @@ TEST_F(RealTimeTest, DISABLED_localMiniHoot)
 
 TEST_F(RealTimeTest, localVideoMeeting)
 {
-    // GTEST_SKIP();
     utils::Time::initialize(); // run in real time
     _bridgeConfig.readFromString(R"({
         "ip":"127.0.0.1",
