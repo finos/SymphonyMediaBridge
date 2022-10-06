@@ -130,7 +130,6 @@ struct IntegrationTest : public ::testing::Test
     void TearDown() override;
 
     void initBridge(config::Config& config);
-
     void finalizeSimulationWithTimeout(uint64_t rampdownTimeout);
     void finalizeSimulation();
 
@@ -141,11 +140,7 @@ public:
     static api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(emulator::HttpdFactory* httpd,
         const char* baseUrl,
         const std::string& endpointId);
-    static void analyzeRecording(const std::vector<int16_t>& recording,
-        std::vector<double>& frequencyPeaks,
-        std::vector<std::pair<uint64_t, double>>& amplitudeProfile,
-        const char* logId,
-        uint64_t cutAtTime = 0);
+
     template <typename TClient>
     static IntegrationTest::AudioAnalysisData analyzeRecording(TClient* client,
         double expectedDurationSeconds,
@@ -156,8 +151,9 @@ protected:
     void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
     void startSimulation();
 
+    void initLocalTransports();
+
 protected:
-    bool _internetStartedAtLeastOnce;
     emulator::TimeTurner _timeSource;
 
     struct NetworkLinkInfo

@@ -36,45 +36,51 @@ ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager,
 {
 }
 
-httpd::Response ApiRequestHandler::callEndpointAction(RequestLogger& requestLogger, const httpd::Request& request)
+httpd::Response ApiRequestHandler::handleConferenceRequest(RequestLogger& requestLogger, const httpd::Request& request)
 {
-    auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
-    if (utils::StringTokenizer::isEqual(token, "about") && token.next && request._method == httpd::Method::GET)
-        return handleAbout(this, requestLogger, request, token);
-
-    if (utils::StringTokenizer::isEqual(token, "stats") && request._method == httpd::Method::GET)
-        return handleStats(this, requestLogger, request, token);
-
-    if (utils::StringTokenizer::isEqual(token, "conferences"))
+    if (request._method == httpd::Method::POST)
     {
-        if (token.next)
-        {
-            if (request._method == httpd::Method::GET)
-            {
-                auto nextToken = utils::StringTokenizer::tokenize(token, '/');
-                if (nextToken.next)
-                    return getEndpointInfo(this, requestLogger, request, token);
-                else
-                    return getConferenceInfo(this, requestLogger, request, token);
-            }
-            if (request._method == httpd::Method::POST)
-                return processConferenceAction(this, requestLogger, request, token);
-        }
-        else
-        {
-            if (request._method == httpd::Method::GET)
-                return getConferences(this, requestLogger, request, token);
-            else if (request._method == httpd::Method::POST)
-                return allocateConference(this, requestLogger, request, token);
-        }
+        return allocateConference(this, requestLogger, request);
+    }
+    else if (request._method == httpd::Method::GET)
+    {
+        return getConferences(this, requestLogger);
     }
 
-    if (utils::StringTokenizer::isEqual(token, "barbell") && token.next &&
-        (request._method == httpd::Method::POST || request._method == httpd::Method::DELETE))
-        return processBarbellAction(this, requestLogger, request, token);
+    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
+}
 
-    if (utils::StringTokenizer::isEqual(token, "ice-candidates") && request._method == httpd::Method::GET)
-        return getProbingInfo(this, requestLogger, request, token);
+httpd::Response ApiRequestHandler::handleConferenceRequest(RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const std::string& conferenceId)
+{
+    if (request._method == httpd::Method::GET)
+    {
+        return getConferenceInfo(this, requestLogger, request, conferenceId);
+    }
+
+    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
+}
+
+httpd::Response ApiRequestHandler::handleEndpointRequest(RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const std::string& conferenceId,
+    const std::string& endpointId)
+{
+    if (request._method == httpd::Method::GET)
+    {
+        return getEndpointInfo(this, requestLogger, request, conferenceId, endpointId);
+    }
+    else if (request._method == httpd::Method::POST)
+    {
+        return processEndpointPostRequest(this, requestLogger, request, conferenceId, endpointId);
+    }
+    else if (request._method == httpd::Method::DELETE)
+    {
+        return expireEndpoint(this, requestLogger, conferenceId, endpointId);
+    }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
         utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
@@ -100,7 +106,52 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
         RequestLogger requestLogger(request, _lastAutoRequestId);
         try
         {
-            return callEndpointAction(requestLogger, request);
+            auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
+            if (utils::StringTokenizer::isEqual(token, "about") && token.next && request._method == httpd::Method::GET)
+            {
+                return handleAbout(this, requestLogger, request, token);
+            }
+            else if (utils::StringTokenizer::isEqual(token, "stats") && request._method == httpd::Method::GET)
+            {
+                return handleStats(this, requestLogger, request);
+            }
+            else if (utils::StringTokenizer::isEqual(token, "conferences") && !token.next)
+            {
+                return handleConferenceRequest(requestLogger, request);
+            }
+            else if (utils::StringTokenizer::isEqual(token, "conferences") && token.next)
+            {
+                token = utils::StringTokenizer::tokenize(token, '/');
+                const auto conferenceId = token.str();
+
+                if (token.next)
+                {
+                    token = utils::StringTokenizer::tokenize(token, '/');
+                    const auto endpointId = token.str();
+                    return handleEndpointRequest(requestLogger, request, conferenceId, endpointId);
+                }
+                else
+                {
+                    return handleConferenceRequest(requestLogger, request, conferenceId);
+                }
+            }
+            else if (utils::StringTokenizer::isEqual(token, "barbell") && token.next)
+            {
+                token = utils::StringTokenizer::tokenize(token, '/');
+                const auto conferenceId = token.str();
+                if (token.next)
+                {
+                    token = utils::StringTokenizer::tokenize(token, '/');
+                    const auto barbellId = token.str();
+                    return processBarbellAction(this, requestLogger, request, conferenceId, barbellId);
+                }
+            }
+            else if (utils::StringTokenizer::isEqual(token, "ice-candidates"))
+            {
+                return getProbingInfo(this, requestLogger, request);
+            }
+
+            throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, utils::format("Resource not found"));
         }
         catch (httpd::RequestErrorException e)
         {
@@ -136,7 +187,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             return response;
         }
 
-        const auto errorMessage = utils::format("URL is not point to a valid endpoint: '%s'", request._url.c_str());
+        const auto errorMessage = utils::format("URL not found: '%s'", request._url.c_str());
         auto response = makeErrorResponse(httpd::StatusCode::NOT_FOUND, errorMessage);
         requestLogger.setResponse(response);
         requestLogger.setErrorMessage(errorMessage);

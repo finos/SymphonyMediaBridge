@@ -5,6 +5,13 @@
 
 namespace emulator
 {
+enum Audio
+{
+    None = 0,
+    Opus,
+    Fake,
+    Muted
+};
 class AudioSource
 {
 public:
@@ -15,7 +22,7 @@ public:
         Set
     };
 
-    AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, uint32_t ptime = 20);
+    AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, Audio fakeAudio, uint32_t ptime = 20);
     ~AudioSource(){};
     memory::UniquePacket getPacket(uint64_t timestamp);
     int64_t timeToRelease(uint64_t timestamp) const;
@@ -43,6 +50,7 @@ private:
     uint32_t _ptime;
     IsPttState _isPtt;
     bool _useAudioLevel;
+    Audio _fakeAudio;
 };
 
 } // namespace emulator

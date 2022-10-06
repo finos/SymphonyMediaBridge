@@ -7,10 +7,7 @@
 
 namespace bridge
 {
-httpd::Response getConferences(ActionContext* context,
-    RequestLogger& requestLogger,
-    const httpd::Request&,
-    const utils::StringTokenizer::Token&)
+httpd::Response getConferences(ActionContext* context, RequestLogger& requestLogger)
 {
     nlohmann::json responseBodyJson = nlohmann::json::array();
     for (const auto& mixerId : context->mixerManager.getMixerIds())

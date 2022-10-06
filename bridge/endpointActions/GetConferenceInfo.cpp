@@ -10,10 +10,8 @@ namespace bridge
 httpd::Response getConferenceInfo(ActionContext* context,
     RequestLogger& requestLogger,
     const httpd::Request& request,
-    const utils::StringTokenizer::Token& incomingToken)
+    const std::string& conferenceId)
 {
-    auto token = utils::StringTokenizer::tokenize(incomingToken, '/');
-    const auto conferenceId = token.str();
     bridge::Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
     nlohmann::json responseBodyJson = nlohmann::json::array();

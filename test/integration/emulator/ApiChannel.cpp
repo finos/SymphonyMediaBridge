@@ -119,7 +119,7 @@ void Channel::create(const std::string& baseUrl,
         body["idleTimeout"] = idleTimeout;
     }
 
-    logger::debug("allocate ch with %s", "", body.dump().c_str());
+    logger::debug("allocate ch with %s", "ApiChannel", body.dump().c_str());
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPostRequest>(_httpd,
         std::string(baseUrl) + "/conferences/" + conferenceId + "/" + _id,
@@ -130,11 +130,11 @@ void Channel::create(const std::string& baseUrl,
     if (success)
     {
         _offer = responseBody;
-        logger::debug("allocate offer received %s", "Test", responseBody.dump().c_str());
+        logger::debug("allocate offer received %s", "ApiChannel", responseBody.dump().c_str());
     }
     else
     {
-        logger::error("failed to allocate channel", "Test");
+        logger::error("failed to allocate channel", "ApiChannel");
     }
 }
 
@@ -232,7 +232,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     body["data"] = json::object({{"port", 5000}});
 
-    logger::info("patch channel with %s", "Test", body.dump().c_str());
+    logger::info("patch channel with %s", "ApiChannel", body.dump().c_str());
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPostRequest>(_httpd,
@@ -247,7 +247,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     }
     else
     {
-        logger::error("failed to patch channel ", "Test");
+        logger::error("failed to patch channel ", "ApiChannel");
     }
 }
 
@@ -261,7 +261,7 @@ void Channel::disconnect()
 
     if (!success)
     {
-        logger::error("failed to delete channel ", "Test");
+        logger::error("failed to delete channel ", "ApiChannel");
     }
 }
 
@@ -424,7 +424,7 @@ void ColibriChannel::create(const std::string& baseUrl,
                     {{"initiator", initiator}, {"endpoint", _id}, {"expire", 60}, {"channel-bundle-id", _id}})})}}));
     }
 
-    logger::debug("allocate ch with %s", "", body.dump().c_str());
+    logger::debug("allocate ch with %s", "ApiChannel", body.dump().c_str());
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPatchRequest>(_httpd,
         std::string(baseUrl) + "/colibri/conferences/" + conferenceId,
@@ -438,7 +438,7 @@ void ColibriChannel::create(const std::string& baseUrl,
     }
     else
     {
-        logger::error("failed to allocate channel", "Test");
+        logger::error("failed to allocate channel", "ApiChannel");
     }
 }
 
@@ -599,7 +599,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
     }
     else
     {
-        logger::error("failed to patch channel", "Test");
+        logger::error("failed to patch channel", "ColibriChannel");
     }
 }
 
@@ -630,7 +630,7 @@ void ColibriChannel::disconnect()
 
     if (!success)
     {
-        logger::error("failed to expire channel ", "Test");
+        logger::error("failed to expire channel ", "ColibriChannel");
     }
 }
 
@@ -762,7 +762,7 @@ std::string Barbell::allocate(const std::string& baseUrl, const std::string& con
                 {"ice-controlling", controlling},
             }}};
 
-    logger::debug("allocate barbell with %s", "", body.dump().c_str());
+    logger::debug("allocate barbell with %s", "BarbellReq", body.dump().c_str());
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPostRequest>(_httpd,
@@ -774,11 +774,11 @@ std::string Barbell::allocate(const std::string& baseUrl, const std::string& con
     if (success)
     {
         _offer = responseBody;
-        logger::debug("barbell allocated:%s", "Test", _offer.dump().c_str());
+        logger::debug("barbell allocated:%s", "BarbellReq", _offer.dump().c_str());
     }
     else
     {
-        logger::error("failed to allocate barbell", "Test");
+        logger::error("failed to allocate barbell", "BarbellReq");
     }
 
     return _offer.dump();
@@ -802,7 +802,7 @@ void Barbell::configure(const std::string& body)
     }
     else
     {
-        logger::error("failed to configure barbell", "Test");
+        logger::error("failed to configure barbell", "BarbellReq");
     }
 }
 
@@ -816,7 +816,7 @@ void Barbell::remove(const std::string& baseUrl)
 
     if (!success)
     {
-        logger::error("Failed to delete barbell", "Test");
+        logger::error("Failed to delete barbell", "BarbellReq");
     }
 }
 

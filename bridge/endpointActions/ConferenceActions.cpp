@@ -894,20 +894,12 @@ httpd::Response expireEndpoint(ActionContext* context,
     return response;
 }
 
-httpd::Response processConferenceAction(ActionContext* context,
+httpd::Response processEndpointPostRequest(ActionContext* context,
     RequestLogger& requestLogger,
     const httpd::Request& request,
-    const utils::StringTokenizer::Token& incomingToken)
+    const std::string& conferenceId,
+    const std::string& endpointId)
 {
-    auto token = utils::StringTokenizer::tokenize(incomingToken, '/');
-    const auto conferenceId = token.str();
-    if (!token.next)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, "Endpoint not found");
-    }
-    token = utils::StringTokenizer::tokenize(token, '/');
-    const auto endpointId = token.str();
-
     const auto requestBody = request._body.build();
     const auto requestBodyJson = nlohmann::json::parse(requestBody);
     const auto actionJsonItr = requestBodyJson.find("action");

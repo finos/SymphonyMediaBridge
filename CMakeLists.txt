@@ -461,8 +461,12 @@ set(TEST_FILES
     test/jobmanager/JobManagerTest.cpp
     test/concurrency/ProcessIntervalTest.cpp
     test/integration/SampleDataUtils.cpp
+    test/integration/FFTanalysis.h
+    test/integration/FFTanalysis.cpp
     test/integration/IntegrationTest.cpp
     test/integration/IntegrationTest.h
+    test/integration/RealTimeTest.cpp
+    test/integration/RealTimeTest.h    
     test/integration/BarbellTest.cpp
     test/integration/BarbellTest.h
 #    test/integration/MixerTimeoutTest.cpp

@@ -232,43 +232,41 @@ httpd::Response deleteBarbell(ActionContext* context,
 httpd::Response processBarbellAction(ActionContext* context,
     RequestLogger& requestLogger,
     const httpd::Request& request,
-    const ::utils::StringTokenizer::Token& incomingToken)
+    const std::string& conferenceId,
+    const std::string& barbellId)
 {
-    auto token = utils::StringTokenizer::tokenize(incomingToken, '/');
-    const auto conferenceId = token.str();
-    if (!token.next)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::NOT_FOUND, "Endpoint not found");
-    }
-    token = utils::StringTokenizer::tokenize(token, '/');
-    const auto barbellId = token.str();
-
     if (request._method == httpd::Method::DELETE)
     {
         return deleteBarbell(context, requestLogger, conferenceId, barbellId);
     }
-
-    const auto requestBody = request._body.build();
-    const auto requestBodyJson = nlohmann::json::parse(requestBody);
-    const auto actionJsonItr = requestBodyJson.find("action");
-    if (actionJsonItr == requestBodyJson.end())
+    else if (request._method == httpd::Method::POST)
     {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Missing required json property: action");
-    }
-    const auto& action = actionJsonItr->get<std::string>();
+        const auto requestBody = request._body.build();
+        const auto requestBodyJson = nlohmann::json::parse(requestBody);
+        const auto actionJsonItr = requestBodyJson.find("action");
+        if (actionJsonItr == requestBodyJson.end())
+        {
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+                "Missing required json property: action");
+        }
+        const auto& action = actionJsonItr->get<std::string>();
 
-    if (action.compare("allocate") == 0)
-    {
-        bool iceControlling = requestBodyJson["bundle-transport"]["ice-controlling"];
-        return allocateBarbell(context, requestLogger, iceControlling, conferenceId, barbellId);
-    }
-    else if (action.compare("configure") == 0)
-    {
-        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, barbellId);
-        return configureBarbell(context, requestLogger, conferenceId, barbellId, endpointDescription);
+        if (action.compare("allocate") == 0)
+        {
+            bool iceControlling = requestBodyJson["bundle-transport"]["ice-controlling"];
+            return allocateBarbell(context, requestLogger, iceControlling, conferenceId, barbellId);
+        }
+        else if (action.compare("configure") == 0)
+        {
+            const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, barbellId);
+            return configureBarbell(context, requestLogger, conferenceId, barbellId, endpointDescription);
+        }
+
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
     }
 
-    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-        utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
+    throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
+        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
 }
 } // namespace bridge

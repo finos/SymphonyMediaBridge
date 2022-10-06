@@ -12,14 +12,11 @@ namespace bridge
 httpd::Response getEndpointInfo(ActionContext* context,
     RequestLogger& requestLogger,
     const httpd::Request&,
-    const ::utils::StringTokenizer::Token& incomingToken)
+    const std::string& conferenceId,
+    const std::string& endpointId)
 {
     bridge::Mixer* mixer;
-    auto token = utils::StringTokenizer::tokenize(incomingToken, '/');
-    const auto conferenceId = token.str();
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
-    token = utils::StringTokenizer::tokenize(token, '/');
-    const auto endpointId = token.str();
 
     const auto activeTalkers = mixer->getActiveTalkers();
 

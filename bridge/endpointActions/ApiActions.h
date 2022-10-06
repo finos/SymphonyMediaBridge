@@ -13,30 +13,28 @@ class Mixer;
 class RequestLogger;
 std::unique_lock<std::mutex> getConferenceMixer(ActionContext*, const std::string&, Mixer*&);
 
-httpd::Response allocateConference(ActionContext*,
-    RequestLogger&,
-    const httpd::Request&,
-    const ::utils::StringTokenizer::Token&);
-httpd::Response getConferences(ActionContext* context,
-    RequestLogger&,
-    const httpd::Request&,
-    const utils::StringTokenizer::Token&);
-httpd::Response processConferenceAction(ActionContext*,
-    RequestLogger&,
-    const httpd::Request&,
-    const utils::StringTokenizer::Token&);
+httpd::Response allocateConference(ActionContext*, RequestLogger&, const httpd::Request&);
+
+httpd::Response getConferences(ActionContext* context, RequestLogger&);
+
+httpd::Response processEndpointPostRequest(ActionContext* context,
+    RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const std::string& conferenceId,
+    const std::string& endpointId);
+
 httpd::Response getConferenceInfo(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
-    const ::utils::StringTokenizer::Token&);
+    const std::string& conferenceId);
 httpd::Response getEndpointInfo(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
-    const ::utils::StringTokenizer::Token&);
+    const std::string& conferenceId,
+    const std::string& endpointId);
 httpd::Response handleStats(ActionContext*,
     RequestLogger&,
-    const httpd::Request&,
-    const ::utils::StringTokenizer::Token&);
+    const httpd::Request&);
 httpd::Response handleAbout(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
@@ -44,9 +42,13 @@ httpd::Response handleAbout(ActionContext*,
 httpd::Response processBarbellAction(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
-    const ::utils::StringTokenizer::Token&);
-httpd::Response getProbingInfo(ActionContext*,
-    RequestLogger&,
-    const httpd::Request&,
-    const ::utils::StringTokenizer::Token&);
+    const std::string& conferenceId,
+    const std::string& barbellId);
+
+httpd::Response getProbingInfo(ActionContext*, RequestLogger&, const httpd::Request&);
+
+httpd::Response expireEndpoint(ActionContext* context,
+    RequestLogger& requestLogger,
+    const std::string& conferenceId,
+    const std::string& endpointId);
 } // namespace bridge
