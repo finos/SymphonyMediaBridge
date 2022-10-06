@@ -1,5 +1,6 @@
 #include "ApiActions.h"
 #include "ApiHelpers.h"
+#include "api/BarbellDescription.h"
 #include "api/EndpointDescription.h"
 #include "api/Generator.h"
 #include "api/Parser.h"
@@ -25,11 +26,11 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     const std::string& barbellId,
     const bool dtlsClient)
 {
-    api::EndpointDescription channelsDescription;
-    channelsDescription._endpointId = barbellId;
+    api::BarbellDescription channelsDescription;
+    channelsDescription.barbellId = barbellId;
 
     // Describe barbell transport
-    api::EndpointDescription::Transport responseBundleTransport;
+    api::Transport responseBundleTransport;
 
     TransportDescription transportDescription;
     if (!mixer.getBarbellTransportDescription(barbellId, transportDescription))
@@ -39,66 +40,65 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     }
 
     const auto& transportDescriptionIce = transportDescription.ice.get();
-    api::EndpointDescription::Ice responseIce;
-    responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
-    responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+    api::Ice responseIce;
+    responseIce.ufrag = transportDescriptionIce.iceCredentials.first;
+    responseIce.pwd = transportDescriptionIce.iceCredentials.second;
     for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
     {
         if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
         {
-            responseIce._candidates.emplace_back(iceCandidateToApi(iceCandidate));
+            responseIce.candidates.emplace_back(iceCandidateToApi(iceCandidate));
         }
     }
-    responseBundleTransport._ice.set(responseIce);
+    responseBundleTransport.ice.set(responseIce);
 
-    api::EndpointDescription::Dtls responseDtls;
+    api::Dtls responseDtls;
     responseDtls.type = "sha-256";
     responseDtls.hash = context->sslDtls.getLocalFingerprint();
 
     responseDtls.setup = dtlsClient ? "active" : "actpass";
 
-    responseBundleTransport._dtls.set(responseDtls);
+    responseBundleTransport.dtls.set(responseDtls);
 
-    responseBundleTransport._rtcpMux = true;
-    channelsDescription._bundleTransport.set(responseBundleTransport);
+    responseBundleTransport.rtcpMux = true;
+    channelsDescription.transport = responseBundleTransport;
 
     // Describe audio, video and data streams
-    api::EndpointDescription::Audio responseAudio;
+    api::Audio responseAudio;
     {
         AudioStreamDescription streamDescription;
         mixer.getAudioStreamDescription(streamDescription);
-        responseAudio._ssrcs = streamDescription.ssrcs;
+        responseAudio.ssrcs = streamDescription.ssrcs;
 
         addDefaultAudioProperties(responseAudio);
-        channelsDescription._audio.set(responseAudio);
+        channelsDescription.audio = responseAudio;
     }
 
-    api::EndpointDescription::Video responseVideo;
+    api::Video responseVideo;
     {
         std::vector<BarbellVideoStreamDescription> streamDescriptions;
         mixer.getBarbellVideoStreamDescription(streamDescriptions);
         for (auto& group : streamDescriptions)
         {
-            responseVideo.streams.emplace_back(api::EndpointDescription::VideoStream());
+            responseVideo.streams.emplace_back(api::VideoStream());
             auto& stream = responseVideo.streams.back();
             for (auto level : group.ssrcLevels)
             {
                 stream.sources.push_back({level.main, level.feedback});
             }
 
-            stream.content =
-                (group.slides ? api::EndpointDescription::slidesContent : api::EndpointDescription::videoContent);
+            stream.content = (group.slides ? api::VideoStream::slidesContent : api::VideoStream::videoContent);
         }
 
         addDefaultVideoProperties(responseVideo);
-        channelsDescription._video.set(responseVideo);
+        channelsDescription.video = responseVideo;
     }
 
-    api::EndpointDescription::Data responseData;
-    responseData._port = 5000;
-    channelsDescription._data.set(responseData);
+    api::Data responseData;
+    responseData.port = 5000;
+    channelsDescription.data = responseData;
 
-    const auto responseBody = api::Generator::generateAllocateEndpointResponse(channelsDescription);
+    const auto responseBody = api::Generator::generateAllocateBarbellResponse(channelsDescription);
 
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
     response._headers["Content-type"] = "text/json";
@@ -135,14 +135,12 @@ httpd::Response configureBarbell(ActionContext* context,
     RequestLogger& requestLogger,
     const std::string& conferenceId,
     const std::string& barbellId,
-    const api::EndpointDescription& barbellDescription)
+    const api::BarbellDescription& barbellDescription)
 {
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
-    if (!barbellDescription._bundleTransport.isSet() || !barbellDescription._bundleTransport.get()._ice.isSet() ||
-        !barbellDescription._bundleTransport.get()._dtls.isSet() || !barbellDescription._audio.isSet() ||
-        !barbellDescription._video.isSet())
+    if (!barbellDescription.transport.ice.isSet() || !barbellDescription.transport.dtls.isSet())
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Missing barbell ice/dtls transport description %s - %s",
@@ -150,20 +148,8 @@ httpd::Response configureBarbell(ActionContext* context,
                 barbellId.c_str()));
     }
 
-    if (!barbellDescription._audio.isSet())
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-            utils::format("Missing barbell audio description %s - %s", conferenceId.c_str(), barbellId.c_str()));
-    }
-
-    if (!barbellDescription._video.isSet() || barbellDescription._video.get().payloadTypes.size() < 2)
-    {
-        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-            utils::format("Missing barbell video description %s - %s", conferenceId.c_str(), barbellId.c_str()));
-    }
-
-    auto& transportDescription = barbellDescription._bundleTransport.get();
-    auto& dtls = transportDescription._dtls.get();
+    auto& transportDescription = barbellDescription.transport;
+    auto& dtls = transportDescription.dtls.get();
 
     const bool isRemoteSideDtlsClient = dtls.isClient();
     const auto candidatesAndCredentials = getIceCandidatesAndCredentials(transportDescription);
@@ -180,33 +166,33 @@ httpd::Response configureBarbell(ActionContext* context,
     }
 
     std::vector<BarbellVideoStreamDescription> videoDescriptions;
-    auto& videoDescription = barbellDescription._video.get();
+    auto& videoDescription = barbellDescription.video;
     for (auto& stream : videoDescription.streams)
     {
         BarbellVideoStreamDescription barbellGroup;
         barbellGroup.ssrcLevels = stream.sources;
-        barbellGroup.slides = (stream.content.compare(api::EndpointDescription::slidesContent) == 0);
+        barbellGroup.slides = (stream.content.compare(api::VideoStream::slidesContent) == 0);
         videoDescriptions.push_back(barbellGroup);
     }
 
-    const auto audioRtpMap = makeRtpMap(barbellDescription._audio.get());
+    const auto audioRtpMap = makeRtpMap(barbellDescription.audio);
     bridge::RtpMap videoRtpMap;
     bridge::RtpMap videoFeedbackRtpMap;
-    for (auto& payloadDescription : barbellDescription._video.get().payloadTypes)
+    for (auto& payloadDescription : barbellDescription.video.payloadTypes)
     {
-        if (payloadDescription._name.compare("rtx") == 0)
+        if (payloadDescription.name.compare("rtx") == 0)
         {
-            videoFeedbackRtpMap = makeRtpMap(barbellDescription._video.get(), payloadDescription);
+            videoFeedbackRtpMap = makeRtpMap(barbellDescription.video, payloadDescription);
         }
         else
         {
-            videoRtpMap = makeRtpMap(barbellDescription._video.get(), payloadDescription);
+            videoRtpMap = makeRtpMap(barbellDescription.video, payloadDescription);
         }
     }
 
     mixer->configureBarbellSsrcs(barbellId,
         videoDescriptions,
-        barbellDescription._audio.get()._ssrcs,
+        barbellDescription.audio.ssrcs,
         audioRtpMap,
         videoRtpMap,
         videoFeedbackRtpMap);
@@ -258,8 +244,8 @@ httpd::Response processBarbellAction(ActionContext* context,
         }
         else if (action.compare("configure") == 0)
         {
-            const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, barbellId);
-            return configureBarbell(context, requestLogger, conferenceId, barbellId, endpointDescription);
+            const auto barbellDescription = api::Parser::parsePatchBarbell(requestBodyJson, barbellId);
+            return configureBarbell(context, requestLogger, conferenceId, barbellId, barbellDescription);
         }
 
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,

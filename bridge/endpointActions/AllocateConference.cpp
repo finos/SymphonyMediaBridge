@@ -21,8 +21,8 @@ httpd::Response allocateConference(ActionContext* context, RequestLogger& reques
 
     const auto allocateConference = api::Parser::parseAllocateConference(requestBodyJson);
 
-    auto mixer = allocateConference._lastN.isSet() ? context->mixerManager.create(allocateConference._lastN.get())
-                                                   : context->mixerManager.create();
+    auto mixer = allocateConference.lastN.isSet() ? context->mixerManager.create(allocateConference.lastN.get())
+                                                  : context->mixerManager.create();
     if (!mixer)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Conference creation has failed");
@@ -32,7 +32,7 @@ httpd::Response allocateConference(ActionContext* context, RequestLogger& reques
         "ApiRequestHandler",
         mixer->getId().c_str(),
         mixer->getLoggableId().c_str(),
-        allocateConference._lastN.isSet() ? allocateConference._lastN.get() : -1);
+        allocateConference.lastN.isSet() ? allocateConference.lastN.get() : -1);
 
     nlohmann::json responseJson;
     responseJson["id"] = mixer->getId();

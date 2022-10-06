@@ -11,35 +11,35 @@ struct AllocateEndpoint
 {
     struct Transport
     {
-        Transport() : _ice(false), _dtls(false) {}
+        Transport() : ice(false), dtls(false) {}
 
-        bool _ice;
-        utils::Optional<bool> _iceControlling;
+        bool ice;
+        utils::Optional<bool> iceControlling;
 
-        bool _dtls;
+        bool dtls;
     };
 
     struct Audio
     {
-        std::string _relayType;
-        utils::Optional<Transport> _transport;
+        std::string relayType;
+        utils::Optional<Transport> transport;
     };
 
     struct Video
     {
-        std::string _relayType;
-        utils::Optional<Transport> _transport;
+        std::string relayType;
+        utils::Optional<Transport> transport;
     };
 
     struct Data
     {
     };
 
-    utils::Optional<Transport> _bundleTransport;
-    utils::Optional<Audio> _audio;
-    utils::Optional<Video> _video;
-    utils::Optional<Data> _data;
-    utils::Optional<uint32_t> _idleTimeoutSeconds;
+    utils::Optional<Transport> bundleTransport;
+    utils::Optional<Audio> audio;
+    utils::Optional<Video> video;
+    utils::Optional<Data> data;
+    utils::Optional<uint32_t> idleTimeoutSeconds;
 };
 
 } // namespace api

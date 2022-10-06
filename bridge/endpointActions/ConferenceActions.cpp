@@ -30,13 +30,13 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
     const std::string& endpointId)
 {
     api::EndpointDescription channelsDescription;
-    channelsDescription._endpointId = endpointId;
+    channelsDescription.endpointId = endpointId;
 
     // Describe bundle transport
-    if (allocateChannel._bundleTransport.isSet())
+    if (allocateChannel.bundleTransport.isSet())
     {
-        const auto& bundleTransport = allocateChannel._bundleTransport.get();
-        api::EndpointDescription::Transport responseBundleTransport;
+        const auto& bundleTransport = allocateChannel.bundleTransport.get();
+        api::Transport responseBundleTransport;
 
         TransportDescription transportDescription;
         if (!mixer.getTransportBundleDescription(endpointId, transportDescription))
@@ -45,40 +45,40 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get bundled description");
         }
 
-        if (!bundleTransport._ice || !bundleTransport._dtls)
+        if (!bundleTransport.ice || !bundleTransport.dtls)
         {
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                 utils::format("Bundling without ice is not supported, conference %s", conferenceId.c_str()));
         }
 
         const auto& transportDescriptionIce = transportDescription.ice.get();
-        api::EndpointDescription::Ice responseIce;
-        responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
-        responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+        api::Ice responseIce;
+        responseIce.ufrag = transportDescriptionIce.iceCredentials.first;
+        responseIce.pwd = transportDescriptionIce.iceCredentials.second;
         for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
         {
             if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
             {
-                responseIce._candidates.emplace_back(iceCandidateToApi(iceCandidate));
+                responseIce.candidates.emplace_back(iceCandidateToApi(iceCandidate));
             }
         }
-        responseBundleTransport._ice.set(responseIce);
+        responseBundleTransport.ice.set(responseIce);
 
-        api::EndpointDescription::Dtls responseDtls;
+        api::Dtls responseDtls;
         responseDtls.type = "sha-256";
         responseDtls.hash = context->sslDtls.getLocalFingerprint();
         responseDtls.setup = "actpass";
-        responseBundleTransport._dtls.set(responseDtls);
+        responseBundleTransport.dtls.set(responseDtls);
 
-        responseBundleTransport._rtcpMux = true;
-        channelsDescription._bundleTransport.set(responseBundleTransport);
+        responseBundleTransport.rtcpMux = true;
+        channelsDescription.bundleTransport.set(responseBundleTransport);
     }
 
     // Describe audio, video and data streams
-    if (allocateChannel._audio.isSet())
+    if (allocateChannel.audio.isSet())
     {
-        const auto& audio = allocateChannel._audio.get();
-        api::EndpointDescription::Audio responseAudio;
+        const auto& audio = allocateChannel.audio.get();
+        api::Audio responseAudio;
 
         AudioStreamDescription streamDescription;
         TransportDescription transportDescription;
@@ -90,62 +90,62 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get audio description");
         }
 
-        responseAudio._ssrcs = streamDescription.ssrcs;
+        responseAudio.ssrcs = streamDescription.ssrcs;
 
-        if (audio._transport.isSet())
+        if (audio.transport.isSet())
         {
-            const auto& transport = audio._transport.get();
-            api::EndpointDescription::Transport responseTransport;
+            const auto& transport = audio.transport.get();
+            api::Transport responseTransport;
 
-            if (transport._ice)
+            if (transport.ice)
             {
-                api::EndpointDescription::Ice responseIce;
+                api::Ice responseIce;
                 const auto& transportDescriptionIce = transportDescription.ice.get();
-                responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
-                responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+                responseIce.ufrag = transportDescriptionIce.iceCredentials.first;
+                responseIce.pwd = transportDescriptionIce.iceCredentials.second;
                 for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
                 {
                     if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
                     {
-                        responseIce._candidates.emplace_back(iceCandidateToApi(iceCandidate));
+                        responseIce.candidates.emplace_back(iceCandidateToApi(iceCandidate));
                     }
                 }
-                responseTransport._ice.set(responseIce);
-                responseTransport._rtcpMux = true;
+                responseTransport.ice.set(responseIce);
+                responseTransport.rtcpMux = true;
             }
             else
             {
                 if (transportDescription.localPeer.isSet() && !transportDescription.localPeer.get().empty())
                 {
-                    api::EndpointDescription::Connection responseConnection;
-                    responseConnection._ip = transportDescription.localPeer.get().ipToString();
-                    responseConnection._port = transportDescription.localPeer.get().getPort();
-                    responseTransport._connection.set(responseConnection);
+                    api::Connection responseConnection;
+                    responseConnection.ip = transportDescription.localPeer.get().ipToString();
+                    responseConnection.port = transportDescription.localPeer.get().getPort();
+                    responseTransport.connection.set(responseConnection);
                 }
 
-                responseTransport._rtcpMux = false;
+                responseTransport.rtcpMux = false;
             }
 
             if (transportDescription.dtls.isSet())
             {
-                api::EndpointDescription::Dtls responseDtls;
+                api::Dtls responseDtls;
                 responseDtls.setup = "active";
                 responseDtls.type = "sha-256";
                 responseDtls.hash = context->sslDtls.getLocalFingerprint();
-                responseTransport._dtls.set(responseDtls);
+                responseTransport.dtls.set(responseDtls);
             }
 
-            responseAudio._transport.set(responseTransport);
+            responseAudio.transport.set(responseTransport);
         }
 
         addDefaultAudioProperties(responseAudio);
-        channelsDescription._audio.set(responseAudio);
+        channelsDescription.audio.set(responseAudio);
     }
 
-    if (allocateChannel._video.isSet())
+    if (allocateChannel.video.isSet())
     {
-        const auto& video = allocateChannel._video.get();
-        api::EndpointDescription::Video responseVideo;
+        const auto& video = allocateChannel.video.get();
+        api::Video responseVideo;
 
         VideoStreamDescription streamDescription;
         TransportDescription transportDescription;
@@ -159,7 +159,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
 
         if (streamDescription.localSsrc != 0)
         {
-            api::EndpointDescription::VideoStream videoStream;
+            api::VideoStream videoStream;
             videoStream.sources.push_back({streamDescription.localSsrc, 0});
             videoStream.content = "local";
             responseVideo.streams.push_back(videoStream);
@@ -168,7 +168,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         size_t index = 0;
         for (auto& level : streamDescription.sources)
         {
-            api::EndpointDescription::VideoStream videoStream;
+            api::VideoStream videoStream;
             videoStream.sources.push_back({level.main, level.feedback});
             if (index++ == 0)
             {
@@ -181,59 +181,59 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             responseVideo.streams.push_back(videoStream);
         }
 
-        if (video._transport.isSet())
+        if (video.transport.isSet())
         {
-            const auto& transport = video._transport.get();
-            api::EndpointDescription::Transport responseTransport;
+            const auto& transport = video.transport.get();
+            api::Transport responseTransport;
 
-            if (transport._ice)
+            if (transport.ice)
             {
-                api::EndpointDescription::Ice responseIce;
+                api::Ice responseIce;
                 const auto& transportDescriptionIce = transportDescription.ice.get();
-                responseIce._ufrag = transportDescriptionIce.iceCredentials.first;
-                responseIce._pwd = transportDescriptionIce.iceCredentials.second;
+                responseIce.ufrag = transportDescriptionIce.iceCredentials.first;
+                responseIce.pwd = transportDescriptionIce.iceCredentials.second;
                 for (const auto& iceCandidate : transportDescriptionIce.iceCandidates)
                 {
                     if (iceCandidate.type != ice::IceCandidate::Type::PRFLX)
                     {
-                        responseIce._candidates.emplace_back(iceCandidateToApi(iceCandidate));
+                        responseIce.candidates.emplace_back(iceCandidateToApi(iceCandidate));
                     }
                 }
-                responseTransport._ice.set(responseIce);
-                responseTransport._rtcpMux = true;
+                responseTransport.ice.set(responseIce);
+                responseTransport.rtcpMux = true;
             }
             else
             {
                 if (transportDescription.localPeer.isSet() && !transportDescription.localPeer.get().empty())
                 {
-                    api::EndpointDescription::Connection responseConnection;
-                    responseConnection._ip = transportDescription.localPeer.get().ipToString();
-                    responseConnection._port = transportDescription.localPeer.get().getPort();
-                    responseTransport._connection.set(responseConnection);
+                    api::Connection responseConnection;
+                    responseConnection.ip = transportDescription.localPeer.get().ipToString();
+                    responseConnection.port = transportDescription.localPeer.get().getPort();
+                    responseTransport.connection.set(responseConnection);
                 }
 
-                responseTransport._rtcpMux = false;
+                responseTransport.rtcpMux = false;
             }
 
             if (transportDescription.dtls.isSet())
             {
-                api::EndpointDescription::Dtls responseDtls;
+                api::Dtls responseDtls;
                 responseDtls.setup = "active";
                 responseDtls.type = "sha-256";
                 responseDtls.hash = context->sslDtls.getLocalFingerprint();
-                responseTransport._dtls.set(responseDtls);
+                responseTransport.dtls.set(responseDtls);
             }
 
             responseVideo.transport.set(responseTransport);
         }
 
         addDefaultVideoProperties(responseVideo);
-        channelsDescription._video.set(responseVideo);
+        channelsDescription.video.set(responseVideo);
     }
 
-    if (allocateChannel._data.isSet())
+    if (allocateChannel.data.isSet())
     {
-        api::EndpointDescription::Data responseData;
+        api::Data responseData;
 
         DataStreamDescription streamDescription;
         if (!mixer.getDataStreamDescription(endpointId, streamDescription))
@@ -242,8 +242,8 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get data stream description");
         }
 
-        responseData._port = streamDescription.sctpPort.isSet() ? streamDescription.sctpPort.get() : 5000;
-        channelsDescription._data.set(responseData);
+        responseData.port = streamDescription.sctpPort.isSet() ? streamDescription.sctpPort.get() : 5000;
+        channelsDescription.data.set(responseData);
     }
 
     const auto responseBody = api::Generator::generateAllocateEndpointResponse(channelsDescription);
@@ -273,33 +273,33 @@ httpd::Response allocateEndpoint(ActionContext* context,
     utils::Optional<std::string> videoChannelId;
     utils::Optional<std::string> dataChannelId;
 
-    if (allocateChannel._bundleTransport.isSet())
+    if (allocateChannel.bundleTransport.isSet())
     {
-        const auto& bundleTransport = allocateChannel._bundleTransport.get();
-        if (!bundleTransport._ice || !bundleTransport._dtls)
+        const auto& bundleTransport = allocateChannel.bundleTransport.get();
+        if (!bundleTransport.ice || !bundleTransport.dtls)
         {
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                 "Bundle transports requires both ICE and DTLS");
         }
 
-        const auto iceRole = bundleTransport._iceControlling.isSet() && !bundleTransport._iceControlling.get()
+        const auto iceRole = bundleTransport.iceControlling.isSet() && !bundleTransport.iceControlling.get()
             ? ice::IceRole::CONTROLLED
             : ice::IceRole::CONTROLLING;
 
         mixer->addBundleTransportIfNeeded(endpointId, iceRole);
 
-        if (allocateChannel._audio.isSet())
+        if (allocateChannel.audio.isSet())
         {
-            const auto& audio = allocateChannel._audio.get();
-            const auto mixed = audio._relayType.compare("mixed") == 0;
-            const auto ssrcRewrite = audio._relayType.compare("ssrc-rewrite") == 0;
+            const auto& audio = allocateChannel.audio.get();
+            const auto mixed = audio.relayType.compare("mixed") == 0;
+            const auto ssrcRewrite = audio.relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
             if (!mixer->addBundledAudioStream(outChannelId,
                     endpointId,
                     mixed,
                     ssrcRewrite,
-                    allocateChannel._idleTimeoutSeconds))
+                    allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                     "It was not possible to add bundled audio stream. Usually happens due to an already existing audio "
@@ -308,16 +308,16 @@ httpd::Response allocateEndpoint(ActionContext* context,
             audioChannelId.set(outChannelId);
         }
 
-        if (allocateChannel._video.isSet())
+        if (allocateChannel.video.isSet())
         {
-            const auto& video = allocateChannel._video.get();
-            const auto ssrcRewrite = video._relayType.compare("ssrc-rewrite") == 0;
+            const auto& video = allocateChannel.video.get();
+            const auto ssrcRewrite = video.relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
             if (!mixer->addBundledVideoStream(outChannelId,
                     endpointId,
                     ssrcRewrite,
-                    allocateChannel._idleTimeoutSeconds))
+                    allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Add bundled video stream has failed");
@@ -325,10 +325,10 @@ httpd::Response allocateEndpoint(ActionContext* context,
             videoChannelId.set(outChannelId);
         }
 
-        if (allocateChannel._data.isSet())
+        if (allocateChannel.data.isSet())
         {
             std::string outChannelId;
-            if (!mixer->addBundledDataStream(outChannelId, endpointId, allocateChannel._idleTimeoutSeconds))
+            if (!mixer->addBundledDataStream(outChannelId, endpointId, allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Add bundled data channel has failed");
@@ -338,25 +338,25 @@ httpd::Response allocateEndpoint(ActionContext* context,
     }
     else
     {
-        if (allocateChannel._audio.isSet())
+        if (allocateChannel.audio.isSet())
         {
-            const auto& audio = allocateChannel._audio.get();
-            if (!audio._transport.isSet())
+            const auto& audio = allocateChannel.audio.get();
+            if (!audio.transport.isSet())
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                     "Transport specification of audio channel is required");
             }
 
-            const auto& transport = audio._transport.get();
+            const auto& transport = audio.transport.get();
             utils::Optional<ice::IceRole> iceRole;
-            if (transport._ice)
+            if (transport.ice)
             {
-                iceRole.set(transport._iceControlling.isSet() && !transport._iceControlling.get()
+                iceRole.set(transport.iceControlling.isSet() && !transport.iceControlling.get()
                         ? ice::IceRole::CONTROLLED
                         : ice::IceRole::CONTROLLING);
             }
-            const auto mixed = audio._relayType.compare("mixed") == 0;
-            const auto isDtlsEnabled = transport._dtls;
+            const auto mixed = audio.relayType.compare("mixed") == 0;
+            const auto isDtlsEnabled = transport.dtls;
 
             std::string outChannelId;
             if (!mixer->addAudioStream(outChannelId,
@@ -365,7 +365,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                     mixed,
                     false,
                     isDtlsEnabled,
-                    allocateChannel._idleTimeoutSeconds))
+                    allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding audio stream has failed");
@@ -373,25 +373,25 @@ httpd::Response allocateEndpoint(ActionContext* context,
             audioChannelId.set(outChannelId);
         }
 
-        if (allocateChannel._video.isSet())
+        if (allocateChannel.video.isSet())
         {
-            const auto& video = allocateChannel._video.get();
-            if (!video._transport.isSet())
+            const auto& video = allocateChannel.video.get();
+            if (!video.transport.isSet())
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                     "Transport specification of video channel is required");
             }
 
-            const auto& transport = video._transport.get();
+            const auto& transport = video.transport.get();
             utils::Optional<ice::IceRole> iceRole;
-            if (transport._ice)
+            if (transport.ice)
             {
-                iceRole.set(transport._iceControlling.isSet() && !transport._iceControlling.get()
+                iceRole.set(transport.iceControlling.isSet() && !transport.iceControlling.get()
                         ? ice::IceRole::CONTROLLED
                         : ice::IceRole::CONTROLLING);
             }
 
-            const auto isDtlsEnabled = transport._dtls;
+            const auto isDtlsEnabled = transport.dtls;
 
             std::string outChannelId;
             if (!mixer->addVideoStream(outChannelId,
@@ -399,7 +399,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                     iceRole,
                     false,
                     isDtlsEnabled,
-                    allocateChannel._idleTimeoutSeconds))
+                    allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding video stream has failed");
@@ -407,7 +407,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
             videoChannelId.set(outChannelId);
         }
 
-        if (allocateChannel._data.isSet())
+        if (allocateChannel.data.isSet())
         {
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                 "Data channels are not supported for non-bundled transports");
@@ -416,7 +416,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
 
     uint32_t totalSleepTimeMs = 0;
 
-    if (allocateChannel._audio.isSet())
+    if (allocateChannel.audio.isSet())
     {
         while (!mixer->isAudioStreamGatheringComplete(endpointId) && totalSleepTimeMs < gatheringCompleteMaxWaitMs)
         {
@@ -425,7 +425,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         }
     }
 
-    if (allocateChannel._video.isSet())
+    if (allocateChannel.video.isSet())
     {
         while (!mixer->isVideoStreamGatheringComplete(endpointId) && totalSleepTimeMs < gatheringCompleteMaxWaitMs)
         {
@@ -434,7 +434,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         }
     }
 
-    if (allocateChannel._data.isSet())
+    if (allocateChannel.data.isSet())
     {
         while (!mixer->isDataStreamGatheringComplete(endpointId) && totalSleepTimeMs < gatheringCompleteMaxWaitMs)
         {
@@ -475,13 +475,13 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
     Mixer& mixer,
     const std::string& endpointId)
 {
-    const auto& audio = endpointDescription._audio.get();
+    const auto& audio = endpointDescription.audio.get();
     if (mixer.isAudioStreamConfigured(endpointId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Audio stream was configured already");
     }
 
-    if (!audio._payloadType.isSet())
+    if (!audio.payloadType.isSet())
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Audio payload type is required");
     }
@@ -489,9 +489,9 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
     const auto rtpMap = makeRtpMap(audio);
 
     utils::Optional<uint32_t> remoteSsrc;
-    if (!audio._ssrcs.empty())
+    if (!audio.ssrcs.empty())
     {
-        remoteSsrc.set(audio._ssrcs.front());
+        remoteSsrc.set(audio.ssrcs.front());
     }
 
     if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc))
@@ -500,10 +500,10 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
             utils::format("Audio stream not found for endpoint '%s'", endpointId.c_str()));
     }
 
-    if (audio._transport.isSet())
+    if (audio.transport.isSet())
     {
-        const auto& transport = audio._transport.get();
-        if (transport._ice.isSet())
+        const auto& transport = audio.transport.get();
+        if (transport.ice.isSet())
         {
             const auto& candidatesAndCredentials = getIceCandidatesAndCredentials(transport);
             if (!mixer.configureAudioStreamTransportIce(endpointId,
@@ -514,10 +514,10 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
                     "ICE configuration for audio stream has failed");
             }
         }
-        else if (transport._connection.isSet())
+        else if (transport.connection.isSet())
         {
-            const auto& connection = transport._connection.get();
-            const auto remotePeer = transport::SocketAddress::parse(connection._ip, connection._port);
+            const auto& connection = transport.connection.get();
+            const auto remotePeer = transport::SocketAddress::parse(connection.ip, connection.port);
             if (!mixer.configureAudioStreamTransportConnection(endpointId, remotePeer))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -525,9 +525,9 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
             }
         }
 
-        if (transport._dtls.isSet())
+        if (transport.dtls.isSet())
         {
-            const auto& dtls = transport._dtls.get();
+            const auto& dtls = transport.dtls.get();
             const bool isRemoteSideDtlsClient = dtls.isClient();
 
             if (!mixer.configureAudioStreamTransportDtls(endpointId, dtls.type, dtls.hash, !isRemoteSideDtlsClient))
@@ -563,7 +563,7 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
     Mixer& mixer,
     const std::string& endpointId)
 {
-    const auto& video = endpointDescription._video.get();
+    const auto& video = endpointDescription.video.get();
     if (mixer.isVideoStreamConfigured(endpointId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Video stream was configured already");
@@ -615,7 +615,7 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
     {
         const auto& transport = video.transport.get();
 
-        if (transport._ice.isSet())
+        if (transport.ice.isSet())
         {
             const auto& candidatesAndCredentials = getIceCandidatesAndCredentials(transport);
             if (!mixer.configureVideoStreamTransportIce(endpointId,
@@ -626,10 +626,10 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
                     "Video stream configuration has failed");
             }
         }
-        else if (transport._connection.isSet())
+        else if (transport.connection.isSet())
         {
-            const auto& connection = transport._connection.get();
-            const auto remotePeer = transport::SocketAddress::parse(connection._ip, connection._port);
+            const auto& connection = transport.connection.get();
+            const auto remotePeer = transport::SocketAddress::parse(connection.ip, connection.port);
             if (!mixer.configureVideoStreamTransportConnection(endpointId, remotePeer))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -637,9 +637,9 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
             }
         }
 
-        if (transport._dtls.isSet())
+        if (transport.dtls.isSet())
         {
-            const auto& dtls = transport._dtls.get();
+            const auto& dtls = transport.dtls.get();
             const bool isRemoteSideDtlsClient = dtls.isClient() == 0;
 
             if (!mixer.configureVideoStreamTransportDtls(endpointId, dtls.type, dtls.hash, !isRemoteSideDtlsClient))
@@ -675,8 +675,8 @@ void configureDataEndpoint(const api::EndpointDescription& endpointDescription,
     Mixer& mixer,
     const std::string& endpointId)
 {
-    const auto& data = endpointDescription._data.get();
-    if (!mixer.configureDataStream(endpointId, data._port) || !mixer.addDataStreamToEngine(endpointId))
+    const auto& data = endpointDescription.data.get();
+    if (!mixer.configureDataStream(endpointId, data.port) || !mixer.addDataStreamToEngine(endpointId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Fail to add data stream");
     }
@@ -691,26 +691,26 @@ httpd::Response configureEndpoint(ActionContext* context,
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
-    if (endpointDescription._audio.isSet())
+    if (endpointDescription.audio.isSet())
     {
         configureAudioEndpoint(endpointDescription, *mixer, endpointId);
     }
 
-    if (endpointDescription._video.isSet())
+    if (endpointDescription.video.isSet())
     {
         configureVideoEndpoint(endpointDescription, *mixer, endpointId);
     }
 
-    if (endpointDescription._data.isSet())
+    if (endpointDescription.data.isSet())
     {
         configureDataEndpoint(endpointDescription, *mixer, endpointId);
     }
 
-    if (endpointDescription._bundleTransport.isSet())
+    if (endpointDescription.bundleTransport.isSet())
     {
-        const auto& transport = endpointDescription._bundleTransport.get();
+        const auto& transport = endpointDescription.bundleTransport.get();
 
-        if (transport._ice.isSet())
+        if (transport.ice.isSet())
         {
             const auto candidatesAndCredentials = getIceCandidatesAndCredentials(transport);
             if (!mixer->configureBundleTransportIce(endpointId,
@@ -722,9 +722,9 @@ httpd::Response configureEndpoint(ActionContext* context,
             }
         }
 
-        if (transport._dtls.isSet())
+        if (transport.dtls.isSet())
         {
-            const auto& dtls = transport._dtls.get();
+            const auto& dtls = transport.dtls.get();
             const bool isRemoteSideDtlsClient = dtls.isClient();
 
             if (!mixer->configureBundleTransportDtls(endpointId, dtls.type, dtls.hash, !isRemoteSideDtlsClient))
@@ -757,8 +757,8 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
-    const bool isAudioSet = endpointDescription._audio.isSet();
-    const bool isVideoSet = endpointDescription._video.isSet();
+    const bool isAudioSet = endpointDescription.audio.isSet();
+    const bool isVideoSet = endpointDescription.video.isSet();
 
     if (isAudioSet && !mixer->isAudioStreamConfigured(endpointId))
     {
@@ -774,11 +774,11 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
 
     if (isAudioSet)
     {
-        const auto& audio = endpointDescription._audio.get();
+        const auto& audio = endpointDescription.audio.get();
         utils::Optional<uint32_t> remoteSsrc;
-        if (!audio._ssrcs.empty())
+        if (!audio.ssrcs.empty())
         {
-            remoteSsrc.set(audio._ssrcs.front());
+            remoteSsrc.set(audio.ssrcs.front());
         }
 
         if (!mixer->reconfigureAudioStream(endpointId, remoteSsrc))
@@ -790,7 +790,7 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
 
     if (isVideoSet)
     {
-        const auto& video = endpointDescription._video.get();
+        const auto& video = endpointDescription.video.get();
         auto simulcastStreams = makeSimulcastStreams(video, endpointId);
         if (simulcastStreams.size() > 2)
         {
@@ -834,26 +834,26 @@ httpd::Response recordEndpoint(ActionContext* context,
     auto scopedMixerLock = getConferenceMixer(context, conferenceId, mixer);
 
     const bool isRecordingStart =
-        recording._isAudioEnabled || recording._isVideoEnabled || recording._isScreenshareEnabled;
+        recording.isAudioEnabled || recording.isVideoEnabled || recording.isScreenshareEnabled;
 
     if (isRecordingStart)
     {
         RecordingDescription description;
-        description._ownerId = recording._userId;
-        description._recordingId = recording._recordingId;
-        description._isAudioEnabled = recording._isAudioEnabled;
-        description._isVideoEnabled = recording._isVideoEnabled;
-        description._isScreenSharingEnabled = recording._isScreenshareEnabled;
+        description.ownerId = recording.userId;
+        description.recordingId = recording.recordingId;
+        description.isAudioEnabled = recording.isAudioEnabled;
+        description.isVideoEnabled = recording.isVideoEnabled;
+        description.isScreenSharingEnabled = recording.isScreenshareEnabled;
 
-        if (!mixer->addOrUpdateRecording(conferenceId, recording._channels, description))
+        if (!mixer->addOrUpdateRecording(conferenceId, recording.channels, description))
         {
             throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                 "Fail to create/update recording streams");
         }
     }
-    else if (!recording._channels.empty())
+    else if (!recording.channels.empty())
     {
-        if (!mixer->removeRecordingTransports(conferenceId, recording._channels))
+        if (!mixer->removeRecordingTransports(conferenceId, recording.channels))
         {
             throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                 "Fail to remove recording channels");
@@ -861,10 +861,10 @@ httpd::Response recordEndpoint(ActionContext* context,
     }
     else
     {
-        if (!mixer->removeRecording(recording._recordingId))
+        if (!mixer->removeRecording(recording.recordingId))
         {
             throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
-                utils::format("Fail to remove recording id '%s'", recording._recordingId.c_str()));
+                utils::format("Fail to remove recording id '%s'", recording.recordingId.c_str()));
         }
     }
 

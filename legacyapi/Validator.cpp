@@ -106,14 +106,14 @@ bool validateDataContent(const legacyapi::Content& content, legacyapi::PatchConf
 
 bool isRecordingStart(const api::Recording& recording)
 {
-    return recording._isAudioEnabled || recording._isVideoEnabled || recording._isScreenshareEnabled;
+    return recording.isAudioEnabled || recording.isVideoEnabled || recording.isScreenshareEnabled;
 }
 
 bool recordingChannelsAreValid(const api::Recording& recording)
 {
-    for (const auto& channel : recording._channels)
+    for (const auto& channel : recording.channels)
     {
-        if (!(channel._port > 0 && !channel._host.empty()))
+        if (!(channel.port > 0 && !channel.host.empty()))
         {
             return false;
         }

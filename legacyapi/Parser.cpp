@@ -362,22 +362,22 @@ Conference parse(const nlohmann::json& data)
 
         const auto& recordingJson = data["recording"];
 
-        recording._recordingId = recordingJson["recording-id"].get<std::string>();
-        recording._userId = recordingJson["user-id"].get<std::string>();
+        recording.recordingId = recordingJson["recording-id"].get<std::string>();
+        recording.userId = recordingJson["user-id"].get<std::string>();
 
         const auto& modalaties = recordingJson["recording-modalities"];
-        setIfExistsOrDefault<>(recording._isAudioEnabled, modalaties, "audio", false);
-        setIfExistsOrDefault<>(recording._isVideoEnabled, modalaties, "video", false);
-        setIfExistsOrDefault<>(recording._isScreenshareEnabled, modalaties, "screenshare", false);
+        setIfExistsOrDefault<>(recording.isAudioEnabled, modalaties, "audio", false);
+        setIfExistsOrDefault<>(recording.isVideoEnabled, modalaties, "video", false);
+        setIfExistsOrDefault<>(recording.isScreenshareEnabled, modalaties, "screenshare", false);
 
         if (recordingJson.find("channels") != recordingJson.end())
         {
             for (const auto& channelJson : recordingJson["channels"])
             {
                 api::RecordingChannel recordingChannel;
-                setIfExists<>(recordingChannel._id, channelJson, "id");
-                setIfExists<>(recordingChannel._host, channelJson, "host");
-                setIfExistsOrDefault<>(recordingChannel._port, channelJson, "port", uint16_t(0));
+                setIfExists<>(recordingChannel.id, channelJson, "id");
+                setIfExists<>(recordingChannel.host, channelJson, "host");
+                setIfExistsOrDefault<>(recordingChannel.port, channelJson, "port", uint16_t(0));
 
                 std::string aesKeyEnc;
                 std::string saltEnc;
@@ -386,14 +386,14 @@ Conference parse(const nlohmann::json& data)
 
                 if (!aesKeyEnc.empty())
                 {
-                    utils::Base64::decode(aesKeyEnc, recordingChannel._aesKey, 32);
+                    utils::Base64::decode(aesKeyEnc, recordingChannel.aesKey, 32);
                 }
                 if (!saltEnc.empty())
                 {
-                    utils::Base64::decode(saltEnc, recordingChannel._aesSalt, 12);
+                    utils::Base64::decode(saltEnc, recordingChannel.aesSalt, 12);
                 }
 
-                recording._channels.emplace_back(recordingChannel);
+                recording.channels.emplace_back(recordingChannel);
             }
         }
         conference._recording.set(std::move(recording));

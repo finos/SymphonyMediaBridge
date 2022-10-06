@@ -640,7 +640,7 @@ void MixerManager::engineRecordingStopped(const EngineMessage::Message& message)
     const auto& command = message.command.recordingStopped;
     logger::info("Stopping recording %s from mixer %s",
         "MixerManager",
-        command.recordingDesc->_recordingId.c_str(),
+        command.recordingDesc->recordingId.c_str(),
         command.mixer->getLoggableId().c_str());
 
     const auto mixerIter = _mixers.find(command.mixer->getId());

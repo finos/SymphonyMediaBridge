@@ -123,20 +123,20 @@ void setIfExists(utils::Optional<std::string>& target, const nlohmann::json& dat
 api::AllocateEndpoint::Transport parseAllocateEndpointTransport(const nlohmann::json& data)
 {
     api::AllocateEndpoint::Transport transport;
-    setIfExists(transport._ice, data, "ice");
-    setIfExists(transport._iceControlling, data, "ice-controlling");
-    setIfExists(transport._dtls, data, "dtls");
+    setIfExists(transport.ice, data, "ice");
+    setIfExists(transport.iceControlling, data, "ice-controlling");
+    setIfExists(transport.dtls, data, "dtls");
     return transport;
 }
 
 api::AllocateEndpoint::Audio parseAllocateEndpointAudio(const nlohmann::json& data)
 {
     api::AllocateEndpoint::Audio audio;
-    setIfExists(audio._relayType, data, "relay-type");
+    setIfExists(audio.relayType, data, "relay-type");
 
     if (data.find("transport") != data.end())
     {
-        audio._transport.set(parseAllocateEndpointTransport(data["transport"]));
+        audio.transport.set(parseAllocateEndpointTransport(data["transport"]));
     }
 
     return audio;
@@ -145,66 +145,66 @@ api::AllocateEndpoint::Audio parseAllocateEndpointAudio(const nlohmann::json& da
 api::AllocateEndpoint::Video parseAllocateEndpointVideo(const nlohmann::json& data)
 {
     api::AllocateEndpoint::Video video;
-    setIfExists(video._relayType, data, "relay-type");
+    setIfExists(video.relayType, data, "relay-type");
 
     if (data.find("transport") != data.end())
     {
-        video._transport.set(parseAllocateEndpointTransport(data["transport"]));
+        video.transport.set(parseAllocateEndpointTransport(data["transport"]));
     }
 
     return video;
 }
 
-api::EndpointDescription::Transport parsePatchEndpointTransport(const nlohmann::json& data)
+api::Transport parsePatchEndpointTransport(const nlohmann::json& data)
 {
-    api::EndpointDescription::Transport transport;
-    setIfExists(transport._rtcpMux, data, "rtcp-mux");
+    api::Transport transport;
+    setIfExists(transport.rtcpMux, data, "rtcp-mux");
 
     if (data.find("ice") != data.end())
     {
-        api::EndpointDescription::Ice ice = api::Parser::parseIce(data["ice"]);
-        transport._ice.set(ice);
+        api::Ice ice = api::Parser::parseIce(data["ice"]);
+        transport.ice.set(ice);
     }
 
     if (data.find("dtls") != data.end())
     {
-        api::EndpointDescription::Dtls dtls;
+        api::Dtls dtls;
         const auto& dtlsJson = data["dtls"];
         dtls.type = dtlsJson["type"].get<std::string>();
         dtls.hash = dtlsJson["hash"].get<std::string>();
         dtls.setup = dtlsJson["setup"].get<std::string>();
-        transport._dtls.set(dtls);
+        transport.dtls.set(dtls);
     }
 
     if (data.find("connection") != data.end())
     {
         const auto& connectionJson = data["connection"];
-        api::EndpointDescription::Connection connection;
-        connection._port = connectionJson["port"].get<uint32_t>();
-        connection._ip = connectionJson["ip"].get<std::string>();
-        transport._connection.set(std::move(connection));
+        api::Connection connection;
+        connection.port = connectionJson["port"].get<uint32_t>();
+        connection.ip = connectionJson["ip"].get<std::string>();
+        transport.connection.set(std::move(connection));
     }
 
     return transport;
 }
 
-api::EndpointDescription::PayloadType parsePatchEndpointPayloadType(const nlohmann::json& data)
+api::PayloadType parsePatchEndpointPayloadType(const nlohmann::json& data)
 {
-    api::EndpointDescription::PayloadType payloadType;
+    api::PayloadType payloadType;
 
-    payloadType._id = data["id"].get<uint32_t>();
-    payloadType._name = data["name"].get<std::string>();
+    payloadType.id = data["id"].get<uint32_t>();
+    payloadType.name = data["name"].get<std::string>();
 
-    payloadType._clockRate = data["clockrate"].get<uint32_t>();
+    payloadType.clockRate = data["clockrate"].get<uint32_t>();
 
-    setIfExists(payloadType._channels, data, "channels");
+    setIfExists(payloadType.channels, data, "channels");
 
     if (data.find("parameters") != data.end())
     {
         const auto& parametersJson = data["parameters"];
         for (auto it = parametersJson.begin(); it != parametersJson.end(); ++it)
         {
-            payloadType._parameters.emplace_back(std::make_pair(it.key(), it.value()));
+            payloadType.parameters.emplace_back(std::make_pair(it.key(), it.value()));
         }
     }
 
@@ -214,11 +214,11 @@ api::EndpointDescription::PayloadType parsePatchEndpointPayloadType(const nlohma
         if (rtcpFbJson.find("subtype") != rtcpFbJson.end())
         {
             const auto& subtype = rtcpFbJson["subtype"].get<std::string>();
-            payloadType._rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>(subtype));
+            payloadType.rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>(subtype));
         }
         else
         {
-            payloadType._rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>());
+            payloadType.rtcpFeedbacks.emplace_back(type, utils::Optional<std::string>());
         }
     }
 
@@ -241,7 +241,7 @@ AllocateConference parseAllocateConference(const nlohmann::json& data)
         const auto& lastN = data["last-n"];
         if (lastN.is_number_integer())
         {
-            allocateConference._lastN.set(lastN.get<uint32_t>());
+            allocateConference.lastN.set(lastN.get<uint32_t>());
         }
     }
 
@@ -254,25 +254,25 @@ AllocateEndpoint parseAllocateEndpoint(const nlohmann::json& data)
 
     if (data.find("bundle-transport") != data.end())
     {
-        allocateEndpoint._bundleTransport.set(parseAllocateEndpointTransport(data["bundle-transport"]));
+        allocateEndpoint.bundleTransport.set(parseAllocateEndpointTransport(data["bundle-transport"]));
     }
 
     if (data.find("audio") != data.end())
     {
-        allocateEndpoint._audio.set(parseAllocateEndpointAudio(data["audio"]));
+        allocateEndpoint.audio.set(parseAllocateEndpointAudio(data["audio"]));
     }
 
     if (data.find("video") != data.end())
     {
-        allocateEndpoint._video.set(parseAllocateEndpointVideo(data["video"]));
+        allocateEndpoint.video.set(parseAllocateEndpointVideo(data["video"]));
     }
 
     if (data.find("data") != data.end())
     {
-        allocateEndpoint._data.set(AllocateEndpoint::Data());
+        allocateEndpoint.data.set(AllocateEndpoint::Data());
     }
 
- setIfExists(allocateEndpoint._idleTimeoutSeconds, data, "idleTimeout");
+    setIfExists(allocateEndpoint.idleTimeoutSeconds, data, "idleTimeout");
 
     return allocateEndpoint;
 }
@@ -280,32 +280,32 @@ AllocateEndpoint parseAllocateEndpoint(const nlohmann::json& data)
 EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::string& endpointId)
 {
     EndpointDescription endpointDescription;
-    endpointDescription._endpointId = endpointId;
+    endpointDescription.endpointId = endpointId;
 
     if (data.find("bundle-transport") != data.end())
     {
-        endpointDescription._bundleTransport.set(parsePatchEndpointTransport(data["bundle-transport"]));
+        endpointDescription.bundleTransport.set(parsePatchEndpointTransport(data["bundle-transport"]));
     }
 
     if (data.find("audio") != data.end())
     {
-        api::EndpointDescription::Audio audioChannel;
+        api::Audio audioChannel;
         const auto& audioJson = data["audio"];
 
         if (audioJson.find("transport") != audioJson.end())
         {
-            audioChannel._transport.set(parsePatchEndpointTransport(audioJson["transport"]));
+            audioChannel.transport.set(parsePatchEndpointTransport(audioJson["transport"]));
         }
 
         for (const auto& ssrcJson : optionalJsonArray(audioJson, "ssrcs"))
         {
             const auto ssrc = ssrcJson.get<uint32_t>();
-            audioChannel._ssrcs.push_back(ssrc);
+            audioChannel.ssrcs.push_back(ssrc);
         }
 
         if (audioJson.find("payload-type") != audioJson.end())
         {
-            audioChannel._payloadType.set(parsePatchEndpointPayloadType(audioJson["payload-type"]));
+            audioChannel.payloadType.set(parsePatchEndpointPayloadType(audioJson["payload-type"]));
         }
 
         for (const auto& rtpHdrExtJson : optionalJsonArray(audioJson, "rtp-hdrexts"))
@@ -313,16 +313,16 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             const auto id = rtpHdrExtJson["id"].get<uint32_t>();
             if (id > 0 && id < 15)
             {
-                audioChannel._rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
+                audioChannel.rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
             }
         }
 
-        endpointDescription._audio.set(std::move(audioChannel));
+        endpointDescription.audio.set(std::move(audioChannel));
     }
 
     if (data.find("video") != data.end())
     {
-        api::EndpointDescription::Video videoChannel;
+        api::Video videoChannel;
         const auto& videoJson = data["video"];
 
         if (videoJson.find("transport") != videoJson.end())
@@ -369,16 +369,16 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             videoChannel.ssrcWhitelist.set(std::move(ssrcWhitelist));
         }
 
-        endpointDescription._video.set(std::move(videoChannel));
+        endpointDescription.video.set(std::move(videoChannel));
     }
 
     if (data.find("data") != data.end())
     {
-        api::EndpointDescription::Data dataChannel;
+        api::Data dataChannel;
         const auto& dataJson = data["data"];
         const auto& portJson = dataJson["port"];
-        dataChannel._port = portJson.get<uint32_t>();
-        endpointDescription._data.set(dataChannel);
+        dataChannel.port = portJson.get<uint32_t>();
+        endpointDescription.data.set(dataChannel);
     }
 
     return endpointDescription;
@@ -390,20 +390,20 @@ Recording parseRecording(const nlohmann::json& data)
 
     const auto& recordingJson = data["recording"];
 
-    recording._recordingId = recordingJson["recording-id"].get<std::string>();
-    recording._userId = recordingJson["user-id"].get<std::string>();
+    recording.recordingId = recordingJson["recording-id"].get<std::string>();
+    recording.userId = recordingJson["user-id"].get<std::string>();
 
     const auto& modalities = recordingJson["recording-modalities"];
-    setIfExistsOrDefault<>(recording._isAudioEnabled, modalities, "audio", false);
-    setIfExistsOrDefault<>(recording._isVideoEnabled, modalities, "video", false);
-    setIfExistsOrDefault<>(recording._isScreenshareEnabled, modalities, "screenshare", false);
+    setIfExistsOrDefault<>(recording.isAudioEnabled, modalities, "audio", false);
+    setIfExistsOrDefault<>(recording.isVideoEnabled, modalities, "video", false);
+    setIfExistsOrDefault<>(recording.isScreenshareEnabled, modalities, "screenshare", false);
 
     for (const auto& channelJson : optionalJsonArray(recordingJson, "channels"))
     {
         api::RecordingChannel recordingChannel;
-        setIfExists<>(recordingChannel._id, channelJson, "id");
-        setIfExists<>(recordingChannel._host, channelJson, "host");
-        setIfExistsOrDefault<>(recordingChannel._port, channelJson, "port", uint16_t(0));
+        setIfExists<>(recordingChannel.id, channelJson, "id");
+        setIfExists<>(recordingChannel.host, channelJson, "host");
+        setIfExistsOrDefault<>(recordingChannel.port, channelJson, "port", uint16_t(0));
 
         std::string aesKeyEnc;
         std::string saltEnc;
@@ -412,15 +412,15 @@ Recording parseRecording(const nlohmann::json& data)
 
         if (!aesKeyEnc.empty())
         {
-            ::utils::Base64::decode(aesKeyEnc, recordingChannel._aesKey, 32);
+            ::utils::Base64::decode(aesKeyEnc, recordingChannel.aesKey, 32);
         }
 
         if (!saltEnc.empty())
         {
-            ::utils::Base64::decode(saltEnc, recordingChannel._aesSalt, 12);
+            ::utils::Base64::decode(saltEnc, recordingChannel.aesSalt, 12);
         }
 
-        recording._channels.emplace_back(recordingChannel);
+        recording.channels.emplace_back(recordingChannel);
     }
 
     return recording;
@@ -497,31 +497,117 @@ ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json& d
     return endpoint;
 }
 
-EndpointDescription::Ice parseIce(const nlohmann::json& iceJson)
+Ice parseIce(const nlohmann::json& iceJson)
 {
-    api::EndpointDescription::Ice ice;
-    ice._ufrag = iceJson["ufrag"].get<std::string>();
-    ice._pwd = iceJson["pwd"].get<std::string>();
+    api::Ice ice;
+    ice.ufrag = iceJson["ufrag"].get<std::string>();
+    ice.pwd = iceJson["pwd"].get<std::string>();
 
     for (const auto& candidateJson : optionalJsonArray(iceJson, "candidates"))
     {
-        api::EndpointDescription::Candidate candidate;
-        candidate._generation = candidateJson["generation"].get<uint32_t>();
-        candidate._component = candidateJson["component"].get<uint32_t>();
-        candidate._protocol = candidateJson["protocol"].get<std::string>();
-        candidate._port = candidateJson["port"].get<uint32_t>();
-        candidate._ip = candidateJson["ip"].get<std::string>();
-        setIfExists(candidate._relPort, candidateJson, "rel-port");
-        setIfExists(candidate._relAddr, candidateJson, "rel-addr");
-        candidate._foundation = candidateJson["foundation"].get<std::string>();
-        candidate._priority = candidateJson["priority"].get<uint32_t>();
-        candidate._type = candidateJson["type"].get<std::string>();
-        candidate._network =
+        api::Candidate candidate;
+        candidate.generation = candidateJson["generation"].get<uint32_t>();
+        candidate.component = candidateJson["component"].get<uint32_t>();
+        candidate.protocol = candidateJson["protocol"].get<std::string>();
+        candidate.port = candidateJson["port"].get<uint32_t>();
+        candidate.ip = candidateJson["ip"].get<std::string>();
+        setIfExists(candidate.relPort, candidateJson, "rel-port");
+        setIfExists(candidate.relAddr, candidateJson, "rel-addr");
+        candidate.foundation = candidateJson["foundation"].get<std::string>();
+        candidate.priority = candidateJson["priority"].get<uint32_t>();
+        candidate.type = candidateJson["type"].get<std::string>();
+        candidate.network =
             candidateJson.find("network") != candidateJson.end() ? candidateJson["network"].get<uint32_t>() : 0;
-        ice._candidates.emplace_back(std::move(candidate));
+        ice.candidates.emplace_back(std::move(candidate));
     }
 
     return ice;
+}
+
+BarbellDescription parsePatchBarbell(const nlohmann::json& data, const std::string& barbellId)
+{
+    BarbellDescription barbellDescription;
+    barbellDescription.barbellId = barbellId;
+
+    if (data.find("bundle-transport") != data.end())
+    {
+        barbellDescription.transport = parsePatchEndpointTransport(data["bundle-transport"]);
+    }
+
+    if (data.find("audio") != data.end())
+    {
+        api::Audio audioChannel;
+        const auto& audioJson = data["audio"];
+
+        for (const auto& ssrcJson : optionalJsonArray(audioJson, "ssrcs"))
+        {
+            const auto ssrc = ssrcJson.get<uint32_t>();
+            audioChannel.ssrcs.push_back(ssrc);
+        }
+
+        if (audioJson.find("payload-type") != audioJson.end())
+        {
+            audioChannel.payloadType.set(parsePatchEndpointPayloadType(audioJson["payload-type"]));
+        }
+
+        for (const auto& rtpHdrExtJson : optionalJsonArray(audioJson, "rtp-hdrexts"))
+        {
+            const auto id = rtpHdrExtJson["id"].get<uint32_t>();
+            if (id > 0 && id < 15)
+            {
+                audioChannel.rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
+            }
+        }
+
+        barbellDescription.audio = audioChannel;
+    }
+
+    if (data.find("video") != data.end())
+    {
+        api::Video videoChannel;
+        const auto& videoJson = data["video"];
+
+        for (const auto& payloadTypeJson : optionalJsonArray(videoJson, "payload-types"))
+        {
+            videoChannel.payloadTypes.emplace_back(parsePatchEndpointPayloadType(payloadTypeJson));
+        }
+
+        for (const auto& rtpHdrExtJson : optionalJsonArray(videoJson, "rtp-hdrexts"))
+        {
+            const auto id = rtpHdrExtJson["id"].get<uint32_t>();
+            if (id > 0 && id < 15)
+            {
+                videoChannel.rtpHeaderExtensions.emplace_back(id, rtpHdrExtJson["uri"].get<std::string>());
+            }
+        }
+
+        for (const auto& stream : optionalJsonArray(videoJson, "streams"))
+        {
+            videoChannel.streams.emplace_back();
+            auto& videoStream = videoChannel.streams.back();
+            for (const auto& rtpSource : requiredJsonArray(stream, "sources"))
+            {
+                api::SsrcPair level;
+                level.main = rtpSource["main"].get<uint32_t>();
+                setIfExists(level.feedback, rtpSource, "feedback");
+                videoStream.sources.push_back(level);
+            }
+            videoStream.content = stream["content"];
+        }
+
+        barbellDescription.video = videoChannel;
+    }
+
+    if (data.find("data") != data.end())
+    {
+        api::Data dataChannel;
+        const auto& dataJson = data["data"];
+        const auto& portJson = dataJson["port"];
+        dataChannel.port = portJson.get<uint32_t>();
+        barbellDescription.data = dataChannel;
+    }
+
+    return barbellDescription;
 }
 } // namespace Parser
 

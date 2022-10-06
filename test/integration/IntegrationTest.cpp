@@ -1316,7 +1316,7 @@ TEST_F(IntegrationTest, probing)
         startSimulation();
         logger::debug("%s", "", iceJson.dump(4).c_str());
 
-        api::EndpointDescription::Ice ice = api::Parser::parseIce(iceJson);
+        api::Ice ice = api::Parser::parseIce(iceJson);
         auto candidatesAndCredentials = bridge::getIceCandidatesAndCredentials(ice);
 
         // Setup transport and attempt to connect to trigger ICE probing
