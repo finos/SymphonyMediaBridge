@@ -16,7 +16,7 @@ class Conference
 public:
     explicit Conference(emulator::HttpdFactory* httpd) : _httpd(httpd), _success(false) {}
 
-    void create(const std::string& baseUrl);
+    void create(const std::string& baseUrl, bool useGlobalPort = true);
 
     const std::string& getId() const { return _id; }
 

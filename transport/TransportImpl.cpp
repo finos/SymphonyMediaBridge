@@ -795,7 +795,7 @@ void TransportImpl::internalUnregisterEndpoints()
         endpoint->unregisterListener(_rtpIceSession->getLocalCredentials().first, this);
     }
 
-    // TODO a pending job for ice send could register a new callback to transport!!!!
+    // TODO a pending job for ice send could register a new callback to transport!
     for (auto& ep : _rtpEndpoints)
     {
         ep->unregisterListener(this);

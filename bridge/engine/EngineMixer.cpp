@@ -927,6 +927,7 @@ void EngineMixer::clear()
 
 void EngineMixer::flush()
 {
+    logger::debug("flushing media from RTP queues", _loggableId.c_str());
     _incomingMixerAudioRtp.clear();
     _incomingForwarderAudioRtp.clear();
     _incomingForwarderVideoRtp.clear();

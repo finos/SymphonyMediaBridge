@@ -41,7 +41,17 @@ public:
     virtual void OnEnvironmentsTearDownEnd(const UnitTest& unit_test) override {}
     virtual void OnTestIterationEnd(const UnitTest& unit_test, int iteration) override {}
     virtual void OnTestProgramEnd(const UnitTest& unit_test) override {}
-    virtual void OnTestPartResult(const TestPartResult& test_part_result) override {}
+    virtual void OnTestPartResult(const TestPartResult& test_part_result) override
+    {
+        if (test_part_result.failed())
+        {
+            logger::error("Test Failure at %s:%d\n '%s'",
+                "gtest",
+                test_part_result.file_name(),
+                test_part_result.line_number(),
+                test_part_result.summary());
+        }
+    }
 };
 
 int main(int argc, char** argv)

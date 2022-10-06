@@ -278,8 +278,8 @@ httpd::Response LegacyApiRequestHandler::createConference(const httpd::Request& 
 
         const auto lastNItr = requestBodyJson.find("last-n");
         auto mixer = lastNItr != requestBodyJson.end() && lastNItr->is_number() && lastNItr->get<int32_t>() > 0
-            ? _mixerManager.create(lastNItr->get<uint32_t>())
-            : _mixerManager.create();
+            ? _mixerManager.create(lastNItr->get<uint32_t>(), true)
+            : _mixerManager.create(true);
 
         if (!mixer)
         {

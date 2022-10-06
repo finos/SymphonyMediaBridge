@@ -89,7 +89,8 @@ public:
         const config::Config& config,
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<api::SimulcastGroup>& videoSsrcs,
-        const std::vector<api::SsrcPair>& videoPinSsrcs);
+        const std::vector<api::SsrcPair>& videoPinSsrcs,
+        bool useGlobalPort);
 
     virtual ~Mixer() = default;
 
@@ -316,6 +317,8 @@ private:
     std::unordered_map<std::string, std::unique_ptr<EngineRecordingStream>> _recordingEngineStreams;
 
     std::unordered_map<std::string, BundleTransport> _bundleTransports;
+    bool _useGlobalPort;
+    transport::Endpoints _rtpPorts;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _videoPacketCaches;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _recordingRtpPacketCaches;
     std::unordered_map<size_t, std::unique_ptr<PacketCache>> _recordingEventPacketCache;

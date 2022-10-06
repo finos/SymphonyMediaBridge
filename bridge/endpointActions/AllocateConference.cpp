@@ -21,18 +21,21 @@ httpd::Response allocateConference(ActionContext* context, RequestLogger& reques
 
     const auto allocateConference = api::Parser::parseAllocateConference(requestBodyJson);
 
-    auto mixer = allocateConference.lastN.isSet() ? context->mixerManager.create(allocateConference.lastN.get())
-                                                  : context->mixerManager.create();
+    auto mixer = allocateConference.lastN.isSet()
+        ? context->mixerManager.create(allocateConference.lastN.get(), allocateConference.useGlobalPort)
+        : context->mixerManager.create(allocateConference.useGlobalPort);
+
     if (!mixer)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Conference creation has failed");
     }
 
-    logger::info("Allocate conference %s, mixer %s, last-n %d",
+    logger::info("Allocate conference %s, mixer %s, last-n %d, global-port %c",
         "ApiRequestHandler",
         mixer->getId().c_str(),
         mixer->getLoggableId().c_str(),
-        allocateConference.lastN.isSet() ? allocateConference.lastN.get() : -1);
+        allocateConference.lastN.isSet() ? allocateConference.lastN.get() : -1,
+        allocateConference.useGlobalPort ? 't' : 'f');
 
     nlohmann::json responseJson;
     responseJson["id"] = mixer->getId();

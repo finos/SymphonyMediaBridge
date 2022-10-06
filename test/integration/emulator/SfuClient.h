@@ -1115,9 +1115,9 @@ public:
         return false;
     }
 
-    static bool startConference(Conference& conf, std::string url)
+    static bool startConference(Conference& conf, std::string url, bool useGlobalPort = true)
     {
-        conf.create(url);
+        conf.create(url, useGlobalPort);
         auto result = conf.isSuccess();
         utils::Time::nanoSleep(1 * utils::Time::sec);
         return result;

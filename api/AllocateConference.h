@@ -9,6 +9,7 @@ namespace api
 struct AllocateConference
 {
     utils::Optional<uint32_t> lastN;
+    bool useGlobalPort = true;
 };
 
 } // namespace api

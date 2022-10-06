@@ -37,17 +37,17 @@ struct EngineAudioStream
     {
     }
 
-    std::string endpointId;
-    size_t endpointIdHash;
-    uint32_t localSsrc;
+    const std::string endpointId;
+    const size_t endpointIdHash;
+    const uint32_t localSsrc;
     utils::Optional<uint32_t> remoteSsrc;
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
     transport::RtcTransport& transport;
-    bool audioMixed;
+    const bool audioMixed;
 
     bridge::RtpMap rtpMap;
-    bool ssrcRewrite;
+    const bool ssrcRewrite;
     const uint32_t idleTimeoutSeconds;
     const uint64_t createdAt;
 };

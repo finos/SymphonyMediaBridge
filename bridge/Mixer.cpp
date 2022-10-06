@@ -152,7 +152,8 @@ Mixer::Mixer(std::string id,
     const config::Config& config,
     const std::vector<uint32_t>& audioSsrcs,
     const std::vector<api::SimulcastGroup>& videoSsrcs,
-    const std::vector<api::SsrcPair>& videoPinSsrcs)
+    const std::vector<api::SsrcPair>& videoPinSsrcs,
+    bool useGlobalPort)
     : _config(config),
       _id(std::move(id)),
       _loggableId("Mixer", logInstanceId),
@@ -164,7 +165,8 @@ Mixer::Mixer(std::string id,
       _engine(engine),
       _engineMixer(engineMixer),
       _idGenerator(idGenerator),
-      _ssrcGenerator(ssrcGenerator)
+      _ssrcGenerator(ssrcGenerator),
+      _useGlobalPort(useGlobalPort)
 {
     logger::info("id=%s, served by engine mixer %s",
         _loggableId.c_str(),
@@ -255,6 +257,7 @@ void Mixer::stopTransports()
     }
 
     _barbellPorts.clear();
+    _rtpPorts.clear();
 }
 
 bool Mixer::waitForAllPendingJobs(const uint32_t timeoutMs)
@@ -305,9 +308,23 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return true;
     }
 
+    if (!_useGlobalPort && _rtpPorts.empty())
+    {
+        if (!_transportFactory.openRtpMuxPorts(_rtpPorts, 1024))
+        {
+            logger::error("Failed to open isolated port for this conference, endpointId %s",
+                _loggableId.c_str(),
+                endpointId.c_str());
+            return false;
+        }
+    }
+
     const auto endpointIdHash = utils::hash<std::string>{}(endpointId);
-    const auto emplaceResult =
-        _bundleTransports.emplace(endpointId, _transportFactory.create(iceRole, 512, endpointIdHash));
+    auto transport = _useGlobalPort
+        ? _transportFactory.create(iceRole, 512, endpointIdHash)
+        : _transportFactory.createOnPorts(iceRole, 512, endpointIdHash, _rtpPorts, 16, 256, true, true);
+
+    const auto emplaceResult = _bundleTransports.emplace(endpointId, transport);
     if (!emplaceResult.second)
     {
         logger::error("Failed to create bundle transport, endpointId %s", _loggableId.c_str(), endpointId.c_str());
@@ -2326,7 +2343,7 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
     std::shared_ptr<transport::RtcTransport> transport;
     if (_barbellPorts.empty())
     {
-        _transportFactory.openRtpMuxPorts(_barbellPorts);
+        _transportFactory.openRtpMuxPorts(_barbellPorts, 32);
         if (_barbellPorts.empty())
         {
             logger::error("Failed to open UDP ports for barbell", _loggableId.c_str());
