@@ -4,10 +4,7 @@
 
 namespace bridge
 {
-httpd::Response handleStats(ActionContext* context,
-    RequestLogger&,
-    const httpd::Request& request,
-    const utils::StringTokenizer::Token& token)
+httpd::Response handleStats(ActionContext* context, RequestLogger&, const httpd::Request& request)
 {
     auto stats = context->mixerManager.getStats();
     const auto statsDescription = stats.describe();

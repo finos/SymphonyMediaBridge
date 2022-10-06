@@ -845,7 +845,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
         nlohmann::json responseBody;
         auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/colibri/stats",
+            std::string(baseUrl) + "/stats",
             1500 * utils::Time::ms,
             responseBody);
         EXPECT_TRUE(statsSuccess);

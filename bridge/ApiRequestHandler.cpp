@@ -113,7 +113,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             }
             else if (utils::StringTokenizer::isEqual(token, "stats") && request._method == httpd::Method::GET)
             {
-                return handleStats(this, requestLogger, request, token);
+                return handleStats(this, requestLogger, request);
             }
             else if (utils::StringTokenizer::isEqual(token, "conferences") && !token.next)
             {

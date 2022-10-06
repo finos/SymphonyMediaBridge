@@ -34,8 +34,7 @@ httpd::Response getEndpointInfo(ActionContext*,
     const std::string& endpointId);
 httpd::Response handleStats(ActionContext*,
     RequestLogger&,
-    const httpd::Request&,
-    const ::utils::StringTokenizer::Token&);
+    const httpd::Request&);
 httpd::Response handleAbout(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
