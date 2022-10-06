@@ -1,0 +1,74 @@
+{
+    "type": "user-media-map",
+    "video-endpoints": [
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-0000fb452938",
+            "ssrcs": [
+                4215270161
+            ]
+        },
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-000023984bc7",
+            "ssrcs": [
+                1115270161
+            ]
+        },
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-0000fb452238",
+            "ssrcs": [
+                4123210161
+            ]
+        },
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-00adc5752938",
+            "ssrcs": [
+                4983473161,
+                1238923
+            ]
+        }
+    ],
+    "audio-endpoints": [
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-0000fb452938",
+            "ssrcs": [
+                919268345
+            ],
+            "neighbours": [
+                546456,
+                234234,
+                1665653,
+                3546345
+            ]
+        },
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-000192939938",
+            "ssrcs": [
+                139268345
+            ]
+        },
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-000aed982938",
+            "ssrcs": [
+                523768345
+            ]
+        },
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-00084bafec38",
+            "ssrcs": [
+                112354845
+            ],
+            "neighbours": [
+                546456,
+                234234,
+                1665653,
+                3546345
+            ]
+        },
+        {
+            "endpoint-id": "b469945f-856b-38c4-cf1b-0007322b8938",
+            "ssrcs": [
+                833583485
+            ]
+        }
+    ]
+}

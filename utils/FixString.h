@@ -1,5 +1,8 @@
 #pragma once
 #include <cstring>
+
+namespace utils
+{
 /**
  * The purpose of not using std:string is to avoid dynamic memory allocation and also the MpmcHashMap has optimistic
  * reuse. The object may be accessed for reading and it is important the memory has not been deallocated, like in
@@ -49,3 +52,14 @@ private:
     size_t _size;
     char _value[SIZE + 1];
 };
+
+template <size_t T>
+struct hash<utils::FixString<T>>
+{
+    uint64_t operator()(const utils::FixString<T>& key) const
+    {
+        return hash<char*>::hashBuffer(key.c_str(), key.size());
+    }
+};
+
+} // namespace utils

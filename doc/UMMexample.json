@@ -1,0 +1,17 @@
+{
+    "colibriClass": "UserMediaMap",
+    "endpoints": [
+        {
+            "id": "1",
+            "ssrcs": [
+                30
+            ]
+        },
+        {
+            "id": "3",
+            "ssrcs": [
+                36
+            ]
+        }
+    ]
+}

@@ -22,6 +22,7 @@
 #include "transport/ice/IceCandidate.h"
 #include "utils/IdGenerator.h"
 #include "utils/SocketAddress.h"
+#include "utils/Span.h"
 #include "utils/SsrcGenerator.h"
 #include "utils/StdExtensions.h"
 #include "utils/StringBuilder.h"
@@ -911,7 +912,7 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     const auto& remoteSsrc = audio->second->remoteSsrc;
     if (remoteSsrc.isSet())
     {
-        endpoint.userId = _engineMixer.getUserId(remoteSsrc.get());
+        endpoint.userId = _engineMixer.getC9UserId(remoteSsrc.get());
         endpoint.ssrcOriginal = remoteSsrc.get();
         endpoint.ssrcRewritten = audio->second->localSsrc;
     }
@@ -1209,7 +1210,8 @@ Mixer::Stats Mixer::getStats()
 
 bool Mixer::configureAudioStream(const std::string& endpointId,
     const RtpMap& rtpMap,
-    const utils::Optional<uint32_t>& remoteSsrc)
+    const utils::Optional<uint32_t>& remoteSsrc,
+    const std::vector<uint32_t>& neighbours)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1245,6 +1247,8 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     {
         audioStream->transport->setAbsSendTimeExtensionId(audioStream->rtpMap.absSendTimeExtId.get());
     }
+
+    audioStream->neighbours = neighbours;
     return true;
 }
 
@@ -1280,6 +1284,7 @@ bool Mixer::reconfigureAudioStream(const std::string& endpointId, const utils::O
     command.command.reconfigureAudioStream.mixer = &_engineMixer;
     command.command.reconfigureAudioStream.remoteSsrc = remoteSsrc.isSet() ? remoteSsrc.get() : 0;
     command.command.reconfigureAudioStream.transport = audioStream->transport.get();
+
     _engine.pushCommand(std::move(command));
     return true;
 }
@@ -1658,7 +1663,8 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
             audioStream->audioMixed,
             audioStream->rtpMap,
             audioStream->ssrcRewrite,
-            audioStream->idleTimeoutSeconds));
+            audioStream->idleTimeoutSeconds,
+            audioStream->neighbours));
 
     EngineCommand::Command command;
     command.type = EngineCommand::Type::AddAudioStream;

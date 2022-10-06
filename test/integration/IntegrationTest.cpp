@@ -304,7 +304,7 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
             EXPECT_EQ(amplitudeProfile.size(), 2);
             if (amplitudeProfile.size() > 1)
             {
-                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 125);
             }
         }
 
@@ -1429,6 +1429,76 @@ TEST_F(IntegrationTest, conferencePort)
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
             }
+
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            std::string clientName = "client_" + std::to_string(id);
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            logVideoSent(clientName.c_str(), *group.clients[id]);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+        }
+    });
+}
+
+TEST_F(IntegrationTest, neighbours)
+{
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        initBridge(_config);
+        const auto baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 4);
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        std::string neighbours[] = {"gid1"};
+        utils::Span<std::string> span(neighbours);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
+        group.clients[2]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
+
+        group.clients[3]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false, span);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
+
+        group.stopTransports();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        const size_t chMixed[] = {0, 0, 0, 3};
+        const size_t expectedFreqCount[] = {3, 1, 1, 1};
+        for (size_t id = 0; id < 4; ++id)
+        {
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, chMixed[id]);
+            EXPECT_EQ(data.dominantFrequencies.size(), expectedFreqCount[id]);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);

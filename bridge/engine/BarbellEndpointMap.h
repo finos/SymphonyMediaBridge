@@ -1,4 +1,5 @@
 #pragma once
+#include "bridge/engine/NeighbourMembership.h"
 #include "concurrency/MpmcHashmap.h"
 #include "memory/Array.h"
 #include "utils/FixString.h"
@@ -7,7 +8,8 @@
 namespace bridge
 {
 
-using EndpointIdString = FixString<42>;
+using EndpointIdString = utils::FixString<42>;
+using BarbellEndpointIdMap = concurrency::MpmcHashmap32<size_t, EndpointIdString>;
 
 struct BarbellMapItem
 {
@@ -48,6 +50,8 @@ struct BarbellMapItem
     char endpointId[EndpointIdString::capacity];
     memory::Array<uint32_t, 2> oldSsrcs;
     memory::Array<uint32_t, 2> newSsrcs;
+    size_t endpointIdHash = 0;
+    engine::NeighbourMembershipArray neighbours;
 };
 
 } // namespace bridge

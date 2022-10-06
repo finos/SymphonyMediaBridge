@@ -45,11 +45,9 @@ inline bool strncpy(char* dst, const char* src, size_t maxLength)
     return false;
 }
 
-
 inline bool startsWith(const std::string& prefix, const std::string& value)
 {
-    return value.size() >= prefix.size() &&
-        std::memcmp(prefix.c_str(), value.c_str(), prefix.size()) == 0;
+    return value.size() >= prefix.size() && std::memcmp(prefix.c_str(), value.c_str(), prefix.size()) == 0;
 }
 
 /**
@@ -95,5 +93,10 @@ struct hash<size_t>
 {
     uint64_t operator()(uint64_t key) const { return hash<char*>::hashBuffer(&key, sizeof(key)); }
 };
+
+inline bool isNumber(const std::string& str)
+{
+    return !str.empty() && str.find_first_not_of("0123456789") == std::string::npos;
+}
 
 } // namespace utils

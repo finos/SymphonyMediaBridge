@@ -93,13 +93,19 @@ void Channel::create(const std::string& baseUrl,
     const bool audio,
     const bool video,
     const bool forwardMedia,
-    const uint32_t idleTimeout = 0)
+    const uint32_t idleTimeout,
+    const utils::Span<std::string> neighbours)
 {
     assert(!conferenceId.empty());
     _conferenceId = conferenceId;
     _relayType = forwardMedia ? "ssrc-rewrite" : "mixed";
     _baseUrl = baseUrl;
     _videoEnabled = video;
+
+    for (auto& n : neighbours)
+    {
+        _answerOptions.neighbours.push_back(n);
+    }
 
     using namespace nlohmann;
     json body = {{"action", "allocate"},
@@ -234,6 +240,20 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     }
 
     body["data"] = json::object({{"port", 5000}});
+
+    if (!_answerOptions.neighbours.empty())
+    {
+        auto neighbours = json::object();
+        auto groups = json::array();
+        neighbours["action"] = "mute";
+        for (auto& id : _answerOptions.neighbours)
+        {
+            groups.push_back(id);
+        }
+        neighbours["groups"] = groups;
+
+        body["neighbours"] = neighbours;
+    }
 
     logger::info("patch channel with %s", "ApiChannel", body.dump().c_str());
 
@@ -395,7 +415,8 @@ void ColibriChannel::create(const std::string& baseUrl,
     const bool audio,
     const bool video,
     const bool forwardMedia,
-    const uint32_t idleTimeout = 0)
+    const uint32_t idleTimeout,
+    const utils::Span<std::string> neighbours)
 {
     // Colibry endpoints do not support idle timeouts.
     assert(0 == idleTimeout);

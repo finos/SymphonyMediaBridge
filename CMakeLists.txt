@@ -459,6 +459,7 @@ set(TEST_FILES
     test/utils/TrackerTest.cpp
     test/memory/RingBufferTest.cpp
     test/memory/ListTest.cpp
+    test/memory/ArrayTest.cpp
     test/jobmanager/JobManagerTest.cpp
     test/concurrency/ProcessIntervalTest.cpp
     test/integration/SampleDataUtils.cpp

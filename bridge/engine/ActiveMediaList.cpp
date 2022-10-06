@@ -787,7 +787,8 @@ const std::map<size_t, ActiveTalker> ActiveMediaList::getActiveTalkers() const
     return result;
 }
 
-bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage)
+bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage,
+    const engine::EndpointMembershipsMap& neighbourMembershipMap)
 {
     auto umm = json::writer::createObjectWriter(outMessage);
     umm.addProperty("type", "user-media-map");
@@ -839,6 +840,15 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
                 audioEndpoint.addProperty("endpoint-id", audioStream->endpointId.c_str());
                 auto audioSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
                 audioSsrcs.addElement(item.second);
+                auto* neighbours = neighbourMembershipMap.getItem(item.first);
+                if (neighbours)
+                {
+                    auto neighboursJson = json::writer::createArrayWriter(outMessage, "neighbours");
+                    for (auto& n : neighbours->memberships)
+                    {
+                        neighboursJson.addElement(n);
+                    }
+                }
             }
         }
     }

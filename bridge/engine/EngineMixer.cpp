@@ -261,6 +261,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _engineDataStreams(maxStreamsPerModality),
       _engineRecordingStreams(maxRecordingStreams),
       _engineBarbells(maxNumBarbells),
+      _neighbourMemberships(ActiveMediaList::maxParticipants),
       _ssrcInboundContexts(maxSsrcs),
       _allSsrcInboundContexts(maxSsrcs),
       _audioSsrcToUserIdMap(ActiveMediaList::maxParticipants),
@@ -315,6 +316,20 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
     if (engineAudioStream->audioMixed)
     {
         _numMixedAudioStreams++;
+    }
+
+    auto neighbourIt = _neighbourMemberships.emplace(endpointIdHash, endpointIdHash);
+    if (neighbourIt.second)
+    {
+        auto& neighbourList = neighbourIt.first->second.memberships;
+        for (auto& it : engineAudioStream->neighbours)
+        {
+            neighbourList.push_back(it.second);
+        }
+    }
+    else
+    {
+        logger::error("Failed to setup neighbour list for audio stream %zu", _loggableId.c_str(), endpointIdHash);
     }
 
     const auto mapRevision = _activeMediaList->getMapRevision();
@@ -2090,14 +2105,46 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
     }
 }
 
+namespace
+{
+template <class V, class T>
+bool isNeighbour(const V& groupList, const T& lookupTable)
+{
+    for (auto& entry : groupList)
+    {
+        if (lookupTable.contains(entry))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+} // namespace
+
 void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp)
 {
+    const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
+    auto srcUserId = getC9UserId(rtpHeader->ssrc);
+
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
         auto audioStream = audioStreamEntry.second;
         if (!audioStream || &audioStream->transport == packetInfo.transport() || audioStream->audioMixed)
         {
             continue;
+        }
+
+        if (srcUserId.isSet() && audioStream->neighbours.contains(srcUserId.get()))
+        {
+            continue;
+        }
+        else if (!audioStream->neighbours.empty())
+        {
+            auto* srcMemberships = _neighbourMemberships.getItem(packetInfo.packet()->endpointIdHash);
+            if (srcMemberships && isNeighbour(srcMemberships->memberships, audioStream->neighbours))
+            {
+                continue;
+            }
         }
 
         if (audioStream->transport.isConnected())
@@ -3124,7 +3171,7 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     }
 
     utils::StringBuilder<1024> userMediaMapMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessage);
+    _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessage, _neighbourMemberships);
 
     if (!_engineBarbells.empty())
     {
@@ -3956,7 +4003,7 @@ std::map<size_t, ActiveTalker> EngineMixer::getActiveTalkers() const
     return _activeMediaList->getActiveTalkers();
 }
 
-utils::Optional<uint32_t> EngineMixer::getUserId(const size_t ssrc) const
+utils::Optional<uint32_t> EngineMixer::getC9UserId(const size_t ssrc) const
 {
     const auto it = _audioSsrcToUserIdMap.find(ssrc);
     if (it != _audioSsrcToUserIdMap.end())
@@ -3987,6 +4034,14 @@ void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TMap& map)
 
         const auto endpointIdHash = utils::hash<char*>{}(item.endpointId);
         map.add(endpointIdHash, item);
+
+        if (endpoint.exists("neighbours"))
+        {
+            for (auto neighbour : endpoint["neighbours"].getArray())
+            {
+                item.neighbours.push_back(neighbour.getInt(0));
+            }
+        }
     }
 }
 
@@ -4165,6 +4220,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         if (item.hasChanged() && !item.oldSsrcs.empty())
         {
             _activeMediaList->removeAudioParticipant(entry.first);
+            _neighbourMemberships.erase(entry.first);
             for (const auto ssrc : item.oldSsrcs)
             {
                 auto* audioStream = barbell->audioSsrcMap.getItem(ssrc);
@@ -4194,6 +4250,15 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
             audioStream->endpointIdHash.set(entry.first);
             audioStream->endpointId.set(item.endpointId);
             _activeMediaList->addBarbellAudioParticipant(entry.first, item.endpointId);
+            if (!item.neighbours.empty())
+            {
+                auto neighbourIt = _neighbourMemberships.emplace(entry.first, entry.first);
+                if (neighbourIt.second)
+                {
+                    auto& newMembershipItem = neighbourIt.first->second;
+                    utils::append(newMembershipItem.memberships, item.neighbours);
+                }
+            }
         }
     }
 

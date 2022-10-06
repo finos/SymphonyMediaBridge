@@ -4,6 +4,7 @@
 #include "nlohmann/json.hpp"
 #include "test/integration/emulator/Httpd.h"
 #include "transport/RtcTransport.h"
+#include "utils/Span.h"
 #include "utils/StdExtensions.h"
 #include <string>
 #include <unordered_set>
@@ -45,6 +46,7 @@ struct SimulcastStream
 struct AnswerOptions
 {
     bool rtxDisabled = false;
+    std::vector<std::string> neighbours;
 };
 
 class BaseChannel
@@ -58,7 +60,8 @@ public:
         const bool audio,
         const bool video,
         const bool forwardMedia,
-        const uint32_t idleTimeout) = 0;
+        const uint32_t idleTimeout,
+        const utils::Span<std::string> neighbours) = 0;
 
     virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
@@ -124,7 +127,8 @@ public:
         const bool audio,
         const bool video,
         const bool forwardMedia,
-        const uint32_t idleTimeout) override;
+        const uint32_t idleTimeout,
+        const utils::Span<std::string> neighbours) override;
 
     void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
@@ -154,7 +158,8 @@ public:
         const bool audio,
         const bool video,
         const bool forwardMedia,
-        const uint32_t idleTimeout) override;
+        const uint32_t idleTimeout,
+        const utils::Span<std::string> neighbours) override;
 
     void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,

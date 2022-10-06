@@ -18,7 +18,8 @@ IceSession::IceSession(size_t sessionId,
     ice::IceComponent component,
     const IceRole role,
     IEvents* eventSink)
-    : _component(component),
+    : _logId("IceSession-" + std::to_string(sessionId)),
+      _component(component),
       _tcpProbeCount(0),
       _config(config),
       _state(State::IDLE),
@@ -26,7 +27,6 @@ IceSession::IceSession(size_t sessionId,
       _credentials(role, static_cast<uint64_t>(_idGenerator.next() & ~(0ull))),
       _sessionStart(0)
 {
-    _logId = "IceSession-" + std::to_string(sessionId);
     char ufrag[14 + 1];
     char pwd[24 + 1]; // length selected to make attribute *4 length
 
@@ -1109,7 +1109,14 @@ void IceSession::CandidatePair::send(const uint64_t now)
     else if (state == Succeeded && replies > 10 && nominated)
     {
         transmitInterval = _config.keepAliveInterval * utils::Time::ms;
-        nextTransmission = nextTransmission + transmitInterval;
+        if (utils::Time::diffGE(nextTransmission, now, transmitInterval * 2))
+        {
+            nextTransmission = now;
+        }
+        else
+        {
+            nextTransmission = nextTransmission + transmitInterval;
+        }
     }
     else
     {
@@ -1131,8 +1138,8 @@ void IceSession::CandidatePair::send(const uint64_t now)
     transaction.id = stunMessage.header.transactionId;
     stunMessage.add(
         StunGenericAttribute(StunAttribute::USERNAME, _credentials.remote.first + ":" + _credentials.local.first));
-    stunMessage.add(StunAttribute64(
-        _credentials.role == IceRole::CONTROLLING ? StunAttribute::ICE_CONTROLLING : StunAttribute::ICE_CONTROLLED,
+    stunMessage.add(StunAttribute64(_credentials.role == IceRole::CONTROLLING ? StunAttribute::ICE_CONTROLLING
+                                                                              : StunAttribute::ICE_CONTROLLED,
         _credentials.tieBreaker));
 
     if (!gatheringProbe)
@@ -1166,6 +1173,7 @@ void IceSession::CandidatePair::send(const uint64_t now)
             _name.c_str(),
             localEndpoint.endpoint->getLocalPort().toString().c_str(),
             remoteCandidate.address.toString().c_str());
+
         localEndpoint.endpoint->sendStunTo(remoteCandidate.address,
             transaction.id.get(),
             &stunMessage,

@@ -51,6 +51,7 @@ struct AudioStream
     bool isDtlsLocalEnabled;
     bool isConfigured;
     const uint32_t idleTimeoutSeconds;
+    std::vector<uint32_t> neighbours;
 };
 
 } // namespace bridge

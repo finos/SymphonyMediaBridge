@@ -291,7 +291,7 @@ private:
 
     void reportState(State newState);
 
-    std::string _logId;
+    const std::string _logId;
     std::vector<std::unique_ptr<CandidatePair>> _candidatePairs;
     std::vector<CandidatePair*> _checklist;
 
