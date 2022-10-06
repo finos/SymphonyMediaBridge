@@ -87,7 +87,6 @@ set(FILES
         api/DataChannelMessage.h
         api/DataChannelMessageParser.cpp
         api/DataChannelMessageParser.h
-        api/EndpointDescription.cpp
         api/EndpointDescription.h
         api/RtcDescriptors.h
         api/RtcDescriptors.cpp
