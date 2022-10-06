@@ -638,7 +638,6 @@ public:
         concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext> contexts;
 
     private:
-        Audio _audioType;
         bridge::RtpMap _rtpMap;
         bridge::RtpMap _rtxRtpMap;
         codec::OpusDecoder _decoder;
