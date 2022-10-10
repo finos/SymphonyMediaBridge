@@ -2,6 +2,7 @@
 
 #include "api/AllocateConference.h"
 #include "api/AllocateEndpoint.h"
+#include "api/BarbellDescription.h"
 #include "api/ConferenceEndpoint.h"
 #include "api/EndpointDescription.h"
 #include "api/Recording.h"
@@ -19,7 +20,9 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json&, const std::string&
 Recording parseRecording(const nlohmann::json&);
 std::vector<ConferenceEndpoint> parseConferenceEndpoints(const nlohmann::json&);
 ConferenceEndpointExtendedInfo parseEndpointExtendedInfo(const nlohmann::json&);
-EndpointDescription::Ice parseIce(const nlohmann::json&);
+api::Ice parseIce(const nlohmann::json&);
+
+BarbellDescription parsePatchBarbell(const nlohmann::json& data, const std::string& barbellId);
 } // namespace Parser
 
 } // namespace api

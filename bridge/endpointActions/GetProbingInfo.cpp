@@ -33,25 +33,25 @@ httpd::Response getProbingInfo(ActionContext* context, RequestLogger& requestLog
 
     for (const auto& candidate : probeServer.getCandidates())
     {
-        api::EndpointDescription::Candidate description = iceCandidateToApi(candidate);
+        api::Candidate description = iceCandidateToApi(candidate);
 
         nlohmann::json candidateJson;
-        candidateJson["generation"] = description._generation;
-        candidateJson["component"] = description._component;
-        candidateJson["protocol"] = description._protocol;
-        candidateJson["port"] = description._port;
-        candidateJson["ip"] = description._ip;
-        candidateJson["foundation"] = description._foundation;
-        candidateJson["priority"] = description._priority;
-        candidateJson["type"] = description._type;
-        candidateJson["network"] = description._network;
-        if (description._relAddr.isSet())
+        candidateJson["generation"] = description.generation;
+        candidateJson["component"] = description.component;
+        candidateJson["protocol"] = description.protocol;
+        candidateJson["port"] = description.port;
+        candidateJson["ip"] = description.ip;
+        candidateJson["foundation"] = description.foundation;
+        candidateJson["priority"] = description.priority;
+        candidateJson["type"] = description.type;
+        candidateJson["network"] = description.network;
+        if (description.relAddr.isSet())
         {
-            candidateJson["rel-addr"] = description._relAddr.get();
+            candidateJson["rel-addr"] = description.relAddr.get();
         }
-        if (description._relPort.isSet())
+        if (description.relPort.isSet())
         {
-            candidateJson["rel-port"] = description._relPort.get();
+            candidateJson["rel-port"] = description.relPort.get();
         }
 
         candidatesJson.push_back(candidateJson);

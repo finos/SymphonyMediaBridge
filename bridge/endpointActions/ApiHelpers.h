@@ -16,19 +16,18 @@ namespace bridge
 {
 
 std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> getIceCandidatesAndCredentials(
-    const api::EndpointDescription::Transport&);
+    const api::Transport&);
 std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> getIceCandidatesAndCredentials(
-    const api::EndpointDescription::Ice& ice);
+    const api::Ice& ice);
 std::unique_lock<std::mutex> getConferenceMixer(ActionContext*,
     const std::string& conferenceId,
     bridge::Mixer*& outMixer);
-api::EndpointDescription::Candidate iceCandidateToApi(const ice::IceCandidate&);
-void addDefaultAudioProperties(api::EndpointDescription::Audio&);
-void addDefaultVideoProperties(api::EndpointDescription::Video&);
+api::Candidate iceCandidateToApi(const ice::IceCandidate&);
+void addDefaultAudioProperties(api::Audio&);
+void addDefaultVideoProperties(api::Video&);
 
-bridge::RtpMap makeRtpMap(const api::EndpointDescription::Audio& audio);
-bridge::RtpMap makeRtpMap(const api::EndpointDescription::Video& video,
-    const api::EndpointDescription::PayloadType& payloadType);
+bridge::RtpMap makeRtpMap(const api::Audio& audio);
+bridge::RtpMap makeRtpMap(const api::Video& video, const api::PayloadType& payloadType);
 
 utils::Optional<uint8_t> findAbsSendTimeExtensionId(
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions);
@@ -36,7 +35,6 @@ utils::Optional<uint8_t> findC9InfoExtensionId(
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions);
 utils::Optional<uint8_t> findAudioLevelExtensionId(
     const std::vector<std::pair<uint32_t, std::string>>& rtpHeaderExtensions);
-std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDescription::Video&,
-    const std::string& endpointId);
-bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::EndpointDescription::Video&);
+std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::Video&, const std::string& endpointId);
+bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::Video&);
 } // namespace bridge

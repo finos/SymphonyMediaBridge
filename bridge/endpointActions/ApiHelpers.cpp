@@ -25,41 +25,41 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext* context,
     return scopedMixerLock;
 }
 
-void addDefaultAudioProperties(api::EndpointDescription::Audio& audioChannel)
+void addDefaultAudioProperties(api::Audio& audioChannel)
 {
-    api::EndpointDescription::PayloadType opus;
-    opus._id = codec::Opus::payloadType;
-    opus._name = "opus";
-    opus._clockRate = codec::Opus::sampleRate;
-    opus._channels.set(codec::Opus::channelsPerFrame);
-    opus._parameters.emplace_back("minptime", "10");
-    opus._parameters.emplace_back("useinbandfec", "1");
+    api::PayloadType opus;
+    opus.id = codec::Opus::payloadType;
+    opus.name = "opus";
+    opus.clockRate = codec::Opus::sampleRate;
+    opus.channels.set(codec::Opus::channelsPerFrame);
+    opus.parameters.emplace_back("minptime", "10");
+    opus.parameters.emplace_back("useinbandfec", "1");
 
-    audioChannel._payloadType.set(opus);
-    audioChannel._rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
-    audioChannel._rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
-    audioChannel._rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
+    audioChannel.payloadType.set(opus);
+    audioChannel.rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
+    audioChannel.rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
+    audioChannel.rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
 }
 
-void addDefaultVideoProperties(api::EndpointDescription::Video& videoChannel)
+void addDefaultVideoProperties(api::Video& videoChannel)
 {
     {
-        api::EndpointDescription::PayloadType vp8;
-        vp8._id = codec::Vp8::payloadType;
-        vp8._name = "VP8";
-        vp8._clockRate = codec::Vp8::sampleRate;
-        vp8._rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
-        vp8._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
-        vp8._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
+        api::PayloadType vp8;
+        vp8.id = codec::Vp8::payloadType;
+        vp8.name = "VP8";
+        vp8.clockRate = codec::Vp8::sampleRate;
+        vp8.rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
+        vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
+        vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
         videoChannel.payloadTypes.push_back(vp8);
     }
 
     {
-        api::EndpointDescription::PayloadType vp8Rtx;
-        vp8Rtx._id = codec::Vp8::rtxPayloadType;
-        vp8Rtx._name = "rtx";
-        vp8Rtx._clockRate = codec::Vp8::sampleRate;
-        vp8Rtx._parameters.emplace_back("apt", std::to_string(codec::Vp8::payloadType));
+        api::PayloadType vp8Rtx;
+        vp8Rtx.id = codec::Vp8::rtxPayloadType;
+        vp8Rtx.name = "rtx";
+        vp8Rtx.clockRate = codec::Vp8::sampleRate;
+        vp8Rtx.parameters.emplace_back("apt", std::to_string(codec::Vp8::payloadType));
         videoChannel.payloadTypes.push_back(vp8Rtx);
     }
 
@@ -88,150 +88,146 @@ ice::TransportType parseTransportType(const std::string& protocol)
         utils::format("Transport protocol type '%s' not supported", protocol.c_str()));
 }
 
-api::EndpointDescription::Candidate iceCandidateToApi(const ice::IceCandidate& iceCandidate)
+api::Candidate iceCandidateToApi(const ice::IceCandidate& iceCandidate)
 {
-    api::EndpointDescription::Candidate candidate;
-    candidate._generation = 0;
-    candidate._component = iceCandidate.component == ice::IceComponent::RTP ? 1 : 2;
+    api::Candidate candidate;
+    candidate.generation = 0;
+    candidate.component = iceCandidate.component == ice::IceComponent::RTP ? 1 : 2;
 
     switch (iceCandidate.transportType)
     {
     case ice::TransportType::UDP:
-        candidate._protocol = "udp";
+        candidate.protocol = "udp";
         break;
     case ice::TransportType::TCP:
-        candidate._protocol = "tcp";
+        candidate.protocol = "tcp";
         break;
     case ice::TransportType::SSLTCP:
-        candidate._protocol = "ssltcp";
+        candidate.protocol = "ssltcp";
         break;
     default:
         assert(false);
         break;
     }
 
-    candidate._port = iceCandidate.address.getPort();
-    candidate._ip = iceCandidate.address.ipToString();
+    candidate.port = iceCandidate.address.getPort();
+    candidate.ip = iceCandidate.address.ipToString();
 
     switch (iceCandidate.type)
     {
     case ice::IceCandidate::Type::HOST:
-        candidate._type = "host";
+        candidate.type = "host";
         break;
     case ice::IceCandidate::Type::SRFLX:
-        candidate._type = "srflx";
-        candidate._relPort.set(iceCandidate.baseAddress.getPort());
-        candidate._relAddr.set(iceCandidate.baseAddress.ipToString());
+        candidate.type = "srflx";
+        candidate.relPort.set(iceCandidate.baseAddress.getPort());
+        candidate.relAddr.set(iceCandidate.baseAddress.ipToString());
         break;
     case ice::IceCandidate::Type::PRFLX:
-        candidate._type = "prflx";
-        candidate._relPort.set(iceCandidate.baseAddress.getPort());
-        candidate._relAddr.set(iceCandidate.baseAddress.ipToString());
+        candidate.type = "prflx";
+        candidate.relPort.set(iceCandidate.baseAddress.getPort());
+        candidate.relAddr.set(iceCandidate.baseAddress.ipToString());
         break;
     default:
-        candidate._type = "unsupported";
+        candidate.type = "unsupported";
         assert(false);
         break;
     }
 
-    candidate._foundation = iceCandidate.getFoundation();
-    candidate._priority = iceCandidate.priority;
-    candidate._network = 1;
+    candidate.foundation = iceCandidate.getFoundation();
+    candidate.priority = iceCandidate.priority;
+    candidate.network = 1;
 
     return candidate;
 }
 
 std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> getIceCandidatesAndCredentials(
-    const api::EndpointDescription::Transport& transport)
+    const api::Transport& transport)
 {
-    const auto& ice = transport._ice.get();
+    const auto& ice = transport.ice.get();
     return getIceCandidatesAndCredentials(ice);
 }
 
 std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> getIceCandidatesAndCredentials(
-    const api::EndpointDescription::Ice& ice)
+    const api::Ice& ice)
 {
     std::vector<ice::IceCandidate> candidates;
 
-    for (const auto& candidate : ice._candidates)
+    for (const auto& candidate : ice.candidates)
     {
-        const ice::TransportType transportType = parseTransportType(candidate._protocol);
-        if (candidate._type.compare("host") == 0)
+        const ice::TransportType transportType = parseTransportType(candidate.protocol);
+        if (candidate.type.compare("host") == 0)
         {
-            candidates.emplace_back(candidate._foundation.c_str(),
-                candidate._component == 1 ? ice::IceComponent::RTP : ice::IceComponent::RTCP,
+            candidates.emplace_back(candidate.foundation.c_str(),
+                candidate.component == 1 ? ice::IceComponent::RTP : ice::IceComponent::RTCP,
                 transportType,
-                candidate._priority,
-                transport::SocketAddress::parse(candidate._ip, candidate._port),
+                candidate.priority,
+                transport::SocketAddress::parse(candidate.ip, candidate.port),
                 ice::IceCandidate::Type::HOST);
         }
-        else if ((candidate._type.compare("srflx") == 0 || candidate._type.compare("relay") == 0) &&
-            candidate._relAddr.isSet() && candidate._relPort.isSet())
+        else if ((candidate.type.compare("srflx") == 0 || candidate.type.compare("relay") == 0) &&
+            candidate.relAddr.isSet() && candidate.relPort.isSet())
         {
-            candidates.emplace_back(candidate._foundation.c_str(),
-                candidate._component == 1 ? ice::IceComponent::RTP : ice::IceComponent::RTCP,
+            candidates.emplace_back(candidate.foundation.c_str(),
+                candidate.component == 1 ? ice::IceComponent::RTP : ice::IceComponent::RTCP,
                 transportType,
-                candidate._priority,
-                transport::SocketAddress::parse(candidate._ip, candidate._port),
-                transport::SocketAddress::parse(candidate._relAddr.get(), candidate._relPort.get()),
-                candidate._type.compare("srflx") == 0 ? ice::IceCandidate::Type::SRFLX
-                                                      : ice::IceCandidate::Type::RELAY);
+                candidate.priority,
+                transport::SocketAddress::parse(candidate.ip, candidate.port),
+                transport::SocketAddress::parse(candidate.relAddr.get(), candidate.relPort.get()),
+                candidate.type.compare("srflx") == 0 ? ice::IceCandidate::Type::SRFLX : ice::IceCandidate::Type::RELAY);
         }
     }
 
-    return std::make_pair(candidates, std::make_pair(ice._ufrag, ice._pwd));
+    return std::make_pair(candidates, std::make_pair(ice.ufrag, ice.pwd));
 }
 
-bridge::RtpMap makeRtpMap(const api::EndpointDescription::Audio& audio)
+bridge::RtpMap makeRtpMap(const api::Audio& audio)
 {
     bridge::RtpMap rtpMap;
 
-    auto& payloadType = audio._payloadType.get();
-    if (payloadType._name.compare("opus") == 0)
+    auto& payloadType = audio.payloadType.get();
+    if (payloadType.name.compare("opus") == 0)
     {
-        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::OPUS,
-            payloadType._id,
-            payloadType._clockRate,
-            payloadType._channels);
+        rtpMap =
+            bridge::RtpMap(bridge::RtpMap::Format::OPUS, payloadType.id, payloadType.clockRate, payloadType.channels);
     }
     else
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-            utils::format("rtp payload '%s' not supported", payloadType._name.c_str()));
+            utils::format("rtp payload '%s' not supported", payloadType.name.c_str()));
     }
 
-    for (const auto& parameter : payloadType._parameters)
+    for (const auto& parameter : payloadType.parameters)
     {
         rtpMap.parameters.emplace(parameter.first, parameter.second);
     }
 
-    rtpMap.audioLevelExtId = findAudioLevelExtensionId(audio._rtpHeaderExtensions);
-    rtpMap.absSendTimeExtId = findAbsSendTimeExtensionId(audio._rtpHeaderExtensions);
-    rtpMap.c9infoExtId = findC9InfoExtensionId(audio._rtpHeaderExtensions);
+    rtpMap.audioLevelExtId = findAudioLevelExtensionId(audio.rtpHeaderExtensions);
+    rtpMap.absSendTimeExtId = findAbsSendTimeExtensionId(audio.rtpHeaderExtensions);
+    rtpMap.c9infoExtId = findC9InfoExtensionId(audio.rtpHeaderExtensions);
 
     return rtpMap;
 }
 
-bridge::RtpMap makeRtpMap(const api::EndpointDescription::Video& video,
-    const api::EndpointDescription::PayloadType& payloadType)
+bridge::RtpMap makeRtpMap(const api::Video& video, const api::PayloadType& payloadType)
 {
     bridge::RtpMap rtpMap;
 
-    if (payloadType._name.compare("VP8") == 0)
+    if (payloadType.name.compare("VP8") == 0)
     {
-        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8, payloadType._id, payloadType._clockRate);
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8, payloadType.id, payloadType.clockRate);
     }
-    else if (payloadType._name.compare("rtx") == 0)
+    else if (payloadType.name.compare("rtx") == 0)
     {
         rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX, codec::Vp8::rtxPayloadType, codec::Vp8::sampleRate);
     }
     else
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-            utils::format("rtp payload '%s' not supported", payloadType._name.c_str()));
+            utils::format("rtp payload '%s' not supported", payloadType.name.c_str()));
     }
 
-    for (const auto& parameter : payloadType._parameters)
+    for (const auto& parameter : payloadType.parameters)
     {
         rtpMap.parameters.emplace(parameter.first, parameter.second);
     }
@@ -271,14 +267,13 @@ utils::Optional<uint8_t> findC9InfoExtensionId(const std::vector<std::pair<uint3
     return findExtensionId("c9:params:rtp-hdrext:info", rtpHeaderExtensions);
 }
 
-std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDescription::Video& video,
-    const std::string& endpointId)
+std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::Video& video, const std::string& endpointId)
 {
     std::vector<bridge::SimulcastStream> simulcastStreams;
     for (const auto& stream : video.streams)
     {
         bridge::SimulcastStream simulcastStream{0};
-        if (stream.content.compare(api::EndpointDescription::slidesContent) == 0)
+        if (stream.content.compare(api::VideoStream::slidesContent) == 0)
         {
             simulcastStream.contentType = bridge::SimulcastStream::VideoContentType::SLIDES;
         }
@@ -305,7 +300,7 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::EndpointDes
     return simulcastStreams;
 }
 
-bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::EndpointDescription::Video& video)
+bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::Video& video)
 {
     bridge::SsrcWhitelist ssrcWhitelist = {false, 0, {0, 0}};
 

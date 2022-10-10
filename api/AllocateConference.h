@@ -8,7 +8,7 @@ namespace api
 
 struct AllocateConference
 {
-    utils::Optional<uint32_t> _lastN;
+    utils::Optional<uint32_t> lastN;
 };
 
 } // namespace api

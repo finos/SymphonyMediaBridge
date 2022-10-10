@@ -1889,40 +1889,40 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
     const std::vector<api::RecordingChannel>& channels,
     const RecordingDescription& recordingDescription)
 {
-    if (!(recordingDescription._isAudioEnabled || recordingDescription._isVideoEnabled))
+    if (!(recordingDescription.isAudioEnabled || recordingDescription.isVideoEnabled))
     {
         logger::error("Received a recording description without any media enabled. RecordingId %s.",
             _loggableId.c_str(),
-            recordingDescription._recordingId.c_str());
+            recordingDescription.recordingId.c_str());
 
         return false;
     }
 
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    RecordingStream* stream = findRecordingStream(recordingDescription._recordingId);
+    RecordingStream* stream = findRecordingStream(recordingDescription.recordingId);
     if (stream)
     {
         const bool wasAudioEnabled = stream->_audioActiveRecCount > 0;
         const bool wasVideoEnabled = stream->_videoActiveRecCount > 0;
         const bool wasScreenSharingEnabled = stream->_screenSharingActiveRecCount > 0;
 
-        auto attachedRecordingDescription = stream->_attachedRecording.at(recordingDescription._recordingId);
-        if (attachedRecordingDescription._isAudioEnabled != recordingDescription._isAudioEnabled)
+        auto attachedRecordingDescription = stream->_attachedRecording.at(recordingDescription.recordingId);
+        if (attachedRecordingDescription.isAudioEnabled != recordingDescription.isAudioEnabled)
         {
-            attachedRecordingDescription._isAudioEnabled = recordingDescription._isAudioEnabled;
-            recordingDescription._isAudioEnabled ? ++stream->_audioActiveRecCount : --stream->_audioActiveRecCount;
+            attachedRecordingDescription.isAudioEnabled = recordingDescription.isAudioEnabled;
+            recordingDescription.isAudioEnabled ? ++stream->_audioActiveRecCount : --stream->_audioActiveRecCount;
         }
-        if (attachedRecordingDescription._isVideoEnabled != recordingDescription._isVideoEnabled)
+        if (attachedRecordingDescription.isVideoEnabled != recordingDescription.isVideoEnabled)
         {
-            attachedRecordingDescription._isVideoEnabled = recordingDescription._isVideoEnabled;
-            recordingDescription._isVideoEnabled ? ++stream->_videoActiveRecCount : --stream->_videoActiveRecCount;
+            attachedRecordingDescription.isVideoEnabled = recordingDescription.isVideoEnabled;
+            recordingDescription.isVideoEnabled ? ++stream->_videoActiveRecCount : --stream->_videoActiveRecCount;
         }
-        if (attachedRecordingDescription._isScreenSharingEnabled != recordingDescription._isScreenSharingEnabled)
+        if (attachedRecordingDescription.isScreenSharingEnabled != recordingDescription.isScreenSharingEnabled)
         {
-            attachedRecordingDescription._isScreenSharingEnabled = recordingDescription._isScreenSharingEnabled;
-            recordingDescription._isScreenSharingEnabled ? ++stream->_screenSharingActiveRecCount
-                                                         : --stream->_screenSharingActiveRecCount;
+            attachedRecordingDescription.isScreenSharingEnabled = recordingDescription.isScreenSharingEnabled;
+            recordingDescription.isScreenSharingEnabled ? ++stream->_screenSharingActiveRecCount
+                                                        : --stream->_screenSharingActiveRecCount;
         }
         addRecordingTransportsToRecordingStream(stream, channels);
         updateRecordingEngineStreamModalities(*stream, wasAudioEnabled, wasVideoEnabled, wasScreenSharingEnabled);
@@ -1944,11 +1944,11 @@ bool Mixer::addOrUpdateRecording(const std::string& conferenceId,
         const bool wasScreenSharingEnabled = stream->_screenSharingActiveRecCount > 0;
 
         const auto recordingEmplaced =
-            stream->_attachedRecording.emplace(recordingDescription._recordingId, recordingDescription);
+            stream->_attachedRecording.emplace(recordingDescription.recordingId, recordingDescription);
 
-        stream->_audioActiveRecCount += recordingDescription._isAudioEnabled ? 1 : 0;
-        stream->_videoActiveRecCount += recordingDescription._isVideoEnabled ? 1 : 0;
-        stream->_screenSharingActiveRecCount += recordingDescription._isScreenSharingEnabled ? 1 : 0;
+        stream->_audioActiveRecCount += recordingDescription.isAudioEnabled ? 1 : 0;
+        stream->_videoActiveRecCount += recordingDescription.isVideoEnabled ? 1 : 0;
+        stream->_screenSharingActiveRecCount += recordingDescription.isScreenSharingEnabled ? 1 : 0;
 
         const bool isAudioEnabled = stream->_audioActiveRecCount > 0;
         const bool isVideoEnabled = stream->_videoActiveRecCount > 0;
@@ -2046,15 +2046,15 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
 {
     for (const auto& channel : channels)
     {
-        auto endpointIdHash = utils::hash<std::string>{}(channel._id);
+        auto endpointIdHash = utils::hash<std::string>{}(channel.id);
         const auto transportEntry = recordingStream->_transports.find(endpointIdHash);
         if (transportEntry == recordingStream->_transports.end())
         {
             auto transport = _transportFactory.createForRecording(endpointIdHash,
                 recordingStream->_endpointIdHash,
-                transport::SocketAddress::parse(channel._host, channel._port),
-                channel._aesKey,
-                channel._aesSalt);
+                transport::SocketAddress::parse(channel.host, channel.port),
+                channel.aesKey,
+                channel.aesSalt);
 
             if (transport)
             {
@@ -2072,8 +2072,8 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
             {
                 logger::error("Creation of recording transport has failed for channel %s:%u",
                     _loggableId.c_str(),
-                    channel._host.c_str(),
-                    channel._port);
+                    channel.host.c_str(),
+                    channel.port);
             }
         }
     }
@@ -2101,7 +2101,7 @@ bool Mixer::removeRecordingTransports(const std::string& conferenceId,
 
         for (const auto& channel : channels)
         {
-            auto endpointIdHash = utils::hash<std::string>{}(channel._id);
+            auto endpointIdHash = utils::hash<std::string>{}(channel.id);
             auto transportItr = stream->_transports.find(endpointIdHash);
             if (transportItr == stream->_transports.end())
             {
@@ -2150,9 +2150,9 @@ bool Mixer::removeRecording(const std::string& recordingId)
         const bool wasVideoEnabled = stream->_videoActiveRecCount > 0;
         const bool wasScreenSharingEnabled = stream->_screenSharingActiveRecCount > 0;
 
-        stream->_audioActiveRecCount -= recordingDescriptionEntry->second._isAudioEnabled ? 1 : 0;
-        stream->_videoActiveRecCount -= recordingDescriptionEntry->second._isVideoEnabled ? 1 : 0;
-        stream->_screenSharingActiveRecCount -= recordingDescriptionEntry->second._isScreenSharingEnabled ? 1 : 0;
+        stream->_audioActiveRecCount -= recordingDescriptionEntry->second.isAudioEnabled ? 1 : 0;
+        stream->_videoActiveRecCount -= recordingDescriptionEntry->second.isVideoEnabled ? 1 : 0;
+        stream->_screenSharingActiveRecCount -= recordingDescriptionEntry->second.isScreenSharingEnabled ? 1 : 0;
 
         auto engineStreamEntry = _recordingEngineStreams.find(stream->_id);
         if (engineStreamEntry == _recordingEngineStreams.end())
@@ -2186,13 +2186,13 @@ void Mixer::engineRecordingDescStopped(const RecordingDescription& recordingDesc
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    RecordingStream* stream = findRecordingStream(recordingDesc._recordingId);
+    RecordingStream* stream = findRecordingStream(recordingDesc.recordingId);
     if (!stream)
     {
         return;
     }
 
-    const size_t erasedCount = stream->_attachedRecording.erase(recordingDesc._recordingId);
+    const size_t erasedCount = stream->_attachedRecording.erase(recordingDesc.recordingId);
     assert(erasedCount == 1);
 }
 

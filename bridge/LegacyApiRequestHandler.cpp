@@ -1399,26 +1399,26 @@ bool LegacyApiRequestHandler::processRecording(Mixer& mixer,
     const api::Recording& recording)
 {
     const bool isRecordingStart =
-        recording._isAudioEnabled || recording._isVideoEnabled || recording._isScreenshareEnabled;
+        recording.isAudioEnabled || recording.isVideoEnabled || recording.isScreenshareEnabled;
 
     if (isRecordingStart)
     {
         RecordingDescription description;
-        description._ownerId = recording._userId;
-        description._recordingId = recording._recordingId;
-        description._isAudioEnabled = recording._isAudioEnabled;
-        description._isVideoEnabled = recording._isVideoEnabled;
-        description._isScreenSharingEnabled = recording._isScreenshareEnabled;
+        description.ownerId = recording.userId;
+        description.recordingId = recording.recordingId;
+        description.isAudioEnabled = recording.isAudioEnabled;
+        description.isVideoEnabled = recording.isVideoEnabled;
+        description.isScreenSharingEnabled = recording.isScreenshareEnabled;
 
-        return mixer.addOrUpdateRecording(conferenceId, recording._channels, description);
+        return mixer.addOrUpdateRecording(conferenceId, recording.channels, description);
     }
-    else if (!recording._channels.empty())
+    else if (!recording.channels.empty())
     {
-        return mixer.removeRecordingTransports(conferenceId, recording._channels);
+        return mixer.removeRecordingTransports(conferenceId, recording.channels);
     }
     else
     {
-        return mixer.removeRecording(recording._recordingId);
+        return mixer.removeRecording(recording.recordingId);
     }
 }
 

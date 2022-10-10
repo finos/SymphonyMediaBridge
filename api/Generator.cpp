@@ -1,4 +1,5 @@
 #include "api/Generator.h"
+#include "api/BarbellDescription.h"
 #include "api/ConferenceEndpoint.h"
 #include "api/EndpointDescription.h"
 #include "api/utils.h"
@@ -15,42 +16,42 @@ void setIfExists(nlohmann::json& target, const char* name, const T& value)
     }
 }
 
-nlohmann::json generateTransport(const api::EndpointDescription::Transport& transport)
+nlohmann::json generateTransport(const api::Transport& transport)
 {
     nlohmann::json transportJson;
-    transportJson["rtcp-mux"] = transport._rtcpMux;
+    transportJson["rtcp-mux"] = transport.rtcpMux;
 
-    if (transport._ice.isSet())
+    if (transport.ice.isSet())
     {
-        const auto& ice = transport._ice.get();
+        const auto& ice = transport.ice.get();
         nlohmann::json iceJson;
-        iceJson["ufrag"] = ice._ufrag;
-        iceJson["pwd"] = ice._pwd;
+        iceJson["ufrag"] = ice.ufrag;
+        iceJson["pwd"] = ice.pwd;
 
         iceJson["candidates"] = nlohmann::json::array();
-        for (const auto& candidate : ice._candidates)
+        for (const auto& candidate : ice.candidates)
         {
             nlohmann::json candidateJson;
-            candidateJson["generation"] = candidate._generation;
-            candidateJson["component"] = candidate._component;
-            candidateJson["protocol"] = candidate._protocol;
-            candidateJson["port"] = candidate._port;
-            candidateJson["ip"] = candidate._ip;
-            candidateJson["foundation"] = candidate._foundation;
-            candidateJson["priority"] = candidate._priority;
-            candidateJson["type"] = candidate._type;
-            candidateJson["network"] = candidate._network;
-            setIfExists(candidateJson, "rel-port", candidate._relPort);
-            setIfExists(candidateJson, "rel-addr", candidate._relAddr);
+            candidateJson["generation"] = candidate.generation;
+            candidateJson["component"] = candidate.component;
+            candidateJson["protocol"] = candidate.protocol;
+            candidateJson["port"] = candidate.port;
+            candidateJson["ip"] = candidate.ip;
+            candidateJson["foundation"] = candidate.foundation;
+            candidateJson["priority"] = candidate.priority;
+            candidateJson["type"] = candidate.type;
+            candidateJson["network"] = candidate.network;
+            setIfExists(candidateJson, "rel-port", candidate.relPort);
+            setIfExists(candidateJson, "rel-addr", candidate.relAddr);
             iceJson["candidates"].push_back(candidateJson);
         }
 
         transportJson["ice"] = iceJson;
     }
 
-    if (transport._dtls.isSet())
+    if (transport.dtls.isSet())
     {
-        const auto& dtls = transport._dtls.get();
+        const auto& dtls = transport.dtls.get();
         nlohmann::json dtlsJson;
         dtlsJson["type"] = dtls.type;
         dtlsJson["hash"] = dtls.hash;
@@ -58,35 +59,35 @@ nlohmann::json generateTransport(const api::EndpointDescription::Transport& tran
         transportJson["dtls"] = dtlsJson;
     }
 
-    if (transport._connection.isSet())
+    if (transport.connection.isSet())
     {
         nlohmann::json connectionJson;
-        connectionJson["port"] = transport._connection.get()._port;
-        connectionJson["ip"] = transport._connection.get()._ip;
+        connectionJson["port"] = transport.connection.get().port;
+        connectionJson["ip"] = transport.connection.get().ip;
         transportJson["connection"] = connectionJson;
     }
 
     return transportJson;
 }
 
-nlohmann::json generatePayloadType(const api::EndpointDescription::PayloadType& payloadType)
+nlohmann::json generatePayloadType(const api::PayloadType& payloadType)
 {
     nlohmann::json payloadTypeJson;
 
-    payloadTypeJson["id"] = payloadType._id;
-    payloadTypeJson["name"] = payloadType._name;
-    payloadTypeJson["clockrate"] = payloadType._clockRate;
-    setIfExists(payloadTypeJson, "channels", payloadType._channels);
+    payloadTypeJson["id"] = payloadType.id;
+    payloadTypeJson["name"] = payloadType.name;
+    payloadTypeJson["clockrate"] = payloadType.clockRate;
+    setIfExists(payloadTypeJson, "channels", payloadType.channels);
 
     payloadTypeJson["parameters"] = nlohmann::json::object();
 
-    for (const auto& parameter : payloadType._parameters)
+    for (const auto& parameter : payloadType.parameters)
     {
         payloadTypeJson["parameters"][parameter.first] = parameter.second;
     }
 
     payloadTypeJson["rtcp-fbs"] = nlohmann::json::array();
-    for (const auto& rtcpFeedback : payloadType._rtcpFeedbacks)
+    for (const auto& rtcpFeedback : payloadType.rtcpFeedbacks)
     {
         nlohmann::json rtcpFeedbackJson;
         rtcpFeedbackJson["type"] = rtcpFeedback.first;
@@ -124,36 +125,36 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
 {
     nlohmann::json responseJson;
 
-    if (channelsDescription._bundleTransport.isSet())
+    if (channelsDescription.bundleTransport.isSet())
     {
-        responseJson["bundle-transport"] = generateTransport(channelsDescription._bundleTransport.get());
+        responseJson["bundle-transport"] = generateTransport(channelsDescription.bundleTransport.get());
     }
 
-    if (channelsDescription._audio.isSet())
+    if (channelsDescription.audio.isSet())
     {
-        const auto& audio = channelsDescription._audio.get();
+        const auto& audio = channelsDescription.audio.get();
         nlohmann::json audioJson;
-        if (audio._transport.isSet())
+        if (audio.transport.isSet())
         {
-            audioJson["transport"] = generateTransport(audio._transport.get());
+            audioJson["transport"] = generateTransport(audio.transport.get());
         }
         audioJson["ssrcs"] = nlohmann::json::array();
-        for (const auto ssrc : audio._ssrcs)
+        for (const auto ssrc : audio.ssrcs)
         {
             audioJson["ssrcs"].push_back(ssrc);
         }
-        if (audio._payloadType.isSet())
+        if (audio.payloadType.isSet())
         {
-            audioJson["payload-type"] = generatePayloadType(audio._payloadType.get());
+            audioJson["payload-type"] = generatePayloadType(audio.payloadType.get());
         }
-        audioJson["rtp-hdrexts"] = generateRtpHeaderExtensions(audio._rtpHeaderExtensions);
+        audioJson["rtp-hdrexts"] = generateRtpHeaderExtensions(audio.rtpHeaderExtensions);
 
         responseJson["audio"] = audioJson;
     }
 
-    if (channelsDescription._video.isSet())
+    if (channelsDescription.video.isSet())
     {
-        const auto& video = channelsDescription._video.get();
+        const auto& video = channelsDescription.video.get();
         nlohmann::json videoJson;
         if (video.transport.isSet())
         {
@@ -190,11 +191,11 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
         responseJson["video"] = videoJson;
     }
 
-    if (channelsDescription._data.isSet())
+    if (channelsDescription.data.isSet())
     {
-        const auto& data = channelsDescription._data.get();
+        const auto& data = channelsDescription.data.get();
         nlohmann::json dataJson;
-        dataJson["port"] = data._port;
+        dataJson["port"] = data.port;
         responseJson["data"] = dataJson;
     }
 
@@ -249,6 +250,68 @@ nlohmann::json generateExtendedConferenceEndpoint(const ConferenceEndpointExtend
         jsonEndpoint.emplace("audioUserIdToSsrcMap", ssrcMap);
     }
     return jsonEndpoint;
+}
+
+nlohmann::json generateAllocateBarbellResponse(const BarbellDescription& channelsDescription)
+{
+    nlohmann::json responseJson;
+
+    responseJson["bundle-transport"] = generateTransport(channelsDescription.transport);
+
+    const auto& audio = channelsDescription.audio;
+    nlohmann::json audioJson;
+
+    audioJson["ssrcs"] = nlohmann::json::array();
+    for (const auto ssrc : audio.ssrcs)
+    {
+        audioJson["ssrcs"].push_back(ssrc);
+    }
+    if (audio.payloadType.isSet())
+    {
+        audioJson["payload-type"] = generatePayloadType(audio.payloadType.get());
+    }
+    audioJson["rtp-hdrexts"] = generateRtpHeaderExtensions(audio.rtpHeaderExtensions);
+
+    responseJson["audio"] = audioJson;
+
+    const auto& video = channelsDescription.video;
+    nlohmann::json videoJson;
+
+    videoJson["streams"] = nlohmann::json::array();
+    for (const auto& stream : video.streams)
+    {
+        nlohmann::json streamJson;
+        streamJson["sources"] = nlohmann::json::array();
+        for (const auto level : stream.sources)
+        {
+            nlohmann::json sourceJson;
+            sourceJson["main"] = level.main;
+            if (level.feedback != 0)
+            {
+                sourceJson["feedback"] = level.feedback;
+            }
+            streamJson["sources"].push_back(sourceJson);
+        }
+        streamJson["content"] = stream.content;
+        videoJson["streams"].push_back(streamJson);
+
+        videoJson["payload-types"] = nlohmann::json::array();
+        for (const auto& payloadType : video.payloadTypes)
+        {
+            videoJson["payload-types"].push_back(generatePayloadType(payloadType));
+        }
+
+        videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video.rtpHeaderExtensions);
+
+        responseJson["video"] = videoJson;
+    }
+
+    const auto& data = channelsDescription.data;
+    nlohmann::json dataJson;
+    dataJson["port"] = data.port;
+    responseJson["data"] = dataJson;
+
+    return responseJson;
 }
 
 } // namespace Generator

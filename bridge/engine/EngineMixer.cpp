@@ -787,12 +787,12 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
         }
 
         auto packet = recp::RecStartStopEventBuilder(_sendAllocator)
-                          .setAudioEnabled(desc->_isAudioEnabled)
-                          .setVideoEnabled(desc->_isVideoEnabled)
+                          .setAudioEnabled(desc->isAudioEnabled)
+                          .setVideoEnabled(desc->isVideoEnabled)
                           .setSequenceNumber(seq)
                           .setTimestamp(timestamp)
-                          .setRecordingId(desc->_recordingId)
-                          .setUserId(desc->_ownerId)
+                          .setRecordingId(desc->recordingId)
+                          .setUserId(desc->ownerId)
                           .build();
         if (!packet)
         {
@@ -830,8 +830,8 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
                           .setVideoEnabled(false)
                           .setSequenceNumber(sequenceNumber)
                           .setTimestamp(timestamp)
-                          .setRecordingId(desc->_recordingId)
-                          .setUserId(desc->_ownerId)
+                          .setRecordingId(desc->recordingId)
+                          .setUserId(desc->ownerId)
                           .build();
 
         if (!packet)

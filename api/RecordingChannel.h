@@ -8,11 +8,11 @@ namespace api
 
 struct RecordingChannel
 {
-    std::string _id;
-    std::string _host;
-    uint16_t _port;
-    uint8_t _aesKey[32];
-    uint8_t _aesSalt[12];
+    std::string id;
+    std::string host;
+    uint16_t port;
+    uint8_t aesKey[32];
+    uint8_t aesSalt[12];
 };
 
 } // namespace api

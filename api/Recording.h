@@ -9,12 +9,12 @@ namespace api
 
 struct Recording
 {
-    std::string _recordingId;
-    std::string _userId;
-    bool _isAudioEnabled;
-    bool _isVideoEnabled;
-    bool _isScreenshareEnabled;
-    std::vector<RecordingChannel> _channels;
+    std::string recordingId;
+    std::string userId;
+    bool isAudioEnabled;
+    bool isVideoEnabled;
+    bool isScreenshareEnabled;
+    std::vector<RecordingChannel> channels;
 };
 
 } // namespace api
