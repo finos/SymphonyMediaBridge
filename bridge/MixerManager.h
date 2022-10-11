@@ -58,8 +58,8 @@ public:
 
     ~MixerManager();
 
-    bridge::Mixer* create();
-    bridge::Mixer* create(uint32_t lastN);
+    bridge::Mixer* create(bool useGlobalPort);
+    bridge::Mixer* create(uint32_t lastN, bool useGlobalPort);
     void remove(const std::string& id);
     std::vector<std::string> getMixerIds();
     std::unique_lock<std::mutex> getMixer(const std::string& id, Mixer*& outMixer);

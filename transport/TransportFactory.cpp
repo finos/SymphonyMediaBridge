@@ -186,20 +186,23 @@ public:
         }
     }
 
-    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts, Endpoints& rtcpPorts) const
+    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts, Endpoints& rtcpPorts, uint32_t maxSessions) const
     {
         const auto portRange = std::make_pair(_config.ice.udpPortRangeLow, _config.ice.udpPortRangeHigh);
         const int portCount = (portRange.second - portRange.first + 1);
         const int offset = _randomGenerator.next() % portCount;
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
-        auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(
-            _endpointFactory
-                ->createUdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
+        auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(_endpointFactory->createUdpEndpoint(_jobManager,
+                                                            maxSessions,
+                                                            _mainAllocator,
+                                                            SocketAddress(ip, firstPort),
+                                                            _rtcePoll,
+                                                            false),
             getDeleter());
 
         auto rtcpEndpoint = std::shared_ptr<UdpEndpoint>(_endpointFactory->createUdpEndpoint(_jobManager,
-                                                             32,
+                                                             maxSessions,
                                                              _mainAllocator,
                                                              SocketAddress(ip, firstPort + 1),
                                                              _rtcePoll,
@@ -234,16 +237,19 @@ public:
         return true;
     }
 
-    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts) const
+    bool openPorts(const SocketAddress& ip, Endpoints& rtpPorts, uint32_t maxSessions) const
     {
         auto portRange = std::make_pair(_config.ice.udpPortRangeLow, _config.ice.udpPortRangeHigh);
         const int portCount = (portRange.second - portRange.first + 1);
         const int offset = _randomGenerator.next() % portCount;
 
         const int firstPort = (portRange.first + (offset % portCount)) & 0xFFFEu;
-        auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(
-            _endpointFactory
-                ->createUdpEndpoint(_jobManager, 32, _mainAllocator, SocketAddress(ip, firstPort), _rtcePoll, false),
+        auto rtpEndpoint = std::shared_ptr<UdpEndpoint>(_endpointFactory->createUdpEndpoint(_jobManager,
+                                                            maxSessions,
+                                                            _mainAllocator,
+                                                            SocketAddress(ip, firstPort),
+                                                            _rtcePoll,
+                                                            false),
             getDeleter());
 
         for (int i = 2; i < portCount && !rtpEndpoint->isGood(); i += 2)
@@ -272,11 +278,11 @@ public:
         return true;
     }
 
-    bool openRtpMuxPorts(Endpoints& rtpPorts) const override
+    bool openRtpMuxPorts(Endpoints& rtpPorts, uint32_t maxSessions) const override
     {
         for (auto nic : _interfaces)
         {
-            if (!openPorts(nic, rtpPorts))
+            if (!openPorts(nic, rtpPorts, maxSessions))
             {
                 return false;
             }
@@ -334,7 +340,7 @@ public:
         const size_t endpointId) override
     {
         Endpoints rtpPorts;
-        if (openPorts(_interfaces.front(), rtpPorts))
+        if (openPorts(_interfaces.front(), rtpPorts, 8))
         {
             return transport::createTransport(_jobManager,
                 _srtpClientFactory,
@@ -414,7 +420,7 @@ public:
     {
         Endpoints rtpPorts;
         Endpoints rtcpPorts;
-        if (openPorts(_interfaces.front(), rtpPorts, rtcpPorts))
+        if (openPorts(_interfaces.front(), rtpPorts, rtcpPorts, 8))
         {
             return transport::createTransport(_jobManager,
                 _srtpClientFactory,

@@ -244,6 +244,7 @@ AllocateConference parseAllocateConference(const nlohmann::json& data)
             allocateConference.lastN.set(lastN.get<uint32_t>());
         }
     }
+    setIfExistsOrDefault(allocateConference.useGlobalPort, data, "global-port", true);
 
     return allocateConference;
 }
@@ -273,7 +274,6 @@ AllocateEndpoint parseAllocateEndpoint(const nlohmann::json& data)
     }
 
     setIfExists(allocateEndpoint.idleTimeoutSeconds, data, "idleTimeout");
-
     return allocateEndpoint;
 }
 

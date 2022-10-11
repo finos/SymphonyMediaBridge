@@ -750,7 +750,7 @@ void SctpAssociationImpl::onInitAck(const SctpPacket& packet,
     {
         if (param->dataSize() > _connect.echoedCookie.maxSize())
         {
-            logger::error("Cookie received is too large!!!", _loggableId.c_str());
+            logger::error("Cookie received is too large!", _loggableId.c_str());
             setState(State::CLOSED);
             return;
         }

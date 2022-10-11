@@ -90,7 +90,7 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
       _receiveQueue(maxSessionCount * 256),
       _defaultListener(nullptr),
       _network(network),
-      _networkLink(std::make_shared<fakenet::NetworkLink>(_name.c_str(), 9000, 1950 * 1024, 3000))
+      _networkLink(std::make_shared<fakenet::NetworkLink>(_name.c_str(), 1500000, 1950 * 1024, 3000))
 {
     openPort(_localPort.getPort());
     _pendingRead.clear();
@@ -160,7 +160,6 @@ void FakeUdpEndpoint::cancelStunTransaction(__uint128_t transactionId)
 // transport::Endpoint
 void FakeUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniquePacket uniquePacket)
 {
-
     if (!uniquePacket)
     {
         return;
@@ -173,7 +172,6 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::Uni
     }
 
     assert(!memory::PacketPoolAllocator::isCorrupt(uniquePacket.get()));
-
     if (!_sendQueue.push({target, memory::makeUniquePacket(_networkLinkAllocator, *uniquePacket)}))
     {
         logger::error("Can't send: send queue is full!", _name.c_str());
@@ -367,7 +365,6 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& source,
     uint64_t timestamp)
 {
     assert(hasIp(target));
-
     _networkLink->push(serializeInbound(source, data, length), timestamp);
 }
 

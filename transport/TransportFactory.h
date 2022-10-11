@@ -70,7 +70,7 @@ public:
         bool enableUplinkEstimation,
         bool enableDownlinkEstimation) = 0;
 
-    virtual bool openRtpMuxPorts(Endpoints& rtpPorts) const = 0;
+    virtual bool openRtpMuxPorts(Endpoints& rtpPorts, uint32_t maxSessions) const = 0;
 
     virtual void maintenance(uint64_t timestamp) = 0;
 

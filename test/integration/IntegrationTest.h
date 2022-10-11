@@ -77,11 +77,13 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
         const auto bitrate = report.second.rtpFrequency * report.second.octets /
             (125 * (report.second.rtpTimestamp - report.second.initialRtpTimestamp));
 
-        logger::debug("%s %s ssrc %u sent video pkts %u, %lu kbps",
+        const char* modality = (report.second.rtpFrequency == 90000 ? "video" : "audio");
+        logger::debug("%s %s ssrc %u sent %s pkts %u, %lu kbps",
             "Test",
             clientName,
             transport->getLoggableId().c_str(),
             report.first,
+            modality,
             report.second.packetsSent,
             bitrate);
     }

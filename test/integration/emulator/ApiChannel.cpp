@@ -1,7 +1,9 @@
 #include "ApiChannel.h"
 #include "HttpRequests.h"
 #include "test/integration/emulator/Httpd.h"
+#include "utils/Format.h"
 #include "utils/IdGenerator.h"
+#include "utils/StringBuilder.h"
 
 namespace
 {
@@ -35,13 +37,14 @@ std::string newIdString()
 namespace emulator
 {
 
-void Conference::create(const std::string& baseUrl)
+void Conference::create(const std::string& baseUrl, bool useGlobalPort)
 {
     nlohmann::json responseBody;
+    nlohmann::json requestBody = {{"last-n", 9}, {"global-port", useGlobalPort}};
 
     _success = awaitResponse<HttpPostRequest>(_httpd,
         baseUrl + "/conferences",
-        "{\"last-n\":9}",
+        requestBody.dump().c_str(),
         3 * utils::Time::sec,
         responseBody);
 

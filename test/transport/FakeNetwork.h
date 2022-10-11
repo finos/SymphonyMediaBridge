@@ -154,7 +154,7 @@ public:
 private:
     void internetThreadRun();
     std::shared_ptr<Internet> _internet;
-    const uint64_t _sleepTime;
+    const uint64_t _tickInterval;
     std::atomic<State> _state;
     std::atomic<State> _command;
     std::unique_ptr<std::thread> _thread;

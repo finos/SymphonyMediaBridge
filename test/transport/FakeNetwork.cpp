@@ -251,8 +251,8 @@ bool Firewall::addPortMapping(const transport::SocketAddress& source, int public
     return true;
 }
 
-InternetRunner::InternetRunner(const uint64_t sleepTime)
-    : _sleepTime(sleepTime),
+InternetRunner::InternetRunner(const uint64_t interval)
+    : _tickInterval(interval),
       _state(State::paused),
       _command(State::paused)
 {
@@ -295,7 +295,7 @@ void InternetRunner::internetThreadRun()
         {
             _state = running;
             _internet->process(utils::Time::getAbsoluteTime());
-            utils::Time::nanoSleep(_sleepTime);
+            utils::Time::nanoSleep(_tickInterval);
         }
         else if (_command == paused)
         {
