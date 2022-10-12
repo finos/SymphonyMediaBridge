@@ -4098,9 +4098,8 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         }
 
         auto* videoStream = barbell->videoSsrcMap.getItem(item.ssrcs[0]);
-        if (!videoStream || videoStream->endpointIdHash.isSet())
+        if (!videoStream)
         {
-            // if it is set it must already be set to this endpointId
             continue;
         }
         videoStream->endpointIdHash.set(item.endpointIdHash);
@@ -4111,7 +4110,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         if (item.ssrcs.size() > 1)
         {
             auto* videoStream = barbell->videoSsrcMap.getItem(item.ssrcs[1]);
-            if (videoStream && videoStream->endpointIdHash.isSet())
+            if (videoStream)
             {
                 videoStream->endpointIdHash.set(item.endpointIdHash);
                 videoStream->endpointId.set(item.endpointId);
