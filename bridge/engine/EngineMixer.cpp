@@ -3878,32 +3878,14 @@ void EngineMixer::addBarbell(EngineBarbell* barbell)
 }
 
 // executed on transport thread context
-// occupying the transport thread context assures inbound ssrc contexts are not used by transport while removing
-// them we also assure all ssrcs are removed before erasing the barbell
+// remove inbound ssrc jobs should execute before this by calling decommissionInboundSsrc
 void EngineMixer::internalRemoveBarbell(size_t idHash)
 {
     auto barbell = _engineBarbells.getItem(idHash);
     if (!barbell)
     {
+        logger::warn("barbell has already been removed from engineBarbells", _loggableId.c_str());
         return;
-    }
-
-    for (auto& videoStream : barbell->videoStreams)
-    {
-        for (size_t i = 0; i < videoStream.stream.numLevels; ++i)
-        {
-            auto& ssrc = videoStream.stream.levels[i].ssrc;
-            auto inboundContext = _ssrcInboundContexts.getItem(ssrc);
-            if (inboundContext)
-            {
-                internalRemoveInboundSsrc(ssrc);
-            }
-        }
-    }
-
-    for (auto& audioStream : barbell->audioStreams)
-    {
-        internalRemoveInboundSsrc(audioStream.ssrc);
     }
 
     _engineBarbells.erase(idHash);
@@ -3924,7 +3906,7 @@ void EngineMixer::removeBarbell(size_t idHash)
 
     barbell->transport.stop();
 
-    for (auto& videoStream : barbell->videoStreams)
+    for (const auto& videoStream : barbell->videoStreams)
     {
         for (size_t i = 0; i < videoStream.stream.numLevels; ++i)
         {
@@ -3933,6 +3915,15 @@ void EngineMixer::removeBarbell(size_t idHash)
             decommissionInboundContext(ssrc);
             decommissionInboundContext(feedbackSsrc);
         }
+    }
+
+    const auto& slideStream = barbell->slideStream;
+    for (size_t i = 0; i < slideStream.stream.numLevels; ++i)
+    {
+        auto ssrc = slideStream.stream.levels[i].ssrc;
+        auto feedbackSsrc = slideStream.stream.levels[i].feedbackSsrc;
+        decommissionInboundContext(ssrc);
+        decommissionInboundContext(feedbackSsrc);
     }
 
     for (auto& audioStream : barbell->audioStreams)
