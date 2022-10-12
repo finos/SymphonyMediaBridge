@@ -108,6 +108,10 @@ public:
     CFG_GROUP_END(rtcp) // can be made configurable later
 
     CFG_GROUP()
+    CFG_PROP(bool, barbelling, false);
+    CFG_GROUP_END(capabilities)
+
+    CFG_GROUP()
     CFG_PROP(uint32_t, mtu, 1440);
     CFG_PROP(uint64_t, reportInterval, utils::Time::ms * 2500);
     CFG_GROUP_END(recordingRtcp)

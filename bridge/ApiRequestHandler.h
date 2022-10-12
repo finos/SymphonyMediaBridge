@@ -1,6 +1,7 @@
 #pragma once
 
 #include "bridge/endpointActions/ActionContext.h"
+#include "config/Config.h"
 #include "httpd/HttpRequestHandler.h"
 #include <functional>
 #include <map>
@@ -45,7 +46,8 @@ class ApiRequestHandler : public httpd::HttpRequestHandler, public ActionContext
 public:
     ApiRequestHandler(bridge::MixerManager& mixerManager,
         transport::SslDtls& sslDtls,
-        transport::ProbeServer& probeServer);
+        transport::ProbeServer& probeServer,
+        const config::Config& config);
     httpd::Response onRequest(const httpd::Request& request) override;
 
 private:

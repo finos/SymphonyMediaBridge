@@ -25,8 +25,9 @@ namespace bridge
 
 ApiRequestHandler::ApiRequestHandler(bridge::MixerManager& mixerManager,
     transport::SslDtls& sslDtls,
-    transport::ProbeServer& probeServer)
-    : ActionContext(mixerManager, sslDtls, probeServer),
+    transport::ProbeServer& probeServer,
+    const config::Config& config)
+    : ActionContext(mixerManager, sslDtls, probeServer, config),
       _lastAutoRequestId(0)
 
 #if ENABLE_LEGACY_API
