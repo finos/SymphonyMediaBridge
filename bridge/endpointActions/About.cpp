@@ -1,6 +1,5 @@
 #include "ApiActions.h"
 #include "bridge/RequestLogger.h"
-#include "utils/SimpleJson.h"
 #include "utils/StringTokenizer.h"
 
 namespace bridge
