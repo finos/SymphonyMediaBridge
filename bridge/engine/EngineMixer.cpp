@@ -2145,6 +2145,11 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
 
 void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp)
 {
+    if (EngineBarbell::isFromBarbell(packetInfo.transport()->getTag()) || !packetInfo.inboundContext())
+    {
+        return;
+    }
+
     for (auto& recordingStreams : _engineRecordingStreams)
     {
         auto* recordingStream = recordingStreams.second;
@@ -2184,14 +2189,14 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
 
 void EngineMixer::forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp)
 {
+    if (EngineBarbell::isFromBarbell(packetInfo.transport()->getTag()))
+    {
+        return;
+    }
+
     for (auto& it : _engineBarbells)
     {
         auto& barbell = *it.second;
-        if (&barbell.transport == packetInfo.transport())
-        {
-            continue; // not sending back over same barbell
-        }
-
         const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
         const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
         if (rewriteMapItr == audioSsrcRewriteMap.end())
@@ -2340,14 +2345,15 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 
 void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
 {
+    if (EngineBarbell::isFromBarbell(packetInfo.transport()->getTag()) || !packetInfo.inboundContext())
+    {
+        return;
+    }
+
     const auto senderEndpointIdHash = packetInfo.packet()->endpointIdHash;
     for (auto& it : _engineBarbells)
     {
         auto& barbell = *it.second;
-        if (&barbell.transport == packetInfo.transport() || !packetInfo.inboundContext())
-        {
-            continue; // not sending back over same barbell
-        }
 
         uint32_t targetSsrc = 0;
         const auto simulcastLevel = packetInfo.inboundContext()->simulcastLevel;
@@ -2510,6 +2516,11 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
 
 void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo, const uint64_t timestamp)
 {
+    if (EngineBarbell::isFromBarbell(packetInfo.transport()->getTag()) || !packetInfo.inboundContext())
+    {
+        return;
+    }
+
     for (auto& recordingStreams : _engineRecordingStreams)
     {
         auto* recordingStream = recordingStreams.second;
