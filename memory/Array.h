@@ -20,7 +20,16 @@ public:
     }
 
     Array(const Array&) = delete;
-    Array& operator=(const Array&) = delete;
+    Array& operator=(const Array& other)
+    {
+        auto* start = _dataPtr;
+        for (auto& m : other)
+        {
+            *start = m;
+        }
+        _size = other._size;
+        return *this;
+    }
 
     ~Array()
     {
@@ -58,6 +67,7 @@ public:
 
     size_t capacity() const { return _capacity; }
     size_t size() const { return _size; }
+    bool empty() const { return _size == 0; }
 
     void clear()
     {

@@ -3972,21 +3972,62 @@ void EngineMixer::mapSsrc2UserId(uint32_t ssrc, uint32_t usid)
 
 namespace
 {
-template <typename TArray>
-void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TArray& target)
+template <typename TMap>
+void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TMap& map)
 {
     for (auto endpoint : endpointArray)
     {
         BarbellMapItem item;
-
         endpoint["endpoint-id"].getString(item.endpointId);
-        item.endpointIdHash = utils::hash<char*>{}(item.endpointId);
         for (auto ssrc : endpoint["ssrcs"].getArray())
         {
-            item.ssrcs.push_back(ssrc.getInt<uint32_t>(0));
+            item.newSsrcs.push_back(ssrc.getInt<uint32_t>(0));
         }
 
-        target.push_back(item);
+        const auto endpointIdHash = utils::hash<char*>{}(item.endpointId);
+        map.add(endpointIdHash, item);
+    }
+}
+
+template <class T>
+void addToMap(EngineBarbell::VideoStream& stream, T& videoMapping)
+{
+    auto* m = videoMapping.getItem(stream.endpointIdHash.get());
+    if (!m)
+    {
+        auto entry = videoMapping.add(stream.endpointIdHash.get(), BarbellMapItem());
+        if (!entry.second)
+        {
+            return;
+        }
+        m = &entry.first->second;
+        std::strcpy(m->endpointId, stream.endpointId.get().c_str());
+    }
+
+    if (m)
+    {
+        m->oldSsrcs.push_back(stream.stream.getKeySsrc());
+    }
+}
+
+template <class T>
+void addToMap(EngineBarbell::AudioStream& stream, T& audioMapping)
+{
+    auto* m = audioMapping.getItem(stream.endpointIdHash.get());
+    if (!m)
+    {
+        auto entry = audioMapping.add(stream.endpointIdHash.get(), BarbellMapItem());
+        if (!entry.second)
+        {
+            return;
+        }
+        m = &entry.first->second;
+        std::strcpy(m->endpointId, stream.endpointId.get().c_str());
+    }
+
+    if (m)
+    {
+        m->oldSsrcs.push_back(stream.ssrc);
     }
 }
 } // namespace
@@ -4016,148 +4057,128 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     auto videoEndpointsArray = mediaMapJson["video-endpoints"].getArray();
     auto audioEndpointsArray = mediaMapJson["audio-endpoints"].getArray();
 
-    memory::Map<uint32_t, size_t, 32> mappedVideoKeySsrcs;
-    memory::Array<BarbellMapItem, 12> videoSsrcs;
-    memory::Array<BarbellMapItem, 8> audioSsrcs;
-
+    memory::Map<size_t, BarbellMapItem, 16> videoSsrcs;
     copyToBarbellMapItemArray(videoEndpointsArray, videoSsrcs);
-    copyToBarbellMapItemArray(audioEndpointsArray, audioSsrcs);
-    for (const auto& bbItem : videoSsrcs)
-    {
-        for (const auto& ssrc : bbItem.ssrcs)
-        {
-            mappedVideoKeySsrcs.add(ssrc, bbItem.endpointIdHash);
-        }
-    }
-
-    memory::Map<size_t, bool, 32> fwdVideoEndpoints;
-    for (auto& item : videoSsrcs)
-    {
-        fwdVideoEndpoints.add(item.endpointIdHash, true);
-    }
-
-    memory::Map<size_t, bool, 32> fwdAudioEndpoints;
-    for (auto& item : audioSsrcs)
-    {
-        fwdAudioEndpoints.add(item.endpointIdHash, true);
-    }
-
-    const auto mapRevision = _activeMediaList->getMapRevision();
-
-    memory::Array<EngineBarbell::VideoStream*, 32> prevMappedVideoStreams;
     for (auto& stream : barbell->videoStreams)
     {
         if (stream.endpointIdHash.isSet())
         {
-            prevMappedVideoStreams.push_back(&stream);
+            addToMap(stream, videoSsrcs);
         }
     }
     if (barbell->slideStream.endpointIdHash.isSet())
     {
-        prevMappedVideoStreams.push_back(&barbell->slideStream);
+        addToMap(barbell->slideStream, videoSsrcs);
     }
 
-    // clear out removed streams
-    for (auto* stream : prevMappedVideoStreams)
+    memory::Map<size_t, BarbellMapItem, 8> audioSsrcs;
+    copyToBarbellMapItemArray(audioEndpointsArray, audioSsrcs);
+    for (auto& stream : barbell->audioStreams)
     {
-        auto& videoStream = *stream;
-        auto it = mappedVideoKeySsrcs.find(videoStream.stream.getKeySsrc());
-        const bool endpointNotMapped = !fwdVideoEndpoints.contains(videoStream.endpointIdHash.get());
-        const bool ssrcRemapped = (it == mappedVideoKeySsrcs.end() || it->second != videoStream.endpointIdHash.get());
-        if (endpointNotMapped || ssrcRemapped)
+        if (stream.endpointIdHash.isSet())
         {
-            _activeMediaList->removeVideoParticipant(videoStream.endpointIdHash.get());
-            _engineStreamDirector->removeParticipant(videoStream.endpointIdHash.get());
-            videoStream.endpointIdHash.clear();
-            videoStream.endpointId.clear();
+            addToMap(stream, audioSsrcs);
         }
     }
 
-    for (auto& audioStream : barbell->audioStreams)
+    const auto mapRevision = _activeMediaList->getMapRevision();
+
+    // remove video
+    for (auto& entry : videoSsrcs)
     {
-        if (audioStream.endpointIdHash.isSet() && !fwdAudioEndpoints.contains(audioStream.endpointIdHash.get()))
+        auto& item = entry.second;
+        if (item.hasChanged())
         {
-            _activeMediaList->removeAudioParticipant(audioStream.endpointIdHash.get());
-            audioStream.endpointIdHash.clear();
-            audioStream.endpointId.clear();
+            _activeMediaList->removeVideoParticipant(entry.first);
+            _engineStreamDirector->removeParticipant(entry.first);
+
+            for (auto ssrc : item.oldSsrcs)
+            {
+                auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
+                if (videoStream)
+                {
+                    videoStream->endpointIdHash.clear();
+                    videoStream->endpointId.clear();
+                }
+            }
         }
     }
 
-    for (auto& item : audioSsrcs)
+    // add videos
+    for (auto& entry : videoSsrcs)
     {
-        for (size_t i = 0; i < item.ssrcs.size(); ++i)
+        auto& item = entry.second;
+        if (item.hasChanged())
         {
-            const auto ssrc = item.ssrcs[i];
-            auto* audioStream = barbell->audioSsrcMap.getItem(ssrc);
+            SimulcastStream primary;
+            utils::Optional<SimulcastStream> secondary;
+            uint32_t streamIndex = 0;
+            for (auto& ssrc : item.newSsrcs)
+            {
+                auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
+                if (!videoStream)
+                {
+                    logger::error("unannounced ssrc %u", _loggableId.c_str(), ssrc);
+                    continue;
+                }
+                if (streamIndex++ == 0)
+                {
+                    primary = videoStream->stream;
+                }
+                else
+                {
+                    secondary.set(videoStream->stream);
+                }
+                videoStream->endpointIdHash.set(entry.first);
+                videoStream->endpointId.set(item.endpointId);
+            }
+
+            if (!item.newSsrcs.empty())
+            {
+                _activeMediaList->addBarbellVideoParticipant(entry.first, primary, secondary, item.endpointId);
+                _engineStreamDirector->addParticipant(entry.first,
+                    primary,
+                    secondary.isSet() ? &secondary.get() : nullptr);
+            }
+        }
+    }
+
+    // remove audio
+    for (auto& entry : audioSsrcs)
+    {
+        auto& item = entry.second;
+        if (item.hasChanged())
+        {
+            _activeMediaList->removeAudioParticipant(entry.first);
+            for (auto ssrc : item.oldSsrcs)
+            {
+                auto* audioStream = barbell->audioSsrcMap.getItem(ssrc);
+                if (audioStream)
+                {
+                    audioStream->endpointIdHash.clear();
+                    audioStream->endpointId.clear();
+                }
+            }
+        }
+    }
+
+    // add audio
+    for (auto& entry : audioSsrcs)
+    {
+        auto& item = entry.second;
+        if (item.hasChanged())
+        {
+            auto* audioStream = barbell->audioSsrcMap.getItem(item.newSsrcs[0]);
             if (!audioStream)
             {
-                logger::error("audio ssrc in barbell UMM does not exist %u", _loggableId.c_str(), ssrc);
-            }
-            else if (audioStream->endpointIdHash.isSet() && audioStream->endpointIdHash.get() != item.endpointIdHash)
-            {
-                // must remove as this ssrc has been remapped
-                _activeMediaList->removeAudioParticipant(audioStream->endpointIdHash.get());
-                audioStream->endpointIdHash.clear();
-                audioStream->endpointId.clear();
-            }
-        }
-    }
-
-    // add video sources
-    for (auto& item : videoSsrcs)
-    {
-        if (item.ssrcs.size() == 0)
-        {
-            continue;
-        }
-
-        SimulcastStream primary;
-        utils::Optional<SimulcastStream> secondary;
-        uint32_t streamIndex = 0;
-        for (auto& ssrc : item.ssrcs)
-        {
-            auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
-            if (!videoStream)
-            {
-                logger::error("unannounced ssrc %u", _loggableId.c_str(), ssrc);
+                // if it is set it must already be set to this endpointId
                 continue;
             }
-            if (streamIndex++ == 0)
-            {
-                primary = videoStream->stream;
-            }
-            else
-            {
-                secondary.set(videoStream->stream);
-            }
-            videoStream->endpointIdHash.set(item.endpointIdHash);
-            videoStream->endpointId.set(item.endpointId);
+
+            audioStream->endpointIdHash.set(entry.first);
+            audioStream->endpointId.set(item.endpointId);
+            _activeMediaList->addBarbellAudioParticipant(entry.first, item.endpointId);
         }
-
-        _activeMediaList->addBarbellVideoParticipant(item.endpointIdHash, primary, secondary, item.endpointId);
-        _engineStreamDirector->addParticipant(item.endpointIdHash,
-            primary,
-            secondary.isSet() ? &secondary.get() : nullptr);
-    }
-
-    // add audio sources
-    for (auto& item : audioSsrcs)
-    {
-        if (item.ssrcs.size() == 0)
-        {
-            continue;
-        }
-
-        auto* audioStream = barbell->audioSsrcMap.getItem(item.ssrcs[0]);
-        if (!audioStream || audioStream->endpointIdHash.isSet())
-        {
-            // if it is set it must already be set to this endpointId
-            continue;
-        }
-
-        audioStream->endpointIdHash.set(item.endpointIdHash);
-        audioStream->endpointId.set(item.endpointId);
-        _activeMediaList->addBarbellAudioParticipant(item.endpointIdHash, item.endpointId);
     }
 
     if (mapRevision != _activeMediaList->getMapRevision())
