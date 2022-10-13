@@ -781,7 +781,8 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
     auto umm = json::writer::createObjectWriter(outMessage);
     umm.addProperty("type", "user-media-map");
 
-    if (!_videoSsrcRewriteMap.empty())
+    bool slidesAdded = false;
+    if (!_videoSsrcRewriteMap.empty() || _videoScreenShareSsrcMapping.isSet())
     {
         auto videoArray = json::writer::createArrayWriter(outMessage, "video-endpoints");
         for (auto& item : _videoSsrcRewriteMap)
@@ -797,8 +798,20 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
 
                 if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == item.first)
                 {
+                    slidesAdded = true;
                     videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second.rewriteSsrc);
                 }
+            }
+        }
+        if (!slidesAdded && _videoScreenShareSsrcMapping.isSet())
+        {
+            const auto* videoStream = _videoParticipants.getItem(_videoScreenShareSsrcMapping.get().first);
+            if (videoStream && videoStream->isLocal)
+            {
+                auto videoEp = json::writer::createObjectWriter(outMessage);
+                videoEp.addProperty("endpoint-id", videoStream->endpointId.c_str());
+                auto videoSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
+                videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second.rewriteSsrc);
             }
         }
     }
