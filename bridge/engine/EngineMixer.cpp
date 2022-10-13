@@ -4100,31 +4100,33 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
             continue;
         }
 
-        auto* videoStream = barbell->videoSsrcMap.getItem(item.ssrcs[0]);
-        if (!videoStream || videoStream->endpointIdHash.isSet())
+        SimulcastStream primary;
+        utils::Optional<SimulcastStream> secondary;
+        uint32_t streamIndex = 0;
+        for (auto& ssrc : item.ssrcs)
         {
-            continue;
-        }
-
-        videoStream->endpointIdHash.set(item.endpointIdHash);
-        videoStream->endpointId.set(item.endpointId);
-        SimulcastStream stream0 = videoStream->stream;
-
-        utils::Optional<SimulcastStream> stream1;
-        if (item.ssrcs.size() > 1)
-        {
-            auto* videoStream = barbell->videoSsrcMap.getItem(item.ssrcs[1]);
-            if (videoStream)
+            auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
+            if (!videoStream)
             {
-                videoStream->endpointIdHash.set(item.endpointIdHash);
-                videoStream->endpointId.set(item.endpointId);
-
-                stream1.set(videoStream->stream);
+                logger::error("unannounced ssrc %u", _loggableId.c_str(), ssrc);
+                continue;
             }
+            if (streamIndex++ == 0)
+            {
+                primary = videoStream->stream;
+            }
+            else
+            {
+                secondary.set(videoStream->stream);
+            }
+            videoStream->endpointIdHash.set(item.endpointIdHash);
+            videoStream->endpointId.set(item.endpointId);
         }
 
-        _activeMediaList->addBarbellVideoParticipant(item.endpointIdHash, stream0, stream1, item.endpointId);
-        _engineStreamDirector->addParticipant(item.endpointIdHash, stream0, stream1.isSet() ? &stream1.get() : nullptr);
+        _activeMediaList->addBarbellVideoParticipant(item.endpointIdHash, primary, secondary, item.endpointId);
+        _engineStreamDirector->addParticipant(item.endpointIdHash,
+            primary,
+            secondary.isSet() ? &secondary.get() : nullptr);
     }
 
     // add audio sources
