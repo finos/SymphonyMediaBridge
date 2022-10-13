@@ -10,7 +10,6 @@
 #include "memory/PartialSortExtractor.h"
 #include "utils/ScopedInvariantChecker.h"
 #include "utils/ScopedReentrancyBlocker.h"
-
 namespace bridge
 {
 
@@ -186,8 +185,16 @@ bool ActiveMediaList::addBarbellVideoParticipant(const size_t endpointIdHash,
     const auto videoParticipantsItr = _videoParticipants.find(endpointIdHash);
     if (videoParticipantsItr != _videoParticipants.end())
     {
-        return false;
+        if (videoParticipantsItr->second.simulcastStream == simulcastStream &&
+            videoParticipantsItr->second.secondarySimulcastStream == secondarySimulcastStream)
+        {
+            // Nothing has changed
+            return false;
+        }
+
+        _videoParticipants.erase(endpointIdHash);
     }
+
     _videoParticipants.emplace(endpointIdHash,
         VideoParticipant{endpointId, simulcastStream, secondarySimulcastStream, false});
 
