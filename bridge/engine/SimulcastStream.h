@@ -63,6 +63,8 @@ struct SimulcastStream
         return utils::Optional<uint32_t>();
     }
 
+    uint32_t getKeySsrc() const { return levels[0].ssrc; }
+
     size_t numLevels;
     size_t highestActiveLevel;
     SimulcastLevel levels[maxLevels];

@@ -4005,30 +4005,55 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     auto videoEndpointsArray = mediaMapJson["video-endpoints"].getArray();
     auto audioEndpointsArray = mediaMapJson["audio-endpoints"].getArray();
 
+    memory::Map<uint32_t, size_t, 32> mappedVideoKeySsrcs;
     memory::Array<BarbellMapItem, 12> videoSsrcs;
     memory::Array<BarbellMapItem, 8> audioSsrcs;
 
     copyToBarbellMapItemArray(videoEndpointsArray, videoSsrcs);
     copyToBarbellMapItemArray(audioEndpointsArray, audioSsrcs);
-
-    memory::Map<size_t, size_t, 32> fwdVideoEndpoints;
-    for (auto& item : videoSsrcs)
+    for (const auto& bbItem : videoSsrcs)
     {
-        fwdVideoEndpoints.add(item.endpointIdHash, item.endpointIdHash);
+        for (const auto& ssrc : bbItem.ssrcs)
+        {
+            mappedVideoKeySsrcs.add(ssrc, bbItem.endpointIdHash);
+        }
     }
 
-    memory::Map<size_t, size_t, 32> fwdAudioEndpoints;
+    memory::Map<size_t, bool, 32> fwdVideoEndpoints;
+    for (auto& item : videoSsrcs)
+    {
+        fwdVideoEndpoints.add(item.endpointIdHash, true);
+    }
+
+    memory::Map<size_t, bool, 32> fwdAudioEndpoints;
     for (auto& item : audioSsrcs)
     {
-        fwdAudioEndpoints.add(item.endpointIdHash, item.endpointIdHash);
+        fwdAudioEndpoints.add(item.endpointIdHash, true);
     }
 
     const auto mapRevision = _activeMediaList->getMapRevision();
 
-    // clear out removed streams
-    for (auto& videoStream : barbell->videoStreams)
+    memory::Array<EngineBarbell::VideoStream*, 32> prevMappedVideoStreams;
+    for (auto& stream : barbell->videoStreams)
     {
-        if (videoStream.endpointIdHash.isSet() && !fwdVideoEndpoints.contains(videoStream.endpointIdHash.get()))
+        if (stream.endpointIdHash.isSet())
+        {
+            prevMappedVideoStreams.push_back(&stream);
+        }
+    }
+    if (barbell->slideStream.endpointIdHash.isSet())
+    {
+        prevMappedVideoStreams.push_back(&barbell->slideStream);
+    }
+
+    // clear out removed streams
+    for (auto* stream : prevMappedVideoStreams)
+    {
+        auto& videoStream = *stream;
+        auto it = mappedVideoKeySsrcs.find(videoStream.stream.getKeySsrc());
+        const bool endpointNotMapped = !fwdVideoEndpoints.contains(videoStream.endpointIdHash.get());
+        const bool ssrcRemapped = (it == mappedVideoKeySsrcs.end() || it->second != videoStream.endpointIdHash.get());
+        if (endpointNotMapped || ssrcRemapped)
         {
             _activeMediaList->removeVideoParticipant(videoStream.endpointIdHash.get());
             _engineStreamDirector->removeParticipant(videoStream.endpointIdHash.get());
@@ -4044,28 +4069,6 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
             _activeMediaList->removeAudioParticipant(audioStream.endpointIdHash.get());
             audioStream.endpointIdHash.clear();
             audioStream.endpointId.clear();
-        }
-    }
-
-    // remove remapped ones
-    for (auto& item : videoSsrcs)
-    {
-        for (size_t i = 0; i < item.ssrcs.size(); ++i)
-        {
-            const auto ssrc = item.ssrcs[i];
-            auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
-            if (!videoStream)
-            {
-                logger::error("video ssrc in barbell UMM does not exist %u", _loggableId.c_str(), ssrc);
-            }
-            else if (videoStream->endpointIdHash.isSet() && videoStream->endpointIdHash.get() != item.endpointIdHash)
-            {
-                // must remove as this ssrc has been remapped
-                _activeMediaList->removeVideoParticipant(videoStream->endpointIdHash.get());
-                _engineStreamDirector->removeParticipant(videoStream->endpointIdHash.get());
-                videoStream->endpointIdHash.clear();
-                videoStream->endpointId.clear();
-            }
         }
     }
 
@@ -4098,10 +4101,11 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         }
 
         auto* videoStream = barbell->videoSsrcMap.getItem(item.ssrcs[0]);
-        if (!videoStream)
+        if (!videoStream || videoStream->endpointIdHash.isSet())
         {
             continue;
         }
+
         videoStream->endpointIdHash.set(item.endpointIdHash);
         videoStream->endpointId.set(item.endpointId);
         SimulcastStream stream0 = videoStream->stream;
