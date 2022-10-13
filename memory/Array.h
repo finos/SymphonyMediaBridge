@@ -22,12 +22,17 @@ public:
     Array(const Array&) = delete;
     Array& operator=(const Array& other)
     {
-        auto* start = _dataPtr;
-        for (auto& m : other)
+        clear();
+        if (other.size() > _capacity)
         {
-            *start = m;
+            if (_dataPtr != reinterpret_cast<T*>(_data))
+            {
+                free(_dataPtr);
+            }
+            _dataPtr = reinterpret_cast<T*>(malloc(other._capacity * sizeof(T)));
         }
-        _size = other._size;
+
+        append(other._dataPtr, other._size);
         return *this;
     }
 

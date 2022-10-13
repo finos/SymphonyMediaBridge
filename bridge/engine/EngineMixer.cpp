@@ -4087,7 +4087,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     for (auto& entry : videoSsrcs)
     {
         auto& item = entry.second;
-        if (item.hasChanged())
+        if (item.hasChanged() && !item.oldSsrcs.empty())
         {
             _activeMediaList->removeVideoParticipant(entry.first);
             _engineStreamDirector->removeParticipant(entry.first);
@@ -4108,7 +4108,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     for (auto& entry : videoSsrcs)
     {
         auto& item = entry.second;
-        if (item.hasChanged())
+        if (item.hasChanged() && !item.newSsrcs.empty())
         {
             SimulcastStream primary;
             utils::Optional<SimulcastStream> secondary;
@@ -4118,7 +4118,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
                 auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
                 if (!videoStream)
                 {
-                    logger::error("unannounced ssrc %u", _loggableId.c_str(), ssrc);
+                    logger::error("unannounced video ssrc %u", _loggableId.c_str(), ssrc);
                     continue;
                 }
                 if (streamIndex++ == 0)
@@ -4133,13 +4133,8 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
                 videoStream->endpointId.set(item.endpointId);
             }
 
-            if (!item.newSsrcs.empty())
-            {
-                _activeMediaList->addBarbellVideoParticipant(entry.first, primary, secondary, item.endpointId);
-                _engineStreamDirector->addParticipant(entry.first,
-                    primary,
-                    secondary.isSet() ? &secondary.get() : nullptr);
-            }
+            _activeMediaList->addBarbellVideoParticipant(entry.first, primary, secondary, item.endpointId);
+            _engineStreamDirector->addParticipant(entry.first, primary, secondary.isSet() ? &secondary.get() : nullptr);
         }
     }
 
@@ -4147,7 +4142,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     for (auto& entry : audioSsrcs)
     {
         auto& item = entry.second;
-        if (item.hasChanged())
+        if (item.hasChanged() && !item.oldSsrcs.empty())
         {
             _activeMediaList->removeAudioParticipant(entry.first);
             for (auto ssrc : item.oldSsrcs)
@@ -4166,11 +4161,12 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     for (auto& entry : audioSsrcs)
     {
         auto& item = entry.second;
-        if (item.hasChanged())
+        if (item.hasChanged() && !item.newSsrcs.empty())
         {
             auto* audioStream = barbell->audioSsrcMap.getItem(item.newSsrcs[0]);
             if (!audioStream)
             {
+                logger::error("unannounced audio ssrc %u", _loggableId.c_str(), item.newSsrcs[0]);
                 // if it is set it must already be set to this endpointId
                 continue;
             }
