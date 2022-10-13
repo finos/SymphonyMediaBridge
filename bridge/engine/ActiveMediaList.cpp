@@ -196,7 +196,7 @@ bool ActiveMediaList::addBarbellVideoParticipant(const size_t endpointIdHash,
         assert(wasRemoved);
     }
 
-    const auto it = _videoParticipants.emplace(endpointIdHash,
+    _videoParticipants.emplace(endpointIdHash,
         VideoParticipant{endpointId, simulcastStream, secondarySimulcastStream, false});
 
     return onVideoParticipantAdded(endpointIdHash, simulcastStream, secondarySimulcastStream, endpointId);
