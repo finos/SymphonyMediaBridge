@@ -45,6 +45,7 @@
 #include "transport/recp/RecStreamAddedEventBuilder.h"
 #include "transport/recp/RecStreamRemovedEventBuilder.h"
 #include "utils/SimpleJson.h"
+#include "utils/Span.h"
 #include "webrtc/DataChannel.h"
 #include <cstring>
 
@@ -1748,6 +1749,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     auto ssrcContext = emplaceInboundSsrcContext(ssrc, sender, rtpHeader->payloadType, timestamp);
     if (!ssrcContext)
     {
+        logger::error("could not acquire inbound ssrc context ssrc %u", _loggableId.c_str(), ssrc);
         return;
     }
 
@@ -2889,6 +2891,7 @@ void EngineMixer::onPliRequestFromReceiver(const size_t endpointIdHash, const ui
 
     if (!outboundContext)
     {
+        logger::debug("PLI for non existent outbound context", _loggableId.c_str());
         return;
     }
 
@@ -3220,6 +3223,7 @@ void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStrea
         auto ssrcInboundContext = _ssrcInboundContexts.getItem(ssrc);
         if (ssrcInboundContext && ssrcInboundContext->activeMedia)
         {
+            ssrcInboundContext->inactiveTransitionCount = 0;
             _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
         }
     }
@@ -4034,9 +4038,9 @@ void addToMap(EngineBarbell::AudioStream& stream, T& audioMapping)
 // This method must be executed on engine thread. UMM requests could go in another queue and processed
 // at start of tick.
 // There are three phases to update the endpoints and ssrc mappings in active media list
-// phase 1: Identify all endpoints that are registered but no longer in UMM, and remove them from AML
-// phase 2: Identify all streams that have been remapped to other ssrcs, and remove them from AML
-// phase 3: All ssrcs in UMM that lacks existing mapping in EngineBarbell, must be new or changed. Add them to AML
+// Step1: Create a table of all existing stream mappings and all new stream mappings so we can compare changes
+// Step2: Remove all streams that have changed mapping and old mapping. Could be that the new mapping is nil
+// Step3: Add all streams that have changed and new mapping
 void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* message)
 {
     auto barbell = _engineBarbells.getItem(barbellIdHash);
@@ -4084,15 +4088,15 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     const auto mapRevision = _activeMediaList->getMapRevision();
 
     // remove video
-    for (auto& entry : videoSsrcs)
+    for (const auto& entry : videoSsrcs)
     {
-        auto& item = entry.second;
+        const auto& item = entry.second;
         if (item.hasChanged() && !item.oldSsrcs.empty())
         {
             _activeMediaList->removeVideoParticipant(entry.first);
             _engineStreamDirector->removeParticipant(entry.first);
 
-            for (auto ssrc : item.oldSsrcs)
+            for (const auto ssrc : item.oldSsrcs)
             {
                 auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
                 if (videoStream)
@@ -4105,19 +4109,20 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     }
 
     // add videos
-    for (auto& entry : videoSsrcs)
+    for (const auto& entry : videoSsrcs)
     {
-        auto& item = entry.second;
+        const auto& item = entry.second;
         if (item.hasChanged() && !item.newSsrcs.empty())
         {
             SimulcastStream primary;
             utils::Optional<SimulcastStream> secondary;
             uint32_t streamIndex = 0;
-            for (auto& ssrc : item.newSsrcs)
+            for (const auto ssrc : item.newSsrcs)
             {
                 auto* videoStream = barbell->videoSsrcMap.getItem(ssrc);
                 if (!videoStream)
                 {
+                    assert(false);
                     logger::error("unannounced video ssrc %u", _loggableId.c_str(), ssrc);
                     continue;
                 }
@@ -4135,17 +4140,40 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
 
             _activeMediaList->addBarbellVideoParticipant(entry.first, primary, secondary, item.endpointId);
             _engineStreamDirector->addParticipant(entry.first, primary, secondary.isSet() ? &secondary.get() : nullptr);
+
+            for (const auto& simLevel : utils::Span<SimulcastLevel>(primary.levels, primary.numLevels))
+            {
+                auto* inboundContext = _ssrcInboundContexts.getItem(simLevel.ssrc);
+                if (inboundContext)
+                {
+                    inboundContext->inactiveTransitionCount = 0;
+                    inboundContext->pliScheduler.triggerPli();
+                }
+            }
+            if (secondary.isSet())
+            {
+                for (const auto& simLevel :
+                    utils::Span<SimulcastLevel>(secondary.get().levels, secondary.get().numLevels))
+                {
+                    auto* inboundContext = _ssrcInboundContexts.getItem(simLevel.ssrc);
+                    if (inboundContext)
+                    {
+                        inboundContext->inactiveTransitionCount = 0;
+                        inboundContext->pliScheduler.triggerPli();
+                    }
+                }
+            }
         }
     }
 
     // remove audio
-    for (auto& entry : audioSsrcs)
+    for (const auto& entry : audioSsrcs)
     {
-        auto& item = entry.second;
+        const auto& item = entry.second;
         if (item.hasChanged() && !item.oldSsrcs.empty())
         {
             _activeMediaList->removeAudioParticipant(entry.first);
-            for (auto ssrc : item.oldSsrcs)
+            for (const auto ssrc : item.oldSsrcs)
             {
                 auto* audioStream = barbell->audioSsrcMap.getItem(ssrc);
                 if (audioStream)
@@ -4158,9 +4186,9 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     }
 
     // add audio
-    for (auto& entry : audioSsrcs)
+    for (const auto& entry : audioSsrcs)
     {
-        auto& item = entry.second;
+        const auto& item = entry.second;
         if (item.hasChanged() && !item.newSsrcs.empty())
         {
             auto* audioStream = barbell->audioSsrcMap.getItem(item.newSsrcs[0]);
