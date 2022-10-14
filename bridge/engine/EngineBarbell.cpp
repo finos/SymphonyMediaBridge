@@ -37,7 +37,7 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
 
         for (auto& ssrcPair : videoGroup.ssrcLevels)
         {
-            videoStream.stream.levels[videoStream.stream.numLevels++] = {ssrcPair.main, ssrcPair.feedback, false};
+            videoStream.stream.addLevel({ssrcPair.main, ssrcPair.feedback, false});
         }
 
         if (videoGroup.slides)
@@ -58,19 +58,17 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
 
     for (auto& videoStream : videoStreams)
     {
-        for (size_t i = 0; i < videoStream.stream.numLevels; ++i)
+        for (auto& simulcastLevel : videoStream.stream.getLevels())
         {
-            auto& ssrcPair = videoStream.stream.levels[i];
-            videoSsrcMap.emplace(ssrcPair.ssrc, &videoStream);
-            videoSsrcMap.emplace(ssrcPair.feedbackSsrc, &videoStream);
+            videoSsrcMap.emplace(simulcastLevel.ssrc, &videoStream);
+            videoSsrcMap.emplace(simulcastLevel.feedbackSsrc, &videoStream);
         }
     }
 
-    for (size_t i = 0; i < slideStream.stream.numLevels; ++i)
+    for (auto& simulcastLevel : slideStream.stream.getLevels())
     {
-        auto& ssrcPair = slideStream.stream.levels[i];
-        videoSsrcMap.emplace(ssrcPair.ssrc, &slideStream);
-        videoSsrcMap.emplace(ssrcPair.feedbackSsrc, &slideStream);
+        videoSsrcMap.emplace(simulcastLevel.ssrc, &slideStream);
+        videoSsrcMap.emplace(simulcastLevel.feedbackSsrc, &slideStream);
     }
 }
 

@@ -14,17 +14,11 @@ bridge::SimulcastStream makeSimulcastStream(const uint32_t ssrc0,
 {
     bridge::SimulcastStream simulcastStream;
     memset(&simulcastStream, 0, sizeof(bridge::SimulcastStream));
-    simulcastStream.numLevels = 3;
+
     simulcastStream.highestActiveLevel = 2;
-    simulcastStream.levels[0].ssrc = ssrc0;
-    simulcastStream.levels[0].feedbackSsrc = feedback0;
-    simulcastStream.levels[0].mediaActive = false;
-    simulcastStream.levels[1].ssrc = ssrc1;
-    simulcastStream.levels[1].feedbackSsrc = feedback1;
-    simulcastStream.levels[1].mediaActive = false;
-    simulcastStream.levels[2].ssrc = ssrc2;
-    simulcastStream.levels[2].feedbackSsrc = feedback2;
-    simulcastStream.levels[2].mediaActive = false;
+    simulcastStream.addLevel({ssrc0, feedback0, false});
+    simulcastStream.addLevel({ssrc1, feedback1, false});
+    simulcastStream.addLevel({ssrc2, feedback2, false});
     simulcastStream.contentType = bridge::SimulcastStream::VideoContentType::VIDEO;
     return simulcastStream;
 }
@@ -35,10 +29,7 @@ bridge::SimulcastStream makeSimulcastStream(const uint32_t ssrc0,
 {
     bridge::SimulcastStream simulcastStream;
     memset(&simulcastStream, 0, sizeof(bridge::SimulcastStream));
-    simulcastStream.numLevels = 1;
-    simulcastStream.levels[0].ssrc = ssrc0;
-    simulcastStream.levels[0].feedbackSsrc = feedback0;
-    simulcastStream.levels[0].mediaActive = false;
+    simulcastStream.addLevel({ssrc0, feedback0, false});
     simulcastStream.contentType = contentType;
     return simulcastStream;
 }

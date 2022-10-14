@@ -454,10 +454,10 @@ void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
 
     if (engineVideoStream->simulcastStream.numLevels != 0)
     {
-        for (size_t i = 0; i < engineVideoStream->simulcastStream.numLevels; ++i)
+        for (auto& simulcastLevel : engineVideoStream->simulcastStream.getLevels())
         {
-            decommissionInboundContext(engineVideoStream->simulcastStream.levels[i].ssrc);
-            decommissionInboundContext(engineVideoStream->simulcastStream.levels[i].feedbackSsrc);
+            decommissionInboundContext(simulcastLevel.ssrc);
+            decommissionInboundContext(simulcastLevel.feedbackSsrc);
         }
 
         markAssociatedVideoOutboundContextsForDeletion(engineVideoStream,
@@ -468,10 +468,10 @@ void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
     if (engineVideoStream->secondarySimulcastStream.isSet() &&
         engineVideoStream->secondarySimulcastStream.get().numLevels != 0)
     {
-        for (size_t i = 0; i < engineVideoStream->simulcastStream.numLevels; ++i)
+        for (auto& simulcastLevel : engineVideoStream->secondarySimulcastStream.get().getLevels())
         {
-            decommissionInboundContext(engineVideoStream->secondarySimulcastStream.get().levels[i].ssrc);
-            decommissionInboundContext(engineVideoStream->secondarySimulcastStream.get().levels[i].feedbackSsrc);
+            decommissionInboundContext(simulcastLevel.ssrc);
+            decommissionInboundContext(simulcastLevel.feedbackSsrc);
         }
 
         markAssociatedVideoOutboundContextsForDeletion(engineVideoStream,
@@ -3217,9 +3217,9 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
 void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStream,
     const SimulcastStream& simulcastStream)
 {
-    for (size_t i = 0; i < simulcastStream.numLevels; ++i)
+    for (auto& simulcastLevel : simulcastStream.getLevels())
     {
-        const auto ssrc = simulcastStream.levels[i].ssrc;
+        const auto ssrc = simulcastLevel.ssrc;
         auto ssrcInboundContext = _ssrcInboundContexts.getItem(ssrc);
         if (ssrcInboundContext && ssrcInboundContext->activeMedia)
         {
@@ -3923,22 +3923,18 @@ void EngineMixer::removeBarbell(size_t idHash)
 
     for (const auto& videoStream : barbell->videoStreams)
     {
-        for (size_t i = 0; i < videoStream.stream.numLevels; ++i)
+        for (auto& simulcastLevel : videoStream.stream.getLevels())
         {
-            auto ssrc = videoStream.stream.levels[i].ssrc;
-            auto feedbackSsrc = videoStream.stream.levels[i].feedbackSsrc;
-            decommissionInboundContext(ssrc);
-            decommissionInboundContext(feedbackSsrc);
+            decommissionInboundContext(simulcastLevel.ssrc);
+            decommissionInboundContext(simulcastLevel.feedbackSsrc);
         }
     }
 
     const auto& slideStream = barbell->slideStream;
-    for (size_t i = 0; i < slideStream.stream.numLevels; ++i)
+    for (auto& simulcastLevel : slideStream.stream.getLevels())
     {
-        auto ssrc = slideStream.stream.levels[i].ssrc;
-        auto feedbackSsrc = slideStream.stream.levels[i].feedbackSsrc;
-        decommissionInboundContext(ssrc);
-        decommissionInboundContext(feedbackSsrc);
+        decommissionInboundContext(simulcastLevel.ssrc);
+        decommissionInboundContext(simulcastLevel.feedbackSsrc);
     }
 
     for (auto& audioStream : barbell->audioStreams)
@@ -4141,7 +4137,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
             _activeMediaList->addBarbellVideoParticipant(entry.first, primary, secondary, item.endpointId);
             _engineStreamDirector->addParticipant(entry.first, primary, secondary.isSet() ? &secondary.get() : nullptr);
 
-            for (const auto& simLevel : utils::Span<SimulcastLevel>(primary.levels, primary.numLevels))
+            for (const auto& simLevel : primary.getLevels())
             {
                 auto* inboundContext = _ssrcInboundContexts.getItem(simLevel.ssrc);
                 if (inboundContext)
@@ -4152,8 +4148,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
             }
             if (secondary.isSet())
             {
-                for (const auto& simLevel :
-                    utils::Span<SimulcastLevel>(secondary.get().levels, secondary.get().numLevels))
+                for (const auto& simLevel : secondary.get().getLevels())
                 {
                     auto* inboundContext = _ssrcInboundContexts.getItem(simLevel.ssrc);
                     if (inboundContext)

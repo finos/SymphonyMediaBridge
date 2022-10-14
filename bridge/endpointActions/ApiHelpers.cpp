@@ -280,7 +280,7 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::Video& vide
 
         for (auto& level : stream.sources)
         {
-            simulcastStream.levels[simulcastStream.numLevels++] = SimulcastLevel{level.main, level.feedback, false};
+            simulcastStream.addLevel(SimulcastLevel{level.main, level.feedback, false});
             logger::debug("Add simulcast level main ssrc %u feedback ssrc %u, content %s, endpointId %s",
                 "ApiRequestHandler",
                 level.main,

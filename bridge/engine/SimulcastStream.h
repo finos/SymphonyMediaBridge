@@ -2,6 +2,8 @@
 
 #include "bridge/engine/SimulcastLevel.h"
 #include "utils/Optional.h"
+#include "utils/Span.h"
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 
@@ -25,11 +27,11 @@ struct SimulcastStream
 
     utils::Optional<uint32_t> getFeedbackSsrcFor(uint32_t ssrc)
     {
-        for (size_t i = 0; i < numLevels; ++i)
+        for (auto& simulcastLevel : getLevels())
         {
-            if (levels[i].ssrc == ssrc)
+            if (simulcastLevel.ssrc == ssrc)
             {
-                return utils::Optional<uint32_t>(levels[i].feedbackSsrc);
+                return utils::Optional<uint32_t>(simulcastLevel.feedbackSsrc);
             }
         }
         return utils::Optional<uint32_t>();
@@ -37,11 +39,11 @@ struct SimulcastStream
 
     utils::Optional<uint32_t> getMainSsrcFor(uint32_t feedbackSsrc)
     {
-        for (size_t i = 0; i < numLevels; ++i)
+        for (auto& simulcastLevel : getLevels())
         {
-            if (levels[i].feedbackSsrc == feedbackSsrc)
+            if (simulcastLevel.feedbackSsrc == feedbackSsrc)
             {
-                return utils::Optional<uint32_t>(levels[i].ssrc);
+                return utils::Optional<uint32_t>(simulcastLevel.ssrc);
             }
         }
         return utils::Optional<uint32_t>();
@@ -64,6 +66,23 @@ struct SimulcastStream
     }
 
     uint32_t getKeySsrc() const { return levels[0].ssrc; }
+    utils::Span<SimulcastLevel> getLevels()
+    {
+        return utils::Span<SimulcastLevel>(levels, std::min(numLevels, maxLevels));
+    }
+    utils::Span<const SimulcastLevel> getLevels() const
+    {
+        return utils::Span<const SimulcastLevel>(levels, std::min(numLevels, maxLevels));
+    }
+
+    void addLevel(const SimulcastLevel& level)
+    {
+        if (numLevels >= maxLevels)
+        {
+            return;
+        }
+        levels[numLevels++] = level;
+    }
 
     size_t numLevels;
     size_t highestActiveLevel;
