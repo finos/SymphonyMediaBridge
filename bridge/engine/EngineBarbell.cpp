@@ -40,14 +40,7 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
             videoStream.stream.addLevel({ssrcPair.main, ssrcPair.feedback, false});
         }
 
-        if (videoGroup.slides)
-        {
-            slideStream = videoStream;
-        }
-        else
-        {
-            videoStreams.push_back(videoStream);
-        }
+        videoStreams.push_back(videoStream);
     }
 
     // setup lookup table after vector population, otherwise objects may move due to reallocation
@@ -63,12 +56,6 @@ EngineBarbell::EngineBarbell(const std::string& barbellId,
             videoSsrcMap.emplace(simulcastLevel.ssrc, &videoStream);
             videoSsrcMap.emplace(simulcastLevel.feedbackSsrc, &videoStream);
         }
-    }
-
-    for (auto& simulcastLevel : slideStream.stream.getLevels())
-    {
-        videoSsrcMap.emplace(simulcastLevel.ssrc, &slideStream);
-        videoSsrcMap.emplace(simulcastLevel.feedbackSsrc, &slideStream);
     }
 }
 

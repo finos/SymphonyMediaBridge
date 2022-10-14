@@ -3,7 +3,6 @@
 #include "bridge/engine/SimulcastLevel.h"
 #include "utils/Optional.h"
 #include "utils/Span.h"
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 
@@ -68,11 +67,11 @@ struct SimulcastStream
     uint32_t getKeySsrc() const { return levels[0].ssrc; }
     utils::Span<SimulcastLevel> getLevels()
     {
-        return utils::Span<SimulcastLevel>(levels, std::min(numLevels, maxLevels));
+        return utils::Span<SimulcastLevel>(levels, numLevels > maxLevels ? maxLevels : numLevels);
     }
     utils::Span<const SimulcastLevel> getLevels() const
     {
-        return utils::Span<const SimulcastLevel>(levels, std::min(numLevels, maxLevels));
+        return utils::Span<const SimulcastLevel>(levels, numLevels > maxLevels ? maxLevels : numLevels);
     }
 
     void addLevel(const SimulcastLevel& level)

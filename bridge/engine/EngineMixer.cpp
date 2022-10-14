@@ -3930,13 +3930,6 @@ void EngineMixer::removeBarbell(size_t idHash)
         }
     }
 
-    const auto& slideStream = barbell->slideStream;
-    for (auto& simulcastLevel : slideStream.stream.getLevels())
-    {
-        decommissionInboundContext(simulcastLevel.ssrc);
-        decommissionInboundContext(simulcastLevel.feedbackSsrc);
-    }
-
     for (auto& audioStream : barbell->audioStreams)
     {
         decommissionInboundContext(audioStream.ssrc);
@@ -4065,10 +4058,6 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         {
             addToMap(stream, videoSsrcs);
         }
-    }
-    if (barbell->slideStream.endpointIdHash.isSet())
-    {
-        addToMap(barbell->slideStream, videoSsrcs);
     }
 
     memory::Map<size_t, BarbellMapItem, 8> audioSsrcs;
