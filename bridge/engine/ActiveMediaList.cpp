@@ -137,7 +137,7 @@ bool ActiveMediaList::onAudioParticipantAdded(const size_t endpointIdHash, const
         return false;
     }
 
-    logger::info("new endpoint %s %zu, added to active audio list, mapped ssrc %u",
+    logger::info("new endpoint %s %zu, added to active audio list, mapped ssrc -> %u",
         _logId.c_str(),
         endpointId,
         endpointIdHash,
@@ -257,8 +257,19 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
             return false;
         }
 
+        const uint32_t ssrc = secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingVideo()
+            ? secondarySimulcastStream.get().levels[0].ssrc
+            : simulcastStream.levels[0].ssrc;
+
         addToRewriteMap(endpointIdHash, simulcastGroup);
-        logger::debug("%s %zu video mapped to %u", _logId.c_str(), endpointId, endpointIdHash, simulcastGroup[0].main);
+        logger::info("%s %zu video mapped %u -> %u (%u %u)",
+            _logId.c_str(),
+            endpointId,
+            endpointIdHash,
+            ssrc,
+            simulcastGroup[0].main,
+            simulcastGroup[1].main,
+            simulcastGroup[2].main);
     }
 
     const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
