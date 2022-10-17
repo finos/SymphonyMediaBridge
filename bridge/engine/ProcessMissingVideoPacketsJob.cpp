@@ -42,7 +42,7 @@ void ProcessMissingVideoPacketsJob::run()
         return;
     }
 
-    logger::info("send NACK for %zu pkts, ssrc %u, %s",
+    logger::debug("send NACK for %zu pkts, ssrc %u, %s",
         "ProcessMissingVideoPacketsJob",
         numMissingSequenceNumbers,
         _ssrcContext.ssrc,
