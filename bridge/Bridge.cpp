@@ -189,7 +189,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
         *_sendPacketAllocator,
         *_audioPacketAllocator);
 
-    _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls, *_probeServer);
+    _requestHandler = std::make_unique<bridge::ApiRequestHandler>(*_mixerManager, *_sslDtls, *_probeServer, _config);
 
     const auto httpAddress = transport::SocketAddress::parse(_config.address, _config.port);
     _httpd = httpdFactory.create(*_requestHandler);

@@ -20,7 +20,21 @@ public:
     }
 
     Array(const Array&) = delete;
-    Array& operator=(const Array&) = delete;
+    Array& operator=(const Array& other)
+    {
+        clear();
+        if (other.size() > _capacity)
+        {
+            if (_dataPtr != reinterpret_cast<T*>(_data))
+            {
+                free(_dataPtr);
+            }
+            _dataPtr = reinterpret_cast<T*>(malloc(other._capacity * sizeof(T)));
+        }
+
+        append(other._dataPtr, other._size);
+        return *this;
+    }
 
     ~Array()
     {
@@ -58,6 +72,7 @@ public:
 
     size_t capacity() const { return _capacity; }
     size_t size() const { return _size; }
+    bool empty() const { return _size == 0; }
 
     void clear()
     {

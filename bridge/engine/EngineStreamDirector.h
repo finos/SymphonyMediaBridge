@@ -537,22 +537,22 @@ public:
             ssrc,
             active ? 't' : 'f');
 
-        for (size_t i = 0; i < primary.numLevels; ++i)
+        for (auto& simulcastLevel : primary.getLevels())
         {
-            if (ssrc == primary.levels[i].ssrc)
+            if (ssrc == simulcastLevel.ssrc)
             {
-                primary.levels[i].mediaActive = active;
+                simulcastLevel.mediaActive = active;
                 return setHighestActiveIndex(endpointIdHash, primary);
             }
         }
 
         if (secondary.isSet())
         {
-            for (size_t i = 0; i < secondary.get().numLevels; ++i)
+            for (auto& simulcastLevel : secondary.get().getLevels())
             {
-                if (ssrc == secondary.get().levels[i].ssrc)
+                if (ssrc == simulcastLevel.ssrc)
                 {
-                    secondary.get().levels[i].mediaActive = active;
+                    simulcastLevel.mediaActive = active;
                     return setHighestActiveIndex(endpointIdHash, secondary.get());
                 }
             }
@@ -620,22 +620,22 @@ public:
         const auto& primary = participantStreams.primary;
         auto& secondary = participantStreams.secondary;
 
-        for (size_t i = 0; i < primary.numLevels; ++i)
+        for (auto& simulcastLevel : primary.getLevels())
         {
-            if (primary.levels[i].feedbackSsrc == feedbackSsrc)
+            if (simulcastLevel.feedbackSsrc == feedbackSsrc)
             {
-                outSsrc = primary.levels[i].ssrc;
+                outSsrc = simulcastLevel.ssrc;
                 return true;
             }
         }
 
         if (secondary.isSet())
         {
-            for (size_t i = 0; i < secondary.get().numLevels; ++i)
+            for (auto& simulcastLevel : secondary.get().getLevels())
             {
-                if (secondary.get().levels[i].feedbackSsrc == feedbackSsrc)
+                if (simulcastLevel.feedbackSsrc == feedbackSsrc)
                 {
-                    outSsrc = secondary.get().levels[i].ssrc;
+                    outSsrc = simulcastLevel.ssrc;
                     return true;
                 }
             }
@@ -733,9 +733,9 @@ private:
         const auto& primary = participantStreams.primary;
         auto& secondary = participantStreams.secondary;
 
-        for (size_t i = 0; i < primary.numLevels; ++i)
+        for (auto& simulcastLevel : primary.getLevels())
         {
-            if (ssrc == primary.levels[i].ssrc)
+            if (ssrc == simulcastLevel.ssrc)
             {
                 return true;
             }
@@ -743,9 +743,9 @@ private:
 
         if (secondary.isSet())
         {
-            for (size_t i = 0; i < secondary.get().numLevels; ++i)
+            for (auto& simulcastLevel : secondary.get().getLevels())
             {
-                if (ssrc == secondary.get().levels[i].ssrc)
+                if (ssrc == simulcastLevel.ssrc)
                 {
                     return true;
                 }

@@ -49,7 +49,7 @@ public:
             return true;
         }
 
-        if ((_isSet && !other._isSet) || (!_isSet && other._isSet))
+        if (_isSet != other._isSet)
         {
             return false;
         }

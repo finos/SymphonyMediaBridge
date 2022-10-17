@@ -59,7 +59,6 @@ struct EngineBarbell
     // inbound ssrcs over barbell and map to endpointId. Static set of streams prepared in constructor
     std::vector<VideoStream> videoStreams;
     std::vector<AudioStream> audioStreams;
-    VideoStream slideStream;
 
     memory::Map<uint32_t, VideoStream*, 128> videoSsrcMap;
     memory::Map<uint32_t, AudioStream*, 16> audioSsrcMap;

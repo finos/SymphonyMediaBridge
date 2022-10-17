@@ -8,35 +8,46 @@ namespace bridge
 {
 
 using EndpointIdString = FixString<42>;
-using BarbellEndpointIdMap = concurrency::MpmcHashmap32<size_t, EndpointIdString>;
 
 struct BarbellMapItem
 {
-    BarbellMapItem() { endpointId[0] = 0; }
-    BarbellMapItem(const BarbellMapItem& rhs) : endpointIdHash(rhs.endpointIdHash)
+    BarbellMapItem() {}
+    BarbellMapItem(const BarbellMapItem& rhs)
     {
         std::strcpy(endpointId, rhs.endpointId);
-        for (auto ssrc : rhs.ssrcs)
-        {
-            ssrcs.push_back(ssrc);
-        }
+        oldSsrcs = rhs.oldSsrcs;
+        newSsrcs = rhs.newSsrcs;
     }
 
     BarbellMapItem& operator=(const BarbellMapItem& rhs)
     {
-        endpointIdHash = rhs.endpointIdHash;
         std::strcpy(endpointId, rhs.endpointId);
-        ssrcs.clear();
-        for (auto ssrc : rhs.ssrcs)
-        {
-            ssrcs.push_back(ssrc);
-        }
+        oldSsrcs = rhs.oldSsrcs;
+        newSsrcs = rhs.newSsrcs;
         return *this;
     }
 
+    bool hasChanged() const
+    {
+        if (oldSsrcs.size() != newSsrcs.size())
+        {
+            return true;
+        }
+
+        for (size_t i = 0; i < oldSsrcs.size(); ++i)
+        {
+            if (oldSsrcs[i] != newSsrcs[i])
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     char endpointId[EndpointIdString::capacity];
-    size_t endpointIdHash = 0;
-    memory::Array<uint32_t, 2> ssrcs;
+    memory::Array<uint32_t, 2> oldSsrcs;
+    memory::Array<uint32_t, 2> newSsrcs;
 };
 
 } // namespace bridge

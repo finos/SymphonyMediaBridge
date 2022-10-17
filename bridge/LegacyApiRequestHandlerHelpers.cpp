@@ -154,9 +154,7 @@ std::vector<SimulcastStream> makeSimulcastStreams(const legacyapi::Channel& chan
                     continue;
                 }
 
-                simulcastStream.levels[simulcastStream.numLevels].ssrc = simulcastSsrc;
-                simulcastStream.levels[simulcastStream.numLevels].feedbackSsrc = feedbackGroup->_sources[1];
-                ++simulcastStream.numLevels;
+                simulcastStream.addLevel({simulcastSsrc, feedbackGroup->_sources[1], false});
 
                 logger::debug("Add simulcast level main ssrc %u feedback ssrc %u, content %s, id %s, endpointId %s",
                     "RequestHandlerHelpers",

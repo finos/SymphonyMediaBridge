@@ -1289,30 +1289,22 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
     }
     auto videoStream = videoStreamItr->second.get();
 
-    if (simulcastStream.numLevels > 3)
-    {
-        logger::error("Simulcast levels can only be 0 - 3. Video stream endpoint id %s",
-            _loggableId.c_str(),
-            endpointId.c_str());
-        return false;
-    }
-
     utils::StringBuilder<1024> ssrcsString;
-    for (size_t i = 0; i < simulcastStream.numLevels; ++i)
+    for (auto& simulcastLevel : simulcastStream.getLevels())
     {
-        ssrcsString.append(simulcastStream.levels[i].ssrc);
+        ssrcsString.append(simulcastLevel.ssrc);
         ssrcsString.append(",");
-        ssrcsString.append(simulcastStream.levels[i].feedbackSsrc);
+        ssrcsString.append(simulcastLevel.feedbackSsrc);
         ssrcsString.append(" ");
     }
 
     if (secondarySimulcastStream.isSet())
     {
-        for (size_t i = 0; i < secondarySimulcastStream.get().numLevels; ++i)
+        for (auto& simulcastLevel : secondarySimulcastStream.get().getLevels())
         {
-            ssrcsString.append(secondarySimulcastStream.get().levels[i].ssrc);
+            ssrcsString.append(simulcastLevel.ssrc);
             ssrcsString.append(",");
-            ssrcsString.append(secondarySimulcastStream.get().levels[i].feedbackSsrc);
+            ssrcsString.append(simulcastLevel.feedbackSsrc);
             ssrcsString.append(" ");
         }
     }
@@ -1364,21 +1356,21 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
     }
 
     utils::StringBuilder<1024> ssrcsString;
-    for (size_t i = 0; i < simulcastStream.numLevels; ++i)
+    for (auto& simulcastLevel : simulcastStream.getLevels())
     {
-        ssrcsString.append(simulcastStream.levels[i].ssrc);
+        ssrcsString.append(simulcastLevel.ssrc);
         ssrcsString.append(",");
-        ssrcsString.append(simulcastStream.levels[i].feedbackSsrc);
+        ssrcsString.append(simulcastLevel.feedbackSsrc);
         ssrcsString.append(" ");
     }
 
     if (secondarySimulcastStream.isSet())
     {
-        for (size_t i = 0; i < secondarySimulcastStream.get().numLevels; ++i)
+        for (auto& simulcastLevel : secondarySimulcastStream.get().getLevels())
         {
-            ssrcsString.append(secondarySimulcastStream.get().levels[i].ssrc);
+            ssrcsString.append(simulcastLevel.ssrc);
             ssrcsString.append(",");
-            ssrcsString.append(secondarySimulcastStream.get().levels[i].feedbackSsrc);
+            ssrcsString.append(simulcastLevel.feedbackSsrc);
             ssrcsString.append(" ");
         }
     }

@@ -10,7 +10,6 @@
 #include "memory/PartialSortExtractor.h"
 #include "utils/ScopedInvariantChecker.h"
 #include "utils/ScopedReentrancyBlocker.h"
-
 namespace bridge
 {
 
@@ -138,7 +137,7 @@ bool ActiveMediaList::onAudioParticipantAdded(const size_t endpointIdHash, const
         return false;
     }
 
-    logger::info("new endpoint %s %zu, added to active audio list, mapped ssrc %u",
+    logger::info("new endpoint %s %zu, added to active audio list, mapped ssrc -> %u",
         _logId.c_str(),
         endpointId,
         endpointIdHash,
@@ -186,8 +185,17 @@ bool ActiveMediaList::addBarbellVideoParticipant(const size_t endpointIdHash,
     const auto videoParticipantsItr = _videoParticipants.find(endpointIdHash);
     if (videoParticipantsItr != _videoParticipants.end())
     {
-        return false;
+        if (videoParticipantsItr->second.simulcastStream == simulcastStream &&
+            videoParticipantsItr->second.secondarySimulcastStream == secondarySimulcastStream)
+        {
+            // Nothing has changed
+            return false;
+        }
+
+        const bool wasRemoved = removeVideoParticipant(endpointIdHash);
+        assert(wasRemoved);
     }
+
     _videoParticipants.emplace(endpointIdHash,
         VideoParticipant{endpointId, simulcastStream, secondarySimulcastStream, false});
 
@@ -249,8 +257,19 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
             return false;
         }
 
+        const uint32_t ssrc = secondarySimulcastStream.isSet() && secondarySimulcastStream.get().isSendingVideo()
+            ? secondarySimulcastStream.get().levels[0].ssrc
+            : simulcastStream.levels[0].ssrc;
+
         addToRewriteMap(endpointIdHash, simulcastGroup);
-        logger::debug("%s %zu video mapped to %u", _logId.c_str(), endpointId, endpointIdHash, simulcastGroup[0].main);
+        logger::info("%s %zu video mapped %u -> %u (%u %u)",
+            _logId.c_str(),
+            endpointId,
+            endpointIdHash,
+            ssrc,
+            simulcastGroup[0].main,
+            simulcastGroup[1].main,
+            simulcastGroup[2].main);
     }
 
     const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
@@ -773,7 +792,8 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
     auto umm = json::writer::createObjectWriter(outMessage);
     umm.addProperty("type", "user-media-map");
 
-    if (!_videoSsrcRewriteMap.empty())
+    bool slidesAdded = false;
+    if (!_videoSsrcRewriteMap.empty() || _videoScreenShareSsrcMapping.isSet())
     {
         auto videoArray = json::writer::createArrayWriter(outMessage, "video-endpoints");
         for (auto& item : _videoSsrcRewriteMap)
@@ -789,8 +809,20 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
 
                 if (_videoScreenShareSsrcMapping.isSet() && _videoScreenShareSsrcMapping.get().first == item.first)
                 {
+                    slidesAdded = true;
                     videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second.rewriteSsrc);
                 }
+            }
+        }
+        if (!slidesAdded && _videoScreenShareSsrcMapping.isSet())
+        {
+            const auto* videoStream = _videoParticipants.getItem(_videoScreenShareSsrcMapping.get().first);
+            if (videoStream && videoStream->isLocal)
+            {
+                auto videoEp = json::writer::createObjectWriter(outMessage);
+                videoEp.addProperty("endpoint-id", videoStream->endpointId.c_str());
+                auto videoSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
+                videoSsrcs.addElement(_videoScreenShareSsrcMapping.get().second.rewriteSsrc);
             }
         }
     }

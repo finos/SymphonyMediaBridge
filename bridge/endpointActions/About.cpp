@@ -24,7 +24,18 @@ httpd::Response handleAbout(ActionContext* context,
     }
     else if (utils::StringTokenizer::isEqual(nextToken, "capabilities"))
     {
-        httpd::Response response(httpd::StatusCode::OK, "[\"smb_api.1\", \"ssrc_rewriting.1\"]");
+        std::string body;
+        body.reserve(128);
+
+        body.append("[").append("\"smb_api.1\",\"ssrc_rewriting.1\"");
+        if (context->config.capabilities.barbelling)
+        {
+            body.append(",\"barbelling.1\"");
+        }
+
+        body.append("]");
+
+        httpd::Response response(httpd::StatusCode::OK, body);
         response._headers["Content-type"] = "text/json";
         return response;
     }
