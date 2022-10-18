@@ -1,0 +1,27 @@
+client-3 from these
+dcf4d8b5-67b6-a373-0e28-0000e2c61fbe
+{"feedback":974505262,"main":2030702920},{"feedback":1381064349,"main":917039355},{"feedback":3578092938,"main":2071948705}
+
+barbell 503 out
+StreamDirector-502] addParticipant primary, endpointIdHash 2034360343214467174, 37581168 2369227058 2811473204
+{"feedback":3915208497,"main":37581168},{"feedback":2287693656,"main":2369227058},{"feedback":532822905,"main":2811473204}
+
+2022-09-10 19:43:07.770 DEBUG [0x7f52238fe700][Vp8Rewriter] Fwd, Transport-510 ssrc 917039355 -> 2369227058, seq 0 (0) -> 1 (0), marker 0, picId 65535 -> 0, tl0PicIdx 255 -> 0, ts 8000 -> 8501
+2022-09-10 19:43:07.770 DEBUG [0x7f52238fe700][Vp8Rewriter] New offset, Transport-510 ssrc 917039355, oseq 1, oPicId 1, otl0PicIdx 1, oTimestamp 501
+
+
+2022-09-10 19:43:07.740 DEBUG [0x7f526503f700][ActiveMediaList-503] dcf4d8b5-67b6-a373-0e28-0000e2c61fbe 2034360343214467174 video mapped to 37581168
+2022-09-10 19:43:07.748 DEBUG [0x7f52c50a9700][ActiveMediaList-502] dcf4d8b5-67b6-a373-0e28-0000e2c61fbe 2034360343214467174 video mapped to 3215198850
+
+2022-09-10 19:43:07.830 DEBUG [0x7f52238fe700][Vp8Rewriter] Fwd, Transport-510 ssrc 917039355 -> 2369227058,
+
+2022-09-10 19:43:08.667 DEBUG [0x7f52ab0fd700][Transport-506] RTP ssrc 2287693656 from 127.0.0.1:18394
+2022-09-10 19:43:08.667 DEBUG [0x7f52ab0fd700][Vp8Rewriter] Transport-506 rewriteRtxPacket ssrc 2287693656 -> 2369227058, seq 0 -> 3
+
+
+
+
+{"feedback":2287693656,"main":2369227058
+
+output from Mixer-502
+{"content":"video","sources":[{"feedback":2859026191,"main":3215198850}]}

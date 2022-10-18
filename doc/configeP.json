@@ -1,0 +1,32 @@
+{
+    "audio": {
+        "payload-type": {
+            "id": 111,
+            "parameters": {
+                "minptime": "10",
+                "useinbandfec": "1"
+            },
+            "rtcp-fbs": [],
+            "name": "opus",
+            "clockrate": 48000,
+            "channels": 2
+        },
+        "ssrcs": [
+        Integer
+        ],
+        "rtp-hdrexts": [
+            {
+                "id": 1,
+                "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level"
+            },
+            {
+                "id": 3,
+                "uri": "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"
+            }
+        ],
+        "neighbours": {
+            "user-id": <integer>,
+            ""
+        }
+    }
+}

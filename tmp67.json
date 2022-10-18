@@ -1,0 +1,128 @@
+{
+    "action": "configure",
+    "audio": {
+        "payload-type": {
+            "channels": 2,
+            "clockrate": 48000,
+            "id": 111,
+            "name": "opus",
+            "rtcp-fbs": []
+        },
+        "rtp-hdrexts": [
+            {
+                "id": 1,
+                "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level"
+            },
+            {
+                "id": 3,
+                "uri": "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"
+            },
+            {
+                "id": 8,
+                "uri": "c9:params:rtp-hdrext:info"
+            }
+        ],
+        "ssrcs": [
+            1729991583
+        ]
+    },
+    "bundle-transport": {
+        "dtls": {
+            "hash": "F4:BB:4F:B4:7C:FC:9F:8D:E2:D2:7C:B6:3B:0B:9B:19:13:D4:1F:8C:22:C0:10:D4:B3:DD:4B:46:22:BE:43:CF",
+            "setup": "active",
+            "type": "sha-256"
+        },
+        "ice": {
+            "candidates": [
+                {
+                    "component": 1,
+                    "foundation": "441761538704",
+                    "generation": 0,
+                    "ip": "127.0.0.1",
+                    "network": 1,
+                    "port": 19264,
+                    "priority": 142541055,
+                    "protocol": "udp",
+                    "type": "host"
+                }
+            ],
+            "pwd": "+TgkpwkBOHbv+t9sAlRuAZMJ",
+            "ufrag": "4XtW9FCPkbpvBL"
+        }
+    },
+    "data": {
+        "port": 5000
+    },
+    "video": {
+        "payload-types": [
+            {
+                "clockrate": 90000,
+                "id": 100,
+                "name": "VP8",
+                "parameters": {},
+                "rtcp-fbs": [
+                    {
+                        "type": "goog-remb"
+                    },
+                    {
+                        "subtype": "fir",
+                        "type": "ccm"
+                    },
+                    {
+                        "type": "nack"
+                    },
+                    {
+                        "subtype": "pli",
+                        "type": "nack"
+                    }
+                ]
+            },
+            {
+                "clockrate": 90000,
+                "id": 96,
+                "name": "rtx",
+                "parameters": {
+                    "apt": "100"
+                },
+                "rtcp-fbs": []
+            }
+        ],
+        "rtp-hdrexts": [
+            {
+                "id": 3,
+                "uri": "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"
+            },
+            {
+                "id": 4,
+                "uri": "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id"
+            }
+        ],
+        "streams": [
+            {
+                "content": "video",
+                "id": "msidX",
+                "sources": [
+                    {
+                        "feedback": 1201923579,
+                        "main": 214924670
+                    },
+                    {
+                        "feedback": 3823327109,
+                        "main": 4026776184
+                    },
+                    {
+                        "feedback": 1954575377,
+                        "main": 740528967
+                    }
+                ]
+            }
+        ]
+    },
+    "neighbours": {
+        "action": "mute",
+        "groups": [
+            "id1",
+            "id2"
+        ]
+    }
+}

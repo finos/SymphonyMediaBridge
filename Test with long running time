@@ -1,0 +1,14 @@
+Test with long running time
+
+ JobManagerTest.concurrentJobs 40s cannot use Timeturner
+JobManagerTest.serialJobs  42s
+
+
+IntegrationTest 102s
+IceIntegrationTest 102s
+SctpIntegrationTest 5s
+LFList   30s
+BweTest 8s
+RecordingTransportTest (5438 ms total)
+
+

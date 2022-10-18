@@ -1,0 +1,284 @@
+{
+    "audio": {
+        "payload-type": {
+            "channels": 2,
+            "clockrate": 48000,
+            "id": 111,
+            "name": "opus",
+            "parameters": {
+                "minptime": "10",
+                "useinbandfec": "1"
+            },
+            "rtcp-fbs": []
+        },
+        "rtp-hdrexts": [
+            {
+                "id": 1,
+                "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level"
+            },
+            {
+                "id": 3,
+                "uri": "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"
+            },
+            {
+                "id": 8,
+                "uri": "c9:params:rtp-hdrext:info"
+            }
+        ],
+        "ssrcs": [
+            1967926703,
+            4122953233,
+            2948873176,
+            4206108326,
+            2291225965,
+            1948563719
+        ]
+    },
+    "bundle-transport": {
+        "dtls": {
+            "hash": "E8:A3:76:C0:50:5C:71:B7:04:06:9C:35:13:AB:07:ED:64:B9:49:3C:AA:CE:D2:38:C1:22:3C:3E:57:D3:62:44",
+            "setup": "actpass",
+            "type": "sha-256"
+        },
+        "ice": {
+            "candidates": [
+                {
+                    "component": 1,
+                    "foundation": "870038700640",
+                    "generation": 0,
+                    "ip": "127.0.0.1",
+                    "network": 1,
+                    "port": 10000,
+                    "priority": 142541055,
+                    "protocol": "udp",
+                    "type": "host"
+                },
+                {
+                    "component": 1,
+                    "foundation": "373010657536",
+                    "generation": 0,
+                    "ip": "172.24.112.16",
+                    "network": 1,
+                    "port": 10000,
+                    "priority": 142540799,
+                    "protocol": "udp",
+                    "type": "host"
+                },
+                {
+                    "component": 1,
+                    "foundation": "373010657537",
+                    "generation": 0,
+                    "ip": "127.0.0.1",
+                    "network": 1,
+                    "port": 10000,
+                    "priority": 140836863,
+                    "protocol": "udp",
+                    "rel-addr": "172.24.112.16",
+                    "rel-port": 10000,
+                    "type": "srflx"
+                }
+            ],
+            "pwd": "P93DBzrCALrqcUVNsaTRlvJC",
+            "ufrag": "0uplQc9Iu0SpwQ"
+        },
+        "rtcp-mux": true
+    },
+    "data": {
+        "port": 5000
+    },
+    "video": {
+        "payload-types": [
+            {
+                "clockrate": 90000,
+                "id": 100,
+                "name": "VP8",
+                "parameters": {},
+                "rtcp-fbs": [
+                    {
+                        "type": "goog-remb"
+                    },
+                    {
+                        "type": "nack"
+                    },
+                    {
+                        "subtype": "pli",
+                        "type": "nack"
+                    }
+                ]
+            },
+            {
+                "clockrate": 90000,
+                "id": 96,
+                "name": "rtx",
+                "parameters": {
+                    "apt": "100"
+                },
+                "rtcp-fbs": []
+            }
+        ],
+        "rtp-hdrexts": [
+            {
+                "id": 3,
+                "uri": "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"
+            },
+            {
+                "id": 4,
+                "uri": "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id"
+            }
+        ],
+        "streams": [
+            {
+                "content": "local",
+                "sources": [
+                    {
+                        "main": 1452293482
+                    }
+                ]
+            },
+            {
+                "content": "slides",
+                "sources": [
+                    {
+                        "feedback": 432414460,
+                        "main": 4282261198
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 1343023375,
+                        "main": 2855178792
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 2299227378,
+                        "main": 4032191708
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 4196278270,
+                        "main": 2611157485
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 3659849515,
+                        "main": 3735466646
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 1919982736,
+                        "main": 3957840882
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 2279321990,
+                        "main": 3574827302
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 3720278362,
+                        "main": 210526953
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 2066120141,
+                        "main": 1558999280
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 2397353904,
+                        "main": 1269212183
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 2446281059,
+                        "main": 1649814228
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 2670845912,
+                        "main": 110627123
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 4129138224,
+                        "main": 309418306
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 522963206,
+                        "main": 3613426613
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 3478962324,
+                        "main": 1559966013
+                    }
+                ]
+            },
+            {
+                "content": "video",
+                "sources": [
+                    {
+                        "feedback": 1366393848,
+                        "main": 3485023764
+                    }
+                ]
+            }
+        ]
+    }
+}
