@@ -508,10 +508,13 @@ void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
 
     for (auto& ssrcOutboundContextPair : engineVideoStream->ssrcOutboundContexts)
     {
-        engineVideoStream->transport.getJobQueue().addJob<RemovePacketCacheJob>(*this,
-            engineVideoStream->transport,
-            ssrcOutboundContextPair.second,
-            _messageListener);
+        if (!ssrcOutboundContextPair.second.markedForDeletion)
+        {
+            engineVideoStream->transport.getJobQueue().addJob<RemovePacketCacheJob>(*this,
+                engineVideoStream->transport,
+                ssrcOutboundContextPair.second,
+                _messageListener);
+        }
     }
 
     if (engineVideoStream->simulcastStream.numLevels != 0)
