@@ -86,22 +86,21 @@ private:
         (instance->*mEngineFunction)(std::forward<UArgs>(args)...);
     }
 
-    template <class TTuple, size_t... I>
-    void call(std::true_type, TTuple& t, std::index_sequence<I...>) const
+    template <size_t... I>
+    void call(std::true_type, std::index_sequence<I...>) const
     {
-        callMemberFunction(std::get<I>(t)...);
+        callMemberFunction(std::get<I>(mFunctionArguments)...);
     }
 
-    template <class TTuple, size_t... I>
-    void call(std::false_type, TTuple& t, std::index_sequence<I...>) const
+    template <size_t... I>
+    void call(std::false_type, std::index_sequence<I...>) const
     {
-        mEngineFunction(std::get<I>(t)...);
+        mEngineFunction(std::get<I>(mFunctionArguments)...);
     }
 
     void invoke() const final
     {
         call(std::is_member_function_pointer<Func>(),
-            mFunctionArguments,
             std::make_index_sequence<std::tuple_size<std::tuple<Args...>>::value>{});
     }
 
@@ -229,7 +228,8 @@ namespace engine
 {
 
 template <class Func, class... Args>
-std::enable_if_t<std::is_function<std::remove_pointer_t<Func>>::value, detail::EngineFunctionBinder<Func, Args...>>
+std::enable_if_t<std::is_function<std::remove_pointer_t<Func>>::value,
+    detail::EngineFunctionBinder<Func, std::decay_t<Args>...>>
 bind(Func&& func, Args&&... args)
 {
     return detail::EngineFunctionBinder<Func, std::decay_t<Args>...>(std::forward<Func>(func),
