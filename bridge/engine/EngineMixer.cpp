@@ -1044,10 +1044,11 @@ void EngineMixer::markSsrcsInUse()
 
         if (previousUse != inboundContext->isSsrcUsed)
         {
-            logger::debug("ssrc %u changed in use state to %c",
+            logger::debug("ssrc %u changed in use state to %c, pinned %c",
                 _loggableId.c_str(),
                 inboundContext->ssrc,
-                previousUse ? 'f' : 't');
+                previousUse ? 'f' : 't',
+                _engineStreamDirector->isPinned(inboundContext->endpointIdHash) ? 't' : 'f');
         }
     }
 }
@@ -1491,7 +1492,6 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
 void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::Packet& packet)
 {
     auto& header = webrtc::streamMessageHeader(packet);
-
     auto dataStreamItr = _engineDataStreams.find(endpointIdHash);
     if (dataStreamItr != _engineDataStreams.cend())
     {

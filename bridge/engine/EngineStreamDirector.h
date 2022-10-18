@@ -9,7 +9,7 @@
 #include "utils/Time.h"
 #include <cstdint>
 
-#define DEBUG_DIRECTOR 1
+#define DEBUG_DIRECTOR 0
 
 #if DEBUG_DIRECTOR
 #define DIRECTOR_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
@@ -397,6 +397,8 @@ public:
         DIRECTOR_LOG("isSsrcUsed, %u false", _loggableId.c_str(), ssrc);
         return false;
     }
+
+    bool isPinned(size_t endpointIdHash) const { return _reversePinMap.contains(endpointIdHash); }
 
     inline QualityLevel getCurrentQualityAndEndpointId(const uint32_t ssrc, size_t& outFromEndpointId)
     {

@@ -1744,17 +1744,13 @@ bool Mixer::pinEndpoint(const size_t endpointIdHash, const std::string& pinnedEn
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto pinnedVideoStreamItr = _videoStreams.find(pinnedEndpointId);
-    if (pinnedVideoStreamItr == _videoStreams.end())
-    {
-        return false;
-    }
+    auto pinnedEndpointIdHash = utils::hash<std::string>()(pinnedEndpointId);
 
     EngineCommand::Command command(EngineCommand::Type::PinEndpoint);
     auto& pinEndpoint = command.command.pinEndpoint;
     pinEndpoint.mixer = &_engineMixer;
     pinEndpoint.endpointIdHash = endpointIdHash;
-    pinEndpoint.pinnedEndpointIdHash = pinnedVideoStreamItr->second->endpointIdHash;
+    pinEndpoint.pinnedEndpointIdHash = pinnedEndpointIdHash;
     _engine.pushCommand(std::move(command));
     return true;
 }
