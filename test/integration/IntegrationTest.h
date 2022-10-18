@@ -78,7 +78,7 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
             (125 * (report.second.rtpTimestamp - report.second.initialRtpTimestamp));
 
         const char* modality = (report.second.rtpFrequency == 90000 ? "video" : "audio");
-        logger::debug("%s %s ssrc %u sent %s pkts %u, %lu kbps",
+        logger::debug("%s %s ssrc %u sent %s pkts %u, %" PRIu64 " kbps",
             "Test",
             clientName,
             transport->getLoggableId().c_str(),

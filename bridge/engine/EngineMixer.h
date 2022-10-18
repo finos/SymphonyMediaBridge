@@ -4,6 +4,7 @@
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/EngineStats.h"
+#include "bridge/engine/EngineThreadContext.h"
 #include "bridge/engine/NeighbourMembership.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
@@ -83,6 +84,7 @@ public:
 
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
+        EngineThreadContext& engineThreadContext,
         EngineMessageListener& messageListener,
         const uint32_t localVideoSsrc,
         const config::Config& config,
@@ -174,6 +176,7 @@ public:
         const uint32_t extendedSequenceNumber);
     void onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet);
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
+    void onOutboundContextFinalized(size_t ownerEndpointHash, uint32_t ssrc, uint32_t feedbackSsrc, bool isVideo);
     void internalRemoveBarbell(size_t idHash);
     void internalRemoveInboundSsrc(uint32_t ssrc);
     // --
@@ -305,6 +308,7 @@ private:
     logger::LoggableId _loggableId;
 
     jobmanager::JobManager& _jobManager;
+    EngineThreadContext& _engineThreadContext;
     EngineMessageListener& _messageListener;
 
     concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
@@ -416,6 +420,9 @@ private:
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream);
 
     void restoreDirectorStreamActiveState(EngineVideoStream& videoStream, const SimulcastStream& simulcastStream);
+    void markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream,
+        const uint32_t ssrc,
+        const uint32_t feedbackSsrc);
     void markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
         const uint32_t ssrc,
         const uint32_t feedbackSsrc);
@@ -482,7 +489,8 @@ private:
     SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
         concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
         const uint32_t ssrc,
-        const RtpMap& rtpMap);
+        const RtpMap& rtpMap,
+        const bool ssrcRewrite);
 
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
     utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);

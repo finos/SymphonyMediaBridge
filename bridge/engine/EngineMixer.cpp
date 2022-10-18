@@ -49,6 +49,8 @@
 #include "webrtc/DataChannel.h"
 #include <cstring>
 
+using namespace bridge;
+
 namespace
 {
 
@@ -80,23 +82,6 @@ public:
 
 private:
     bridge::EngineMixer& _engineMixer;
-    uint32_t _ssrc;
-};
-
-class RemoveSrtpSsrcJob : public jobmanager::CountedJob
-{
-public:
-    RemoveSrtpSsrcJob(transport::RtcTransport& transport, uint32_t ssrc)
-        : CountedJob(transport.getJobCounter()),
-          _transport(transport),
-          _ssrc(ssrc)
-    {
-    }
-
-    void run() override { _transport.removeSrtpLocalSsrc(_ssrc); }
-
-private:
-    transport::RtcTransport& _transport;
     uint32_t _ssrc;
 };
 
@@ -167,7 +152,7 @@ public:
 
             if (_mixerManager.onMessage(std::move(message)))
             {
-                _outboundContext.packetCache.set(nullptr);
+                _outboundContext.packetCache.clear();
             }
         }
     }
@@ -177,6 +162,61 @@ private:
     bridge::SsrcOutboundContext& _outboundContext;
     bridge::EngineMessageListener& _mixerManager;
     size_t _endpointIdHash;
+};
+
+class FinalizeNonSsrcRewriteOutboundContext : public jobmanager::CountedJob
+{
+public:
+    FinalizeNonSsrcRewriteOutboundContext(bridge::EngineMixer& mixer,
+        transport::RtcTransport& transport,
+        bridge::SsrcOutboundContext& outboundContext,
+        bridge::EngineThreadContext& engineThreadContext,
+        bridge::EngineMessageListener& mixerManager,
+        uint32_t feedbackSsrc)
+        : CountedJob(transport.getJobCounter()),
+          _mixer(mixer),
+          _outboundContext(outboundContext),
+          _transport(transport),
+          _engineThreadContext(engineThreadContext),
+          _mixerManager(mixerManager),
+          _feedbackSsrc(feedbackSsrc)
+    {
+    }
+
+    void run() override
+    {
+        const size_t endpointIdHash = _transport.getEndpointIdHash();
+        const uint32_t ssrc = _outboundContext.ssrc;
+
+        auto packet = createGoodBye(ssrc, _outboundContext.allocator);
+        if (packet)
+        {
+            _transport.protectAndSend(std::move(packet));
+        }
+
+        if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
+        {
+            // Run RemovePacketCacheJob inside of this job
+            RemovePacketCacheJob(_mixer, _transport, _outboundContext, _mixerManager).run();
+        }
+
+        _transport.removeSrtpLocalSsrc(ssrc);
+
+        _engineThreadContext.post(engine::bind(&EngineMixer::onOutboundContextFinalized,
+            &_mixer,
+            endpointIdHash,
+            ssrc,
+            _feedbackSsrc,
+            _outboundContext.rtpMap.isVideo()));
+    }
+
+private:
+    bridge::EngineMixer& _mixer;
+    bridge::SsrcOutboundContext& _outboundContext;
+    transport::RtcTransport& _transport;
+    bridge::EngineThreadContext& _engineThreadContext;
+    bridge::EngineMessageListener& _mixerManager;
+    uint32_t _feedbackSsrc;
 };
 
 class AddPacketCacheJob : public jobmanager::CountedJob
@@ -238,6 +278,7 @@ constexpr size_t EngineMixer::iterationDurationMs;
 
 EngineMixer::EngineMixer(const std::string& id,
     jobmanager::JobManager& jobManager,
+    EngineThreadContext& engineThreadContext,
     EngineMessageListener& messageListener,
     const uint32_t localVideoSsrc,
     const config::Config& config,
@@ -249,6 +290,7 @@ EngineMixer::EngineMixer(const std::string& id,
     : _id(id),
       _loggableId("EngineMixer"),
       _jobManager(jobManager),
+      _engineThreadContext(engineThreadContext),
       _messageListener(messageListener),
       _mixerSsrcAudioBuffers(maxSsrcs),
       _incomingBarbellSctp(128),
@@ -362,10 +404,7 @@ void EngineMixer::removeStream(EngineAudioStream* engineAudioStream)
     if (engineAudioStream->transport.isConnected())
     {
         // Job count will increase delaying the deletion of transport by Mixer.
-        auto* context = obtainOutboundSsrcContext(engineAudioStream->endpointIdHash,
-            engineAudioStream->ssrcOutboundContexts,
-            engineAudioStream->localSsrc,
-            engineAudioStream->rtpMap);
+        auto* context = engineAudioStream->ssrcOutboundContexts.getItem(engineAudioStream->localSsrc);
         if (context)
         {
             auto goodByePacket = createGoodBye(context->ssrc, context->allocator);
@@ -465,6 +504,14 @@ void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
                     engineVideoStream->transport);
             }
         }
+    }
+
+    for (auto& ssrcOutboundContextPair : engineVideoStream->ssrcOutboundContexts)
+    {
+        engineVideoStream->transport.getJobQueue().addJob<RemovePacketCacheJob>(*this,
+            engineVideoStream->transport,
+            ssrcOutboundContextPair.second,
+            _messageListener);
     }
 
     if (engineVideoStream->simulcastStream.numLevels != 0)
@@ -1850,12 +1897,38 @@ void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
 SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHash,
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
     const uint32_t ssrc,
-    const RtpMap& rtpMap)
+    const RtpMap& rtpMap,
+    const bool ssrcRewrite)
 {
     auto ssrcOutboundContextItr = ssrcOutboundContexts.find(ssrc);
     if (ssrcOutboundContextItr != ssrcOutboundContexts.cend())
     {
+        if (ssrcOutboundContextItr->second.markedForDeletion)
+        {
+            // The outboundContext is marked for deletion after owner inbound stream
+            // as been removed (only for non ssrcRewrite). This means the job to
+            // remove OutboundSsrc has already been enqueued and it will be deleted
+            // soon. Then we MUST NOT enqueue any more jobs with a reference to this
+            // SsrcOutboundContext
+            assert(!ssrcRewrite);
+            return nullptr;
+        }
+
         return &ssrcOutboundContextItr->second;
+    }
+
+    if (!ssrcRewrite)
+    {
+        // When is not ssrc rewrite, we have to ensure that ssrcInboundContext is not been
+        // decommissioned already. If it was decommissioned and the ssrcOutboundContext
+        // is not in the ssrcOutboundContexts, most likely the reason is because we are
+        // processing an old packet in the queue and the ssrcOutboundContext has been deleted already.
+        // In such case we we will not recreate the outboundContext because it would be
+        // deleted only in the end of the conference (keep with it all associated resources, like video caches)
+        if (!_ssrcInboundContexts.contains(ssrc))
+        {
+            return nullptr;
+        }
     }
 
     auto emplaceResult = ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap);
@@ -1874,6 +1947,31 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHas
         endpointIdHash,
         ssrc);
     return &emplaceResult.first->second;
+}
+
+void EngineMixer::onOutboundContextFinalized(size_t ownerEndpointHash,
+    uint32_t ssrc,
+    uint32_t feedbackSsrc,
+    bool isVideo)
+{
+    if (isVideo)
+    {
+        auto it = _engineVideoStreams.find(ownerEndpointHash);
+        if (it != _engineVideoStreams.end())
+        {
+            it->second->ssrcOutboundContexts.erase(ssrc);
+            it->second->ssrcOutboundContexts.erase(feedbackSsrc);
+        }
+
+        return;
+    }
+
+    auto it = _engineAudioStreams.find(ownerEndpointHash);
+    if (it != _engineAudioStreams.end())
+    {
+        it->second->ssrcOutboundContexts.erase(ssrc);
+        it->second->ssrcOutboundContexts.erase(feedbackSsrc);
+    }
 }
 
 SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
@@ -2179,7 +2277,8 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         if (audioStream->transport.isConnected())
         {
             auto ssrc = packetInfo.inboundContext()->ssrc;
-            if (audioStream->ssrcRewrite)
+            const bool ssrcRewrite = audioStream->ssrcRewrite;
+            if (ssrcRewrite)
             {
                 const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
                 const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
@@ -2193,7 +2292,8 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
             auto* ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
                 ssrc,
-                audioStream->rtpMap);
+                audioStream->rtpMap,
+                ssrcRewrite);
 
             if (!ssrcOutboundContext)
             {
@@ -2278,9 +2378,13 @@ void EngineMixer::forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             continue;
         }
         uint32_t ssrc = rewriteMapItr->second;
+        static constexpr bool ssrcRewrite = true;
 
-        auto* ssrcOutboundContext =
-            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, ssrc, barbell.audioRtpMap);
+        auto* ssrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+            barbell.ssrcOutboundContexts,
+            ssrc,
+            barbell.audioRtpMap,
+            ssrcRewrite);
 
         if (!ssrcOutboundContext)
         {
@@ -2453,8 +2557,13 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             targetSsrc = (*rewriteMapping)[simulcastLevel].main;
         }
 
-        auto* ssrcOutboundContext =
-            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, targetSsrc, barbell.videoRtpMap);
+        static constexpr bool ssrcRewrite = true;
+
+        auto* ssrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+            barbell.ssrcOutboundContexts,
+            targetSsrc,
+            barbell.videoRtpMap,
+            ssrcRewrite);
         if (!ssrcOutboundContext)
         {
             continue;
@@ -2518,7 +2627,8 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
         }
 
         uint32_t ssrc = 0;
-        if (videoStream->ssrcRewrite)
+        const bool ssrcRewrite = videoStream->ssrcRewrite;
+        if (ssrcRewrite)
         {
             const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
             if (screenShareSsrcMapping.isSet() && screenShareSsrcMapping.get().first == senderEndpointIdHash &&
@@ -2559,7 +2669,8 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
         auto* ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->endpointIdHash,
             videoStream->ssrcOutboundContexts,
             ssrc,
-            videoStream->rtpMap);
+            videoStream->rtpMap,
+            ssrcRewrite);
 
         if (!ssrcOutboundContext)
         {
@@ -2745,16 +2856,24 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     const auto mediaSsrc = rtcpFeedback.mediaSsrc.get();
     _activeMediaList->getFeedbackSsrc(mediaSsrc, rtxSsrc);
 
+    static constexpr bool ssrcRewrite = true;
+
     auto& bbTransport = barbell.transport;
-    auto* mediaSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.audioRtpMap);
+    auto* mediaSsrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+        barbell.ssrcOutboundContexts,
+        mediaSsrc,
+        barbell.audioRtpMap,
+        ssrcRewrite);
     if (!mediaSsrcOutboundContext)
     {
         return;
     }
 
-    auto* rtxSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.audioRtpMap);
+    auto* rtxSsrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+        barbell.ssrcOutboundContexts,
+        rtxSsrc,
+        barbell.audioRtpMap,
+        ssrcRewrite);
     if (!rtxSsrcOutboundContext)
     {
         return;
@@ -2822,8 +2941,9 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     }
 
     uint32_t feedbackSsrc;
-    if (!(rtcpSenderVideoStream->ssrcRewrite ? _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc)
-                                             : _engineStreamDirector->getFeedbackSsrc(mediaSsrc, feedbackSsrc)))
+    const bool ssrcRewrite = rtcpSenderVideoStream->ssrcRewrite;
+    if (!(ssrcRewrite ? _activeMediaList->getFeedbackSsrc(mediaSsrc, feedbackSsrc)
+                      : _engineStreamDirector->getFeedbackSsrc(mediaSsrc, feedbackSsrc)))
     {
         return;
     }
@@ -2831,7 +2951,8 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     auto rtxSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->endpointIdHash,
         rtcpSenderVideoStream->ssrcOutboundContexts,
         feedbackSsrc,
-        rtcpSenderVideoStream->feedbackRtpMap);
+        rtcpSenderVideoStream->feedbackRtpMap,
+        ssrcRewrite);
 
     if (!rtxSsrcOutboundContext)
     {
@@ -2960,10 +3081,13 @@ inline void EngineMixer::processAudioStreams()
             }
         }
 
+        static constexpr bool ssrcRewrite = false;
         auto* ssrcContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
             audioStream->ssrcOutboundContexts,
             audioStream->localSsrc,
-            audioStream->rtpMap);
+            audioStream->rtpMap,
+            ssrcRewrite);
+
         if (ssrcContext)
         {
             audioStream->transport.getJobQueue().addJob<EncodeJob>(std::move(audioPacket),
@@ -3331,6 +3455,49 @@ void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStrea
     }
 }
 
+void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream,
+    const uint32_t ssrc,
+    const uint32_t feedbackSsrc)
+{
+    for (auto& audioStreamEntry : _engineAudioStreams)
+    {
+        auto* audioStream = audioStreamEntry.second;
+        if (audioStream == senderAudioStream || audioStream->ssrcRewrite)
+        {
+            // If we use ssrc rewrite there is no need to remove the outbound context as it is not there
+            continue;
+        }
+        const auto endpointIdHash = audioStreamEntry.first;
+
+        auto outboundContextItr = audioStream->ssrcOutboundContexts.find(ssrc);
+        if (outboundContextItr != audioStream->ssrcOutboundContexts.end())
+        {
+            outboundContextItr->second.markedForDeletion = true;
+            logger::info("Marking unused audio outbound context for deletion, ssrc %u, endpointIdHash %lu",
+                _loggableId.c_str(),
+                ssrc,
+                endpointIdHash);
+
+            audioStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContext>(*this,
+                audioStream->transport,
+                outboundContextItr->second,
+                _engineThreadContext,
+                _messageListener,
+                feedbackSsrc);
+        }
+
+        outboundContextItr = audioStream->ssrcOutboundContexts.find(feedbackSsrc);
+        if (outboundContextItr != audioStream->ssrcOutboundContexts.end())
+        {
+            outboundContextItr->second.markedForDeletion = true;
+            logger::info("Marking unused audio outbound context for deletion, feedback ssrc %u, endpointIdHash %lu´",
+                _loggableId.c_str(),
+                ssrc,
+                endpointIdHash);
+        }
+    }
+}
+
 void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
     const uint32_t ssrc,
     const uint32_t feedbackSsrc)
@@ -3345,29 +3512,31 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
         }
         const auto endpointIdHash = videoStreamEntry.first;
 
+        auto outboundContextItr = videoStream->ssrcOutboundContexts.find(ssrc);
+        if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
         {
-            auto outboundContextItr = videoStream->ssrcOutboundContexts.find(ssrc);
-            if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
-            {
-                outboundContextItr->second.markedForDeletion = true;
-                logger::info("Marking unused video outbound context for deletion, ssrc %u, endpointIdHash %lu",
-                    _loggableId.c_str(),
-                    ssrc,
-                    endpointIdHash);
-            }
+            outboundContextItr->second.markedForDeletion = true;
+            logger::info("Marking unused video outbound context for deletion, ssrc %u, endpointIdHash %lu",
+                _loggableId.c_str(),
+                ssrc,
+                endpointIdHash);
+
+            videoStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContext>(*this,
+                videoStream->transport,
+                outboundContextItr->second,
+                _engineThreadContext,
+                _messageListener,
+                feedbackSsrc);
         }
 
+        outboundContextItr = videoStream->ssrcOutboundContexts.find(feedbackSsrc);
+        if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
         {
-            auto outboundContextItr = videoStream->ssrcOutboundContexts.find(feedbackSsrc);
-            if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
-            {
-                outboundContextItr->second.markedForDeletion = true;
-                logger::info(
-                    "Marking unused video outbound context for deletion, feedback ssrc %u, endpointIdHash %lu´",
-                    _loggableId.c_str(),
-                    ssrc,
-                    endpointIdHash);
-            }
+            outboundContextItr->second.markedForDeletion = true;
+            logger::info("Marking unused video outbound context for deletion, feedback ssrc %u, endpointIdHash %lu´",
+                _loggableId.c_str(),
+                ssrc,
+                endpointIdHash);
         }
     }
 }
@@ -3862,10 +4031,13 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
         return;
     }
 
+    static constexpr bool ssrcRewrite = false;
+
     auto* outboundContext = obtainOutboundSsrcContext(engineVideoStream.endpointIdHash,
         engineVideoStream.ssrcOutboundContexts,
         engineVideoStream.localSsrc,
-        engineVideoStream.feedbackRtpMap);
+        engineVideoStream.feedbackRtpMap,
+        ssrcRewrite);
 
     if (outboundContext)
     {

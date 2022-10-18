@@ -22,7 +22,8 @@ namespace bridge
 {
 
 Engine::Engine(const config::Config& config)
-    : _config(config),
+    : EngineThreadContext(1024),
+      _config(config),
       _messageListener(nullptr),
       _running(true),
       _pendingCommands(1024),
@@ -189,6 +190,8 @@ void Engine::run()
             mixerEntry->_data->run(engineIterationStartTimestamp);
         }
 
+        processEngineTasks(128);
+
         if (++_tickCounter % STATS_UPDATE_TICKS == 0)
         {
             uint64_t pollTime = utils::Time::getAbsoluteTime();
@@ -218,7 +221,19 @@ void Engine::run()
                 assert(mixerEntry->_data);
                 mixerEntry->_data->forwardPackets(utils::Time::getAbsoluteTime());
             }
+
             toSleep = pacer.timeToNextTick(utils::Time::getAbsoluteTime());
+            if (toSleep > 0)
+            {
+                static constexpr size_t maxTasksToProcessPerCycle = 16;
+                size_t processedTasks = 0;
+                do
+                {
+                    processedTasks = processEngineTasks(maxTasksToProcessPerCycle);
+                    toSleep = pacer.timeToNextTick(utils::Time::getAbsoluteTime());
+                } while (toSleep > 0 && processedTasks == maxTasksToProcessPerCycle);
+            }
+
             if (toSleep > 0)
             {
                 utils::Time::nanoSleep(

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EngineThreadContext.h"
 #include "bridge/engine/EngineCommand.h"
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
@@ -16,7 +17,7 @@ namespace bridge
 class EngineMixer;
 class EngineMessageListener;
 
-class Engine
+class Engine : private EngineThreadContext
 {
 public:
     Engine(const config::Config& config);
@@ -28,6 +29,8 @@ public:
     void pushCommand(EngineCommand::Command&& command);
 
     EngineStats::EngineStats getStats();
+
+    EngineThreadContext& getEngineThreadContext() { return *this; }
 
 private:
     static const size_t maxMixers = 4096;
