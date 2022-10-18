@@ -9,7 +9,7 @@
 #include "utils/Time.h"
 #include <cstdint>
 
-#define DEBUG_DIRECTOR 0
+#define DEBUG_DIRECTOR 1
 
 #if DEBUG_DIRECTOR
 #define DIRECTOR_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)

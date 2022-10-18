@@ -27,7 +27,7 @@
 
 namespace transport
 {
-
+constexpr uint32_t Mbps100 = 100000;
 // we have to serialize operations on srtp client
 // timers, start and receive must be done from same serialized jobmanager.
 class PacketReceiveJob : public jobmanager::Job
@@ -541,7 +541,6 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
 
     if (!_downlinkEstimationEnabled)
     {
-        const uint32_t Mbps100 = 100000;
         _inboundMetrics.estimatedKbps = Mbps100;
         _inboundMetrics.estimatedKbpsMin = Mbps100;
         _inboundMetrics.estimatedKbpsMax = Mbps100;
@@ -701,7 +700,6 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
 
     if (!_downlinkEstimationEnabled)
     {
-        const uint32_t Mbps100 = 100000;
         _inboundMetrics.estimatedKbps = Mbps100;
         _inboundMetrics.estimatedKbpsMin = Mbps100;
         _inboundMetrics.estimatedKbpsMax = Mbps100;
@@ -1271,10 +1269,10 @@ bool TransportImpl::doBandwidthEstimation(const uint64_t receiveTime,
 {
     if (!_downlinkEstimationEnabled)
     {
-        const uint32_t Mbps100 = 100000;
         _inboundMetrics.estimatedKbps = Mbps100;
         _inboundMetrics.estimatedKbpsMin = Mbps100;
         _inboundMetrics.estimatedKbpsMax = Mbps100;
+        _bwe->onUnmarkedTraffic(packetSize, receiveTime);
         return false;
     }
 
@@ -1592,8 +1590,11 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             _pacingQueue.size() + _rtxPacingQueue.size(),
             _rateController.isRtpProbingEnabled() ? "t" : "f");
 
-        _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
-        _inboundMetrics.estimatedKbpsMax = 0;
+        if (_downlinkEstimationEnabled)
+        {
+            _inboundMetrics.estimatedKbpsMin = 0xFFFFFFFF;
+            _inboundMetrics.estimatedKbpsMax = 0;
+        }
         _lastLogTimestamp = timestamp;
     }
 

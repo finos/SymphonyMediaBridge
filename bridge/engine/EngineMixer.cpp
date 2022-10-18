@@ -3221,10 +3221,13 @@ void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStrea
     {
         const auto ssrc = simulcastLevel.ssrc;
         auto ssrcInboundContext = _ssrcInboundContexts.getItem(ssrc);
-        if (ssrcInboundContext && ssrcInboundContext->activeMedia)
+        if (ssrcInboundContext)
         {
             ssrcInboundContext->inactiveTransitionCount = 0;
-            _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
+            if (ssrcInboundContext->activeMedia)
+            {
+                _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
+            }
         }
     }
 }
