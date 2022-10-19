@@ -365,11 +365,9 @@ public:
         }
 
         const auto quality = getQualityLevel(ssrc);
-        auto highestAvailableQuality = highestActiveQuality(senderEndpointIdHash, ssrc);
-        if (hasRecentActivity && quality > highestAvailableQuality)
-        {
-            highestAvailableQuality = quality;
-        }
+        const auto highestAvailableQuality = hasRecentActivity
+            ? std::max(highestActiveQuality(senderEndpointIdHash, ssrc), quality)
+            : highestActiveQuality(senderEndpointIdHash, ssrc);
 
         if (highestAvailableQuality == dropQuality)
         {
