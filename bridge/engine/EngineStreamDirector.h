@@ -342,6 +342,7 @@ public:
      */
     inline bool isSsrcUsed(uint32_t ssrc,
         const size_t senderEndpointIdHash,
+        const bool hasRecentActivity,
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
@@ -364,7 +365,12 @@ public:
         }
 
         const auto quality = getQualityLevel(ssrc);
-        const auto highestAvailableQuality = highestActiveQuality(senderEndpointIdHash, ssrc);
+        auto highestAvailableQuality = highestActiveQuality(senderEndpointIdHash, ssrc);
+        if (hasRecentActivity && quality > highestAvailableQuality)
+        {
+            highestAvailableQuality = quality;
+        }
+
         if (highestAvailableQuality == dropQuality)
         {
             DIRECTOR_LOG("isSsrcUsed, %u false, ssrc not found", _loggableId.c_str(), ssrc);
@@ -699,7 +705,7 @@ private:
         const auto participantStreamsItr = _participantStreams.find(endpointIdHash);
         if (participantStreamsItr == _participantStreams.end())
         {
-            return lowQuality;
+            return dropQuality;
         }
 
         auto& participantStreams = participantStreamsItr->second;

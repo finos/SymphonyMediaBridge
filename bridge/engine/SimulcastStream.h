@@ -83,6 +83,13 @@ struct SimulcastStream
         levels[numLevels++] = level;
     }
 
+    void reset()
+    {
+        numLevels = 0;
+        highestActiveLevel = 0;
+        contentType = VideoContentType::VIDEO;
+    }
+
     size_t numLevels;
     size_t highestActiveLevel;
     SimulcastLevel levels[maxLevels];
