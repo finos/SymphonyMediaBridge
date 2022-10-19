@@ -124,12 +124,16 @@ public:
     template <class Func, class... Args>
     EngineFunction(const detail::EngineFunctionBinder<Func, Args...>& binder)
     {
+        static_assert(sizeof(mStorage) >= sizeof(std::decay_t<decltype(binder)>),
+            "EngineFunctionStorage has insufficent space");
         mInvokable = binder.copyTo(mStorage);
     }
 
     template <class Func, class... Args>
     EngineFunction(detail::EngineFunctionBinder<Func, Args...>&& binder)
     {
+        static_assert(sizeof(mStorage) >= sizeof(std::decay_t<decltype(binder)>),
+            "EngineFunctionStorage has insufficent space");
         mInvokable = binder.moveTo(mStorage);
     }
 
