@@ -53,9 +53,9 @@ void BandwidthEstimator::onUnmarkedTraffic(uint32_t packetSize, uint64_t receive
     if (_baseClockOffset != 0 && _state(0) < 1600 * 8)
     {
         _state(0) = _state(0) + packetSize * 8;
-        _receiveBandwidth.update(packetSize * 8, receiveTimeNs);
-        _previousReceiveTime = receiveTimeNs;
     }
+    _previousReceiveTime = receiveTimeNs;
+    _receiveBandwidth.update(packetSize * 8, receiveTimeNs);
 }
 
 void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, uint64_t receiveTimeNs)

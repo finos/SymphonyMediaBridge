@@ -168,10 +168,21 @@ Mixer::Mixer(std::string id,
       _ssrcGenerator(ssrcGenerator),
       _useGlobalPort(useGlobalPort)
 {
-    logger::info("id=%s, served by engine mixer %s",
+    utils::StringBuilder<1024> b;
+    b.append("slides ");
+    b.append(_videoSsrcs[0][0].main);
+    b.append(" pins");
+    for (const auto& pinSsrc : videoPinSsrcs)
+    {
+        b.append(" ");
+        b.append(pinSsrc.main);
+    }
+
+    logger::info("id=%s, served by engine mixer %s, %s",
         _loggableId.c_str(),
         _id.c_str(),
-        engineMixer.getLoggableId().c_str());
+        engineMixer.getLoggableId().c_str(),
+        b.build().c_str());
 }
 
 void Mixer::markForDeletion()
@@ -1733,17 +1744,13 @@ bool Mixer::pinEndpoint(const size_t endpointIdHash, const std::string& pinnedEn
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    const auto pinnedVideoStreamItr = _videoStreams.find(pinnedEndpointId);
-    if (pinnedVideoStreamItr == _videoStreams.end())
-    {
-        return false;
-    }
+    auto pinnedEndpointIdHash = utils::hash<std::string>()(pinnedEndpointId);
 
     EngineCommand::Command command(EngineCommand::Type::PinEndpoint);
     auto& pinEndpoint = command.command.pinEndpoint;
     pinEndpoint.mixer = &_engineMixer;
     pinEndpoint.endpointIdHash = endpointIdHash;
-    pinEndpoint.pinnedEndpointIdHash = pinnedVideoStreamItr->second->endpointIdHash;
+    pinEndpoint.pinnedEndpointIdHash = pinnedEndpointIdHash;
     _engine.pushCommand(std::move(command));
     return true;
 }

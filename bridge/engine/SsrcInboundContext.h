@@ -65,6 +65,15 @@ public:
         return utils::Time::diffLT(_lastReceiveTime.load(), timestamp, intervalNs);
     }
 
+    // make ready for reactivation
+    void makeReady()
+    {
+        inactiveTransitionCount = 0;
+        activeMedia = false;
+        isSsrcUsed = true;
+        shouldDropPackets = false;
+    }
+
     const uint32_t ssrc;
     const bridge::RtpMap rtpMap;
     transport::RtcTransport* const sender;

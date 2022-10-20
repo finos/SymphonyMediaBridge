@@ -342,6 +342,7 @@ public:
      */
     inline bool isSsrcUsed(uint32_t ssrc,
         const size_t senderEndpointIdHash,
+        const bool hasRecentActivity,
         const bool isSenderInLastNList,
         const size_t numRecordingStreams)
     {
@@ -364,7 +365,10 @@ public:
         }
 
         const auto quality = getQualityLevel(ssrc);
-        const auto highestAvailableQuality = highestActiveQuality(senderEndpointIdHash, ssrc);
+        const auto highestAvailableQuality = hasRecentActivity
+            ? std::max(highestActiveQuality(senderEndpointIdHash, ssrc), quality)
+            : highestActiveQuality(senderEndpointIdHash, ssrc);
+
         if (highestAvailableQuality == dropQuality)
         {
             DIRECTOR_LOG("isSsrcUsed, %u false, ssrc not found", _loggableId.c_str(), ssrc);
@@ -397,6 +401,8 @@ public:
         DIRECTOR_LOG("isSsrcUsed, %u false", _loggableId.c_str(), ssrc);
         return false;
     }
+
+    bool isPinned(size_t endpointIdHash) const { return _reversePinMap.contains(endpointIdHash); }
 
     inline QualityLevel getCurrentQualityAndEndpointId(const uint32_t ssrc, size_t& outFromEndpointId)
     {
@@ -697,7 +703,7 @@ private:
         const auto participantStreamsItr = _participantStreams.find(endpointIdHash);
         if (participantStreamsItr == _participantStreams.end())
         {
-            return lowQuality;
+            return dropQuality;
         }
 
         auto& participantStreams = participantStreamsItr->second;

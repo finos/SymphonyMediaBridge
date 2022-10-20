@@ -954,7 +954,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     runDominantSpeakerCheck(engineIterationStartTimestamp);
     sendMessagesToNewDataStreams();
-    markSsrcsInUse();
+    markSsrcsInUse(engineIterationStartTimestamp);
     processMissingPackets(engineIterationStartTimestamp); // must run after checkPacketCounters
 
     // 3. Update bandwidth estimates
@@ -1023,7 +1023,7 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
     }
 }
 
-void EngineMixer::markSsrcsInUse()
+void EngineMixer::markSsrcsInUse(const uint64_t timestamp)
 {
     for (auto& it : _ssrcInboundContexts)
     {
@@ -1039,15 +1039,17 @@ void EngineMixer::markSsrcsInUse()
 
         inboundContext->isSsrcUsed = _engineStreamDirector->isSsrcUsed(inboundContext->ssrc,
             inboundContext->endpointIdHash,
+            inboundContext->hasRecentActivity(utils::Time::sec, timestamp),
             isSenderInLastNList,
             _engineRecordingStreams.size());
 
         if (previousUse != inboundContext->isSsrcUsed)
         {
-            logger::debug("ssrc %u changed in use state to %c",
+            logger::debug("ssrc %u changed in use state to %c, pinned %c",
                 _loggableId.c_str(),
                 inboundContext->ssrc,
-                previousUse ? 'f' : 't');
+                previousUse ? 'f' : 't',
+                _engineStreamDirector->isPinned(inboundContext->endpointIdHash) ? 't' : 'f');
         }
     }
 }
@@ -1135,18 +1137,13 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
     {
         auto& inboundContext = *inboundContextEntry.second;
         const auto endpointIdHash = inboundContext.sender->getEndpointIdHash();
-        const bool recentActivity =
-            inboundContext.hasRecentActivity(_config.idleInbound.transitionTimeout * utils::Time::ms, timestamp);
-        if (!inboundContext.activeMedia && recentActivity)
+        if (!inboundContext.activeMedia)
         {
-            inboundContext.activeMedia = true;
-            if (inboundContext.rtpMap.isVideo())
-            {
-                _engineStreamDirector->streamActiveStateChanged(endpointIdHash, inboundContext.ssrc, true);
-            }
-            continue;
+            continue; // it will turn active on next packet arrival
         }
 
+        const bool recentActivity =
+            inboundContext.hasRecentActivity(_config.idleInbound.transitionTimeout * utils::Time::ms, timestamp);
         const auto ssrc = inboundContextEntry.first;
         auto receiveCounters = inboundContext.sender->getCumulativeReceiveCounters(ssrc);
 
@@ -1491,7 +1488,6 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
 void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::Packet& packet)
 {
     auto& header = webrtc::streamMessageHeader(packet);
-
     auto dataStreamItr = _engineDataStreams.find(endpointIdHash);
     if (dataStreamItr != _engineDataStreams.cend())
     {
@@ -2689,6 +2685,13 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(&rtcpFeedback);
     uint16_t pid = 0;
     uint16_t blp = 0;
+
+    logger::debug("Barbell received NACK for %zu pkts on ssrc %u, %s",
+        _loggableId.c_str(),
+        numFeedbackControlInfos,
+        mediaSsrc,
+        barbell.transport.getLoggableId().c_str());
+
     for (size_t i = 0; i < numFeedbackControlInfos; ++i)
     {
         rtxSsrcOutboundContext->onRtpSent(timestamp);
@@ -2760,6 +2763,11 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
     const auto numFeedbackControlInfos = rtp::getNumFeedbackControlInfos(rtcpFeedback);
     uint16_t pid = 0;
     uint16_t blp = 0;
+    logger::debug("Client NACK for %zu pkts on ssrc %u, %s",
+        _loggableId.c_str(),
+        numFeedbackControlInfos,
+        mediaSsrc,
+        transport->getLoggableId().c_str());
     for (size_t i = 0; i < numFeedbackControlInfos; ++i)
     {
         rtxSsrcOutboundContext->onRtpSent(timestamp);
@@ -3221,10 +3229,10 @@ void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStrea
     {
         const auto ssrc = simulcastLevel.ssrc;
         auto ssrcInboundContext = _ssrcInboundContexts.getItem(ssrc);
-        if (ssrcInboundContext && ssrcInboundContext->activeMedia)
+        if (ssrcInboundContext)
         {
-            ssrcInboundContext->inactiveTransitionCount = 0;
-            _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, true);
+            ssrcInboundContext->makeReady();
+            _engineStreamDirector->streamActiveStateChanged(videoStream.endpointIdHash, ssrc, false);
         }
     }
 }
@@ -4131,7 +4139,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
                 auto* inboundContext = _ssrcInboundContexts.getItem(simLevel.ssrc);
                 if (inboundContext)
                 {
-                    inboundContext->inactiveTransitionCount = 0;
+                    inboundContext->makeReady();
                     inboundContext->pliScheduler.triggerPli();
                 }
             }
@@ -4142,7 +4150,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
                     auto* inboundContext = _ssrcInboundContexts.getItem(simLevel.ssrc);
                     if (inboundContext)
                     {
-                        inboundContext->inactiveTransitionCount = 0;
+                        inboundContext->makeReady();
                         inboundContext->pliScheduler.triggerPli();
                     }
                 }

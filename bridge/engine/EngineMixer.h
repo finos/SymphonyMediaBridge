@@ -396,7 +396,7 @@ private:
     void checkBarbellPacketCounters(const uint64_t timestamp);
     void checkIfRateControlIsNeeded(const uint64_t timestamp);
     bool isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const;
-    void markSsrcsInUse();
+    void markSsrcsInUse(const uint64_t timestamp);
 
     void onPliRequestFromReceiver(size_t endpointIdHash, uint32_t ssrc, uint64_t timestamp);
     void sendLastNListMessage(const size_t endpointIdHash);

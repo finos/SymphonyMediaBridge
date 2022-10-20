@@ -585,6 +585,7 @@ void MixerManager::engineMessageSctp(EngineMessage::Message&& message)
             auto json = nlohmann::json::parse(body);
             if (api::DataChannelMessageParser::isPinnedEndpointsChanged(json))
             {
+                logger::debug("received pin msg %s", "MixerManager", body.c_str());
                 auto mixerIt = _mixers.find(sctpMessage.mixer->getId());
                 if (mixerIt != _mixers.end())
                 {
