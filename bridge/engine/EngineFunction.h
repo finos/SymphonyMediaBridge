@@ -43,34 +43,34 @@ class EngineFunctionBinder final : public Invokable
 public:
     template <class UFunc, class... UArgs>
     EngineFunctionBinder(UFunc&& func, UArgs&&... args)
-        : mEngineFunction(std::forward<UFunc>(func)),
-          mFunctionArguments(std::forward<UArgs>(args)...)
+        : _engineFunction(std::forward<UFunc>(func)),
+          _functionArguments(std::forward<UArgs>(args)...)
     {
     }
 
     EngineFunctionBinder(const EngineFunctionBinder& rhs)
-        : mEngineFunction(rhs.mEngineFunction),
-          mFunctionArguments(rhs.mFunctionArguments)
+        : _engineFunction(rhs._engineFunction),
+          _functionArguments(rhs._functionArguments)
     {
     }
 
     EngineFunctionBinder(EngineFunctionBinder&& rhs)
-        : mEngineFunction(std::move(rhs.mEngineFunction)),
-          mFunctionArguments(std::move(rhs.mFunctionArguments))
+        : _engineFunction(std::move(rhs._engineFunction)),
+          _functionArguments(std::move(rhs._functionArguments))
     {
     }
 
     EngineFunctionBinder& operator=(const EngineFunctionBinder& rhs)
     {
-        mEngineFunction = rhs.mEngineFunction;
-        mFunctionArguments = rhs.mFunctionArguments;
+        _engineFunction = rhs._engineFunction;
+        _functionArguments = rhs._functionArguments;
         return *this;
     }
 
     EngineFunctionBinder& operator=(EngineFunctionBinder&& rhs)
     {
-        mEngineFunction = std::move(rhs.mEngineFunction);
-        mFunctionArguments = std::move(rhs.mFunctionArguments);
+        _engineFunction = std::move(rhs._engineFunction);
+        _functionArguments = std::move(rhs._functionArguments);
         return *this;
     }
 
@@ -83,19 +83,19 @@ private:
     template <class T, class... UArgs>
     void callMemberFunction(T* instance, UArgs&&... args) const
     {
-        (instance->*mEngineFunction)(std::forward<UArgs>(args)...);
+        (instance->*_engineFunction)(std::forward<UArgs>(args)...);
     }
 
     template <size_t... I>
     void call(std::true_type, std::index_sequence<I...>) const
     {
-        callMemberFunction(std::get<I>(mFunctionArguments)...);
+        callMemberFunction(std::get<I>(_functionArguments)...);
     }
 
     template <size_t... I>
     void call(std::false_type, std::index_sequence<I...>) const
     {
-        mEngineFunction(std::get<I>(mFunctionArguments)...);
+        _engineFunction(std::get<I>(_functionArguments)...);
     }
 
     void invoke() const final
@@ -109,8 +109,8 @@ private:
     TThis* copyTo(EngineFunctionStorage& newStorage) const final { return new (&newStorage) TThis(*this); }
 
 private:
-    Func mEngineFunction;
-    std::tuple<Args...> mFunctionArguments;
+    Func _engineFunction;
+    std::tuple<Args...> _functionArguments;
 };
 
 } // namespace detail
@@ -118,38 +118,38 @@ private:
 class EngineFunction
 {
 public:
-    EngineFunction() : mInvokable(nullptr) {}
+    EngineFunction() : _invokable(nullptr) {}
     EngineFunction(std::nullptr_t) : EngineFunction() {}
 
     template <class Func, class... Args>
     EngineFunction(const detail::EngineFunctionBinder<Func, Args...>& binder)
     {
-        static_assert(sizeof(mStorage) >= sizeof(std::decay_t<decltype(binder)>),
-            "EngineFunctionStorage has insufficent space");
-        mInvokable = binder.copyTo(mStorage);
+        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(binder)>),
+            "EngineFunctionStorage has insufficient space");
+        _invokable = binder.copyTo(_storage);
     }
 
     template <class Func, class... Args>
     EngineFunction(detail::EngineFunctionBinder<Func, Args...>&& binder)
     {
-        static_assert(sizeof(mStorage) >= sizeof(std::decay_t<decltype(binder)>),
-            "EngineFunctionStorage has insufficent space");
-        mInvokable = binder.moveTo(mStorage);
+        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(binder)>),
+            "EngineFunctionStorage has insufficient space");
+        _invokable = binder.moveTo(_storage);
     }
 
-    EngineFunction(const EngineFunction& rhs) : mInvokable(nullptr)
+    EngineFunction(const EngineFunction& rhs) : _invokable(nullptr)
     {
-        if (rhs.mInvokable)
+        if (rhs._invokable)
         {
-            mInvokable = rhs.mInvokable->copyTo(mStorage);
+            _invokable = rhs._invokable->copyTo(_storage);
         }
     }
 
-    EngineFunction(EngineFunction&& rhs) : mInvokable(nullptr)
+    EngineFunction(EngineFunction&& rhs) : _invokable(nullptr)
     {
-        if (rhs.mInvokable)
+        if (rhs._invokable)
         {
-            mInvokable = rhs.mInvokable->moveTo(mStorage);
+            _invokable = rhs._invokable->moveTo(_storage);
             rhs.release();
         }
     }
@@ -159,9 +159,9 @@ public:
     EngineFunction& operator=(const EngineFunction& rhs)
     {
         release();
-        if (rhs.mInvokable)
+        if (rhs._invokable)
         {
-            mInvokable = rhs.mInvokable->copyTo(mStorage);
+            _invokable = rhs._invokable->copyTo(_storage);
         }
 
         return *this;
@@ -170,9 +170,9 @@ public:
     EngineFunction& operator=(EngineFunction&& rhs)
     {
         release();
-        if (rhs.mInvokable)
+        if (rhs._invokable)
         {
-            mInvokable = rhs.mInvokable->moveTo(mStorage);
+            _invokable = rhs._invokable->moveTo(_storage);
             rhs.release();
         }
 
@@ -185,27 +185,27 @@ public:
         return *this;
     }
 
-    operator bool() const { return !!mInvokable; }
+    operator bool() const { return !!_invokable; }
 
     void operator()() const
     {
-        assert(mInvokable);
-        mInvokable->invoke();
+        assert(_invokable);
+        _invokable->invoke();
     }
 
 private:
     void release()
     {
-        if (mInvokable)
+        if (_invokable)
         {
-            mInvokable->~Invokable();
-            mInvokable = nullptr;
+            _invokable->~Invokable();
+            _invokable = nullptr;
         }
     }
 
 private:
-    detail::EngineFunctionStorage mStorage;
-    detail::Invokable* mInvokable;
+    detail::EngineFunctionStorage _storage;
+    detail::Invokable* _invokable;
 };
 
 inline bool operator==(const EngineFunction& f, std::nullptr_t) noexcept
