@@ -14,13 +14,15 @@ using BarbellEndpointIdMap = concurrency::MpmcHashmap32<size_t, EndpointIdString
 struct BarbellMapItem
 {
     BarbellMapItem() { endpointId[0] = 0; }
-    BarbellMapItem(const BarbellMapItem& rhs)
+    explicit BarbellMapItem(const BarbellMapItem& rhs)
     {
         std::strcpy(endpointId, rhs.endpointId);
         oldSsrcs = rhs.oldSsrcs;
         newSsrcs = rhs.newSsrcs;
         neighbours = rhs.neighbours;
     }
+
+    explicit BarbellMapItem(const char* endpointIdString) { std::strcpy(endpointId, endpointIdString); }
 
     BarbellMapItem& operator=(const BarbellMapItem& rhs)
     {

@@ -4025,14 +4025,16 @@ void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TMap& map)
 {
     for (auto endpoint : endpointArray)
     {
-        BarbellMapItem item;
-        endpoint["endpoint-id"].getString(item.endpointId);
+        char endpointId[45];
+        endpoint["endpoint-id"].getString(endpointId);
+        const auto endpointIdHash = utils::hash<char*>{}(endpointId);
+        auto entryIt = map.emplace(endpointIdHash, endpointId);
+
+        auto& item = entryIt.first->second;
         for (auto ssrc : endpoint["ssrcs"].getArray())
         {
             item.newSsrcs.push_back(ssrc.getInt<uint32_t>(0));
         }
-
-        const auto endpointIdHash = utils::hash<char*>{}(item.endpointId);
 
         if (endpoint.exists("neighbours"))
         {
@@ -4041,8 +4043,6 @@ void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TMap& map)
                 item.neighbours.push_back(neighbour.getInt<uint32_t>(0));
             }
         }
-
-        map.add(endpointIdHash, item);
     }
 }
 
@@ -4052,13 +4052,12 @@ void addToMap(EngineBarbell::VideoStream& stream, T& videoMapping)
     auto* m = videoMapping.getItem(stream.endpointIdHash.get());
     if (!m)
     {
-        auto entry = videoMapping.add(stream.endpointIdHash.get(), BarbellMapItem());
+        auto entry = videoMapping.emplace(stream.endpointIdHash.get(), stream.endpointId.get().c_str());
         if (!entry.second)
         {
             return;
         }
         m = &entry.first->second;
-        std::strcpy(m->endpointId, stream.endpointId.get().c_str());
     }
 
     if (m)
@@ -4073,13 +4072,12 @@ void addToMap(EngineBarbell::AudioStream& stream, T& audioMapping)
     auto* m = audioMapping.getItem(stream.endpointIdHash.get());
     if (!m)
     {
-        auto entry = audioMapping.add(stream.endpointIdHash.get(), BarbellMapItem());
+        auto entry = audioMapping.emplace(stream.endpointIdHash.get(), stream.endpointId.get().c_str());
         if (!entry.second)
         {
             return;
         }
         m = &entry.first->second;
-        std::strcpy(m->endpointId, stream.endpointId.get().c_str());
     }
 
     if (m)

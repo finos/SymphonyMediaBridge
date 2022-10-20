@@ -23,7 +23,11 @@ public:
         }
     }
 
-    Array(const Array&) = delete;
+    Array(const Array& rhs) : _capacity(rhs.capacity()), _size(0), _dataPtr(reinterpret_cast<T*>(_data))
+    {
+        *this = rhs;
+    }
+
     Array& operator=(const Array& other)
     {
         clear();
@@ -60,7 +64,7 @@ public:
     const T& operator[](size_t pos) const { return _dataPtr[pos]; }
 
     const T* data() const { return _dataPtr; }
-    
+
     Array& append(const T* vector, size_t count)
     {
         if (_size + count <= _capacity)

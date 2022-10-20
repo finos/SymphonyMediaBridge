@@ -80,7 +80,7 @@ TEST(StackMap, iterate)
     EXPECT_EQ(count, 29);
 
     EXPECT_TRUE(hmap.add(60, Simple(555, 999)).second);
-    EXPECT_EQ(hmap[60].ssrc, 555);
+    EXPECT_EQ(hmap.getItem(60)->ssrc, 555);
 }
 
 TEST(StackMap, clear)
