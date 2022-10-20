@@ -164,10 +164,10 @@ private:
     size_t _endpointIdHash;
 };
 
-class FinalizeNonSsrcRewriteOutboundContext : public jobmanager::CountedJob
+class FinalizeNonSsrcRewriteOutboundContextJob : public jobmanager::CountedJob
 {
 public:
-    FinalizeNonSsrcRewriteOutboundContext(bridge::EngineMixer& mixer,
+    FinalizeNonSsrcRewriteOutboundContextJob(bridge::EngineMixer& mixer,
         transport::RtcTransport& transport,
         bridge::SsrcOutboundContext& outboundContext,
         bridge::EngineThreadContext& engineThreadContext,
@@ -217,6 +217,41 @@ private:
     bridge::EngineThreadContext& _engineThreadContext;
     bridge::EngineMessageListener& _mixerManager;
     uint32_t _feedbackSsrc;
+};
+
+class FinalizeRecordingOutboundContextJob : public jobmanager::CountedJob
+{
+public:
+    FinalizeRecordingOutboundContextJob(bridge::EngineMixer& mixer,
+        transport::RecordingTransport& transport,
+        bridge::EngineThreadContext& engineThreadContext,
+        uint32_t ssrc,
+        std::atomic_uint32_t& finalizerCounter)
+        : CountedJob(transport.getJobCounter()),
+          _mixer(mixer),
+          _engineThreadContext(engineThreadContext),
+          _endpointIdHash(transport.getEndpointIdHash()),
+          _ssrc(ssrc),
+          _finalizerCounter(finalizerCounter)
+    {
+        ++finalizerCounter;
+    }
+
+    void run() override
+    {
+        if (0 == --_finalizerCounter)
+        {
+            _engineThreadContext.post(
+                engine::bind(&EngineMixer::onRecordingOutboundContextFinalized, &_mixer, _endpointIdHash, _ssrc));
+        }
+    }
+
+private:
+    bridge::EngineMixer& _mixer;
+    bridge::EngineThreadContext& _engineThreadContext;
+    size_t _endpointIdHash;
+    uint32_t _ssrc;
+    std::atomic_uint32_t& _finalizerCounter;
 };
 
 class AddPacketCacheJob : public jobmanager::CountedJob
@@ -430,6 +465,7 @@ void EngineMixer::removeStream(EngineAudioStream* engineAudioStream)
         decommissionInboundContext(engineAudioStream->remoteSsrc.get());
         _mixerSsrcAudioBuffers.erase(engineAudioStream->remoteSsrc.get());
 
+        markAssociatedAudioOutboundContextsForDeletion(engineAudioStream);
         sendAudioStreamToRecording(*engineAudioStream, false);
     }
 
@@ -925,21 +961,28 @@ void EngineMixer::addRecordingRtpPacketCache(const uint32_t ssrc, const size_t e
         return;
     }
 
-    auto outboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
+    auto* outboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
     if (outboundContext)
     {
-        auto* transport = recordingStream->transports.getItem(endpointIdHash);
-        auto* outboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
-        if (transport && outboundContext)
+        if (outboundContext->markedForDeletion)
         {
-            transport->getJobQueue().addJob<AddPacketCacheJob>(*transport, *outboundContext, packetCache);
+            logger::warn("Outbound context for recording video packet cache is marked for deletion. ssrc %u",
+                _loggableId.c_str(),
+                ssrc);
+            return;
+            return;
         }
-        else
+
+        auto* transport = recordingStream->transports.getItem(endpointIdHash);
+        if (!transport)
         {
             logger::warn("cannot find transport and outbound context for recording video packet cache. ssrc %u",
                 _loggableId.c_str(),
                 ssrc);
+            return;
         }
+
+        transport->getJobQueue().addJob<AddPacketCacheJob>(*transport, *outboundContext, packetCache);
     }
 }
 
@@ -1264,27 +1307,59 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
 
 void EngineMixer::checkRecordingPacketCounters(const uint64_t timestamp)
 {
+    // We will give 15 seconds before delete outbound context since it was marked for deletion
+    // because we can still receive some NACK or need to resend some recording events if smb hasn't
+    // receive the ACKs. The recording events are especially important to recording to be converted properly
+    static constexpr uint64_t decommissionedTimeout = 15 * utils::Time::sec;
     for (auto& recordingStreamEntry : _engineRecordingStreams)
     {
         const auto endpointIdHash = recordingStreamEntry.first;
         for (auto& outboundContextEntry : recordingStreamEntry.second->ssrcOutboundContexts)
         {
             auto& outboundContext = outboundContextEntry.second;
-            if (outboundContext.markedForDeletion &&
-                utils::Time::diffGT(outboundContext.lastSendTime, timestamp, utils::Time::sec * 30))
+
+            const bool isDecommissioned =
+                outboundContext.recordingOutboundDecommissioned && !outboundContext.markedForDeletion;
+
+            if (isDecommissioned && utils::Time::diffGT(outboundContext.lastSendTime, timestamp, decommissionedTimeout))
             {
-                logger::info("Removing marked and idle recording outbound context ssrc %u, rec endpointIdHash %lu",
+                logger::info("Marking for deletion decommissioned recording outbound context ssrc %u, rec "
+                             "endpointIdHash %zu",
                     _loggableId.c_str(),
                     outboundContextEntry.first,
                     endpointIdHash);
 
-                EngineMessage::Message message(EngineMessage::Type::FreeRecordingRtpPacketCache);
-                message.command.freeRecordingRtpPacketCache.mixer = this;
-                message.command.freeRecordingRtpPacketCache.ssrc = outboundContext.ssrc;
-                message.command.freeRecordingRtpPacketCache.endpointIdHash = recordingStreamEntry.first;
-                _messageListener.onMessage(std::move(message));
+                const auto ssrc = outboundContextEntry.first;
+                outboundContext.markedForDeletion = true;
+                auto& outboundContextsFinalizerCounter = recordingStreamEntry.second->outboundContextsFinalizerCounter;
+                auto counterIt = outboundContextsFinalizerCounter.find(ssrc);
+                if (counterIt == outboundContextsFinalizerCounter.end())
+                {
+                    auto pair = outboundContextsFinalizerCounter.emplace(ssrc, 0);
+                    if (!pair.second)
+                    {
+                        logger::error("No space to emplace recording counter for endpoint %zu, ssrc %u",
+                            _loggableId.c_str(),
+                            endpointIdHash,
+                            ssrc);
+                        outboundContext.markedForDeletion = false;
+                        // This will reschedule new execution in 5 seconds
+                        outboundContext.lastSendTime = timestamp - decommissionedTimeout + 5 * utils::Time::sec;
+                        return;
+                    }
 
-                recordingStreamEntry.second->ssrcOutboundContexts.erase(outboundContextEntry.first);
+                    counterIt = pair.first;
+                }
+
+                std::atomic_uint32_t& finalizeCounter = counterIt->second;
+                for (auto& transportEntry : recordingStreamEntry.second->transports)
+                {
+                    transportEntry.second.getJobQueue().addJob<FinalizeRecordingOutboundContextJob>(*this,
+                        transportEntry.second,
+                        _engineThreadContext,
+                        ssrc,
+                        finalizeCounter);
+                }
             }
         }
     }
@@ -1744,7 +1819,7 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
     {
         auto ssrc = recControlHeader->getSsrc();
         auto ssrcContext = stream->ssrcOutboundContexts.getItem(ssrc);
-        if (!ssrcContext)
+        if (!ssrcContext || ssrcContext->markedForDeletion)
         {
             return;
         }
@@ -1961,18 +2036,82 @@ void EngineMixer::onOutboundContextFinalized(size_t ownerEndpointHash,
         if (it != _engineVideoStreams.end())
         {
             it->second->ssrcOutboundContexts.erase(ssrc);
-            it->second->ssrcOutboundContexts.erase(feedbackSsrc);
+            if (feedbackSsrc != 0)
+            {
+                it->second->ssrcOutboundContexts.erase(feedbackSsrc);
+            }
         }
 
         return;
     }
 
+    assert(feedbackSsrc == 0);
     auto it = _engineAudioStreams.find(ownerEndpointHash);
     if (it != _engineAudioStreams.end())
     {
         it->second->ssrcOutboundContexts.erase(ssrc);
-        it->second->ssrcOutboundContexts.erase(feedbackSsrc);
     }
+}
+
+void EngineMixer::onRecordingOutboundContextFinalized(size_t ownerEndpointHash, uint32_t ssrc)
+{
+    const auto recordingStreamIt = _engineRecordingStreams.find(ownerEndpointHash);
+    if (recordingStreamIt == _engineRecordingStreams.end())
+    {
+        return;
+    }
+
+    auto& outboundContexts = recordingStreamIt->second->ssrcOutboundContexts;
+    const auto outboundContextIt = outboundContexts.find(ssrc);
+    if (outboundContextIt == outboundContexts.end())
+    {
+        return;
+    }
+
+    // It can happen that outbound context can be re-activated after marked for deletion. Then we will check if it
+    // is still marked for deletion.
+    if (!outboundContextIt->second.markedForDeletion)
+    {
+        logger::info("Recording outbound context was re-activated for endpointId %zu, ssrc %u",
+            _loggableId.c_str(),
+            ownerEndpointHash,
+            ssrc);
+
+        recordingStreamIt->second->outboundContextsFinalizerCounter.erase(ssrc);
+        return;
+    }
+
+    auto& outboundContextsFinalizerCounter = recordingStreamIt->second->outboundContextsFinalizerCounter;
+    auto finalizeCounterIt = outboundContextsFinalizerCounter.find(ssrc);
+    assert(finalizeCounterIt != outboundContextsFinalizerCounter.end());
+    if (finalizeCounterIt != outboundContextsFinalizerCounter.end())
+    {
+        // It's allowed to re-active outbound ssrc, even though this should never happen.
+        // but for safety we will verify if a reactivation has provoked new finalized jobs
+        if (finalizeCounterIt->second != 0)
+        {
+            logger::warn("Finalize counter is not zero yet for endpoint %zu, ssrc %u",
+                _loggableId.c_str(),
+                ownerEndpointHash,
+                ssrc);
+            return;
+        }
+
+        outboundContextsFinalizerCounter.erase(ssrc);
+    }
+
+    logger::info("Removing recording outbound context for endpointId %zu, ssrc %u",
+        _loggableId.c_str(),
+        ownerEndpointHash,
+        ssrc);
+
+    EngineMessage::Message message(EngineMessage::Type::FreeRecordingRtpPacketCache);
+    message.command.freeRecordingRtpPacketCache.mixer = this;
+    message.command.freeRecordingRtpPacketCache.ssrc = outboundContextIt->second.ssrc;
+    message.command.freeRecordingRtpPacketCache.endpointIdHash = ownerEndpointHash;
+    _messageListener.onMessage(std::move(message));
+
+    outboundContexts.erase(outboundContextIt->first);
 }
 
 SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
@@ -2335,7 +2474,7 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
 
         const auto ssrc = packetInfo.inboundContext()->ssrc;
         auto* ssrcOutboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
-        if (!ssrcOutboundContext || ssrcOutboundContext->markedForDeletion)
+        if (!ssrcOutboundContext || ssrcOutboundContext->recordingOutboundDecommissioned)
         {
             continue;
         }
@@ -2726,7 +2865,7 @@ void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo,
 
         auto* ssrcOutboundContext =
             recordingStream->ssrcOutboundContexts.getItem(packetInfo.inboundContext()->defaultLevelSsrc);
-        if (!ssrcOutboundContext || ssrcOutboundContext->markedForDeletion)
+        if (!ssrcOutboundContext || ssrcOutboundContext->recordingOutboundDecommissioned)
         {
             continue;
         }
@@ -3456,10 +3595,13 @@ void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStrea
     }
 }
 
-void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream,
-    const uint32_t ssrc,
-    const uint32_t feedbackSsrc)
+void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream)
 {
+    if (!senderAudioStream->remoteSsrc.isSet())
+    {
+        return;
+    }
+
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
         auto* audioStream = audioStreamEntry.second;
@@ -3470,31 +3612,22 @@ void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(EngineAudioStre
         }
         const auto endpointIdHash = audioStreamEntry.first;
 
-        auto outboundContextItr = audioStream->ssrcOutboundContexts.find(ssrc);
+        auto outboundContextItr = audioStream->ssrcOutboundContexts.find(senderAudioStream->remoteSsrc.get());
         if (outboundContextItr != audioStream->ssrcOutboundContexts.end())
         {
             outboundContextItr->second.markedForDeletion = true;
             logger::info("Marking unused audio outbound context for deletion, ssrc %u, endpointIdHash %lu",
                 _loggableId.c_str(),
-                ssrc,
+                outboundContextItr->first,
                 endpointIdHash);
 
-            audioStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContext>(*this,
+            static constexpr uint32_t feedbackSsrc = 0;
+            audioStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContextJob>(*this,
                 audioStream->transport,
                 outboundContextItr->second,
                 _engineThreadContext,
                 _messageListener,
                 feedbackSsrc);
-        }
-
-        outboundContextItr = audioStream->ssrcOutboundContexts.find(feedbackSsrc);
-        if (outboundContextItr != audioStream->ssrcOutboundContexts.end())
-        {
-            outboundContextItr->second.markedForDeletion = true;
-            logger::info("Marking unused audio outbound context for deletion, feedback ssrc %u, endpointIdHash %lu´",
-                _loggableId.c_str(),
-                ssrc,
-                endpointIdHash);
         }
     }
 }
@@ -3522,7 +3655,7 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
                 ssrc,
                 endpointIdHash);
 
-            videoStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContext>(*this,
+            videoStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContextJob>(*this,
                 videoStream->transport,
                 outboundContextItr->second,
                 _engineThreadContext,
@@ -3577,9 +3710,63 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
     const EngineAudioStream& audioStream,
     bool isAdded)
 {
-    const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
-    const auto ssrc = audioStream.remoteSsrc.isSet() ? audioStream.remoteSsrc.get() : 0;
+    const auto ssrc = audioStream.remoteSsrc.valueOr(0);
+    if (ssrc == 0)
+    {
+        return;
+    }
 
+    if (targetStream.transports.empty())
+    {
+        logger::error("Audio recording stream has zero transports. endpointHashId %zu",
+            _loggableId.c_str(),
+            targetStream.endpointIdHash);
+
+        return;
+    }
+
+    memory::UniquePacket packet;
+    auto outboundContextIt = targetStream.ssrcOutboundContexts.find(ssrc);
+    if (isAdded)
+    {
+        if (outboundContextIt != targetStream.ssrcOutboundContexts.end())
+        {
+            if (!outboundContextIt->second.recordingOutboundDecommissioned)
+            {
+                // The event already was sent
+                // It happens when audio is reconfigured
+                // We will not send the event again
+                return;
+            }
+
+            outboundContextIt->second.recordingOutboundDecommissioned = false;
+            outboundContextIt->second.markedForDeletion = false;
+        }
+        packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
+                     .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
+                     .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / utils::Time::ms))
+                     .setSsrc(ssrc)
+                     .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap.payloadType))
+                     .setPayloadFormat(audioStream.rtpMap.format)
+                     .setEndpoint(audioStream.endpointId)
+                     .setWallClock(utils::Time::now())
+                     .build();
+    }
+    else
+    {
+        if (outboundContextIt != targetStream.ssrcOutboundContexts.end())
+        {
+            outboundContextIt->second.recordingOutboundDecommissioned = true;
+        }
+
+        packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
+                     .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
+                     .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / utils::Time::ms))
+                     .setSsrc(ssrc)
+                     .build();
+    }
+
+    auto lastKey = (--targetStream.transports.end())->first;
     for (const auto& transportEntry : targetStream.transports)
     {
         auto unackedPacketsTrackerItr = targetStream.recEventUnackedPacketsTracker.find(transportEntry.first);
@@ -3588,80 +3775,30 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
             logger::error("RecEvent packet tracker not found. Unable to send recording audio stream event to %s",
                 _loggableId.c_str(),
                 transportEntry.second.getLoggableId().c_str());
-            continue;
+            return;
         }
 
-        memory::UniquePacket packet;
-        if (isAdded)
+        memory::UniquePacket packetToSend;
+        if (lastKey == transportEntry.first)
         {
-            auto outboundContextIt = targetStream.ssrcOutboundContexts.find(ssrc);
-            if (outboundContextIt != targetStream.ssrcOutboundContexts.end())
-            {
-                if (!outboundContextIt->second.markedForDeletion)
-                {
-                    // The event already was sent
-                    // It happens when audio is reconfigured
-                    // We will not send the event again
-                    return;
-                }
-
-                outboundContextIt->second.markedForDeletion = false;
-            }
-
-            packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
-                         .setTimestamp(timestamp)
-                         .setSsrc(ssrc)
-                         .setRtpPayloadType(static_cast<uint8_t>(audioStream.rtpMap.payloadType))
-                         .setPayloadFormat(audioStream.rtpMap.format)
-                         .setEndpoint(audioStream.endpointId)
-                         .setWallClock(utils::Time::now())
-                         .build();
-
-            auto emplaceResult =
-                targetStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream.rtpMap);
-
-            if (!emplaceResult.second && emplaceResult.first == targetStream.ssrcOutboundContexts.end())
-            {
-                logger::error("Failed to create outbound context for audio ssrc %u, rec transport %s",
-                    _loggableId.c_str(),
-                    ssrc,
-                    transportEntry.second.getLoggableId().c_str());
-            }
-            else
-            {
-                logger::info("Created new outbound context for audio rec stream, rec endpointIdHash %lu, ssrc %u",
-                    _loggableId.c_str(),
-                    targetStream.endpointIdHash,
-                    ssrc);
-            }
+            packetToSend = std::move(packet);
         }
         else
         {
-            packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
-                         .setTimestamp(timestamp)
-                         .setSsrc(ssrc)
-                         .build();
-
-            auto outboundContextItr = targetStream.ssrcOutboundContexts.find(ssrc);
-            if (outboundContextItr != targetStream.ssrcOutboundContexts.end())
-            {
-                outboundContextItr->second.markedForDeletion = true;
-            }
+            packetToSend = makeUniquePacket(_sendAllocator, *packetToSend);
         }
 
         if (!packet)
         {
             // This need to be improved. If we can't allocate this event, the recording
             // must fail as the we will not info about this stream
-            logger::error("No space to allocate rec Stream%s event",
+            logger::error("No space to allocate rec AudioStream%s event",
                 _loggableId.c_str(),
                 isAdded ? "Added" : "Removed");
             continue;
         }
 
-        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packetToSend),
             transportEntry.second,
             targetStream.recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);
@@ -3715,6 +3852,77 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
         return;
     }
 
+    if (targetStream.transports.empty())
+    {
+        logger::error("Video recording stream has zero transports. endpointHashId %zu",
+            _loggableId.c_str(),
+            targetStream.endpointIdHash);
+
+        return;
+    }
+
+    memory::UniquePacket packet;
+    if (isAdded)
+    {
+        auto outboundContextIt = targetStream.ssrcOutboundContexts.find(ssrc);
+        if (outboundContextIt != targetStream.ssrcOutboundContexts.end())
+        {
+            if (!outboundContextIt->second.recordingOutboundDecommissioned)
+            {
+                // The event already was sent
+                // It happens when audio is reconfigured
+                // We will not send the event again
+                return;
+            }
+
+            outboundContextIt->second.recordingOutboundDecommissioned = false;
+            outboundContextIt->second.markedForDeletion = false;
+        }
+
+        packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
+                     .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
+                     .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / utils::Time::ms))
+                     .setSsrc(ssrc)
+                     .setIsScreenSharing(simulcast.contentType == SimulcastStream::VideoContentType::SLIDES)
+                     .setRtpPayloadType(static_cast<uint8_t>(videoStream.rtpMap.payloadType))
+                     .setPayloadFormat(videoStream.rtpMap.format)
+                     .setEndpoint(videoStream.endpointId)
+                     .setWallClock(utils::Time::now())
+                     .build();
+
+        auto emplaceResult = targetStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream.rtpMap);
+
+        if (!emplaceResult.second && emplaceResult.first == targetStream.ssrcOutboundContexts.end())
+        {
+            logger::error("Failed to create outbound context for video ssrc %u, endpoint transport %zu",
+                _loggableId.c_str(),
+                ssrc,
+                targetStream.endpointIdHash);
+        }
+        else
+        {
+            logger::info("Created new outbound context for video rec stream, endpointIdHash %lu, ssrc %u",
+                _loggableId.c_str(),
+                targetStream.endpointIdHash,
+                ssrc);
+        }
+    }
+    else
+    {
+        packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
+                     .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
+                     .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / utils::Time::ms))
+                     .setSsrc(ssrc)
+                     .build();
+
+        auto outboundContextItr = targetStream.ssrcOutboundContexts.find(ssrc);
+        if (outboundContextItr != targetStream.ssrcOutboundContexts.end())
+        {
+            outboundContextItr->second.recordingOutboundDecommissioned = true;
+        }
+    }
+
+    auto lastKey = (--targetStream.transports.end())->first;
     for (const auto& transportEntry : targetStream.transports)
     {
         auto unackedPacketsTrackerItr = targetStream.recEventUnackedPacketsTracker.find(transportEntry.first);
@@ -3723,81 +3931,30 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
             logger::error("RecEvent packet tracker not found. Unable to send stream event to %s",
                 _loggableId.c_str(),
                 transportEntry.second.getLoggableId().c_str());
-            continue;
+            return;
         }
 
-        memory::UniquePacket packet;
-        if (isAdded)
+        memory::UniquePacket packetToSend;
+        if (lastKey == transportEntry.first)
         {
-            auto outboundContextIt = targetStream.ssrcOutboundContexts.find(ssrc);
-            if (outboundContextIt != targetStream.ssrcOutboundContexts.end())
-            {
-                if (!outboundContextIt->second.markedForDeletion)
-                {
-                    // The event already was sent
-                    // It happens when audio is reconfigured
-                    // We will not send the event again
-                    return;
-                }
-
-                outboundContextIt->second.markedForDeletion = false;
-            }
-
-            packet = recp::RecStreamAddedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
-                         .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL))
-                         .setSsrc(ssrc)
-                         .setIsScreenSharing(simulcast.contentType == SimulcastStream::VideoContentType::SLIDES)
-                         .setRtpPayloadType(static_cast<uint8_t>(videoStream.rtpMap.payloadType))
-                         .setPayloadFormat(videoStream.rtpMap.format)
-                         .setEndpoint(videoStream.endpointId)
-                         .setWallClock(utils::Time::now())
-                         .build();
-
-            auto emplaceResult =
-                targetStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream.rtpMap);
-
-            if (!emplaceResult.second && emplaceResult.first == targetStream.ssrcOutboundContexts.end())
-            {
-                logger::error("Failed to create outbound context for video ssrc %u, rec transport %s",
-                    _loggableId.c_str(),
-                    ssrc,
-                    transportEntry.second.getLoggableId().c_str());
-            }
-            else
-            {
-                logger::info("Created new outbound context for video rec stream, endpointIdHash %lu, ssrc %u",
-                    _loggableId.c_str(),
-                    targetStream.endpointIdHash,
-                    ssrc);
-            }
+            packetToSend = std::move(packet);
         }
         else
         {
-            packet = recp::RecStreamRemovedEventBuilder(_sendAllocator)
-                         .setSequenceNumber(targetStream.recordingEventsOutboundContext.sequenceNumber++)
-                         .setTimestamp(static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL))
-                         .setSsrc(ssrc)
-                         .build();
-
-            auto outboundContextItr = targetStream.ssrcOutboundContexts.find(ssrc);
-            if (outboundContextItr != targetStream.ssrcOutboundContexts.end())
-            {
-                outboundContextItr->second.markedForDeletion = true;
-            }
+            packetToSend = makeUniquePacket(_sendAllocator, *packetToSend);
         }
 
         if (!packet)
         {
             // This need to be improved. If we can't allocate this event, the recording
             // must fail as the we will not info about this stream
-            logger::error("No space to allocate rec Stream%s event",
+            logger::error("No space to allocate rec VideoStream%s event",
                 _loggableId.c_str(),
                 isAdded ? "Added" : "Removed");
             continue;
         }
 
-        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
+        transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packetToSend),
             transportEntry.second,
             targetStream.recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);

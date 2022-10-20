@@ -25,6 +25,7 @@ struct EngineRecordingStream
           isScreenSharingEnabled(isScreenSharingEnabled),
           isReady(false),
           ssrcOutboundContexts(1024),
+          outboundContextsFinalizerCounter(1024),
           recordingEventsOutboundContext(recordingEventPacketCache),
           recEventUnackedPacketsTracker(2)
     {
@@ -39,6 +40,7 @@ struct EngineRecordingStream
     bool isReady;
 
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
+    concurrency::MpmcHashmap32<uint32_t, std::atomic_uint32_t> outboundContextsFinalizerCounter;
     RecordingOutboundContext recordingEventsOutboundContext;
 
     // missing packet trackers per transport peer
@@ -46,3 +48,4 @@ struct EngineRecordingStream
 };
 
 } // namespace bridge
+;

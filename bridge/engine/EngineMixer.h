@@ -177,6 +177,7 @@ public:
     void onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet);
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
     void onOutboundContextFinalized(size_t ownerEndpointHash, uint32_t ssrc, uint32_t feedbackSsrc, bool isVideo);
+    void onRecordingOutboundContextFinalized(size_t ownerEndpointHash, uint32_t ssrc);
     void internalRemoveBarbell(size_t idHash);
     void internalRemoveInboundSsrc(uint32_t ssrc);
     // --
@@ -420,9 +421,7 @@ private:
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream);
 
     void restoreDirectorStreamActiveState(EngineVideoStream& videoStream, const SimulcastStream& simulcastStream);
-    void markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream,
-        const uint32_t ssrc,
-        const uint32_t feedbackSsrc);
+    void markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream);
     void markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
         const uint32_t ssrc,
         const uint32_t feedbackSsrc);

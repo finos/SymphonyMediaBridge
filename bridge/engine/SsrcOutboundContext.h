@@ -36,7 +36,8 @@ public:
           lastRespondedNackTimestamp(0),
           originalSsrc(~0u),
           lastSendTime(utils::Time::getAbsoluteTime()),
-          markedForDeletion(false)
+          markedForDeletion(false),
+          recordingOutboundDecommissioned(false)
     {
     }
 
@@ -104,6 +105,11 @@ public:
 
     // Stream owner is being removed. Stop outbound packets over this context
     bool markedForDeletion;
+
+    // This is for recording only! We will keep the SsrcOutbound context for while
+    // before mark if for deletion so we can keep the the retransmission mechanisms
+    // for some time
+    bool recordingOutboundDecommissioned;
 };
 
 } // namespace bridge
