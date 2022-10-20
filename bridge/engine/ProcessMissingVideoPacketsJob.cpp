@@ -42,6 +42,12 @@ void ProcessMissingVideoPacketsJob::run()
         return;
     }
 
+    logger::debug("send NACK for %zu pkts, ssrc %u, %s",
+        "ProcessMissingVideoPacketsJob",
+        numMissingSequenceNumbers,
+        _ssrcContext.ssrc,
+        _transport.getLoggableId().c_str());
+
     rtp::RtcpNackBuilder rtcpNackBuilder(_reporterSsrc, _ssrcContext.ssrc);
 
     for (size_t i = 0; i < numMissingSequenceNumbers; ++i)
