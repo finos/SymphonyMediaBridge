@@ -838,10 +838,13 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
             {
                 auto audioEndpoint = json::writer::createObjectWriter(outMessage);
                 audioEndpoint.addProperty("endpoint-id", audioStream->endpointId.c_str());
-                auto audioSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
-                audioSsrcs.addElement(item.second);
+                {
+                    auto audioSsrcs = json::writer::createArrayWriter(outMessage, "ssrcs");
+                    audioSsrcs.addElement(item.second);
+                }
+
                 auto* neighbours = neighbourMembershipMap.getItem(item.first);
-                if (neighbours)
+                if (neighbours && !neighbours->memberships.empty())
                 {
                     auto neighboursJson = json::writer::createArrayWriter(outMessage, "neighbours");
                     for (auto& n : neighbours->memberships)

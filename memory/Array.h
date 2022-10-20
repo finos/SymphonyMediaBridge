@@ -60,11 +60,11 @@ public:
     const T& operator[](size_t pos) const { return _dataPtr[pos]; }
 
     const T* data() const { return _dataPtr; }
+    
     Array& append(const T* vector, size_t count)
     {
         if (_size + count <= _capacity)
         {
-
             for (size_t i = 0; i < count; ++i)
             {
                 new (&_dataPtr[_size++]) T(vector[i]);

@@ -482,7 +482,7 @@ std::vector<uint32_t> convertGroupIds(const std::vector<std::string>& groupIds)
     {
         if (utils::isNumber(gid))
         {
-            result.push_back(std::atoi(gid.c_str()));
+            result.push_back(std::atoll(gid.c_str()) & 0xFFFFFFFFu);
         }
         else
         {

@@ -593,7 +593,7 @@ TEST_F(BarbellTest, barbellNeighbours)
         utils::Span<std::string> span(neighbours);
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
         group.clients[1]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
-        group.clients[2]->initiateCall2(baseUrl2, conf.getId(), false, emulator::Audio::Opus, true, true, span);
+        group.clients[2]->initiateCall2(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true, span);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -623,38 +623,19 @@ TEST_F(BarbellTest, barbellNeighbours)
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
-        logVideoSent("client1", *group.clients[0]);
-        logVideoSent("client2", *group.clients[1]);
-        logVideoSent("client3", *group.clients[2]);
-
-        const double expectedFrequencies[2][2] = {{1300.0, 2100.0}, {600.0, 2100.0}};
-        size_t freqId = 0;
-        for (auto id : {0, 1})
+        const size_t expectedFreqCount[] = {2, 1, 1};
+        for (size_t id = 0; id < 3; ++id)
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
-            EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
-        }
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 0);
+            EXPECT_EQ(data.dominantFrequencies.size(), expectedFreqCount[id]);
 
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
-        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
-        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-        group.clients[1]->_transport->getReportSummary(transportSummary1);
-        group.clients[2]->_transport->getReportSummary(transportSummary2);
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            std::string clientName = "client_" + std::to_string(id);
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
 
-        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
-        logVideoReceive("client1", *group.clients[0]);
-        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
-        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
-
-        auto allStreamsVideoStats = group.clients[0]->getActiveVideoDecoderStats();
-        EXPECT_EQ(allStreamsVideoStats.size(), 2);
-        for (const auto& videoStats : allStreamsVideoStats)
-        {
-            const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
-            EXPECT_NEAR(fps, 30.0, 1.0);
-            EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+            logVideoSent(clientName.c_str(), *group.clients[id]);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
         }
     });
 }

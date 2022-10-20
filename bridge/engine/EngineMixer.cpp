@@ -324,7 +324,7 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
         auto& neighbourList = neighbourIt.first->second.memberships;
         for (auto& it : engineAudioStream->neighbours)
         {
-            neighbourList.push_back(it.second);
+            neighbourList.push_back(it.first);
         }
     }
     else
@@ -4033,15 +4033,16 @@ void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TMap& map)
         }
 
         const auto endpointIdHash = utils::hash<char*>{}(item.endpointId);
-        map.add(endpointIdHash, item);
 
         if (endpoint.exists("neighbours"))
         {
             for (auto neighbour : endpoint["neighbours"].getArray())
             {
-                item.neighbours.push_back(neighbour.getInt(0));
+                item.neighbours.push_back(neighbour.getInt<uint32_t>(0));
             }
         }
+
+        map.add(endpointIdHash, item);
     }
 }
 
