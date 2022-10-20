@@ -1922,13 +1922,11 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHas
 
     if (!ssrcRewrite)
     {
-        // When is not ssrc rewrite, we have to ensure that ssrcInboundContext is not been
-        // decommissioned already. If it was decommissioned and the ssrcOutboundContext
-        // is not in the ssrcOutboundContexts, most likely the reason is because we are
-        // processing an old packet in the queue and the ssrcOutboundContext has been deleted already.
-        // In such case we we will not recreate the outboundContext because it would be
-        // deleted only in the end of the conference (keep with it all associated resources, like video caches)
-        if (!_ssrcInboundContexts.contains(ssrc))
+        // In this case most likely both input stream and ssrcOutboundContext have been removed already
+        // and we are processing an old packet. If we create an new ssrcOutboundContext it would be leaked
+        // until the end of outbound stream
+        const bool isInboundDecommissioned = !_ssrcInboundContexts.contains(ssrc);
+        if (isInboundDecommissioned)
         {
             return nullptr;
         }
