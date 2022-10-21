@@ -3834,7 +3834,7 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
         }
         else
         {
-            packetToSend = makeUniquePacket(_sendAllocator, *packetToSend);
+            packetToSend = makeUniquePacket(_sendAllocator, *packet);
         }
 
         if (!packetToSend)
@@ -4005,7 +4005,7 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
         }
         else
         {
-            packetToSend = makeUniquePacket(_sendAllocator, *packetToSend);
+            packetToSend = makeUniquePacket(_sendAllocator, *packet);
         }
 
         if (!packetToSend)
