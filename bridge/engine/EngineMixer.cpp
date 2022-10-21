@@ -2119,6 +2119,34 @@ bool isNeighbour(const V& groupList, const T& lookupTable)
     }
     return false;
 }
+
+template <class TMap>
+bool areNeighbours(const TMap& table1, const TMap& table2)
+{
+    if (table1.size() < table2.size())
+    {
+        for (auto& entry : table1)
+        {
+            if (table2.contains(entry.first))
+            {
+                return true;
+            }
+        }
+    }
+    else
+    {
+        for (auto& entry : table2)
+        {
+            if (table1.contains(entry.first))
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 } // namespace
 
 void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp)
@@ -2914,31 +2942,21 @@ inline void EngineMixer::processAudioStreams()
 
         if (!audioStream->neighbours.empty())
         {
-            memory::Map<size_t, bool, EngineAudioStream::MAX_NEIGHBOUR_COUNT> neighbourEndpointIds;
-            for (auto& n : audioStream->neighbours)
+            for (auto& stream : _engineAudioStreams)
             {
-                for (auto& stream : _engineAudioStreams)
+                auto& peerAudioStream = *stream.second;
+                if (peerAudioStream.remoteSsrc.isSet() && peerAudioStream.transport.isConnected() &&
+                    areNeighbours(audioStream->neighbours, peerAudioStream.neighbours))
                 {
-                    auto& peerAudioStream = *stream.second;
-                    if (peerAudioStream.remoteSsrc.isSet() && peerAudioStream.transport.isConnected() &&
-                        peerAudioStream.neighbours.contains(n.first))
+                    auto* neighbourAudioBuffer = _mixerSsrcAudioBuffers.getItem(peerAudioStream.remoteSsrc.get());
+                    if (!neighbourAudioBuffer || neighbourAudioBuffer->isPreBuffering())
                     {
-                        neighbourEndpointIds.emplace(stream.first);
+                        continue;
                     }
+                    neighbourAudioBuffer->removeFromMix(reinterpret_cast<int16_t*>(payloadStart),
+                        samplesPerIteration,
+                        mixSampleScaleFactor);
                 }
-            }
-
-            for (auto& n : neighbourEndpointIds)
-            {
-                auto neighbourStream = _engineAudioStreams.getItem(n.first);
-                auto* neighbourAudioBuffer = _mixerSsrcAudioBuffers.getItem(neighbourStream->remoteSsrc.get());
-                if (!neighbourAudioBuffer || neighbourAudioBuffer->isPreBuffering())
-                {
-                    continue;
-                }
-                neighbourAudioBuffer->removeFromMix(reinterpret_cast<int16_t*>(payloadStart),
-                    samplesPerIteration,
-                    mixSampleScaleFactor);
             }
         }
 
