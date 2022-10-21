@@ -22,7 +22,6 @@
 #include "transport/ice/IceCandidate.h"
 #include "utils/IdGenerator.h"
 #include "utils/SocketAddress.h"
-#include "utils/Span.h"
 #include "utils/SsrcGenerator.h"
 #include "utils/StdExtensions.h"
 #include "utils/StringBuilder.h"

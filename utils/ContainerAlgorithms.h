@@ -12,14 +12,7 @@ bool contains(const T& container, UnaryPredicate predicate)
 template <typename T, class I>
 bool itemIn(const I& item, const T& container)
 {
-    for (auto& containerItem : container)
-    {
-        if (containerItem == item)
-        {
-            return true;
-        }
-    }
-    return false;
+    return std::find(container.begin(), container.end(), item) != container.end();
 }
 
 template <typename T>

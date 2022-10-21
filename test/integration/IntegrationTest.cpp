@@ -363,9 +363,10 @@ void IntegrationTest::startSimulation()
 void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
 {
     // Stopped the internet, but allow some process to finish.
-    const auto now = _timeSource.getAbsoluteTime();
-    const auto step = 500 * utils::Time::us;
-    for (auto t = now; t < now + rampdownTimeout; t += step)
+    const auto step = 5 * utils::Time::ms;
+    const bool internetRunning = (_internet->getState() == fakenet::InternetRunner::State::running);
+
+    for (uint64_t t = 0; t < rampdownTimeout && internetRunning; t += step)
     {
         utils::Time::nanoSleep(step);
     }
@@ -1493,12 +1494,11 @@ TEST_F(IntegrationTest, neighbours)
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
-        const size_t chMixed[] = {0, 0, 0, 3};
-        const size_t expectedFreqCount[] = {3, 1, 1, 1};
+        const size_t chMixed[] = {0, 0, 0, 1};
+        AudioAnalysisData results[4];
         for (size_t id = 0; id < 4; ++id)
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, chMixed[id]);
-            EXPECT_EQ(data.dominantFrequencies.size(), expectedFreqCount[id]);
+            results[id] = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, chMixed[id]);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
@@ -1507,6 +1507,21 @@ TEST_F(IntegrationTest, neighbours)
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
+        }
+
+        EXPECT_EQ(results[0].audioSsrcCount, 3u);
+        EXPECT_EQ(results[1].audioSsrcCount, 1u);
+        EXPECT_EQ(results[2].audioSsrcCount, 1u);
+        EXPECT_EQ(results[3].audioSsrcCount, 1u);
+
+        EXPECT_EQ(results[0].dominantFrequencies.size(), 3);
+        EXPECT_EQ(results[1].dominantFrequencies.size(), 1);
+        EXPECT_EQ(results[2].dominantFrequencies.size(), 1);
+        EXPECT_EQ(results[3].dominantFrequencies.size(), 1);
+
+        if (results[3].dominantFrequencies.size() > 0)
+        {
+            EXPECT_NEAR(results[3].dominantFrequencies[0], 600.0, 50.0);
         }
     });
 }

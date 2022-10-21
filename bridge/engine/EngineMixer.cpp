@@ -2138,7 +2138,8 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         {
             continue;
         }
-        else if (!audioStream->neighbours.empty())
+
+        if (!audioStream->neighbours.empty())
         {
             auto* srcMemberships = _neighbourMemberships.getItem(packetInfo.packet()->endpointIdHash);
             if (srcMemberships && isNeighbour(srcMemberships->memberships, audioStream->neighbours))
@@ -2274,6 +2275,9 @@ void EngineMixer::forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInf
     }
 }
 
+/**
+ * Append RTP audio to pre-buffer for this ssrc in _mixerSsrcAudioBuffers
+ */
 void EngineMixer::addPacketToMixerBuffers(const IncomingAudioPacketInfo& packetInfo,
     const uint64_t timestamp,
     bool overrunLogSpamGuard)
@@ -2868,12 +2872,7 @@ inline void EngineMixer::processAudioStreams()
 
         if (audioStream->remoteSsrc.isSet())
         {
-            auto mixerAudioBufferItr = _mixerSsrcAudioBuffers.find(audioStream->remoteSsrc.get());
-            if (mixerAudioBufferItr != _mixerSsrcAudioBuffers.end())
-            {
-                audioBuffer = mixerAudioBufferItr->second;
-            }
-
+            audioBuffer = _mixerSsrcAudioBuffers.getItem(audioStream->remoteSsrc.get());
             isContributingToMix = audioBuffer && !audioBuffer->isPreBuffering();
 
             if (!audioStream->audioMixed || !audioStream->transport.isConnected())
@@ -2911,6 +2910,36 @@ inline void EngineMixer::processAudioStreams()
                 samplesPerIteration,
                 mixSampleScaleFactor);
             audioBuffer->drop(samplesPerIteration);
+        }
+
+        if (!audioStream->neighbours.empty())
+        {
+            memory::Map<size_t, bool, EngineAudioStream::MAX_NEIGHBOUR_COUNT> neighbourEndpointIds;
+            for (auto& n : audioStream->neighbours)
+            {
+                for (auto& stream : _engineAudioStreams)
+                {
+                    auto& peerAudioStream = *stream.second;
+                    if (peerAudioStream.remoteSsrc.isSet() && peerAudioStream.transport.isConnected() &&
+                        peerAudioStream.neighbours.contains(n.first))
+                    {
+                        neighbourEndpointIds.emplace(stream.first);
+                    }
+                }
+            }
+
+            for (auto& n : neighbourEndpointIds)
+            {
+                auto neighbourStream = _engineAudioStreams.getItem(n.first);
+                auto* neighbourAudioBuffer = _mixerSsrcAudioBuffers.getItem(neighbourStream->remoteSsrc.get());
+                if (!neighbourAudioBuffer || neighbourAudioBuffer->isPreBuffering())
+                {
+                    continue;
+                }
+                neighbourAudioBuffer->removeFromMix(reinterpret_cast<int16_t*>(payloadStart),
+                    samplesPerIteration,
+                    mixSampleScaleFactor);
+            }
         }
 
         auto* ssrcContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,

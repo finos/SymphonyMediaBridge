@@ -165,7 +165,7 @@ void rawNanoSleep(int64_t ns)
 {
     ns = (ns > 0 ? ns : 0);
     ns = std::min(ns, static_cast<int64_t>(std::numeric_limits<int32_t>::max()) * int64_t(1000'000'000));
-    const timespec sleepTime = {static_cast<long>(ns / 1000'000'000UL), static_cast<long>(ns % 1000000000UL)};
+    const timespec sleepTime = {static_cast<long>(ns / 1000'000'000UL), static_cast<long>(ns % 1000'000'000UL)};
     ::nanosleep(&sleepTime, nullptr);
 }
 

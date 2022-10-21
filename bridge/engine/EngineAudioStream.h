@@ -3,8 +3,6 @@
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "concurrency/MpmcHashmap.h"
 #include "memory/Map.h"
-#include "utils/FixString.h"
-#include "utils/Span.h"
 #include "utils/StdExtensions.h"
 #include <cstdint>
 
@@ -18,7 +16,7 @@ namespace bridge
 
 struct EngineAudioStream
 {
-    static constexpr uint32_t MAX_NEIGHBOUR_COUNT = 64;
+    static constexpr uint32_t MAX_NEIGHBOUR_COUNT = 128;
 
     EngineAudioStream(const std::string& endpointId,
         const size_t endpointIdHash,
