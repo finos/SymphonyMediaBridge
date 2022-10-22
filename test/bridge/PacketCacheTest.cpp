@@ -75,3 +75,12 @@ TEST_F(PacketCacheTest, fillCache)
     EXPECT_EQ(nullptr, _packetCache->get(0));
     EXPECT_NE(nullptr, _packetCache->get(512));
 }
+
+TEST_F(PacketCacheTest, destructor)
+{
+    _packetCache->add(*makeUniquePacket(5), 5);
+    _packetCache->add(*makeUniquePacket(6), 6);
+    _packetCache->add(*makeUniquePacket(7), 7);
+
+    _packetCache.reset();
+}

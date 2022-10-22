@@ -1,13 +1,6 @@
 #include "bridge/engine/PacketCache.h"
 #include "utils/ScopedReentrancyBlocker.h"
 
-namespace
-{
-
-const size_t maxPackets = 512;
-
-}
-
 namespace bridge
 {
 PacketCache::PacketCache(const char* loggableId)
@@ -15,9 +8,8 @@ PacketCache::PacketCache(const char* loggableId)
 #if DEBUG
       _reentrancyCounter(0),
 #endif
-      _cache(maxPackets * 2),
-      _packetAllocator(std::make_unique<memory::PacketPoolAllocator>(maxPackets, _loggableId.c_str())),
-      _arrivalQueue(maxPackets * 2)
+      _packetAllocator(maxPackets, _loggableId.c_str()),
+      _cache(maxPackets * 2)
 {
     logger::info("Creating cache", _loggableId.c_str());
 }
@@ -27,9 +19,8 @@ PacketCache::PacketCache(const char* loggableId, const uint32_t ssrc)
 #if DEBUG
       _reentrancyCounter(0),
 #endif
-      _cache(maxPackets * 2),
-      _packetAllocator(std::make_unique<memory::PacketPoolAllocator>(maxPackets, _loggableId.c_str())),
-      _arrivalQueue(maxPackets * 2)
+      _packetAllocator(maxPackets, _loggableId.c_str()),
+      _cache(maxPackets * 2)
 {
     logger::info("Creating cache for ssrc %u", _loggableId.c_str(), ssrc);
 }
@@ -37,8 +28,6 @@ PacketCache::PacketCache(const char* loggableId, const uint32_t ssrc)
 PacketCache::~PacketCache()
 {
     REENTRANCE_CHECK(_reentrancyCounter);
-    // must clear out content in case PacketAllocator is removed first.
-    _cache.reInitialize();
 }
 
 bool PacketCache::add(const memory::Packet& packet, const uint16_t sequenceNumber)
@@ -52,9 +41,8 @@ bool PacketCache::add(const memory::Packet& packet, const uint16_t sequenceNumbe
 
     if (_arrivalQueue.size() >= maxPackets)
     {
-        uint16_t sequenceNumberToRemove;
-        const auto popResult = _arrivalQueue.pop(sequenceNumberToRemove);
-        assert(popResult);
+        const uint16_t sequenceNumberToRemove = _arrivalQueue.back();
+        _arrivalQueue.pop_back();
 
         auto removedPacketItr = _cache.find(sequenceNumberToRemove);
         if (removedPacketItr != _cache.end())
@@ -64,14 +52,14 @@ bool PacketCache::add(const memory::Packet& packet, const uint16_t sequenceNumbe
         }
     }
 
-    auto cachedPacket = memory::makeUniquePacket(*_packetAllocator, packet);
+    auto cachedPacket = memory::makeUniquePacket(_packetAllocator, packet);
     if (!cachedPacket)
     {
         return false;
     }
 
     _cache.emplace(sequenceNumber, std::move(cachedPacket));
-    _arrivalQueue.push(sequenceNumber);
+    _arrivalQueue.push_front(sequenceNumber);
     return true;
 }
 

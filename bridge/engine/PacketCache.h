@@ -4,6 +4,7 @@
 #include "concurrency/MpmcQueue.h"
 #include "logger/Logger.h"
 #include "memory/PacketPoolAllocator.h"
+#include "memory/RandomAccessBacklog.h"
 
 namespace bridge
 {
@@ -23,6 +24,8 @@ public:
     bool add(const memory::Packet& packet, const uint16_t sequenceNumber);
     const memory::Packet* get(const uint16_t sequenceNumber);
 
+    constexpr static size_t maxPackets = 512;
+
 private:
     logger::LoggableId _loggableId;
 
@@ -30,9 +33,9 @@ private:
     std::atomic_uint32_t _reentrancyCounter;
 #endif
 
+    memory::PacketPoolAllocator _packetAllocator;
     concurrency::MpmcHashmap32<uint16_t, memory::UniquePacket> _cache;
-    std::unique_ptr<memory::PacketPoolAllocator> _packetAllocator;
-    concurrency::MpmcQueue<uint16_t> _arrivalQueue;
+    memory::RandomAccessBacklog<uint16_t, maxPackets> _arrivalQueue;
 };
 
 } // namespace bridge
