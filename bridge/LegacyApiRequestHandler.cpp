@@ -1126,7 +1126,8 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
                 remoteSsrc.set(channel._sources.front());
             }
 
-            if (!mixer.configureAudioStream(endpointId, rtpMaps.front(), remoteSsrc))
+            std::vector<uint32_t> noNeighbours;
+            if (!mixer.configureAudioStream(endpointId, rtpMaps.front(), remoteSsrc, noNeighbours))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;

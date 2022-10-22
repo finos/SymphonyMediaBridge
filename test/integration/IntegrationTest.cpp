@@ -304,7 +304,7 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
             EXPECT_EQ(amplitudeProfile.size(), 2);
             if (amplitudeProfile.size() > 1)
             {
-                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 100);
+                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 125);
             }
         }
 
@@ -363,9 +363,10 @@ void IntegrationTest::startSimulation()
 void IntegrationTest::finalizeSimulationWithTimeout(uint64_t rampdownTimeout)
 {
     // Stopped the internet, but allow some process to finish.
-    const auto now = _timeSource.getAbsoluteTime();
-    const auto step = 500 * utils::Time::us;
-    for (auto t = now; t < now + rampdownTimeout; t += step)
+    const auto step = 5 * utils::Time::ms;
+    const bool internetRunning = (_internet->getState() == fakenet::InternetRunner::State::running);
+
+    for (uint64_t t = 0; t < rampdownTimeout && internetRunning; t += step)
     {
         utils::Time::nanoSleep(step);
     }
@@ -1437,6 +1438,90 @@ TEST_F(IntegrationTest, conferencePort)
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
+        }
+    });
+}
+
+TEST_F(IntegrationTest, neighbours)
+{
+    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        initBridge(_config);
+        const auto baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 4);
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        std::string neighbours[] = {"gid1"};
+        utils::Span<std::string> span(neighbours);
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
+        group.clients[2]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
+
+        group.clients[3]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false, span);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
+
+        group.stopTransports();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        const size_t chMixed[] = {0, 0, 0, 1};
+        AudioAnalysisData results[4];
+        for (size_t id = 0; id < 4; ++id)
+        {
+            results[id] = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, chMixed[id]);
+
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            std::string clientName = "client_" + std::to_string(id);
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            logVideoSent(clientName.c_str(), *group.clients[id]);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+        }
+
+        EXPECT_EQ(results[0].audioSsrcCount, 3u);
+        EXPECT_EQ(results[1].audioSsrcCount, 1u);
+        EXPECT_EQ(results[2].audioSsrcCount, 1u);
+        EXPECT_EQ(results[3].audioSsrcCount, 1u);
+
+        EXPECT_EQ(results[0].dominantFrequencies.size(), 3);
+        EXPECT_EQ(results[1].dominantFrequencies.size(), 1);
+        EXPECT_EQ(results[2].dominantFrequencies.size(), 1);
+        EXPECT_EQ(results[3].dominantFrequencies.size(), 1);
+
+        if (results[3].dominantFrequencies.size() > 0)
+        {
+            EXPECT_NEAR(results[3].dominantFrequencies[0], 600.0, 50.0);
         }
     });
 }

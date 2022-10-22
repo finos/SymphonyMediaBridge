@@ -19,9 +19,9 @@ TEST(Map, Initialize)
 TEST(Map, getItemShouldReturnPointerToMutableType)
 {
     auto map = Map<int, int, 256>();
-    map[1] = 100;
-    map[2] = 200;
-    map[3] = 300;
+    map.emplace(1, 100);
+    map.emplace(2, 200);
+    map.emplace(3, 300);
 
     int* i1 = map.getItem(1);
     int* i2 = map.getItem(2);
@@ -35,9 +35,9 @@ TEST(Map, getItemShouldReturnPointerToMutableType)
     *i2 = 2222;
     *i3 = 3333;
 
-    ASSERT_EQ(1111, map[1]);
-    ASSERT_EQ(2222, map[2]);
-    ASSERT_EQ(3333, map[3]);
+    ASSERT_EQ(1111, *map.getItem(1));
+    ASSERT_EQ(2222, *map.getItem(2));
+    ASSERT_EQ(3333, *map.getItem(3));
 
     // Assert multiple calls to getItem returns same pointer
     ASSERT_EQ(i1, map.getItem(1));
@@ -52,9 +52,9 @@ TEST(Map, getItemShouldReturnTypeWhenTypeIsPointer)
     int i2 = 200;
     int i3 = 300;
 
-    map[1] = &i1;
-    map[2] = &i2;
-    map[3] = &i3;
+    map.emplace(1, &i1);
+    map.emplace(2, &i2);
+    map.emplace(3, &i3);
 
     ASSERT_EQ(&i1, map.getItem(1));
     ASSERT_EQ(&i2, map.getItem(2));
@@ -70,36 +70,12 @@ TEST(Map, getItemShouldReturnNullPointer)
     int i2 = 200;
     int i3 = 300;
 
-    map1[1] = i1;
-    map1[2] = i2;
-    map1[3] = i3;
-
-    map2[1] = &i1;
-    map2[2] = &i2;
-    map2[3] = &i3;
+    map1.emplace(1, i1);
+    map1.emplace(1, i2);
+    map1.emplace(1, i3);
 
     ASSERT_EQ(nullptr, map1.getItem(10));
     ASSERT_EQ(nullptr, map2.getItem(20));
-}
-
-TEST(Map, getItemShouldReturnPointerToConst)
-{
-    // As we use initialized memory, const types are not supported as
-    // then internal memory of Map is immutable
-    //auto map1 = Map<int, const int, 256>();
-    auto map2 = Map<int, const int*, 256>();
-
-    const int i1 = 100;
-    const int i2 = 200;
-    const int i3 = 300;
-
-    map2[1] = &i1;
-    map2[2] = &i2;
-    map2[3] = &i3;
-
-    ASSERT_EQ(&i1, map2.getItem(1));
-    ASSERT_EQ(&i2, map2.getItem(2));
-    ASSERT_EQ(&i3, map2.getItem(3));
 }
 
 TEST(Map, getItemConstShouldReturnPointerToMutableType)

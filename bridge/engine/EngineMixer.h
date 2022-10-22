@@ -4,6 +4,7 @@
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/EngineStats.h"
+#include "bridge/engine/NeighbourMembership.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
@@ -139,7 +140,7 @@ public:
     memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
     size_t getDominantSpeakerId() const;
     std::map<size_t, ActiveTalker> getActiveTalkers() const;
-    utils::Optional<uint32_t> getUserId(const size_t ssrc) const;
+    utils::Optional<uint32_t> getC9UserId(const size_t ssrc) const;
     void mapSsrc2UserId(uint32_t ssrc, uint32_t usid);
 
     /**
@@ -319,6 +320,8 @@ private:
     concurrency::MpmcHashmap32<size_t, EngineDataStream*> _engineDataStreams;
     concurrency::MpmcHashmap32<size_t, EngineRecordingStream*> _engineRecordingStreams;
     concurrency::MpmcHashmap32<size_t, EngineBarbell*> _engineBarbells;
+
+    engine::EndpointMembershipsMap _neighbourMemberships;
 
     // active contexts
     concurrency::MpmcHashmap32<uint32_t, SsrcInboundContext*> _ssrcInboundContexts;

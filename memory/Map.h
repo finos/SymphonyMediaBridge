@@ -19,6 +19,15 @@ class Map
 
     struct ElementEntry
     {
+        template <typename... Args>
+        explicit ElementEntry(const KeyT& key, Args&&... args)
+            : keyValue(std::piecewise_construct,
+                  std::forward_as_tuple(key),
+                  std::forward_as_tuple(std::forward<Args>(args)...)),
+              committed(true)
+        {
+        }
+
         std::pair<KeyT, T> keyValue;
         bool committed = false;
     };
@@ -84,9 +93,21 @@ public:
     typedef IterBase iterator;
     typedef std::pair<KeyT, T> value_type;
 
-    explicit Map() : _end(SIZE), _maxSpread(1), _count(0) {}
+    explicit Map() : _end(SIZE), _maxSpread(1), _count(0)
+    {
+        auto elements = data();
+        for (size_t i = 0; i < SIZE; ++i)
+        {
+            elements[i].committed = false;
+        }
+    }
 
-    std::pair<iterator, bool> add(const KeyT& key, const T& value)
+    ~Map() { clear(); }
+
+    std::pair<iterator, bool> add(const KeyT& key, const T& value) { return emplace(key, value); }
+
+    template <typename... Args>
+    std::pair<iterator, bool> emplace(const KeyT& key, Args&&... args)
     {
         auto keyHash = utils::hash<KeyT>{}(key);
 
@@ -114,70 +135,36 @@ public:
                 continue;
             }
 
-            auto& elementEntry = _elements[freePos - 1];
+            auto elements = data();
             indexEntry.position = freePos;
             indexEntry.keyHash = keyHash;
-            elementEntry.keyValue.second = value;
-            elementEntry.keyValue.first = key;
-            elementEntry.committed = true;
+            auto& elementEntry = elements[freePos - 1];
+            new (&elementEntry) ElementEntry(key, std::forward<Args>(args)...);
+
             ++_count;
-            return std::make_pair(iterator(_elements.data(), freePos - 1, _end), true);
+            return std::make_pair(iterator(elements, freePos - 1, _end), true);
         }
 
         return std::make_pair(end(), false); // full
     }
 
-    std::pair<iterator, bool> emplace(const KeyT& key, const T& value) { return add(key, value); }
-
     bool erase(const KeyT& key)
     {
         auto keyHash = utils::hash<KeyT>{}(key);
+        auto elements = data();
         for (uint32_t i = 0; i < _maxSpread; ++i)
         {
             auto& indexEntry = _index[indexPosition(keyHash, i)];
             if (indexEntry.keyHash == keyHash && indexEntry.position)
             {
-                _elements[indexEntry.position - 1] = ElementEntry();
+                elements[indexEntry.position - 1].~ElementEntry();
+                elements[indexEntry.position - 1].committed = false;
                 indexEntry = IndexEntry();
                 --_count;
                 return true;
             }
         }
         return false;
-    }
-
-    const T& operator[](const KeyT& key) const
-    {
-        auto keyHash = utils::hash<KeyT>{}(key);
-        for (uint32_t i = 0; i < _maxSpread; ++i)
-        {
-            const auto& indexEntry = _index[indexPosition(keyHash, i)];
-            if (indexEntry.keyHash == keyHash && indexEntry.position)
-            {
-                return _elements[indexEntry.position - 1].keyValue.second;
-            }
-        }
-
-        return _emptyObject;
-    }
-
-    T& operator[](const KeyT& key)
-    {
-        auto keyHash = utils::hash<KeyT>{}(key);
-        for (uint32_t i = 0; i < _maxSpread; ++i)
-        {
-            const auto& indexEntry = _index[indexPosition(keyHash, i)];
-            if (indexEntry.keyHash == keyHash && indexEntry.position)
-            {
-                return _elements[indexEntry.position - 1].keyValue.second;
-            }
-        }
-
-        if (add(key, T()).second)
-        {
-            return (*this)[key];
-        }
-        return _emptyObject;
     }
 
     iterator find(const KeyT& key)
@@ -195,7 +182,7 @@ public:
 
             if (indexEntry.keyHash == keyHash && indexEntry.position)
             {
-                return const_iterator(const_cast<ElementEntry*>(_elements.data()), indexEntry.position - 1, _end);
+                return const_iterator(const_cast<ElementEntry*>(data()), indexEntry.position - 1, _end);
             }
         }
         return end();
@@ -216,7 +203,7 @@ public:
         return false;
     }
 
-    size_t capacity() const { return _elements.size(); }
+    size_t capacity() const { return SIZE; }
     size_t size() const { return _count; }
     bool empty() const { return _count == 0; }
 
@@ -225,35 +212,39 @@ public:
         _nextFreeEntry = 0;
         _count = 0;
         _maxSpread = 1;
+        auto* elements = data();
         for (size_t i = 0; i < SIZE; ++i)
         {
-            if (_elements[i].committed)
+            auto& element = elements[i];
+            if (element.committed)
             {
-                _elements[i] = ElementEntry();
+                element.~ElementEntry();
+                element.committed = false;
             }
         }
-        for (size_t i = 0; i < INDEX_SIZE; ++i)
+        for (auto& indexEntry : _index)
         {
-            _index[i] = IndexEntry();
+            indexEntry = IndexEntry();
         }
     }
 
     const_iterator cbegin() const
     {
         uint32_t first = 0;
-        while (first != _end && !_elements[first].committed)
+        auto* elements = data();
+        while (first != _end && !elements[first].committed)
         {
             ++first;
         }
-        return const_iterator(const_cast<ElementEntry*>(_elements.data()), first, _end);
+        return const_iterator(const_cast<ElementEntry*>(elements), first, _end);
     }
 
-    const_iterator cend() const { return const_iterator(const_cast<ElementEntry*>(_elements.data()), _end, _end); }
+    const_iterator cend() const { return const_iterator(const_cast<ElementEntry*>(data()), _end, _end); }
 
     const_iterator begin() const { return cbegin(); }
     const_iterator end() const { return cend(); }
     iterator begin() { return iterator(cbegin()); }
-    iterator end() { return iterator(_elements.data(), _end, _end); }
+    iterator end() { return iterator(data(), _end, _end); }
 
     PointerType getItem(const KeyT& key)
     {
@@ -280,9 +271,10 @@ private:
 
     uint32_t findFreePosition()
     {
+        auto elements = data();
         for (size_t i = 0; i < _index.size(); ++i)
         {
-            if (!_elements[_nextFreeEntry].committed)
+            if (!elements[_nextFreeEntry].committed)
             {
                 const auto freePosition = _nextFreeEntry + 1;
                 _nextFreeEntry = (_nextFreeEntry + 1) % SIZE;
@@ -294,8 +286,12 @@ private:
         return 0;
     }
 
+    ElementEntry* data() { return reinterpret_cast<ElementEntry*>(_storage); }
+    const ElementEntry* data() const { return reinterpret_cast<const ElementEntry*>(_storage); }
+
     std::array<IndexEntry, INDEX_SIZE> _index;
-    std::array<ElementEntry, SIZE> _elements;
+    alignas(ElementEntry) uint8_t _storage[SIZE * sizeof(ElementEntry)];
+
     const uint32_t _end;
     uint32_t _nextFreeEntry = 0;
     T _emptyObject;

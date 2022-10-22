@@ -381,6 +381,13 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
         endpointDescription.data.set(dataChannel);
     }
 
+    if (data.find("neighbours") != data.end())
+    {
+        for (auto& group : requiredJsonArray(data["neighbours"], "groups"))
+        {
+            endpointDescription.neighbours.push_back(group);
+        }
+    }
     return endpointDescription;
 }
 

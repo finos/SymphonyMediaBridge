@@ -158,6 +158,7 @@ protected:
 
     void addEngineAudioStream(const size_t id)
     {
+        std::vector<uint32_t> neighbours;
         auto engineAudioStream = std::make_unique<bridge::EngineAudioStream>(std::to_string(id),
             id,
             id,
@@ -166,7 +167,8 @@ protected:
             false,
             bridge::RtpMap(),
             true,
-            0);
+            0,
+            neighbours);
 
         _engineAudioStreams.emplace(id, engineAudioStream.release());
     }
@@ -544,7 +546,8 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsOnlyLastNItems)
     EXPECT_FALSE(endpointsContainsId(messageJson, "4"));
 
     utils::StringBuilder<1024> bbMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage);
+    bridge::engine::EndpointMembershipsMap noMembership(8);
+    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage, noMembership);
     printf("%s\n", bbMessage.get());
     const auto barbellJson = nlohmann::json::parse(bbMessage.build());
     EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));
@@ -643,7 +646,8 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
     EXPECT_TRUE(endpointsContainsId(messageJson, "4"));
 
     utils::StringBuilder<1024> bbMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage);
+    bridge::engine::EndpointMembershipsMap noMembership(8);
+    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage, noMembership);
     printf("%s\n", bbMessage.get());
     const auto barbellJson = nlohmann::json::parse(bbMessage.build());
     EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));

@@ -1,4 +1,8 @@
 #pragma once
+#include <cassert>
+#include <cstddef>
+#include <iterator>
+#include <type_traits>
 
 namespace memory
 {
@@ -19,7 +23,11 @@ public:
         }
     }
 
-    Array(const Array&) = delete;
+    Array(const Array& rhs) : _capacity(rhs.capacity()), _size(0), _dataPtr(reinterpret_cast<T*>(_data))
+    {
+        *this = rhs;
+    }
+
     Array& operator=(const Array& other)
     {
         clear();
@@ -56,11 +64,11 @@ public:
     const T& operator[](size_t pos) const { return _dataPtr[pos]; }
 
     const T* data() const { return _dataPtr; }
+
     Array& append(const T* vector, size_t count)
     {
         if (_size + count <= _capacity)
         {
-
             for (size_t i = 0; i < count; ++i)
             {
                 new (&_dataPtr[_size++]) T(vector[i]);
@@ -92,6 +100,16 @@ public:
         new (&_dataPtr[_size++]) T(value);
     }
 
+    template <typename... U>
+    void emplace_back(U&&... args)
+    {
+        if (_size >= _capacity)
+        {
+            return;
+        }
+        new (&_dataPtr[_size++]) T(std::forward<U>(args)...);
+    }
+
     T& back()
     {
         if (_size == 0)
@@ -102,6 +120,47 @@ public:
     }
 
     const T& back() const { return const_cast<Array<T, SIZE>&>(*this).back(); }
+
+    iterator insert(iterator pos, const_iterator startIt, const_iterator endIt)
+    {
+        assert(pos >= begin() && pos <= end());
+        const auto count = std::distance(startIt, endIt);
+        if (_size + count > _capacity)
+        {
+            return end();
+        }
+
+        if (pos == end())
+        {
+            for (auto it = startIt; it != endIt; ++it)
+            {
+                push_back(*it);
+            }
+            return pos;
+        }
+        else
+        {
+            const auto tailCount = std::distance(pos, end());
+            auto targetIt = pos + tailCount + count;
+            for (int i = 0; i < tailCount; ++i)
+            {
+                new (targetIt) T(*(pos + tailCount - i));
+                --targetIt;
+                (pos + tailCount - i)->~T();
+            }
+
+            auto it = startIt;
+            for (int i = 0; i < count; ++i)
+            {
+                new (pos + i) T(*it);
+                ++it;
+            }
+            _size += count;
+            return pos;
+        }
+
+        return end();
+    }
 
 private:
     const size_t _capacity;

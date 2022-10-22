@@ -1,4 +1,5 @@
 #pragma once
+#include "bridge/engine/NeighbourMembership.h"
 #include "concurrency/MpmcHashmap.h"
 #include "memory/Array.h"
 #include "utils/FixString.h"
@@ -7,23 +8,28 @@
 namespace bridge
 {
 
-using EndpointIdString = FixString<42>;
+using EndpointIdString = utils::FixString<42>;
+using BarbellEndpointIdMap = concurrency::MpmcHashmap32<size_t, EndpointIdString>;
 
 struct BarbellMapItem
 {
-    BarbellMapItem() {}
-    BarbellMapItem(const BarbellMapItem& rhs)
+    BarbellMapItem() { endpointId[0] = 0; }
+    explicit BarbellMapItem(const BarbellMapItem& rhs)
     {
         std::strcpy(endpointId, rhs.endpointId);
         oldSsrcs = rhs.oldSsrcs;
         newSsrcs = rhs.newSsrcs;
+        neighbours = rhs.neighbours;
     }
+
+    explicit BarbellMapItem(const char* endpointIdString) { std::strcpy(endpointId, endpointIdString); }
 
     BarbellMapItem& operator=(const BarbellMapItem& rhs)
     {
         std::strcpy(endpointId, rhs.endpointId);
         oldSsrcs = rhs.oldSsrcs;
         newSsrcs = rhs.newSsrcs;
+        neighbours = rhs.neighbours;
         return *this;
     }
 
@@ -48,6 +54,7 @@ struct BarbellMapItem
     char endpointId[EndpointIdString::capacity];
     memory::Array<uint32_t, 2> oldSsrcs;
     memory::Array<uint32_t, 2> newSsrcs;
+    engine::NeighbourMembershipArray neighbours;
 };
 
 } // namespace bridge

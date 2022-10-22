@@ -17,6 +17,7 @@
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
+#include "utils/Span.h"
 #include "utils/StringBuilder.h"
 #include "webrtc/WebRtcDataStream.h"
 #include <cstdint>
@@ -153,8 +154,37 @@ public:
         bool forwardMedia,
         uint32_t idleTimeout = 0)
     {
+        utils::Span<std::string> noNeighbours;
         _audioType = audio;
-        _channel.create(baseUrl, conferenceId, initiator, audio != Audio::None, video, forwardMedia, idleTimeout);
+        _channel.create(baseUrl,
+            conferenceId,
+            initiator,
+            audio != Audio::None,
+            video,
+            forwardMedia,
+            idleTimeout,
+            noNeighbours);
+        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+    }
+
+    void initiateCall2(const std::string& baseUrl,
+        std::string conferenceId,
+        bool initiator,
+        Audio audio,
+        bool video,
+        bool forwardMedia,
+        const utils::Span<std::string>& neighbours,
+        uint32_t idleTimeout = 0)
+    {
+        _audioType = audio;
+        _channel.create(baseUrl,
+            conferenceId,
+            initiator,
+            audio != Audio::None,
+            video,
+            forwardMedia,
+            idleTimeout,
+            neighbours);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
@@ -1134,6 +1164,14 @@ public:
         for (auto& client : clients)
         {
             client->disconnect();
+        }
+    }
+
+    void stopTransports()
+    {
+        for (auto& client : clients)
+        {
+            client->_transport->stop();
         }
     }
 

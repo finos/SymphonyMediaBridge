@@ -471,6 +471,28 @@ httpd::Response allocateEndpoint(ActionContext* context,
     return generateAllocateEndpointResponse(context, requestLogger, allocateChannel, *mixer, conferenceId, endpointId);
 }
 
+namespace
+{
+
+std::vector<uint32_t> convertGroupIds(const std::vector<std::string>& groupIds)
+{
+    std::vector<uint32_t> result;
+    result.reserve(groupIds.size());
+    for (auto& gid : groupIds)
+    {
+        if (utils::isNumber(gid))
+        {
+            result.push_back(std::atoll(gid.c_str()) & 0xFFFFFFFFu);
+        }
+        else
+        {
+            result.push_back(utils::hash<std::string>()(gid));
+        }
+    }
+    return result;
+}
+} // namespace
+
 void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
     Mixer& mixer,
     const std::string& endpointId)
@@ -494,7 +516,8 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         remoteSsrc.set(audio.ssrcs.front());
     }
 
-    if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc))
+    auto neighbours = convertGroupIds(endpointDescription.neighbours);
+    if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, neighbours))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Audio stream not found for endpoint '%s'", endpointId.c_str()));

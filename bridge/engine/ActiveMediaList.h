@@ -3,6 +3,7 @@
 #include "api/SimulcastGroup.h"
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
+#include "bridge/engine/NeighbourMembership.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "concurrency/MpmcHashmap.h"
@@ -149,7 +150,8 @@ public:
         const concurrency::MpmcHashmap32<size_t, EngineVideoStream*>& engineVideoStreams,
         utils::StringBuilder<1024>& outMessage);
 
-    bool makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage);
+    bool makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage,
+        const engine::EndpointMembershipsMap& membershipMap);
 
     uint32_t getMapRevision() const { return _ssrcMapRevision; }
 #if DEBUG
