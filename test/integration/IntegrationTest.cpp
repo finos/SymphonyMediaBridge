@@ -72,8 +72,8 @@ void IntegrationTest::SetUp()
     utils::Time::initialize(_timeSource);
     _httpd = new emulator::HttpdFactory();
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
-
-    _jobManager = std::make_unique<jobmanager::JobManager>();
+    _timers = std::make_unique<jobmanager::TimerQueue>(4096);
+    _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));

@@ -6,6 +6,7 @@
 #include "httpd/Httpd.h"
 #include "httpd/HttpdFactory.h"
 #include "jobmanager/JobManager.h"
+#include "jobmanager/TimerQueue.h"
 #include "jobmanager/WorkerThread.h"
 #include "transport/Endpoint.h"
 #include "transport/EndpointFactoryImpl.h"
@@ -59,7 +60,8 @@ Bridge::Bridge(const config::Config& config)
       _config(config),
       _idGenerator(std::make_unique<utils::IdGenerator>()),
       _ssrcGenerator(std::make_unique<utils::SsrcGenerator>()),
-      _jobManager(std::make_unique<jobmanager::JobManager>()),
+      _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
+      _jobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
       _sslDtls(std::make_unique<transport::SslDtls>()),
       _network(transport::createRtcePoll()),
       _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(32 * 1024, "main")),

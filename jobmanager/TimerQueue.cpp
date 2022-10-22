@@ -5,9 +5,8 @@
 namespace jobmanager
 {
 
-TimerQueue::TimerQueue(JobManager& jobManager, size_t maxElements)
-    : _jobManager(jobManager),
-      _newTimers(maxElements),
+TimerQueue::TimerQueue(size_t maxElements)
+    : _newTimers(maxElements),
       _idCounter(0),
       _running(true),
       _timeReference(utils::Time::getAbsoluteTime()),
@@ -22,11 +21,15 @@ TimerQueue::~TimerQueue()
 }
 
 // multi threaded
-bool TimerQueue::addTimer(uint32_t groupId, uint64_t timeoutNs, Job* job, uint32_t& newId)
+bool TimerQueue::addTimer(uint32_t groupId,
+    uint64_t timeoutNs,
+    MultiStepJob& job,
+    JobManager& jobManager,
+    uint32_t& newId)
 {
     const uint32_t id = _idCounter++;
 
-    if (addTimer(groupId, id, timeoutNs, job))
+    if (addTimer(groupId, id, timeoutNs, job, jobManager))
     {
         newId = id;
         return true;
@@ -34,25 +37,30 @@ bool TimerQueue::addTimer(uint32_t groupId, uint64_t timeoutNs, Job* job, uint32
     return false;
 }
 
-bool TimerQueue::addTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, Job* job)
+bool TimerQueue::addTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, MultiStepJob& job, JobManager& jobManager)
 {
-    return _newTimers.push(ChangeTimer(ChangeTimer::add, TimerEntry(getInternalTime() + timeoutNs, id, groupId, job)));
+    return _newTimers.push(
+        ChangeTimer(ChangeTimer::add, TimerEntry(getInternalTime() + timeoutNs, id, groupId, &job, &jobManager)));
 }
 
-bool TimerQueue::replaceTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, Job* job)
+bool TimerQueue::replaceTimer(uint32_t groupId,
+    uint32_t id,
+    uint64_t timeoutNs,
+    MultiStepJob& job,
+    JobManager& jobManager)
 {
     abortTimer(groupId, id);
-    return addTimer(groupId, id, timeoutNs, job);
+    return addTimer(groupId, id, timeoutNs, job, jobManager);
 }
 
 void TimerQueue::abortTimer(uint32_t groupId, uint32_t id)
 {
-    _newTimers.push(ChangeTimer(ChangeTimer::removeSingle, TimerEntry(0, id, groupId, nullptr)));
+    _newTimers.push(ChangeTimer(ChangeTimer::removeSingle, TimerEntry(0, id, groupId, nullptr, nullptr)));
 }
 
 void TimerQueue::abortTimers(uint32_t groupId)
 {
-    _newTimers.push(ChangeTimer(ChangeTimer::removeGroup, TimerEntry(0, 0, groupId, nullptr)));
+    _newTimers.push(ChangeTimer(ChangeTimer::removeGroup, TimerEntry(0, 0, groupId, nullptr, nullptr)));
 }
 
 void TimerQueue::stop()
@@ -79,7 +87,7 @@ void TimerQueue::run()
             if (toWait <= 0)
             {
                 popTimer(entry);
-                _jobManager.addJobItem(entry.job);
+                entry.jobManager->addJobItem(entry.job);
             }
             else
             {
@@ -96,12 +104,14 @@ void TimerQueue::run()
     while (_newTimers.pop(nEntry))
     {
         if (nEntry.type == ChangeTimer::add)
-            _jobManager.freeJob(nEntry.entry.job);
+        {
+            nEntry.entry.jobManager->freeJob(nEntry.entry.job);
+        }
     }
 
     while (popTimer(entry))
     {
-        _jobManager.freeJob(entry.job);
+        entry.jobManager->freeJob(entry.job);
     }
 }
 
@@ -137,7 +147,7 @@ void TimerQueue::changeTimer(ChangeTimer& timerJob)
             {
                 auto entry = *it;
                 it = _timers.erase(it);
-                _jobManager.freeJob(entry.job);
+                entry.jobManager->freeJob(entry.job);
                 std::make_heap(_timers.begin(), _timers.end());
                 return;
             }
@@ -155,7 +165,7 @@ void TimerQueue::changeTimer(ChangeTimer& timerJob)
                 auto entry = *it;
                 it = _timers.erase(it);
                 modified = true;
-                _jobManager.freeJob(entry.job);
+                entry.jobManager->freeJob(entry.job);
             }
             else
             {

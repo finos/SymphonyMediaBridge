@@ -64,8 +64,8 @@ void RealTimeTest::SetUp()
 
     using namespace std;
     utils::Time::initialize(); // run in real time
-
-    _jobManager = std::make_unique<jobmanager::JobManager>();
+    _timerQueue = std::make_unique<jobmanager::TimerQueue>(4096);
+    _jobManager = std::make_unique<jobmanager::JobManager>(*_timerQueue);
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));

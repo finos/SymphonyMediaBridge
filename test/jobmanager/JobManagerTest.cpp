@@ -101,11 +101,12 @@ void writer(TestContext& ctx,
 
 struct JobManagerTest : public ::testing::Test
 {
+    jobmanager::TimerQueue timers;
     JobManager jobManager;
     vector<unique_ptr<WorkerThread>> workerThreads;
     TestContext context;
 
-    JobManagerTest() : context() {}
+    JobManagerTest() : timers(512), jobManager(timers), context() {}
 
     void SetUp() override
     {

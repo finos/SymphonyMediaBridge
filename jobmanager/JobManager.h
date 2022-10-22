@@ -32,7 +32,11 @@ namespace jobmanager
 class JobManager
 {
 public:
-    JobManager() : _jobQueue(poolSize), _jobPool(poolSize, "JobManagerPool"), _running(true), _timers(*this, 4096 * 8)
+    JobManager(TimerQueue& timerQueue)
+        : _jobQueue(poolSize),
+          _jobPool(poolSize, "JobManagerPool"),
+          _running(true),
+          _timers(timerQueue)
     {
     }
 
@@ -69,7 +73,7 @@ public:
             return false;
         }
 
-        if (!_timers.addTimer(groupId, id, timeoutUs * 1000, job))
+        if (!_timers.addTimer(groupId, id, timeoutUs * 1000, *job, *this))
         {
             freeJob(job);
             return false;
@@ -87,7 +91,7 @@ public:
             return false;
         }
 
-        if (!_timers.replaceTimer(groupId, id, timeoutUs * 1000, job))
+        if (!_timers.replaceTimer(groupId, id, timeoutUs * 1000, *job, *this))
         {
             freeJob(job);
             return false;
@@ -146,7 +150,7 @@ private:
     memory::PoolAllocator<maxJobSize> _jobPool;
     std::atomic<bool> _running;
 
-    TimerQueue _timers;
+    TimerQueue& _timers;
 };
 
 } // namespace jobmanager

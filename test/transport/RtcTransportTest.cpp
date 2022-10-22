@@ -239,6 +239,7 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
 struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, bool>>
 {
     std::unique_ptr<config::Config> _config;
+    std::unique_ptr<jobmanager::TimerQueue> _timers;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
     std::unique_ptr<transport::SslDtls> _sslDtls;
@@ -255,7 +256,8 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
 
     RtcTransportTest()
         : _config(std::make_unique<config::Config>()),
-          _jobManager(std::make_unique<jobmanager::JobManager>()),
+          _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
+          _jobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
           _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096 * 32, "testMain")),
           _sslDtls(std::make_unique<transport::SslDtls>()),
           _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls)),
