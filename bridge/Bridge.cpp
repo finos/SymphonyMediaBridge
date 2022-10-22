@@ -61,13 +61,14 @@ Bridge::Bridge(const config::Config& config)
       _idGenerator(std::make_unique<utils::IdGenerator>()),
       _ssrcGenerator(std::make_unique<utils::SsrcGenerator>()),
       _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
-      _jobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
+      _engineJobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
+      _relaxedJobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
       _sslDtls(std::make_unique<transport::SslDtls>()),
       _network(transport::createRtcePoll()),
       _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(32 * 1024, "main")),
       _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(128 * 1024, "send")),
       _audioPacketAllocator(std::make_unique<memory::AudioPacketPoolAllocator>(4 * 1024, "audio")),
-      _engine(std::make_unique<bridge::Engine>(config))
+      _engine(std::make_unique<bridge::Engine>(config, *_relaxedJobManager))
 {
 }
 
@@ -84,11 +85,18 @@ Bridge::~Bridge()
 
     _timers->stop();
 
-    if (_jobManager)
+    if (_relaxedJobManager)
     {
-        _jobManager->stop();
+        _relaxedJobManager->stop();
+    }
+
+    if (_engineJobManager)
+    {
+        _engineJobManager->stop();
     }
     logger::info("JobManager stopped", "main");
+
+    _timers.reset();
 
     if (_probeServer)
     {
@@ -100,6 +108,11 @@ Bridge::~Bridge()
     {
         workerThread->stop();
         logger::info("stopped workerThread %d", "main", n++);
+    }
+
+    if (_relaxedWorker)
+    {
+        _relaxedWorker->stop();
     }
 }
 
@@ -140,6 +153,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     }
 
     startWorkerThreads();
+    _relaxedWorker = std::make_unique<jobmanager::WorkerThread>(*_relaxedJobManager, "MMWorker");
 
     if (!_sslDtls->isInitialized())
     {
@@ -156,7 +170,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
 
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
     _bweConfig.sanitize();
-    _transportFactory = transport::createTransportFactory(*_jobManager,
+    _transportFactory = transport::createTransportFactory(*_engineJobManager,
         *_srtpClientFactory,
         _config,
         _sctpConfig,
@@ -185,7 +199,8 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
 
     _mixerManager = std::make_unique<bridge::MixerManager>(*_idGenerator,
         *_ssrcGenerator,
-        *_jobManager,
+        *_engineJobManager,
+        *_relaxedJobManager,
         *_transportFactory,
         *_engine,
         _config,
@@ -225,7 +240,7 @@ void Bridge::startWorkerThreads()
 
     for (int i = 0; i < numWorkerThreads; ++i)
     {
-        _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
+        _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_engineJobManager));
     }
 }
 } // namespace bridge

@@ -11,7 +11,7 @@ class JobManager;
 class WorkerThread
 {
 public:
-    explicit WorkerThread(jobmanager::JobManager& jobManager);
+    explicit WorkerThread(jobmanager::JobManager& jobManager, const char* name = nullptr);
     ~WorkerThread();
 
     void stop();
@@ -33,8 +33,15 @@ private:
     static void threadEntry(WorkerThread* instance);
     uint32_t processBackgroundJobs();
 
-    std::vector<MultiStepJob*> _backgroundJobs;
+    struct BackgroundJob
+    {
+        bool running = false;
+        MultiStepJob* job = nullptr;
+    };
+    std::vector<BackgroundJob> _backgroundJobs;
     uint32_t _backgroundJobCount;
+
+    std::string _name;
     std::thread _thread; // must be last
 };
 

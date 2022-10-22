@@ -28,7 +28,6 @@
 namespace
 {
 
-const auto intervalNs = 10000000UL;
 const uint32_t maxLastN = 16;
 
 } // namespace
@@ -36,9 +35,50 @@ const uint32_t maxLastN = 16;
 namespace bridge
 {
 
+class MixerManagerMainJob : public jobmanager::MultiStepJob
+{
+public:
+    MixerManagerMainJob(MixerManager& mixerManager, std::atomic_bool& running, utils::Pacer& statsRefreshPacer)
+        : _mixerManager(mixerManager),
+          _running(running),
+          _statsPacer(statsRefreshPacer)
+    {
+        _statsPacer.tick(utils::Time::getAbsoluteTime());
+    }
+
+    bool runStep() override
+    {
+        if (!_running)
+        {
+            return false;
+        }
+
+        auto timestamp = utils::Time::getAbsoluteTime();
+        const auto toSleep = _statsPacer.timeToNextTick(timestamp);
+        if (toSleep > 0)
+        {
+            _mixerManager.processMessages(timestamp);
+            return _running.load();
+        }
+        else
+        {
+            _mixerManager.maintenance(timestamp);
+            _statsPacer.tick(timestamp);
+        }
+
+        return _running.load();
+    }
+
+private:
+    MixerManager& _mixerManager;
+    std::atomic_bool& _running;
+    utils::Pacer& _statsPacer;
+};
+
 MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     utils::SsrcGenerator& ssrcGenerator,
-    jobmanager::JobManager& jobManager,
+    jobmanager::JobManager& engineJobManager,
+    jobmanager::JobManager& relaxedJobManager,
     transport::TransportFactory& transportFactory,
     Engine& engine,
     const config::Config& config,
@@ -47,20 +87,20 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     memory::AudioPacketPoolAllocator& audioAllocator)
     : _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
-      _jobManager(jobManager),
+      _engineJobManager(engineJobManager),
+      _relaxedJobManager(relaxedJobManager),
       _transportFactory(transportFactory),
       _engine(engine),
       _config(config),
-      _threadRunning(true),
+      _running(true),
+      _statsRefreshPacer(500 * utils::Time::ms),
       _engineMessages(16 * 1024),
       _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator)
 {
     _engine.setMessageListener(this);
-
-    // thread must initialize last to ensure the thread observes other members fully initialized
-    _managerThread = std::make_unique<std::thread>([this] { this->run(); });
+    _relaxedJobManager.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer);
 }
 
 MixerManager::~MixerManager()
@@ -111,31 +151,30 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         videoPinSsrcs.push_back({_ssrcGenerator.next(), _ssrcGenerator.next()});
     }
 
-    auto engineMixerEmplaceResult = _engineMixers.emplace(id,
-        std::make_unique<EngineMixer>(id,
-            _jobManager,
-            _engine.getSynchronizationContext(),
-            *this,
-            localVideoSsrc,
-            _config,
-            _sendAllocator,
-            _audioAllocator,
-            audioSsrcs,
-            videoSsrcs,
-            lastN));
-    if (!engineMixerEmplaceResult.second)
+    auto engineMixer = std::make_unique<EngineMixer>(id,
+        _engineJobManager,
+        _engine.getSynchronizationContext(),
+        _relaxedJobManager,
+        *this,
+        localVideoSsrc,
+        _config,
+        _sendAllocator,
+        _audioAllocator,
+        audioSsrcs,
+        videoSsrcs,
+        lastN);
+    if (!engineMixer)
     {
         logger::error("Failed to create engineMixer", "MixerManager");
         return nullptr;
     }
 
-    auto& engineMixer = *(engineMixerEmplaceResult.first->second);
     auto mixerEmplaceResult = _mixers.emplace(id,
-        std::make_unique<Mixer>(id,
-            engineMixer.getLoggableId().getInstanceId(),
+        std::make_shared<Mixer>(id,
+            engineMixer->getLoggableId().getInstanceId(),
             _transportFactory,
             _engine,
-            engineMixer,
+            std::move(engineMixer),
             _idGenerator,
             _ssrcGenerator,
             _config,
@@ -146,7 +185,6 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
     if (!mixerEmplaceResult.second)
     {
         logger::error("Failed to create mixer", "MixerManager");
-        _engineMixers.erase(id);
         return nullptr;
     }
 
@@ -160,16 +198,15 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         b.append(pinSsrc.main);
     }
 
-    logger::info("Mixer-%zu id=%s, served by engine mixer %s, %s",
+    logger::info("Mixer-%zu id=%s, %s",
         "MixerManager",
-        engineMixer.getLoggableId().getInstanceId(),
+        engineMixer->getLoggableId().getInstanceId(),
         id.c_str(),
-        engineMixer.getLoggableId().c_str(),
         b.build().c_str());
 
     {
         EngineCommand::Command addMixerCommand = {EngineCommand::Type::AddMixer};
-        addMixerCommand.command.addMixer.mixer = engineMixerEmplaceResult.first->second.get();
+        addMixerCommand.command.addMixer.mixer = mixerEmplaceResult.first->second->getEngineMixer();
         _engine.pushCommand(std::move(addMixerCommand));
     }
 
@@ -188,7 +225,7 @@ void MixerManager::remove(const std::string& id)
     findResult->second->markForDeletion();
 
     EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
-    command.command.removeMixer.mixer = _engineMixers[id].get();
+    command.command.removeMixer.mixer = findResult->second->getEngineMixer();
     _engine.pushCommand(std::move(command));
 }
 
@@ -222,7 +259,7 @@ std::unique_lock<std::mutex> MixerManager::getMixer(const std::string& id, Mixer
 
 void MixerManager::stop()
 {
-    if (!_threadRunning)
+    if (!_running)
     {
         return;
     }
@@ -236,7 +273,7 @@ void MixerManager::stop()
             {
                 it->second->markForDeletion();
                 EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
-                command.command.removeMixer.mixer = _engineMixers[it->first].get();
+                command.command.removeMixer.mixer = it->second->getEngineMixer();
                 _engine.pushCommand(std::move(command));
             }
         }
@@ -249,112 +286,104 @@ void MixerManager::stop()
             break;
     }
 
-    _threadRunning = false;
-
-    _managerThread->join();
+    _running = false;
     logger::info("MixerManager thread stopped", "MixerManager");
 }
 
-void MixerManager::run()
+void MixerManager::processMessages(uint64_t timestamp)
 {
-    logger::info("MixerManager thread started", "MixerManager");
-    concurrency::setThreadName("MixerManager");
-    utils::Pacer pacer(intervalNs);
-
-    while (_threadRunning)
+    try
     {
-        try
+        for (EngineMessage::Message nextMessage; _engineMessages.pop(nextMessage);)
         {
-            auto timestamp = utils::Time::getAbsoluteTime();
-            pacer.tick(timestamp);
-
-            for (EngineMessage::Message nextMessage; _engineMessages.pop(nextMessage);)
+            switch (nextMessage.type)
             {
-                switch (nextMessage.type)
-                {
-                case EngineMessage::Type::MixerRemoved:
-                    engineMessageMixerRemoved(nextMessage);
-                    break;
+            case EngineMessage::Type::AllocateAudioBuffer:
+                engineMessageAllocateAudioBuffer(nextMessage);
+                break;
 
-                case EngineMessage::Type::AllocateAudioBuffer:
-                    engineMessageAllocateAudioBuffer(nextMessage);
-                    break;
+            case EngineMessage::Type::AudioStreamRemoved:
+                engineMessageAudioStreamRemoved(nextMessage);
+                break;
 
-                case EngineMessage::Type::AudioStreamRemoved:
-                    engineMessageAudioStreamRemoved(nextMessage);
-                    break;
+            case EngineMessage::Type::VideoStreamRemoved:
+                engineMessageVideoStreamRemoved(nextMessage);
+                break;
 
-                case EngineMessage::Type::VideoStreamRemoved:
-                    engineMessageVideoStreamRemoved(nextMessage);
-                    break;
+            case EngineMessage::Type::DataStreamRemoved:
+                engineMessageDataStreamRemoved(nextMessage);
+                break;
+            case EngineMessage::Type::RecordingStreamRemoved:
+                engineMessageRecordingStreamRemoved(nextMessage);
+                break;
 
-                case EngineMessage::Type::DataStreamRemoved:
-                    engineMessageDataStreamRemoved(nextMessage);
-                    break;
-                case EngineMessage::Type::RecordingStreamRemoved:
-                    engineMessageRecordingStreamRemoved(nextMessage);
-                    break;
+            case EngineMessage::Type::MixerTimedOut:
+                engineMessageMixerTimedOut(nextMessage);
+                break;
 
-                case EngineMessage::Type::MixerTimedOut:
-                    engineMessageMixerTimedOut(nextMessage);
-                    break;
+            case EngineMessage::Type::SctpMessage:
+                engineMessageSctp(std::move(nextMessage));
+                break;
 
-                case EngineMessage::Type::SctpMessage:
-                    engineMessageSctp(std::move(nextMessage));
-                    break;
+            case EngineMessage::Type::AllocateVideoPacketCache:
+                engineMessageAllocateVideoPacketCache(nextMessage);
+                break;
+            case EngineMessage::Type::InboundSsrcRemoved:
+                engineMessageInboundSsrcRemoved(nextMessage);
+                break;
 
-                case EngineMessage::Type::AllocateVideoPacketCache:
-                    engineMessageAllocateVideoPacketCache(nextMessage);
-                    break;
-                case EngineMessage::Type::InboundSsrcRemoved:
-                    engineMessageInboundSsrcRemoved(nextMessage);
-                    break;
+            case EngineMessage::Type::FreeVideoPacketCache:
+                engineMessageFreeVideoPacketCache(nextMessage);
+                break;
 
-                case EngineMessage::Type::FreeVideoPacketCache:
-                    engineMessageFreeVideoPacketCache(nextMessage);
-                    break;
+            case EngineMessage::Type::RecordingStopped:
+                engineRecordingStopped(nextMessage);
+                break;
 
-                case EngineMessage::Type::RecordingStopped:
-                    engineRecordingStopped(nextMessage);
-                    break;
+            case EngineMessage::Type::AllocateRecordingRtpPacketCache:
+                engineMessageAllocateRecordingRtpPacketCache(nextMessage);
+                break;
+            case EngineMessage::Type::FreeRecordingRtpPacketCache:
+                engineMessageFreeRecordingRtpPacketCache(nextMessage);
+                break;
 
-                case EngineMessage::Type::AllocateRecordingRtpPacketCache:
-                    engineMessageAllocateRecordingRtpPacketCache(nextMessage);
-                    break;
-                case EngineMessage::Type::FreeRecordingRtpPacketCache:
-                    engineMessageFreeRecordingRtpPacketCache(nextMessage);
-                    break;
+            case EngineMessage::Type::RemoveRecordingTransport:
+                engineMessageRemoveRecordingTransport(nextMessage);
+                break;
 
-                case EngineMessage::Type::RemoveRecordingTransport:
-                    engineMessageRemoveRecordingTransport(nextMessage);
-                    break;
-
-                case EngineMessage::Type::BarbellRemoved:
-                    engineBarbellRemoved(nextMessage.command.barbellMessage);
-                    break;
-                default:
-                    assert(false);
-                    break;
-                }
-            }
-
-            if (++_stats.ticksSinceLastUpdate >= 50)
-            {
-                _transportFactory.maintenance(timestamp);
-                updateStats();
+            case EngineMessage::Type::BarbellRemoved:
+                engineBarbellRemoved(nextMessage.command.barbellMessage);
+                break;
+            default:
+                assert(false);
+                break;
             }
         }
-        catch (std::exception e)
-        {
-            logger::error("Exception in MixerManager run: %s", "MixerManager", e.what());
-        }
-        catch (...)
-        {
-            logger::error("Unknown exception in MixerManager run", "MixerManager");
-        }
+    }
+    catch (std::exception e)
+    {
+        logger::error("Exception in MixerManager run: %s", "MixerManager", e.what());
+    }
+    catch (...)
+    {
+        logger::error("Unknown exception in MixerManager run", "MixerManager");
+    }
+}
 
-        const auto toSleep = pacer.timeToNextTick(utils::Time::getAbsoluteTime());
-        utils::Time::nanoSleep(toSleep);
+void MixerManager::maintenance(uint64_t timestamp)
+{
+    try
+    {
+        _transportFactory.maintenance(timestamp);
+        updateStats();
+    }
+    catch (std::exception e)
+    {
+        logger::error("Exception in MixerManager run: %s", "MixerManager", e.what());
+    }
+    catch (...)
+    {
+        logger::error("Unknown exception in MixerManager run", "MixerManager");
     }
 }
 
@@ -365,51 +394,35 @@ bool MixerManager::onMessage(EngineMessage::Message&& message)
     return messagePosted;
 }
 
-void MixerManager::engineMessageMixerRemoved(const EngineMessage::Message& message)
+std::shared_ptr<Mixer> MixerManager::onEngineMixerRemoved1(EngineMixer& engineMixer)
 {
-    // Aims to delete the mixer out of the locker at it can take some time
-    // and we want to reduce the lock contention
-    std::unique_ptr<bridge::Mixer> mixer;
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    std::string mixerId(engineMixer.getId()); // copy id string to have it after EngineMixer is deleted
 
+    auto findResult = _mixers.find(mixerId);
+    if (findResult != _mixers.end())
     {
-        std::lock_guard<std::mutex> locker(_configurationLock);
-
-        auto& command = message.command.mixerRemoved;
-
-        std::string mixerId(command.mixer->getId()); // copy id string to have it after EngineMixer is deleted
-        auto findResult = _mixers.find(mixerId);
-        if (findResult != _mixers.end())
-        {
-            mixer = std::move(findResult->second);
-            mixer->stopTransports(); // this will stop new packets from coming in
-            if (!mixer->waitForAllPendingJobs(1000))
-            {
-                logger::error("still pending jobs or packets after 1s.", mixer->getLoggableId().c_str());
-            }
-
-            _mixers.erase(findResult);
-        }
-        else
-        {
-            logger::debug("did not find mixer to stop %s", "MixerManager", mixerId.c_str());
-        }
-
-        logger::info("Removing EngineMixer %s", "MixerManager", command.mixer->getLoggableId().c_str());
-        // This will sweep the PacketPoolAllocator. Any pending jobs may crash or corrupt memory.
-        _engineMixers.erase(mixerId);
-
-        auto mixerAudioBuffers = _audioBuffers.find(mixerId);
-        if (mixerAudioBuffers != _audioBuffers.cend())
-        {
-            mixerAudioBuffers->second.clear();
-            _audioBuffers.erase(mixerAudioBuffers);
-        }
+        auto mixer = findResult->second;
+        _mixers.erase(mixerId);
+        mixer->stopTransports(); // this will stop new packets from coming in
+        return mixer;
     }
 
-    mixer.reset();
-    logger::info("EngineMixer removed", "MixerManager");
+    return std::shared_ptr<Mixer>();
+}
 
-    if (_engineMixers.empty())
+void MixerManager::onEngineMixerRemoved2(const std::string& mixerId)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+
+    auto mixerAudioBuffers = _audioBuffers.find(mixerId);
+    if (mixerAudioBuffers != _audioBuffers.cend())
+    {
+        mixerAudioBuffers->second.clear();
+        _audioBuffers.erase(mixerAudioBuffers);
+    }
+
+    if (_mixers.empty())
     {
         _mainAllocator.logAllocatedElements();
         _sendAllocator.logAllocatedElements();
@@ -751,7 +764,7 @@ Stats::MixerManagerStats MixerManager::getStats()
 
     EndpointMetrics udpMetrics = _transportFactory.getSharedUdpEndpointsMetrics();
 
-    result.jobQueueLength = _jobManager.getCount();
+    result.jobQueueLength = _engineJobManager.getCount();
     result.receivePoolSize = _mainAllocator.size();
     result.sendPoolSize = _sendAllocator.size();
     result.udpSharedEndpointsSendQueue = udpMetrics.sendQueue;
@@ -781,7 +794,6 @@ void MixerManager::updateStats()
     }
 
     _stats.engine = _engine.getStats();
-    _stats.ticksSinceLastUpdate = 0;
 
     if (_mainAllocator.size() < 512)
     {

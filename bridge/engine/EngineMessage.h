@@ -23,11 +23,6 @@ struct RecordingDescription;
 namespace EngineMessage
 {
 
-struct MixerRemoved
-{
-    EngineMixer* mixer;
-};
-
 struct AllocateAudioBuffer
 {
     EngineMixer* mixer;
@@ -125,7 +120,6 @@ struct EngineBarbellMessage
 
 enum class Type
 {
-    MixerRemoved,
     AllocateAudioBuffer,
     AudioStreamRemoved,
     VideoStreamRemoved,
@@ -146,7 +140,6 @@ enum class Type
 
 union MessageUnion
 {
-    MixerRemoved mixerRemoved;
     AllocateAudioBuffer allocateAudioBuffer;
     AudioStreamRemoved audioStreamRemoved;
     VideoStreamRemoved videoStreamRemoved;

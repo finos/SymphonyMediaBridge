@@ -289,7 +289,7 @@ void ProbeServer::addCandidate(const ice::IceCandidate& candidate)
 
 void ProbeServer::run()
 {
-    concurrency::setThreadName("ProbeServerMaintenance");
+    concurrency::setThreadName("ProbeServer");
 
     while (_maintenanceThreadIsRunning)
     {

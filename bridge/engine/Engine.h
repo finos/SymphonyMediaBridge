@@ -11,6 +11,11 @@
 #include <sys/types.h>
 #include <thread>
 
+namespace jobmanager
+{
+class JobManager;
+}
+
 namespace bridge
 {
 
@@ -20,7 +25,7 @@ class EngineMessageListener;
 class Engine
 {
 public:
-    Engine(const config::Config& config);
+    Engine(const config::Config& config, jobmanager::JobManager& relaxedJobManager);
 
     void setMessageListener(EngineMessageListener* messageListener);
     void stop();
@@ -50,6 +55,7 @@ private:
     uint32_t _tickCounter;
 
     concurrency::MpmcQueue<utils::Function> _threadQueue;
+    jobmanager::JobManager& _relaxedJobManager;
 
     std::thread _thread; // must be last member
 

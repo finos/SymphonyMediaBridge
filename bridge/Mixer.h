@@ -83,7 +83,7 @@ public:
         size_t logInstanceId,
         transport::TransportFactory& transportFactory,
         Engine& engine,
-        EngineMixer& engineMixer,
+        std::unique_ptr<EngineMixer> engineMixer,
         utils::IdGenerator& idGenerator,
         utils::SsrcGenerator& ssrcGenerator,
         const config::Config& config,
@@ -278,13 +278,15 @@ public:
     void removeRecordingTransport(const std::string& streamId, const size_t endpointIdHash);
 
     Stats getStats();
-    bool waitForAllPendingJobs(const uint32_t timeoutMs);
+    bool hasPendingTransportJobs();
 
     void sendEndpointMessage(const std::string& toEndpointId,
         const size_t fromEndpointIdHash,
         const std::string& message);
 
     std::unordered_set<std::string> getEndpoints() const;
+
+    EngineMixer* getEngineMixer() { return _engineMixer.get(); }
 
 private:
     struct BundleTransport
@@ -304,7 +306,7 @@ private:
 
     transport::TransportFactory& _transportFactory;
     Engine& _engine;
-    EngineMixer& _engineMixer;
+    std::unique_ptr<EngineMixer> _engineMixer;
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
 

@@ -1,4 +1,5 @@
 #include "bridge/engine/Engine.h"
+#include "bridge/MixerJobs.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineDataStream.h"
 #include "bridge/engine/EngineMessageListener.h"
@@ -21,13 +22,14 @@ const auto intervalNs = 1000000UL * bridge::EngineMixer::iterationDurationMs;
 namespace bridge
 {
 
-Engine::Engine(const config::Config& config)
+Engine::Engine(const config::Config& config, jobmanager::JobManager& relaxedJobManager)
     : _config(config),
       _messageListener(nullptr),
       _running(true),
       _pendingCommands(1024),
       _tickCounter(0),
       _threadQueue(1024),
+      _relaxedJobManager(relaxedJobManager),
       _thread([this] { this->run(); })
 {
     if (concurrency::setPriority(_thread, concurrency::Priority::RealTime))
@@ -278,16 +280,14 @@ void Engine::addMixer(EngineCommand::Command& nextCommand)
     assert(nextCommand.type == EngineCommand::Type::AddMixer);
     assert(nextCommand.command.addMixer.mixer);
 
-    logger::debug("Adding mixer %s", "Engine", nextCommand.command.addMixer.mixer->getLoggableId().c_str());
-    if (!_mixers.pushToTail(nextCommand.command.addMixer.mixer))
-    {
-        logger::error("Unable to add EngineMixer %s to Engine",
-            "Engine",
-            nextCommand.command.addMixer.mixer->getLoggableId().c_str());
+    auto* engineMixer = nextCommand.command.addMixer.mixer;
 
-        EngineMessage::Message message = {EngineMessage::Type::MixerRemoved};
-        message.command.mixerRemoved.mixer = nextCommand.command.addMixer.mixer;
-        _messageListener->onMessage(std::move(message));
+    logger::debug("Adding mixer %s", "Engine", engineMixer->getLoggableId().c_str());
+    if (!_mixers.pushToTail(engineMixer))
+    {
+        logger::error("Unable to add EngineMixer %s to Engine", "Engine", engineMixer->getLoggableId().c_str());
+
+        _relaxedJobManager.addJob<EngineMixerRemoved>(*_messageListener, *engineMixer);
 
         return;
     }
@@ -306,9 +306,7 @@ void Engine::removeMixer(EngineCommand::Command& nextCommand)
         logger::error("Unable to remove EngineMixer %s from Engine", "Engine", command.mixer->getLoggableId().c_str());
     }
 
-    EngineMessage::Message message = {EngineMessage::Type::MixerRemoved};
-    message.command.mixerRemoved.mixer = command.mixer;
-    _messageListener->onMessage(std::move(message));
+    _relaxedJobManager.addJob<EngineMixerRemoved>(*_messageListener, *command.mixer);
 }
 
 void Engine::addAudioStream(EngineCommand::Command& nextCommand)

@@ -6,6 +6,7 @@
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/PacketPoolAllocator.h"
+#include "utils/Pacer.h"
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -48,7 +49,8 @@ class MixerManager : public EngineMessageListener
 public:
     MixerManager(utils::IdGenerator& idGenerator,
         utils::SsrcGenerator& ssrcGenerator,
-        jobmanager::JobManager& jobManager,
+        jobmanager::JobManager& engineJobManager,
+        jobmanager::JobManager& relaxedJobManager,
         transport::TransportFactory& transportFactory,
         bridge::Engine& engine,
         const config::Config& config,
@@ -65,9 +67,13 @@ public:
     std::unique_lock<std::mutex> getMixer(const std::string& id, Mixer*& outMixer);
 
     void stop();
-    void run();
+    void processMessages(uint64_t timestamp);
+    void maintenance(uint64_t timestamp);
     bool onMessage(EngineMessage::Message&& message) override;
     Stats::MixerManagerStats getStats();
+
+    std::shared_ptr<Mixer> onEngineMixerRemoved1(EngineMixer& mixer) override;
+    void onEngineMixerRemoved2(const std::string& mixerId) override;
 
 private:
     struct MixerStats
@@ -76,25 +82,25 @@ private:
         uint32_t audioStreams = 0;
         uint32_t videoStreams = 0;
         uint32_t dataStreams = 0;
-        uint32_t ticksSinceLastUpdate = 0;
+        uint64_t lastRefreshTimestamp = 0;
         uint32_t largestConference = 0;
         EngineStats::EngineStats engine;
     };
 
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
-    jobmanager::JobManager& _jobManager;
+    jobmanager::JobManager& _engineJobManager;
+    jobmanager::JobManager& _relaxedJobManager;
     transport::TransportFactory& _transportFactory;
     Engine& _engine;
     const config::Config& _config;
 
-    std::unordered_map<std::string, std::unique_ptr<Mixer>> _mixers;
-    std::unordered_map<std::string, std::unique_ptr<EngineMixer>> _engineMixers;
+    std::unordered_map<std::string, std::shared_ptr<Mixer>> _mixers;
     std::unordered_map<std::string, std::unordered_map<uint32_t, std::unique_ptr<EngineMixer::AudioBuffer>>>
         _audioBuffers;
 
-    std::atomic<bool> _threadRunning;
-    std::unique_ptr<std::thread> _managerThread;
+    std::atomic<bool> _running;
+    utils::Pacer _statsRefreshPacer;
     concurrency::MpmcQueue<EngineMessage::Message> _engineMessages;
     std::mutex _configurationLock;
 
@@ -104,7 +110,6 @@ private:
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
-    void engineMessageMixerRemoved(const EngineMessage::Message& message);
     void engineMessageAllocateAudioBuffer(const EngineMessage::Message& message);
     void engineMessageAudioStreamRemoved(const EngineMessage::Message& message);
     void engineMessageVideoStreamRemoved(const EngineMessage::Message& message);

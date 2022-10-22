@@ -207,6 +207,8 @@ set(FILES
         bridge/engine/Vp8Rewriter.h
         bridge/engine/SetMaxMediaBitrateJob.h
         bridge/engine/SetMaxMediaBitrateJob.cpp
+        bridge/MixerJobs.h
+        bridge/MixerJobs.cpp
         bwe/BandwidthEstimator.cpp
         bwe/BandwidthEstimator.h
         bwe/BandwidthUtils.cpp
