@@ -1,4 +1,4 @@
-#include "bridge/engine/EngineFunction.h"
+#include "utils/Function.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -48,16 +48,16 @@ public:
 
 } // namespace
 
-TEST(EngineFunctionTest, bindFreeFunction)
+TEST(FunctionTest, bindFreeFunction)
 {
 
     freeFunction0CalledCount = 0;
     freeFunction1CalledCount = 0;
     freeFunction1LastValue = 0;
 
-    auto freeFunctionBind0 = bridge::engine::bind(&freeFunction0);
-    auto freeFunctionBind1 = bridge::engine::bind(&freeFunction1, 122);
-    auto freeFunctionBind2 = bridge::engine::bind(&freeFunction1, 1223);
+    auto freeFunctionBind0 = utils::bind(&freeFunction0);
+    auto freeFunctionBind1 = utils::bind(&freeFunction1, 122);
+    auto freeFunctionBind2 = utils::bind(&freeFunction1, 1223);
 
     freeFunctionBind0();
     ASSERT_EQ(1, freeFunction0CalledCount);
@@ -86,7 +86,7 @@ TEST(EngineFunctionTest, bindFreeFunction)
     ASSERT_EQ(1223, freeFunction1LastValue);
 }
 
-TEST(EngineFunctionTest, bindMemberFunction)
+TEST(FunctionTest, bindMemberFunction)
 {
     FakeValue fakeValue0 = {1, 2};
     FakeValue fakeValue1 = {111, 222};
@@ -103,29 +103,18 @@ TEST(EngineFunctionTest, bindMemberFunction)
     StrictMock<CallbackClassMock> callbacks6;
     StrictMock<CallbackClassMock> callbacks7;
 
-    auto callbackBind0 = bridge::engine::bind(&CallbackClassMock::callback0, &callbacks0);
-    auto callbackBind1 = bridge::engine::bind(&CallbackClassMock::callback1, &callbacks1, 5);
-    auto callbackBind2 = bridge::engine::bind(&CallbackClassMock::callback2, &callbacks2, 10, 20);
-    auto callbackBind3 = bridge::engine::bind(&CallbackClassMock::callback3, &callbacks3, 30, 40, true);
-    auto callbackBind4 = bridge::engine::bind(&CallbackClassMock::callback4, &callbacks4, 30, 40, false, fakeValue0);
-    auto callbackBind5 =
-        bridge::engine::bind(&CallbackClassMock::callback5, &callbacks5, 30, 40, true, fakeValue0, fakeValue1);
+    auto callbackBind0 = utils::bind(&CallbackClassMock::callback0, &callbacks0);
+    auto callbackBind1 = utils::bind(&CallbackClassMock::callback1, &callbacks1, 5);
+    auto callbackBind2 = utils::bind(&CallbackClassMock::callback2, &callbacks2, 10, 20);
+    auto callbackBind3 = utils::bind(&CallbackClassMock::callback3, &callbacks3, 30, 40, true);
+    auto callbackBind4 = utils::bind(&CallbackClassMock::callback4, &callbacks4, 30, 40, false, fakeValue0);
+    auto callbackBind5 = utils::bind(&CallbackClassMock::callback5, &callbacks5, 30, 40, true, fakeValue0, fakeValue1);
 
-    auto callbackBind6 = bridge::engine::bind(&CallbackClassMock::callback6,
-        &callbacks6,
-        30,
-        40,
-        true,
-        fakeValue0,
-        std::cref(fakeValue1));
+    auto callbackBind6 =
+        utils::bind(&CallbackClassMock::callback6, &callbacks6, 30, 40, true, fakeValue0, std::cref(fakeValue1));
 
-    auto callbackBind7 = bridge::engine::bind(&CallbackClassMock::callback7,
-        &callbacks7,
-        30,
-        40,
-        true,
-        fakeValue0,
-        std::ref(fakeValue1));
+    auto callbackBind7 =
+        utils::bind(&CallbackClassMock::callback7, &callbacks7, 30, 40, true, fakeValue0, std::ref(fakeValue1));
 
     // Change values to ensure we are not keep a reference
     fakeValue0.value1 = 9;
@@ -157,7 +146,7 @@ TEST(EngineFunctionTest, bindMemberFunction)
     callbackBind7();
 }
 
-TEST(EngineFunctionTest, implicitConversionToEngineFunction)
+TEST(FunctionTest, implicitConversionToFunction)
 {
 
     freeFunction0CalledCount = 0;
@@ -169,29 +158,19 @@ TEST(EngineFunctionTest, implicitConversionToEngineFunction)
 
     FakeValue fakeOriginalValue0 = fakeValue0;
 
-    std::vector<bridge::EngineFunction> mFunctions;
+    std::vector<utils::Function> mFunctions;
 
-    mFunctions.push_back(bridge::engine::bind(&freeFunction0));
-    mFunctions.emplace_back(bridge::engine::bind(&freeFunction1, 1223));
+    mFunctions.push_back(utils::bind(&freeFunction0));
+    mFunctions.emplace_back(utils::bind(&freeFunction1, 1223));
 
     StrictMock<CallbackClassMock> callbacks6;
     StrictMock<CallbackClassMock> callbacks7;
 
-    mFunctions.push_back(bridge::engine::bind(&CallbackClassMock::callback6,
-        &callbacks6,
-        30,
-        40,
-        true,
-        fakeValue0,
-        std::cref(fakeValue1)));
+    mFunctions.push_back(
+        utils::bind(&CallbackClassMock::callback6, &callbacks6, 30, 40, true, fakeValue0, std::cref(fakeValue1)));
 
-    mFunctions.push_back(bridge::engine::bind(&CallbackClassMock::callback7,
-        &callbacks7,
-        30,
-        40,
-        true,
-        fakeValue0,
-        std::ref(fakeValue1)));
+    mFunctions.push_back(
+        utils::bind(&CallbackClassMock::callback7, &callbacks7, 30, 40, true, fakeValue0, std::ref(fakeValue1)));
 
     // Copy
     mFunctions.push_back(mFunctions.back());
@@ -220,23 +199,18 @@ TEST(EngineFunctionTest, implicitConversionToEngineFunction)
     ASSERT_EQ(1223, freeFunction1LastValue);
 }
 
-TEST(EngineFunctionTest, copy)
+TEST(FunctionTest, copy)
 {
     FakeValue fakeValue0 = {1, 2};
     FakeValue fakeOriginalValue0 = fakeValue0;
 
     StrictMock<CallbackClassMock> callbacks7;
 
-    bridge::EngineFunction originalFunction = bridge::engine::bind(&CallbackClassMock::callback7,
-        &callbacks7,
-        30,
-        40,
-        true,
-        fakeValue0,
-        std::ref(fakeValue0));
+    utils::Function originalFunction =
+        utils::bind(&CallbackClassMock::callback7, &callbacks7, 30, 40, true, fakeValue0, std::ref(fakeValue0));
 
-    bridge::EngineFunction copyFunction2;
-    bridge::EngineFunction copyFunction1(originalFunction);
+    utils::Function copyFunction2;
+    utils::Function copyFunction1(originalFunction);
     copyFunction2 = originalFunction;
 
     fakeValue0.value1 = 887766;
@@ -249,7 +223,7 @@ TEST(EngineFunctionTest, copy)
     copyFunction2();
 }
 
-TEST(EngineFunctionTest, move)
+TEST(FunctionTest, move)
 {
     FakeValue fakeValue0 = {1, 2};
     FakeValue fakeOriginalValue0 = fakeValue0;
@@ -257,17 +231,12 @@ TEST(EngineFunctionTest, move)
     StrictMock<CallbackClassMock> callbacks0;
     StrictMock<CallbackClassMock> callbacks7;
 
-    bridge::EngineFunction originalFunction0 = bridge::engine::bind(&CallbackClassMock::callback0, &callbacks0);
-    bridge::EngineFunction originalFunction7 = bridge::engine::bind(&CallbackClassMock::callback7,
-        &callbacks7,
-        30,
-        40,
-        true,
-        fakeValue0,
-        std::ref(fakeValue0));
+    utils::Function originalFunction0 = utils::bind(&CallbackClassMock::callback0, &callbacks0);
+    utils::Function originalFunction7 =
+        utils::bind(&CallbackClassMock::callback7, &callbacks7, 30, 40, true, fakeValue0, std::ref(fakeValue0));
 
-    bridge::EngineFunction newFunction7;
-    bridge::EngineFunction newFunction0(std::move(originalFunction0));
+    utils::Function newFunction7;
+    utils::Function newFunction0(std::move(originalFunction0));
     newFunction7 = std::move(originalFunction7);
 
     fakeValue0.value1 = 887766;

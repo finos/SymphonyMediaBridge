@@ -202,7 +202,7 @@ public:
 
         _transport.removeSrtpLocalSsrc(ssrc);
 
-        _engineThreadContext.post(engine::bind(&EngineMixer::onOutboundContextFinalized,
+        _engineThreadContext.post(utils::bind(&EngineMixer::onOutboundContextFinalized,
             &_mixer,
             endpointIdHash,
             ssrc,
@@ -242,10 +242,8 @@ public:
     {
         if (0 == --_finalizerCounter)
         {
-            _engineThreadContext.post(engine::bind(&EngineMixer::onRecordingOutboundContextFinalized,
-                &_mixer,
-                _recordingStreamIdHash,
-                _ssrc));
+            _engineThreadContext.post(
+                utils::bind(&EngineMixer::onRecordingOutboundContextFinalized, &_mixer, _recordingStreamIdHash, _ssrc));
         }
     }
 

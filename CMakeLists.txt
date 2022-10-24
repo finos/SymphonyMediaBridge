@@ -554,7 +554,6 @@ set(TEST_FILES
     test/legacyapi/ParserTest.cpp
     test/legacyapi/GeneratorTest.cpp
     test/bridge/EngineStreamDirectorTest.cpp
-    test/bridge/EngineFunctionTest.cpp
     test/codec/Vp8HeaderTest.cpp
     test/bridge/ActiveMediaListTest.cpp
     test/bridge/BarbellMessagesTest.cpp
@@ -579,7 +578,8 @@ set(TEST_FILES
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/VideoNackReceiveJobTest.cpp
     test/bridge/DummyRtcTransport.h
-    test/utils/LogSpamTest.cpp)
+    test/utils/LogSpamTest.cpp
+    test/utils/FunctionTest.cpp)
 
 
 set(CMAKE_TEST_DIRECTORY "${CMAKE_BINARY_DIR}/test")

@@ -9,7 +9,7 @@ size_t EngineThreadContext::processEngineTasks(size_t maxTasksToProcess)
 
     for (size_t i = 0; i < tasksToProcess; ++i)
     {
-        EngineFunction task;
+        utils::Function task;
         // We could specialize thread task queue so we can execute
         // without moving memory from container to outside
         if (!_threadTasksQueue.pop(task))
