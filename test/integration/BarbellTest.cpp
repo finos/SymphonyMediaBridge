@@ -142,7 +142,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         Barbell bb1(_httpd);
         Barbell bb2(&httpd2);
 
-        // This map: _endpointNetworkLinkMap is populated automatically on endpoint creation.
+        // The map _endpointNetworkLinkMap is populated automatically on endpoint creation.
         // Following it's evolution allows to find Endpoint/NetworkLink for paritcular component.
         _endpointNetworkLinkMap.clear();
         auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
