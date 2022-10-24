@@ -76,6 +76,18 @@ public:
         }
     }
 
+    template <class Callable>
+    bool post(Callable&& callable)
+    {
+        return addJob<CallableJob<Callable>>(std::forward<Callable>(callable));
+    }
+
+    template <class Callable>
+    bool post(std::atomic_uint32_t& jobsCounter, Callable&& callable)
+    {
+        return addJob<CallableCountedJob<Callable>>(jobsCounter, std::forward<Callable>(callable));
+    }
+
     JobManager& getJobManager() { return _jobManager; }
     size_t getCount() const { return _jobQueue.size(); }
 

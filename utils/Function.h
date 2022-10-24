@@ -253,6 +253,46 @@ inline bool operator!=(std::nullptr_t, const Function& f) noexcept
     return !!f;
 }
 
+/**
+ * This is for give pass rvalues using utils::bind function for types that can't be copied
+ * like std::unique_ptr.
+ *
+ * WARNING: This object moves internal object on copies. it must be used only
+ * for functions that will be called only one time
+ */
+template <class T>
+class RValueWrapper
+{
+public:
+    RValueWrapper(T&& rValueRef) : _rValue(std::move(rValueRef)) {}
+    RValueWrapper(const RValueWrapper& rhs) : _rValue(std::move(rhs._rValue)) {}
+    RValueWrapper(RValueWrapper&& rhs) : _rValue(std::move(rhs._rValue)) {}
+
+    RValueWrapper& operator=(const RValueWrapper& rhs)
+    {
+        _rValue(std::move(rhs._rValue));
+        return *this;
+    }
+
+    RValueWrapper& operator=(RValueWrapper&& rhs)
+    {
+        _rValue(std::move(rhs._rValue));
+        return *this;
+    }
+
+    operator T() const { return std::move(_rValue); }
+
+private:
+    mutable T _rValue;
+};
+
+template <class T>
+auto rvalueParam(T&& value)
+{
+    static_assert(std::is_rvalue_reference<T&&>::value, "value must be an rvalue reference");
+    return RValueWrapper<T>(std::move(value));
+}
+
 template <class Func, class... Args>
 std::enable_if_t<std::is_function<std::remove_pointer_t<Func>>::value,
     detail::FunctionBinder<Func, std::decay_t<Args>...>>

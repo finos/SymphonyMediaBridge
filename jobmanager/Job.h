@@ -48,4 +48,38 @@ private:
     utils::ScopedIncrement _jobsCounterIncrement;
 };
 
+template <class Callable>
+class CallableJob final : public Job
+{
+public:
+    explicit CallableJob(const Callable& callable) : _callable(callable) {}
+    explicit CallableJob(Callable&& callable) : _callable(std::move(callable)) {}
+
+    void run() final { _callable(); }
+
+private:
+    Callable _callable;
+};
+
+template <class Callable>
+class CallableCountedJob : public CountedJob
+{
+public:
+    explicit CallableCountedJob(std::atomic_uint32_t& jobsCounter, const Callable& callable)
+        : CountedJob(jobsCounter),
+          _callable(callable)
+    {
+    }
+    explicit CallableCountedJob(std::atomic_uint32_t& jobsCounter, Callable&& callable)
+        : CountedJob(jobsCounter),
+          _callable(std::move(callable))
+    {
+    }
+
+    void run() final { _callable(); }
+
+private:
+    Callable _callable;
+};
+
 } // namespace jobmanager

@@ -114,6 +114,18 @@ public:
         _jobPool.free(job);
     }
 
+    template <class Callable>
+    bool post(Callable&& callable)
+    {
+        return addJob<CallableJob>(std::forward<Callable>(callable));
+    }
+
+    template <class Callable>
+    bool post(std::atomic_uint32_t& jobsCounter, Callable&& callable)
+    {
+        return addJob<CallableCountedJob>(jobsCounter, std::forward<Callable>(callable));
+    }
+
     MultiStepJob* pop()
     {
         MultiStepJob* job;
