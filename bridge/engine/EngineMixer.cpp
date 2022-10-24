@@ -68,64 +68,6 @@ memory::UniquePacket createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& a
     return packet;
 }
 
-class RemoveInboundSsrcContextJob : public jobmanager::CountedJob
-{
-public:
-    RemoveInboundSsrcContextJob(uint32_t ssrc, transport::Transport& transport, bridge::EngineMixer& engineMixer)
-        : CountedJob(transport.getJobCounter()),
-          _engineMixer(engineMixer),
-          _ssrc(ssrc)
-    {
-    }
-
-    void run() override { _engineMixer.internalRemoveInboundSsrc(_ssrc); }
-
-private:
-    bridge::EngineMixer& _engineMixer;
-    uint32_t _ssrc;
-};
-
-class SetRtxProbeSourceJob : public jobmanager::CountedJob
-{
-public:
-    SetRtxProbeSourceJob(transport::RtcTransport& transport,
-        const uint32_t ssrc,
-        uint32_t* sequenceCounter,
-        const uint16_t payloadType)
-        : CountedJob(transport.getJobCounter()),
-          _transport(transport),
-          _ssrc(ssrc),
-          _sequenceCounter(sequenceCounter),
-          _payloadType(payloadType)
-    {
-    }
-
-    void run() override { _transport.setRtxProbeSource(_ssrc, _sequenceCounter, _payloadType); }
-
-private:
-    transport::RtcTransport& _transport;
-    uint32_t _ssrc;
-    uint32_t* _sequenceCounter;
-    uint16_t _payloadType;
-};
-
-class RemoveBarbellJob : public jobmanager::CountedJob
-{
-public:
-    RemoveBarbellJob(bridge::EngineMixer& engineMixer, transport::RtcTransport& transport, size_t barbellIdHash)
-        : CountedJob(transport.getJobCounter()),
-          _engineMixer(engineMixer),
-          _barbellIdHash(barbellIdHash)
-    {
-    }
-
-    void run() override { _engineMixer.internalRemoveBarbell(_barbellIdHash); }
-
-private:
-    bridge::EngineMixer& _engineMixer;
-    size_t _barbellIdHash;
-};
-
 class RemovePacketCacheJob : public jobmanager::CountedJob
 {
 public:
@@ -170,14 +112,14 @@ public:
     FinalizeNonSsrcRewriteOutboundContextJob(bridge::EngineMixer& mixer,
         transport::RtcTransport& transport,
         bridge::SsrcOutboundContext& outboundContext,
-        bridge::EngineThreadContext& engineThreadContext,
+        concurrency::SynchronizationContext& engineSyncContext,
         bridge::EngineMessageListener& mixerManager,
         uint32_t feedbackSsrc)
         : CountedJob(transport.getJobCounter()),
           _mixer(mixer),
           _outboundContext(outboundContext),
           _transport(transport),
-          _engineThreadContext(engineThreadContext),
+          _engineSyncContext(engineSyncContext),
           _mixerManager(mixerManager),
           _feedbackSsrc(feedbackSsrc)
     {
@@ -202,7 +144,7 @@ public:
 
         _transport.removeSrtpLocalSsrc(ssrc);
 
-        _engineThreadContext.post(utils::bind(&EngineMixer::onOutboundContextFinalized,
+        _engineSyncContext.post(utils::bind(&EngineMixer::onOutboundContextFinalized,
             &_mixer,
             endpointIdHash,
             ssrc,
@@ -214,7 +156,7 @@ private:
     bridge::EngineMixer& _mixer;
     bridge::SsrcOutboundContext& _outboundContext;
     transport::RtcTransport& _transport;
-    bridge::EngineThreadContext& _engineThreadContext;
+    concurrency::SynchronizationContext& _engineSyncContext;
     bridge::EngineMessageListener& _mixerManager;
     uint32_t _feedbackSsrc;
 };
@@ -225,12 +167,12 @@ public:
     FinalizeRecordingOutboundContextJob(bridge::EngineMixer& mixer,
         transport::RecordingTransport& transport,
         size_t recordingStreamIdHash,
-        bridge::EngineThreadContext& engineThreadContext,
+        concurrency::SynchronizationContext& engineSyncContext,
         uint32_t ssrc,
         std::atomic_uint32_t& finalizerCounter)
         : CountedJob(transport.getJobCounter()),
           _mixer(mixer),
-          _engineThreadContext(engineThreadContext),
+          _engineSyncContext(engineSyncContext),
           _recordingStreamIdHash(recordingStreamIdHash),
           _ssrc(ssrc),
           _finalizerCounter(finalizerCounter)
@@ -242,14 +184,14 @@ public:
     {
         if (0 == --_finalizerCounter)
         {
-            _engineThreadContext.post(
+            _engineSyncContext.post(
                 utils::bind(&EngineMixer::onRecordingOutboundContextFinalized, &_mixer, _recordingStreamIdHash, _ssrc));
         }
     }
 
 private:
     bridge::EngineMixer& _mixer;
-    bridge::EngineThreadContext& _engineThreadContext;
+    concurrency::SynchronizationContext& _engineSyncContext;
     size_t _recordingStreamIdHash;
     uint32_t _ssrc;
     std::atomic_uint32_t& _finalizerCounter;
@@ -314,7 +256,7 @@ constexpr size_t EngineMixer::iterationDurationMs;
 
 EngineMixer::EngineMixer(const std::string& id,
     jobmanager::JobManager& jobManager,
-    EngineThreadContext& engineThreadContext,
+    const concurrency::SynchronizationContext& engineSyncContext,
     EngineMessageListener& messageListener,
     const uint32_t localVideoSsrc,
     const config::Config& config,
@@ -326,7 +268,7 @@ EngineMixer::EngineMixer(const std::string& id,
     : _id(id),
       _loggableId("EngineMixer"),
       _jobManager(jobManager),
-      _engineThreadContext(engineThreadContext),
+      _engineSyncContext(engineSyncContext),
       _messageListener(messageListener),
       _mixerSsrcAudioBuffers(maxSsrcs),
       _incomingBarbellSctp(128),
@@ -1370,7 +1312,7 @@ void EngineMixer::checkRecordingPacketCounters(const uint64_t timestamp)
                     transportEntry.second.getJobQueue().addJob<FinalizeRecordingOutboundContextJob>(*this,
                         transportEntry.second,
                         recordingStreamIdHash,
-                        _engineThreadContext,
+                        _engineSyncContext,
                         ssrc,
                         finalizeCounter);
                 }
@@ -3634,7 +3576,7 @@ void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(EngineAudioStre
             audioStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContextJob>(*this,
                 audioStream->transport,
                 outboundContextItr->second,
-                _engineThreadContext,
+                _engineSyncContext,
                 _messageListener,
                 feedbackSsrc);
         }
@@ -3667,7 +3609,7 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
             videoStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContextJob>(*this,
                 videoStream->transport,
                 outboundContextItr->second,
-                _engineThreadContext,
+                _engineSyncContext,
                 _messageListener,
                 feedbackSsrc);
         }
@@ -3691,7 +3633,7 @@ void EngineMixer::decommissionInboundContext(const uint32_t ssrc)
     {
         _ssrcInboundContexts.erase(ssrc);
         logger::info("Decommissioned inbound ssrc context %u", _loggableId.c_str(), ssrc);
-        it->second->sender->getJobQueue().addJob<RemoveInboundSsrcContextJob>(ssrc, *it->second->sender, *this);
+        it->second->sender->postOnQueue(utils::bind(&EngineMixer::internalRemoveInboundSsrc, this, ssrc));
     }
 }
 
@@ -4256,10 +4198,11 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
 
     if (outboundContext)
     {
-        engineVideoStream.transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream.transport,
+        engineVideoStream.transport.postOnQueue(utils::bind(&transport::RtcTransport::setRtxProbeSource,
+            &engineVideoStream.transport,
             engineVideoStream.localSsrc,
             &outboundContext->rewrite.lastSent.sequenceNumber,
-            outboundContext->rtpMap.payloadType);
+            outboundContext->rtpMap.payloadType));
     }
     _probingVideoStreams = true;
 }
@@ -4271,10 +4214,11 @@ void EngineMixer::stopProbingVideoStream(const EngineVideoStream& engineVideoStr
         return;
     }
 
-    engineVideoStream.transport.getJobQueue().addJob<SetRtxProbeSourceJob>(engineVideoStream.transport,
+    engineVideoStream.transport.postOnQueue(utils::bind(&transport::RtcTransport::setRtxProbeSource,
+        &engineVideoStream.transport,
         engineVideoStream.localSsrc,
         nullptr,
-        engineVideoStream.feedbackRtpMap.payloadType);
+        engineVideoStream.feedbackRtpMap.payloadType));
 }
 
 bool EngineMixer::isVideoInUse(const uint64_t timestamp, const uint64_t threshold) const
@@ -4424,7 +4368,7 @@ void EngineMixer::removeBarbell(size_t idHash)
         decommissionInboundContext(audioStream.ssrc);
     }
 
-    barbell->transport.getJobQueue().addJob<RemoveBarbellJob>(*this, barbell->transport, barbell->idHash);
+    barbell->transport.postOnQueue(utils::bind(&EngineMixer::internalRemoveBarbell, this, barbell->idHash));
 }
 
 size_t EngineMixer::getDominantSpeakerId() const

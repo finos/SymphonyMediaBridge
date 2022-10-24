@@ -1,10 +1,10 @@
 #pragma once
 
-#include "EngineThreadContext.h"
 #include "bridge/engine/EngineCommand.h"
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
+#include "concurrency/SynchronizationContext.h"
 #include "config/Config.h"
 #include "memory/List.h"
 #include "utils/Trackers.h"
@@ -17,7 +17,7 @@ namespace bridge
 class EngineMixer;
 class EngineMessageListener;
 
-class Engine : private EngineThreadContext
+class Engine
 {
 public:
     Engine(const config::Config& config);
@@ -30,7 +30,10 @@ public:
 
     EngineStats::EngineStats getStats();
 
-    EngineThreadContext& getEngineThreadContext() { return *this; }
+    concurrency::SynchronizationContext getSynchronizationContext()
+    {
+        return concurrency::SynchronizationContext(_threadQueue);
+    }
 
 private:
     static const size_t maxMixers = 4096;
@@ -46,7 +49,12 @@ private:
     concurrency::MpmcPublish<EngineStats::EngineStats, 4> _stats;
     uint32_t _tickCounter;
 
+    concurrency::MpmcQueue<utils::Function> _threadQueue;
+
     std::thread _thread; // must be last member
+
+    /* @return true if max tasks number were reached */
+    bool processTreadQueue(size_t maxTasksToProcess);
 
     void addMixer(EngineCommand::Command& nextCommand);
     void removeMixer(EngineCommand::Command& nextCommand);

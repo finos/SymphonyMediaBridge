@@ -159,8 +159,6 @@ set(FILES
         bridge/engine/EngineStats.h
         bridge/engine/EngineStreamDirector.h
         bridge/engine/EngineStreamDirector.cpp
-        bridge/engine/EngineThreadContext.h
-        bridge/engine/EngineThreadContext.cpp
         bridge/engine/EngineVideoStream.h
         bridge/engine/EngineBarbell.h
         bridge/engine/EngineBarbell.cpp

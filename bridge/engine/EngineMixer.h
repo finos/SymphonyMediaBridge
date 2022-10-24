@@ -4,11 +4,11 @@
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
 #include "bridge/engine/EngineStats.h"
-#include "bridge/engine/EngineThreadContext.h"
 #include "bridge/engine/NeighbourMembership.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
+#include "concurrency/SynchronizationContext.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/Map.h"
 #include "memory/PacketPoolAllocator.h"
@@ -84,7 +84,7 @@ public:
 
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
-        EngineThreadContext& engineThreadContext,
+        const concurrency::SynchronizationContext& engineSyncContext,
         EngineMessageListener& messageListener,
         const uint32_t localVideoSsrc,
         const config::Config& config,
@@ -309,7 +309,7 @@ private:
     logger::LoggableId _loggableId;
 
     jobmanager::JobManager& _jobManager;
-    EngineThreadContext& _engineThreadContext;
+    concurrency::SynchronizationContext _engineSyncContext;
     EngineMessageListener& _messageListener;
 
     concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
