@@ -1999,11 +1999,6 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHas
     {
         if (ssrcOutboundContextItr->second.markedForDeletion)
         {
-            // The outboundContext is marked for deletion after owner inbound stream
-            // as been removed (only for non ssrcRewrite). This means the job to
-            // remove OutboundSsrc has already been enqueued and it will be deleted
-            // soon. Then we MUST NOT enqueue any more jobs with a reference to this
-            // SsrcOutboundContext
             assert(!ssrcRewrite);
             return nullptr;
         }

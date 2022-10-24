@@ -12,11 +12,8 @@ namespace detail
 constexpr size_t calculateStorageSize()
 {
     constexpr size_t minSize = 128;
-    // EngineFunction will have EngineFunctionStorage + a pointer
-    // Most likely std::max_align_t will return 16. Then it would create
-    // padding of 8 bytes for a 128 size storage. Here we will ensure that we
-    // take advantage of all allocated memory without wasting memory with paddings
-    // when we have a contiguous collection of EngineFunction
+    // Ensure EngineFunction has a size multiple of alignof(std::max_align_t) to not waste space with paddings
+    // when we have a contiguous containers with EngineFunction
     constexpr size_t alignedSpace =
         (minSize + sizeof(void*) + (alignof(std::max_align_t) - 1)) & ~(alignof(std::max_align_t) - 1);
 
