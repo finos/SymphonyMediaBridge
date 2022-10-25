@@ -12,6 +12,7 @@ TimerQueue::TimerQueue(size_t maxElements)
       _timeReference(utils::Time::getAbsoluteTime()),
       _thread([this] { this->run(); })
 {
+    _timers.reserve(256);
 }
 
 TimerQueue::~TimerQueue()

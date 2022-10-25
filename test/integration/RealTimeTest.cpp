@@ -192,7 +192,11 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 
     Conference conf(nullptr);
 
-    group.startConference(conf, baseUrl);
+    bool startConfResult = group.startConference(conf, baseUrl);
+    if (!startConfResult)
+    {
+        return;
+    }
 
     uint32_t count = 0;
     for (auto& client : group.clients)
