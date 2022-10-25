@@ -82,6 +82,8 @@ Bridge::~Bridge()
 
     _transportFactory.reset(nullptr);
 
+    _timers->stop();
+
     if (_jobManager)
     {
         _jobManager->stop();
