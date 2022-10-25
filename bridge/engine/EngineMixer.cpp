@@ -1019,6 +1019,7 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
     bool dominantSpeakerChanged = false;
     bool videoMapChanged = false;
     bool audioMapChanged = false;
+    auto mapRevision = _activeMediaList->getMapRevision();
     _activeMediaList->process(engineIterationStartTimestamp, dominantSpeakerChanged, videoMapChanged, audioMapChanged);
 
     if (dominantSpeakerChanged)
@@ -1032,7 +1033,7 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
     {
         sendUserMediaMapMessageToAll();
     }
-    if (audioMapChanged || videoMapChanged)
+    if (mapRevision != _activeMediaList->getMapRevision())
     {
         sendUserMediaMapMessageOverBarbells();
     }
@@ -4030,11 +4031,19 @@ void EngineMixer::removeBarbell(size_t idHash)
             decommissionInboundContext(simulcastLevel.ssrc);
             decommissionInboundContext(simulcastLevel.feedbackSsrc);
         }
+        if (videoStream.endpointIdHash.isSet())
+        {
+            _activeMediaList->removeVideoParticipant(videoStream.endpointIdHash.get());
+        }
     }
 
     for (auto& audioStream : barbell->audioStreams)
     {
         decommissionInboundContext(audioStream.ssrc);
+        if (audioStream.endpointIdHash.isSet())
+        {
+            _activeMediaList->removeAudioParticipant(audioStream.endpointIdHash.get());
+        }
     }
 
     barbell->transport.getJobQueue().addJob<RemoveBarbellJob>(*this, barbell->transport, barbell->idHash);

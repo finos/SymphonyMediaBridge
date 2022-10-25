@@ -605,7 +605,7 @@ bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
     const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
     assert(pushResult);
-
+    ++_ssrcMapRevision;
     return true;
 }
 
