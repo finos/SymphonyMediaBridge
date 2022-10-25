@@ -4169,7 +4169,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         }
     }
 
-    memory::Map<size_t, BarbellMapItem, 10> audioSsrcs;
+    memory::Map<size_t, BarbellMapItem, 8> audioSsrcs;
     copyToBarbellMapItemArray(audioEndpointsArray, audioSsrcs);
     for (auto& stream : barbell->audioStreams)
     {
