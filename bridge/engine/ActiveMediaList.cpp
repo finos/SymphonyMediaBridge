@@ -133,11 +133,14 @@ bool ActiveMediaList::onAudioParticipantAdded(const size_t endpointIdHash, const
     uint32_t ssrc;
     if (!_audioSsrcs.pop(ssrc))
     {
-        logger::info("new endpoint %s %zu, added to active audio list", _logId.c_str(), endpointId, endpointIdHash);
+        logger::info("new audio endpoint %s %zu, added to active audio list",
+            _logId.c_str(),
+            endpointId,
+            endpointIdHash);
         return false;
     }
 
-    logger::info("new endpoint %s %zu, added to active audio list, mapped ssrc -> %u",
+    logger::info("new audio endpoint %s %zu, entered active audio list, mapped ssrc -> %u",
         _logId.c_str(),
         endpointId,
         endpointIdHash,
@@ -273,7 +276,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
     }
 
     const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
-    logger::info("new endpoint %s %zu, added to active video list, original ssrc %u",
+    logger::info("new video endpoint %s %zu, added to active video list, original ssrc %u",
         _logId.c_str(),
         endpointId,
         endpointIdHash,
@@ -409,6 +412,35 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
     return speakerCount;
 }
 
+void ActiveMediaList::logAudioList()
+{
+    if (logger::_logLevel < logger::Level::DBG)
+    {
+        return;
+    }
+
+    utils::StringBuilder<1024> sb;
+    size_t count = _maxSpeakers;
+    for (auto* tail = _activeAudioList.tail(); count > 0 && tail != nullptr; tail = tail->_previous)
+    {
+        const auto entry = _audioParticipants.find(tail->_data);
+        if (entry != _audioParticipants.end())
+        {
+            const auto& participant = entry->second;
+            const auto* ssrc = _audioSsrcRewriteMap.getItem(entry->first);
+            if (ssrc)
+            {
+
+                sb.append(entry->first).append(" -> ").append(*ssrc);
+                const auto score = std::max(0.0f, participant.maxRecentLevel - participant.noiseLevel);
+                sb.append(" ").append(participant.maxRecentLevel).append(" (").append(score).append(")\n");
+            }
+        }
+        --count;
+    }
+    logger::debug("audio list updated %s", _logId.c_str(), sb.get());
+}
+
 // Algorithm for video switching:
 // 1. Allow switching at most once per two second
 // 2. Calculate average of (dBov + 127) level over time period for last 2s window and last
@@ -463,7 +495,7 @@ void ActiveMediaList::process(const uint64_t timestamp,
     for (size_t i = 0; i < _audioLastN && !heap.empty(); ++i)
     {
         const auto& top = heap.top();
-        outAudioMapChanged = updateActiveAudioList(top.participant);
+        outAudioMapChanged |= updateActiveAudioList(top.participant);
         auto const& curParticipant = _audioParticipants.find(top.participant);
 
         if (top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
@@ -480,6 +512,11 @@ void ActiveMediaList::process(const uint64_t timestamp,
         heap.pop();
     }
     _activeTalkerSnapshot.write(activeTalkersSnapshot);
+
+    if (outAudioMapChanged && logger::_logLevel >= logger::Level::DBG)
+    {
+        logAudioList();
+    }
 
     if (timestamp - _lastChangeTimestamp + 10 * utils::Time::ms * (requiredConsecutiveWins - 1) <
         maxSwitchDominantSpeakerEvery)
@@ -569,7 +606,6 @@ bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
     const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
     assert(pushResult);
 
-    logger::debug("endpointIdHash %zu, ssrc %u added to active audio list", _logId.c_str(), endpointIdHash, ssrc);
     return true;
 }
 
@@ -861,7 +897,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
 
 void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup)
 {
-    logger::debug("add to ssrcmap %zu", _logId.c_str(), endpointIdHash);
+    logger::debug("add to video ssrcmap %zu", _logId.c_str(), endpointIdHash);
     _videoSsrcRewriteMap.emplace(endpointIdHash, simulcastGroup);
     for (auto& ssrcPair : simulcastGroup)
     {
@@ -872,7 +908,7 @@ void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup
 
 void ActiveMediaList::removeFromRewriteMap(size_t endpointIdHash)
 {
-    logger::debug("remove from ssrcmap %zu", _logId.c_str(), endpointIdHash);
+    logger::debug("remove from video ssrcmap %zu", _logId.c_str(), endpointIdHash);
     const auto rewriteMapItr = _videoSsrcRewriteMap.find(endpointIdHash);
     if (rewriteMapItr != _videoSsrcRewriteMap.end())
     {

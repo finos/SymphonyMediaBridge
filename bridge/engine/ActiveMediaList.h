@@ -190,7 +190,7 @@ private:
         float noiseLevel;
         bool ptt;
         EndpointIdString endpointId;
-        bool isLocal;
+        const bool isLocal;
     };
 
     struct AudioLevelEntry
@@ -292,6 +292,8 @@ private:
         const SimulcastStream& simulcastStream,
         const utils::Optional<SimulcastStream>& secondarySimulcastStream,
         const char* endpointId);
+
+    void logAudioList();
 };
 
 } // namespace bridge
