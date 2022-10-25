@@ -131,11 +131,7 @@ public:
         }
     }
 
-    void stop()
-    {
-        _timers.stop();
-        _running = false;
-    }
+    void stop() { _running = false; }
 
     int32_t getCount() const { return _jobPool.countAllocatedItems(); }
 

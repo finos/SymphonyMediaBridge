@@ -17,7 +17,6 @@ TimerQueue::TimerQueue(size_t maxElements)
 TimerQueue::~TimerQueue()
 {
     stop();
-    _thread.join();
 }
 
 // multi threaded
@@ -65,7 +64,11 @@ void TimerQueue::abortTimers(uint32_t groupId)
 
 void TimerQueue::stop()
 {
-    _running = false;
+    if (_running)
+    {
+        _running = false;
+        _thread.join();
+    }
 }
 
 void TimerQueue::run()

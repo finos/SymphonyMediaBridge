@@ -91,6 +91,7 @@ void IntegrationTest::TearDown()
 
     _bridge.reset();
     _transportFactory.reset();
+    _timers->stop();
     _jobManager->stop();
     for (auto& worker : _workerThreads)
     {
