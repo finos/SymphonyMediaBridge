@@ -1,6 +1,9 @@
 cmake_minimum_required(VERSION 3.6.2)
 project(smb)
 
+include(version/CheckGit.cmake)
+CheckGitSetup()
+
 option(ENABLE_LEGACY_API "ENABLE_LEGACY_API" OFF)
 option(ENABLE_LIBATOMIC "ENABLE_LIBATOMIC" OFF)
 option(ENABLE_ALLOCATOR_METRICS "Force enable the allocator metrics. It will be active by default in DEBUG" OFF)
@@ -425,7 +428,7 @@ add_executable(smb
         ${FILES}
         main.cpp)
 
-target_link_libraries(smb Threads::Threads ${THIRD_PARTY_LIBS})
+target_link_libraries(smb Threads::Threads ${THIRD_PARTY_LIBS} git_version)
 
 ##################
 # Test framework
@@ -592,7 +595,7 @@ target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include"
 # Copy test Data
 file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
 
-target_link_libraries(UnitTest gtest gmock ${THIRD_PARTY_LIBS})
+target_link_libraries(UnitTest gtest gmock ${THIRD_PARTY_LIBS} git_version)
 
 add_test(AllUnitTests UnitTest)
 
