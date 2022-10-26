@@ -177,8 +177,7 @@ private:
         // Ramp up last seen noise level by 1 every second if no new minimum
         static constexpr float NOISE_RAMPUP = 0.01f;
         // Min should not be below -120 dBov
-
-        static const uint8_t MIN_NOISE = 7;
+        static const float MIN_NOISE;
 
         void setNoiseLevel(float level)
         {

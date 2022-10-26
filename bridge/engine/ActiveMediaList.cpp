@@ -13,6 +13,8 @@
 namespace bridge
 {
 
+const float ActiveMediaList::AudioParticipant::MIN_NOISE = 7;
+
 ActiveMediaList::AudioParticipant::AudioParticipant(const char* id)
     : maxRecentLevel(0.0),
       noiseLevel(50.0),
@@ -360,8 +362,7 @@ bool ActiveMediaList::removeVideoParticipant(const size_t endpointIdHash)
     return true;
 }
 
-// note that  zero level is mainly produced by muted participants. All unmuted produce non zero level.
-// nonZerolevelWindow thus means how long a participant has been unmuted.
+// note that zero level is mainly produced by muted participants. All unmuted produce non zero level.
 void ActiveMediaList::updateLevels(const uint64_t timestamp)
 {
     for (auto& audioParticipantEntry : _audioParticipants)
