@@ -173,7 +173,7 @@ void AudioForwarderReceiveJob::run()
             _engineMixer.mapSsrc2UserId(_ssrcContext.ssrc, c9UserId);
         }
 
-        _activeMediaList.onNewAudioLevel(_sender->getEndpointIdHash(),
+        _activeMediaList.onNewAudioLevel(_packet->endpointIdHash,
             audioLevel.valueOr(120),
             isPtt.isSet() && isPtt.get());
 
