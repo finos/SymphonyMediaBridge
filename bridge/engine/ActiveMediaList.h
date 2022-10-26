@@ -49,7 +49,7 @@ public:
         uint32_t activeTalkerSilenceThresholdDb);
 
     bool addAudioParticipant(const size_t endpointIdHash, const char* endpointId);
-    bool addBarbellAudioParticipant(const size_t endpointIdHash, const char* endpointId);
+    bool addBarbellAudioParticipant(const size_t endpointIdHash, const char* endpointId, float noiseLevel);
     bool removeAudioParticipant(const size_t endpointIdHash);
     bool addVideoParticipant(const size_t endpointIdHash,
         const SimulcastStream& simulcastStream,
@@ -284,7 +284,7 @@ private:
     void updateLevels(const uint64_t timestampMs);
     bool updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
-    void addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup);
+    void addToVideoRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup);
     void removeFromRewriteMap(size_t endpointIdHash);
 
     bool onAudioParticipantAdded(const size_t endpointIdHash, const char* endpointId);

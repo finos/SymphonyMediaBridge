@@ -90,7 +90,7 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
     }
 }
 
-bool ActiveMediaList::addBarbellAudioParticipant(const size_t endpointIdHash, const char* endpointId)
+bool ActiveMediaList::addBarbellAudioParticipant(const size_t endpointIdHash, const char* endpointId, float noiseLevel)
 {
 #if DEBUG
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
@@ -102,7 +102,11 @@ bool ActiveMediaList::addBarbellAudioParticipant(const size_t endpointIdHash, co
         return false;
     }
 
-    _audioParticipants.emplace(endpointIdHash, AudioParticipant(endpointId, false));
+    auto itPair = _audioParticipants.emplace(endpointIdHash, AudioParticipant(endpointId, false));
+    if (itPair.second)
+    {
+        itPair.first->second.noiseLevel = noiseLevel;
+    }
     return onAudioParticipantAdded(endpointIdHash, endpointId);
 }
 
@@ -264,7 +268,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
             ? secondarySimulcastStream.get().levels[0].ssrc
             : simulcastStream.levels[0].ssrc;
 
-        addToRewriteMap(endpointIdHash, simulcastGroup);
+        addToVideoRewriteMap(endpointIdHash, simulcastGroup);
         logger::info("%s %zu video mapped %u -> %u (%u %u)",
             _logId.c_str(),
             endpointId,
@@ -665,7 +669,7 @@ bool ActiveMediaList::updateActiveVideoList(const size_t endpointIdHash)
             return false;
         }
 
-        addToRewriteMap(endpointIdHash, simulcastGroup);
+        addToVideoRewriteMap(endpointIdHash, simulcastGroup);
     }
 
     const bool addResult = _activeVideoList.pushToTail(endpointIdHash);
@@ -879,6 +883,8 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
                     audioSsrcs.addElement(item.second);
                 }
 
+                audioEndpoint.addProperty("noise-level", audioStream->noiseLevel);
+
                 auto* neighbours = neighbourMembershipMap.getItem(item.first);
                 if (neighbours && !neighbours->memberships.empty())
                 {
@@ -895,7 +901,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
     return true;
 }
 
-void ActiveMediaList::addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup)
+void ActiveMediaList::addToVideoRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup)
 {
     logger::debug("add to video ssrcmap %zu", _logId.c_str(), endpointIdHash);
     _videoSsrcRewriteMap.emplace(endpointIdHash, simulcastGroup);
