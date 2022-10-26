@@ -189,16 +189,18 @@ private:
         class History
         {
         public:
-            void update(uint8_t level);
+            void update(uint8_t level, uint64_t timestamp);
             float average() const { return static_cast<float>(_totalLevel) / _levels.size(); }
             void fill(uint8_t level);
             bool allNonZero() const { return _nonZeroLevels == _levels.size(); }
+            uint64_t getUpdateTime() const { return _timestamp; }
 
         private:
             std::array<uint8_t, 5> _levels = {0};
             size_t _index = 0;
             uint32_t _totalLevel = 0;
             uint32_t _nonZeroLevels = 0;
+            uint64_t _timestamp = 0;
 
         } history;
 

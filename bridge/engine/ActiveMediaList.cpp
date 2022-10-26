@@ -32,14 +32,16 @@ ActiveMediaList::AudioParticipant::AudioParticipant(const char* id, float noiseL
     history.fill(noiseLevel);
 }
 
-void ActiveMediaList::AudioParticipant::History::update(uint8_t level)
+void ActiveMediaList::AudioParticipant::History::update(uint8_t level, uint64_t timestamp)
 {
     _index = (_index + 1) % _levels.size();
-    auto removedItem = _levels[_index];
 
+    const auto removedItem = _levels[_index];
     _levels[_index] = level;
 
-    _totalLevel += (level - removedItem);
+    _totalLevel += level;
+    _totalLevel -= removedItem;
+
     if (level > 0)
     {
         ++_nonZeroLevels;
@@ -49,6 +51,8 @@ void ActiveMediaList::AudioParticipant::History::update(uint8_t level)
     {
         --_nonZeroLevels;
     }
+
+    _timestamp = timestamp;
 }
 
 void ActiveMediaList::AudioParticipant::History::fill(uint8_t level)
@@ -366,9 +370,14 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
         // Decay old max level over time (assuming process function called on average every 10ms)
         audioParticipant.maxRecentLevel -=
             (audioParticipant.maxRecentLevel - audioParticipant.noiseLevel) * AudioParticipant::MAX_LEVEL_DECAY;
-        // Move old min level over time towards mean about 3dB per 3 seconds
-        audioParticipant.noiseLevel = std::max(audioParticipant.noiseLevel + AudioParticipant::NOISE_RAMPUP,
-            static_cast<float>(AudioParticipant::MIN_NOISE));
+
+        if (audioParticipant.history.allNonZero() &&
+            utils::Time::diffLT(audioParticipant.history.getUpdateTime(), timestamp, utils::Time::ms * 200))
+        {
+            // Move old min level over time towards mean about 3dB per 3 seconds
+            audioParticipant.noiseLevel = std::max(audioParticipant.noiseLevel + AudioParticipant::NOISE_RAMPUP,
+                static_cast<float>(AudioParticipant::MIN_NOISE));
+        }
     }
 
     for (AudioLevelEntry levelEntry; _incomingAudioLevels.pop(levelEntry);)
@@ -388,13 +397,13 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
         {
             audioParticipant.maxRecentLevel = 0; // muted
         }
-        audioParticipant.history.update(levelEntry.level);
+        audioParticipant.history.update(levelEntry.level, timestamp);
 
         if (audioParticipant.ptt)
         {
             audioParticipant.noiseLevel = 37;
         }
-        else if (levelEntry.level != 0 && audioParticipant.history.allNonZero())
+        else if (audioParticipant.history.allNonZero())
         {
             audioParticipant.noiseLevel = std::min(audioParticipant.noiseLevel, audioParticipant.history.average());
         }
