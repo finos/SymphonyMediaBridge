@@ -183,7 +183,6 @@ private:
         size_t index;
         size_t indexEndShortWindow;
 
-        int32_t totalLevelLongWindow;
         int32_t totalLevelShortWindow;
         int32_t nonZeroLevelsShortWindow;
         float maxRecentLevel;
@@ -279,6 +278,7 @@ private:
     uint64_t _lastRunTimestamp;
     uint64_t _lastChangeTimestamp;
     uint32_t _ssrcMapRevision;
+    uint32_t _transactionCounter;
 
     size_t rankSpeakers(float& currentDominantSpeakerScore);
     void updateLevels(const uint64_t timestampMs);

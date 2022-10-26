@@ -17,7 +17,6 @@ ActiveMediaList::AudioParticipant::AudioParticipant(const char* id, bool isLocal
     : levels({0}),
       index(lengthShortWindow - 1),
       indexEndShortWindow(0),
-      totalLevelLongWindow(0),
       totalLevelShortWindow(0),
       nonZeroLevelsShortWindow(0),
       maxRecentLevel(0.0),
@@ -59,7 +58,8 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
 #endif
       _lastRunTimestamp(0),
       _lastChangeTimestamp(0),
-      _ssrcMapRevision(0)
+      _ssrcMapRevision(0),
+      _transactionCounter(audioSsrcs[0])
 {
     assert(videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -325,11 +325,8 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
     {
         auto& participantLevels = participantLevelEntry.second;
         // Decay old max level over time (assuming process function called on average every 10ms)
-        // participantLevels.maxRecentLevel *= AudioParticipant::MAX_LEVEL_DECAY;
-        float averageLevelLongWindow =
-            static_cast<float>(participantLevels.totalLevelLongWindow) / participantLevels.levels.size();
         participantLevels.maxRecentLevel -=
-            (participantLevels.maxRecentLevel - averageLevelLongWindow) * AudioParticipant::MAX_LEVEL_DECAY;
+            (participantLevels.maxRecentLevel - participantLevels.noiseLevel) * AudioParticipant::MAX_LEVEL_DECAY;
         // Move old min level over time towards mean about 3dB per 3 seconds
         participantLevels.noiseLevel = participantLevels.noiseLevel + AudioParticipant::NOISE_RAMPUP;
         participantLevels.noiseLevel =
@@ -350,7 +347,6 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
         // Update the energy history
 
         participantLevels.index = (participantLevels.index + 1) % participantLevels.levels.size();
-        uint8_t levelLeavingLongWindow = participantLevels.levels[participantLevels.index];
         uint8_t levelLeavingShortWindow = participantLevels.levels[participantLevels.indexEndShortWindow];
         participantLevels.indexEndShortWindow =
             (participantLevels.indexEndShortWindow + 1) % participantLevels.levels.size();
@@ -358,7 +354,6 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
 
         // Update average level, max level, min level and number of non zero entries
 
-        participantLevels.totalLevelLongWindow += (levelEntry.level - levelLeavingLongWindow);
         participantLevels.totalLevelShortWindow += (levelEntry.level - levelLeavingShortWindow);
 
         participantLevels.maxRecentLevel =
@@ -832,6 +827,7 @@ bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>&
 {
     auto umm = json::writer::createObjectWriter(outMessage);
     umm.addProperty("type", "user-media-map");
+    umm.addProperty("msg-id", ++_transactionCounter);
 
     bool slidesAdded = false;
     if (!_videoSsrcRewriteMap.empty() || _videoScreenShareSsrcMapping.isSet())
