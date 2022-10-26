@@ -4324,7 +4324,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         }
     }
 
-    if (logger::_logLevel < logger::Level::DBG && audioMapRevision != _activeMediaList->getMapRevision())
+    if (logger::_logLevel >= logger::Level::DBG && audioMapRevision != _activeMediaList->getMapRevision())
     {
         _activeMediaList->logAudioList();
     }
