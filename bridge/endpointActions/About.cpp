@@ -1,6 +1,6 @@
 #include "ApiActions.h"
 #include "bridge/RequestLogger.h"
-#include "generated/git_version.h"
+#include "git_version.h"
 #include "utils/StringTokenizer.h"
 
 namespace bridge
