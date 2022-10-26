@@ -60,23 +60,36 @@ public:
         return *this;
     }
 
+    StringBuilder& append(const int32_t value)
+    {
+        char valueString[16];
+        auto count = std::snprintf(valueString, 16, "%d", value);
+
+        return append(valueString, count);
+    }
+
     StringBuilder& append(const uint32_t value)
     {
         char valueString[16];
-        std::snprintf(valueString, 16, "%u", value);
+        auto count = std::snprintf(valueString, 16, "%u", value);
 
-        auto remainingBytes = S - _offset;
-        const auto length = strnlen(valueString, S - _offset);
+        return append(valueString, count);
+    }
 
-        if (!checkLength(length))
-        {
-            return *this;
-        }
+    StringBuilder& append(const size_t value)
+    {
+        char valueString[24];
+        auto count = std::snprintf(valueString, 24, "%zu", value);
 
-        auto data = &_data[_offset];
-        std::strncpy(data, valueString, remainingBytes);
-        _offset += strnlen(valueString, remainingBytes);
-        return *this;
+        return append(valueString, count);
+    }
+
+    StringBuilder& append(const double value)
+    {
+        char valueString[24];
+        auto count = std::snprintf(valueString, 24, "%f", value);
+
+        return append(valueString, count);
     }
 
     std::string build() const { return std::string(_data); }

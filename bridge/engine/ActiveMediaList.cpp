@@ -438,7 +438,7 @@ void ActiveMediaList::logAudioList()
         }
         --count;
     }
-    logger::debug("audio list updated %s", _logId.c_str(), sb.get());
+    logger::debug("audio list updated\n%s", _logId.c_str(), sb.get());
 }
 
 // Algorithm for video switching:
