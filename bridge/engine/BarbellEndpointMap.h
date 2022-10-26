@@ -13,7 +13,7 @@ using BarbellEndpointIdMap = concurrency::MpmcHashmap32<size_t, EndpointIdString
 
 struct BarbellMapItem
 {
-    BarbellMapItem() : noiseLevel(0) { endpointId[0] = 0; }
+    BarbellMapItem() : noiseLevel(0), recentLevel(0) { endpointId[0] = 0; }
     explicit BarbellMapItem(const BarbellMapItem& rhs)
     {
         std::strcpy(endpointId, rhs.endpointId);
@@ -21,6 +21,7 @@ struct BarbellMapItem
         newSsrcs = rhs.newSsrcs;
         neighbours = rhs.neighbours;
         noiseLevel = rhs.noiseLevel;
+        recentLevel = rhs.recentLevel;
     }
 
     explicit BarbellMapItem(const char* endpointIdString) : noiseLevel(0) { std::strcpy(endpointId, endpointIdString); }
@@ -32,6 +33,7 @@ struct BarbellMapItem
         newSsrcs = rhs.newSsrcs;
         neighbours = rhs.neighbours;
         noiseLevel = rhs.noiseLevel;
+        recentLevel = rhs.recentLevel;
         return *this;
     }
 
@@ -58,6 +60,7 @@ struct BarbellMapItem
     memory::Array<uint32_t, 2> newSsrcs;
     engine::NeighbourMembershipArray neighbours;
     float noiseLevel;
+    float recentLevel;
 };
 
 } // namespace bridge

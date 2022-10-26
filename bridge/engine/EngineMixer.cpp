@@ -4097,6 +4097,11 @@ void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TMap& map)
             item.noiseLevel = endpoint["noise-level"].getFloat(0.0);
         }
 
+        if (endpoint.exists("level"))
+        {
+            item.noiseLevel = endpoint["level"].getFloat(0.0);
+        }
+
         if (endpoint.exists("neighbours"))
         {
             for (auto neighbour : endpoint["neighbours"].getArray())
@@ -4311,7 +4316,10 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
 
             audioStream->endpointIdHash.set(entry.first);
             audioStream->endpointId.set(item.endpointId);
-            _activeMediaList->addBarbellAudioParticipant(entry.first, item.endpointId, item.noiseLevel);
+            _activeMediaList->addBarbellAudioParticipant(entry.first,
+                item.endpointId,
+                item.noiseLevel,
+                item.recentLevel);
             if (!item.neighbours.empty())
             {
                 auto neighbourIt = _neighbourMemberships.emplace(entry.first, entry.first);
