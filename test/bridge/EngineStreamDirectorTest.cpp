@@ -1056,15 +1056,6 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_PinTarget_IsForwarded)
 
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 11));
 }
-/*
-TEST_F(EngineStreamDirectorTest, contentTypeSlidesNotInLastNIsNotUsedWithoutRecordingStreams)
-{
-    _engineStreamDirector->addParticipant(1,
-        makeSimulcastStream(1, 2, bridge::SimulcastStream::VideoContentType::SLIDES));
-    _engineStreamDirector->setUplinkEstimateKbps(1, 100000, 5 * utils::Time::sec);
-    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(1, 1, true, false, 0));
-}
-*/
 
 TEST_F(EngineStreamDirectorTest, highQualitySsrcDuringSlides_PinTarget_IsForwardedAsUnpinned)
 {
