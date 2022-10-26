@@ -12,7 +12,6 @@ TimerQueue::TimerQueue(size_t maxElements)
       _timeReference(utils::Time::getAbsoluteTime()),
       _thread([this] { this->run(); })
 {
-    _timers.reserve(256);
 }
 
 TimerQueue::~TimerQueue()
@@ -74,6 +73,7 @@ void TimerQueue::stop()
 
 void TimerQueue::run()
 {
+    _timers.reserve(256);
     concurrency::setThreadName("TimerQueue");
     TimerEntry entry;
     while (_running.load(std::memory_order::memory_order_relaxed))
