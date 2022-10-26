@@ -35,6 +35,11 @@ public:
         auto jobArea = _jobPool.allocate();
         if (!jobArea)
         {
+            if (needToRecover())
+            {
+                startProcessing();
+            }
+
             return false;
         }
         auto job = new (jobArea) JOB_TYPE(std::forward<U>(args)...);
