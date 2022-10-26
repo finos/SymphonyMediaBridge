@@ -158,6 +158,8 @@ public:
     void checkInvariant();
 #endif
 
+    void logAudioList();
+
 private:
     static const size_t INTERVAL_MS = 10;
     static const int32_t requiredConsecutiveWins = 3;
@@ -248,7 +250,7 @@ private:
     };
     using TActiveTalkersSnapshot = ActiveTalkersSnapshot<maxParticipants / 2>;
 
-    // Use 6 to accomodate 1 writing thread for "process" and up to 5 http threads.
+    // Use 6 to accommodate 1 writing thread for "process" and up to 5 http threads.
     concurrency::MpmcPublish<TActiveTalkersSnapshot, 6> _activeTalkerSnapshot;
 
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
@@ -292,8 +294,6 @@ private:
         const SimulcastStream& simulcastStream,
         const utils::Optional<SimulcastStream>& secondarySimulcastStream,
         const char* endpointId);
-
-    void logAudioList();
 };
 
 } // namespace bridge

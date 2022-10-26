@@ -4273,6 +4273,8 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         }
     }
 
+    const auto audioMapRevision = _activeMediaList->getMapRevision();
+
     // remove audio
     for (const auto& entry : audioSsrcs)
     {
@@ -4320,6 +4322,11 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
                 }
             }
         }
+    }
+
+    if (logger::_logLevel < logger::Level::DBG && audioMapRevision != _activeMediaList->getMapRevision())
+    {
+        _activeMediaList->logAudioList();
     }
 
     if (mapRevision != _activeMediaList->getMapRevision())
