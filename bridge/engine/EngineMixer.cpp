@@ -2748,14 +2748,14 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
 
     auto& bbTransport = barbell.transport;
     auto* mediaSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.audioRtpMap);
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.videoRtpMap);
     if (!mediaSsrcOutboundContext)
     {
         return;
     }
 
     auto* rtxSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.audioRtpMap);
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.videoFeedbackRtpMap);
     if (!rtxSsrcOutboundContext)
     {
         return;
