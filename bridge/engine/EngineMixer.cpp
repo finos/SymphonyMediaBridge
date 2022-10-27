@@ -3832,6 +3832,7 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     minUplinkEstimate =
         std::max(_config.slides.minBitrate.get(), std::min(minUplinkEstimate, getMinRemoteClientDownlinkBandwidth()));
 
+    uint32_t highQualityBitrate = 750;
     if (presenterSimulcastLevel)
     {
         const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
@@ -3851,7 +3852,27 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     }
     else
     {
+        highQualityBitrate = 8000;
         _engineStreamDirector->setSlidesSsrcAndBitrate(0, 0);
+    }
+
+    for (auto videoIt : _engineVideoStreams)
+    {
+        auto& videoStream = *videoIt.second;
+        if (3 == videoStream.simulcastStream.numLevels)
+        {
+
+            logger::info("setting high-res bitrate for ssrc %u, at %u",
+                _loggableId.c_str(),
+                videoStream.simulcastStream.levels[2].ssrc,
+                highQualityBitrate);
+
+            videoStream.transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(videoStream.transport,
+                videoStream.localSsrc,
+                videoStream.simulcastStream.levels[2].ssrc,
+                highQualityBitrate,
+                _sendAllocator);
+        }
     }
 }
 
