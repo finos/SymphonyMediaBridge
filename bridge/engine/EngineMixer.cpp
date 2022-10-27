@@ -1024,8 +1024,7 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
 
     if (dominantSpeakerChanged)
     {
-        const auto dominantSpeaker = _activeMediaList->getDominantSpeaker();
-        sendDominantSpeakerMessageToAll(dominantSpeaker);
+        sendDominantSpeakerMessageToAll();
         sendLastNListMessageToAll();
     }
 
@@ -3061,15 +3060,8 @@ void EngineMixer::sendLastNListMessageToAll()
 
 void EngineMixer::sendMessagesToNewDataStreams()
 {
-    const auto dominantSpeakerParticipant = _activeMediaList->getDominantSpeaker();
-    auto dominantSpeakerVideoStreamItr = _engineVideoStreams.find(dominantSpeakerParticipant);
-
     utils::StringBuilder<256> dominantSpeakerMessage;
-    if (dominantSpeakerVideoStreamItr != _engineVideoStreams.end())
-    {
-        api::DataChannelMessage::makeDominantSpeaker(dominantSpeakerMessage,
-            dominantSpeakerVideoStreamItr->second->endpointId);
-    }
+    _activeMediaList->makeDominantSpeakerMessage(dominantSpeakerMessage);
 
     utils::StringBuilder<1024> lastNListMessage;
     utils::StringBuilder<1024> userMediaMapMessage;
@@ -3232,21 +3224,15 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     }
 }
 
-void EngineMixer::sendDominantSpeakerMessageToAll(const size_t dominantSpeaker)
+void EngineMixer::sendDominantSpeakerMessageToAll()
 {
-    auto dominantSpeakerDataStreamItr = _engineDataStreams.find(dominantSpeaker);
-    if (dominantSpeakerDataStreamItr == _engineDataStreams.end())
-    {
-        return;
-    }
-
     utils::StringBuilder<256> dominantSpeakerMessage;
-    api::DataChannelMessage::makeDominantSpeaker(dominantSpeakerMessage,
-        dominantSpeakerDataStreamItr->second->endpointId);
+    _activeMediaList->makeDominantSpeakerMessage(dominantSpeakerMessage);
 
     for (auto dataStreamEntry : _engineDataStreams)
     {
         auto dataStream = dataStreamEntry.second;
+
         if (!dataStream->stream.isOpen() || !dataStream->hasSeenInitialSpeakerList)
         {
             continue;
@@ -3254,11 +3240,14 @@ void EngineMixer::sendDominantSpeakerMessageToAll(const size_t dominantSpeaker)
         dataStream->stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
     }
 
-    for (auto& recStreamPair : _engineRecordingStreams)
+    const auto dominantSpeaker = _activeMediaList->getDominantSpeaker();
+    auto* dataStream = _engineDataStreams.getItem(dominantSpeaker);
+    if (dataStream)
     {
-        sendDominantSpeakerToRecordingStream(*recStreamPair.second,
-            dominantSpeaker,
-            dominantSpeakerDataStreamItr->second->endpointId);
+        for (auto& recStreamPair : _engineRecordingStreams)
+        {
+            sendDominantSpeakerToRecordingStream(*recStreamPair.second, dominantSpeaker, dataStream->endpointId);
+        }
     }
 }
 

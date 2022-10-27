@@ -25,7 +25,7 @@ inline void makeEndpointMessage(utils::StringBuilder<2048>& outMessage,
     outMessage.append("}");
 }
 
-inline void makeDominantSpeakerChange(utils::StringBuilder<256>& outMessage, const std::string& endpointId)
+inline void makeDominantSpeakerChange(utils::StringBuilder<256>& outMessage, const char* endpointId)
 {
     outMessage.append("{\"colibriClass\":\"DominantSpeakerEndpointChangeEvent\", \"dominantSpeakerEndpoint\":\"");
     outMessage.append(endpointId);

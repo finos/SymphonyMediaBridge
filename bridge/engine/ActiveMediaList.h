@@ -83,6 +83,8 @@ public:
 
     inline size_t getDominantSpeaker() const { return _dominantSpeaker; }
 
+    void makeDominantSpeakerMessage(utils::StringBuilder<256>& outMessage);
+
     const std::map<size_t, ActiveTalker> getActiveTalkers() const;
 
     inline const concurrency::MpmcHashmap32<size_t, uint32_t>& getAudioSsrcRewriteMap() const

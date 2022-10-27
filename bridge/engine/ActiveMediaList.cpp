@@ -833,6 +833,20 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
     return true;
 }
 
+void ActiveMediaList::makeDominantSpeakerMessage(utils::StringBuilder<256>& outMessage)
+{
+    if (_dominantSpeaker == 0)
+    {
+        return;
+    }
+
+    auto* participant = _audioParticipants.getItem(_dominantSpeaker);
+    if (participant)
+    {
+        api::DataChannelMessage::makeDominantSpeaker(outMessage, participant->endpointId.c_str());
+    }
+}
+
 const std::map<size_t, ActiveTalker> ActiveMediaList::getActiveTalkers() const
 {
     std::map<size_t, ActiveTalker> result;
