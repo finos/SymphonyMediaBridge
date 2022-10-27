@@ -129,6 +129,7 @@ void AudioForwarderReceiveJob::run()
         return;
     }
 
+    bool silence = false;
     const auto rtpHeaderExtensions = rtpHeader->getExtensionHeader();
     if (rtpHeaderExtensions)
     {
@@ -156,7 +157,6 @@ void AudioForwarderReceiveJob::run()
             }
         }
 
-        bool silence = false;
         if (audioLevel.isSet())
         {
             silence = audioLevel.get() > _silenceThresholdLevel;
@@ -179,8 +179,12 @@ void AudioForwarderReceiveJob::run()
 
         if (silence)
         {
+            if (_ssrcContext.markNextPacket)
+            {
+                return;
+            }
+            // Let first silent packet through to clients and barbells
             _ssrcContext.markNextPacket = true;
-            return;
         }
     }
 
@@ -214,7 +218,7 @@ void AudioForwarderReceiveJob::run()
         decodeOpus(*_packet);
     }
 
-    if (_ssrcContext.markNextPacket)
+    if (_ssrcContext.markNextPacket && !silence)
     {
         rtpHeader->marker = 1;
         _ssrcContext.markNextPacket = false;

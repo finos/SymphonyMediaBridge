@@ -187,6 +187,10 @@ private:
             history.fill(level);
         }
 
+        float getScore() const { return std::max(0.0f, maxRecentLevel - noiseLevel); }
+        float getInstantScore() const { return std::max(0.0f, audioLevel - noiseLevel); }
+        void onNewLevel(uint8_t level, uint64_t timestamp);
+
         class History
         {
         public:
@@ -205,6 +209,7 @@ private:
 
         } history;
 
+        float audioLevel;
         float maxRecentLevel;
         float noiseLevel;
         bool ptt;
@@ -300,7 +305,7 @@ private:
     uint32_t _ssrcMapRevision;
     uint32_t _transactionCounter;
 
-    size_t rankSpeakers(float& currentDominantSpeakerScore);
+    size_t rankSpeakers();
     void updateLevels(const uint64_t timestampMs);
     bool updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);

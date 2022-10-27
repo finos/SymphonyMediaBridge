@@ -16,7 +16,8 @@ namespace bridge
 const float ActiveMediaList::AudioParticipant::MIN_NOISE = 7;
 
 ActiveMediaList::AudioParticipant::AudioParticipant(const char* id)
-    : maxRecentLevel(0.0),
+    : audioLevel(0.0),
+      maxRecentLevel(0.0),
       noiseLevel(50.0),
       ptt(false),
       endpointId(id),
@@ -25,13 +26,29 @@ ActiveMediaList::AudioParticipant::AudioParticipant(const char* id)
 }
 
 ActiveMediaList::AudioParticipant::AudioParticipant(const char* id, float noiseLevel, float recentLevel)
-    : maxRecentLevel(recentLevel),
+    : audioLevel(recentLevel),
+      maxRecentLevel(recentLevel),
       noiseLevel(noiseLevel),
       ptt(false),
       endpointId(id),
       isLocal(false)
 {
     history.fill(noiseLevel);
+}
+
+void ActiveMediaList::AudioParticipant::onNewLevel(uint8_t level, uint64_t timestamp)
+{
+    audioLevel = level;
+    if (level == 0)
+    {
+        maxRecentLevel = 0; // muted
+    }
+    else
+    {
+        maxRecentLevel = std::max(maxRecentLevel, static_cast<float>(level));
+    }
+
+    history.update(level, timestamp);
 }
 
 void ActiveMediaList::AudioParticipant::History::update(uint8_t level, uint64_t timestamp)
@@ -372,12 +389,19 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
         audioParticipant.maxRecentLevel -=
             (audioParticipant.maxRecentLevel - audioParticipant.noiseLevel) * AudioParticipant::MAX_LEVEL_DECAY;
 
-        if (audioParticipant.history.allNonZero() &&
-            utils::Time::diffLT(audioParticipant.history.getUpdateTime(), timestamp, utils::Time::ms * 200))
+        const bool audioOutage =
+            utils::Time::diffGT(audioParticipant.history.getUpdateTime(), timestamp, utils::Time::ms * 200);
+        if (audioParticipant.history.allNonZero() && !audioOutage)
         {
             // Move old min level over time towards mean about 3dB per 3 seconds
             audioParticipant.noiseLevel = std::max(audioParticipant.noiseLevel + AudioParticipant::NOISE_RAMPUP,
                 static_cast<float>(AudioParticipant::MIN_NOISE));
+        }
+
+        if (audioOutage)
+        {
+            audioParticipant.maxRecentLevel = 0; // assume muted
+            audioParticipant.audioLevel = 0;
         }
     }
 
@@ -391,14 +415,7 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
 
         auto& audioParticipant = participantLevelItr->second;
         audioParticipant.ptt = levelEntry.ptt;
-
-        audioParticipant.maxRecentLevel =
-            std::max(audioParticipant.maxRecentLevel, static_cast<float>(levelEntry.level));
-        if (levelEntry.level == 0)
-        {
-            audioParticipant.maxRecentLevel = 0; // muted
-        }
-        audioParticipant.history.update(levelEntry.level, timestamp);
+        audioParticipant.onNewLevel(levelEntry.level, timestamp);
 
         if (audioParticipant.ptt)
         {
@@ -413,10 +430,8 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
 
 // recently unmuted participants have some advantage because the score is higher as the
 // noise level is likely lower than unmuted.
-size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
+size_t ActiveMediaList::rankSpeakers()
 {
-    currentDominantSpeakerScore = 0;
-
     size_t speakerCount = 0;
     for (auto& audioParticipantEntry : _audioParticipants)
     {
@@ -426,12 +441,7 @@ size_t ActiveMediaList::rankSpeakers(float& currentDominantSpeakerScore)
             continue; // muted
         }
 
-        const float participantScore = std::max(0.0f, audioParticipant.maxRecentLevel - audioParticipant.noiseLevel);
-
-        if (audioParticipantEntry.first == _dominantSpeaker)
-        {
-            currentDominantSpeakerScore = participantScore;
-        }
+        const float participantScore = audioParticipant.getScore();
 
         _highestScoringSpeakers[speakerCount++] = AudioParticipantScore{audioParticipantEntry.first,
             participantScore,
@@ -508,12 +518,13 @@ void ActiveMediaList::process(const uint64_t timestamp,
 
     updateLevels(timestamp);
 
-    float dominantSpeakerScore = 0.0;
-    size_t speakerCount = rankSpeakers(dominantSpeakerScore);
+    size_t speakerCount = rankSpeakers();
     if (speakerCount == 0)
     {
         return;
     }
+
+    const auto* dominantSpeaker = _audioParticipants.getItem(_dominantSpeaker);
 
     memory::PartialSortExtractor<AudioParticipantScore> heap(_highestScoringSpeakers.begin(),
         _highestScoringSpeakers.begin() + speakerCount);
@@ -558,11 +569,14 @@ void ActiveMediaList::process(const uint64_t timestamp,
         _nominatedSpeaker = nominatedSpeaker.participant;
     }
 
+    const float dominantSpeakerInstantScore = dominantSpeaker ? dominantSpeaker->getInstantScore() : 0.0;
+    const float dominantSpeakerScore = dominantSpeaker ? dominantSpeaker->getScore() : 0.0;
     // switch at most every 2s
     // dominant must have stopped speaking or new speaker has persistently barged in for 2s
     if (nominatedSpeaker.participant != _dominantSpeaker &&
         utils::Time::diffGT(_dominationTimestamp, timestamp, minSpotlightDuration) &&
-        (utils::Time::diffGT(_nominationTimestamp, timestamp, minSpotlightDuration) || dominantSpeakerScore < 3.0))
+        (utils::Time::diffGT(_nominationTimestamp, timestamp, minSpotlightDuration) ||
+            dominantSpeakerInstantScore < 3.0))
     {
         logger::info("process dominant speaker switch %lu (score %f) -> %lu (score %f)",
             _logId.c_str(),
