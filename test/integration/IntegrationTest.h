@@ -108,6 +108,7 @@ struct IntegrationTest : public ::testing::Test
 
     memory::PacketPoolAllocator _sendAllocator;
     memory::AudioPacketPoolAllocator _audioAllocator;
+    std::unique_ptr<jobmanager::TimerQueue> _timers;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
     transport::SslDtls* _sslDtls;

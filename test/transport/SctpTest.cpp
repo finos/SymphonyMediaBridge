@@ -229,6 +229,7 @@ struct SctpTransportTest : public ::testing::Test
 
     memory::PacketPoolAllocator _sendAllocator;
     std::unique_ptr<config::Config> _config;
+    std::unique_ptr<jobmanager::TimerQueue> _timers;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<memory::PacketPoolAllocator> _mainAllocator;
     std::unique_ptr<transport::SslDtls> _sslDtls;
@@ -245,7 +246,8 @@ struct SctpTransportTest : public ::testing::Test
     SctpTransportTest()
         : _sendAllocator(memory::packetPoolSize, "TransportTest"),
           _config(nullptr),
-          _jobManager(std::make_unique<jobmanager::JobManager>()),
+          _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
+          _jobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
           _mainAllocator(std::make_unique<memory::PacketPoolAllocator>(1024, "SctpTest")),
           _sslDtls(nullptr),
           _srtpClientFactory(nullptr),

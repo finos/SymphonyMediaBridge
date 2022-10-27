@@ -375,7 +375,9 @@ class IceTestInfra : public transport::RtcePoll::IEventListener
 {
 public:
     IceTestInfra(const ice::IceConfig& config)
-        : session(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr),
+        : timers(4096),
+          jobManager(timers),
+          session(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr),
           _socketService(transport::createRtcePoll()),
           _socketCount(0),
           _inboundPackets(32){};
@@ -455,6 +457,7 @@ public:
         }
     }
 
+    jobmanager::TimerQueue timers;
     jobmanager::JobManager jobManager;
     ice::IceSession session;
     std::unique_ptr<transport::RtcePoll> _socketService;

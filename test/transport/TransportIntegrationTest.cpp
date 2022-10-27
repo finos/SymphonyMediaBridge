@@ -11,7 +11,8 @@ using namespace testing;
 TransportIntegrationTest::TransportIntegrationTest()
     : _sendAllocator(memory::packetPoolSize, "TransportTest"),
       _audioAllocator(memory::packetPoolSize, "TransportTestAudio"),
-      _jobManager(std::make_unique<jobmanager::JobManager>()),
+      _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
+      _jobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
       _mainPoolAllocator(std::make_unique<memory::PacketPoolAllocator>(4096, "testMain")),
       _sslDtls(std::make_unique<transport::SslDtls>()),
       _srtpClientFactory(std::make_unique<transport::SrtpClientFactory>(*_sslDtls)),
