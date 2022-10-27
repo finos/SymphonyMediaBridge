@@ -1019,12 +1019,12 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
     bool dominantSpeakerChanged = false;
     bool videoMapChanged = false;
     bool audioMapChanged = false;
+    auto mapRevision = _activeMediaList->getMapRevision();
     _activeMediaList->process(engineIterationStartTimestamp, dominantSpeakerChanged, videoMapChanged, audioMapChanged);
 
     if (dominantSpeakerChanged)
     {
-        const auto dominantSpeaker = _activeMediaList->getDominantSpeaker();
-        sendDominantSpeakerMessageToAll(dominantSpeaker);
+        sendDominantSpeakerMessageToAll();
         sendLastNListMessageToAll();
     }
 
@@ -1032,7 +1032,7 @@ void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTim
     {
         sendUserMediaMapMessageToAll();
     }
-    if (audioMapChanged || videoMapChanged)
+    if (mapRevision != _activeMediaList->getMapRevision())
     {
         sendUserMediaMapMessageOverBarbells();
     }
@@ -1340,7 +1340,7 @@ void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
 {
     // TODO we should also check if this ssrc is in use, mixed clients are present, or it needs to be forwarded over
     // barbell. If not, we can drop this packet.
-    if (_engineAudioStreams.size() > 0)
+    if (!_engineAudioStreams.empty())
     {
         sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(std::move(packet),
             sender,
@@ -2747,14 +2747,14 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
 
     auto& bbTransport = barbell.transport;
     auto* mediaSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.audioRtpMap);
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.videoRtpMap);
     if (!mediaSsrcOutboundContext)
     {
         return;
     }
 
     auto* rtxSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.audioRtpMap);
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.videoFeedbackRtpMap);
     if (!rtxSsrcOutboundContext)
     {
         return;
@@ -3060,15 +3060,8 @@ void EngineMixer::sendLastNListMessageToAll()
 
 void EngineMixer::sendMessagesToNewDataStreams()
 {
-    const auto dominantSpeakerParticipant = _activeMediaList->getDominantSpeaker();
-    auto dominantSpeakerVideoStreamItr = _engineVideoStreams.find(dominantSpeakerParticipant);
-
     utils::StringBuilder<256> dominantSpeakerMessage;
-    if (dominantSpeakerVideoStreamItr != _engineVideoStreams.end())
-    {
-        api::DataChannelMessage::makeDominantSpeaker(dominantSpeakerMessage,
-            dominantSpeakerVideoStreamItr->second->endpointId);
-    }
+    _activeMediaList->makeDominantSpeakerMessage(dominantSpeakerMessage);
 
     utils::StringBuilder<1024> lastNListMessage;
     utils::StringBuilder<1024> userMediaMapMessage;
@@ -3231,21 +3224,15 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     }
 }
 
-void EngineMixer::sendDominantSpeakerMessageToAll(const size_t dominantSpeaker)
+void EngineMixer::sendDominantSpeakerMessageToAll()
 {
-    auto dominantSpeakerDataStreamItr = _engineDataStreams.find(dominantSpeaker);
-    if (dominantSpeakerDataStreamItr == _engineDataStreams.end())
-    {
-        return;
-    }
-
     utils::StringBuilder<256> dominantSpeakerMessage;
-    api::DataChannelMessage::makeDominantSpeaker(dominantSpeakerMessage,
-        dominantSpeakerDataStreamItr->second->endpointId);
+    _activeMediaList->makeDominantSpeakerMessage(dominantSpeakerMessage);
 
     for (auto dataStreamEntry : _engineDataStreams)
     {
         auto dataStream = dataStreamEntry.second;
+
         if (!dataStream->stream.isOpen() || !dataStream->hasSeenInitialSpeakerList)
         {
             continue;
@@ -3253,11 +3240,14 @@ void EngineMixer::sendDominantSpeakerMessageToAll(const size_t dominantSpeaker)
         dataStream->stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
     }
 
-    for (auto& recStreamPair : _engineRecordingStreams)
+    const auto dominantSpeaker = _activeMediaList->getDominantSpeaker();
+    auto* dataStream = _engineDataStreams.getItem(dominantSpeaker);
+    if (dataStream)
     {
-        sendDominantSpeakerToRecordingStream(*recStreamPair.second,
-            dominantSpeaker,
-            dominantSpeakerDataStreamItr->second->endpointId);
+        for (auto& recStreamPair : _engineRecordingStreams)
+        {
+            sendDominantSpeakerToRecordingStream(*recStreamPair.second, dominantSpeaker, dataStream->endpointId);
+        }
     }
 }
 
@@ -4030,11 +4020,19 @@ void EngineMixer::removeBarbell(size_t idHash)
             decommissionInboundContext(simulcastLevel.ssrc);
             decommissionInboundContext(simulcastLevel.feedbackSsrc);
         }
+        if (videoStream.endpointIdHash.isSet())
+        {
+            _activeMediaList->removeVideoParticipant(videoStream.endpointIdHash.get());
+        }
     }
 
     for (auto& audioStream : barbell->audioStreams)
     {
         decommissionInboundContext(audioStream.ssrc);
+        if (audioStream.endpointIdHash.isSet())
+        {
+            _activeMediaList->removeAudioParticipant(audioStream.endpointIdHash.get());
+        }
     }
 
     barbell->transport.getJobQueue().addJob<RemoveBarbellJob>(*this, barbell->transport, barbell->idHash);
@@ -4081,6 +4079,16 @@ void copyToBarbellMapItemArray(utils::SimpleJsonArray& endpointArray, TMap& map)
         for (auto ssrc : endpoint["ssrcs"].getArray())
         {
             item.newSsrcs.push_back(ssrc.getInt<uint32_t>(0));
+        }
+
+        if (endpoint.exists("noise-level"))
+        {
+            item.noiseLevel = endpoint["noise-level"].getFloat(0.0);
+        }
+
+        if (endpoint.exists("level"))
+        {
+            item.noiseLevel = endpoint["level"].getFloat(0.0);
         }
 
         if (endpoint.exists("neighbours"))
@@ -4259,6 +4267,8 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         }
     }
 
+    const auto audioMapRevision = _activeMediaList->getMapRevision();
+
     // remove audio
     for (const auto& entry : audioSsrcs)
     {
@@ -4295,7 +4305,10 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
 
             audioStream->endpointIdHash.set(entry.first);
             audioStream->endpointId.set(item.endpointId);
-            _activeMediaList->addBarbellAudioParticipant(entry.first, item.endpointId);
+            _activeMediaList->addBarbellAudioParticipant(entry.first,
+                item.endpointId,
+                item.noiseLevel,
+                item.recentLevel);
             if (!item.neighbours.empty())
             {
                 auto neighbourIt = _neighbourMemberships.emplace(entry.first, entry.first);
@@ -4306,6 +4319,11 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
                 }
             }
         }
+    }
+
+    if (logger::_logLevel >= logger::Level::DBG && audioMapRevision != _activeMediaList->getMapRevision())
+    {
+        _activeMediaList->logAudioList();
     }
 
     if (mapRevision != _activeMediaList->getMapRevision())

@@ -49,7 +49,10 @@ public:
         uint32_t activeTalkerSilenceThresholdDb);
 
     bool addAudioParticipant(const size_t endpointIdHash, const char* endpointId);
-    bool addBarbellAudioParticipant(const size_t endpointIdHash, const char* endpointId);
+    bool addBarbellAudioParticipant(const size_t endpointIdHash,
+        const char* endpointId,
+        float noiseLevel,
+        float recentLevel);
     bool removeAudioParticipant(const size_t endpointIdHash);
     bool addVideoParticipant(const size_t endpointIdHash,
         const SimulcastStream& simulcastStream,
@@ -78,7 +81,9 @@ public:
         bool& outUserMediaMapChanged,
         bool& outAudioMapChanged);
 
-    inline size_t getDominantSpeaker() const { return _dominantSpeakerId; }
+    inline size_t getDominantSpeaker() const { return _dominantSpeaker; }
+
+    void makeDominantSpeakerMessage(utils::StringBuilder<256>& outMessage);
 
     const std::map<size_t, ActiveTalker> getActiveTalkers() const;
 
@@ -158,39 +163,58 @@ public:
     void checkInvariant();
 #endif
 
+    void logAudioList();
+
 private:
     static const size_t INTERVAL_MS = 10;
-    static const int32_t requiredConsecutiveWins = 3;
     // Only allow a new switch after 2s
-    static const uint64_t maxSwitchDominantSpeakerEvery = 2000 * utils::Time::ms;
-    // 100 entries corresponding to 2s for the case of 20ms packets
-    static const size_t numLevels = 100;
-    // Short Window (5 packets, typically 100ms) used to estimate noise level
-    static const size_t lengthShortWindow = 5;
+    static const uint64_t minSpotlightDuration = 2000 * utils::Time::ms;
 
     struct AudioParticipant
     {
-        explicit AudioParticipant(const char* id, bool isLocal);
+        AudioParticipant(const char* id);
+        AudioParticipant(const char* id, float noiseLevel, float recentLevel);
 
         static constexpr float MAX_LEVEL_DECAY = 0.006f;
         // Ramp up last seen noise level by 1 every second if no new minimum
         static constexpr float NOISE_RAMPUP = 0.01f;
         // Min should not be below -120 dBov
+        static const float MIN_NOISE;
 
-        static const uint8_t MIN_NOISE = 7;
+        void setNoiseLevel(float level)
+        {
+            noiseLevel = level;
+            history.fill(level);
+        }
 
-        std::array<uint8_t, numLevels> levels;
-        size_t index;
-        size_t indexEndShortWindow;
+        float getScore() const { return std::max(0.0f, maxRecentLevel - noiseLevel); }
+        float getInstantScore() const { return std::max(0.0f, audioLevel - noiseLevel); }
+        void onNewLevel(uint8_t level, uint64_t timestamp);
 
-        int32_t totalLevelLongWindow;
-        int32_t totalLevelShortWindow;
-        int32_t nonZeroLevelsShortWindow;
+        class History
+        {
+        public:
+            void update(uint8_t level, uint64_t timestamp);
+            float average() const { return static_cast<float>(_totalLevel) / _levels.size(); }
+            void fill(uint8_t level);
+            bool allNonZero() const { return _nonZeroLevels == _levels.size(); }
+            uint64_t getUpdateTime() const { return _timestamp; }
+
+        private:
+            std::array<uint8_t, 5> _levels = {0};
+            size_t _index = 0;
+            uint32_t _totalLevel = 0;
+            uint32_t _nonZeroLevels = 0;
+            uint64_t _timestamp = 0;
+
+        } history;
+
+        float audioLevel;
         float maxRecentLevel;
         float noiseLevel;
         bool ptt;
         EndpointIdString endpointId;
-        bool isLocal;
+        const bool isLocal;
     };
 
     struct AudioLevelEntry
@@ -249,7 +273,7 @@ private:
     };
     using TActiveTalkersSnapshot = ActiveTalkersSnapshot<maxParticipants / 2>;
 
-    // Use 6 to accomodate 1 writing thread for "process" and up to 5 http threads.
+    // Use 6 to accommodate 1 writing thread for "process" and up to 5 http threads.
     concurrency::MpmcPublish<TActiveTalkersSnapshot, 6> _activeTalkerSnapshot;
 
     concurrency::MpmcQueue<AudioLevelEntry> _incomingAudioLevels;
@@ -257,10 +281,9 @@ private:
     concurrency::MpmcHashmap32<size_t, uint32_t> _audioSsrcRewriteMap;
     memory::List<size_t, 32> _activeAudioList;
 
-    std::atomic_size_t _dominantSpeakerId;
-    size_t _prevWinningDominantSpeaker;
+    std::atomic_size_t _dominantSpeaker;
+    size_t _nominatedSpeaker;
     std::array<AudioParticipantScore, maxParticipants> _highestScoringSpeakers;
-    int32_t _consecutiveDominantSpeakerWins;
 
     concurrency::MpmcHashmap32<size_t, VideoParticipant> _videoParticipants;
     concurrency::MpmcQueue<api::SimulcastGroup> _videoSsrcs;
@@ -277,14 +300,16 @@ private:
 #endif
 
     uint64_t _lastRunTimestamp;
-    uint64_t _lastChangeTimestamp;
+    uint64_t _dominationTimestamp;
+    uint64_t _nominationTimestamp;
     uint32_t _ssrcMapRevision;
+    uint32_t _transactionCounter;
 
-    size_t rankSpeakers(float& currentDominantSpeakerScore);
+    size_t rankSpeakers();
     void updateLevels(const uint64_t timestampMs);
     bool updateActiveAudioList(size_t endpointIdHash);
     bool updateActiveVideoList(const size_t endpointIdHash);
-    void addToRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup);
+    void addToVideoRewriteMap(size_t endpointIdHash, api::SimulcastGroup simulcastGroup);
     void removeFromRewriteMap(size_t endpointIdHash);
 
     bool onAudioParticipantAdded(const size_t endpointIdHash, const char* endpointId);
