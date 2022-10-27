@@ -162,8 +162,7 @@ bool ActiveMediaList::addBarbellAudioParticipant(const size_t endpointIdHash,
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
     utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
-    const auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
-    if (audioParticipantsItr != _audioParticipants.end())
+    if (_audioParticipants.contains(endpointIdHash))
     {
         return false;
     }
@@ -178,9 +177,7 @@ bool ActiveMediaList::addAudioParticipant(const size_t endpointIdHash, const cha
     utils::ScopedReentrancyBlocker blocker(_reentrancyCounter);
     utils::ScopedInvariantChecker<ActiveMediaList> invariantChecker(*this);
 #endif
-
-    const auto audioParticipantsItr = _audioParticipants.find(endpointIdHash);
-    if (audioParticipantsItr != _audioParticipants.end())
+    if (_audioParticipants.contains(endpointIdHash))
     {
         return false;
     }
