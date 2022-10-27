@@ -1,5 +1,6 @@
 #include "ApiActions.h"
 #include "bridge/RequestLogger.h"
+#include "git_version.h"
 #include "utils/StringTokenizer.h"
 
 namespace bridge
@@ -12,7 +13,8 @@ httpd::Response handleAbout(ActionContext* context,
     const auto nextToken = ::utils::StringTokenizer::tokenize(token.next, token.remainingLength, '/');
     if (utils::StringTokenizer::isEqual(nextToken, "version"))
     {
-        httpd::Response response(httpd::StatusCode::OK, "{}");
+        std::string versionString = "{\"revision\":\"" + std::string(kGitHash) + "\"}";
+        httpd::Response response(httpd::StatusCode::OK, versionString);
         response._headers["Content-type"] = "text/json";
         return response;
     }
