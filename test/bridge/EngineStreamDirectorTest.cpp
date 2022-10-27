@@ -1071,16 +1071,18 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrcDuringSlides_PinTarget_IsForward
     _engineStreamDirector->pin(2, 1);
     _engineStreamDirector->pin(3, 1);
 
+    _engineStreamDirector->setSlidesSsrcAndBitrate(14, 1000);
+
     // Though 1st pinned #2, it receives mid quality, since slides are present.
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 11));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 9));
 
     // Though 2nd pinned #1, it receives mid quality, since slides are present.
-    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
 
     // Though 3rd pinned #1, it receives mid quality, since slides are present.
-    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(3, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(3, 5));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(3, 3));
 }
 
