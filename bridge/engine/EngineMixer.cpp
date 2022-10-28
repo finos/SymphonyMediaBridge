@@ -1931,31 +1931,55 @@ void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
 SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHash,
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
     const uint32_t ssrc,
-    const RtpMap& rtpMap,
-    const bool isForwardSsrc)
+    const RtpMap& rtpMap)
+{
+    auto ssrcOutboundContextItr = ssrcOutboundContexts.find(ssrc);
+    if (ssrcOutboundContextItr != ssrcOutboundContexts.cend())
+    {
+        return &ssrcOutboundContextItr->second;
+    }
+
+    auto emplaceResult = ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap);
+
+    if (!emplaceResult.second && emplaceResult.first == ssrcOutboundContexts.end())
+    {
+        logger::error("Failed to create outbound context for ssrc %u, endpointIdHash %zu",
+            _loggableId.c_str(),
+            ssrc,
+            endpointIdHash);
+        return nullptr;
+    }
+
+    logger::info("Created new outbound context for stream, endpointIdHash %zu, ssrc %u",
+        _loggableId.c_str(),
+        endpointIdHash,
+        ssrc);
+    return &emplaceResult.first->second;
+}
+
+SsrcOutboundContext* EngineMixer::obtainOutboundForwardSsrcContext(size_t endpointIdHash,
+    concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
+    const uint32_t ssrc,
+    const RtpMap& rtpMap)
 {
     auto ssrcOutboundContextItr = ssrcOutboundContexts.find(ssrc);
     if (ssrcOutboundContextItr != ssrcOutboundContexts.cend())
     {
         if (ssrcOutboundContextItr->second.markedForDeletion)
         {
-            assert(isForwardSsrc);
             return nullptr;
         }
 
         return &ssrcOutboundContextItr->second;
     }
 
-    if (isForwardSsrc)
+    // In this case most likely both input stream and ssrcOutboundContext have been removed already
+    // and we are processing an old packet. If we create an new ssrcOutboundContext it would be leaked
+    // until the end of outbound stream
+    const bool isInboundDecommissioned = !_ssrcInboundContexts.contains(ssrc);
+    if (isInboundDecommissioned)
     {
-        // In this case most likely both input stream and ssrcOutboundContext have been removed already
-        // and we are processing an old packet. If we create an new ssrcOutboundContext it would be leaked
-        // until the end of outbound stream
-        const bool isInboundDecommissioned = !_ssrcInboundContexts.contains(ssrc);
-        if (isInboundDecommissioned)
-        {
-            return nullptr;
-        }
+        return nullptr;
     }
 
     auto emplaceResult = ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap);
@@ -2369,6 +2393,7 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         {
             auto ssrc = packetInfo.inboundContext()->ssrc;
             const bool ssrcRewrite = audioStream->ssrcRewrite;
+            SsrcOutboundContext* ssrcOutboundContext;
             if (ssrcRewrite)
             {
                 const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
@@ -2378,14 +2403,18 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
                     continue;
                 }
                 ssrc = rewriteMapItr->second;
+                ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
+                    audioStream->ssrcOutboundContexts,
+                    ssrc,
+                    audioStream->rtpMap);
             }
-
-            const bool isForwardSsrc = !ssrcRewrite;
-            auto* ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
-                audioStream->ssrcOutboundContexts,
-                ssrc,
-                audioStream->rtpMap,
-                isForwardSsrc);
+            else
+            {
+                ssrcOutboundContext = obtainOutboundForwardSsrcContext(audioStream->endpointIdHash,
+                    audioStream->ssrcOutboundContexts,
+                    ssrc,
+                    audioStream->rtpMap);
+            }
 
             if (!ssrcOutboundContext)
             {
@@ -2470,14 +2499,9 @@ void EngineMixer::forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             continue;
         }
         uint32_t ssrc = rewriteMapItr->second;
-        static constexpr bool ssrcRewrite = true;
 
-        const bool isForwardSsrc = !ssrcRewrite;
-        auto* ssrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
-            barbell.ssrcOutboundContexts,
-            ssrc,
-            barbell.audioRtpMap,
-            isForwardSsrc);
+        auto* ssrcOutboundContext =
+            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, ssrc, barbell.audioRtpMap);
 
         if (!ssrcOutboundContext)
         {
@@ -2650,14 +2674,8 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             targetSsrc = (*rewriteMapping)[simulcastLevel].main;
         }
 
-        static constexpr bool ssrcRewrite = true;
-
-        const bool isForwardSsrc = !ssrcRewrite;
-        auto* ssrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
-            barbell.ssrcOutboundContexts,
-            targetSsrc,
-            barbell.videoRtpMap,
-            isForwardSsrc);
+        auto* ssrcOutboundContext =
+            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, targetSsrc, barbell.videoRtpMap);
 
         if (!ssrcOutboundContext)
         {
@@ -2723,6 +2741,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
 
         uint32_t ssrc = 0;
         const bool ssrcRewrite = videoStream->ssrcRewrite;
+        SsrcOutboundContext* ssrcOutboundContext = nullptr;
         if (ssrcRewrite)
         {
             const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
@@ -2754,19 +2773,21 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
                 }
                 ssrc = rewriteMapItr->second[0].main;
             }
+
+            ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->endpointIdHash,
+                videoStream->ssrcOutboundContexts,
+                ssrc,
+                videoStream->rtpMap);
         }
         else
         {
             // non rewrite recipients gets the video sent on same ssrc as level 0.
             ssrc = packetInfo.inboundContext()->defaultLevelSsrc;
+            ssrcOutboundContext = obtainOutboundForwardSsrcContext(videoStream->endpointIdHash,
+                videoStream->ssrcOutboundContexts,
+                ssrc,
+                videoStream->rtpMap);
         }
-
-        const bool isForwardSsrc = !ssrcRewrite;
-        auto* ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->endpointIdHash,
-            videoStream->ssrcOutboundContexts,
-            ssrc,
-            videoStream->rtpMap,
-            isForwardSsrc);
 
         if (!ssrcOutboundContext)
         {
@@ -2952,25 +2973,17 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     const auto mediaSsrc = rtcpFeedback.mediaSsrc.get();
     _activeMediaList->getFeedbackSsrc(mediaSsrc, rtxSsrc);
 
-    static constexpr bool isForwardSsrc = false;
-
     auto& bbTransport = barbell.transport;
-    auto* mediaSsrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
-        barbell.ssrcOutboundContexts,
-        mediaSsrc,
-        barbell.audioRtpMap,
-        isForwardSsrc);
+    auto* mediaSsrcOutboundContext =
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.audioRtpMap);
 
     if (!mediaSsrcOutboundContext)
     {
         return;
     }
 
-    auto* rtxSsrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
-        barbell.ssrcOutboundContexts,
-        rtxSsrc,
-        barbell.audioRtpMap,
-        isForwardSsrc);
+    auto* rtxSsrcOutboundContext =
+        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.audioRtpMap);
 
     if (!rtxSsrcOutboundContext)
     {
@@ -3046,12 +3059,21 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         return;
     }
 
-    const bool isForwardSsrc = !ssrcRewrite;
-    auto rtxSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->endpointIdHash,
-        rtcpSenderVideoStream->ssrcOutboundContexts,
-        feedbackSsrc,
-        rtcpSenderVideoStream->feedbackRtpMap,
-        isForwardSsrc);
+    SsrcOutboundContext* rtxSsrcOutboundContext = nullptr;
+    if (ssrcRewrite)
+    {
+        rtxSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->endpointIdHash,
+            rtcpSenderVideoStream->ssrcOutboundContexts,
+            feedbackSsrc,
+            rtcpSenderVideoStream->feedbackRtpMap);
+    }
+    else
+    {
+        rtxSsrcOutboundContext = obtainOutboundForwardSsrcContext(rtcpSenderVideoStream->endpointIdHash,
+            rtcpSenderVideoStream->ssrcOutboundContexts,
+            feedbackSsrc,
+            rtcpSenderVideoStream->feedbackRtpMap);
+    }
 
     if (!rtxSsrcOutboundContext)
     {
@@ -3180,12 +3202,10 @@ inline void EngineMixer::processAudioStreams()
             }
         }
 
-        static constexpr bool isForwardSsrc = false;
         auto* ssrcContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
             audioStream->ssrcOutboundContexts,
             audioStream->localSsrc,
-            audioStream->rtpMap,
-            isForwardSsrc);
+            audioStream->rtpMap);
 
         if (ssrcContext)
         {
@@ -4196,13 +4216,10 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
         return;
     }
 
-    static constexpr bool isForwardSsrc = false;
-
     auto* outboundContext = obtainOutboundSsrcContext(engineVideoStream.endpointIdHash,
         engineVideoStream.ssrcOutboundContexts,
         engineVideoStream.localSsrc,
-        engineVideoStream.feedbackRtpMap,
-        isForwardSsrc);
+        engineVideoStream.feedbackRtpMap);
 
     if (outboundContext)
     {

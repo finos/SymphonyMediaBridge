@@ -488,8 +488,11 @@ private:
     SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
         concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
         const uint32_t ssrc,
-        const RtpMap& rtpMap,
-        const bool isForwardSsrc);
+        const RtpMap& rtpMap);
+    SsrcOutboundContext* obtainOutboundForwardSsrcContext(size_t endpointIdHash,
+        concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
+        const uint32_t ssrc,
+        const RtpMap& rtpMap);
 
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
     utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);

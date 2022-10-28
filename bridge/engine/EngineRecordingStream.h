@@ -48,4 +48,3 @@ struct EngineRecordingStream
 };
 
 } // namespace bridge
-;
