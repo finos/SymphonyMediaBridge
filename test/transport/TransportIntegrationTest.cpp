@@ -84,6 +84,7 @@ void TransportIntegrationTest::TearDown()
     _transportFactory1.reset();
     _transportFactory2.reset();
     _network->stop();
+    _timers->stop();
     _jobManager->stop();
     for (auto& wt : _workerThreads)
     {

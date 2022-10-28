@@ -49,6 +49,7 @@ struct RecordingTransportTest : public testing::Test
 
     void TearDown() override
     {
+        _timers->stop();
         _jobManager->stop();
         _rtcePoll->stop();
         for (auto& wt : _workerThreads)
