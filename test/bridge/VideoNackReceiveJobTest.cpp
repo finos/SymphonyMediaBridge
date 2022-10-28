@@ -20,7 +20,8 @@ class VideoNackReceiveJobTest : public ::testing::Test
 {
     void SetUp() override
     {
-        _jobManager = std::make_unique<jobmanager::JobManager>();
+        _timers = std::make_unique<jobmanager::TimerQueue>(4096 * 8);
+        _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
         _jobQueue = std::make_unique<jobmanager::JobQueue>(*_jobManager);
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
@@ -50,6 +51,7 @@ class VideoNackReceiveJobTest : public ::testing::Test
     }
 
 protected:
+    std::unique_ptr<jobmanager::TimerQueue> _timers;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<jobmanager::JobQueue> _jobQueue;
     std::unique_ptr<DummyRtcTransport> _transport;

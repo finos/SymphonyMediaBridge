@@ -4,6 +4,7 @@
 #include "bridge/Bridge.h"
 #include "config/Config.h"
 #include "emulator/TimeTurner.h"
+#include "jobmanager/TimerQueue.h"
 #include "test/integration/emulator/Httpd.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/EndpointFactory.h"
@@ -32,6 +33,7 @@ struct RealTimeTest : public ::testing::Test
 
     memory::PacketPoolAllocator _sendAllocator;
     memory::AudioPacketPoolAllocator _audioAllocator;
+    std::unique_ptr<jobmanager::TimerQueue> _timerQueue;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
     std::unique_ptr<transport::SslDtls> _sslDtls;

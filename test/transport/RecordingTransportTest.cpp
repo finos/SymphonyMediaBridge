@@ -26,6 +26,7 @@ using namespace testing;
 struct RecordingTransportTest : public testing::Test
 {
     unique_ptr<config::Config> _config;
+    std::unique_ptr<jobmanager::TimerQueue> _timers;
     unique_ptr<jobmanager::JobManager> _jobManager;
     unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
     unique_ptr<RtcePoll> _rtcePoll;
@@ -33,7 +34,8 @@ struct RecordingTransportTest : public testing::Test
 
     RecordingTransportTest()
         : _config(make_unique<config::Config>()),
-          _jobManager(make_unique<JobManager>()),
+          _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
+          _jobManager(make_unique<JobManager>(*_timers)),
           _mainPoolAllocator(make_unique<memory::PacketPoolAllocator>(4096 * 32, "testMain")),
           _rtcePoll(createRtcePoll())
     {

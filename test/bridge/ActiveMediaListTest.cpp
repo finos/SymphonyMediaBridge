@@ -85,7 +85,8 @@ private:
             _videoPinSsrcs.push_back(api::SsrcPair({i, i + 100}));
         }
 
-        _jobManager = std::make_unique<jobmanager::JobManager>();
+        _timers = std::make_unique<jobmanager::TimerQueue>(4096 * 8);
+        _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
         _jobQueue = std::make_unique<jobmanager::JobQueue>(*_jobManager);
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
@@ -125,6 +126,7 @@ protected:
     std::vector<api::SimulcastGroup> _videoSsrcs;
     std::vector<api::SsrcPair> _videoPinSsrcs;
 
+    std::unique_ptr<jobmanager::TimerQueue> _timers;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<jobmanager::JobQueue> _jobQueue;
     std::unique_ptr<DummyRtcTransport> _transport;
@@ -239,6 +241,7 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
     timestamp += 200;
     _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     EXPECT_TRUE(dominantSpeakerChanged);
+    EXPECT_EQ(_activeMediaList->getDominantSpeaker(), 1);
 
     for (auto i = 0; i < 199; ++i)
     {
@@ -256,7 +259,7 @@ TEST_F(ActiveMediaListTest, maxOneSwitchEveryTwoSeconds)
 
     _activeMediaList->onNewAudioLevel(participant1, 96, false);
     _activeMediaList->onNewAudioLevel(participant2, 64, false);
-    timestamp += 11;
+    timestamp += 500;
     _activeMediaList->process(timestamp * utils::Time::ms, dominantSpeakerChanged, videoMapChanged, _audioMapChanged);
     EXPECT_TRUE(dominantSpeakerChanged);
 

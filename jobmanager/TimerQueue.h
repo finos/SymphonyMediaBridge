@@ -5,20 +5,20 @@
 namespace jobmanager
 {
 class JobManager;
-class Job;
+class MultiStepJob;
 
 // thread safe
 class TimerQueue
 {
 public:
-    TimerQueue(JobManager& jobManager, size_t maxElements);
+    TimerQueue(size_t maxElements);
     ~TimerQueue();
 
-    bool addTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, Job* job);
-    bool addTimer(uint32_t groupId, uint64_t timeoutNs, Job* job, uint32_t& newId);
+    bool addTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, MultiStepJob& job, JobManager& jobManager);
+    bool addTimer(uint32_t groupId, uint64_t timeoutNs, MultiStepJob& job, JobManager& jobManager, uint32_t& newId);
     void abortTimer(uint32_t groupId, uint32_t id);
     void abortTimers(uint32_t groupId);
-    bool replaceTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, Job* job);
+    bool replaceTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, MultiStepJob& job, JobManager& jobManager);
     void stop();
 
 private:
@@ -27,15 +27,17 @@ private:
         uint64_t endTime; // ns
         uint32_t id;
         uint32_t groupId;
-        Job* job;
+        MultiStepJob* job;
+        JobManager* jobManager;
 
         TimerEntry() : endTime(0), id(0), groupId(0), job(nullptr) {}
 
-        TimerEntry(uint64_t endTime, uint32_t id, uint32_t groupId, Job* jobItem)
+        TimerEntry(uint64_t endTime, uint32_t id, uint32_t groupId, MultiStepJob* jobItem, JobManager* jobManager)
             : endTime(endTime),
               id(id),
               groupId(groupId),
-              job(jobItem)
+              job(jobItem),
+              jobManager(jobManager)
         {
         }
 
@@ -66,7 +68,6 @@ private:
     bool popTimer(TimerEntry& entry);
     uint64_t getInternalTime();
 
-    JobManager& _jobManager;
     std::vector<TimerEntry> _timers; // std::heap
     concurrency::MpmcQueue<ChangeTimer> _newTimers;
     std::atomic_uint32_t _idCounter;

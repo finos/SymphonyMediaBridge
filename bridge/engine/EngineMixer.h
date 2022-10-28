@@ -411,7 +411,7 @@ private:
     void sendLastNListMessageToAll();
     void sendMessagesToNewDataStreams();
     void updateBandwidthFloor();
-    void sendDominantSpeakerMessageToAll(const size_t dominantSpeaker);
+    void sendDominantSpeakerMessageToAll();
     void sendUserMediaMapMessage(const size_t endpointIdHash);
     void sendUserMediaMapMessageToAll();
     void sendUserMediaMapMessageOverBarbells();

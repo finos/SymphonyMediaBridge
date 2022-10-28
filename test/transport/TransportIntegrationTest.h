@@ -29,6 +29,7 @@ struct TransportIntegrationTest : public ::testing::Test
     memory::AudioPacketPoolAllocator _audioAllocator;
     config::Config _config1;
     config::Config _config2;
+    std::unique_ptr<jobmanager::TimerQueue> _timers;
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<memory::PacketPoolAllocator> _mainPoolAllocator;
     std::unique_ptr<transport::SslDtls> _sslDtls;

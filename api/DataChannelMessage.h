@@ -33,7 +33,7 @@ inline void makeEndpointMessage(utils::StringBuilder<2048>& outMessage,
 #endif
 }
 
-inline void makeDominantSpeaker(utils::StringBuilder<256>& outMessage, const std::string& endpointId)
+inline void makeDominantSpeaker(utils::StringBuilder<256>& outMessage, const char* endpointId)
 {
 #if ENABLE_LEGACY_API
     legacyapi::DataChannelMessage::makeDominantSpeakerChange(outMessage, endpointId);
