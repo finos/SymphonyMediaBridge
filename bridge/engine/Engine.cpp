@@ -27,6 +27,7 @@ Engine::Engine(const config::Config& config)
       _running(true),
       _pendingCommands(1024),
       _tickCounter(0),
+      _threadQueue(1024),
       _thread([this] { this->run(); })
 {
     if (concurrency::setPriority(_thread, concurrency::Priority::RealTime))
@@ -189,6 +190,8 @@ void Engine::run()
             mixerEntry->_data->run(engineIterationStartTimestamp);
         }
 
+        processTreadQueue(128);
+
         if (++_tickCounter % STATS_UPDATE_TICKS == 0)
         {
             uint64_t pollTime = utils::Time::getAbsoluteTime();
@@ -218,7 +221,19 @@ void Engine::run()
                 assert(mixerEntry->_data);
                 mixerEntry->_data->forwardPackets(utils::Time::getAbsoluteTime());
             }
+
             toSleep = pacer.timeToNextTick(utils::Time::getAbsoluteTime());
+            if (toSleep > 0)
+            {
+                static constexpr size_t maxTasksToProcessPerCycle = 16;
+                bool allTasksProcessed = false;
+                do
+                {
+                    allTasksProcessed = processTreadQueue(maxTasksToProcessPerCycle);
+                    toSleep = pacer.timeToNextTick(utils::Time::getAbsoluteTime());
+                } while (toSleep > 0 && allTasksProcessed);
+            }
+
             if (toSleep > 0)
             {
                 utils::Time::nanoSleep(
@@ -226,6 +241,26 @@ void Engine::run()
             }
         }
     }
+}
+
+bool Engine::processTreadQueue(size_t maxTasksToProcess)
+{
+    const size_t tasksToProcess = std::min(_threadQueue.size(), maxTasksToProcess);
+
+    size_t processedTasks = 0;
+    for (; processedTasks < tasksToProcess; ++processedTasks)
+    {
+        utils::Function task;
+        if (!_threadQueue.pop(task))
+        {
+            --processedTasks;
+            break;
+        }
+
+        task();
+    }
+
+    return processedTasks == maxTasksToProcess;
 }
 
 void Engine::pushCommand(EngineCommand::Command&& command)

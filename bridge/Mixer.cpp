@@ -53,7 +53,7 @@ void logTransportPacketLoss(const std::string& endpointId, transport::RtcTranspo
 
         logger::info("EndpointId %s %s, outbound ssrc %u, packets %u"
                      ", last sent seq %u, last received %u, reported loss count %u, initial RTP timestamp %u, RTP "
-                     "timestamp %u, brutto octets sent: %lu",
+                     "timestamp %u, brutto octets sent: %" PRIu64,
             mixerId,
             endpointId.c_str(),
             transport.getLoggableId().c_str(),
@@ -342,7 +342,8 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         return false;
     }
 
-    logger::info("Created bundle transport, endpointId %s, endpointIdHash %zu, transport %s (%p), ice controlling %c",
+    logger::info("Created bundle transport, endpointId %s, endpointIdHash %" PRIu64
+                 ", transport %s (%p), ice controlling %c",
         _loggableId.c_str(),
         endpointId.c_str(),
         endpointIdHash,

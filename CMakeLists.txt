@@ -579,7 +579,8 @@ set(TEST_FILES
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/VideoNackReceiveJobTest.cpp
     test/bridge/DummyRtcTransport.h
-    test/utils/LogSpamTest.cpp)
+    test/utils/LogSpamTest.cpp
+    test/utils/FunctionTest.cpp)
 
 
 set(CMAKE_TEST_DIRECTORY "${CMAKE_BINARY_DIR}/test")

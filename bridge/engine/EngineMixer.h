@@ -8,6 +8,7 @@
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "concurrency/MpmcHashmap.h"
+#include "concurrency/SynchronizationContext.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/Map.h"
 #include "memory/PacketPoolAllocator.h"
@@ -83,6 +84,7 @@ public:
 
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
+        const concurrency::SynchronizationContext& engineSyncContext,
         EngineMessageListener& messageListener,
         const uint32_t localVideoSsrc,
         const config::Config& config,
@@ -174,6 +176,8 @@ public:
         const uint32_t extendedSequenceNumber);
     void onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet);
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
+    void onOutboundContextFinalized(size_t ownerEndpointHash, uint32_t ssrc, uint32_t feedbackSsrc, bool isVideo);
+    void onRecordingOutboundContextFinalized(size_t recordingStreamIdHash, uint32_t ssrc);
     void internalRemoveBarbell(size_t idHash);
     void internalRemoveInboundSsrc(uint32_t ssrc);
     // --
@@ -305,6 +309,7 @@ private:
     logger::LoggableId _loggableId;
 
     jobmanager::JobManager& _jobManager;
+    concurrency::SynchronizationContext _engineSyncContext;
     EngineMessageListener& _messageListener;
 
     concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
@@ -416,6 +421,7 @@ private:
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream);
 
     void restoreDirectorStreamActiveState(EngineVideoStream& videoStream, const SimulcastStream& simulcastStream);
+    void markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream);
     void markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
         const uint32_t ssrc,
         const uint32_t feedbackSsrc);
@@ -480,6 +486,10 @@ private:
         const uint64_t timestamp);
 
     SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
+        concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
+        const uint32_t ssrc,
+        const RtpMap& rtpMap);
+    SsrcOutboundContext* obtainOutboundForwardSsrcContext(size_t endpointIdHash,
         concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
         const uint32_t ssrc,
         const RtpMap& rtpMap);

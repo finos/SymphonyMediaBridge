@@ -17,6 +17,7 @@
 #include "transport/IceJob.h"
 #include "transport/SctpJob.h"
 #include "transport/ice/IceSerialize.h"
+#include "utils/Function.h"
 #include "utils/SocketAddress.h"
 #include "utils/StdExtensions.h"
 #include <arpa/inet.h>
@@ -67,40 +68,6 @@ private:
     uint64_t _timestamp;
 
     void (TransportImpl::*_receiveMethod)(Endpoint&, const SocketAddress&, memory::UniquePacket packet, uint64_t);
-};
-
-class TcpConnected : public jobmanager::Job
-{
-public:
-    TcpConnected(TransportImpl& transport,
-        std::shared_ptr<Endpoint> endpoint,
-        const SocketAddress& source,
-        memory::UniquePacket packet)
-        : _transport(transport),
-          _endpoint(endpoint),
-          _source(source),
-          _packet(std::move(packet))
-    {
-    }
-
-    void run() override { _transport.internalIceTcpConnect(_endpoint, _source, std::move(_packet)); }
-
-private:
-    TransportImpl& _transport;
-    std::shared_ptr<Endpoint> _endpoint;
-    const SocketAddress _source;
-    memory::UniquePacket _packet;
-};
-
-class UnregisterEndpointsJob : public jobmanager::CountedJob
-{
-public:
-    UnregisterEndpointsJob(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
-
-    void run() override { _transport.internalUnregisterEndpoints(); }
-
-private:
-    TransportImpl& _transport;
 };
 
 class IceDisconnectJob : public jobmanager::Job
@@ -238,19 +205,6 @@ private:
     memory::UniquePacket _packet;
 };
 
-// must be serialized after set Ice and set Dtls
-// otherwise transport will not know when we are connected and may start connect too early
-class ConnectJob : public jobmanager::CountedJob
-{
-public:
-    ConnectJob(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
-
-    void run() override { _transport.doConnect(); }
-
-private:
-    TransportImpl& _transport;
-};
-
 class SctpSendJob : public jobmanager::CountedJob
 {
     struct SctpDataChunk
@@ -345,17 +299,6 @@ private:
     jobmanager::JobQueue& _jobQueue;
     sctp::SctpAssociation& _sctpAssociation;
     memory::UniquePacket _packet;
-    TransportImpl& _transport;
-};
-
-class ConnectSctpJob : public jobmanager::CountedJob
-{
-public:
-    ConnectSctpJob(TransportImpl& transport) : CountedJob(transport.getJobCounter()), _transport(transport) {}
-
-    void run() override { _transport.doConnectSctp(); }
-
-private:
     TransportImpl& _transport;
 };
 
@@ -769,7 +712,7 @@ void TransportImpl::stop()
     }
     _isInitialized = false;
 
-    _jobQueue.addJob<UnregisterEndpointsJob>(*this);
+    _jobQueue.post(_jobCounter, [this]() { internalUnregisterEndpoints(); });
 }
 
 void TransportImpl::internalUnregisterEndpoints()
@@ -1050,7 +993,10 @@ void TransportImpl::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
 {
     if (_rtpIceSession && _isRunning)
     {
-        if (!_jobQueue.addJob<TcpConnected>(*this, endpoint, source, std::move(packet)))
+        const bool posted = _jobQueue.post(_jobCounter,
+            utils::bind(&TransportImpl::internalIceTcpConnect, this, endpoint, source, utils::moveParam(packet)));
+
+        if (!posted)
         {
             logger::error("job queue full ICE, TCP connect", _loggableId.c_str());
         }
@@ -1755,7 +1701,9 @@ bool TransportImpl::isConnected()
 
 void TransportImpl::connect()
 {
-    _jobQueue.addJob<ConnectJob>(*this);
+    // must be serialized after set Ice and set Dtls
+    // otherwise transport will not know when we are connected and may start connect too early
+    _jobQueue.post(_jobCounter, [this]() { doConnect(); });
 }
 
 void TransportImpl::doConnect()
@@ -2150,7 +2098,7 @@ bool TransportImpl::sendSctp(const uint16_t streamId,
 
 void TransportImpl::connectSctp()
 {
-    _jobQueue.addJob<ConnectSctpJob>(*this);
+    _jobQueue.post(_jobCounter, [this]() { doConnectSctp(); });
 }
 
 void TransportImpl::doConnectSctp()

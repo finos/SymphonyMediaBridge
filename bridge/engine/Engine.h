@@ -4,6 +4,7 @@
 #include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
+#include "concurrency/SynchronizationContext.h"
 #include "config/Config.h"
 #include "memory/List.h"
 #include "utils/Trackers.h"
@@ -29,6 +30,11 @@ public:
 
     EngineStats::EngineStats getStats();
 
+    concurrency::SynchronizationContext getSynchronizationContext()
+    {
+        return concurrency::SynchronizationContext(_threadQueue);
+    }
+
 private:
     static const size_t maxMixers = 4096;
     static const uint32_t STATS_UPDATE_TICKS = 200;
@@ -43,7 +49,12 @@ private:
     concurrency::MpmcPublish<EngineStats::EngineStats, 4> _stats;
     uint32_t _tickCounter;
 
+    concurrency::MpmcQueue<utils::Function> _threadQueue;
+
     std::thread _thread; // must be last member
+
+    /* @return true if max tasks number were reached */
+    bool processTreadQueue(size_t maxTasksToProcess);
 
     void addMixer(EngineCommand::Command& nextCommand);
     void removeMixer(EngineCommand::Command& nextCommand);

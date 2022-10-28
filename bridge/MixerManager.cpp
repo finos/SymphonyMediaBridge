@@ -113,6 +113,7 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
     auto engineMixerEmplaceResult = _engineMixers.emplace(id,
         std::make_unique<EngineMixer>(id,
             _jobManager,
+            _engine.getSynchronizationContext(),
             *this,
             localVideoSsrc,
             _config,

@@ -35,6 +35,11 @@ public:
         auto jobArea = _jobPool.allocate();
         if (!jobArea)
         {
+            if (needToRecover())
+            {
+                startProcessing();
+            }
+
             return false;
         }
         auto job = new (jobArea) JOB_TYPE(std::forward<U>(args)...);
@@ -74,6 +79,18 @@ public:
         {
             sema.wait();
         }
+    }
+
+    template <class Callable>
+    bool post(Callable&& callable)
+    {
+        return addJob<CallableJob<Callable>>(std::forward<Callable>(callable));
+    }
+
+    template <class Callable>
+    bool post(std::atomic_uint32_t& jobsCounter, Callable&& callable)
+    {
+        return addJob<CallableCountedJob<Callable>>(jobsCounter, std::forward<Callable>(callable));
     }
 
     JobManager& getJobManager() { return _jobManager; }

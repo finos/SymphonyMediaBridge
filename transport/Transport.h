@@ -1,12 +1,7 @@
 #pragma once
 
-#include "jobmanager/JobManager.h"
+#include "jobmanager/JobQueue.h"
 #include "memory/PacketPoolAllocator.h"
-
-namespace jobmanager
-{
-class JobQueue;
-}
 
 namespace transport
 {
@@ -37,6 +32,12 @@ public:
     virtual void connect() = 0;
     virtual jobmanager::JobQueue& getJobQueue() = 0;
     virtual void protectAndSend(memory::UniquePacket packet) = 0;
+
+    template <class Callable>
+    bool postOnQueue(Callable&& callableFunction)
+    {
+        return getJobQueue().post(getJobCounter(), std::forward<Callable>(callableFunction));
+    }
 };
 
 } // namespace transport

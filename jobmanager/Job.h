@@ -48,4 +48,46 @@ private:
     utils::ScopedIncrement _jobsCounterIncrement;
 };
 
+/**
+Generic callable. The only restriction is that needs to implement operator()().
+This is has some advantages over give a utils::function.
+
+We can use the direct type returned by utils::bind which creates one less level of indirection as the result is a final
+type and does not need to invoke more virtual methods We can use lambda functions directly. The lambda function itself
+does not created dynamic memory (dynamic memory can happens when we transform the lambda on std::function).
+*/
+template <class Callable>
+class CallableJob final : public Job
+{
+public:
+    explicit CallableJob(const Callable& callable) : _callable(callable) {}
+    explicit CallableJob(Callable&& callable) : _callable(std::move(callable)) {}
+
+    void run() final { _callable(); }
+
+private:
+    Callable _callable;
+};
+
+template <class Callable>
+class CallableCountedJob : public CountedJob
+{
+public:
+    explicit CallableCountedJob(std::atomic_uint32_t& jobsCounter, const Callable& callable)
+        : CountedJob(jobsCounter),
+          _callable(callable)
+    {
+    }
+    explicit CallableCountedJob(std::atomic_uint32_t& jobsCounter, Callable&& callable)
+        : CountedJob(jobsCounter),
+          _callable(std::move(callable))
+    {
+    }
+
+    void run() final { _callable(); }
+
+private:
+    Callable _callable;
+};
+
 } // namespace jobmanager
