@@ -357,6 +357,7 @@ private:
     uint32_t _minUplinkEstimate;
 
     uint64_t _lastRecordingAckProcessed;
+    bool _slidesPresent;
 
     uint32_t getMinRemoteClientDownlinkBandwidth() const;
     void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;

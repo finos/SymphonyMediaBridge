@@ -288,7 +288,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _hasSentTimeout(false),
       _probingVideoStreams(false),
       _minUplinkEstimate(0),
-      _lastRecordingAckProcessed(utils::Time::getAbsoluteTime())
+      _lastRecordingAckProcessed(utils::Time::getAbsoluteTime()),
+      _slidesPresent(0)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -3832,8 +3833,8 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     minUplinkEstimate =
         std::max(_config.slides.minBitrate.get(), std::min(minUplinkEstimate, getMinRemoteClientDownlinkBandwidth()));
 
-    uint32_t highQualityBitrate = 750;
-    if (presenterSimulcastLevel)
+    const bool slidesPresent = presenterSimulcastLevel;
+    if (slidesPresent)
     {
         const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
 
@@ -3852,28 +3853,45 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     }
     else
     {
-        highQualityBitrate = 8000;
         _engineStreamDirector->setSlidesSsrcAndBitrate(0, 0);
     }
 
     for (auto videoIt : _engineVideoStreams)
     {
         auto& videoStream = *videoIt.second;
+        const uint32_t highQualityBitrate = slidesPresent ? 750 : 8000;
+
         if (3 == videoStream.simulcastStream.numLevels)
         {
-
+            const auto& highResSsrc = videoStream.simulcastStream.levels[2].ssrc;
             logger::info("setting high-res bitrate for ssrc %u, at %u",
                 _loggableId.c_str(),
-                videoStream.simulcastStream.levels[2].ssrc,
+                highResSsrc,
                 highQualityBitrate);
 
             videoStream.transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(videoStream.transport,
                 videoStream.localSsrc,
-                videoStream.simulcastStream.levels[2].ssrc,
+                highResSsrc,
                 highQualityBitrate,
                 _sendAllocator);
+
+            // WebRTC's incorrect implementation of TMBBR leads assigned bitrate to be
+            // used for all members of the simulcast group, instead of the single layer.
+            // That, in turn, leads to high res layer being switched on sometimes for a
+            // short burst of frames. SFU detects constant swithcing on and off as "unstable"
+            // behaviour and disables such layer forever. To prevent that side effect, we
+            // reset "inactiveTransitionCount" when switching slides off.
+            if (_slidesPresent && !slidesPresent)
+            {
+                auto inboundSsrcContext = _ssrcInboundContexts.getItem(highResSsrc);
+                if (inboundSsrcContext)
+                {
+                    inboundSsrcContext->makeReady();
+                }
+            }
         }
     }
+    _slidesPresent = slidesPresent;
 }
 
 void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
