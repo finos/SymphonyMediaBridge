@@ -50,6 +50,29 @@ void getFeedbackControlInfo(const RtcpFeedback* rtcpFeedback,
     outBlp = static_cast<uint16_t>(feedbackControlInfo[2]) << 8 | static_cast<uint16_t>(feedbackControlInfo[3]);
 }
 
+size_t getNackPacketCount(const RtcpFeedback* rtcpFeedback, const size_t numFeedbackControlInfos)
+{
+    size_t count = 0;
+    for (size_t i = 0; i < numFeedbackControlInfos; ++i)
+    {
+        uint16_t pid = 0;
+        uint16_t blp = 0;
+
+        getFeedbackControlInfo(rtcpFeedback, i, numFeedbackControlInfos, pid, blp);
+        ++count;
+        while (blp)
+        {
+            if (blp & 1)
+            {
+                ++count;
+            }
+            blp >>= 1;
+        }
+    }
+
+    return count;
+}
+
 uint64_t RtcpRembFeedback::getBitrate() const
 {
     uint32_t exponent = _bitrate[0] >> 2;

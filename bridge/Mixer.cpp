@@ -168,21 +168,6 @@ Mixer::Mixer(std::string id,
       _ssrcGenerator(ssrcGenerator),
       _useGlobalPort(useGlobalPort)
 {
-    utils::StringBuilder<1024> b;
-    b.append("slides ");
-    b.append(_videoSsrcs[0][0].main);
-    b.append(" pins");
-    for (const auto& pinSsrc : videoPinSsrcs)
-    {
-        b.append(" ");
-        b.append(pinSsrc.main);
-    }
-
-    logger::info("id=%s, served by engine mixer %s, %s",
-        _loggableId.c_str(),
-        _id.c_str(),
-        engineMixer.getLoggableId().c_str(),
-        b.build().c_str());
 }
 
 void Mixer::markForDeletion()

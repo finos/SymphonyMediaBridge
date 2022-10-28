@@ -384,6 +384,7 @@ private:
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
         const rtp::RtcpHeader& rtcpPacket,
         uint64_t timestamp);
+
     void processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
         const rtp::RtcpFeedback& rtcpFeedback,
         const uint64_t timestamp);
@@ -485,6 +486,10 @@ private:
         transport::RtcTransport* sender,
         const uint32_t payloadType,
         const uint64_t timestamp);
+    SsrcInboundContext* emplaceBarbellInboundSsrcContext(const uint32_t ssrc,
+        transport::RtcTransport* sender,
+        const uint32_t payloadType,
+        const uint64_t timestamp);
 
     SsrcOutboundContext* obtainOutboundSsrcContext(size_t endpointIdHash,
         concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
@@ -496,7 +501,7 @@ private:
         const RtpMap& rtpMap);
 
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
-    utils::Optional<uint32_t> findMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);
+    utils::Optional<uint32_t> findBarbellMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);
     // --
 };
 

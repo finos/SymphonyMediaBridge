@@ -839,6 +839,13 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     {
         rembReady = true; // force REMB to allow for high receive rate
     }
+    if ((rtpHeader->sequenceNumber % 50) == 0)
+    {
+        logger::debug("!!! received RTP ssrc %u, seq %u",
+            _loggableId.c_str(),
+            rtpHeader->ssrc.get(),
+            rtpHeader->sequenceNumber.get());
+    }
 
     if (utils::Time::diffGE(_rtcp.lastSendTime, timestamp, utils::Time::ms * 100) || rembReady)
     {
@@ -1587,6 +1594,15 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
     {
         _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
     }
+
+    if ((rtpHeader->sequenceNumber % 50) == 0)
+    {
+        logger::debug("!!! sent RTP ssrc %u, seq %u",
+            _loggableId.c_str(),
+            rtpHeader->ssrc.get(),
+            rtpHeader->sequenceNumber.get());
+    }
+
     doProtectAndSend(timestamp, std::move(packet), _peerRtpPort, _selectedRtp);
 }
 

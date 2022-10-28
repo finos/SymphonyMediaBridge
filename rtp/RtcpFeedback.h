@@ -30,6 +30,7 @@ enum TransportLayerFeedbackType
 
 RtcpFeedback* createPLI(void* buffer, const uint32_t fromSsrc, const uint32_t aboutSsrc);
 size_t getNumFeedbackControlInfos(const RtcpFeedback* rtcpFeedback);
+size_t getNackPacketCount(const RtcpFeedback* rtcpFeedback, const size_t numFeedbackControlInfos);
 
 void getFeedbackControlInfo(const RtcpFeedback* rtcpFeedback,
     const size_t index,
