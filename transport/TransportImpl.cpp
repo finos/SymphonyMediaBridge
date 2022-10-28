@@ -994,11 +994,7 @@ void TransportImpl::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
     if (_rtpIceSession && _isRunning)
     {
         const bool posted = _jobQueue.post(_jobCounter,
-            utils::bind(&TransportImpl::internalIceTcpConnect,
-                this,
-                endpoint,
-                source,
-                utils::rvalueParam(std::move(packet))));
+            utils::bind(&TransportImpl::internalIceTcpConnect, this, endpoint, source, utils::moveParam(packet)));
 
         if (!posted)
         {

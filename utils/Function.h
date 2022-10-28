@@ -287,10 +287,9 @@ private:
 };
 
 template <class T>
-auto rvalueParam(T&& value)
+auto moveParam(T&& value)
 {
-    static_assert(std::is_rvalue_reference<T&&>::value, "value must be an rvalue reference");
-    return RValueWrapper<T>(std::move(value));
+    return RValueWrapper<std::remove_reference_t<T>>(std::move(value));
 }
 
 template <class Func, class... Args>
