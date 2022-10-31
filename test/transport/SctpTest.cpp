@@ -289,6 +289,7 @@ struct SctpTransportTest : public ::testing::Test
         _testPairs.clear();
         _transportFactory.reset();
         _network->stop();
+        _timers->stop();
         _jobManager->stop();
 
         for (auto& wt : _workerThreads)

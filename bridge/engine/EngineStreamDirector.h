@@ -475,7 +475,10 @@ public:
 
         const auto pinMapItr = _pinMap.find(toEndpointIdHash);
         const bool fromPinnedEndpoint = pinMapItr != _pinMap.end() && isSsrcFromParticipant(pinMapItr->second, ssrc);
-        const auto assignedQuality = (fromPinnedEndpoint ? viewer->pinQualityLevel : viewer->unpinQualityLevel);
+
+        // In case slides are used - limit video resolution to save CPU on recipients.
+        const auto assignedQuality =
+            (fromPinnedEndpoint && 0 == _slidesBitrateKbps) ? viewer->pinQualityLevel : viewer->unpinQualityLevel;
 
         size_t fromEndpointId = 0;
         const auto quality = getCurrentQualityAndEndpointId(ssrc, fromEndpointId);

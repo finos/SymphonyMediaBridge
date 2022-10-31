@@ -1057,6 +1057,35 @@ TEST_F(EngineStreamDirectorTest, highQualitySsrc_PinTarget_IsForwarded)
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 11));
 }
 
+TEST_F(EngineStreamDirectorTest, highQualitySsrcDuringSlides_PinTarget_IsForwardedAsUnpinned)
+{
+    addActiveVideoSender(1, 1);
+    addActiveVideoSender(2, 7);
+    addActiveVideoSender(3, 13);
+
+    _engineStreamDirector->addParticipant(4,
+        makeSimulcastStream(14, 15, bridge::SimulcastStream::VideoContentType::SLIDES));
+    _engineStreamDirector->setUplinkEstimateKbps(4, 100000, 5 * utils::Time::sec);
+
+    _engineStreamDirector->pin(1, 2);
+    _engineStreamDirector->pin(2, 1);
+    _engineStreamDirector->pin(3, 1);
+
+    _engineStreamDirector->setSlidesSsrcAndBitrate(14, 1000);
+
+    // Though 1st pinned #2, it receives mid quality, since slides are present.
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(1, 11));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(1, 9));
+
+    // Though 2nd pinned #1, it receives mid quality, since slides are present.
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+
+    // Though 3rd pinned #1, it receives mid quality, since slides are present.
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(3, 5));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(3, 3));
+}
+
 TEST_F(EngineStreamDirectorTest, lowQualitySsrc_HasNoPinTarget_UnderKbpsLimit_IsNotForwarded)
 {
     addActiveVideoSender(1, 1);

@@ -297,6 +297,7 @@ struct RtcTransportTest : public testing::TestWithParam<std::tuple<uint32_t, boo
         _transportFactory.reset();
         _testPairs.clear();
         _network->stop();
+        _timers->stop();
         _jobManager->stop();
         for (auto& wt : _workerThreads)
         {
