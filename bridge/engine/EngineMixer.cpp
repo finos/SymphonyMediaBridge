@@ -289,7 +289,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _probingVideoStreams(false),
       _minUplinkEstimate(0),
       _lastRecordingAckProcessed(utils::Time::getAbsoluteTime()),
-      _slidesPresent(0)
+      _slidesPresent(false)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
