@@ -4175,8 +4175,8 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     minUplinkEstimate =
         std::max(_config.slides.minBitrate.get(), std::min(minUplinkEstimate, getMinRemoteClientDownlinkBandwidth()));
 
-    const bool slidesPresent = presenterSimulcastLevel;
-    if (slidesPresent)
+    // Local presenter. Sending TMBBR to restrict slides.
+    if (presenterStream)
     {
         const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
 
@@ -4197,6 +4197,9 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     {
         _engineStreamDirector->setSlidesSsrcAndBitrate(0, 0);
     }
+
+    // Any presenter (local or remote). Sending TMBBR to restrict video.
+    const bool slidesPresent = _activeMediaList->getVideoScreenShareSsrcMapping().isSet();
 
     for (auto videoIt : _engineVideoStreams)
     {
