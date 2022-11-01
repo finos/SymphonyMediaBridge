@@ -1742,7 +1742,7 @@ void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
     else if (recControlHeader->isRtpNack())
     {
         auto ssrc = recControlHeader->getSsrc();
-        auto ssrcContext = stream->ssrcOutboundContexts.getItem(ssrc);
+        auto ssrcContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
         if (!ssrcContext || ssrcContext->markedForDeletion)
         {
             return;
@@ -3613,9 +3613,9 @@ void EngineMixer::decommissionInboundContext(const uint32_t ssrc)
     auto* ssrcContext = _ssrcInboundContexts.getItem(ssrc);
     if (ssrcContext)
     {
+        ssrcContext->sender->postOnQueue(utils::bind(&EngineMixer::internalRemoveInboundSsrc, this, ssrc));
         _ssrcInboundContexts.erase(ssrc);
         logger::info("Decommissioned inbound ssrc context %u", _loggableId.c_str(), ssrc);
-        it->second->sender->postOnQueue(utils::bind(&EngineMixer::internalRemoveInboundSsrc, this, ssrc));
     }
 }
 
