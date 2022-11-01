@@ -3288,11 +3288,12 @@ void EngineMixer::sendMessagesToNewDataStreams()
             dataStream->stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
         }
 
-        const auto* videoStream = _engineVideoStreams.getItem(endpointIdHash);
-        if (!videoStream)
+        const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
+        if (videoStreamItr == _engineVideoStreams.end())
         {
             continue;
         }
+        const auto videoStream = videoStreamItr->second;
         const auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);
 
         if (videoStream->ssrcRewrite)
