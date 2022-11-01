@@ -1199,13 +1199,7 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
             inboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
         {
             inboundContext.activeMedia = false;
-            if (!_engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false))
-            {
-                logger::warn("streamActiveStateChanged not set. Participant may be removed %zu ssrc %u",
-                    _loggableId.c_str(),
-                    inboundContext.endpointIdHash.load(),
-                    inboundContext.ssrc);
-            }
+            _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false);
 
             if (inboundContext.rtpMap.isVideo() && _engineVideoStreams.contains(endpointIdHash))
             {

@@ -529,12 +529,12 @@ public:
      * space. Since this function will possibly access elements after removal. MpmcMap does not return memory for
      * removed elements to the OS and it does not reuse removed elements until all other free elements are reused.
      */
-    bool streamActiveStateChanged(const size_t endpointIdHash, const uint32_t ssrc, const bool active)
+    void streamActiveStateChanged(const size_t endpointIdHash, const uint32_t ssrc, const bool active)
     {
         auto participantStreamsItr = _participantStreams.find(endpointIdHash);
         if (participantStreamsItr == _participantStreams.end())
         {
-            return false;
+            return;
         }
         auto& participantStreams = participantStreamsItr->second;
         auto& primary = participantStreams.primary;
@@ -551,7 +551,8 @@ public:
             if (ssrc == simulcastLevel.ssrc)
             {
                 simulcastLevel.mediaActive = active;
-                return setHighestActiveIndex(endpointIdHash, primary);
+                setHighestActiveIndex(endpointIdHash, primary);
+                return;
             }
         }
 
@@ -562,12 +563,11 @@ public:
                 if (ssrc == simulcastLevel.ssrc)
                 {
                     simulcastLevel.mediaActive = active;
-                    return setHighestActiveIndex(endpointIdHash, secondary.get());
+                    setHighestActiveIndex(endpointIdHash, secondary.get());
+                    return;
                 }
             }
         }
-
-        return false;
     }
 
     inline size_t getParticipantForDefaultLevelSsrc(const uint32_t ssrc)
