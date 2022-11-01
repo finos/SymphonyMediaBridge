@@ -3213,37 +3213,6 @@ inline void EngineMixer::processAudioStreams()
     }
 }
 
-void EngineMixer::onPliRequestFromReceiver(const size_t endpointIdHash, const uint32_t ssrc, const uint64_t timestamp)
-{
-    SsrcOutboundContext* outboundContext = nullptr;
-    auto videoStream = _engineVideoStreams.getItem(endpointIdHash);
-    if (videoStream)
-    {
-        outboundContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
-    }
-    else
-    {
-        auto barbell = _engineBarbells.getItem(endpointIdHash);
-        if (barbell)
-        {
-            outboundContext = barbell->ssrcOutboundContexts.getItem(ssrc);
-        }
-    }
-
-    if (!outboundContext)
-    {
-        logger::debug("PLI for non existent outbound context", _loggableId.c_str());
-        return;
-    }
-
-    const auto sourceSsrc = outboundContext->originalSsrc.load();
-    auto inboundSsrcContext = _ssrcInboundContexts.getItem(sourceSsrc);
-    if (inboundSsrcContext)
-    {
-        inboundSsrcContext->pliScheduler.triggerPli();
-    }
-}
-
 void EngineMixer::sendLastNListMessage(const size_t endpointIdHash)
 {
     utils::StringBuilder<1024> lastNListMessage;
