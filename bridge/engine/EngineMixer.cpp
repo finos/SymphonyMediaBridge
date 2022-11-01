@@ -1149,15 +1149,15 @@ void EngineMixer::internalRemoveInboundSsrc(uint32_t ssrc)
         return;
     }
 
-    auto contextIt = _allSsrcInboundContexts.find(ssrc);
-    if (contextIt != _allSsrcInboundContexts.end())
+    auto* context = _allSsrcInboundContexts.getItem(ssrc);
+    if (context)
     {
-        logger::info("Removing inbound context ssrc %u", _loggableId.c_str(), contextIt->first);
+        logger::info("Removing inbound context ssrc %u", _loggableId.c_str(), ssrc);
 
         EngineMessage::Message message(EngineMessage::Type::InboundSsrcRemoved);
         message.command.ssrcInboundRemoved.mixer = this;
         message.command.ssrcInboundRemoved.ssrc = ssrc;
-        message.command.ssrcInboundRemoved.opusDecoder = contextIt->second.opusDecoder.release();
+        message.command.ssrcInboundRemoved.opusDecoder = context->opusDecoder.release();
         _allSsrcInboundContexts.erase(ssrc);
         if (message.command.ssrcInboundRemoved.opusDecoder)
         {
@@ -1934,15 +1934,15 @@ SsrcOutboundContext* EngineMixer::obtainOutboundForwardSsrcContext(size_t endpoi
     const uint32_t ssrc,
     const RtpMap& rtpMap)
 {
-    auto ssrcOutboundContextItr = ssrcOutboundContexts.find(ssrc);
-    if (ssrcOutboundContextItr != ssrcOutboundContexts.cend())
+    auto ssrcOutboundContext = ssrcOutboundContexts.getItem(ssrc);
+    if (ssrcOutboundContext)
     {
-        if (ssrcOutboundContextItr->second.markedForDeletion)
+        if (ssrcOutboundContext->markedForDeletion)
         {
             return nullptr;
         }
 
-        return &ssrcOutboundContextItr->second;
+        return ssrcOutboundContext;
     }
 
     // In this case most likely both input stream and ssrcOutboundContext have been removed already
@@ -1979,13 +1979,13 @@ void EngineMixer::onOutboundContextFinalized(size_t ownerEndpointHash,
 {
     if (isVideo)
     {
-        auto it = _engineVideoStreams.find(ownerEndpointHash);
-        if (it != _engineVideoStreams.end())
+        auto* videoStream = _engineVideoStreams.getItem(ownerEndpointHash);
+        if (videoStream)
         {
-            it->second->ssrcOutboundContexts.erase(ssrc);
+            videoStream->ssrcOutboundContexts.erase(ssrc);
             if (feedbackSsrc != 0)
             {
-                it->second->ssrcOutboundContexts.erase(feedbackSsrc);
+                videoStream->ssrcOutboundContexts.erase(feedbackSsrc);
             }
         }
 
@@ -1993,22 +1993,22 @@ void EngineMixer::onOutboundContextFinalized(size_t ownerEndpointHash,
     }
 
     assert(feedbackSsrc == 0);
-    auto it = _engineAudioStreams.find(ownerEndpointHash);
-    if (it != _engineAudioStreams.end())
+    auto* audioStream = _engineAudioStreams.getItem(ownerEndpointHash);
+    if (audioStream)
     {
-        it->second->ssrcOutboundContexts.erase(ssrc);
+        audioStream->ssrcOutboundContexts.erase(ssrc);
     }
 }
 
 void EngineMixer::onRecordingOutboundContextFinalized(size_t recordingStreamIdHash, uint32_t ssrc)
 {
-    const auto recordingStreamIt = _engineRecordingStreams.find(recordingStreamIdHash);
-    if (recordingStreamIt == _engineRecordingStreams.end())
+    auto* recordingStream = _engineRecordingStreams.getItem(recordingStreamIdHash);
+    if (!recordingStream)
     {
         return;
     }
 
-    auto& outboundContexts = recordingStreamIt->second->ssrcOutboundContexts;
+    auto& outboundContexts = recordingStream->ssrcOutboundContexts;
     const auto outboundContextIt = outboundContexts.find(ssrc);
     if (outboundContextIt == outboundContexts.end())
     {
@@ -2024,11 +2024,11 @@ void EngineMixer::onRecordingOutboundContextFinalized(size_t recordingStreamIdHa
             recordingStreamIdHash,
             ssrc);
 
-        recordingStreamIt->second->outboundContextsFinalizerCounter.erase(ssrc);
+        recordingStream->outboundContextsFinalizerCounter.erase(ssrc);
         return;
     }
 
-    auto& outboundContextsFinalizerCounter = recordingStreamIt->second->outboundContextsFinalizerCounter;
+    auto& outboundContextsFinalizerCounter = recordingStream->outboundContextsFinalizerCounter;
     auto finalizeCounterIt = outboundContextsFinalizerCounter.find(ssrc);
     assert(finalizeCounterIt != outboundContextsFinalizerCounter.end());
     if (finalizeCounterIt != outboundContextsFinalizerCounter.end())
@@ -3318,12 +3318,11 @@ void EngineMixer::sendMessagesToNewDataStreams()
             dataStream->stream.sendString(dominantSpeakerMessage.get(), dominantSpeakerMessage.getLength());
         }
 
-        const auto videoStreamItr = _engineVideoStreams.find(endpointIdHash);
-        if (videoStreamItr == _engineVideoStreams.end())
+        auto* videoStream = _engineVideoStreams.getItem(endpointIdHash);
+        if (!videoStream)
         {
             continue;
         }
-        const auto videoStream = videoStreamItr->second;
         const auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);
 
         if (videoStream->ssrcRewrite)
@@ -3609,10 +3608,10 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
         }
         const auto endpointIdHash = videoStreamEntry.first;
 
-        auto outboundContextItr = videoStream->ssrcOutboundContexts.find(ssrc);
-        if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
+        auto* outboundContext = videoStream->ssrcOutboundContexts.getItem(ssrc);
+        if (outboundContext)
         {
-            outboundContextItr->second.markedForDeletion = true;
+            outboundContext->markedForDeletion = true;
             logger::info("Marking unused video outbound context for deletion, ssrc %u, endpointIdHash %lu",
                 _loggableId.c_str(),
                 ssrc,
@@ -3620,16 +3619,16 @@ void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStre
 
             videoStream->transport.getJobQueue().addJob<FinalizeNonSsrcRewriteOutboundContextJob>(*this,
                 videoStream->transport,
-                outboundContextItr->second,
+                *outboundContext,
                 _engineSyncContext,
                 _messageListener,
                 feedbackSsrc);
         }
 
-        outboundContextItr = videoStream->ssrcOutboundContexts.find(feedbackSsrc);
-        if (outboundContextItr != videoStream->ssrcOutboundContexts.end())
+        outboundContext = videoStream->ssrcOutboundContexts.getItem(feedbackSsrc);
+        if (outboundContext)
         {
-            outboundContextItr->second.markedForDeletion = true;
+            outboundContext->markedForDeletion = true;
             logger::info("Marking unused video outbound context for deletion, feedback ssrc %u, endpointIdHash %lu´",
                 _loggableId.c_str(),
                 ssrc,
