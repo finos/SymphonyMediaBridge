@@ -3611,8 +3611,8 @@ void EngineMixer::decommissionInboundContext(const uint32_t ssrc)
     auto* ssrcContext = _ssrcInboundContexts.getItem(ssrc);
     if (ssrcContext)
     {
+        _ssrcInboundContexts.erase(ssrc); // remove first or internalRemoveInboundSsrc may assert
         ssrcContext->sender->postOnQueue(utils::bind(&EngineMixer::internalRemoveInboundSsrc, this, ssrc));
-        _ssrcInboundContexts.erase(ssrc);
         logger::info("Decommissioned inbound ssrc context %u", _loggableId.c_str(), ssrc);
     }
 }
