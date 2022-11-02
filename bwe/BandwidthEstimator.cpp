@@ -45,7 +45,7 @@ BandwidthEstimator::BandwidthEstimator(const Config& config)
     _state(1) = _config.estimate.initialKbpsDownlink;
 
     const math::Matrix<double, 3> initDelta({8000.0 * 8, _config.estimate.initialKbpsDownlink * 0.001, 0.1});
-    _covarianceP = initDelta * transpose(initDelta);
+    _covarianceP = initDelta * math::transpose(initDelta);
 }
 
 void BandwidthEstimator::onUnmarkedTraffic(uint32_t packetSize, uint64_t receiveTimeNs)
@@ -62,7 +62,7 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
 {
     if (_baseClockOffset == 0 && _state(2) == 0 && _state(0) == 0 && _previousTransmitTime == 0)
     {
-        // base Offset is very sensitive, if you start 5ms behind it will crate a lower estimate, assuming higher delay
+        // base Offset is very sensitive, if you start 5ms behind it will create a lower estimate, assuming higher delay
         // and longer queue. Starting with a long queue is also a bad start
         _baseClockOffset = receiveTimeNs - transmitTimeNs;
         _previousTransmitTime = transmitTimeNs - 5 * utils::Time::sec;
@@ -106,10 +106,10 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
     math::Matrix<double, 3, 3> statePredictionCovariance;
     for (size_t i = 1; i < sigmaPoints.size(); ++i)
     {
-        statePredictionCovariance += outerProduct(sigmaPoints[i]);
+        statePredictionCovariance += math::outerProduct(sigmaPoints[i]);
     }
     statePredictionCovariance *= _weightMeanCovariance;
-    statePredictionCovariance += (_weightCovariance0 * outerProduct(sigmaPoints[0]));
+    statePredictionCovariance += (_weightCovariance0 * math::outerProduct(sigmaPoints[0]));
     assert(math::isValid(statePredictionCovariance));
 
     double predictedMeanDelay = predictedDelays[0] * _weightMean0;
@@ -132,7 +132,7 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
 
     const auto kalmanGain = crossCovariance * (1.0 / covDelay);
     _state = predictedMeanState + kalmanGain * (observedDelay - predictedMeanDelay);
-    _covarianceP = statePredictionCovariance - kalmanGain * covDelay * transpose(kalmanGain);
+    _covarianceP = statePredictionCovariance - kalmanGain * covDelay * math::transpose(kalmanGain);
     assert(math::isValid(_covarianceP));
     _observedDelay = observedDelay;
     _state(0) = std::max(0.0, std::min(_state(0), _config.maxNetworkQueue * 8));
