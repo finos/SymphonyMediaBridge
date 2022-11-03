@@ -424,7 +424,7 @@ set(FILES
         webrtc/WebRtcDataStream.h
         )
 
-add_library(smblib ${FILES})
+add_library(smblib STATIC ${FILES})
 target_include_directories(smblib PUBLIC ${CMAKE_BINARY_DIR}/generated)
 
 add_executable(smb
@@ -597,7 +597,7 @@ set(CMAKE_TEST_DIRECTORY "${CMAKE_BINARY_DIR}/test")
 set(CMAKE_TEST_INCLUDE "${CMAKE_TEST_DIRECTORY}/include")
 configure_file(test/TestConfig.h.in ${CMAKE_TEST_INCLUDE}/TestConfig.h)
 
-add_library(testlib ${TEST_LIB_FILES})
+add_library(testlib STATIC ${TEST_LIB_FILES})
 target_include_directories(testlib PRIVATE ${CMAKE_TEST_INCLUDE} ${gtest_SOURCE_DIR}/include "test/include")
 
 add_executable(UnitTest
