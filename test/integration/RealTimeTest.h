@@ -1,5 +1,6 @@
 #pragma once
 
+#include "LoadTestConfig.h"
 #include "api/ConferenceEndpoint.h"
 #include "bridge/Bridge.h"
 #include "config/Config.h"
@@ -72,6 +73,8 @@ protected:
 
 protected:
     const uint32_t _clientsConnectionTimeout;
+    const std::unique_ptr<config::LoadTestConfig> _config;
+    bool _configInitialized;
 
 private:
     size_t getNumWorkerThreads() const;

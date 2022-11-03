@@ -1,0 +1,6 @@
+{
+    "port": 8080,
+    "address": "localhost",
+    "ip": "127.0.0.1",
+    "numClients": 250
+}

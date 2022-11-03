@@ -1,7 +1,9 @@
 #include "logger/Logger.h"
+#include "test/integration/LoadTestConfig.h"
 #include "utils/Time.h"
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
+#include <string>
 
 using namespace ::testing;
 class GtestMain : public ::testing::Environment
@@ -54,11 +56,28 @@ public:
     }
 };
 
+void initLoadTestConfig(const int argc, char** argv)
+{
+    static const char configPrefix[] = "--load_test_config=";
+    config::g_LoadTestConfigFile = nullptr;
+    for (auto i = 0; i < argc; i++)
+    {
+        const std::string arg = std::string(argv[i]);
+        if (arg.length() > strlen(configPrefix) && arg.find(configPrefix) == 0)
+        {
+            config::g_LoadTestConfigFile = argv[i] + strlen(configPrefix);
+            break;
+        }
+    }
+}
+
 int main(int argc, char** argv)
 {
     ::testing::AddGlobalTestEnvironment(new GtestMain()); // Gtest takes ownership
 
     ::testing::InitGoogleTest(&argc, argv);
+
+    initLoadTestConfig(argc, argv);
 
     ::testing::TestEventListeners& listeners = ::testing::UnitTest::GetInstance()->listeners();
     // Adds a listener to the end.  googletest takes the ownership.
