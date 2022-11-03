@@ -14,12 +14,9 @@ RUN cd /tmp/ && git clone https://github.com/llvm/llvm-project.git --branch rele
     && make -j5 cxx \
     && make install-cxx install-cxxabi
 
-# Build openssl-1.1.1l
-RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1l.tar.gz \
-    && tar xvfz openssl-1.1.1l.tar.gz \
-    && cd /tmp/openssl-1.1.1l \
-    && ./config \
-    && make -j5 \
+# Build openssl-1.1.1s
+RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
+RUN cd /tmp/openssl-1.1.1s && ./config && make -j5 && make install_sw
     && make install
 
 # Build libsrtp 2.4.2
