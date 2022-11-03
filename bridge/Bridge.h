@@ -68,8 +68,8 @@ private:
     std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;
     std::unique_ptr<jobmanager::TimerQueue> _timers;
     const std::unique_ptr<jobmanager::JobManager> _engineJobManager;
-    const std::unique_ptr<jobmanager::JobManager> _relaxedJobManager;
-    std::unique_ptr<jobmanager::WorkerThread> _relaxedWorker;
+    const std::unique_ptr<jobmanager::JobManager> _deferrableJobManager;
+    std::unique_ptr<jobmanager::WorkerThread> deferrableWorker;
 
     std::vector<transport::SocketAddress> _localInterfaces;
     const std::unique_ptr<transport::SslDtls> _sslDtls;

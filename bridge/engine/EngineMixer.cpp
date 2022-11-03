@@ -257,7 +257,7 @@ constexpr size_t EngineMixer::iterationDurationMs;
 EngineMixer::EngineMixer(const std::string& id,
     jobmanager::JobManager& jobManager,
     const concurrency::SynchronizationContext& engineSyncContext,
-    jobmanager::JobManager& relaxedJobManager,
+    jobmanager::JobManager& deferrableJobManager,
     EngineMessageListener& messageListener,
     const uint32_t localVideoSsrc,
     const config::Config& config,
@@ -309,7 +309,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _hasSentTimeout(false),
       _probingVideoStreams(false),
       _minUplinkEstimate(0),
-      _relaxedJobManager(relaxedJobManager),
+      _deferrableJobManager(deferrableJobManager),
       _lastRecordingAckProcessed(utils::Time::getAbsoluteTime()),
       _slidesPresent(false)
 {

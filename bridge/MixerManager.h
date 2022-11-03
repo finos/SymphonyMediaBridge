@@ -50,7 +50,7 @@ public:
     MixerManager(utils::IdGenerator& idGenerator,
         utils::SsrcGenerator& ssrcGenerator,
         jobmanager::JobManager& engineJobManager,
-        jobmanager::JobManager& relaxedJobManager,
+        jobmanager::JobManager& deferrableJobManager,
         transport::TransportFactory& transportFactory,
         bridge::Engine& engine,
         const config::Config& config,
@@ -90,7 +90,7 @@ private:
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
     jobmanager::JobManager& _engineJobManager;
-    jobmanager::JobManager& _relaxedJobManager;
+    jobmanager::JobManager& _deferrableJobManager;
     transport::TransportFactory& _transportFactory;
     Engine& _engine;
     const config::Config& _config;

@@ -78,7 +78,7 @@ private:
 MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     utils::SsrcGenerator& ssrcGenerator,
     jobmanager::JobManager& engineJobManager,
-    jobmanager::JobManager& relaxedJobManager,
+    jobmanager::JobManager& deferrableJobManager,
     transport::TransportFactory& transportFactory,
     Engine& engine,
     const config::Config& config,
@@ -88,7 +88,7 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     : _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
       _engineJobManager(engineJobManager),
-      _relaxedJobManager(relaxedJobManager),
+      _deferrableJobManager(deferrableJobManager),
       _transportFactory(transportFactory),
       _engine(engine),
       _config(config),
@@ -100,7 +100,7 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _audioAllocator(audioAllocator)
 {
     _engine.setMessageListener(this);
-    _relaxedJobManager.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer);
+    _deferrableJobManager.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer);
 }
 
 MixerManager::~MixerManager()
@@ -154,7 +154,7 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
     auto engineMixer = std::make_unique<EngineMixer>(id,
         _engineJobManager,
         _engine.getSynchronizationContext(),
-        _relaxedJobManager,
+        _deferrableJobManager,
         *this,
         localVideoSsrc,
         _config,

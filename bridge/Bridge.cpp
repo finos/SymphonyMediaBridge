@@ -62,13 +62,13 @@ Bridge::Bridge(const config::Config& config)
       _ssrcGenerator(std::make_unique<utils::SsrcGenerator>()),
       _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
       _engineJobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
-      _relaxedJobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
+      _deferrableJobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
       _sslDtls(std::make_unique<transport::SslDtls>()),
       _network(transport::createRtcePoll()),
       _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(32 * 1024, "main")),
       _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(128 * 1024, "send")),
       _audioPacketAllocator(std::make_unique<memory::AudioPacketPoolAllocator>(4 * 1024, "audio")),
-      _engine(std::make_unique<bridge::Engine>(config, *_relaxedJobManager))
+      _engine(std::make_unique<bridge::Engine>(config, *_deferrableJobManager))
 {
 }
 
@@ -85,9 +85,9 @@ Bridge::~Bridge()
 
     _timers->stop();
 
-    if (_relaxedJobManager)
+    if (_deferrableJobManager)
     {
-        _relaxedJobManager->stop();
+        _deferrableJobManager->stop();
     }
 
     if (_engineJobManager)
@@ -110,9 +110,9 @@ Bridge::~Bridge()
         logger::info("stopped workerThread %d", "main", n++);
     }
 
-    if (_relaxedWorker)
+    if (deferrableWorker)
     {
-        _relaxedWorker->stop();
+        deferrableWorker->stop();
     }
 }
 
@@ -153,7 +153,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     }
 
     startWorkerThreads();
-    _relaxedWorker = std::make_unique<jobmanager::WorkerThread>(*_relaxedJobManager, "MMWorker");
+    deferrableWorker = std::make_unique<jobmanager::WorkerThread>(*_deferrableJobManager, "MMWorker");
 
     if (!_sslDtls->isInitialized())
     {
@@ -200,7 +200,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     _mixerManager = std::make_unique<bridge::MixerManager>(*_idGenerator,
         *_ssrcGenerator,
         *_engineJobManager,
-        *_relaxedJobManager,
+        *_deferrableJobManager,
         *_transportFactory,
         *_engine,
         _config,
