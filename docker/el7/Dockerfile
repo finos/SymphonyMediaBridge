@@ -17,7 +17,6 @@ RUN cd /tmp/ && git clone https://github.com/llvm/llvm-project.git --branch rele
 # Build openssl-1.1.1s
 RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
 RUN cd /tmp/openssl-1.1.1s && ./config && make -j5 && make install_sw
-    && make install
 
 # Build libsrtp 2.4.2
 RUN cd /tmp && git clone https://github.com/cisco/libsrtp \
