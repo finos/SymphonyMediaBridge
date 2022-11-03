@@ -18,7 +18,6 @@ RUN cd /tmp/libsrtp && git checkout v2.4.2 && PKG_CONFIG_PATH=/usr/local/lib/pkg
 RUN cd /tmp \
     && wget -O clang+llvm-12.0.1-x86_64-linux.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz \
     && tar xvf clang+llvm-12.0.1-x86_64-linux.tar.xz \
-    && rm  clang+llvm-12.0.1-x86_64-linux.tar.xz \
     && cd clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
     && cp -rn * /usr/local \
     && cd /tmp && rm -rf clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-* \
