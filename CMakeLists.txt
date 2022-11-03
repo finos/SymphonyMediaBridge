@@ -424,11 +424,14 @@ set(FILES
         webrtc/WebRtcDataStream.h
         )
 
+add_library(smblib ${FILES})
+target_include_directories(smblib PUBLIC ${CMAKE_BINARY_DIR}/generated)
+
 add_executable(smb
-        ${FILES}
+        #${FILES}
         main.cpp)
 
-target_link_libraries(smb Threads::Threads ${THIRD_PARTY_LIBS} git_version)
+target_link_libraries(smb smblib Threads::Threads ${THIRD_PARTY_LIBS} git_version)
 
 ##################
 # Test framework
@@ -588,7 +591,6 @@ set(CMAKE_TEST_INCLUDE "${CMAKE_TEST_DIRECTORY}/include")
 configure_file(test/TestConfig.h.in ${CMAKE_TEST_INCLUDE}/TestConfig.h)
 
 add_executable(UnitTest
-    ${FILES}
     ${TEST_FILES})
 
 target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include")
@@ -596,7 +598,7 @@ target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include"
 # Copy test Data
 file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
 
-target_link_libraries(UnitTest gtest gmock ${THIRD_PARTY_LIBS} git_version)
+target_link_libraries(UnitTest smblib gtest gmock ${THIRD_PARTY_LIBS} git_version)
 
 add_test(AllUnitTests UnitTest)
 
