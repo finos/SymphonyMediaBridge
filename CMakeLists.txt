@@ -590,6 +590,7 @@ set(TEST_FILES
 set(LOAD_TEST_FILES
     test/integration/RealTimeTest.cpp
     test/integration/RealTimeTest.h
+    test/integration/LoadTestConfig.h
 )
 
 

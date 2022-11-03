@@ -36,6 +36,11 @@
 #include <sstream>
 #include <unordered_set>
 
+namespace config
+{
+const char* g_LoadTestConfigFile = nullptr;
+}
+
 RealTimeTest::RealTimeTest()
     : _sendAllocator(memory::packetPoolSize * 8, "RealTimeTest"),
       _audioAllocator(memory::packetPoolSize * 8, "RealTimeTestAudio"),
@@ -45,8 +50,24 @@ RealTimeTest::RealTimeTest()
       _pacer(10 * utils::Time::ms),
       _instanceCounter(0),
       _numWorkerThreads(getNumWorkerThreads()),
-      _clientsConnectionTimeout(15)
+      _clientsConnectionTimeout(15),
+      _config(std::make_unique<config::LoadTestConfig>()),
+      _configInitialized(false)
 {
+    if (config::g_LoadTestConfigFile != nullptr)
+    {
+        _configInitialized = _config->readFromFile(config::g_LoadTestConfigFile);
+        if (!_configInitialized)
+        {
+            logger::error("Failed to read load test configuration from %s",
+                "RealTimeTest",
+                config::g_LoadTestConfigFile);
+        }
+    }
+    else
+    {
+        logger::info("No load test configuration provided, load test will fail.", "RealTimeTest");
+    }
 }
 
 // TimeTurner time source must be set before starting any threads.
@@ -169,16 +190,25 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
 
 TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 {
-    _bridgeConfig.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "log.level": "INFO"
-        })");
+    std::string baseUrl = "http://127.0.0.1:8080";
+    auto numClients = 1000;
 
-    // initRealBridge(_config);
+    if (_configInitialized)
+    {
+        numClients = _config->numClients;
 
-    const auto baseUrl = "http://127.0.0.1:8080";
+        utils::StringBuilder<1000> sb;
+        sb.append("http://");
+        sb.append(_config->ip.get().empty() ? _config->address : _config->ip);
+        sb.append(":");
+        sb.append(_config->port);
+        baseUrl = sb.build();
+    }
+
+    logger::info("Starting smbMegaHoot test:\n\tbaseUrl: %s\n\tnumClients: %d",
+        "RealTimeTest",
+        baseUrl.c_str(),
+        numClients);
 
     GroupCall<SfuClient<Channel>> group(nullptr,
         _instanceCounter,
@@ -186,11 +216,11 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         _audioAllocator,
         *_clientTransportFactory,
         *_sslDtls,
-        1000);
+        numClients);
 
     Conference conf(nullptr);
 
-    bool startConfResult = group.startConference(conf, baseUrl);
+    bool startConfResult = group.startConference(conf, baseUrl.c_str());
     if (!startConfResult)
     {
         return;
@@ -201,11 +231,11 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     {
         if (count++ == 0)
         {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, false, true);
+            client->initiateCall(baseUrl.c_str(), conf.getId(), true, emulator::Audio::Fake, false, true);
         }
         else
         {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Muted, false, true);
+            client->initiateCall(baseUrl.c_str(), conf.getId(), true, emulator::Audio::Muted, false, true);
         }
     }
 
