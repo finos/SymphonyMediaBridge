@@ -26,6 +26,12 @@
 #include <string>
 #include <utility>
 
+#if DEBUG_RTP
+#define RTP_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define RTP_LOG(fmt, ...)
+#endif
+
 namespace transport
 {
 constexpr uint32_t Mbps100 = 100000;
@@ -840,6 +846,16 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
         rembReady = true; // force REMB to allow for high receive rate
     }
 
+#if DEBUG_RTP
+    if ((rtpHeader->sequenceNumber % 50) == 0)
+    {
+        RTP_LOG("received RTP ssrc %u, seq %u",
+            _loggableId.c_str(),
+            rtpHeader->ssrc.get(),
+            rtpHeader->sequenceNumber.get());
+    }
+#endif
+
     if (utils::Time::diffGE(_rtcp.lastSendTime, timestamp, utils::Time::ms * 100) || rembReady)
     {
         sendReports(timestamp, rembReady);
@@ -1587,6 +1603,17 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
     {
         _rateController.onRtpSent(timestamp, rtpHeader->ssrc, rtpHeader->sequenceNumber, packet->getLength());
     }
+
+#if DEBUG_RTP
+    if ((rtpHeader->sequenceNumber % 50) == 0)
+    {
+        RTP_LOG("sent RTP ssrc %u, seq %u",
+            _loggableId.c_str(),
+            rtpHeader->ssrc.get(),
+            rtpHeader->sequenceNumber.get());
+    }
+#endif
+
     doProtectAndSend(timestamp, std::move(packet), _peerRtpPort, _selectedRtp);
 }
 

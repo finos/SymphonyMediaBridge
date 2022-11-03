@@ -20,6 +20,7 @@
 #include "utils/IdGenerator.h"
 #include "utils/Pacer.h"
 #include "utils/SsrcGenerator.h"
+#include "utils/StringBuilder.h"
 #include "utils/Time.h"
 #include "webrtc/DataChannel.h"
 #include <vector>
@@ -128,12 +129,13 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         return nullptr;
     }
 
+    auto& engineMixer = *(engineMixerEmplaceResult.first->second);
     auto mixerEmplaceResult = _mixers.emplace(id,
         std::make_unique<Mixer>(id,
-            engineMixerEmplaceResult.first->second->getLoggableId().getInstanceId(),
+            engineMixer.getLoggableId().getInstanceId(),
             _transportFactory,
             _engine,
-            *(engineMixerEmplaceResult.first->second),
+            engineMixer,
             _idGenerator,
             _ssrcGenerator,
             _config,
@@ -147,6 +149,23 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         _engineMixers.erase(id);
         return nullptr;
     }
+
+    utils::StringBuilder<1024> b;
+    b.append("local ").append(localVideoSsrc);
+    b.append(" slides ").append(videoSsrcs[0][0].main);
+    b.append(" pins");
+    for (const auto& pinSsrc : videoPinSsrcs)
+    {
+        b.append(" ");
+        b.append(pinSsrc.main);
+    }
+
+    logger::info("Mixer-%zu id=%s, served by engine mixer %s, %s",
+        "MixerManager",
+        engineMixer.getLoggableId().getInstanceId(),
+        id.c_str(),
+        engineMixer.getLoggableId().c_str(),
+        b.build().c_str());
 
     {
         EngineCommand::Command addMixerCommand = {EngineCommand::Type::AddMixer};

@@ -105,7 +105,7 @@ private:
     const double _lambda;
     math::Matrix<double, 3> _state; // Queue bits, Bandwidth kbps, clockOffset ms
     math::Matrix<double, 3, 3> _covarianceP;
-    math::Matrix<double, 3> _processNoise; // Q, Bw, offset  to control the filter
+    const math::Matrix<double, 3> _processNoise; // Q, Bw, offset  to control the filter
 
     const double _weightCovariance0;
     const double _weightMeanCovariance;
