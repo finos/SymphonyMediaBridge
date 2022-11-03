@@ -36,8 +36,6 @@
 #include <sstream>
 #include <unordered_set>
 
-#define USE_FAKENETWORK 1
-
 RealTimeTest::RealTimeTest()
     : _sendAllocator(memory::packetPoolSize * 8, "RealTimeTest"),
       _audioAllocator(memory::packetPoolSize * 8, "RealTimeTestAudio"),
