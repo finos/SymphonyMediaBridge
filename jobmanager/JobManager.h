@@ -32,7 +32,7 @@ namespace jobmanager
 class JobManager // TODO rename to MainJobQueue or MpmcJobQueue
 {
 public:
-    JobManager(TimerQueue& timerQueue)
+    JobManager(TimerQueue& timerQueue, size_t poolSize = 4096 * 8)
         : _jobQueue(poolSize),
           _jobPool(poolSize, "JobManagerPool"),
           _running(true),
@@ -121,13 +121,13 @@ public:
     template <class Callable>
     bool post(Callable&& callable)
     {
-        return addJob<CallableJob>(std::forward<Callable>(callable));
+        return addJob<jobmanager::CallableJob<Callable>>(std::forward<Callable>(callable));
     }
 
     template <class Callable>
     bool post(std::atomic_uint32_t& jobsCounter, Callable&& callable)
     {
-        return addJob<CallableCountedJob>(jobsCounter, std::forward<Callable>(callable));
+        return addJob<CallableCountedJob<Callable>>(jobsCounter, std::forward<Callable>(callable));
     }
 
     MultiStepJob* pop()
@@ -150,8 +150,7 @@ public:
     void abortTimedJobs(const uint64_t groupId) { _timers.abortTimers(groupId); }
     void abortTimedJob(const uint64_t groupId, const uint32_t id) { _timers.abortTimer(groupId, id); }
 
-    static const auto poolSize = 4096 * 8;
-    static const auto maxJobSize = 15 * 8;
+    static const auto maxJobSize = 22 * 8;
 
 private:
     concurrency::MpmcQueue<MultiStepJob*> _jobQueue;

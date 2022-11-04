@@ -7,45 +7,29 @@
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineDataStream.h"
-#include "bridge/engine/EngineMessageListener.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/EngineRecordingStream.h"
 #include "bridge/engine/EngineVideoStream.h"
 
 namespace bridge
 {
-EngineMixerRemoved::EngineMixerRemoved(EngineMessageListener& mixerManager, EngineMixer& mixer)
+FinalizeEngineMixerRemoval::FinalizeEngineMixerRemoval(MixerManager& mixerManager, std::shared_ptr<Mixer> mixer)
     : _mixerManager(mixerManager),
-      _engineMixer(mixer),
-      _step(Acquire)
+      _mixer(mixer)
 {
 }
 
-bool EngineMixerRemoved::runStep()
+bool FinalizeEngineMixerRemoval::runStep()
 {
-    if (_step == Acquire)
+    // TODO add timeout
+    if (_mixer->hasPendingTransportJobs())
     {
-        _mixer = _mixerManager.onEngineMixerRemoved1(_engineMixer);
-        if (!_mixer)
-        {
-            return false;
-        }
-        _step = Stopping;
+        return true;
     }
 
-    if (_step == Stopping)
-    {
-        // TODO add timeout
-        if (_mixer->hasPendingTransportJobs())
-        {
-            return true;
-        }
-        _mixerManager.onEngineMixerRemoved2(_mixer->getId());
-        // must not touch engineMixer anymore
-        _mixer.reset();
-        return false;
-    }
-
-    return true;
+    _mixerManager.finalizeEngineMixerRemoval(_mixer->getId());
+    // must not touch engineMixer anymore
+    _mixer.reset();
+    return false;
 }
 } // namespace bridge

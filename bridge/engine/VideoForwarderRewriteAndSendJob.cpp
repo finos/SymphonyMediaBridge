@@ -1,10 +1,11 @@
 #include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
-#include "bridge/engine/EngineMessageListener.h"
+#include "bridge/MixerManagerAsync.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "bridge/engine/Vp8Rewriter.h"
 #include "transport/Transport.h"
+#include "utils/Function.h"
 
 namespace bridge
 {
@@ -14,7 +15,7 @@ VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundCon
     memory::UniquePacket packet,
     transport::Transport& transport,
     const uint32_t extendedSequenceNumber,
-    EngineMessageListener& mixerManager,
+    MixerManagerAsync& mixerManager,
     size_t endpointIdHash,
     EngineMixer& mixer)
     : jobmanager::CountedJob(transport.getJobCounter()),
@@ -59,11 +60,11 @@ void VideoForwarderRewriteAndSendJob::run()
 
         _outboundContext.packetCache.set(nullptr);
 
-        EngineMessage::Message message(EngineMessage::Type::AllocateVideoPacketCache);
-        message.command.allocateVideoPacketCache.mixer = &_mixer;
-        message.command.allocateVideoPacketCache.ssrc = _outboundContext.ssrc;
-        message.command.allocateVideoPacketCache.endpointIdHash = _endpointIdHash;
-        _mixerManager.onMessage(std::move(message));
+        _mixerManager.post(utils::bind(&MixerManagerAsync::allocateVideoPacketCache,
+            &_mixerManager,
+            &_mixer,
+            _outboundContext.ssrc,
+            _endpointIdHash));
     }
 
     const bool isKeyFrame = codec::Vp8Header::isKeyFrame(rtpHeader->getPayload(),

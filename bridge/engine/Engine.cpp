@@ -1,8 +1,8 @@
 #include "bridge/engine/Engine.h"
 #include "bridge/MixerJobs.h"
+#include "bridge/MixerManagerAsync.h"
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineDataStream.h"
-#include "bridge/engine/EngineMessageListener.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/EngineRecordingStream.h"
 #include "bridge/engine/EngineVideoStream.h"
@@ -29,7 +29,6 @@ Engine::Engine(const config::Config& config, jobmanager::JobManager& backgroundJ
       _pendingCommands(1024),
       _tickCounter(0),
       _threadQueue(1024),
-      _backgroundJobQueue(backgroundJobQueue),
       _thread([this] { this->run(); })
 {
     if (concurrency::setPriority(_thread, concurrency::Priority::RealTime))
@@ -38,7 +37,7 @@ Engine::Engine(const config::Config& config, jobmanager::JobManager& backgroundJ
     }
 }
 
-void Engine::setMessageListener(EngineMessageListener* messageListener)
+void Engine::setMessageListener(MixerManagerAsync* messageListener)
 {
     _messageListener = messageListener;
 }
@@ -287,7 +286,7 @@ void Engine::addMixer(EngineCommand::Command& nextCommand)
     {
         logger::error("Unable to add EngineMixer %s to Engine", "Engine", engineMixer->getLoggableId().c_str());
 
-        _backgroundJobQueue.addJob<EngineMixerRemoved>(*_messageListener, *engineMixer);
+        _messageListener->post(utils::bind(&MixerManagerAsync::engineMixerRemoved, _messageListener, engineMixer));
 
         return;
     }
@@ -306,7 +305,7 @@ void Engine::removeMixer(EngineCommand::Command& nextCommand)
         logger::error("Unable to remove EngineMixer %s from Engine", "Engine", command.mixer->getLoggableId().c_str());
     }
 
-    _backgroundJobQueue.addJob<EngineMixerRemoved>(*_messageListener, *command.mixer);
+    _messageListener->post(utils::bind(&MixerManagerAsync::engineMixerRemoved, _messageListener, command.mixer));
 }
 
 void Engine::addAudioStream(EngineCommand::Command& nextCommand)
@@ -396,11 +395,10 @@ void Engine::removeRecordingStream(EngineCommand::Command& command)
     auto mixer = command.command.addRecordingStream.mixer;
     mixer->removeRecordingStream(command.command.addRecordingStream.recordingStream);
 
-    EngineMessage::Message message = {EngineMessage::Type::RecordingStreamRemoved};
-    message.command.recordingStreamRemoved.mixer = command.command.removeRecordingStream.mixer;
-    message.command.recordingStreamRemoved.engineStream = command.command.removeRecordingStream.recordingStream;
-
-    _messageListener->onMessage(std::move(message));
+    _messageListener->post(utils::bind(&MixerManagerAsync::recordingStreamRemoved,
+        _messageListener,
+        command.command.removeRecordingStream.mixer,
+        command.command.removeRecordingStream.recordingStream));
 }
 
 void Engine::updateRecordingStreamModalities(EngineCommand::Command& command)
@@ -601,11 +599,10 @@ void Engine::stopRecording(EngineCommand::Command& nextCommand)
     mixer->recordingStop(nextCommand.command.stopRecording.recordingStream,
         nextCommand.command.stopRecording.recordingDesc);
 
-    EngineMessage::Message message = {EngineMessage::Type::RecordingStopped};
-    message.command.recordingStopped.mixer = nextCommand.command.removeDataStream.mixer;
-    message.command.recordingStopped.recordingDesc = nextCommand.command.stopRecording.recordingDesc;
-
-    _messageListener->onMessage(std::move(message));
+    _messageListener->post(utils::bind(&MixerManagerAsync::engineRecordingStopped,
+        _messageListener,
+        nextCommand.command.removeDataStream.mixer,
+        nextCommand.command.stopRecording.recordingDesc));
 }
 
 void Engine::addRecordingRtpPacketCache(EngineCommand::Command& nextCommand)

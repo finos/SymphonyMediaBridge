@@ -52,7 +52,6 @@ class ActiveMediaList;
 class PacketCache;
 struct SsrcWhitelist;
 struct RecordingDescription;
-class EngineMessageListener;
 class SsrcOutboundContext;
 class UnackedPacketsTracker;
 struct EngineAudioStream;
@@ -61,6 +60,7 @@ struct EngineRecordingStream;
 struct EngineVideoStream;
 struct SimulcastLevel;
 struct EngineBarbell;
+class MixerManagerAsync;
 
 class EngineMixer : public transport::DataReceiver
 {
@@ -86,7 +86,7 @@ public:
         jobmanager::JobManager& jobManager,
         const concurrency::SynchronizationContext& engineSyncContext,
         jobmanager::JobManager& backgroundJobQueue,
-        EngineMessageListener& messageListener,
+        MixerManagerAsync& messageListener,
         const uint32_t localVideoSsrc,
         const config::Config& config,
         memory::PacketPoolAllocator& sendAllocator,
@@ -312,7 +312,7 @@ private:
 
     jobmanager::JobManager& _jobManager;
     concurrency::SynchronizationContext _engineSyncContext;
-    EngineMessageListener& _messageListener;
+    MixerManagerAsync& _messageListener;
 
     concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
 

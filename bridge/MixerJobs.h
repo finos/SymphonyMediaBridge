@@ -4,26 +4,19 @@
 
 namespace bridge
 {
-class EngineMessageListener;
-class EngineMixer;
 class Mixer;
+class MixerManager;
 
-class EngineMixerRemoved : public jobmanager::MultiStepJob
+class FinalizeEngineMixerRemoval : public jobmanager::MultiStepJob
 {
 public:
-    EngineMixerRemoved(EngineMessageListener& mixerManager, EngineMixer& mixer);
+    FinalizeEngineMixerRemoval(MixerManager& mixerManager, std::shared_ptr<Mixer> mixer);
 
     bool runStep() override;
 
 private:
-    EngineMessageListener& _mixerManager;
-    EngineMixer& _engineMixer;
+    MixerManager& _mixerManager;
     std::shared_ptr<Mixer> _mixer;
-    enum
-    {
-        Acquire = 1,
-        Stopping
-    } _step;
 };
 
 } // namespace bridge

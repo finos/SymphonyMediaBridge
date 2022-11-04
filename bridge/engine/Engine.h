@@ -20,14 +20,14 @@ namespace bridge
 {
 
 class EngineMixer;
-class EngineMessageListener;
+class MixerManagerAsync;
 
 class Engine
 {
 public:
     Engine(const config::Config& config, jobmanager::JobManager& backgroundJobQueue);
 
-    void setMessageListener(EngineMessageListener* messageListener);
+    void setMessageListener(MixerManagerAsync* messageListener);
     void stop();
     void run();
 
@@ -45,7 +45,7 @@ private:
     static const uint32_t STATS_UPDATE_TICKS = 200;
 
     const config::Config& _config;
-    EngineMessageListener* _messageListener;
+    MixerManagerAsync* _messageListener;
     std::atomic<bool> _running;
 
     concurrency::MpmcQueue<EngineCommand::Command> _pendingCommands;
@@ -55,7 +55,6 @@ private:
     uint32_t _tickCounter;
 
     concurrency::MpmcQueue<utils::Function> _threadQueue;
-    jobmanager::JobManager& _backgroundJobQueue;
 
     std::thread _thread; // must be last member
 

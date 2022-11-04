@@ -10,7 +10,7 @@ class Transport;
 
 namespace bridge
 {
-class EngineMessageListener;
+class MixerManagerAsync;
 class SsrcOutboundContext;
 class SsrcInboundContext;
 class EngineMixer;
@@ -23,7 +23,7 @@ public:
         memory::UniquePacket packet,
         transport::Transport& transport,
         const uint32_t extendedSequenceNumber,
-        EngineMessageListener& mixerManager,
+        MixerManagerAsync& mixerManager,
         size_t endpointIdHash,
         EngineMixer& mixer);
 
@@ -35,7 +35,7 @@ private:
     memory::UniquePacket _packet;
     transport::Transport& _transport;
     uint32_t _extendedSequenceNumber;
-    EngineMessageListener& _mixerManager;
+    MixerManagerAsync& _mixerManager;
     size_t _endpointIdHash;
     EngineMixer& _mixer;
 };

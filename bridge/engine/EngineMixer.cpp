@@ -1,6 +1,7 @@
 #include "bridge/engine/EngineMixer.h"
 #include "api/DataChannelMessage.h"
 #include "api/DataChannelMessageParser.h"
+#include "bridge/MixerManagerAsync.h"
 #include "bridge/RecordingDescription.h"
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/AudioForwarderReceiveJob.h"
@@ -10,8 +11,6 @@
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineDataStream.h"
-#include "bridge/engine/EngineMessage.h"
-#include "bridge/engine/EngineMessageListener.h"
 #include "bridge/engine/EngineRecordingStream.h"
 #include "bridge/engine/EngineStreamDirector.h"
 #include "bridge/engine/EngineVideoStream.h"
@@ -22,7 +21,6 @@
 #include "bridge/engine/RecordingRtpNackReceiveJob.h"
 #include "bridge/engine/RecordingSendEventJob.h"
 #include "bridge/engine/RecordingVideoForwarderSendJob.h"
-#include "bridge/engine/SendEngineMessageJob.h"
 #include "bridge/engine/SendRtcpJob.h"
 #include "bridge/engine/SetMaxMediaBitrateJob.h"
 #include "bridge/engine/SsrcWhitelist.h"
@@ -74,7 +72,7 @@ public:
     RemovePacketCacheJob(bridge::EngineMixer& mixer,
         transport::Transport& transport,
         bridge::SsrcOutboundContext& outboundContext,
-        bridge::EngineMessageListener& mixerManager)
+        bridge::MixerManagerAsync& mixerManager)
         : CountedJob(transport.getJobCounter()),
           _mixer(mixer),
           _outboundContext(outboundContext),
@@ -87,12 +85,13 @@ public:
     {
         if (_outboundContext.packetCache.isSet() && _outboundContext.packetCache.get())
         {
-            bridge::EngineMessage::Message message(bridge::EngineMessage::Type::FreeVideoPacketCache);
-            message.command.freeVideoPacketCache.mixer = &_mixer;
-            message.command.freeVideoPacketCache.ssrc = _outboundContext.ssrc;
-            message.command.freeVideoPacketCache.endpointIdHash = _endpointIdHash;
+            const auto posted = _mixerManager.post(utils::bind(&MixerManagerAsync::freeVideoPacketCache,
+                &_mixerManager,
+                &_mixer,
+                _outboundContext.ssrc,
+                _endpointIdHash));
 
-            if (_mixerManager.onMessage(std::move(message)))
+            if (posted)
             {
                 _outboundContext.packetCache.clear();
             }
@@ -102,7 +101,7 @@ public:
 private:
     bridge::EngineMixer& _mixer;
     bridge::SsrcOutboundContext& _outboundContext;
-    bridge::EngineMessageListener& _mixerManager;
+    bridge::MixerManagerAsync& _mixerManager;
     size_t _endpointIdHash;
 };
 
@@ -113,7 +112,7 @@ public:
         transport::RtcTransport& transport,
         bridge::SsrcOutboundContext& outboundContext,
         concurrency::SynchronizationContext& engineSyncContext,
-        bridge::EngineMessageListener& mixerManager,
+        bridge::MixerManagerAsync& mixerManager,
         uint32_t feedbackSsrc)
         : CountedJob(transport.getJobCounter()),
           _mixer(mixer),
@@ -157,7 +156,7 @@ private:
     bridge::SsrcOutboundContext& _outboundContext;
     transport::RtcTransport& _transport;
     concurrency::SynchronizationContext& _engineSyncContext;
-    bridge::EngineMessageListener& _mixerManager;
+    bridge::MixerManagerAsync& _mixerManager;
     uint32_t _feedbackSsrc;
 };
 
@@ -258,7 +257,7 @@ EngineMixer::EngineMixer(const std::string& id,
     jobmanager::JobManager& jobManager,
     const concurrency::SynchronizationContext& engineSyncContext,
     jobmanager::JobManager& backgroundJobQueue,
-    EngineMessageListener& messageListener,
+    MixerManagerAsync& messageListener,
     const uint32_t localVideoSsrc,
     const config::Config& config,
     memory::PacketPoolAllocator& sendAllocator,
@@ -417,12 +416,11 @@ void EngineMixer::removeStream(EngineAudioStream* engineAudioStream)
 
     _engineAudioStreams.erase(endpointIdHash);
 
-    EngineMessage::Message message(EngineMessage::Type::AudioStreamRemoved);
-    message.command.audioStreamRemoved.mixer = this;
-    message.command.audioStreamRemoved.engineStream = engineAudioStream;
-    engineAudioStream->transport.getJobQueue().addJob<SendEngineMessageJob>(engineAudioStream->transport,
-        _messageListener,
-        std::move(message));
+    auto& jobQueue = engineAudioStream->transport.getJobQueue();
+    jobQueue.post(engineAudioStream->transport.getJobCounter(), [this, engineAudioStream]() {
+        _messageListener.post(
+            utils::bind(&MixerManagerAsync::audioStreamRemoved, &_messageListener, this, engineAudioStream));
+    });
 }
 
 void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
@@ -550,12 +548,10 @@ void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
 
     _engineVideoStreams.erase(endpointIdHash);
 
-    EngineMessage::Message message(EngineMessage::Type::VideoStreamRemoved);
-    message.command.videoStreamRemoved.mixer = this;
-    message.command.videoStreamRemoved.engineStream = engineVideoStream;
-    engineVideoStream->transport.getJobQueue().addJob<SendEngineMessageJob>(engineVideoStream->transport,
-        _messageListener,
-        std::move(message));
+    engineVideoStream->transport.getJobQueue().post([this, engineVideoStream]() {
+        _messageListener.post(
+            utils::bind(&MixerManagerAsync::videoStreamRemoved, &_messageListener, this, engineVideoStream));
+    });
 }
 
 void EngineMixer::addRecordingStream(EngineRecordingStream* engineRecordingStream)
@@ -637,12 +633,11 @@ void EngineMixer::removeStream(EngineDataStream* engineDataStream)
 
     _engineDataStreams.erase(endpointIdHash);
 
-    EngineMessage::Message message(EngineMessage::Type::DataStreamRemoved);
-    message.command.dataStreamRemoved.mixer = this;
-    message.command.dataStreamRemoved.engineStream = engineDataStream;
-    engineDataStream->transport.getJobQueue().addJob<SendEngineMessageJob>(engineDataStream->transport,
-        _messageListener,
-        std::move(message));
+    engineDataStream->transport.getJobQueue().post(engineDataStream->transport.getJobCounter(),
+        [this, engineDataStream]() {
+            _messageListener.post(
+                utils::bind(&MixerManagerAsync::dataStreamRemoved, &_messageListener, this, engineDataStream));
+        });
 }
 
 void EngineMixer::startTransport(transport::RtcTransport* transport)
@@ -972,10 +967,11 @@ void EngineMixer::removeTransportFromRecordingStream(const size_t streamIdHash, 
     recordingStream->transports.erase(endpointIdHash);
     recordingStream->recEventUnackedPacketsTracker.erase(endpointIdHash);
 
-    EngineMessage::Message message(EngineMessage::Type::RemoveRecordingTransport);
-    message.command.removeRecordingTransport.streamId = recordingStream->id.c_str();
-    message.command.removeRecordingTransport.endpointIdHash = endpointIdHash;
-    _messageListener.onMessage(std::move(message));
+    _messageListener.post(utils::bind(&MixerManagerAsync::removeRecordingTransport,
+        &_messageListener,
+        this,
+        recordingStream->id.c_str(),
+        endpointIdHash));
 }
 
 void EngineMixer::clear()
@@ -1156,14 +1152,12 @@ void EngineMixer::internalRemoveInboundSsrc(uint32_t ssrc)
     {
         logger::info("Removing inbound context ssrc %u", _loggableId.c_str(), ssrc);
 
-        EngineMessage::Message message(EngineMessage::Type::InboundSsrcRemoved);
-        message.command.ssrcInboundRemoved.mixer = this;
-        message.command.ssrcInboundRemoved.ssrc = ssrc;
-        message.command.ssrcInboundRemoved.opusDecoder = context->opusDecoder.release();
+        auto decoder = context->opusDecoder.release();
         _allSsrcInboundContexts.erase(ssrc);
-        if (message.command.ssrcInboundRemoved.opusDecoder)
+        if (decoder)
         {
-            _messageListener.onMessage(std::move(message));
+            _messageListener.post(
+                utils::bind(&MixerManagerAsync::inboundSsrcContextRemoved, &_messageListener, this, ssrc, decoder));
         }
     }
 }
@@ -1706,18 +1700,18 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
         return;
     }
 
-    EngineMessage::Message message(EngineMessage::Type::SctpMessage);
-    auto& sctpMessage = message.command.sctpMessage;
-    sctpMessage.mixer = this;
-    sctpMessage.endpointIdHash = sender->getEndpointIdHash();
-    message.packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
-    if (!message.packet)
+    auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
+    if (!packet)
     {
         logger::error("Unable to allocate sctp message, sender %p, length %lu", _loggableId.c_str(), sender, length);
         return;
     }
 
-    _messageListener.onMessage(std::move(message));
+    _messageListener.post(utils::bind(&MixerManagerAsync::sctpReceived,
+        &_messageListener,
+        this,
+        utils::moveParam(packet),
+        sender->getEndpointIdHash()));
 }
 
 void EngineMixer::onRecControlReceived(transport::RecordingTransport* sender,
@@ -2054,11 +2048,11 @@ void EngineMixer::onRecordingOutboundContextFinalized(size_t recordingStreamIdHa
         recordingStreamIdHash,
         ssrc);
 
-    EngineMessage::Message message(EngineMessage::Type::FreeRecordingRtpPacketCache);
-    message.command.freeRecordingRtpPacketCache.mixer = this;
-    message.command.freeRecordingRtpPacketCache.ssrc = outboundContextIt->second.ssrc;
-    message.command.freeRecordingRtpPacketCache.endpointIdHash = recordingStreamIdHash;
-    _messageListener.onMessage(std::move(message));
+    _messageListener.post(utils::bind(&MixerManagerAsync::freeRecordingRtpPacketCache,
+        &_messageListener,
+        this,
+        outboundContextIt->second.ssrc,
+        recordingStreamIdHash));
 
     outboundContexts.erase(outboundContextIt->first);
 }
@@ -2551,10 +2545,8 @@ void EngineMixer::addPacketToMixerBuffers(const IncomingAudioPacketInfo& packetI
             sequenceNumber.get());
         _mixerSsrcAudioBuffers.emplace(ssrc, nullptr);
         {
-            EngineMessage::Message message(EngineMessage::Type::AllocateAudioBuffer);
-            message.command.allocateAudioBuffer.mixer = this;
-            message.command.allocateAudioBuffer.ssrc = ssrc.get();
-            _messageListener.onMessage(std::move(message));
+            _messageListener.post(
+                utils::bind(&MixerManagerAsync::allocateAudioBuffer, &_messageListener, this, ssrc.get()));
         }
     }
     else if (!mixerAudioBufferItr->second)
@@ -2630,9 +2622,8 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             utils::Time::diffGE(_lastReceiveTime, timestamp, _config.mixerInactivityTimeoutMs * utils::Time::ms);
         if (isIdle && !_hasSentTimeout)
         {
-            EngineMessage::Message message(EngineMessage::Type::MixerTimedOut);
-            message.command.mixerTimedOut.mixer = this;
-            _hasSentTimeout = _messageListener.onMessage(std::move(message));
+            _hasSentTimeout =
+                _messageListener.post(utils::bind(&MixerManagerAsync::mixerTimedOut, &_messageListener, this));
         }
     }
     else
@@ -4356,10 +4347,7 @@ void EngineMixer::internalRemoveBarbell(size_t idHash)
     }
 
     _engineBarbells.erase(idHash);
-    EngineMessage::Message message(EngineMessage::Type::BarbellRemoved);
-    message.command.barbellMessage.barbell = barbell;
-    message.command.barbellMessage.mixer = this;
-    _messageListener.onMessage(std::move(message));
+    _messageListener.post(utils::bind(&MixerManagerAsync::barbellRemoved, &_messageListener, this, barbell));
 }
 
 // executed on engine thread
