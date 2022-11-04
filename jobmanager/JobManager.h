@@ -29,7 +29,7 @@ namespace jobmanager
  * group id.
  *
  */
-class JobManager
+class JobManager // TODO rename to MainJobQueue or MpmcJobQueue
 {
 public:
     JobManager(TimerQueue& timerQueue)

@@ -85,7 +85,7 @@ public:
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
         const concurrency::SynchronizationContext& engineSyncContext,
-        jobmanager::JobManager& backgroundJobManager,
+        jobmanager::JobManager& backgroundJobQueue,
         EngineMessageListener& messageListener,
         const uint32_t localVideoSsrc,
         const config::Config& config,
@@ -184,7 +184,7 @@ public:
     // --
 
     jobmanager::JobManager& getJobManager() { return _jobManager; }
-    jobmanager::JobManager& getBackgroundJobManager() { return _backgroundJobManager; }
+    jobmanager::JobManager& getbackgroundJobQueue() { return _backgroundJobQueue; }
 
     // call only on related Transport thread context
 
@@ -362,7 +362,7 @@ private:
     bool _hasSentTimeout;
     bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
-    jobmanager::JobManager& _backgroundJobManager; // to non-real time world
+    jobmanager::JobManager& _backgroundJobQueue; // to non-real time world
 
     uint64_t _lastRecordingAckProcessed;
     bool _slidesPresent;

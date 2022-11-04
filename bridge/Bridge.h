@@ -68,7 +68,7 @@ private:
     std::vector<std::unique_ptr<jobmanager::WorkerThread>> _workerThreads;
     std::unique_ptr<jobmanager::TimerQueue> _timers;
     const std::unique_ptr<jobmanager::JobManager> _rtJobManager;
-    const std::unique_ptr<jobmanager::JobManager> _backgroundJobManager;
+    const std::unique_ptr<jobmanager::JobManager> _backgroundJobQueue;
     std::unique_ptr<jobmanager::WorkerThread> deferrableWorker;
 
     std::vector<transport::SocketAddress> _localInterfaces;

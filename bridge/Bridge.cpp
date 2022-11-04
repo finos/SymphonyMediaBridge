@@ -62,13 +62,13 @@ Bridge::Bridge(const config::Config& config)
       _ssrcGenerator(std::make_unique<utils::SsrcGenerator>()),
       _timers(std::make_unique<jobmanager::TimerQueue>(4096 * 8)),
       _rtJobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
-      _backgroundJobManager(std::make_unique<jobmanager::JobManager>(*_timers)),
+      _backgroundJobQueue(std::make_unique<jobmanager::JobManager>(*_timers)),
       _sslDtls(std::make_unique<transport::SslDtls>()),
       _network(transport::createRtcePoll()),
       _mainPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(32 * 1024, "main")),
       _sendPacketAllocator(std::make_unique<memory::PacketPoolAllocator>(128 * 1024, "send")),
       _audioPacketAllocator(std::make_unique<memory::AudioPacketPoolAllocator>(4 * 1024, "audio")),
-      _engine(std::make_unique<bridge::Engine>(config, *_backgroundJobManager))
+      _engine(std::make_unique<bridge::Engine>(config, *_backgroundJobQueue))
 {
 }
 
@@ -85,9 +85,9 @@ Bridge::~Bridge()
 
     _timers->stop();
 
-    if (_backgroundJobManager)
+    if (_backgroundJobQueue)
     {
-        _backgroundJobManager->stop();
+        _backgroundJobQueue->stop();
     }
 
     if (_rtJobManager)
@@ -153,7 +153,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     }
 
     startWorkerThreads();
-    deferrableWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobManager, "MMWorker");
+    deferrableWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, "MMWorker");
 
     if (!_sslDtls->isInitialized())
     {
@@ -200,7 +200,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     _mixerManager = std::make_unique<bridge::MixerManager>(*_idGenerator,
         *_ssrcGenerator,
         *_rtJobManager,
-        *_backgroundJobManager,
+        *_backgroundJobQueue,
         *_transportFactory,
         *_engine,
         _config,

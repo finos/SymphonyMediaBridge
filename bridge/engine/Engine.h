@@ -25,7 +25,7 @@ class EngineMessageListener;
 class Engine
 {
 public:
-    Engine(const config::Config& config, jobmanager::JobManager& backgroundJobManager);
+    Engine(const config::Config& config, jobmanager::JobManager& backgroundJobQueue);
 
     void setMessageListener(EngineMessageListener* messageListener);
     void stop();
@@ -55,7 +55,7 @@ private:
     uint32_t _tickCounter;
 
     concurrency::MpmcQueue<utils::Function> _threadQueue;
-    jobmanager::JobManager& _backgroundJobManager;
+    jobmanager::JobManager& _backgroundJobQueue;
 
     std::thread _thread; // must be last member
 
