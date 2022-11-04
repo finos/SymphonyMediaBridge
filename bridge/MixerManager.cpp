@@ -160,11 +160,10 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         b.append(pinSsrc.main);
     }
 
-    logger::info("Mixer-%zu id=%s, served by engine mixer %s, %s",
+    logger::info("%s id=%s, %s",
         "MixerManager",
-        engineMixer.getLoggableId().getInstanceId(),
+        mixerEmplaceResult.first->second->getLoggableId().c_str(),
         id.c_str(),
-        engineMixer.getLoggableId().c_str(),
         b.build().c_str());
 
     {
