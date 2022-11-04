@@ -49,7 +49,7 @@ class MixerManager : public EngineMessageListener
 public:
     MixerManager(utils::IdGenerator& idGenerator,
         utils::SsrcGenerator& ssrcGenerator,
-        jobmanager::JobManager& engineJobManager,
+        jobmanager::JobManager& rtJobManager,
         jobmanager::JobManager& deferrableJobManager,
         transport::TransportFactory& transportFactory,
         bridge::Engine& engine,
@@ -89,8 +89,8 @@ private:
 
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
-    jobmanager::JobManager& _engineJobManager;
-    jobmanager::JobManager& _deferrableJobManager;
+    jobmanager::JobManager& _rtJobManager;
+    jobmanager::JobManager& _backgroundJobManager;
     transport::TransportFactory& _transportFactory;
     Engine& _engine;
     const config::Config& _config;

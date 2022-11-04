@@ -77,7 +77,7 @@ private:
 
 MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     utils::SsrcGenerator& ssrcGenerator,
-    jobmanager::JobManager& engineJobManager,
+    jobmanager::JobManager& rtJobManager,
     jobmanager::JobManager& deferrableJobManager,
     transport::TransportFactory& transportFactory,
     Engine& engine,
@@ -87,8 +87,8 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     memory::AudioPacketPoolAllocator& audioAllocator)
     : _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
-      _engineJobManager(engineJobManager),
-      _deferrableJobManager(deferrableJobManager),
+      _rtJobManager(rtJobManager),
+      _backgroundJobManager(deferrableJobManager),
       _transportFactory(transportFactory),
       _engine(engine),
       _config(config),
@@ -100,7 +100,7 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _audioAllocator(audioAllocator)
 {
     _engine.setMessageListener(this);
-    _deferrableJobManager.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer);
+    _backgroundJobManager.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer);
 }
 
 MixerManager::~MixerManager()
@@ -152,9 +152,9 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
     }
 
     auto engineMixer = std::make_unique<EngineMixer>(id,
-        _engineJobManager,
+        _rtJobManager,
         _engine.getSynchronizationContext(),
-        _deferrableJobManager,
+        _backgroundJobManager,
         *this,
         localVideoSsrc,
         _config,
@@ -408,7 +408,7 @@ std::shared_ptr<Mixer> MixerManager::onEngineMixerRemoved1(EngineMixer& engineMi
         return mixer;
     }
 
-    return std::shared_ptr<Mixer>();
+    return nullptr;
 }
 
 void MixerManager::onEngineMixerRemoved2(const std::string& mixerId)
@@ -764,7 +764,7 @@ Stats::MixerManagerStats MixerManager::getStats()
 
     EndpointMetrics udpMetrics = _transportFactory.getSharedUdpEndpointsMetrics();
 
-    result.jobQueueLength = _engineJobManager.getCount();
+    result.jobQueueLength = _rtJobManager.getCount();
     result.receivePoolSize = _mainAllocator.size();
     result.sendPoolSize = _sendAllocator.size();
     result.udpSharedEndpointsSendQueue = udpMetrics.sendQueue;

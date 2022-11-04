@@ -22,14 +22,14 @@ const auto intervalNs = 1000000UL * bridge::EngineMixer::iterationDurationMs;
 namespace bridge
 {
 
-Engine::Engine(const config::Config& config, jobmanager::JobManager& deferrableJobManager)
+Engine::Engine(const config::Config& config, jobmanager::JobManager& backgroundJobManager)
     : _config(config),
       _messageListener(nullptr),
       _running(true),
       _pendingCommands(1024),
       _tickCounter(0),
       _threadQueue(1024),
-      _deferrableJobManager(deferrableJobManager),
+      _backgroundJobManager(backgroundJobManager),
       _thread([this] { this->run(); })
 {
     if (concurrency::setPriority(_thread, concurrency::Priority::RealTime))
@@ -287,7 +287,7 @@ void Engine::addMixer(EngineCommand::Command& nextCommand)
     {
         logger::error("Unable to add EngineMixer %s to Engine", "Engine", engineMixer->getLoggableId().c_str());
 
-        _deferrableJobManager.addJob<EngineMixerRemoved>(*_messageListener, *engineMixer);
+        _backgroundJobManager.addJob<EngineMixerRemoved>(*_messageListener, *engineMixer);
 
         return;
     }
@@ -306,7 +306,7 @@ void Engine::removeMixer(EngineCommand::Command& nextCommand)
         logger::error("Unable to remove EngineMixer %s from Engine", "Engine", command.mixer->getLoggableId().c_str());
     }
 
-    _deferrableJobManager.addJob<EngineMixerRemoved>(*_messageListener, *command.mixer);
+    _backgroundJobManager.addJob<EngineMixerRemoved>(*_messageListener, *command.mixer);
 }
 
 void Engine::addAudioStream(EngineCommand::Command& nextCommand)
