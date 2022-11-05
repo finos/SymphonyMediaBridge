@@ -253,6 +253,14 @@ bool Mixer::hasPendingTransportJobs()
         }
     }
 
+    for (auto& barbell : _barbells)
+    {
+        if (barbell.second->transport->hasPendingJobs())
+        {
+            return true;
+        }
+    }
+
     _engineMixer->flush();
 
     return false;
@@ -352,6 +360,23 @@ bool Mixer::addAudioStream(std::string& outId,
         streamItr.first->second->transport->getLoggableId().c_str());
 
     return streamItr.first->second->transport->isInitialized();
+}
+
+void Mixer::allocateAudioBuffer(uint32_t ssrc)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto findResult = _audioBuffers.find(ssrc);
+    if (findResult != _audioBuffers.cend())
+    {
+        return;
+    }
+
+    logger::info("Allocating audio buffer for ssrc %u", getLoggableId().c_str(), ssrc);
+
+    auto audioBuffer = std::make_unique<EngineMixer::AudioBuffer>();
+    auto* rawAudioBuffer = audioBuffer.get();
+    _audioBuffers.emplace(ssrc, std::move(audioBuffer));
+    _engine.post(utils::bind(&EngineMixer::addAudioBuffer, _engineMixer.get(), ssrc, rawAudioBuffer));
 }
 
 bool Mixer::addVideoStream(std::string& outId,
@@ -1713,14 +1738,14 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
     const std::string& message)
 {
     assert(fromEndpointIdHash);
-    if (message.size() >= memory::AudioPacket::maxLength() - 1)
+    if (message.size() >= memory::AudioPacket::maxLength())
     {
         return;
     }
 
     auto& audioAllocator = _engineMixer->getAudioAllocator();
     auto packet = memory::makeUniquePacket(audioAllocator, message.c_str(), message.size());
-    reinterpret_cast<char*>(packet->get())[message.size()] = 0; // null terminated already in packet
+    reinterpret_cast<char*>(packet->get())[message.size()] = 0; // null terminated in packet
 
     std::lock_guard<std::mutex> locker(_configurationLock);
 

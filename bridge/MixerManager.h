@@ -94,8 +94,6 @@ private:
     const config::Config& _config;
 
     std::unordered_map<std::string, std::shared_ptr<Mixer>> _mixers;
-    std::unordered_map<std::string, std::unordered_map<uint32_t, std::unique_ptr<EngineMixer::AudioBuffer>>>
-        _audioBuffers;
 
     std::atomic<bool> _running;
     utils::Pacer _statsRefreshPacer;

@@ -3,6 +3,7 @@
 #include "bridge/Barbell.h"
 #include "bridge/RecordingStream.h"
 #include "bridge/engine/ActiveTalker.h"
+#include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
@@ -46,7 +47,7 @@ namespace bridge
 {
 
 class Engine;
-class EngineMixer;
+
 struct EngineAudioStream;
 struct EngineVideoStream;
 struct AudioStreamDescription;
@@ -113,6 +114,7 @@ public:
         bool rewriteSsrcs,
         bool isDtlsEnabled,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
+    void allocateAudioBuffer(uint32_t ssrc);
 
     bool addBundledAudioStream(std::string& outId,
         const std::string& endpointId,
@@ -310,6 +312,7 @@ private:
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
 
+    std::unordered_map<uint32_t, std::unique_ptr<EngineMixer::AudioBuffer>> _audioBuffers;
     std::unordered_map<std::string, std::unique_ptr<AudioStream>> _audioStreams;
     std::unordered_map<std::string, std::unique_ptr<EngineAudioStream>> _audioEngineStreams;
     std::unordered_map<std::string, std::unique_ptr<VideoStream>> _videoStreams;

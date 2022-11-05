@@ -316,13 +316,6 @@ void MixerManager::finalizeEngineMixerRemoval(const std::string& mixerId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    auto mixerAudioBuffers = _audioBuffers.find(mixerId);
-    if (mixerAudioBuffers != _audioBuffers.cend())
-    {
-        mixerAudioBuffers->second.clear();
-        _audioBuffers.erase(mixerAudioBuffers);
-    }
-
     if (_mixers.empty())
     {
         _mainAllocator.logAllocatedElements();
@@ -335,23 +328,13 @@ void MixerManager::allocateAudioBuffer(EngineMixer* mixer, uint32_t ssrc)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    auto& mixerAudioBuffers = _audioBuffers[mixer->getId()];
-    auto findResult = mixerAudioBuffers.find(ssrc);
-    if (findResult != mixerAudioBuffers.cend())
+    auto it = _mixers.find(mixer->getId());
+    if (it == _mixers.end())
     {
         return;
     }
 
-    logger::info("Allocating audio buffer for EngineMixer %s, ssrc %u",
-        "MixerManager",
-        mixer->getLoggableId().c_str(),
-        ssrc);
-
-    auto audioBuffer = std::make_unique<EngineMixer::AudioBuffer>();
-    {
-        _engine.post(utils::bind(&EngineMixer::addAudioBuffer, mixer, ssrc, audioBuffer.get()));
-    }
-    mixerAudioBuffers.emplace(ssrc, std::move(audioBuffer));
+    it->second->allocateAudioBuffer(ssrc);
 }
 
 void MixerManager::audioStreamRemoved(EngineMixer* mixer, EngineAudioStream* audioStream)
