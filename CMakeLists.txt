@@ -155,8 +155,6 @@ set(FILES
         bridge/engine/EngineAudioStream.h
         bridge/engine/EngineCommand.h
         bridge/engine/EngineDataStream.h
-        bridge/engine/EngineMessage.h
-        bridge/engine/EngineMessageListener.h
         bridge/engine/EngineMixer.cpp
         bridge/engine/EngineMixer.h
         bridge/engine/EngineStats.h
@@ -180,7 +178,6 @@ set(FILES
         bridge/engine/RecordingRtpNackReceiveJob.cpp
         bridge/engine/RecordingRtpNackReceiveJob.h
         bridge/engine/RecordingSendEventJob.cpp
-        bridge/engine/SendEngineMessageJob.h
         bridge/engine/SendPliJob.cpp
         bridge/engine/SendPliJob.h
         bridge/engine/SendRtcpJob.cpp
