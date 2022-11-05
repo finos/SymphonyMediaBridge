@@ -586,6 +586,12 @@ void EngineMixer::updateRecordingStreamModalities(EngineRecordingStream* engineR
         return;
     }
 
+    logger::debug("Update recordingStream modalities, stream: %s audio: %s, video: %s",
+        getLoggableId().c_str(),
+        engineRecordingStream->id.c_str(),
+        isAudioEnabled ? "enabled" : "disabled",
+        isVideoEnabled ? "enabled" : "disabled");
+
     if (engineRecordingStream->isAudioEnabled != isAudioEnabled)
     {
         engineRecordingStream->isAudioEnabled = isAudioEnabled;
@@ -692,8 +698,8 @@ void EngineMixer::reconfigureAudioStream(const transport::RtcTransport* transpor
 }
 
 void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transport,
-    const SsrcWhitelist& ssrcWhitelist,
-    const SimulcastStream& simulcastStream,
+    const SsrcWhitelist* ssrcWhitelist,
+    const SimulcastStream* simulcastStream,
     const SimulcastStream* secondarySimulcastStream)
 {
     const auto endpointIdHash = transport->getEndpointIdHash();
@@ -704,10 +710,19 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
         return;
     }
 
+    logger::debug("Reconfigure %s video stream, endpointIdHash %lu, whitelist %c %u %u %u",
+        _loggableId.c_str(),
+        secondarySimulcastStream ? "secondary" : "primary",
+        transport->getEndpointIdHash(),
+        ssrcWhitelist->enabled ? 't' : 'f',
+        ssrcWhitelist->numSsrcs,
+        ssrcWhitelist->ssrcs[0],
+        ssrcWhitelist->ssrcs[1]);
+
     const auto mapRevision = _activeMediaList->getMapRevision();
     if (engineVideoStream->simulcastStream.numLevels != 0 &&
-        (simulcastStream.numLevels == 0 ||
-            simulcastStream.levels[0].ssrc != engineVideoStream->simulcastStream.levels[0].ssrc))
+        (simulcastStream->numLevels == 0 ||
+            simulcastStream->levels[0].ssrc != engineVideoStream->simulcastStream.levels[0].ssrc))
     {
         removeVideoSsrcFromRecording(*engineVideoStream, engineVideoStream->simulcastStream.levels[0].ssrc);
     }
@@ -722,7 +737,7 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
             engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc);
     }
 
-    engineVideoStream->simulcastStream = simulcastStream;
+    engineVideoStream->simulcastStream = *simulcastStream;
     engineVideoStream->secondarySimulcastStream = secondarySimulcastStream == nullptr
         ? utils::Optional<SimulcastStream>()
         : utils::Optional<SimulcastStream>(*secondarySimulcastStream);
@@ -1551,9 +1566,9 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
     }
 }
 
-void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::Packet& packet)
+void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet)
 {
-    auto& header = webrtc::streamMessageHeader(packet);
+    auto& header = webrtc::streamMessageHeader(*packet);
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
     if (dataStream)
     {
@@ -1562,7 +1577,7 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::P
             header.sequenceNumber,
             header.payloadProtocol,
             header.data(),
-            packet.getLength() - sizeof(header));
+            packet->getLength() - sizeof(header));
     }
 }
 
@@ -1605,9 +1620,9 @@ void EngineMixer::pinEndpoint(const size_t endpointIdHash, const size_t targetEn
 
 void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
-    const char* message)
+    memory::UniqueAudioPacket packet)
 {
-    if (!fromEndpointIdHash)
+    if (!fromEndpointIdHash || !packet)
     {
         assert(false);
         return;
@@ -1619,6 +1634,7 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
         return;
     }
 
+    auto message = reinterpret_cast<const char*>(packet->get());
     utils::StringBuilder<2048> endpointMessage;
 
     if (toEndpointIdHash)

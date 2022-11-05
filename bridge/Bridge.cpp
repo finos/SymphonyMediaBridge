@@ -110,9 +110,9 @@ Bridge::~Bridge()
         logger::info("stopped workerThread %d", "main", n++);
     }
 
-    if (deferrableWorker)
+    if (backgroundWorker)
     {
-        deferrableWorker->stop();
+        backgroundWorker->stop();
     }
 }
 
@@ -153,7 +153,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     }
 
     startWorkerThreads();
-    deferrableWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, "MMWorker");
+    backgroundWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, "MMWorker");
 
     if (!_sslDtls->isInitialized())
     {

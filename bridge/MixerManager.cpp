@@ -203,11 +203,7 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         id.c_str(),
         b.build().c_str());
 
-    {
-        EngineCommand::Command addMixerCommand = {EngineCommand::Type::AddMixer};
-        addMixerCommand.command.addMixer.mixer = mixerEmplaceResult.first->second->getEngineMixer();
-        _engine.pushCommand(std::move(addMixerCommand));
-    }
+    _engine.post(utils::bind(&Engine::addMixer, &_engine, mixerEmplaceResult.first->second->getEngineMixer()));
 
     return mixerEmplaceResult.first->second.get();
 }
@@ -222,10 +218,7 @@ void MixerManager::remove(const std::string& id)
     }
 
     findResult->second->markForDeletion();
-
-    EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
-    command.command.removeMixer.mixer = findResult->second->getEngineMixer();
-    _engine.pushCommand(std::move(command));
+    _engine.post(utils::bind(&Engine::removeMixer, &_engine, findResult->second->getEngineMixer()));
 }
 
 std::vector<std::string> MixerManager::getMixerIds()
@@ -271,9 +264,7 @@ void MixerManager::stop()
             if (!it->second->isMarkedForDeletion())
             {
                 it->second->markForDeletion();
-                EngineCommand::Command command(EngineCommand::Type::RemoveMixer);
-                command.command.removeMixer.mixer = it->second->getEngineMixer();
-                _engine.pushCommand(std::move(command));
+                _engine.post(utils::bind(&Engine::removeMixer, &_engine, it->second->getEngineMixer()));
             }
         }
     }
@@ -358,11 +349,7 @@ void MixerManager::allocateAudioBuffer(EngineMixer* mixer, uint32_t ssrc)
 
     auto audioBuffer = std::make_unique<EngineMixer::AudioBuffer>();
     {
-        EngineCommand::Command command(EngineCommand::Type::AddAudioBuffer);
-        command.command.addAudioBuffer.mixer = mixer;
-        command.command.addAudioBuffer.ssrc = ssrc;
-        command.command.addAudioBuffer.audioBuffer = audioBuffer.get();
-        _engine.pushCommand(std::move(command));
+        _engine.post(utils::bind(&EngineMixer::addAudioBuffer, mixer, ssrc, audioBuffer.get()));
     }
     mixerAudioBuffers.emplace(ssrc, std::move(audioBuffer));
 }
@@ -467,8 +454,6 @@ void MixerManager::inboundSsrcContextRemoved(EngineMixer* mixer, uint32_t ssrc, 
     delete opusDecoder;
 }
 
-// TODO we could call method directly on Mixer if we expose the sync lock from MixerManager. EngineMixer could now his
-// parent
 void MixerManager::allocateVideoPacketCache(EngineMixer* mixer, uint32_t ssrc, size_t endpointIdHash)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -503,12 +488,7 @@ void MixerManager::sctpReceived(EngineMixer* mixer, memory::UniquePacket msgPack
     {
         // create command with this packet to send the binary data -> engine -> WebRtcDataStream belonging to this
         // transport
-        EngineCommand::Command command{EngineCommand::Type::SctpControl};
-        auto& sctpControl = command.command.sctpControl;
-        command.packet.swap(msgPacket);
-        sctpControl.mixer = mixer;
-        sctpControl.endpointIdHash = endpointIdHash;
-        _engine.pushCommand(std::move(command));
+        _engine.post(utils::bind(&EngineMixer::handleSctpControl, mixer, endpointIdHash, utils::moveParam(msgPacket)));
         return; // do not free packet as we passed it on
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)

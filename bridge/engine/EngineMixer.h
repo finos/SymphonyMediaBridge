@@ -113,13 +113,15 @@ public:
     void startRecordingTransport(transport::RecordingTransport* transport);
     void reconfigureAudioStream(const transport::RtcTransport* transport, const uint32_t remoteSsrc);
     void reconfigureVideoStream(const transport::RtcTransport* transport,
-        const SsrcWhitelist& ssrcWhitelist,
-        const SimulcastStream& simulcastStream,
+        const SsrcWhitelist* ssrcWhitelist,
+        const SimulcastStream* simulcastStream,
         const SimulcastStream* secondarySimulcastStream = nullptr);
     void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
-    void handleSctpControl(const size_t endpointIdHash, const memory::Packet& packet);
+    void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
-    void sendEndpointMessage(const size_t toEndpointIdHash, const size_t fromEndpointIdHash, const char* message);
+    void sendEndpointMessage(const size_t toEndpointIdHash,
+        const size_t fromEndpointIdHash,
+        memory::UniqueAudioPacket packet);
     void recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc);
     void recordingStop(EngineRecordingStream* stream, const RecordingDescription* desc);
     void updateRecordingStreamModalities(EngineRecordingStream* engineRecordingStream,
