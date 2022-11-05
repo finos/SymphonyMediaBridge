@@ -153,7 +153,6 @@ set(FILES
         bridge/engine/Engine.cpp
         bridge/engine/Engine.h
         bridge/engine/EngineAudioStream.h
-        bridge/engine/EngineCommand.h
         bridge/engine/EngineDataStream.h
         bridge/engine/EngineMixer.cpp
         bridge/engine/EngineMixer.h
