@@ -734,6 +734,11 @@ void Mixer::engineAudioStreamRemoved(EngineAudioStream* engineStream)
         return;
     }
 
+    if (engineStream->remoteSsrc.isSet() && _audioBuffers.find(engineStream->remoteSsrc.get()) != _audioBuffers.end())
+    {
+        _audioBuffers.erase(engineStream->remoteSsrc.get());
+    }
+
     auto& stream = streamItr->second;
     logger::info("AudioStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
