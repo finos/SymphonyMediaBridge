@@ -82,7 +82,7 @@ void RealTimeTest::TearDown()
 #if !ENABLE_LEGACY_API
     GTEST_SKIP();
 #endif
-
+    _timerQueue->stop();
     _bridge.reset();
     _clientTransportFactory.reset();
     _jobManager->stop();
