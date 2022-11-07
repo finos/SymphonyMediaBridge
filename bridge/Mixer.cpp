@@ -1373,24 +1373,12 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
     videoStream->secondarySimulcastStream = secondarySimulcastStream;
     videoStream->ssrcWhitelist = ssrcWhitelist;
 
-    if (secondarySimulcastStream.isSet())
-    {
-        _engine.post(utils::bind(&EngineMixer::reconfigureVideoStream,
-            _engineMixer.get(),
-            videoStream->transport.get(),
-            &videoStream->ssrcWhitelist,
-            &videoStream->simulcastStream,
-            &videoStream->secondarySimulcastStream.get()));
-    }
-    else
-    {
-        _engine.post(utils::bind(&EngineMixer::reconfigureVideoStream,
-            _engineMixer.get(),
-            videoStream->transport.get(),
-            &videoStream->ssrcWhitelist,
-            &videoStream->simulcastStream,
-            nullptr));
-    }
+    _engine.post(utils::bind(&EngineMixer::reconfigureVideoStream,
+        _engineMixer.get(),
+        videoStream->transport.get(),
+        ssrcWhitelist,
+        simulcastStream,
+        secondarySimulcastStream));
 
     return true;
 }

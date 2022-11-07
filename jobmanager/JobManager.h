@@ -150,7 +150,7 @@ public:
     void abortTimedJobs(const uint64_t groupId) { _timers.abortTimers(groupId); }
     void abortTimedJob(const uint64_t groupId, const uint32_t id) { _timers.abortTimer(groupId, id); }
 
-    static const auto maxJobSize = 22 * 8;
+    static const auto maxJobSize = 26 * sizeof(uint64_t);
 
 private:
     concurrency::MpmcQueue<MultiStepJob*> _jobQueue;

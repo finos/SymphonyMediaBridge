@@ -113,9 +113,9 @@ public:
     void startRecordingTransport(transport::RecordingTransport* transport);
     void reconfigureAudioStream(const transport::RtcTransport* transport, const uint32_t remoteSsrc);
     void reconfigureVideoStream(const transport::RtcTransport* transport,
-        const SsrcWhitelist* ssrcWhitelist,
-        const SimulcastStream* simulcastStream,
-        const SimulcastStream* secondarySimulcastStream = nullptr);
+        const SsrcWhitelist& ssrcWhitelist,
+        const SimulcastStream& simulcastStream,
+        const utils::Optional<SimulcastStream>& secondarySimulcastStream);
     void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
     void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);

@@ -698,9 +698,9 @@ void EngineMixer::reconfigureAudioStream(const transport::RtcTransport* transpor
 }
 
 void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transport,
-    const SsrcWhitelist* ssrcWhitelist,
-    const SimulcastStream* simulcastStream,
-    const SimulcastStream* secondarySimulcastStream)
+    const SsrcWhitelist& ssrcWhitelist,
+    const SimulcastStream& simulcastStream,
+    const utils::Optional<SimulcastStream>& secondarySimulcastStream)
 {
     const auto endpointIdHash = transport->getEndpointIdHash();
 
@@ -712,44 +712,42 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
 
     logger::debug("Reconfigure %s video stream, endpointIdHash %lu, whitelist %c %u %u %u",
         _loggableId.c_str(),
-        secondarySimulcastStream ? "secondary" : "primary",
+        secondarySimulcastStream.isSet() ? "secondary" : "primary",
         transport->getEndpointIdHash(),
-        ssrcWhitelist->enabled ? 't' : 'f',
-        ssrcWhitelist->numSsrcs,
-        ssrcWhitelist->ssrcs[0],
-        ssrcWhitelist->ssrcs[1]);
+        ssrcWhitelist.enabled ? 't' : 'f',
+        ssrcWhitelist.numSsrcs,
+        ssrcWhitelist.ssrcs[0],
+        ssrcWhitelist.ssrcs[1]);
 
     const auto mapRevision = _activeMediaList->getMapRevision();
     if (engineVideoStream->simulcastStream.numLevels != 0 &&
-        (simulcastStream->numLevels == 0 ||
-            simulcastStream->levels[0].ssrc != engineVideoStream->simulcastStream.levels[0].ssrc))
+        (simulcastStream.numLevels == 0 ||
+            simulcastStream.levels[0].ssrc != engineVideoStream->simulcastStream.levels[0].ssrc))
     {
         removeVideoSsrcFromRecording(*engineVideoStream, engineVideoStream->simulcastStream.levels[0].ssrc);
     }
 
     if ((engineVideoStream->secondarySimulcastStream.isSet() &&
             engineVideoStream->secondarySimulcastStream.get().numLevels != 0) &&
-        (!secondarySimulcastStream ||
-            secondarySimulcastStream->levels[0].ssrc !=
+        (!secondarySimulcastStream.isSet() ||
+            secondarySimulcastStream.get().levels[0].ssrc !=
                 engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc))
     {
         removeVideoSsrcFromRecording(*engineVideoStream,
             engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc);
     }
 
-    engineVideoStream->simulcastStream = *simulcastStream;
-    engineVideoStream->secondarySimulcastStream = secondarySimulcastStream == nullptr
-        ? utils::Optional<SimulcastStream>()
-        : utils::Optional<SimulcastStream>(*secondarySimulcastStream);
+    engineVideoStream->simulcastStream = simulcastStream;
+    engineVideoStream->secondarySimulcastStream = secondarySimulcastStream;
 
     _engineStreamDirector->removeParticipant(endpointIdHash);
     _activeMediaList->removeVideoParticipant(endpointIdHash);
 
     if (engineVideoStream->simulcastStream.numLevels > 0)
     {
-        if (secondarySimulcastStream && secondarySimulcastStream->numLevels > 0)
+        if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().numLevels > 0)
         {
-            engineVideoStream->secondarySimulcastStream.set(*secondarySimulcastStream);
+            engineVideoStream->secondarySimulcastStream = secondarySimulcastStream;
             _engineStreamDirector->addParticipant(endpointIdHash,
                 engineVideoStream->simulcastStream,
                 &engineVideoStream->secondarySimulcastStream.get());
@@ -765,9 +763,9 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
             engineVideoStream->endpointId.c_str());
 
         restoreDirectorStreamActiveState(*engineVideoStream, engineVideoStream->simulcastStream);
-        if (secondarySimulcastStream && secondarySimulcastStream->numLevels > 0)
+        if (secondarySimulcastStream.isSet() && secondarySimulcastStream.get().numLevels > 0)
         {
-            restoreDirectorStreamActiveState(*engineVideoStream, *secondarySimulcastStream);
+            restoreDirectorStreamActiveState(*engineVideoStream, secondarySimulcastStream.get());
         }
     }
     else
@@ -783,7 +781,7 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     }
     sendVideoStreamToRecording(*engineVideoStream, true);
 
-    engineVideoStream->ssrcWhitelist = *ssrcWhitelist;
+    engineVideoStream->ssrcWhitelist = ssrcWhitelist;
 }
 
 void EngineMixer::addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache)

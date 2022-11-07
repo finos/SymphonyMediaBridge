@@ -15,7 +15,7 @@ namespace detail
 
 constexpr size_t calculateStorageSize()
 {
-    constexpr size_t minSize = 128;
+    constexpr size_t minSize = 20 * sizeof(uint64_t);
     // Ensure EngineFunction has a size multiple of alignof(std::max_align_t) to not waste space with paddings
     // when we have a contiguous containers with EngineFunction
     constexpr size_t alignedSpace =
