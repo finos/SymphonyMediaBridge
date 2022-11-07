@@ -1315,7 +1315,7 @@ bool Mixer::configureVideoStream(const std::string& endpointId,
         videoStream->transport->setAbsSendTimeExtensionId(videoStream->rtpMap.absSendTimeExtId.get());
     }
 
-    std::memcpy(&videoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
+    videoStream->ssrcWhitelist = ssrcWhitelist;
     return true;
 }
 
@@ -1371,7 +1371,7 @@ bool Mixer::reconfigureVideoStream(const std::string& endpointId,
 
     videoStream->simulcastStream = simulcastStream;
     videoStream->secondarySimulcastStream = secondarySimulcastStream;
-    std::memcpy(&videoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
+    videoStream->ssrcWhitelist = ssrcWhitelist;
 
     if (secondarySimulcastStream.isSet())
     {

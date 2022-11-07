@@ -783,7 +783,7 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport* transpor
     }
     sendVideoStreamToRecording(*engineVideoStream, true);
 
-    memcpy(&engineVideoStream->ssrcWhitelist, &ssrcWhitelist, sizeof(SsrcWhitelist));
+    engineVideoStream->ssrcWhitelist = *ssrcWhitelist;
 }
 
 void EngineMixer::addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache)

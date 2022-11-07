@@ -149,7 +149,7 @@ protected:
             *_transport,
             bridge::RtpMap(),
             bridge::RtpMap(),
-            bridge::SsrcWhitelist({false, 0, {0, 0}}),
+            bridge::SsrcWhitelist(),
             true,
             _videoPinSsrcs,
             0);

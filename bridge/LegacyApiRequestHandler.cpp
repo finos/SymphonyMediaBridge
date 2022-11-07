@@ -163,7 +163,7 @@ legacyapi::Candidate iceCandidateToApi(const ice::IceCandidate& iceCandidate)
 
 bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const legacyapi::Channel& channel)
 {
-    bridge::SsrcWhitelist ssrcWhitelist = {false, 0, {0, 0}};
+    bridge::SsrcWhitelist ssrcWhitelist;
 
     if (channel._ssrcWhitelist.isSet())
     {

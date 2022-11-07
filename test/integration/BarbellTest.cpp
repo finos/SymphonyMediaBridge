@@ -244,7 +244,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
                 else
                 {
                     EXPECT_NEAR(fps, 30.0, 1.0);
-                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 7);
                 }
             }
         }

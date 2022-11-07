@@ -302,7 +302,7 @@ std::vector<bridge::SimulcastStream> makeSimulcastStreams(const api::Video& vide
 
 bridge::SsrcWhitelist makeWhitelistedSsrcsArray(const api::Video& video)
 {
-    bridge::SsrcWhitelist ssrcWhitelist = {false, 0, {0, 0}};
+    bridge::SsrcWhitelist ssrcWhitelist;
 
     if (video.ssrcWhitelist.isSet())
     {

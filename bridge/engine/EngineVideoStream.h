@@ -42,6 +42,7 @@ struct EngineVideoStream
           transport(transport),
           rtpMap(rtpMap),
           feedbackRtpMap(feedbackRtpMap),
+          ssrcWhitelist(whitelist),
           ssrcRewrite(ssrcRewrite),
           videoPinSsrcs(SsrcRewrite::ssrcArraySize),
           idleTimeoutSeconds(idleTimeoutSeconds),
@@ -49,7 +50,6 @@ struct EngineVideoStream
     {
         assert(pinSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
-        std::memcpy(&ssrcWhitelist, &whitelist, sizeof(SsrcWhitelist));
         for (const auto& videoSsrc : pinSsrcs)
         {
             videoPinSsrcs.push({videoSsrc.main, videoSsrc.feedback, false});
