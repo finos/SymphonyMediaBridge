@@ -26,7 +26,7 @@ struct RecordingDescription;
 class Engine
 {
 public:
-    Engine(const config::Config& config, jobmanager::JobManager& backgroundJobQueue);
+    Engine(jobmanager::JobManager& backgroundJobQueue);
 
     void setMessageListener(MixerManagerAsync* messageListener);
     void stop();
@@ -45,7 +45,6 @@ private:
     static const size_t maxMixers = 4096;
     static const uint32_t STATS_UPDATE_TICKS = 200;
 
-    const config::Config& _config;
     MixerManagerAsync* _messageListener;
     std::atomic<bool> _running;
 
@@ -58,7 +57,8 @@ private:
 
     std::thread _thread; // must be last member
 
-    /* @return true if max tasks number were reached */
+    bool processTasks(uint32_t maxCount);
+    void updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& currentStatSample, uint64_t timestamp);
 
 public: // async methods called via post
     void addMixer(EngineMixer* engineMixer);
