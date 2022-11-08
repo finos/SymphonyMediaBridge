@@ -136,7 +136,10 @@ struct IntegrationTest : public ::testing::Test
     void finalizeSimulationWithTimeout(uint64_t rampdownTimeout);
     void finalizeSimulation();
 
-    size_t expectedTestThreadCount(size_t smbCount) const { return (1 + smbCount) * (_numWorkerThreads + 3); }
+    size_t expectedTestThreadCount(size_t smbCount) const
+    {
+        return (1 + smbCount) * (_numWorkerThreads + 3) + smbCount;
+    }
 
 public:
     static bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint);

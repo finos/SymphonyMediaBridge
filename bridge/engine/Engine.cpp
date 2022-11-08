@@ -95,12 +95,12 @@ void Engine::run()
                 nextForwardCycle -= utils::Time::ms;
             }
 
-            const auto done = processTasks(32);
+            const auto pendingTasks = processTasks(128);
             timestamp = utils::Time::getAbsoluteTime();
             toSleep = pacer.timeToNextTick(timestamp);
-            if (done && toSleep > 0)
+            if (!pendingTasks && toSleep > 0)
             {
-                utils::Time::nanoSleep(std::min(utils::checkedCast<uint64_t>(toSleep), utils::Time::us * 250));
+                utils::Time::nanoSleep(std::min(utils::checkedCast<uint64_t>(toSleep), utils::Time::us * 2000));
                 timestamp = utils::Time::getAbsoluteTime();
                 toSleep = pacer.timeToNextTick(timestamp);
             }
@@ -114,7 +114,7 @@ void Engine::run()
     }
 }
 
-/* @return true there seem to be more tasks to process */
+/* @return true if there are pending tasks */
 bool Engine::processTasks(uint32_t maxCount)
 {
     for (uint32_t jobCount = 0; jobCount < maxCount; ++jobCount)
@@ -130,7 +130,7 @@ bool Engine::processTasks(uint32_t maxCount)
         }
     }
 
-    return true;
+    return !_tasks.empty();
 }
 
 void Engine::updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& currentStatSample, const uint64_t timestamp)
