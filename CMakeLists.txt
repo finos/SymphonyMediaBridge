@@ -426,7 +426,6 @@ add_library(smblib STATIC ${FILES})
 target_include_directories(smblib PUBLIC ${CMAKE_BINARY_DIR}/generated)
 
 add_executable(smb
-        #${FILES}
         main.cpp)
 
 target_link_libraries(smb smblib Threads::Threads ${THIRD_PARTY_LIBS} git_version)
