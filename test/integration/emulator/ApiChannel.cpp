@@ -39,6 +39,8 @@ namespace emulator
 
 void Conference::create(const std::string& baseUrl, bool useGlobalPort)
 {
+    assert(_success == false);
+
     nlohmann::json responseBody;
     nlohmann::json requestBody = {{"last-n", 9}, {"global-port", useGlobalPort}};
 

@@ -15,6 +15,8 @@ public:
     CFG_PROP(uint16_t, port, 8080);
     CFG_PROP(std::string, address, "localhost");
     CFG_PROP(uint16_t, numClients, 100);
+    CFG_PROP(std::string, conference_id, "");
+    CFG_PROP(bool, initiator, false);
 };
 
 } // namespace config
