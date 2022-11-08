@@ -3,6 +3,7 @@
 #include "bridge/Barbell.h"
 #include "bridge/RecordingStream.h"
 #include "bridge/engine/ActiveTalker.h"
+#include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
@@ -46,7 +47,7 @@ namespace bridge
 {
 
 class Engine;
-class EngineMixer;
+
 struct EngineAudioStream;
 struct EngineVideoStream;
 struct AudioStreamDescription;
@@ -83,7 +84,7 @@ public:
         size_t logInstanceId,
         transport::TransportFactory& transportFactory,
         Engine& engine,
-        EngineMixer& engineMixer,
+        std::unique_ptr<EngineMixer> engineMixer,
         utils::IdGenerator& idGenerator,
         utils::SsrcGenerator& ssrcGenerator,
         const config::Config& config,
@@ -113,6 +114,7 @@ public:
         bool rewriteSsrcs,
         bool isDtlsEnabled,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
+    void allocateAudioBuffer(uint32_t ssrc);
 
     bool addBundledAudioStream(std::string& outId,
         const std::string& endpointId,
@@ -278,13 +280,15 @@ public:
     void removeRecordingTransport(const std::string& streamId, const size_t endpointIdHash);
 
     Stats getStats();
-    bool waitForAllPendingJobs(const uint32_t timeoutMs);
+    bool hasPendingTransportJobs();
 
     void sendEndpointMessage(const std::string& toEndpointId,
         const size_t fromEndpointIdHash,
         const std::string& message);
 
     std::unordered_set<std::string> getEndpoints() const;
+
+    EngineMixer* getEngineMixer() { return _engineMixer.get(); }
 
 private:
     struct BundleTransport
@@ -304,10 +308,11 @@ private:
 
     transport::TransportFactory& _transportFactory;
     Engine& _engine;
-    EngineMixer& _engineMixer;
+    std::unique_ptr<EngineMixer> _engineMixer;
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
 
+    std::unordered_map<uint32_t, std::unique_ptr<EngineMixer::AudioBuffer>> _audioBuffers;
     std::unordered_map<std::string, std::unique_ptr<AudioStream>> _audioStreams;
     std::unordered_map<std::string, std::unique_ptr<EngineAudioStream>> _audioEngineStreams;
     std::unordered_map<std::string, std::unique_ptr<VideoStream>> _videoStreams;

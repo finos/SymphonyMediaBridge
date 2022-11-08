@@ -115,6 +115,7 @@ private:
 
         auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager);
         _jobQueue.reset();
+        _timers->stop();
         _jobManager->stop();
         thread->stop();
         _jobManager.reset();
@@ -149,7 +150,7 @@ protected:
             *_transport,
             bridge::RtpMap(),
             bridge::RtpMap(),
-            bridge::SsrcWhitelist({false, 0, {0, 0}}),
+            bridge::SsrcWhitelist(),
             true,
             _videoPinSsrcs,
             0);

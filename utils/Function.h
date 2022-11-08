@@ -15,7 +15,7 @@ namespace detail
 
 constexpr size_t calculateStorageSize()
 {
-    constexpr size_t minSize = 128;
+    constexpr size_t minSize = 20 * sizeof(uint64_t);
     // Ensure EngineFunction has a size multiple of alignof(std::max_align_t) to not waste space with paddings
     // when we have a contiguous containers with EngineFunction
     constexpr size_t alignedSpace =
@@ -110,6 +110,48 @@ private:
     std::tuple<Args...> _functionArguments;
 };
 
+template <class Func>
+class GenericCallable final : public Invokable
+{
+public:
+    template <typename F, typename = decltype(std::declval<F&>()())>
+    GenericCallable(F&& function) : _func(std::forward<F>(function))
+    {
+        bool a = true;
+        (void)a;
+    }
+
+    GenericCallable(const GenericCallable& rhs) : _func(rhs._func) {}
+
+    GenericCallable(GenericCallable&& rhs) : _func(std::move(rhs._func)) {}
+
+    GenericCallable& operator=(const GenericCallable& rhs)
+    {
+        _func = rhs._func;
+        return *this;
+    }
+
+    GenericCallable& operator=(GenericCallable&& rhs)
+    {
+        _func = std::move(rhs._func);
+        return *this;
+    }
+
+    void operator()() const { _func(); }
+
+private:
+    using TThis = GenericCallable<Func>;
+    friend class ::utils::Function;
+
+    void invoke() const final { _func(); }
+
+    Invokable* moveTo(FunctionStorage& newStorage) final { return new (&newStorage) TThis(std::move(*this)); }
+    Invokable* copyTo(FunctionStorage& newStorage) const final { return new (&newStorage) TThis(*this); }
+
+private:
+    Func _func;
+};
+
 } // namespace detail
 
 class Function
@@ -121,13 +163,42 @@ public:
     template <class Func, class... Args>
     Function(const detail::FunctionBinder<Func, Args...>& binder)
     {
-        copyBinder(binder);
+        copyInvokable(binder);
     }
 
     template <class Func, class... Args>
     Function(detail::FunctionBinder<Func, Args...>&& binder)
     {
-        moveBinder(std::move(binder));
+        moveInvokable(std::move(binder));
+    }
+
+    template <class Func>
+    Function(const detail::GenericCallable<Func>& callable)
+    {
+        copyInvokable(callable);
+    }
+
+    template <class Func>
+    Function(detail::GenericCallable<Func>&& callable)
+    {
+        moveInvokable(callable);
+    }
+
+    template <typename F, typename = decltype(std::declval<F&>()())>
+    Function(const F& function)
+    {
+        static_assert(!std::is_same<std::decay_t<F>, Function>::value, "Function bound on wrong overload");
+        static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
+        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(function);
+    }
+
+    template <typename F,
+        typename = decltype(std::declval<std::enable_if_t<std::is_rvalue_reference<F&&>::value, F&>>()())>
+    Function(F&& function)
+    {
+        static_assert(!std::is_same<std::decay_t<F>, Function>::value, "Function bound on wrong overload");
+        static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
+        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(std::move(function));
     }
 
     Function(const Function& rhs) : _invokable(nullptr)
@@ -176,7 +247,7 @@ public:
     Function& operator=(const detail::FunctionBinder<Func, Args...>& binder)
     {
         release();
-        copyBinder(binder);
+        copyInvokable(binder);
         return *this;
     }
 
@@ -184,7 +255,45 @@ public:
     Function& operator=(detail::FunctionBinder<Func, Args...>&& binder)
     {
         release();
-        moveBinder(std::move(binder));
+        moveInvokable(std::move(binder));
+        return *this;
+    }
+
+    template <class Func>
+    Function& operator=(const detail::GenericCallable<Func>& callable)
+    {
+        release();
+        copyInvokable(callable);
+        return *this;
+    }
+
+    template <class Func>
+    Function& operator=(detail::GenericCallable<Func>&& callable)
+    {
+        release();
+        moveInvokable(std::move(callable));
+        return *this;
+    }
+
+    template <typename F, typename = decltype(std::declval<F&>()())>
+    Function& operator=(const F& callable)
+    {
+        static_assert(!std::is_same<std::decay_t<F>, Function>::value, "Function bound on wrong overload");
+        static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
+
+        release();
+        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(callable);
+        return *this;
+    }
+
+    template <typename F,
+        typename = decltype(std::declval<std::enable_if_t<std::is_rvalue_reference<F&&>::value, F&>>()())>
+    Function& operator=(F&& callable)
+    {
+        static_assert(!std::is_same<std::decay_t<F>, Function>::value, "Function bound on wrong overload");
+        static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
+        release();
+        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(std::move(callable));
         return *this;
     }
 
@@ -212,20 +321,20 @@ private:
         }
     }
 
-    template <class Func, class... Args>
-    void copyBinder(const detail::FunctionBinder<Func, Args...>& binder)
+    template <class TInvokable>
+    void copyInvokable(const TInvokable& invokable)
     {
-        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(binder)>),
+        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(invokable)>),
             "EngineFunctionStorage has insufficient space");
-        _invokable = binder.copyTo(_storage);
+        _invokable = invokable.copyTo(_storage);
     }
 
-    template <class Func, class... Args>
-    void moveBinder(detail::FunctionBinder<Func, Args...>&& binder)
+    template <class TInvokable>
+    void moveInvokable(TInvokable&& invokable)
     {
-        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(binder)>),
+        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(invokable)>),
             "EngineFunctionStorage has insufficient space");
-        _invokable = binder.moveTo(_storage);
+        _invokable = invokable.moveTo(_storage);
     }
 
 private:

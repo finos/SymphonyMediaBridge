@@ -29,9 +29,9 @@ inline UniqueAudioPacket makeUniquePacket(AudioPacketPoolAllocator& allocator)
         return UniqueAudioPacket();
     }
 
-    new (pointer) memory::AudioPacket();
+    auto packet = new (pointer) memory::AudioPacket();
 
-    return UniqueAudioPacket(reinterpret_cast<memory::AudioPacket*>(pointer), allocator.getDeleter());
+    return UniqueAudioPacket(packet, allocator.getDeleter());
 }
 
 inline UniqueAudioPacket makeUniquePacket(AudioPacketPoolAllocator& allocator, const void* data, size_t length)

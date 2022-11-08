@@ -86,7 +86,7 @@ Test setup:
 */
 TEST_F(BarbellTest, packetLossViaBarbell)
 {
-    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
+    runTestInThread(expectedTestThreadCount(2), [this]() {
         constexpr auto PACKET_LOSS_RATE = 0.03;
 
         _config.readFromString(R"({
@@ -244,7 +244,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
                 else
                 {
                     EXPECT_NEAR(fps, 30.0, 1.0);
-                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 5);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 7);
                 }
             }
         }
@@ -253,7 +253,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
 TEST_F(BarbellTest, simpleBarbell)
 {
-    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
+    runTestInThread(expectedTestThreadCount(2), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -384,7 +384,7 @@ TEST_F(BarbellTest, simpleBarbell)
 
 TEST_F(BarbellTest, barbellAfterClients)
 {
-    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
+    runTestInThread(expectedTestThreadCount(2), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -530,7 +530,7 @@ TEST_F(BarbellTest, barbellAfterClients)
 
 TEST_F(BarbellTest, barbellNeighbours)
 {
-    runTestInThread(3 * _numWorkerThreads + 11, [this]() {
+    runTestInThread(expectedTestThreadCount(2), [this]() {
         _config.readFromString(R"({
         "ip":"72.0.83.1",
         "ice.preferredIp":"72.0.83.1",

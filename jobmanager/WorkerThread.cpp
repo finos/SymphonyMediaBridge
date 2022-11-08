@@ -12,21 +12,22 @@ thread_local jobmanager::WorkerThread* workerThreadHandler = nullptr;
 namespace jobmanager
 {
 
-WorkerThread::WorkerThread(jobmanager::JobManager& jobManager)
+WorkerThread::WorkerThread(jobmanager::JobManager& jobManager, const char* name)
     : _running(true),
       _jobManager(jobManager),
       _backgroundJobCount(0),
+      _name(name ? name : "Worker"),
       _thread([this] { this->run(); })
 {
 }
 
 WorkerThread::~WorkerThread()
 {
-    for (auto& job : _backgroundJobs)
+    for (auto& backgroundJob : _backgroundJobs)
     {
-        if (job)
+        if (backgroundJob.job)
         {
-            _jobManager.freeJob(job);
+            _jobManager.freeJob(backgroundJob.job);
         }
     }
 }
@@ -40,20 +41,23 @@ void WorkerThread::stop()
 uint32_t WorkerThread::processBackgroundJobs()
 {
     uint32_t pendingJobCount = 0;
-    for (auto& job : _backgroundJobs)
+    for (auto& backgroundJob : _backgroundJobs)
     {
-        if (job)
+        // running flag prevents re-entrance in case the WorkerThread yields and comes back here
+        if (backgroundJob.job && !backgroundJob.running)
         {
-            const bool runAgain = job->runStep();
+            backgroundJob.running = true;
+            const bool runAgain = backgroundJob.job->runStep();
             if (runAgain)
             {
                 ++pendingJobCount;
             }
             else
             {
-                _jobManager.freeJob(job);
-                job = nullptr;
+                _jobManager.freeJob(backgroundJob.job);
+                backgroundJob.job = nullptr;
             }
+            backgroundJob.running = false;
         }
     }
 
@@ -67,7 +71,7 @@ uint32_t WorkerThread::processBackgroundJobs()
 
 void WorkerThread::run()
 {
-    concurrency::setThreadName("Worker");
+    concurrency::setThreadName(_name.c_str());
     workerThreadHandler = this;
     _backgroundJobs.reserve(512);
 
@@ -122,16 +126,16 @@ bool WorkerThread::processJobs()
         {
             if (_backgroundJobCount == _backgroundJobs.size())
             {
-                _backgroundJobs.push_back(job);
+                _backgroundJobs.push_back({false, job});
                 ++_backgroundJobCount;
             }
             else
             {
                 for (auto& slot : _backgroundJobs)
                 {
-                    if (!slot)
+                    if (!slot.job)
                     {
-                        slot = job;
+                        slot = {false, job};
                         ++_backgroundJobCount;
                         break;
                     }

@@ -153,10 +153,7 @@ set(FILES
         bridge/engine/Engine.cpp
         bridge/engine/Engine.h
         bridge/engine/EngineAudioStream.h
-        bridge/engine/EngineCommand.h
         bridge/engine/EngineDataStream.h
-        bridge/engine/EngineMessage.h
-        bridge/engine/EngineMessageListener.h
         bridge/engine/EngineMixer.cpp
         bridge/engine/EngineMixer.h
         bridge/engine/EngineStats.h
@@ -180,7 +177,6 @@ set(FILES
         bridge/engine/RecordingRtpNackReceiveJob.cpp
         bridge/engine/RecordingRtpNackReceiveJob.h
         bridge/engine/RecordingSendEventJob.cpp
-        bridge/engine/SendEngineMessageJob.h
         bridge/engine/SendPliJob.cpp
         bridge/engine/SendPliJob.h
         bridge/engine/SendRtcpJob.cpp
@@ -207,6 +203,8 @@ set(FILES
         bridge/engine/Vp8Rewriter.h
         bridge/engine/SetMaxMediaBitrateJob.h
         bridge/engine/SetMaxMediaBitrateJob.cpp
+        bridge/MixerJobs.h
+        bridge/MixerJobs.cpp
         bwe/BandwidthEstimator.cpp
         bwe/BandwidthEstimator.h
         bwe/BandwidthUtils.cpp

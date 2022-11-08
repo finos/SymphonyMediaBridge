@@ -386,7 +386,7 @@ void IntegrationTest::finalizeSimulation()
 
 TEST_F(IntegrationTest, plain)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -479,7 +479,7 @@ TEST_F(IntegrationTest, plain)
 
 TEST_F(IntegrationTest, twoClientsAudioOnly)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -551,7 +551,7 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
 
 TEST_F(IntegrationTest, audioOnlyNoPadding)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
@@ -607,7 +607,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
 TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString("{\"ip\":\"127.0.0.1\", "
                                "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
 
@@ -714,7 +714,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
 TEST_F(IntegrationTest, videoOffPaddingOff)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         /*
            Test checks that after video is off and cooldown interval passed, no padding will be sent for the
            call that became audio-only.
@@ -817,7 +817,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
 TEST_F(IntegrationTest, plainNewApi)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -908,7 +908,7 @@ TEST_F(IntegrationTest, plainNewApi)
 
 TEST_F(IntegrationTest, ptime10)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -991,7 +991,7 @@ TEST_F(IntegrationTest, ptime10)
 
 TEST_F(IntegrationTest, detectIsPtt)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1137,7 +1137,7 @@ Test setup:
 */
 TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         constexpr auto PACKET_LOSS_RATE = 0.04;
 
         _config.readFromString(R"({
@@ -1233,7 +1233,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
 TEST_F(IntegrationTest, endpointAutoRemove)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1293,7 +1293,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
 
 TEST_F(IntegrationTest, probing)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1352,7 +1352,7 @@ TEST_F(IntegrationTest, probing)
 
 TEST_F(IntegrationTest, conferencePort)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
@@ -1445,7 +1445,7 @@ TEST_F(IntegrationTest, conferencePort)
 
 TEST_F(IntegrationTest, neighbours)
 {
-    runTestInThread(2 * _numWorkerThreads + 7, [this]() {
+    runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",

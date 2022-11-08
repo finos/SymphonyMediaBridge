@@ -52,7 +52,6 @@ class ActiveMediaList;
 class PacketCache;
 struct SsrcWhitelist;
 struct RecordingDescription;
-class EngineMessageListener;
 class SsrcOutboundContext;
 class UnackedPacketsTracker;
 struct EngineAudioStream;
@@ -61,6 +60,7 @@ struct EngineRecordingStream;
 struct EngineVideoStream;
 struct SimulcastLevel;
 struct EngineBarbell;
+class MixerManagerAsync;
 
 class EngineMixer : public transport::DataReceiver
 {
@@ -85,7 +85,8 @@ public:
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
         const concurrency::SynchronizationContext& engineSyncContext,
-        EngineMessageListener& messageListener,
+        jobmanager::JobManager& backgroundJobQueue,
+        MixerManagerAsync& messageListener,
         const uint32_t localVideoSsrc,
         const config::Config& config,
         memory::PacketPoolAllocator& sendAllocator,
@@ -114,13 +115,15 @@ public:
     void reconfigureVideoStream(const transport::RtcTransport* transport,
         const SsrcWhitelist& ssrcWhitelist,
         const SimulcastStream& simulcastStream,
-        const SimulcastStream* secondarySimulcastStream = nullptr);
+        const utils::Optional<SimulcastStream>& secondarySimulcastStream);
     void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
-    void handleSctpControl(const size_t endpointIdHash, const memory::Packet& packet);
+    void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
-    void sendEndpointMessage(const size_t toEndpointIdHash, const size_t fromEndpointIdHash, const char* message);
+    void sendEndpointMessage(const size_t toEndpointIdHash,
+        const size_t fromEndpointIdHash,
+        memory::UniqueAudioPacket packet);
     void recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc);
-    void recordingStop(EngineRecordingStream* stream, const RecordingDescription* desc);
+    void recordingStop(EngineRecordingStream& stream, const RecordingDescription& desc);
     void updateRecordingStreamModalities(EngineRecordingStream* engineRecordingStream,
         bool isAudioEnabled,
         bool isVideoEnabled,
@@ -183,6 +186,7 @@ public:
     // --
 
     jobmanager::JobManager& getJobManager() { return _jobManager; }
+    jobmanager::JobManager& getbackgroundJobQueue() { return _backgroundJobQueue; }
 
     // call only on related Transport thread context
 
@@ -310,7 +314,7 @@ private:
 
     jobmanager::JobManager& _jobManager;
     concurrency::SynchronizationContext _engineSyncContext;
-    EngineMessageListener& _messageListener;
+    MixerManagerAsync& _messageListener;
 
     concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
 
@@ -360,6 +364,7 @@ private:
     bool _hasSentTimeout;
     bool _probingVideoStreams;
     uint32_t _minUplinkEstimate;
+    jobmanager::JobManager& _backgroundJobQueue; // to non-real time world
 
     uint64_t _lastRecordingAckProcessed;
     bool _slidesPresent;

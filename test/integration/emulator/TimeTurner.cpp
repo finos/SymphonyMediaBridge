@@ -60,25 +60,32 @@ void TimeTurner::waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutN
     const int MAX_ITERATIONS = 1000;
     const auto interval = timeoutNs / MAX_ITERATIONS;
     uint32_t count = 0;
+    uint32_t visitors = 0;
+
     for (int i = 0; i < MAX_ITERATIONS; ++i)
     {
         count = 0;
+        visitors = 0;
         for (auto& slot : _sleepers)
         {
             if (slot.state.load() == State::Sleeping)
             {
                 ++count;
             }
+            if (slot.state.load() != State::Empty)
+            {
+                ++visitors;
+            }
         }
         if (count == expectedCount)
         {
-            logger::info("%u threads asleep as expected", "TimeTurner", count);
+            logger::info("%u threads asleep as expected. Visitors %u", "TimeTurner", count, visitors);
             return;
         }
 
         utils::Time::rawNanoSleep(interval);
     }
-    logger::warn("%u threads asleep. Expected %u", "TimeTurner", count, expectedCount);
+    logger::warn("%u threads asleep. Expected %u. Visitors %u", "TimeTurner", count, expectedCount, visitors);
 }
 
 /**

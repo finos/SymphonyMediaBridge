@@ -1,6 +1,7 @@
 #include "utils/Function.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <string>
 
 using namespace testing;
 
@@ -44,6 +45,7 @@ public:
     MOCK_METHOD(void, callback5, (int a, int b, bool c, FakeValue d, const FakeValue& e));
     MOCK_METHOD(void, callback6, (int a, int b, bool c, FakeValue d, const FakeValue& e));
     MOCK_METHOD(void, callback7, (int a, int b, bool c, FakeValue d, FakeValue& e));
+    MOCK_METHOD(void, callback8, (std::string x));
 };
 
 } // namespace
@@ -256,4 +258,70 @@ TEST(FunctionTest, move)
 
     newFunction0();
     newFunction7();
+}
+
+TEST(FunctionTest, lambda)
+{
+    StrictMock<CallbackClassMock> callbacks0;
+
+    std::string lambda1Str = "lambda1-string";
+    std::string lambda2Str = "lambda2-string";
+    std::string lambda3Str = "lambda3-string";
+    std::string lambda4Str = "lambda4-string";
+
+    auto lambda1 = [&callbacks0, u = lambda1Str]() {
+        callbacks0.callback8(u);
+    };
+
+    auto lambda2 = [&callbacks0, u = lambda2Str]() {
+        callbacks0.callback8(u);
+    };
+
+    auto lambda3 = [&callbacks0, u = lambda3Str]() {
+        callbacks0.callback8(u);
+    };
+
+    auto lambda4 = [&callbacks0, u = lambda4Str]() {
+        callbacks0.callback8(u);
+    };
+
+    utils::Function function1(lambda1);
+    utils::Function function2(std::move(lambda2));
+
+    utils::Function function3;
+    utils::Function function4;
+
+    function3 = lambda3;
+    function4 = std::move(lambda4);
+
+    {
+        InSequence seq;
+
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string("lambda1-string"))));
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string("lambda2-string"))));
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string("lambda3-string"))));
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string("lambda4-string"))));
+    }
+
+    function1();
+    function2();
+    function3();
+    function4();
+
+    ASSERT_EQ(true, Mock::VerifyAndClearExpectations(&callbacks0));
+
+    // Moved objects should be now empty
+    {
+        InSequence seq;
+
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string("lambda1-string"))));
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string())));
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string("lambda3-string"))));
+        EXPECT_CALL(callbacks0, callback8(Eq(std::string())));
+    }
+
+    lambda1();
+    lambda2();
+    lambda3();
+    lambda4();
 }

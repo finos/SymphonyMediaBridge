@@ -1,10 +1,11 @@
 #include "bridge/engine/RecordingAudioForwarderSendJob.h"
+#include "bridge/MixerManagerAsync.h"
 #include "bridge/engine/AudioRewriter.h"
-#include "bridge/engine/EngineMessageListener.h"
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RecordingTransport.h"
+#include "utils/Function.h"
 
 namespace bridge
 {
@@ -12,7 +13,7 @@ RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundConte
     memory::UniquePacket packet,
     transport::RecordingTransport& transport,
     const uint32_t extendedSequenceNumber,
-    EngineMessageListener& mixerManager,
+    MixerManagerAsync& mixerManager,
     size_t endpointIdHash,
     EngineMixer& mixer)
     : jobmanager::CountedJob(transport.getJobCounter()),
@@ -73,11 +74,11 @@ void RecordingAudioForwarderSendJob::run()
 
         _outboundContext.packetCache.set(nullptr);
 
-        EngineMessage::Message message(EngineMessage::Type::AllocateRecordingRtpPacketCache);
-        message.command.allocateVideoPacketCache.mixer = &_mixer;
-        message.command.allocateVideoPacketCache.ssrc = _outboundContext.ssrc;
-        message.command.allocateVideoPacketCache.endpointIdHash = _endpointIdHash;
-        _mixerManager.onMessage(std::move(message));
+        _mixerManager.post(utils::bind(&MixerManagerAsync::allocateRecordingRtpPacketCache,
+            &_mixerManager,
+            &_mixer,
+            _outboundContext.ssrc,
+            _endpointIdHash));
     }
 
     _transport.protectAndSend(std::move(_packet));

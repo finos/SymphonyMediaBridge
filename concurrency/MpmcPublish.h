@@ -10,7 +10,7 @@ namespace concurrency
 template <typename T, int MAX_THREADS = 32>
 class MpmcPublish
 {
-    struct alignas(8) Entry
+    struct Entry
     {
         Entry() : refCount(0) {}
 
