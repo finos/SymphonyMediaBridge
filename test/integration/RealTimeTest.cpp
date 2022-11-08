@@ -85,6 +85,7 @@ void RealTimeTest::TearDown()
 
     _bridge.reset();
     _clientTransportFactory.reset();
+    _timerQueue->stop();
     _jobManager->stop();
     for (auto& worker : _workerThreads)
     {

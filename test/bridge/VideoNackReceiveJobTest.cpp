@@ -45,6 +45,7 @@ class VideoNackReceiveJobTest : public ::testing::Test
 
         auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager);
         _jobQueue.reset();
+        _timers->stop();
         _jobManager->stop();
         thread->stop();
         _jobManager.reset();
