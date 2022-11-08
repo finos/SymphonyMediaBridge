@@ -60,15 +60,13 @@ private:
     bool processTasks(uint32_t maxCount);
     void updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& currentStatSample, uint64_t timestamp);
 
-public: // async methods called via post
+public:
+    bool asyncAddMixer(EngineMixer* engineMixer);
+    bool asyncRemoveMixer(EngineMixer* engineMixer);
+
+private:
     void addMixer(EngineMixer* engineMixer);
     void removeMixer(EngineMixer* engineMixer);
-
-    void removeRecordingStream(EngineMixer* mixer, EngineRecordingStream* recordingStream);
-
-    void stopRecording(EngineMixer& engineMixer,
-        EngineRecordingStream& recordingStream,
-        RecordingDescription& recordingDesc);
 };
 
 } // namespace bridge

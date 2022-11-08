@@ -99,42 +99,7 @@ public:
     const std::string& getId() const { return _id; }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
-    // -- methods executed on engine thread
-    void addAudioStream(EngineAudioStream* engineAudioStream);
-    void removeStream(EngineAudioStream* engineAudioStream);
-    void addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
-    void addVideoStream(EngineVideoStream* engineVideoStream);
-    void removeStream(EngineVideoStream* engineVideoStream);
-    void addRecordingStream(EngineRecordingStream* engineRecordingStream);
-    void removeRecordingStream(EngineRecordingStream* engineRecordingStream);
-    void addDataSteam(EngineDataStream* engineDataStream);
-    void removeStream(EngineDataStream* engineDataStream);
-    void startTransport(transport::RtcTransport* transport);
-    void startRecordingTransport(transport::RecordingTransport* transport);
-    void reconfigureAudioStream(const transport::RtcTransport* transport, const uint32_t remoteSsrc);
-    void reconfigureVideoStream(const transport::RtcTransport* transport,
-        const SsrcWhitelist& ssrcWhitelist,
-        const SimulcastStream& simulcastStream,
-        const utils::Optional<SimulcastStream>& secondarySimulcastStream);
-    void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
-    void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
-    void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
-    void sendEndpointMessage(const size_t toEndpointIdHash,
-        const size_t fromEndpointIdHash,
-        memory::UniqueAudioPacket packet);
-    void recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc);
-    void recordingStop(EngineRecordingStream& stream, const RecordingDescription& desc);
-    void updateRecordingStreamModalities(EngineRecordingStream* engineRecordingStream,
-        bool isAudioEnabled,
-        bool isVideoEnabled,
-        bool isScreenSharingEnabled);
-    void addRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* packetCache);
-    void addTransportToRecordingStream(const size_t streamIdHash,
-        transport::RecordingTransport* transport,
-        UnackedPacketsTracker* recUnackedPacketsTracker);
-    void removeTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
-    void addBarbell(EngineBarbell* barbell);
-    void removeBarbell(size_t idHash);
+public:
     void forwardPackets(const uint64_t engineTimestamp);
     void clear();
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
@@ -188,7 +153,83 @@ public:
     jobmanager::JobManager& getJobManager() { return _jobManager; }
     jobmanager::JobManager& getbackgroundJobQueue() { return _backgroundJobQueue; }
 
-    // call only on related Transport thread context
+public: // EngineMixer async interface. Will execute on engine thread
+    bool asyncReconfigureVideoStream(const transport::RtcTransport& transport,
+        const SsrcWhitelist& ssrcWhitelist,
+        const SimulcastStream& simulcastStream,
+        const utils::Optional<SimulcastStream>& secondarySimulcastStream);
+
+    bool asyncAddAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
+    bool asyncRemoveStream(EngineAudioStream* engineAudioStream);
+    bool asyncRemoveStream(EngineVideoStream* stream);
+    bool asyncRemoveStream(EngineDataStream* stream);
+    bool asyncAddVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
+    bool asyncReconfigureAudioStream(const transport::RtcTransport& transport, const uint32_t remoteSsrc);
+    bool asyncStartTransport(transport::RtcTransport& transport);
+    bool asyncAddAudioStream(EngineAudioStream* engineAudioStream);
+    bool asyncAddVideoStream(EngineVideoStream* engineVideoStream);
+    bool asyncAddDataSteam(EngineDataStream* engineDataStream);
+    bool asyncPinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
+    bool asyncSendEndpointMessage(const size_t toEndpointIdHash,
+        const size_t fromEndpointIdHash,
+        memory::UniqueAudioPacket& packet);
+    bool asyncAddRecordingStream(EngineRecordingStream* engineRecordingStream);
+    bool asyncAddTransportToRecordingStream(const size_t streamIdHash,
+        transport::RecordingTransport& transport,
+        UnackedPacketsTracker& recUnackedPacketsTracker);
+    bool asyncRecordingStart(EngineRecordingStream& stream, const RecordingDescription& desc);
+    bool asyncUpdateRecordingStreamModalities(EngineRecordingStream& engineRecordingStream,
+        bool isAudioEnabled,
+        bool isVideoEnabled,
+        bool isScreenSharingEnabled);
+    bool asyncStartRecordingTransport(transport::RecordingTransport& transport);
+    bool asyncStopRecording(EngineRecordingStream& stream, const RecordingDescription& desc);
+    bool asyncAddRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* packetCache);
+    bool asyncRemoveTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
+    bool asyncAddBarbell(EngineBarbell* barbell);
+    bool asyncRemoveBarbell(size_t idHash);
+    bool asyncHandleSctpControl(const size_t endpointIdHash, memory::UniquePacket& packet);
+    bool asyncRemoveRecordingStream(const EngineRecordingStream& engineRecordingStream);
+
+private: // impl async interface
+    bool post(utils::Function&& task) { return _engineSyncContext.post(std::move(task)); }
+    void reconfigureVideoStream(const transport::RtcTransport& transport,
+        const SsrcWhitelist& ssrcWhitelist,
+        const SimulcastStream& simulcastStream,
+        const utils::Optional<SimulcastStream>& secondarySimulcastStream);
+    void addAudioStream(EngineAudioStream* engineAudioStream);
+    void addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
+    void addVideoStream(EngineVideoStream* engineVideoStream);
+    void addRecordingStream(EngineRecordingStream* engineRecordingStream);
+    void removeRecordingStream(const EngineRecordingStream& engineRecordingStream);
+    void addDataSteam(EngineDataStream* engineDataStream);
+    void startTransport(transport::RtcTransport& transport);
+    void startRecordingTransport(transport::RecordingTransport& transport);
+    void reconfigureAudioStream(const transport::RtcTransport& transport, const uint32_t remoteSsrc);
+    void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
+    void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
+    void sendEndpointMessage(const size_t toEndpointIdHash,
+        const size_t fromEndpointIdHash,
+        memory::UniqueAudioPacket packet);
+    void recordingStart(EngineRecordingStream& stream, const RecordingDescription& desc);
+    void stopRecording(EngineRecordingStream& stream, const RecordingDescription& desc);
+    void updateRecordingStreamModalities(EngineRecordingStream& engineRecordingStream,
+        bool isAudioEnabled,
+        bool isVideoEnabled,
+        bool isScreenSharingEnabled);
+    void addRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* packetCache);
+    void addTransportToRecordingStream(const size_t streamIdHash,
+        transport::RecordingTransport& transport,
+        UnackedPacketsTracker& recUnackedPacketsTracker);
+    void removeTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
+    void addBarbell(EngineBarbell* barbell);
+    void removeBarbell(size_t idHash);
+    void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
+
+public: // private but called from helper method
+    void removeStream(EngineVideoStream* engineVideoStream);
+    void removeStream(EngineAudioStream* engineAudioStream);
+    void removeStream(EngineDataStream* engineDataStream);
 
 private:
     static const size_t maxPendingPackets = 8192;

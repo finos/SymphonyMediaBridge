@@ -83,7 +83,6 @@ public:
     Mixer(std::string id,
         size_t logInstanceId,
         transport::TransportFactory& transportFactory,
-        Engine& engine,
         std::unique_ptr<EngineMixer> engineMixer,
         utils::IdGenerator& idGenerator,
         utils::SsrcGenerator& ssrcGenerator,
@@ -140,10 +139,10 @@ public:
     bool removeDataStream(const std::string& endpointId);
     bool removeDataStreamId(const std::string& id);
 
-    void engineAudioStreamRemoved(EngineAudioStream* engineStream);
-    void engineVideoStreamRemoved(EngineVideoStream* engineStream);
-    void engineDataStreamRemoved(EngineDataStream* engineStream);
-    void engineBarbellRemoved(EngineBarbell* engineBarbell);
+    void engineAudioStreamRemoved(EngineAudioStream& engineStream);
+    void engineVideoStreamRemoved(EngineVideoStream& engineStream);
+    void engineDataStreamRemoved(EngineDataStream& engineStream);
+    void engineBarbellRemoved(EngineBarbell& engineBarbell);
 
     bool configureAudioStream(const std::string& endpointId,
         const RtpMap& rtpMap,
@@ -265,7 +264,7 @@ public:
     bool addOrUpdateRecording(const std::string& conferenceId,
         const std::vector<api::RecordingChannel>& channels,
         const RecordingDescription& recordingDescription);
-    void addRecordingTransportsToRecordingStream(RecordingStream* recordingStream,
+    void addRecordingTransportsToRecordingStream(RecordingStream& recordingStream,
         const std::vector<api::RecordingChannel>& channels);
     void updateRecordingEngineStreamModalities(const RecordingStream& recordingStream,
         const bool wasAudioEnabled,
@@ -273,7 +272,7 @@ public:
         const bool wasScreenSharingEnabled);
     bool removeRecording(const std::string& recordingId);
     bool removeRecordingTransports(const std::string& conferenceId, const std::vector<api::RecordingChannel>& channels);
-    void engineRecordingStreamRemoved(EngineRecordingStream* engineStream);
+    void engineRecordingStreamRemoved(const EngineRecordingStream& engineStream);
     void engineRecordingDescStopped(const RecordingDescription& recordingDesc);
     void allocateRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash);
     void freeRecordingRtpPacketCache(const uint32_t ssrc, const size_t endpointIdHash);
@@ -307,7 +306,6 @@ private:
     const std::vector<api::SsrcPair> _videoPinSsrcs;
 
     transport::TransportFactory& _transportFactory;
-    Engine& _engine;
     std::unique_ptr<EngineMixer> _engineMixer;
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;

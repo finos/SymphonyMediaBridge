@@ -154,10 +154,7 @@ void Engine::addMixer(EngineMixer* engineMixer)
     if (!_mixers.pushToTail(engineMixer))
     {
         logger::error("Unable to add EngineMixer %s to Engine", "Engine", engineMixer->getLoggableId().c_str());
-
-        _messageListener->post(utils::bind(&MixerManagerAsync::engineMixerRemoved, _messageListener, engineMixer));
-
-        return;
+        _messageListener->asyncEngineMixerRemoved(*engineMixer);
     }
 }
 
@@ -170,26 +167,17 @@ void Engine::removeMixer(EngineMixer* engineMixer)
         logger::error("Unable to remove EngineMixer %s from Engine", "Engine", engineMixer->getLoggableId().c_str());
     }
 
-    _messageListener->post(utils::bind(&MixerManagerAsync::engineMixerRemoved, _messageListener, engineMixer));
+    _messageListener->asyncEngineMixerRemoved(*engineMixer);
 }
 
-void Engine::removeRecordingStream(EngineMixer* mixer, EngineRecordingStream* recordingStream)
+bool Engine::asyncAddMixer(EngineMixer* engineMixer)
 {
-    logger::debug("Remove recordingStream, mixer %s", "Engine", mixer->getLoggableId().c_str());
-
-    mixer->removeRecordingStream(recordingStream);
-
-    _messageListener->post(
-        utils::bind(&MixerManagerAsync::recordingStreamRemoved, _messageListener, mixer, recordingStream));
+    return post(utils::bind(&Engine::addMixer, this, engineMixer));
 }
 
-void Engine::stopRecording(EngineMixer& engineMixer,
-    EngineRecordingStream& recordingStream,
-    RecordingDescription& recordingDesc)
+bool Engine::asyncRemoveMixer(EngineMixer* engineMixer)
 {
-    engineMixer.recordingStop(recordingStream, recordingDesc);
-
-    _messageListener->post([&]() { _messageListener->engineRecordingStopped(engineMixer, recordingDesc); });
+    return post(utils::bind(&Engine::removeMixer, this, engineMixer));
 }
 
 EngineStats::EngineStats Engine::getStats()

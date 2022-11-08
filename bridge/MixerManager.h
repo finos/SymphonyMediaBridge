@@ -110,22 +110,22 @@ private:
     // Async interface
     bool post(utils::Function&& task) override { return _backgroundJobQueue.post(std::move(task)); }
 
-    void allocateAudioBuffer(EngineMixer* mixer, uint32_t ssrc) override;
-    void audioStreamRemoved(EngineMixer* mixer, EngineAudioStream* audioStream) override;
-    void engineMixerRemoved(EngineMixer* mixer) override;
-    void freeVideoPacketCache(EngineMixer* mixer, uint32_t ssrc, size_t endpointIdHash) override;
-    void allocateVideoPacketCache(EngineMixer* mixer, uint32_t ssrc, size_t endpointIdHash) override;
-    void allocateRecordingRtpPacketCache(EngineMixer* mixer, uint32_t ssrc, size_t endpointIdHash) override;
-    void videoStreamRemoved(EngineMixer* engineMixer, EngineVideoStream* videoStream) override;
-    void sctpReceived(EngineMixer* mixer, memory::UniquePacket msgPacket, size_t endpointIdHash) override;
-    void dataStreamRemoved(EngineMixer* mixer, EngineDataStream* dataStream) override;
-    void freeRecordingRtpPacketCache(EngineMixer* mixer, uint32_t ssrc, size_t endpointIdHash) override;
-    void barbellRemoved(EngineMixer* mixer, EngineBarbell* barbell) override;
-    void recordingStreamRemoved(EngineMixer* mixer, EngineRecordingStream* recordingStream) override;
-    void removeRecordingTransport(EngineMixer* mixer, const char* streamId, size_t endpointIdHash) override;
-    void inboundSsrcContextRemoved(EngineMixer* mixer, uint32_t ssrc, codec::OpusDecoder* opusDecoder) override;
-    void mixerTimedOut(EngineMixer* mixer) override;
-    void engineRecordingStopped(EngineMixer& mixer, RecordingDescription& recordingDesc) override;
+    void allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc) override;
+    void audioStreamRemoved(EngineMixer& mixer, EngineAudioStream& audioStream) override;
+    void engineMixerRemoved(EngineMixer& mixer) override;
+    void freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
+    void allocateVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
+    void allocateRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
+    void videoStreamRemoved(EngineMixer& engineMixer, EngineVideoStream& videoStream) override;
+    void sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPacket, size_t endpointIdHash) override;
+    void dataStreamRemoved(EngineMixer& mixer, EngineDataStream& dataStream) override;
+    void freeRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
+    void barbellRemoved(EngineMixer& mixer, EngineBarbell& barbell) override;
+    void recordingStreamRemoved(EngineMixer& mixer, const EngineRecordingStream& recordingStream) override;
+    void removeRecordingTransport(EngineMixer& mixer, EndpointIdString streamId, size_t endpointIdHash) override;
+    void inboundSsrcContextRemoved(EngineMixer& mixer, uint32_t ssrc, codec::OpusDecoder* opusDecoder) override;
+    void mixerTimedOut(EngineMixer& mixer) override;
+    void engineRecordingStopped(EngineMixer& mixer, const RecordingDescription& recordingDesc) override;
 };
 
 } // namespace bridge
