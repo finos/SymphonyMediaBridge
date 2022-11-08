@@ -18,6 +18,12 @@ public:
     explicit Conference(emulator::HttpdFactory* httpd) : _httpd(httpd), _success(false) {}
 
     void create(const std::string& baseUrl, bool useGlobalPort = true);
+    void createFromExternal(const std::string& conferenceId)
+    {
+        assert(_success == false);
+        _success = true;
+        _id = conferenceId;
+    }
 
     const std::string& getId() const { return _id; }
 

@@ -2,5 +2,7 @@
     "port": 8080,
     "address": "localhost",
     "ip": "127.0.0.1",
-    "numClients": 250
+    "numClients": 250,
+    "conference_id": "11580087491520156198",
+    "initiator": true
 }

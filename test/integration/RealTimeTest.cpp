@@ -192,6 +192,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 {
     std::string baseUrl = "http://127.0.0.1:8080";
     auto numClients = 1000;
+    bool createTalker = true;
 
     if (_configInitialized)
     {
@@ -203,6 +204,9 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         sb.append(":");
         sb.append(_config->port);
         baseUrl = sb.build();
+        createTalker = _config->initiator.get();
+
+        assert(!_config->conference_id.get().empty());
     }
 
     logger::info("Starting smbMegaHoot test:\n\tbaseUrl: %s\n\tnumClients: %d",
@@ -220,8 +224,11 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 
     Conference conf(nullptr);
 
-    bool startConfResult = group.startConference(conf, baseUrl.c_str());
-    if (!startConfResult)
+    if (_configInitialized)
+    {
+        conf.createFromExternal(_config->conference_id.get());
+    }
+    else if (!group.startConference(conf, baseUrl.c_str()))
     {
         return;
     }
@@ -229,14 +236,8 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
-        if (count++ == 0)
-        {
-            client->initiateCall(baseUrl.c_str(), conf.getId(), true, emulator::Audio::Fake, false, true);
-        }
-        else
-        {
-            client->initiateCall(baseUrl.c_str(), conf.getId(), true, emulator::Audio::Muted, false, true);
-        }
+        auto audio = createTalker && count == 0 ? emulator::Audio::Fake : emulator::Audio::Muted;
+        client->initiateCall(baseUrl.c_str(), conf.getId(), true, audio, false, true);
     }
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
