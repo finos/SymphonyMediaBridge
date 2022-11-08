@@ -75,7 +75,7 @@ public:
             mmap(nullptr, _size, (PROT_READ | PROT_WRITE), (MAP_PRIVATE | MAP_ANONYMOUS), -1, 0));
         assert(reinterpret_cast<intptr_t>(_elements) != -1);
 
-        static_assert(sizeof(Entry) % 8 == 0, "ELEMENT_SIZE must be multiple of alignment");
+        static_assert(sizeof(Entry) % alignof(std::max_align_t) == 0, "ELEMENT_SIZE must be multiple of alignment");
 
         for (size_t i = 0; i < _originalElementCount; ++i)
         {
@@ -200,7 +200,9 @@ private:
     public:
         Entry() { _data[0] = 0; }
 
-        uint8_t _data[ELEMENT_SIZE];
+        alignas(std::max_align_t) uint8_t _data[ELEMENT_SIZE % alignof(std::max_align_t)
+                ? ELEMENT_SIZE + alignof(std::max_align_t) - (ELEMENT_SIZE % alignof(std::max_align_t))
+                : ELEMENT_SIZE];
 #ifdef DEBUG
         uint64_t _endGuard = 0xBABABABABABABABALLU;
 #endif
