@@ -14,8 +14,10 @@
 #if !defined(ENABLE_ALLOCATOR_METRICS)
 #ifdef DEBUG
 #define ENABLE_ALLOCATOR_METRICS 1
+#define POOLALLOC_MEMGUARDS 1
 #else
 #define ENABLE_ALLOCATOR_METRICS 0
+#define POOLALLOC_MEMGUARDS 0
 #endif
 #endif
 
@@ -79,8 +81,8 @@ public:
 
         for (size_t i = 0; i < _originalElementCount; ++i)
         {
-            new (&_elements[i]) Entry();
-            _freeQueue[i % QCOUNT].push(&(_elements[i]));
+            auto entry = new (&_elements[i]) Entry();
+            _freeQueue[i % QCOUNT].push(entry);
         }
     }
 
@@ -94,7 +96,7 @@ public:
 
     void logAllocatedElements()
     {
-#if DEBUG
+#if POOLALLOC_MEMGUARDS
         if (_originalElementCount != size())
         {
             logger::warn("leaked pool allocator elements %zu", _name.c_str(), _originalElementCount - size());
@@ -136,7 +138,7 @@ public:
         _count.fetch_sub(1, std::memory_order_relaxed);
 #endif
         auto entry = reinterpret_cast<Entry*>(item);
-#ifdef DEBUG
+#if POOLALLOC_MEMGUARDS
         assert(entry->_beginGuard == 0xABABABABABABABABLLU);
         assert(entry->_endGuard == 0xBABABABABABABABALLU);
         entry->_beginGuard = 0xEFEFEFEFEFEFEFEFLLU;
@@ -152,8 +154,9 @@ public:
         {
             return;
         }
-        auto entry = reinterpret_cast<Entry*>(reinterpret_cast<char*>(pointer) - sizeof(typename Entry::Head));
-#ifdef DEBUG
+
+        auto entry = reinterpret_cast<Entry*>(reinterpret_cast<char*>(pointer) - Entry::headerSize());
+#if POOLALLOC_MEMGUARDS
         assert(reinterpret_cast<uintptr_t>(entry) >= reinterpret_cast<uintptr_t>(_elements) &&
             reinterpret_cast<uintptr_t>(entry) < reinterpret_cast<uintptr_t>(_elements) + _size);
 
@@ -172,8 +175,8 @@ public:
 protected:
     static bool isCorrupt(void* pointer)
     {
-#ifdef DEBUG
-        auto entry = reinterpret_cast<Entry*>(reinterpret_cast<char*>(pointer) - sizeof(typename Entry::Head));
+#if POOLALLOC_MEMGUARDS
+        auto entry = reinterpret_cast<Entry*>(reinterpret_cast<char*>(pointer) - Entry::headerSize());
 
         return (entry->_beginGuard != 0xEFEFEFEFEFEFEFEFLLU || entry->_endGuard != 0xFEFEFEFEFEFEFEFELLU);
 #else
@@ -182,7 +185,7 @@ protected:
     }
 
 private:
-#ifdef DEBUG
+#if POOLALLOC_MEMGUARDS
     class Head : public concurrency::StackItem
     {
     public:
@@ -199,11 +202,17 @@ private:
     {
     public:
         Entry() { _data[0] = 0; }
+        static size_t headerSize()
+        {
+            static const Entry e;
+            static const size_t headerSize = e._data - reinterpret_cast<const uint8_t*>(&e);
+            return headerSize;
+        }
 
         alignas(std::max_align_t) uint8_t _data[ELEMENT_SIZE % alignof(std::max_align_t)
                 ? ELEMENT_SIZE + alignof(std::max_align_t) - (ELEMENT_SIZE % alignof(std::max_align_t))
                 : ELEMENT_SIZE];
-#ifdef DEBUG
+#if POOLALLOC_MEMGUARDS
         uint64_t _endGuard = 0xBABABABABABABABALLU;
 #endif
     };

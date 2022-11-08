@@ -220,19 +220,19 @@ public:
             }
         }
 
-        Entry* entry = nullptr;
+        Entry* reusedEntry = nullptr;
         ListItem* listItem = nullptr;
         if (_freeItems.pop(listItem))
         {
-            entry = reinterpret_cast<Entry*>(listItem);
-            auto state = entry->state.load();
+            reusedEntry = reinterpret_cast<Entry*>(listItem);
+            auto state = reusedEntry->state.load();
             if (state == State::empty)
             {
                 _end.fetch_add(1);
             }
             else if (state == State::tombstone)
             {
-                entry->~Entry();
+                reusedEntry->~Entry();
             }
         }
         else
@@ -240,8 +240,8 @@ public:
             return std::make_pair(end(), false);
         }
 
-        const uint32_t pos = std::distance(_elements, reinterpret_cast<Entry*>(entry));
-        new (entry) Entry(key, std::forward<Args>(args)...);
+        const uint32_t pos = std::distance(_elements, reinterpret_cast<Entry*>(reusedEntry));
+        auto entry = new (reusedEntry) Entry(key, std::forward<Args>(args)...);
         entry->state.store(State::committed);
         if (!_index.add(utils::hash<KeyT>{}(key), pos + 1))
         {

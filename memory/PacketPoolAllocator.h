@@ -34,9 +34,9 @@ inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator)
         return UniquePacket();
     }
 
-    new (pointer) Packet();
+    auto packet = new (pointer) Packet();
 
-    return UniquePacket(reinterpret_cast<Packet*>(pointer), allocator.getDeleter());
+    return UniquePacket(packet, allocator.getDeleter());
 }
 
 inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator, const void* data, size_t length)
