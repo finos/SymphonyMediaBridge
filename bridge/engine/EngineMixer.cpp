@@ -2558,10 +2558,7 @@ void EngineMixer::addPacketToMixerBuffers(const IncomingAudioPacketInfo& packetI
             ssrc.get(),
             sequenceNumber.get());
         _mixerSsrcAudioBuffers.emplace(ssrc, nullptr);
-        {
-            _messageListener.post(
-                utils::bind(&MixerManagerAsync::allocateAudioBuffer, &_messageListener, this, ssrc.get()));
-        }
+        _messageListener.post([=]() { _messageListener.allocateAudioBuffer(this, ssrc.get()); });
     }
     else if (!mixerAudioBufferItr->second)
     {
@@ -4192,7 +4189,7 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             // WebRTC's incorrect implementation of TMBBR leads assigned bitrate to be
             // used for all members of the simulcast group, instead of the single layer.
             // That, in turn, leads to high res layer being switched on sometimes for a
-            // short burst of frames. SFU detects constant swithcing on and off as "unstable"
+            // short burst of frames. SFU detects constant switching on and off as "unstable"
             // behaviour and disables such layer forever. To prevent that side effect, we
             // reset "inactiveTransitionCount" when switching slides off.
             if (_slidesPresent && !slidesPresent)
