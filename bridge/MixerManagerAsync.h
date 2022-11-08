@@ -50,7 +50,7 @@ public:
     virtual void removeRecordingTransport(EngineMixer* mixer, const char* streamId, size_t endpointIdHash) = 0;
     virtual void inboundSsrcContextRemoved(EngineMixer* mixer, uint32_t ssrc, codec::OpusDecoder* opusDecoder) = 0;
     virtual void mixerTimedOut(EngineMixer* mixer) = 0;
-    virtual void engineRecordingStopped(EngineMixer* mixer, RecordingDescription* recordingDesc) = 0;
+    virtual void engineRecordingStopped(EngineMixer& mixer, RecordingDescription& recordingDesc) = 0;
 };
 
 } // namespace bridge

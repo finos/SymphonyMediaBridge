@@ -868,15 +868,15 @@ void EngineMixer::recordingStart(EngineRecordingStream* stream, const RecordingD
     }
 }
 
-void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDescription* desc)
+void EngineMixer::recordingStop(EngineRecordingStream& stream, const RecordingDescription& desc)
 {
-    const auto sequenceNumber = stream->recordingEventsOutboundContext.sequenceNumber++;
+    const auto sequenceNumber = stream.recordingEventsOutboundContext.sequenceNumber++;
     const auto timestamp = static_cast<uint32_t>(utils::Time::getAbsoluteTime() / 1000000ULL);
 
-    for (const auto& transportEntry : stream->transports)
+    for (const auto& transportEntry : stream.transports)
     {
-        auto unackedPacketsTrackerItr = stream->recEventUnackedPacketsTracker.find(transportEntry.first);
-        if (unackedPacketsTrackerItr == stream->recEventUnackedPacketsTracker.end())
+        auto unackedPacketsTrackerItr = stream.recEventUnackedPacketsTracker.find(transportEntry.first);
+        if (unackedPacketsTrackerItr == stream.recEventUnackedPacketsTracker.end())
         {
             logger::error("RecEvent packet tracker not found. Unable to send stop recording event to %s",
                 _loggableId.c_str(),
@@ -889,8 +889,8 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
                           .setVideoEnabled(false)
                           .setSequenceNumber(sequenceNumber)
                           .setTimestamp(timestamp)
-                          .setRecordingId(desc->recordingId)
-                          .setUserId(desc->ownerId)
+                          .setRecordingId(desc.recordingId)
+                          .setUserId(desc.ownerId)
                           .build();
 
         if (!packet)
@@ -903,13 +903,13 @@ void EngineMixer::recordingStop(EngineRecordingStream* stream, const RecordingDe
 
         logger::info("Sent recording stop event for recordingId %s, streamIdHash %zu, transport %zu",
             _loggableId.c_str(),
-            desc->recordingId.c_str(),
-            stream->endpointIdHash,
+            desc.recordingId.c_str(),
+            stream.endpointIdHash,
             transportEntry.first);
 
         transportEntry.second.getJobQueue().addJob<RecordingSendEventJob>(std::move(packet),
             transportEntry.second,
-            stream->recordingEventsOutboundContext.packetCache,
+            stream.recordingEventsOutboundContext.packetCache,
             unackedPacketsTrackerItr->second);
     }
 }

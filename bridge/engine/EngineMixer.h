@@ -123,7 +123,7 @@ public:
         const size_t fromEndpointIdHash,
         memory::UniqueAudioPacket packet);
     void recordingStart(EngineRecordingStream* stream, const RecordingDescription* desc);
-    void recordingStop(EngineRecordingStream* stream, const RecordingDescription* desc);
+    void recordingStop(EngineRecordingStream& stream, const RecordingDescription& desc);
     void updateRecordingStreamModalities(EngineRecordingStream* engineRecordingStream,
         bool isAudioEnabled,
         bool isVideoEnabled,

@@ -183,14 +183,13 @@ void Engine::removeRecordingStream(EngineMixer* mixer, EngineRecordingStream* re
         utils::bind(&MixerManagerAsync::recordingStreamRemoved, _messageListener, mixer, recordingStream));
 }
 
-void Engine::stopRecording(EngineMixer* engineMixer,
-    EngineRecordingStream* recordingStream,
-    RecordingDescription* recordingDesc)
+void Engine::stopRecording(EngineMixer& engineMixer,
+    EngineRecordingStream& recordingStream,
+    RecordingDescription& recordingDesc)
 {
-    engineMixer->recordingStop(recordingStream, recordingDesc);
+    engineMixer.recordingStop(recordingStream, recordingDesc);
 
-    _messageListener->post(
-        utils::bind(&MixerManagerAsync::engineRecordingStopped, _messageListener, engineMixer, recordingDesc));
+    _messageListener->post([&]() { _messageListener->engineRecordingStopped(engineMixer, recordingDesc); });
 }
 
 EngineStats::EngineStats Engine::getStats()

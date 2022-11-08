@@ -66,9 +66,9 @@ public: // async methods called via post
 
     void removeRecordingStream(EngineMixer* mixer, EngineRecordingStream* recordingStream);
 
-    void stopRecording(EngineMixer* engineMixer,
-        EngineRecordingStream* recordingStream,
-        RecordingDescription* recordingDesc);
+    void stopRecording(EngineMixer& engineMixer,
+        EngineRecordingStream& recordingStream,
+        RecordingDescription& recordingDesc);
 };
 
 } // namespace bridge

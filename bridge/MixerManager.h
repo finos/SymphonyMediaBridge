@@ -125,7 +125,7 @@ private:
     void removeRecordingTransport(EngineMixer* mixer, const char* streamId, size_t endpointIdHash) override;
     void inboundSsrcContextRemoved(EngineMixer* mixer, uint32_t ssrc, codec::OpusDecoder* opusDecoder) override;
     void mixerTimedOut(EngineMixer* mixer) override;
-    void engineRecordingStopped(EngineMixer* mixer, RecordingDescription* recordingDesc) override;
+    void engineRecordingStopped(EngineMixer& mixer, RecordingDescription& recordingDesc) override;
 };
 
 } // namespace bridge

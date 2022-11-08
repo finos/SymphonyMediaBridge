@@ -531,26 +531,26 @@ void MixerManager::sctpReceived(EngineMixer* mixer, memory::UniquePacket msgPack
     }
 }
 
-void MixerManager::engineRecordingStopped(EngineMixer* mixer, RecordingDescription* recordingDesc)
+void MixerManager::engineRecordingStopped(EngineMixer& mixer, RecordingDescription& recordingDesc)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
     logger::info("Stopping recording %s from mixer %s",
         "MixerManager",
-        recordingDesc->recordingId.c_str(),
-        mixer->getLoggableId().c_str());
+        recordingDesc.recordingId.c_str(),
+        mixer.getLoggableId().c_str());
 
-    const auto mixerIter = _mixers.find(mixer->getId());
+    const auto mixerIter = _mixers.find(mixer.getId());
     if (mixerIter == _mixers.cend())
     {
         logger::info("Mixer %s (id=%s) does not exist",
             "MixerManager",
-            mixer->getLoggableId().c_str(),
-            mixer->getId().c_str());
+            mixer.getLoggableId().c_str(),
+            mixer.getId().c_str());
         return;
     }
 
-    mixerIter->second->engineRecordingDescStopped(*recordingDesc);
+    mixerIter->second->engineRecordingDescStopped(recordingDesc);
 }
 
 void MixerManager::allocateRecordingRtpPacketCache(EngineMixer* mixer, uint32_t ssrc, size_t endpointIdHash)
