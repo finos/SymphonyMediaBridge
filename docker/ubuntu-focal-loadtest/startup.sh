@@ -7,6 +7,12 @@ then
       exit
 fi
 
+if [ -z "$GCE_BUCKET_NAME" ]
+then
+      echo "\$GCE_BUCKET_NAME env var should be set!"
+      exit
+fi
+
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 if [ "$#" -ne 5 ]; then
@@ -19,25 +25,52 @@ if [ "$1" != "initiator" ] && [ "$1" != "guest" ]; then
     exit
 fi
 
-echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID"
+echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID, number of test instances = $5, each with $4 clients."
 
 if [ "$1" == "initiator" ]; then
+
+    # Create conference and obtain CONFERENCE_ID.
     source $SCRIPT_DIR/create_conference.sh $2 $3
+
+    if [ -z "$CONFERENCE_ID" ]
+    then
+      echo "create_conference.sh failed! Exiting..."
+      exit
+    fi
+
+    # Create and share config file that contains CONFERENCE_ID.
     CONFIG_FILE=$(jq --null-input \
                 --arg ip "$2" \
                 --arg conference_id "$CONFERENCE_ID" \
                 '{"ip": $ip, "port": '$3', "numClients": '$4', "conference_id":$conference_id, "initiator":true}')
     echo $CONFIG_FILE > load_test_config.json
     jq '.initiator = false' load_test_config.json > load_test_config_for_guests.json
-    #TODO 1: upload "load_test_config_for_guests.json" to GCP bucket
+    gsutil cp load_test_config_for_guests.json gs://$GCE_BUCKET_NAME/load_test_config.json
 else
-    #TODO 2: wait for "load_test_config_for_guests.json" to the GCP bucket and download it as "load_test_config.json"
+    # If not initiator, retreive load_test_config.json.
+    attempt=$(( 20 ))
+    while [ $(( attempt )) != 0 ]
+        do
+        gsutil cp "gs://$GCE_BUCKET_NAME/load_test_config.json" ./
+        if [ $? -eq 0 ]; then
+            break
+        fi
+        attempt=$(( attempt - 1 ))
+        sleep 1
+    done
 fi
 
-    #TODO 3: upload $INSTANCE_ID.signal to the GCP bucket
-    #TODO 4: wait for $5 (<num instances>) *.signal files in the GCP bucket
+# Wait for other test instances.
+if ! $SCRIPT_DIR/wait_for_others.sh $5 30; then
+    echo "Wait for others failed, $? participants are missing. Exiting..."
+    exit
+fi
 
-
+# Execute tests.
 $SCRIPT_DIR/../../LoadTest --gtest_also_run_disabled_tests --gtest_filter="RealTimeTest.DISABLED_smbMegaHoot" --load_test_config=load_test_config.json
 
-    #TODO 5: upload log files to the GCP bucket
+# Upload results.
+gsutil cp smb_load_test.log "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/smb_load_test.log"
+
+# Cleanup. (TODO: use "if $AUTO_DELETE ; then")
+gcloud compute instances delete -q $INSTANCE_ID --zone $GCE_ZONE
