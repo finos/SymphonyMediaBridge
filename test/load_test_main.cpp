@@ -12,9 +12,9 @@ public:
     void SetUp() override
     {
         utils::Time::initialize();
-        auto fh = fopen("./smb_unit_test.log", "w");
+        auto fh = fopen("./smb_load_test.log", "w");
         fclose(fh);
-        logger::setup("./smb_unit_test.log", true, logger::Level::DBG, 32 * 1024);
+        logger::setup("./smb_load_test.log", true, logger::Level::DBG, 32 * 1024);
     }
 
     void TearDown() override { logger::stop(); }
