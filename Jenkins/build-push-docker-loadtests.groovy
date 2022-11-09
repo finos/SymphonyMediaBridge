@@ -6,10 +6,10 @@ node {
     scmVars = checkout scm
     git_hash = scmVars.GIT_COMMIT.substring(0,7)
 
-    dir("./docker") {
+    dir("./") {
         try {
             stage("Build") {
-                sh "./build_loadtest_container.sh"
+                sh "./docker/build_loadtest_container.sh"
             }
             stage("Push") {
                 gcloud_image_name="gcr.io/$params.GCE_PROJECT_ID/buildsmb-loadtests"
