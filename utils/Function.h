@@ -189,7 +189,7 @@ public:
     {
         static_assert(!std::is_same<std::decay_t<F>, Function>::value, "Function bound on wrong overload");
         static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
-        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(function);
+        _invokable = constructAtStorage<detail::GenericCallable<std::decay_t<F>>>(function);
     }
 
     template <typename F,
@@ -198,7 +198,7 @@ public:
     {
         static_assert(!std::is_same<std::decay_t<F>, Function>::value, "Function bound on wrong overload");
         static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
-        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(std::move(function));
+        _invokable = constructAtStorage<detail::GenericCallable<std::decay_t<F>>>(std::move(function));
     }
 
     Function(const Function& rhs) : _invokable(nullptr)
@@ -282,7 +282,7 @@ public:
         static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
 
         release();
-        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(callable);
+        _invokable = constructAtStorage<detail::GenericCallable<std::decay_t<F>>>(callable);
         return *this;
     }
 
@@ -293,7 +293,7 @@ public:
         static_assert(!std::is_same<std::decay_t<F>, Function>::value, "Function bound on wrong overload");
         static_assert(!std::is_base_of<detail::Invokable, std::decay_t<F>>::value, "Invokable bound on wrong overload");
         release();
-        _invokable = new (&_storage) detail::GenericCallable<std::decay_t<F>>(std::move(callable));
+        _invokable = constructAtStorage<detail::GenericCallable<std::decay_t<F>>>(std::move(callable));
         return *this;
     }
 
@@ -324,17 +324,29 @@ private:
     template <class TInvokable>
     void copyInvokable(const TInvokable& invokable)
     {
-        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(invokable)>),
-            "EngineFunctionStorage has insufficient space");
-        _invokable = invokable.copyTo(_storage);
+        static_assert(std::is_final<TInvokable>::value,
+            "TInvokable must be a final type to ensure it doesn't overflow the storage");
+
+        _invokable = constructAtStorage<TInvokable>(invokable);
     }
 
     template <class TInvokable>
     void moveInvokable(TInvokable&& invokable)
     {
-        static_assert(sizeof(_storage) >= sizeof(std::decay_t<decltype(invokable)>),
-            "EngineFunctionStorage has insufficient space");
-        _invokable = invokable.moveTo(_storage);
+        static_assert(std::is_final<TInvokable>::value,
+            "TInvokable must be a final type to ensure it doesn't overflow the storage");
+
+        _invokable = constructAtStorage<TInvokable>(std::move(invokable));
+    }
+
+    template <class TInvokable, class... Args>
+    auto* constructAtStorage(Args&&... args)
+    {
+        static_assert(std::is_base_of<detail::Invokable, TInvokable>::value,
+            "invokable must be a derived class of Invokable");
+        static_assert(sizeof(_storage) >= sizeof(TInvokable), "EngineFunctionStorage has insufficient space");
+
+        return new (&_storage) TInvokable(std::forward<Args>(args)...);
     }
 
 private:
