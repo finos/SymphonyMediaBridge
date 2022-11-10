@@ -2092,9 +2092,11 @@ bool Mixer::removeRecording(const std::string& recordingId)
             return false;
         }
 
-        _engine.post([&]() {
-            _engine.stopRecording(*_engineMixer, *engineStreamEntry->second, recordingDescriptionEntry->second);
-        });
+        _engine.post(utils::bind(&Engine::stopRecording,
+            &_engine,
+            std::ref(*_engineMixer),
+            std::ref(*engineStreamEntry->second),
+            std::ref(recordingDescriptionEntry->second)));
 
         if (stream->_attachedRecording.size() == 1)
         {
