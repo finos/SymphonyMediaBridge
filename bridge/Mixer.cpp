@@ -705,7 +705,7 @@ bool Mixer::removeDataStreamId(const std::string& id)
     return removeDataStream(endpointId);
 }
 
-void Mixer::engineAudioStreamRemoved(EngineAudioStream& engineStream)
+void Mixer::engineAudioStreamRemoved(const EngineAudioStream& engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -741,7 +741,7 @@ void Mixer::engineAudioStreamRemoved(EngineAudioStream& engineStream)
     _audioEngineStreams.erase(endpointId);
 }
 
-void Mixer::engineVideoStreamRemoved(EngineVideoStream& engineStream)
+void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -771,7 +771,7 @@ void Mixer::engineVideoStreamRemoved(EngineVideoStream& engineStream)
     _videoEngineStreams.erase(endpointId);
 }
 
-void Mixer::engineDataStreamRemoved(EngineDataStream& engineStream)
+void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -2308,7 +2308,7 @@ void Mixer::removeBarbell(const std::string& barbellId)
     }
 }
 
-void Mixer::engineBarbellRemoved(EngineBarbell& engineBarbell)
+void Mixer::engineBarbellRemoved(const EngineBarbell& engineBarbell)
 {
     std::unique_ptr<Barbell> barbell;
     {

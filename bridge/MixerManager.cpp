@@ -335,7 +335,7 @@ void MixerManager::allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc)
     it->second->allocateAudioBuffer(ssrc);
 }
 
-void MixerManager::audioStreamRemoved(EngineMixer& mixer, EngineAudioStream& audioStream)
+void MixerManager::audioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -357,7 +357,7 @@ void MixerManager::audioStreamRemoved(EngineMixer& mixer, EngineAudioStream& aud
     mixerIter->second->engineAudioStreamRemoved(audioStream);
 }
 
-void MixerManager::videoStreamRemoved(EngineMixer& engineMixer, EngineVideoStream& videoStream)
+void MixerManager::videoStreamRemoved(EngineMixer& engineMixer, const EngineVideoStream& videoStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -401,7 +401,7 @@ void MixerManager::recordingStreamRemoved(EngineMixer& mixer, const EngineRecord
     mixerIter->second->engineRecordingStreamRemoved(recordingStream);
 }
 
-void MixerManager::dataStreamRemoved(EngineMixer& mixer, EngineDataStream& dataStream)
+void MixerManager::dataStreamRemoved(EngineMixer& mixer, const EngineDataStream& dataStream)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -590,7 +590,7 @@ void MixerManager::removeRecordingTransport(EngineMixer& mixer, EndpointIdString
     mixerItr->second->removeRecordingTransport(streamId.c_str(), endpointIdHash);
 }
 
-void MixerManager::barbellRemoved(EngineMixer& mixer, EngineBarbell& barbell)
+void MixerManager::barbellRemoved(EngineMixer& mixer, const EngineBarbell& barbell)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 

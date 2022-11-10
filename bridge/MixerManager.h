@@ -111,16 +111,16 @@ private:
     bool post(utils::Function&& task) override { return _backgroundJobQueue.post(std::move(task)); }
 
     void allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc) override;
-    void audioStreamRemoved(EngineMixer& mixer, EngineAudioStream& audioStream) override;
+    void audioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream) override;
     void engineMixerRemoved(EngineMixer& mixer) override;
     void freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
     void allocateVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
     void allocateRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
-    void videoStreamRemoved(EngineMixer& engineMixer, EngineVideoStream& videoStream) override;
+    void videoStreamRemoved(EngineMixer& engineMixer, const EngineVideoStream& videoStream) override;
     void sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPacket, size_t endpointIdHash) override;
-    void dataStreamRemoved(EngineMixer& mixer, EngineDataStream& dataStream) override;
+    void dataStreamRemoved(EngineMixer& mixer, const EngineDataStream& dataStream) override;
     void freeRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
-    void barbellRemoved(EngineMixer& mixer, EngineBarbell& barbell) override;
+    void barbellRemoved(EngineMixer& mixer, const EngineBarbell& barbell) override;
     void recordingStreamRemoved(EngineMixer& mixer, const EngineRecordingStream& recordingStream) override;
     void removeRecordingTransport(EngineMixer& mixer, EndpointIdString streamId, size_t endpointIdHash) override;
     void inboundSsrcContextRemoved(EngineMixer& mixer, uint32_t ssrc, codec::OpusDecoder* opusDecoder) override;

@@ -160,9 +160,9 @@ public: // EngineMixer async interface. Will execute on engine thread
         const utils::Optional<SimulcastStream>& secondarySimulcastStream);
 
     bool asyncAddAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
-    bool asyncRemoveStream(EngineAudioStream* engineAudioStream);
-    bool asyncRemoveStream(EngineVideoStream* stream);
-    bool asyncRemoveStream(EngineDataStream* stream);
+    bool asyncRemoveStream(const EngineAudioStream* engineAudioStream);
+    bool asyncRemoveStream(const EngineVideoStream* stream);
+    bool asyncRemoveStream(const EngineDataStream* stream);
     bool asyncAddVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
     bool asyncReconfigureAudioStream(const transport::RtcTransport& transport, const uint32_t remoteSsrc);
     bool asyncStartTransport(transport::RtcTransport& transport);
@@ -227,9 +227,9 @@ private: // impl async interface
     void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
 
 public: // private but called from helper method
-    void removeStream(EngineVideoStream* engineVideoStream);
-    void removeStream(EngineAudioStream* engineAudioStream);
-    void removeStream(EngineDataStream* engineDataStream);
+    void removeStream(const EngineVideoStream* engineVideoStream);
+    void removeStream(const EngineAudioStream* engineAudioStream);
+    void removeStream(const EngineDataStream* engineDataStream);
 
 private:
     static const size_t maxPendingPackets = 8192;
@@ -467,9 +467,9 @@ private:
         const std::string& dominantSpeakerEndpoint);
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream);
 
-    void restoreDirectorStreamActiveState(EngineVideoStream& videoStream, const SimulcastStream& simulcastStream);
-    void markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream);
-    void markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
+    void restoreDirectorStreamActiveState(const EngineVideoStream& videoStream, const SimulcastStream& simulcastStream);
+    void markAssociatedAudioOutboundContextsForDeletion(const EngineAudioStream* senderAudioStream);
+    void markAssociatedVideoOutboundContextsForDeletion(const EngineVideoStream* senderVideoStream,
         const uint32_t ssrc,
         const uint32_t feedbackSsrc);
     void decommissionInboundContext(const uint32_t ssrc);

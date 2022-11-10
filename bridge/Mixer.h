@@ -139,10 +139,10 @@ public:
     bool removeDataStream(const std::string& endpointId);
     bool removeDataStreamId(const std::string& id);
 
-    void engineAudioStreamRemoved(EngineAudioStream& engineStream);
-    void engineVideoStreamRemoved(EngineVideoStream& engineStream);
-    void engineDataStreamRemoved(EngineDataStream& engineStream);
-    void engineBarbellRemoved(EngineBarbell& engineBarbell);
+    void engineAudioStreamRemoved(const EngineAudioStream& engineStream);
+    void engineVideoStreamRemoved(const EngineVideoStream& engineStream);
+    void engineDataStreamRemoved(const EngineDataStream& engineStream);
+    void engineBarbellRemoved(const EngineBarbell& engineBarbell);
 
     bool configureAudioStream(const std::string& endpointId,
         const RtpMap& rtpMap,

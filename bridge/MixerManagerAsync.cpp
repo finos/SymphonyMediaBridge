@@ -1,4 +1,5 @@
 #include "bridge/MixerManagerAsync.h"
+#include "bridge/RecordingDescription.h"
 #include "bridge/engine/EngineMixer.h"
 #include "utils/Function.h"
 
@@ -19,15 +20,9 @@ class Function;
 
 namespace bridge
 {
-/*
-bool MixerManagerAsync::asyncAllocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc)
+bool MixerManagerAsync::asyncAudioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream)
 {
-    return post(utils::bind(&MixerManagerAsync::allocateAudioBuffer, this, std::ref(mixer), ssrc));
-}*/
-
-bool MixerManagerAsync::asyncAudioStreamRemoved(EngineMixer& mixer, EngineAudioStream& audioStream)
-{
-    return post(utils::bind(&MixerManagerAsync::audioStreamRemoved, this, std::ref(mixer), std::ref(audioStream)));
+    return post(utils::bind(&MixerManagerAsync::audioStreamRemoved, this, std::ref(mixer), std::cref(audioStream)));
 }
 
 bool MixerManagerAsync::asyncEngineMixerRemoved(EngineMixer& mixer)
@@ -51,10 +46,10 @@ bool MixerManagerAsync::asyncAllocateRecordingRtpPacketCache(EngineMixer& mixer,
         utils::bind(&MixerManagerAsync::allocateRecordingRtpPacketCache, this, std::ref(mixer), ssrc, endpointIdHash));
 }
 
-bool MixerManagerAsync::asyncVideoStreamRemoved(EngineMixer& engineMixer, EngineVideoStream& videoStream)
+bool MixerManagerAsync::asyncVideoStreamRemoved(EngineMixer& engineMixer, const EngineVideoStream& videoStream)
 {
     return post(
-        utils::bind(&MixerManagerAsync::videoStreamRemoved, this, std::ref(engineMixer), std::ref(videoStream)));
+        utils::bind(&MixerManagerAsync::videoStreamRemoved, this, std::ref(engineMixer), std::cref(videoStream)));
 }
 
 bool MixerManagerAsync::asyncSctpReceived(EngineMixer& mixer, memory::UniquePacket& msgPacket, size_t endpointIdHash)
@@ -66,9 +61,9 @@ bool MixerManagerAsync::asyncSctpReceived(EngineMixer& mixer, memory::UniquePack
         endpointIdHash));
 }
 
-bool MixerManagerAsync::asyncDataStreamRemoved(EngineMixer& mixer, EngineDataStream& dataStream)
+bool MixerManagerAsync::asyncDataStreamRemoved(EngineMixer& mixer, const EngineDataStream& dataStream)
 {
-    return post(utils::bind(&MixerManagerAsync::dataStreamRemoved, this, std::ref(mixer), std::ref(dataStream)));
+    return post(utils::bind(&MixerManagerAsync::dataStreamRemoved, this, std::ref(mixer), std::cref(dataStream)));
 }
 
 bool MixerManagerAsync::asyncFreeRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash)
@@ -77,9 +72,9 @@ bool MixerManagerAsync::asyncFreeRecordingRtpPacketCache(EngineMixer& mixer, uin
         utils::bind(&MixerManagerAsync::freeRecordingRtpPacketCache, this, std::ref(mixer), ssrc, endpointIdHash));
 }
 
-bool MixerManagerAsync::asyncBarbellRemoved(EngineMixer& mixer, EngineBarbell& barbell)
+bool MixerManagerAsync::asyncBarbellRemoved(EngineMixer& mixer, const EngineBarbell& barbell)
 {
-    return post(utils::bind(&MixerManagerAsync::barbellRemoved, this, std::ref(mixer), std::ref(barbell)));
+    return post(utils::bind(&MixerManagerAsync::barbellRemoved, this, std::ref(mixer), std::cref(barbell)));
 }
 
 bool MixerManagerAsync::asyncRecordingStreamRemoved(EngineMixer& mixer, const EngineRecordingStream& recordingStream)
@@ -111,8 +106,7 @@ bool MixerManagerAsync::asyncMixerTimedOut(EngineMixer& mixer)
 
 bool MixerManagerAsync::asyncEngineRecordingStopped(EngineMixer& mixer, const RecordingDescription& recordingDesc)
 {
-    return post(
-        utils::bind(&MixerManagerAsync::engineRecordingStopped, this, std::ref(mixer), std::ref(recordingDesc)));
+    return post(utils::bind(&MixerManagerAsync::engineRecordingStopped, this, std::ref(mixer), recordingDesc));
 }
 
 } // namespace bridge

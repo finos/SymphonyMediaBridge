@@ -358,7 +358,7 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
     sendAudioStreamToRecording(*engineAudioStream, true);
 }
 
-void EngineMixer::removeStream(EngineAudioStream* engineAudioStream)
+void EngineMixer::removeStream(const EngineAudioStream* engineAudioStream)
 {
     const auto endpointIdHash = engineAudioStream->endpointIdHash;
 
@@ -454,7 +454,7 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
     sendVideoStreamToRecording(*engineVideoStream, true);
 }
 
-void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
+void EngineMixer::removeStream(const EngineVideoStream* engineVideoStream)
 {
     engineVideoStream->transport.getJobQueue().getJobManager().abortTimedJob(engineVideoStream->transport.getId(),
         engineVideoStream->localSsrc);
@@ -617,7 +617,7 @@ void EngineMixer::addDataSteam(EngineDataStream* engineDataStream)
     _engineDataStreams.emplace(endpointIdHash, engineDataStream);
 }
 
-void EngineMixer::removeStream(EngineDataStream* engineDataStream)
+void EngineMixer::removeStream(const EngineDataStream* engineDataStream)
 {
     const auto endpointIdHash = engineDataStream->endpointIdHash;
     logger::debug("Remove engineDataStream, transport %s, endpointIdHash %lu",
@@ -3482,7 +3482,7 @@ void EngineMixer::sendDominantSpeakerToRecordingStream(EngineRecordingStream& re
 // This method is called after a video stream has been reconfigured. That has led to streams being removed and then
 // added again to ActiveMediaList and EngineStreamDirector. If the ssrc is an active inbound ssrc, we will set the
 // stream state again in EngineStreamDirector.
-void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStream,
+void EngineMixer::restoreDirectorStreamActiveState(const EngineVideoStream& videoStream,
     const SimulcastStream& simulcastStream)
 {
     for (auto& simulcastLevel : simulcastStream.getLevels())
@@ -3497,7 +3497,7 @@ void EngineMixer::restoreDirectorStreamActiveState(EngineVideoStream& videoStrea
     }
 }
 
-void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(EngineAudioStream* senderAudioStream)
+void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(const EngineAudioStream* senderAudioStream)
 {
     if (!senderAudioStream->remoteSsrc.isSet())
     {
@@ -3534,7 +3534,7 @@ void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(EngineAudioStre
     }
 }
 
-void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(EngineVideoStream* senderVideoStream,
+void EngineMixer::markAssociatedVideoOutboundContextsForDeletion(const EngineVideoStream* senderVideoStream,
     const uint32_t ssrc,
     const uint32_t feedbackSsrc)
 {
@@ -4714,9 +4714,9 @@ bool EngineMixer::asyncReconfigureVideoStream(const transport::RtcTransport& tra
     return post(utils::bind(&EngineMixer::reconfigureVideoStream,
         this,
         std::ref(transport),
-        std::cref(ssrcWhitelist),
-        std::cref(simulcastStream),
-        std::cref(secondarySimulcastStream)));
+        ssrcWhitelist,
+        simulcastStream,
+        secondarySimulcastStream));
 }
 
 bool EngineMixer::asyncAddAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer)
@@ -4724,17 +4724,17 @@ bool EngineMixer::asyncAddAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuf
     return post(utils::bind(&EngineMixer::addAudioBuffer, this, ssrc, audioBuffer));
 }
 
-bool EngineMixer::asyncRemoveStream(EngineAudioStream* engineAudioStream)
+bool EngineMixer::asyncRemoveStream(const EngineAudioStream* engineAudioStream)
 {
     return post([=]() { this->removeStream(engineAudioStream); });
 }
 
-bool EngineMixer::asyncRemoveStream(EngineVideoStream* stream)
+bool EngineMixer::asyncRemoveStream(const EngineVideoStream* stream)
 {
     return post([=]() { this->removeStream(stream); });
 }
 
-bool EngineMixer::asyncRemoveStream(EngineDataStream* stream)
+bool EngineMixer::asyncRemoveStream(const EngineDataStream* stream)
 {
     return post([=]() { this->removeStream(stream); });
 }
@@ -4805,7 +4805,7 @@ bool EngineMixer::asyncAddTransportToRecordingStream(const size_t streamIdHash,
 
 bool EngineMixer::asyncRecordingStart(EngineRecordingStream& stream, const RecordingDescription& desc)
 {
-    return post(utils::bind(&EngineMixer::recordingStart, this, std::ref(stream), std::ref(desc)));
+    return post(utils::bind(&EngineMixer::recordingStart, this, std::ref(stream), desc));
 }
 
 bool EngineMixer::asyncUpdateRecordingStreamModalities(EngineRecordingStream& engineRecordingStream,
@@ -4828,7 +4828,7 @@ bool EngineMixer::asyncStartRecordingTransport(transport::RecordingTransport& tr
 
 bool EngineMixer::asyncStopRecording(EngineRecordingStream& stream, const RecordingDescription& desc)
 {
-    post(utils::bind(&EngineMixer::stopRecording, this, std::ref(stream), std::ref(desc)));
+    post(utils::bind(&EngineMixer::stopRecording, this, std::ref(stream), desc));
     return _messageListener.asyncEngineRecordingStopped(*this, desc);
 }
 
