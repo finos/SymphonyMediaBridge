@@ -1755,8 +1755,8 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
 
     _engine.post(utils::bind(&EngineMixer::sendEndpointMessage,
         _engineMixer.get(),
-        fromEndpointIdHash,
         toEndpointIdHash,
+        fromEndpointIdHash,
         utils::moveParam(packet)));
 }
 
