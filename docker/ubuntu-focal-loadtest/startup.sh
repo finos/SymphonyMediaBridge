@@ -15,8 +15,8 @@ fi
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-if [ "$#" -ne 5 ]; then
-    echo "Usage startup.sh <initiator|guest> <SMB IP> <SMB Port> <num clients per instance> <num instances>. Eg. for 1000 clients: startup.sh initiator 127.0.0.1 8080 250 4"
+if [ "$#" -ne 6 ]; then
+    echo "Usage startup.sh <initiator|guest> <SMB IP> <SMB Port> <num clients per instance> <num instances> <gtest filter>. Eg. for 1000 clients: startup.sh initiator 127.0.0.1 8080 250 4 RealTimeTest.DISABLED_smbMegaHoot"
     exit
 fi
 
@@ -25,7 +25,7 @@ if [ "$1" != "initiator" ] && [ "$1" != "guest" ]; then
     exit
 fi
 
-echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID, number of test instances = $5, each with $4 clients."
+echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID, number of test instances = $5, each with $4 clients. gtest-filter = $6"
 
 if [ "$1" == "initiator" ]; then
 
@@ -67,7 +67,7 @@ if ! $SCRIPT_DIR/wait_for_others.sh $5 30; then
 fi
 
 # Execute tests.
-$SCRIPT_DIR/../../LoadTest --gtest_also_run_disabled_tests --gtest_filter="RealTimeTest.DISABLED_smbMegaHoot" --load_test_config=load_test_config.json
+$SCRIPT_DIR/../../LoadTest --gtest_also_run_disabled_tests --gtest_filter="RealTimeTest.DISABLED_smbMegaHoot" --load_test_config="$6"
 
 # Upload results.
 gsutil cp smb_load_test.log "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/smb_load_test.log"
