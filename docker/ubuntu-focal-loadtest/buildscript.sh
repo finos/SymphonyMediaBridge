@@ -11,8 +11,8 @@ function pr() {
   echo -e ${GREEN}$1${NC}
 }
 
-mkdir -p ubuntu-focal-deb/smb
-pushd ubuntu-focal-deb/smb
+mkdir -p ubuntu-focal-loadtest/smb
+pushd ubuntu-focal-loadtest/smb
 
 export CC=clang
 export CXX=clang++
@@ -21,7 +21,7 @@ pr "Generating versioninfo"
 ../../tools/scripts/versioninfo.sh
 
 pr "Generating make files"
-../../docker/ubuntu-focal-deb/generate_makefile.sh $1
+../../docker/ubuntu-focal-loadtest/generate_makefile.sh $1
 if [ $? != 0 ]; then
     pr "Could not generate make file."; exit 1
 fi
