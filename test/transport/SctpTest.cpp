@@ -256,7 +256,7 @@ struct SctpTransportTest : public ::testing::Test
     {
         for (size_t threadIndex = 0; threadIndex < std::thread::hardware_concurrency(); ++threadIndex)
         {
-            _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
+            _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager, true));
         }
     }
 

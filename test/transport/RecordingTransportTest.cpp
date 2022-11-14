@@ -41,7 +41,7 @@ struct RecordingTransportTest : public testing::Test
     {
         for (size_t i = 0; i < thread::hardware_concurrency(); ++i)
         {
-            _workerThreads.push_back(make_unique<WorkerThread>(*_jobManager));
+            _workerThreads.push_back(make_unique<WorkerThread>(*_jobManager, true));
         }
     }
 

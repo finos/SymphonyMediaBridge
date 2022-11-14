@@ -12,10 +12,11 @@ thread_local jobmanager::WorkerThread* workerThreadHandler = nullptr;
 namespace jobmanager
 {
 
-WorkerThread::WorkerThread(jobmanager::JobManager& jobManager, const char* name)
+WorkerThread::WorkerThread(jobmanager::JobManager& jobManager, bool yieldEnabled, const char* name)
     : _running(true),
       _jobManager(jobManager),
       _backgroundJobCount(0),
+      _yieldEnabled(yieldEnabled),
       _name(name ? name : "Worker"),
       _thread([this] { this->run(); })
 {
@@ -151,7 +152,7 @@ bool WorkerThread::processJobs()
 bool WorkerThread::yield()
 {
     WorkerThread* wt = workerThreadHandler;
-    if (wt)
+    if (wt && wt->_yieldEnabled)
     {
         return wt->processJobs();
     }

@@ -43,7 +43,7 @@ class VideoNackReceiveJobTest : public ::testing::Test
         _mainOutboundContext.reset();
         _rtxOutboundContext.reset();
 
-        auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager);
+        auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager, true);
         _jobQueue.reset();
         _timers->stop();
         _jobManager->stop();
