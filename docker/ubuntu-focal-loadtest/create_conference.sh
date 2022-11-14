@@ -9,5 +9,5 @@ fi
 echo "Attempting to create conference..."
 
 rm -f conference_id.json
-curl -X POST $1:$2/conferences -H 'Content-Type: application/json' -d '{"last-n":9,"global-port":true}' >> conference_id.json
-export CONFERENCE_ID=`jq '.id' conference_id.json | head -n 1 | tr -d '"'`
+curl -X POST $1:$2/conferences -H 'Content-Type: application/json' -d '{"last-n":9,"global-port":true}' > conference_id.json
+cat conference_id.json

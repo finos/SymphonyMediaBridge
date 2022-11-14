@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 
+function uploadLogFileIfExist {
+if [ -n "$log_file" ] && [ -f "$log_file" ] ; then
+    gsutil cp "$log_file" "gs://$GCE_BUCKET_NAME"
+    gcloud compute instances delete -q "$INSTANCE_ID" --zone "$GCE_ZONE"
+fi
+}
+
+trap uploadLogFileIfExist EXIT
+
 if [ -z "$INSTANCE_ID" ]
 then
       echo "\$INSTANCE_ID env var should be set!"
@@ -25,16 +34,25 @@ if [ "$1" != "initiator" ] && [ "$1" != "guest" ]; then
     exit
 fi
 
-echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID, number of test instances = $5, each with $4 clients. gtest-filter = $6"
+log_file="$INSTANCE_ID-test-output.log"
+
+echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID, number of test instances = $5, each with $4 clients. gtest-filter = $6" 2>&1 | tee $log_file
 
 if [ "$1" == "initiator" ]; then
 
     # Create conference and obtain CONFERENCE_ID.
-    source $SCRIPT_DIR/create_conference.sh $2 $3
+    source $SCRIPT_DIR/create_conference.sh $2 $3 2>&1 | tee -a $log_file
 
-    if [ -z "$CONFERENCE_ID" ]
+    if [ -f "conference_id.json" ]; then
+        CONFERENCE_ID=$(jq '.id' conference_id.json | head -n 1 | tr -d '"')
+        echo "Conference ID: $CONFERENCE_ID" 2>&1 | tee -a $log_file
+    else
+        exit
+    fi
+
+    if [ -z "${CONFERENCE_ID}" ]
     then
-      echo "create_conference.sh failed! Exiting..."
+      echo "create_conference.sh failed! Exiting..." 2>&1 | tee -a $log_file
       exit
     fi
 
@@ -45,13 +63,13 @@ if [ "$1" == "initiator" ]; then
                 '{"ip": $ip, "port": '$3', "numClients": '$4', "conference_id":$conference_id, "initiator":true}')
     echo $CONFIG_FILE > load_test_config.json
     jq '.initiator = false' load_test_config.json > load_test_config_for_guests.json
-    gsutil cp load_test_config_for_guests.json gs://$GCE_BUCKET_NAME/load_test_config.json
+    gsutil cp load_test_config_for_guests.json "gs://$GCE_BUCKET_NAME/load_test_config.json" 2>&1 | tee -a $log_file
 else
     # If not initiator, retreive load_test_config.json.
     attempt=$(( 20 ))
     while [ $(( attempt )) != 0 ]
         do
-        gsutil cp "gs://$GCE_BUCKET_NAME/load_test_config.json" ./
+        gsutil cp "gs://$GCE_BUCKET_NAME/load_test_config.json" ./ 2>&1 | tee -a $log_file
         if [ $? -eq 0 ]; then
             break
         fi
@@ -61,16 +79,26 @@ else
 fi
 
 # Wait for other test instances.
-if ! $SCRIPT_DIR/wait_for_others.sh $5 30; then
-    echo "Wait for others failed, $? participants are missing. Exiting..."
+source $SCRIPT_DIR/wait_for_others.sh "$5" 30 2>&1 | tee -a $log_file
+if [ ! "$?" ]; then
+    echo "Wait for others failed, $? participants are missing. Exiting..."  2>&1 | tee -a $log_file
     exit
 fi
 
+echo "Starting tests..." | tee -a $log_file
+
+execFileName=$(find -type f -name "LoadTest")
+execFileName=$(realpath "$execFileName")
+loadTestConfig=$(realpath load_test_config.json)
+
+echo "Local config:" | tee -a $log_file
+cat $loadTestConfig 2>&1 | tee -a $log_file
+
+test_cmd='$execFileName --gtest_also_run_disabled_tests --gtest_filter=$6 --load_test_config=$loadTestConfig'
+echo "Test cmd line: $test_cmd" 2>&1 | tee -a $log_file
+
 # Execute tests.
-$SCRIPT_DIR/../../LoadTest --gtest_also_run_disabled_tests --gtest_filter="RealTimeTest.DISABLED_smbMegaHoot" --load_test_config="$6"
+eval "$test_cmd" 2>&1 | tee -a $log_file
 
 # Upload results.
-gsutil cp smb_load_test.log "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/smb_load_test.log"
-
-# Cleanup. (TODO: use "if $AUTO_DELETE ; then")
-gcloud compute instances delete -q $INSTANCE_ID --zone $GCE_ZONE
+gsutil cp smb_load_test.log "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/smb_load_test.log" 2>&1 | tee -a $log_file
