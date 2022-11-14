@@ -112,7 +112,7 @@ struct JobManagerTest : public ::testing::Test
     {
         for (int i = 0; i < numWorkers; ++i)
         {
-            workerThreads.emplace_back(make_unique<WorkerThread>(jobManager));
+            workerThreads.emplace_back(make_unique<WorkerThread>(jobManager, true));
         }
     }
 

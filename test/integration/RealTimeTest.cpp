@@ -68,7 +68,7 @@ void RealTimeTest::SetUp()
     _jobManager = std::make_unique<jobmanager::JobManager>(*_timerQueue);
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
     {
-        _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager));
+        _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_jobManager, true));
     }
 
     initLocalTransports();

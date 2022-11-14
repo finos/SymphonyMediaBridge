@@ -153,7 +153,9 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     }
 
     startWorkerThreads();
-    backgroundWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, "MMWorker");
+    // Disabling yield because we don't want to yield jobs that holds mixer and MixerManager locks, otherwise it can create deadlocks
+    const bool yieldEnabled = false;
+    backgroundWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, yieldEnabled, "MMWorker");
 
     if (!_sslDtls->isInitialized())
     {
@@ -240,7 +242,7 @@ void Bridge::startWorkerThreads()
 
     for (int i = 0; i < numWorkerThreads; ++i)
     {
-        _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_rtJobManager, "RTWorker"));
+        _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_rtJobManager, true, "RTWorker"));
     }
 }
 } // namespace bridge

@@ -11,7 +11,7 @@ class JobManager;
 class WorkerThread
 {
 public:
-    explicit WorkerThread(jobmanager::JobManager& jobManager, const char* name = nullptr);
+    explicit WorkerThread(jobmanager::JobManager& jobManager, bool yieldEnabled, const char* name = nullptr);
     ~WorkerThread();
 
     void stop();
@@ -41,6 +41,7 @@ private:
     std::vector<BackgroundJob> _backgroundJobs;
     uint32_t _backgroundJobCount;
 
+    bool _yieldEnabled;
     std::string _name;
     std::thread _thread; // must be last
 };

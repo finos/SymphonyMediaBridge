@@ -113,7 +113,7 @@ private:
         _engineAudioStreams.clear();
         _engineVideoStreams.clear();
 
-        auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager);
+        auto thread = std::make_unique<jobmanager::WorkerThread>(*_jobManager, true);
         _jobQueue.reset();
         _timers->stop();
         _jobManager->stop();

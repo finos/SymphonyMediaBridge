@@ -1755,8 +1755,8 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
 
     _engine.post(utils::bind(&EngineMixer::sendEndpointMessage,
         _engineMixer.get(),
-        fromEndpointIdHash,
         toEndpointIdHash,
+        fromEndpointIdHash,
         utils::moveParam(packet)));
 }
 
@@ -1995,11 +1995,11 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream* recordingSt
 
             if (transport)
             {
+                auto* transportRawPointer = transport.get();
                 recordingStream->_transports.emplace(endpointIdHash, std::move(transport));
                 recordingStream->_recEventUnackedPacketsTracker.emplace(endpointIdHash,
                     std::make_unique<UnackedPacketsTracker>("RecEventUnackedPacketsTracker"));
-
-                _engine.post(utils::bind(&EngineMixer::startRecordingTransport, _engineMixer.get(), transport.get()));
+                _engine.post(utils::bind(&EngineMixer::startRecordingTransport, _engineMixer.get(), transportRawPointer));
             }
             else
             {
