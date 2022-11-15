@@ -137,8 +137,7 @@ void RealTimeTest::initLocalTransports()
     std::string configJson =
         "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10050, \"recording.singlePort\":0}";
     _clientConfig.readFromString(configJson);
-    std::vector<transport::SocketAddress> interfaces;
-    interfaces.push_back(transport::SocketAddress::parse(_clientConfig.ice.preferredIp, 0));
+    std::vector<transport::SocketAddress> interfaces = bridge::gatherInterfaces(_clientConfig);
 
     _clientsEndpointFactory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
     _clientTransportFactory = transport::createTransportFactory(*_jobManager,

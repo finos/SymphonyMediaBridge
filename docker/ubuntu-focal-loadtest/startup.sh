@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-function uploadLogFileIfExist {
+function cleanup {
 if [ -n "$log_file" ] && [ -f "$log_file" ] ; then
     gsutil cp "$log_file" "gs://$GCE_BUCKET_NAME"
     gcloud compute instances delete -q "$INSTANCE_ID" --zone "$GCE_ZONE"
 fi
 }
 
-trap uploadLogFileIfExist EXIT
+trap cleanup EXIT
 
 if [ -z "$INSTANCE_ID" ]
 then
@@ -76,6 +76,11 @@ else
         attempt=$(( attempt - 1 ))
         sleep 1
     done
+fi
+
+if [ ! -f load_test_config.json ]; then
+    echo "Failed to receive config file load_test_config.json. Exiting..."  2>&1 | tee -a $log_file
+    exit
 fi
 
 # Wait for other test instances.
