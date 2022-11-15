@@ -1,4 +1,5 @@
 #include "utils/Function.h"
+#include <functional>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <string>
@@ -46,6 +47,8 @@ public:
     MOCK_METHOD(void, callback6, (int a, int b, bool c, FakeValue d, const FakeValue& e));
     MOCK_METHOD(void, callback7, (int a, int b, bool c, FakeValue d, FakeValue& e));
     MOCK_METHOD(void, callback8, (std::string x));
+
+    MOCK_METHOD(void, callback10, (std::unique_ptr<FakeValue> p));
 };
 
 } // namespace
@@ -324,4 +327,32 @@ TEST(FunctionTest, lambda)
     lambda2();
     lambda3();
     lambda4();
+}
+
+TEST(FunctionTest, lambdaUnique)
+{
+    StrictMock<CallbackClassMock> callbacks0;
+
+    auto value = std::make_unique<FakeValue>();
+    auto value2 = std::make_unique<FakeValue>();
+
+    auto lambda1 = [&callbacks0, u = utils::moveParam(value)]() {
+        callbacks0.callback10(std::move(u));
+    };
+
+    auto lambda2 = [&callbacks0, u = utils::moveParam(value2)]() {
+        callbacks0.callback10(std::move(u));
+    };
+
+    utils::Function function1(lambda1);
+    utils::Function function2(std::move(lambda2));
+
+    {
+        InSequence seq;
+
+        EXPECT_CALL(callbacks0, callback10).Times(2);
+    }
+
+    lambda1();
+    function2();
 }

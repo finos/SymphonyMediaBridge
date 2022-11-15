@@ -117,8 +117,6 @@ public:
     template <typename F, typename = decltype(std::declval<F&>()())>
     GenericCallable(F&& function) : _func(std::forward<F>(function))
     {
-        bool a = true;
-        (void)a;
     }
 
     GenericCallable(const GenericCallable& rhs) : _func(rhs._func) {}

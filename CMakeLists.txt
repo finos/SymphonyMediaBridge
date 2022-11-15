@@ -205,6 +205,8 @@ set(FILES
         bridge/engine/SetMaxMediaBitrateJob.cpp
         bridge/MixerJobs.h
         bridge/MixerJobs.cpp
+        bridge/MixerManagerAsync.h
+        bridge/MixerManagerAsync.cpp
         bwe/BandwidthEstimator.cpp
         bwe/BandwidthEstimator.h
         bwe/BandwidthUtils.cpp

@@ -59,12 +59,7 @@ void RecordingVideoForwarderSendJob::run()
             _transport.getLoggableId().c_str());
 
         _outboundContext.packetCache.set(nullptr);
-
-        _mixerManager.post(utils::bind(&MixerManagerAsync::allocateRecordingRtpPacketCache,
-            &_mixerManager,
-            &_mixer,
-            _outboundContext.ssrc,
-            _endpointIdHash));
+        _mixerManager.asyncAllocateRecordingRtpPacketCache(_mixer, _outboundContext.ssrc, _endpointIdHash);
     }
 
     const bool isKeyFrame = codec::Vp8Header::isKeyFrame(rtpHeader->getPayload(),

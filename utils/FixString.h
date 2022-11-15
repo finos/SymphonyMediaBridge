@@ -1,4 +1,7 @@
 #pragma once
+#include "utils/FowlerNollHash.h"
+#include "utils/StdExtensions.h"
+#include <algorithm>
 #include <cstring>
 
 namespace utils
