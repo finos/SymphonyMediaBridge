@@ -99,7 +99,7 @@ loadTestConfig=$(realpath load_test_config.json)
 echo "Local config:" | tee -a $log_file
 cat $loadTestConfig 2>&1 | tee -a $log_file
 
-test_cmd='$execFileName --gtest_also_run_disabled_tests --gtest_filter=$6 --load_test_config=$loadTestConfig'
+test_cmd='$execFileName --gtest_also_run_disabled_tests --gtest_filter=$6 --gtest_output=xml:results.xml --load_test_config=$loadTestConfig'
 echo "Test cmd line: $test_cmd" 2>&1 | tee -a $log_file
 
 # Execute tests.
@@ -107,3 +107,4 @@ eval "$test_cmd" 2>&1 | tee -a $log_file
 
 # Upload results.
 gsutil cp smb_load_test.log "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/smb_load_test.log" 2>&1 | tee -a $log_file
+gsutil cp results.xml "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/results.xml" 2>&1 | tee -a $log_file
