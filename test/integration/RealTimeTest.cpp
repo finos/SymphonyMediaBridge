@@ -192,10 +192,12 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     std::string baseUrl = "http://127.0.0.1:8080";
     auto numClients = 1000;
     bool createTalker = true;
+    uint16_t duration = 60;
 
     if (_configInitialized)
     {
         numClients = _config->numClients;
+        duration = _config->duration;
 
         utils::StringBuilder<1000> sb;
         sb.append("http://");
@@ -241,7 +243,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-    makeCallWithDefaultAudioProfile(group, 20 * utils::Time::sec);
+    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
 
     for (auto& client : group.clients)
     {
