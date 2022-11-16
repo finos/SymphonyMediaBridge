@@ -1710,7 +1710,7 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
         toEndpointIdHash = dataStreamItr->second->endpointIdHash;
     }
 
-    _engineMixer->asyncSendEndpointMessage(fromEndpointIdHash, toEndpointIdHash, packet);
+    _engineMixer->asyncSendEndpointMessage(toEndpointIdHash, fromEndpointIdHash, packet);
 }
 
 RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)
@@ -1938,11 +1938,12 @@ void Mixer::addRecordingTransportsToRecordingStream(RecordingStream& recordingSt
 
             if (transport)
             {
+                auto& transportRef = *transport;
                 recordingStream._transports.emplace(endpointIdHash, std::move(transport));
                 recordingStream._recEventUnackedPacketsTracker.emplace(endpointIdHash,
                     std::make_unique<UnackedPacketsTracker>("RecEventUnackedPacketsTracker"));
 
-                _engineMixer->asyncStartRecordingTransport(*transport);
+                _engineMixer->asyncStartRecordingTransport(transportRef);
             }
             else
             {
