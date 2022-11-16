@@ -4828,8 +4828,10 @@ bool EngineMixer::asyncStartRecordingTransport(transport::RecordingTransport& tr
 
 bool EngineMixer::asyncStopRecording(EngineRecordingStream& stream, const RecordingDescription& desc)
 {
-    post(utils::bind(&EngineMixer::stopRecording, this, std::ref(stream), desc));
-    return _messageListener.asyncEngineRecordingStopped(*this, desc);
+    return post([this, &stream, &desc]() {
+        this->stopRecording(stream, desc);
+        _messageListener.asyncEngineRecordingStopped(*this, desc);
+    });
 }
 
 bool EngineMixer::asyncAddRecordingRtpPacketCache(const uint32_t ssrc,
@@ -4861,10 +4863,10 @@ bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash, memory::Un
 
 bool EngineMixer::asyncRemoveRecordingStream(const EngineRecordingStream& engineRecordingStream)
 {
-    const bool postResult =
-        post(utils::bind(&EngineMixer::removeRecordingStream, this, std::cref(engineRecordingStream)));
-    _messageListener.asyncRecordingStreamRemoved(*this, engineRecordingStream);
-    return postResult;
+    return post([this, &engineRecordingStream]() {
+        this->removeRecordingStream(engineRecordingStream);
+        _messageListener.asyncRecordingStreamRemoved(*this, engineRecordingStream);
+    });
 }
 
 } // namespace bridge
