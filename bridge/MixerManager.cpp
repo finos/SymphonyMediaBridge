@@ -305,10 +305,15 @@ void MixerManager::engineMixerRemoved(EngineMixer& engineMixer)
     auto findResult = _mixers.find(mixerId);
     if (findResult != _mixers.end())
     {
+        logger::info("Finalizing EngineMixer %s", "MixerManager", mixerId.c_str());
         auto mixer = findResult->second;
         _mixers.erase(mixerId);
         mixer->stopTransports(); // this will stop new packets from coming in
         _backgroundJobQueue.addJob<bridge::FinalizeEngineMixerRemoval>(*this, mixer);
+    }
+    else
+    {
+        logger::error("EngineMixer %s not found", "MixerManager", mixerId.c_str());
     }
 }
 
@@ -322,6 +327,8 @@ void MixerManager::finalizeEngineMixerRemoval(const std::string& mixerId)
         _sendAllocator.logAllocatedElements();
         _audioAllocator.logAllocatedElements();
     }
+
+    logger::info("Mixer %s has been finalized", "MixerManager", mixerId.c_str());
 }
 
 void MixerManager::allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc)

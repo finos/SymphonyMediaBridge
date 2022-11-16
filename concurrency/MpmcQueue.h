@@ -1,9 +1,8 @@
 #pragma once
+#include "utils/Allocator.h"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
-#include <sys/mman.h>
-#include <unistd.h>
 namespace concurrency
 {
 // It is wise to make your queue entries at least 56B large
@@ -27,7 +26,7 @@ class MpmcQueue
 
 public:
     typedef T value_type;
-    explicit MpmcQueue(uint32_t maxElements) : _maxElements(maxElements), _blockSize(calculateNeededSpace(maxElements))
+    explicit MpmcQueue(uint32_t maxElements) : _maxElements(maxElements), _blockSize(page_allocator::pageAlignedSpace(maxElements * sizeof(Entry)))
     {
         _readCursor = 0;
         _writeCursor = 0;
@@ -37,8 +36,7 @@ public:
         _cacheLineSeparator2[0] = 0;
 
         _elements = reinterpret_cast<Entry*>(
-            mmap(nullptr, _blockSize, (PROT_READ | PROT_WRITE), (MAP_PRIVATE | MAP_ANONYMOUS), -1, 0));
-        assert(reinterpret_cast<intptr_t>(_elements) != -1);
+            page_allocator::allocate(_blockSize));
 
         for (uint32_t i = 0; i < _maxElements; ++i)
         {
@@ -52,7 +50,8 @@ public:
         {
             _elements[i].~Entry();
         }
-        munmap(_elements, _blockSize);
+
+        page_allocator::free(_elements, _blockSize);
     }
 
     // return false if empty
@@ -74,7 +73,7 @@ public:
             if (_readCursor.compare_exchange_weak(pos, pos + 1))
             {
                 // we own the read position now. If thread pauses here,
-                // A writer cannot write due to commited state and will not increase write cursor.
+                // A writer cannot write due to committed state and will not increase write cursor.
                 // A reader fail to update readCursor and has to try next slot.
                 // A reader that wrapped will not pass readable test because the pos == writepos
                 auto& entry = _elements[pos % _maxElements];
@@ -154,14 +153,6 @@ private:
     uint64_t _cacheLineSeparator2[7];
     Entry* _elements;
     const size_t _blockSize;
-
-    static size_t calculateNeededSpace(uint32_t maxElements)
-    {
-        auto neededSize = sizeof(Entry) * maxElements;
-        const auto pageSize = getpagesize();
-        const auto remaining = neededSize % pageSize;
-        return neededSize + (remaining != 0 ? pageSize - remaining : 0);
-    }
 
     bool isWritable(const uint32_t pos) const
     {

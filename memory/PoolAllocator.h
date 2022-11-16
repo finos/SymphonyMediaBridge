@@ -3,13 +3,12 @@
 #include "concurrency/LockFreeList.h"
 #include "concurrency/WaitFreeStack.h"
 #include "logger/Logger.h"
+#include "utils/Allocator.h"
 #include <cassert>
 #include <cstddef>
 #include <iterator>
 #include <numeric>
 #include <string>
-#include <sys/mman.h>
-#include <unistd.h>
 
 #if !defined(ENABLE_ALLOCATOR_METRICS)
 #ifdef DEBUG
@@ -32,13 +31,6 @@ template <size_t ELEMENT_SIZE>
 class PoolAllocator
 {
     static const size_t QCOUNT = 8;
-    static size_t calculateNeededSpace(size_t desiredCount)
-    {
-        auto finalSize = desiredCount * sizeof(Entry);
-        const auto pageSize = getpagesize();
-        const auto remaining = finalSize % pageSize;
-        return finalSize + (remaining != 0 ? pageSize - remaining : 0);
-    }
 
 public:
     class Deleter
@@ -64,9 +56,9 @@ public:
         : _deleter(this),
           _name(std::move(name)),
           _elements(nullptr),
+          _size(page_allocator::pageAlignedSpace(elementCount * sizeof(Entry))),
           _popIndex(0),
           _pushIndex(0),
-          _size(calculateNeededSpace(elementCount)),
           _originalElementCount(_size / sizeof(Entry)),
           _count(_originalElementCount)
     {
@@ -74,8 +66,7 @@ public:
         _cacheLineSeparator2[0] = 0;
         _cacheLineSeparator3[0] = 0;
 
-        _elements = reinterpret_cast<Entry*>(
-            mmap(nullptr, _size, (PROT_READ | PROT_WRITE), (MAP_PRIVATE | MAP_ANONYMOUS), -1, 0));
+        _elements = reinterpret_cast<Entry*>(page_allocator::allocate(_size));
         assert(reinterpret_cast<intptr_t>(_elements) != -1);
 
         static_assert(sizeof(Entry) % alignof(std::max_align_t) == 0, "ELEMENT_SIZE must be multiple of alignment");
@@ -90,7 +81,7 @@ public:
     ~PoolAllocator()
     {
         logAllocatedElements();
-        munmap(_elements, _size);
+        page_allocator::free(_elements, _size);
     }
 
     Deleter& getDeleter() { return _deleter; }

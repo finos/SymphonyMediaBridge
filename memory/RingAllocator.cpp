@@ -1,9 +1,7 @@
 #include "RingAllocator.h"
-
+#include "utils/Allocator.h"
 #include <cassert>
 #include <cstddef>
-#include <sys/mman.h>
-#include <unistd.h>
 
 namespace memory
 {
@@ -27,18 +25,17 @@ const uint32_t ALLOCATED = 0xAB0CADED;
 const uint32_t FREE = 0xFFBBEEDD;
 } // namespace
 
-RingAllocator::RingAllocator(size_t size) : _size(alignSize(size, getpagesize()))
+RingAllocator::RingAllocator(size_t size)
+    : _size(page_allocator::pageAlignedSpace(size)),
+      _area(reinterpret_cast<uint8_t*>(page_allocator::allocate(_size))),
+      _head(0),
+      _tail(0)
 {
-    _area = reinterpret_cast<uint8_t*>(
-        mmap(nullptr, _size, (PROT_READ | PROT_WRITE), (MAP_PRIVATE | MAP_ANONYMOUS), -1, 0));
-    assert(reinterpret_cast<intptr_t>(_area) != -1);
-    _head = 0;
-    _tail = 0;
 }
 
 RingAllocator::~RingAllocator()
 {
-    munmap(_area, _size);
+    page_allocator::free(_area, _size);
 }
 
 // allocates continuous block after tail of buffer.
