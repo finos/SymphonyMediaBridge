@@ -11,8 +11,12 @@ namespace crypto
 class HMAC
 {
 public:
+    HMAC();
     HMAC(const void* key, int keyLength);
+    HMAC(const HMAC&) = delete;
     ~HMAC();
+
+    HMAC& operator=(const HMAC&) = delete;
 
     void add(const void* data, int length);
 

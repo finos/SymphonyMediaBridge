@@ -31,6 +31,8 @@ std::string toHexString(const void* srcData, uint16_t len)
     return s;
 }
 
+HMAC::HMAC() : _ctx(HMAC_CTX_new()), _keyLength(0) {}
+
 HMAC::HMAC(const void* key, int keyLength) : _ctx(HMAC_CTX_new()), _keyLength(keyLength)
 {
     reset(key, keyLength);
@@ -50,7 +52,7 @@ void HMAC::reset(const void* key, int keyLength)
 
 void HMAC::reset()
 {
-    HMAC_CTX_reset(_ctx);
+    HMAC_Init_ex(_ctx, nullptr, 0, EVP_sha1(), nullptr);
 }
 
 HMAC::~HMAC()

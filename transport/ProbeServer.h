@@ -1,5 +1,6 @@
 #pragma once
 #include "concurrency/MpmcQueue.h"
+#include "crypto/SslHelper.h"
 #include "ice/IceCandidate.h"
 #include "ice/Stun.h"
 #include "transport/Endpoint.h"
@@ -77,6 +78,7 @@ private:
         uint64_t timestamp;
     };
 
+    crypto::HMAC _hmacComputer;
     std::vector<ProbeTcpConnection> _tcpConnections;
     concurrency::MpmcQueue<ProbeTcpConnection> _queue;
     std::atomic_bool _maintenanceThreadIsRunning;

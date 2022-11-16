@@ -234,9 +234,9 @@ uint32_t StunMessage::computeFingerprint() const
 // If you add any attributes before the MESSAGE-INTEGRITY
 // attribute, you must recompute HMAC.
 // pwd is a=ice-pwd: from SDP
-void StunMessage::computeHMAC(const std::string& pwd, uint8_t* hmac20b) const
+void StunMessage::computeHMAC(crypto::HMAC& hmacComputer, uint8_t* hmac20b) const
 {
-    crypto::HMAC hmac(pwd.c_str(), pwd.size());
+    hmacComputer.reset();
     const auto start = reinterpret_cast<const uint8_t*>(this);
 
     // if there is no message-integrity attribute yet, we assume that is going to be the next one added
@@ -253,17 +253,17 @@ void StunMessage::computeHMAC(const std::string& pwd, uint8_t* hmac20b) const
     }
 
     const nwuint16_t fakeLength(digestableLength - sizeof(StunHeader) + StunMessageIntegrity::size());
-    hmac.add(start, 2);
-    hmac.add(&fakeLength, 2);
-    hmac.add(start + 4, digestableLength - 4);
-    hmac.compute(hmac20b);
+    hmacComputer.add(start, 2);
+    hmacComputer.add(&fakeLength, 2);
+    hmacComputer.add(start + 4, digestableLength - 4);
+    hmacComputer.compute(hmac20b);
 }
 
-void StunMessage::addMessageIntegrity(const std::string& pwd)
+void StunMessage::addMessageIntegrity(crypto::HMAC& hmacComputer)
 {
     StunMessageIntegrity attribute;
     uint8_t hmac[20];
-    computeHMAC(pwd, hmac);
+    computeHMAC(hmacComputer, hmac);
     attribute.setHmac(hmac);
     add(attribute);
 }
@@ -321,7 +321,7 @@ bool StunMessage::isValid() const
     return true;
 }
 
-bool StunMessage::isAuthentic(const std::string& pwd) const
+bool StunMessage::isAuthentic(crypto::HMAC& hmacComputer) const
 {
     for (auto& attribute : *this)
     {
@@ -332,7 +332,7 @@ bool StunMessage::isAuthentic(const std::string& pwd) const
                 return false;
             }
             uint8_t hmac[20];
-            computeHMAC(pwd, hmac);
+            computeHMAC(hmacComputer, hmac);
             return reinterpret_cast<const StunMessageIntegrity&>(attribute).isMatch(hmac);
         }
     }
