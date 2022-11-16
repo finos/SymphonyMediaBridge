@@ -63,19 +63,26 @@ if [ "$1" == "initiator" ]; then
                 '{"ip": $ip, "port": '$3', "numClients": '$4', "conference_id":$conference_id, "initiator":true, "duration": '$7'}')
     echo $CONFIG_FILE > load_test_config.json
     jq '.initiator = false' load_test_config.json > load_test_config_for_guests.json
+    echo "Uploading config file to gs://$GCE_BUCKET_NAME/load_test_config.json" 2>&1 | tee -a $log_file
     gsutil cp load_test_config_for_guests.json "gs://$GCE_BUCKET_NAME/load_test_config.json" 2>&1 | tee -a $log_file
+    date -u 2>&1 | tee -a $log_file
 else
     # If not initiator, retreive load_test_config.json.
-    attempt=$(( 20 ))
+    attempt=$(( 120 ))
+    echo "Trying to retreive load_test_config.json, current time (UTC):" 2>&1 | tee -a $log_file
+    date -u 2>&1 | tee -a $log_file
     while [ $(( attempt )) != 0 ]
         do
         gsutil cp "gs://$GCE_BUCKET_NAME/load_test_config.json" ./ 2>&1 | tee -a $log_file
-        if [ $? -eq 0 ]; then
+        if [ -f load_test_config.json ]; then
+            echo "Received load_test_config.json!" 2>&1 | tee -a $log_file
             break
         fi
         attempt=$(( attempt - 1 ))
+        echo "Trying to get config... attempt: $attempt" 2>&1 | tee -a $log_file
         sleep 1
     done
+    date -u 2>&1 | tee -a $log_file
 fi
 
 if [ ! -f load_test_config.json ]; then
@@ -106,5 +113,6 @@ echo "Test cmd line: $test_cmd" 2>&1 | tee -a $log_file
 eval "$test_cmd" 2>&1 | tee -a $log_file
 
 # Upload results.
-gsutil cp smb_load_test.log "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/smb_load_test.log" 2>&1 | tee -a $log_file
+# Disable upload smb_log_test.log since it's duplicated in the main test output log.
+# gsutil cp smb_load_test.log "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/smb_load_test.log" 2>&1 | tee -a $log_file
 gsutil cp results.xml "gs://$GCE_BUCKET_NAME/$INSTANCE_ID/results.xml" 2>&1 | tee -a $log_file
