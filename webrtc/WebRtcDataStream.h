@@ -16,6 +16,12 @@ class DataStreamTransport;
 class WebRtcDataStream
 {
 public:
+    class Listener
+    {
+    public:
+        virtual void onWebRtcDataString(const char* m, size_t len) = 0;
+    };
+
     enum State
     {
         CLOSED = 0,
@@ -42,12 +48,15 @@ public:
 
     State getState() const { return _state; }
 
+    void setListener(Listener* listener) { _listener = listener; }
+
 private:
     uint16_t _streamId;
     webrtc::DataStreamTransport& _transport;
     State _state;
     std::string _label;
     char _loggableId[32];
+    Listener* _listener;
 };
 
 struct SctpStreamMessageHeader

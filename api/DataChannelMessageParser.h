@@ -9,12 +9,12 @@ namespace api
 namespace DataChannelMessageParser
 {
 
-bool isPinnedEndpointsChanged(const nlohmann::json& messageJson);
-const nlohmann::json& getPinnedEndpoint(const nlohmann::json& messageJson);
+bool isEndpointMessage(const utils::SimpleJson& messageJson);
+utils::SimpleJson getEndpointMessageTo(const utils::SimpleJson& messageJson);
+utils::SimpleJson getEndpointMessagePayload(const utils::SimpleJson& messageJson);
 
-bool isEndpointMessage(const nlohmann::json& messageJson);
-nlohmann::json::const_iterator getEndpointMessageTo(const nlohmann::json& messageJson);
-nlohmann::json::const_iterator getEndpointMessagePayload(const nlohmann::json& messageJson);
+bool isPinnedEndpointsChanged(const utils::SimpleJson& messageJson);
+utils::SimpleJson getPinnedEndpoint(const utils::SimpleJson& messageJson);
 
 bool isUserMediaMap(const utils::SimpleJson&);
 

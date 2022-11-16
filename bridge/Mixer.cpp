@@ -22,6 +22,7 @@
 #include "transport/TransportFactory.h"
 #include "transport/ice/IceCandidate.h"
 #include "utils/IdGenerator.h"
+#include "utils/SimpleJson.h"
 #include "utils/SocketAddress.h"
 #include "utils/SsrcGenerator.h"
 #include "utils/StdExtensions.h"
@@ -1636,11 +1637,11 @@ bool Mixer::addDataStreamToEngine(const std::string& endpointId)
     return _engineMixer->asyncAddDataSteam(emplaceResult.first->second.get());
 }
 
-bool Mixer::pinEndpoint(const size_t endpointIdHash, const std::string& pinnedEndpointId)
+bool Mixer::pinEndpoint(const size_t endpointIdHash, const char* pinnedEndpointId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    auto pinnedEndpointIdHash = utils::hash<std::string>()(pinnedEndpointId);
+    auto pinnedEndpointIdHash = utils::hash<const char*>()(pinnedEndpointId);
     return _engineMixer->asyncPinEndpoint(endpointIdHash, pinnedEndpointIdHash);
 }
 
@@ -1685,7 +1686,7 @@ bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId)
 
 void Mixer::sendEndpointMessage(const std::string& toEndpointId,
     const size_t fromEndpointIdHash,
-    const std::string& message)
+    const utils::SimpleJson& message)
 {
     assert(fromEndpointIdHash);
     if (message.size() >= memory::AudioPacket::maxLength())
@@ -1694,7 +1695,7 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
     }
 
     auto& audioAllocator = _engineMixer->getAudioAllocator();
-    auto packet = memory::makeUniquePacket(audioAllocator, message.c_str(), message.size());
+    auto packet = memory::makeUniquePacket(audioAllocator, message.jsonBegin(), message.size());
     reinterpret_cast<char*>(packet->get())[message.size()] = 0; // null terminated in packet
 
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -1710,7 +1711,7 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
         toEndpointIdHash = dataStreamItr->second->endpointIdHash;
     }
 
-    _engineMixer->asyncSendEndpointMessage(fromEndpointIdHash, toEndpointIdHash, packet);
+    _engineMixer->asyncSendEndpointMessage(toEndpointIdHash, fromEndpointIdHash, packet);
 }
 
 RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)

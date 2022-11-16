@@ -1,5 +1,4 @@
 #include "api/DataChannelMessageParser.h"
-#include "legacyapi/DataChannelMessageParser.h"
 
 namespace api
 {
@@ -8,29 +7,37 @@ namespace DataChannelMessageParser
 {
 namespace
 {
-bool isLegacyApi(const nlohmann::json& messageJson)
+bool isLegacyApi(const utils::SimpleJson& messageJson)
 {
-    return messageJson.find("colibriClass") != messageJson.end();
+    return messageJson.exists("colibriClass");
 }
 } // namespace
 
-bool isPinnedEndpointsChanged(const nlohmann::json& messageJson)
+bool isPinnedEndpointsChanged(const utils::SimpleJson& messageJson)
 {
+    char messageType[200];
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::isPinnedEndpointsChanged(messageJson);
+        messageJson["colibriClass"].getString(messageType);
+        return std::strcmp("PinnedEndpointsChangedEvent", messageType) == 0;
     }
     else
     {
-        return messageJson["type"].get<std::string>().compare("PinnedEndpointsChanged") == 0;
+        auto typeItem = messageJson.find("type");
+        if (typeItem.isNone())
+        {
+            return false;
+        }
+        typeItem.getString(messageType);
+        return std::strcmp(messageType, "PinnedEndpointsChanged") == 0;
     }
 }
 
-const nlohmann::json& getPinnedEndpoint(const nlohmann::json& messageJson)
+utils::SimpleJson getPinnedEndpoint(const utils::SimpleJson& messageJson)
 {
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::getPinnedEndpoint(messageJson);
+        return messageJson["pinnedEndpoints"];
     }
     else
     {
@@ -38,35 +45,31 @@ const nlohmann::json& getPinnedEndpoint(const nlohmann::json& messageJson)
     }
 }
 
-bool isEndpointMessage(const nlohmann::json& messageJson)
+bool isEndpointMessage(const utils::SimpleJson& messageJson)
 {
+    char messageType[100];
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::isEndpointMessage(messageJson);
+        messageJson["colibriClass"].getString(messageType);
+        return std::strcmp(messageType, "EndpointMessage") == 0;
     }
     else
     {
-        return messageJson["type"].get<std::string>().compare("EndpointMessage") == 0;
+        messageJson["type"].getString(messageType);
+        return std::strcmp(messageType, "EndpointMessage") == 0;
     }
 }
 
-nlohmann::json::const_iterator getEndpointMessageTo(const nlohmann::json& messageJson)
+utils::SimpleJson getEndpointMessageTo(const utils::SimpleJson& messageJson)
 {
-    if (isLegacyApi(messageJson))
-    {
-        return legacyapi::DataChannelMessageParser::getEndpointMessageTo(messageJson);
-    }
-    else
-    {
-        return messageJson.find("to");
-    }
+    return messageJson.find("to");
 }
 
-nlohmann::json::const_iterator getEndpointMessagePayload(const nlohmann::json& messageJson)
+utils::SimpleJson getEndpointMessagePayload(const utils::SimpleJson& messageJson)
 {
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::getEndpointMessagePayload(messageJson);
+        return messageJson.find("msgPayload");
     }
     else
     {

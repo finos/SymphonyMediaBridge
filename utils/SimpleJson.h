@@ -166,11 +166,25 @@ public:
         return false;
     }
 
+    template <size_t N>
+    bool copyTo(char (&target)[N]) const
+    {
+        if (N < _item.end - _item.begin)
+        {
+            target[0] = 0;
+            return false;
+        }
+
+        std::strcpy(target, _item.begin, _item.end - _item.begin);
+        return true;
+    }
+
     Optional<bool> getBool() const;
     SimpleJsonArray getArray() const;
 
     bool isNone() const { return _type == Type::None; }
     size_t size() const { return _item.size(); }
+    const char* jsonBegin() const { return _item.begin; }
 
     static const SimpleJson SimpleJsonNone;
 
