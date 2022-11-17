@@ -495,7 +495,7 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
                     else
                     {
                         auto endpoints = pinnedEndpoints.getArray();
-                        char endpointId[100];
+                        char endpointId[45];
                         endpoints.front().getString(endpointId);
                         mixerIt->second->pinEndpoint(endpointIdHash, endpointId);
                     }
@@ -516,8 +516,7 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
                     return;
                 }
 
-                char toEndpoint[100];
-                toJson.getString(toEndpoint);
+                auto toEndpoint = toJson.getString();
                 mixerIt->second->sendEndpointMessage(toEndpoint, endpointIdHash, payloadJson);
             }
         }

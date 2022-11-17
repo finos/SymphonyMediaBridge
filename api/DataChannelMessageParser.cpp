@@ -15,11 +15,9 @@ bool isLegacyApi(const utils::SimpleJson& messageJson)
 
 bool isPinnedEndpointsChanged(const utils::SimpleJson& messageJson)
 {
-    char messageType[200];
     if (isLegacyApi(messageJson))
     {
-        messageJson["colibriClass"].getString(messageType);
-        return std::strcmp("PinnedEndpointsChangedEvent", messageType) == 0;
+        return messageJson["colibriClass"].strcmp("PinnedEndpointsChangedEvent") == 0;
     }
     else
     {
@@ -28,8 +26,7 @@ bool isPinnedEndpointsChanged(const utils::SimpleJson& messageJson)
         {
             return false;
         }
-        typeItem.getString(messageType);
-        return std::strcmp(messageType, "PinnedEndpointsChanged") == 0;
+        return typeItem.strcmp("PinnedEndpointsChanged") == 0;
     }
 }
 
@@ -47,16 +44,13 @@ utils::SimpleJson getPinnedEndpoint(const utils::SimpleJson& messageJson)
 
 bool isEndpointMessage(const utils::SimpleJson& messageJson)
 {
-    char messageType[100];
     if (isLegacyApi(messageJson))
     {
-        messageJson["colibriClass"].getString(messageType);
-        return std::strcmp(messageType, "EndpointMessage") == 0;
+        return messageJson["colibriClass"].strcmp("EndpointMessage") == 0;
     }
     else
     {
-        messageJson["type"].getString(messageType);
-        return std::strcmp(messageType, "EndpointMessage") == 0;
+        return messageJson["type"].strcmp("EndpointMessage") == 0;
     }
 }
 
@@ -79,14 +73,12 @@ utils::SimpleJson getEndpointMessagePayload(const utils::SimpleJson& messageJson
 
 bool isUserMediaMap(const utils::SimpleJson& json)
 {
-    char messageType[64];
-    return json["type"].getString(messageType) && 0 == std::strcmp(messageType, "user-media-map");
+    return json["type"].strcmp("user-media-map") == 0;
 }
 
 bool isMinUplinkBitrate(const utils::SimpleJson& json)
 {
-    char messageType[64];
-    return json["type"].getString(messageType) && 0 == std::strcmp(messageType, "min-uplink-bitrate");
+    return json["type"].strcmp("min-uplink-bitrate") == 0;
 }
 
 uint32_t getMinUplinkBitrate(const utils::SimpleJson& json)
