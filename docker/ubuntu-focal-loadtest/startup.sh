@@ -24,8 +24,8 @@ fi
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-if [ "$#" -ne 7 ]; then
-    echo "Usage startup.sh <initiator|guest> <SMB IP> <SMB Port> <num clients per instance> <num instances> <gtest filter> <duration>. Eg. for 1000 clients: startup.sh initiator 127.0.0.1 8080 250 4 RealTimeTest.DISABLED_smbMegaHoot 30"
+if [ "$#" -ne 9 ]; then
+    echo "Usage startup.sh <initiator|guest> <SMB IP> <SMB Port> <num clients per instance> <num instances> <gtest filter> <joinRampUpTime> <maxJoinRampUpTime> <duration>. Eg. for 1000 clients: startup.sh initiator 127.0.0.1 8080 250 4 RealTimeTest.DISABLED_smbMegaHoot 30"
     exit
 fi
 
@@ -36,7 +36,7 @@ fi
 
 log_file="$INSTANCE_ID-test-output.log"
 
-echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID, number of test instances = $5, each with $4 clients. gtest-filter = $6, duration = $7 seconds" 2>&1 | tee $log_file
+echo "Statring with SMB IP: $2:$3, $1, Instance ID = $INSTANCE_ID, number of test instances = $5, each with $4 clients. gtest-filter = $6, ramup time = [$7-$8] duration = $9 seconds" 2>&1 | tee $log_file
 
 if [ "$1" == "initiator" ]; then
 
@@ -60,7 +60,7 @@ if [ "$1" == "initiator" ]; then
     CONFIG_FILE=$(jq --null-input \
                 --arg ip "$2" \
                 --arg conference_id "$CONFERENCE_ID" \
-                '{"ip": $ip, "port": '$3', "numClients": '$4', "conference_id":$conference_id, "initiator":true, "duration": '$7'}')
+                '{"ip": $ip, "port": '$3', "numClients": '$4', "conference_id":$conference_id, "initiator":true, "rampup":'$7',"max_rampup":'$8',"duration": '$9'}')
     echo $CONFIG_FILE > load_test_config.json
     jq '.initiator = false' load_test_config.json > load_test_config_for_guests.json
     echo "Uploading config file to gs://$GCE_BUCKET_NAME/load_test_config.json" 2>&1 | tee -a $log_file

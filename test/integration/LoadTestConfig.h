@@ -17,6 +17,8 @@ public:
     CFG_PROP(uint16_t, numClients, 100);
     CFG_PROP(std::string, conference_id, "");
     CFG_PROP(bool, initiator, false);
+    CFG_PROP(uint16_t, rampup, 0);
+    CFG_PROP(uint16_t, max_rampup, 0);
     CFG_PROP(uint16_t, duration, 60);
 };
 

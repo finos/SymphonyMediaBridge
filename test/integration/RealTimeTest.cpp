@@ -194,11 +194,15 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     auto numClients = 1000;
     bool createTalker = true;
     uint16_t duration = 60;
+    uint32_t rampup = 0;
+    uint32_t max_rampup = 0;
 
     if (_configInitialized)
     {
         numClients = _config->numClients;
         duration = _config->duration;
+        rampup = _config->rampup;
+        max_rampup = _config->max_rampup;
 
         utils::StringBuilder<1000> sb;
         sb.append("http://");
@@ -235,6 +239,14 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         return;
     }
 
+    logger::info("Waiting before join for: %d s, start after: %d s", "RealTimeTest", rampup, max_rampup);
+
+    auto startTime = utils::Time::getAbsoluteTime();
+    if (rampup != 0)
+    {
+        utils::Time::nanoSleep(rampup * utils::Time::sec);
+    }
+
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
@@ -243,6 +255,14 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     }
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+    if (max_rampup != 0 &&
+        utils::Time::diffGT(startTime, utils::Time::getAbsoluteTime(), utils::Time::sec * max_rampup))
+    {
+        auto diff = utils::Time::diff(startTime, utils::Time::getAbsoluteTime());
+        logger::info("Waiting before start for another: %d s", "RealTimeTest", diff / utils::Time::sec);
+        utils::Time::nanoSleep(diff);
+    }
 
     makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
 
