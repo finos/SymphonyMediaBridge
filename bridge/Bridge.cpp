@@ -244,6 +244,8 @@ void Bridge::startWorkerThreads()
     }
     logger::info("Starting %u worker threads", "main", numWorkerThreads);
 
+    _workerThreads.reserve(numWorkerThreads);
+
     for (int i = 0; i < numWorkerThreads; ++i)
     {
         _workerThreads.push_back(std::make_unique<jobmanager::WorkerThread>(*_rtJobManager, true, "RTWorker"));

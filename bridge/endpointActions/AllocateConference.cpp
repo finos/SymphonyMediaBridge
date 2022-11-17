@@ -11,8 +11,7 @@ namespace bridge
 
 httpd::Response allocateConference(ActionContext* context, RequestLogger& requestLogger, const httpd::Request& request)
 {
-    const auto requestBody = request._body.build();
-    const auto requestBodyJson = nlohmann::json::parse(requestBody);
+    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
     if (!requestBodyJson.is_object())
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,

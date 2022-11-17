@@ -1,6 +1,7 @@
 #pragma once
 
 #include "logger/Logger.h"
+#include "utils/Span.h"
 #include <array>
 #include <string>
 
@@ -91,6 +92,8 @@ public:
 
         return append(valueString, count);
     }
+
+    utils::Span<const char> getSpan() const { return utils::Span<const char>(_data, _offset); }
 
     std::string build() const { return std::string(_data); }
 
