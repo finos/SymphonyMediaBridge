@@ -133,6 +133,19 @@ TEST(IceTest, hmac1)
     EXPECT_TRUE(stun->isAuthentic(hmacComputer));
 }
 
+TEST(IceTest, HMACempty)
+{
+    alignas(memory::Packet) const unsigned char req[] = "\x00\x01\x00\x58";
+    std::string pwd = "VOkJxbRl1RmTxUk/WvJxBt";
+    crypto::HMAC hmac;
+    EXPECT_TRUE(hmac.init(pwd.c_str(), pwd.size()));
+    uint8_t result[20];
+    hmac.compute(result);
+    hmac.add(req, 5);
+
+    hmac.compute(result);
+}
+
 TEST(IceTest, jvbnice)
 {
     using namespace ice;

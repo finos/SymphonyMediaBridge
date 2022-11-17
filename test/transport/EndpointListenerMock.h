@@ -13,22 +13,38 @@ struct EndpointListenerMock : public Endpoint::IEvents
 {
     MOCK_METHOD(void,
         onRtpReceived,
-        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet),
+        (Endpoint & endpoint,
+            const SocketAddress& source,
+            const SocketAddress& target,
+            memory::UniquePacket packet,
+            uint64_t timestamp),
         (override));
 
     MOCK_METHOD(void,
         onDtlsReceived,
-        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet),
+        (Endpoint & endpoint,
+            const SocketAddress& source,
+            const SocketAddress& target,
+            memory::UniquePacket packet,
+            uint64_t timestamp),
         (override));
 
     MOCK_METHOD(void,
         onRtcpReceived,
-        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet),
+        (Endpoint & endpoint,
+            const SocketAddress& source,
+            const SocketAddress& target,
+            memory::UniquePacket packet,
+            uint64_t timestamp),
         (override));
 
     MOCK_METHOD(void,
         onIceReceived,
-        (Endpoint & endpoint, const SocketAddress& source, const SocketAddress& target, memory::UniquePacket packet),
+        (Endpoint & endpoint,
+            const SocketAddress& source,
+            const SocketAddress& target,
+            memory::UniquePacket packet,
+            uint64_t timestamp),
         (override));
 
     MOCK_METHOD(void, onRegistered, (Endpoint & endpoint), (override));

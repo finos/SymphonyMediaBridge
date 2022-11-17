@@ -31,28 +31,44 @@ std::string toHexString(const void* srcData, uint16_t len)
     return s;
 }
 
-HMAC::HMAC() : _ctx(HMAC_CTX_new()), _keyLength(0) {}
-
-HMAC::HMAC(const void* key, int keyLength) : _ctx(HMAC_CTX_new()), _keyLength(keyLength)
+HMAC::HMAC() : _ctx(HMAC_CTX_new())
 {
-    reset(key, keyLength);
+    assert(_ctx);
 }
 
-void HMAC::reset(const void* key, int keyLength)
+HMAC::HMAC(const void* key, int keyLength) : _ctx(HMAC_CTX_new())
 {
-    reset();
+    assert(_ctx);
+    init(key, keyLength);
+}
+
+bool HMAC::init(const void* key, int keyLength)
+{
     assert(keyLength <= 1024);
-    if (key != nullptr)
+    assert(keyLength >= 0);
+    if (key != nullptr && keyLength > 0)
     {
-        std::memcpy(_key, key, keyLength);
-        _keyLength = keyLength;
-        HMAC_Init_ex(_ctx, _key, _keyLength, EVP_sha1(), nullptr);
+        int success = HMAC_Init_ex(_ctx, key, keyLength, EVP_sha1(), nullptr);
+        assert(success);
+        assert(HMAC_size(_ctx) <= 20);
+        return true;
+    }
+    else
+    {
+        assert(false);
+        return false;
     }
 }
 
-void HMAC::reset()
+/**
+ * Resets calculation and prepares for another run off add, add, compute.
+ */
+bool HMAC::reset()
 {
-    HMAC_Init_ex(_ctx, nullptr, 0, EVP_sha1(), nullptr);
+    int success = HMAC_Init_ex(_ctx, nullptr, 0, nullptr, nullptr);
+    assert(success);
+    assert(HMAC_size(_ctx) <= 20);
+    return success;
 }
 
 HMAC::~HMAC()
@@ -62,12 +78,20 @@ HMAC::~HMAC()
 
 void HMAC::add(const void* data, int length)
 {
-    HMAC_Update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
+    assert(length > 0);
+    int success = HMAC_Update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
+    assert(success);
 }
 
+/**
+ * @brief computes 20B output
+ */
 void HMAC::compute(uint8_t* sha) const
 {
-    HMAC_Final(_ctx, sha, nullptr);
+    unsigned int outLen = 0;
+    int success = HMAC_Final(_ctx, sha, &outLen);
+    assert(success);
+    assert(outLen == 20);
 }
 
 MD5::MD5() : _ctx(EVP_MD_CTX_new())

@@ -40,7 +40,9 @@ public:
     void unregisterListener(IEvents* listener) override;
 
 public: // internal job interface
-    void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet) override;
+    void dispatchReceivedPacket(const SocketAddress& srcAddress,
+        memory::UniquePacket packet,
+        uint64_t timestamp) override;
 
     void internalUnregisterListener(IEvents* listener);
     void internalUnregisterStunListener(__uint128_t transactionId);

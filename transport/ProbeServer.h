@@ -22,22 +22,26 @@ public:
     virtual void onRtpReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onDtlsReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onRtcpReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onIceReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onRegistered(Endpoint&) override;
     virtual void onUnregistered(Endpoint&) override;
@@ -49,7 +53,8 @@ public:
     virtual void onIceTcpConnect(std::shared_ptr<Endpoint>,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     // Endpoint::IStopEvents
     virtual void onEndpointStopped(Endpoint*) override;

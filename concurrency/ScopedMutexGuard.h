@@ -38,7 +38,7 @@ private:
 
 #ifdef DEBUG
 #define DBGCHECK_SINGLETHREADED(x) concurrency::ScopedMutexGuard singleThreadCheck_dbg(x)
-#define DBGCHECK_SINGLETHREADED_MUTEX(x) concurrency::MutexGuard x
+#define DBGCHECK_SINGLETHREADED_MUTEX(x) mutable concurrency::MutexGuard x
 #else
 #define DBGCHECK_SINGLETHREADED(x)
 #define DBGCHECK_SINGLETHREADED_MUTEX(x)

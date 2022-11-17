@@ -206,27 +206,32 @@ public: // end point callbacks
     void onRtpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket packet) override;
+        memory::UniquePacket packet,
+        uint64_t timestamp) override;
 
     void onDtlsReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket packet) override;
+        memory::UniquePacket packet,
+        uint64_t timestamp) override;
 
     void onRtcpReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket packet) override;
+        memory::UniquePacket packet,
+        uint64_t timestamp) override;
 
     void onIceReceived(Endpoint& endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket packet) override;
+        memory::UniquePacket packet,
+        uint64_t timestamp) override;
 
     void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket packet) override;
+        memory::UniquePacket packet,
+        uint64_t timestamp) override;
 
     void onIceDisconnect(Endpoint& endpoint);
 
@@ -259,24 +264,19 @@ public: // end point callbacks
     virtual void onSctpChunkDropped(sctp::SctpAssociation* session, size_t size) override;
 
     void internalDtlsReceived(Endpoint& endpoint,
-        const SocketAddress& source,
+        SocketAddress source,
         memory::UniquePacket packet,
         uint64_t timestamp);
-    void internalIceReceived(Endpoint& endpoint,
-        const SocketAddress& source,
-        memory::UniquePacket packet,
-        uint64_t timestamp);
-    void internalRtpReceived(Endpoint& endpoint,
-        const SocketAddress& source,
-        memory::UniquePacket packet,
-        uint64_t timestamp);
+    void internalIceReceived(Endpoint& endpoint, SocketAddress source, memory::UniquePacket packet, uint64_t timestamp);
+    void internalRtpReceived(Endpoint& endpoint, SocketAddress source, memory::UniquePacket packet, uint64_t timestamp);
     void internalRtcpReceived(Endpoint& endpoint,
-        const SocketAddress& source,
+        SocketAddress source,
         memory::UniquePacket packet,
         uint64_t timestamp);
     void internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
-        const SocketAddress& source,
-        memory::UniquePacket packet);
+        SocketAddress source,
+        memory::UniquePacket packet,
+        uint64_t timestamp);
     void internalUnregisterEndpoints();
 
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;

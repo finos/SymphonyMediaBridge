@@ -24,33 +24,37 @@ ProbeServer::ProbeServer(const ice::IceConfig& iceConfig, const config::Config& 
     ice::IceSession::generateCredentialString(_idGenerator, pwd, sizeof(pwd) - 1);
 
     _credentials = std::make_pair<std::string, std::string>(ufrag, pwd);
-    _hmacComputer.reset(_credentials.second.c_str(), _credentials.second.size());
+    _hmacComputer.init(_credentials.second.c_str(), _credentials.second.size());
 }
 
 // Endpoint::IEvents
 void ProbeServer::onRtpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
 }
 
 void ProbeServer::onDtlsReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet){};
+    memory::UniquePacket packet,
+    const uint64_t timestamp){};
 
 void ProbeServer::onRtcpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
 }
 
 void ProbeServer::onIceReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
     replyStunOk(endpoint, source, std::move(packet));
 }
@@ -232,7 +236,8 @@ void ProbeServer::onServerPortUnregistered(ServerEndpoint& endpoint)
 void ProbeServer::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
     if (endpoint->getTransportType() == ice::TransportType::TCP)
     {

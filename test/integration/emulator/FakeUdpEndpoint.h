@@ -71,7 +71,9 @@ public:
 
     // called on receiveJobs threads
     void internalReceive();
-    void dispatchReceivedPacket(const transport::SocketAddress& srcAddress, memory::UniquePacket packet);
+    void dispatchReceivedPacket(const transport::SocketAddress& srcAddress,
+        memory::UniquePacket packet,
+        uint64_t timestamp);
 
 private:
     struct InboundPacket

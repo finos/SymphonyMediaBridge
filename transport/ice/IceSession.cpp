@@ -33,7 +33,7 @@ IceSession::IceSession(size_t sessionId,
     generateCredentialString(_idGenerator, ufrag, sizeof(ufrag) - 1);
     generateCredentialString(_idGenerator, pwd, sizeof(pwd) - 1);
     _credentials.local = std::make_pair<std::string, std::string>(ufrag, pwd);
-    _hmacComputer.local.reset(_credentials.local.second.c_str(), _credentials.local.second.size());
+    _hmacComputer.local.init(_credentials.local.second.c_str(), _credentials.local.second.size());
 }
 
 // add most preferred UDP end point first. It will affect prioritization of candidates
@@ -309,6 +309,7 @@ void IceSession::addLocalCandidate(const transport::SocketAddress& publicAddress
 
 const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate)
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     auto it = std::find_if(_remoteCandidates.cbegin(), _remoteCandidates.cend(), [candidate](const IceCandidate& x) {
         return x.transportType == candidate.transportType && x.address == candidate.address;
     });
@@ -324,6 +325,7 @@ const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate
 
 void IceSession::addRemoteCandidate(const IceCandidate& candidate, IceEndpoint* tcpEndpoint)
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     if (isAttached(tcpEndpoint))
     {
         return;
@@ -367,6 +369,7 @@ uint64_t IceSession::getSelectedPairRtt() const
 
 bool IceSession::isRequestAuthentic(const void* data, size_t len) const
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     const auto* stunMessage = StunMessage::fromPtr(data);
 
     if (stunMessage && stunMessage->isValid() && stunMessage->header.isRequest() &&
@@ -381,6 +384,7 @@ bool IceSession::isRequestAuthentic(const void* data, size_t len) const
 
 bool IceSession::isResponseAuthentic(const void* data, size_t len) const
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     const auto* stunMessage = StunMessage::fromPtr(data);
     return stunMessage && stunMessage->isValid() && stunMessage->header.isResponse() &&
         stunMessage->isAuthentic(_hmacComputer.remote);
@@ -985,7 +989,7 @@ const std::pair<std::string, std::string>& IceSession::getLocalCredentials() con
 void IceSession::setLocalCredentials(const std::pair<std::string, std::string>& credentials)
 {
     _credentials.local = credentials;
-    _hmacComputer.local.reset(credentials.second.c_str(), credentials.second.size());
+    _hmacComputer.local.init(credentials.second.c_str(), credentials.second.size());
 }
 
 void IceSession::setRemoteCredentials(const std::string& ufrag, const std::string& pwd)
@@ -995,8 +999,9 @@ void IceSession::setRemoteCredentials(const std::string& ufrag, const std::strin
 
 void IceSession::setRemoteCredentials(const std::pair<std::string, std::string>& credentials)
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     _credentials.remote = credentials;
-    _hmacComputer.remote.reset(credentials.second.c_str(), credentials.second.size());
+    _hmacComputer.remote.init(credentials.second.c_str(), credentials.second.size());
 };
 
 // targetBuffer must be length + 1 for null termination

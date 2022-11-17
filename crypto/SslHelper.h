@@ -8,6 +8,7 @@ struct evp_cipher_ctx_st;
 
 namespace crypto
 {
+
 class HMAC
 {
 public:
@@ -21,8 +22,8 @@ public:
     void add(const void* data, int length);
 
     void compute(uint8_t* sha) const;
-    void reset(const void* key, int keyLength);
-    void reset();
+    bool init(const void* key, int keyLength);
+    bool reset();
 
     template <typename IntType>
     void add(const IntType& data)
@@ -32,8 +33,6 @@ public:
 
 private:
     hmac_ctx_st* _ctx;
-    uint8_t _key[1024];
-    int _keyLength;
 };
 
 class MD5

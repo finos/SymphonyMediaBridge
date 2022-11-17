@@ -48,7 +48,9 @@ public:
     void unregisterRecordingListener(IRecordingEvents* listener);
 
 public: // internal job interface
-    void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet) override;
+    void dispatchReceivedPacket(const SocketAddress& srcAddress,
+        memory::UniquePacket packet,
+        uint64_t timestamp) override;
 
     void internalUnregisterListener(IRecordingEvents* listener);
 
