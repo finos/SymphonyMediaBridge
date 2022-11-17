@@ -153,7 +153,8 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     }
 
     startWorkerThreads();
-    // Disabling yield because we don't want to yield jobs that holds mixer and MixerManager locks, otherwise it can create deadlocks
+    // Disabling yield because we don't want to yield jobs that holds mixer and MixerManager locks, otherwise it can
+    // create deadlocks
     const bool yieldEnabled = false;
     backgroundWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, yieldEnabled, "MMWorker");
 
@@ -169,6 +170,9 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     _rateControllerConfig.bandwidthFloorKbps = _config.rctl.floor;
     _rateControllerConfig.initialEstimateKbps = _config.rctl.initialEstimate;
     _rateControllerConfig.debugLog = _config.rctl.debugLog;
+
+    _sctpConfig.receiveBufferSize = _config.sctp.bufferSize;
+    _sctpConfig.transmitBufferSize = _config.sctp.bufferSize;
 
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
     _bweConfig.sanitize();
