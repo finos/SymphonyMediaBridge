@@ -42,6 +42,7 @@ public:
     CFG_GROUP()
     // fix SCTP port to 5000 to support old CS
     CFG_PROP(bool, fixedPort, true);
+    CFG_PROP(uint32_t, bufferSize, 50 * 1024);
     CFG_GROUP_END(sctp);
 
     CFG_GROUP()
