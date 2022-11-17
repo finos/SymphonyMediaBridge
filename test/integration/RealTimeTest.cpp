@@ -29,6 +29,7 @@
 #include "transport/dtls/SrtpClientFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
+#include "utils/MersienneRandom.h"
 #include "utils/StringBuilder.h"
 #include <chrono>
 #include <complex>
@@ -196,13 +197,15 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     uint16_t duration = 60;
     uint32_t rampup = 0;
     uint32_t max_rampup = 0;
+    utils::MersienneRandom<uint32_t> randGen;
 
     if (_configInitialized)
     {
         numClients = _config->numClients;
         duration = _config->duration;
-        rampup = _config->rampup;
+        // rampup = _config->rampup;
         max_rampup = _config->max_rampup;
+        rampup = randGen.next() % max_rampup;
 
         utils::StringBuilder<1000> sb;
         sb.append("http://");
@@ -260,7 +263,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         utils::Time::diffGT(startTime, utils::Time::getAbsoluteTime(), utils::Time::sec * max_rampup))
     {
         auto diff = utils::Time::diff(startTime, utils::Time::getAbsoluteTime());
-        logger::info("Waiting before start for another: %d s", "RealTimeTest", diff / utils::Time::sec);
+        logger::info("Waiting before start for another: %lu s", "RealTimeTest", diff / utils::Time::sec);
         utils::Time::nanoSleep(diff);
     }
 
