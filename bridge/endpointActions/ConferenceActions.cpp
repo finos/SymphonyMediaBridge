@@ -923,8 +923,7 @@ httpd::Response processEndpointPostRequest(ActionContext* context,
     const std::string& conferenceId,
     const std::string& endpointId)
 {
-    const auto requestBody = request._body.build();
-    const auto requestBodyJson = nlohmann::json::parse(requestBody);
+    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
     const auto actionJsonItr = requestBodyJson.find("action");
     if (actionJsonItr == requestBodyJson.end())
     {

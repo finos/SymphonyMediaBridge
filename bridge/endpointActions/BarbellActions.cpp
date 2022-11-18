@@ -227,8 +227,7 @@ httpd::Response processBarbellAction(ActionContext* context,
     }
     else if (request._method == httpd::Method::POST)
     {
-        const auto requestBody = request._body.build();
-        const auto requestBodyJson = nlohmann::json::parse(requestBody);
+        const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
         const auto actionJsonItr = requestBodyJson.find("action");
         if (actionJsonItr == requestBodyJson.end())
         {

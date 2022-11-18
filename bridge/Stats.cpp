@@ -89,13 +89,13 @@ std::string MixerManagerStats::describe()
     result["cpu_workers"] = systemStats.workerCpu;
     result["cpu_manager"] = systemStats.managerCpu;
 
-    result["total_memory"] = systemStats.processMemory;
+    result["total_memory"] = systemStats.virtualMemory;
     result["used_memory"] = systemStats.processMemory;
     result["packet_rate_download"] = engineStats.activeMixers.inbound.total().packetsPerSecond;
     result["bit_rate_download"] = engineStats.activeMixers.inbound.total().bitrateKbps;
     result["packet_rate_upload"] = engineStats.activeMixers.outbound.total().packetsPerSecond;
     result["bit_rate_upload"] = engineStats.activeMixers.outbound.total().bitrateKbps;
-    result["total_udp_connections"] = systemStats.connections.udpTotol();
+    result["total_udp_connections"] = systemStats.connections.udpTotal();
     result["total_tcp_connections"] = systemStats.connections.tcpTotal();
     result["rtc_tcp4_connections"] = systemStats.connections.tcp4.rtp;
     result["rtc_tcp6_connections"] = systemStats.connections.tcp6.rtp;
@@ -245,6 +245,7 @@ SystemStats SystemStatsCollector::collect(uint16_t httpPort, uint16_t tcpRtpPort
     stats.processCPU /= std::thread::hardware_concurrency();
     stats.systemCpu = 0;
     stats.processMemory = sample1.pagedmem;
+    stats.virtualMemory = sample1.pagedmem;
 #else
     const auto cpuCount = std::thread::hardware_concurrency();
     const auto taskIds = getTaskIds();
@@ -301,6 +302,7 @@ SystemStats SystemStatsCollector::collect(uint16_t httpPort, uint16_t tcpRtpPort
     stats.systemCpu = 1.0 - systemDiff.idleRatio();
     stats.totalNumberOfThreads = sample1.procSample.threads;
     stats.processMemory = sample1.procSample.pagedmem * getpagesize() / 1024;
+    stats.virtualMemory = sample1.procSample.virtualmem / 1024;
 #endif
     stats.timestamp = utils::Time::getAbsoluteTime();
     stats.connections = netStat;

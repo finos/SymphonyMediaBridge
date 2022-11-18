@@ -98,6 +98,7 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator)
 {
+    _mixers.reserve(512);
     _engine.setMessageListener(this);
     _backgroundJobQueue.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer);
 }

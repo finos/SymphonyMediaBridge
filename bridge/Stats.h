@@ -29,7 +29,7 @@ struct ConnectionsStats
     ConnectionsStats() {}
 
     uint32_t tcpTotal() const { return tcp4.total() + tcp6.total(); }
-    uint32_t udpTotol() const { return udp4 + udp6; }
+    uint32_t udpTotal() const { return udp4 + udp6; }
 };
 
 struct SystemStats
@@ -37,6 +37,7 @@ struct SystemStats
     SystemStats();
 
     uint64_t processMemory = 0;
+    uint64_t virtualMemory = 0;
     double processCPU = 0;
     double systemCpu = 0;
     uint32_t totalNumberOfThreads = 0;
