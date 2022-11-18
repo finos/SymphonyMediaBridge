@@ -32,6 +32,7 @@ function generateSsrcMap(sdpStr: string, rtxUsed: boolean, primarySsrc: number, 
     let ssrcSimulcastMap: number[] = [primarySsrc];
 
     // Store already used SSRCs
+    // nosemgrep: detect-non-literal-regexp
     let regExpSsrc = new RegExp(".*" + ssrcStr + ".*$", "gmi");
     let ssrcLines = sdpStr.match(regExpSsrc);
     ssrcLines && ssrcLines.forEach(function(ssrcLine) {
@@ -45,6 +46,7 @@ function generateSsrcMap(sdpStr: string, rtxUsed: boolean, primarySsrc: number, 
     let columns: number = rtxUsed ? 2 : 1;
     if (rtxUsed) {
         let fidStr: string = "a=ssrc-group:FID " + primarySsrc + " ";
+        // nosemgrep: detect-non-literal-regexp
         let regExpFid: RegExp = new RegExp(".*" + fidStr + ".*$", "gmi");
         let fidLines = sdpStr.match(regExpFid);
         ssrcSimulcastMap[1] = fidLines ? parseInt(fidLines[0].substr(fidStr.length)) : NaN;
@@ -80,6 +82,7 @@ export function addSimulcastSdpLocalDescription(inSessionDescription: RTCSession
             return (inSessionDescription);
         } else {
             // Get SSRC for the mediatrack
+            // nosemgrep: detect-non-literal-regexp
             let regExpMediaTrackPrimarySsrc = new RegExp(".*" + "msid:.*? " + mediaTrackId + ".*$", "gmi");
             let mediaTrackPrimarySsrcArr = sdpStr.match(regExpMediaTrackPrimarySsrc);
             if (!mediaTrackPrimarySsrcArr) {
@@ -97,6 +100,7 @@ export function addSimulcastSdpLocalDescription(inSessionDescription: RTCSession
 
             // Fill in ssrc lines by copy pasting ssrc lines with generated simulcast ssrc
             let primarySsrcStr: string = "a=ssrc:" + primarySsrc + " ";
+            // nosemgrep: detect-non-literal-regexp
             let regExpPrimarySsrcLine = new RegExp(".*" + primarySsrcStr + ".*$", "gmi");
             let sdpPrimarySsrcLinesArr = sdpStr.match(regExpPrimarySsrcLine);
             if (!sdpPrimarySsrcLinesArr) {
@@ -106,6 +110,7 @@ export function addSimulcastSdpLocalDescription(inSessionDescription: RTCSession
             sdpPrimarySsrcLines += "\r\n";
             let ssrcAddLines: string = "";
             let columns = rtxUsed ? 2 : 1;
+            // nosemgrep: detect-non-literal-regexp
             let regExpPrimarySsrc = new RegExp(primarySsrcStr, "gmi");
             for (i = 1; i < nrOfSimulcastLayers; i++) {
                 for (j = 0; j < columns; j++) {
