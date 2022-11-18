@@ -269,8 +269,6 @@ set(FILES
         legacyapi/Connection.h
         legacyapi/Content.h
         legacyapi/DataChannelMessage.h
-        legacyapi/DataChannelMessageParser.cpp
-        legacyapi/DataChannelMessageParser.h
         legacyapi/Fingerprint.h
         legacyapi/Generator.cpp
         legacyapi/Generator.h

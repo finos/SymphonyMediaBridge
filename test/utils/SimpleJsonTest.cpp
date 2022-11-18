@@ -8,13 +8,6 @@
 namespace utils
 {
 
-std::string getString(const SimpleJson& json)
-{
-    const char* str;
-    size_t len;
-    EXPECT_TRUE(json.getString(str, len));
-    return std::string(str, len);
-}
 TEST(SimpleJson, ParseValidJson)
 {
     const std::string json = R"(
@@ -37,7 +30,7 @@ TEST(SimpleJson, ParseValidJson)
     {
         auto prop = simpleJson.find("name");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        auto val = getString(prop);
+        auto val = prop.getString();
         EXPECT_EQ(val, "some value");
         auto wrongVal = prop.getInt();
         EXPECT_FALSE(wrongVal.isSet());
@@ -45,7 +38,7 @@ TEST(SimpleJson, ParseValidJson)
     {
         auto prop = simpleJson.find("objName.innerEmpty");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        auto val = getString(prop);
+        auto val = prop.getString();
         EXPECT_EQ(val, "");
         auto wrongVal = prop.getInt();
         EXPECT_FALSE(wrongVal.isSet());
@@ -59,13 +52,13 @@ TEST(SimpleJson, ParseValidJson)
         EXPECT_EQ(SimpleJson::Type::Object, prop.getType());
         prop = prop.find("innerName");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        std::string out = getString(prop);
+        std::string out = prop.getString();
         EXPECT_EQ(out, "innerValue");
     }
     {
         auto prop = simpleJson.find("objName.innerName");
         EXPECT_EQ(SimpleJson::Type::String, prop.getType());
-        std::string out = getString(prop);
+        std::string out = prop.getString();
         EXPECT_EQ(out, "innerValue");
     }
     {
@@ -170,13 +163,13 @@ TEST(SimpleJson, ParseUMM)
 
     auto simpleJson = SimpleJson::create(json.c_str(), json.length());
     auto value = simpleJson.find("type");
-    EXPECT_EQ(getString(value), "user-media-map");
+    EXPECT_EQ(value.getString(), "user-media-map");
 
     {
         auto array = simpleJson.find("video-endpoints").getArray();
 
         value = array.front().find("endpoint-id");
-        EXPECT_EQ(getString(value), "b469945f-856b-38c4-cf1b-0000fb452938");
+        EXPECT_EQ(value.getString(), "b469945f-856b-38c4-cf1b-0000fb452938");
         auto ssrc = array.front().find("ssrcs").getArray();
 
         EXPECT_EQ(ssrc.front().getInt().get(), 4215270161);
@@ -185,7 +178,7 @@ TEST(SimpleJson, ParseUMM)
         auto array = simpleJson.find("audio-endpoints").getArray();
         EXPECT_EQ(array.count(), 1);
         value = array.front().find("endpoint-id");
-        EXPECT_EQ(getString(value), "b469945f-856b-38c4-cf1b-0000fb452938");
+        EXPECT_EQ(value.getString(), "b469945f-856b-38c4-cf1b-0000fb452938");
         auto ssrcs = array.front().find("ssrcs").getArray();
         EXPECT_EQ(ssrcs.count(), 1);
         EXPECT_EQ(ssrcs.front().getInt().get(), 919268345);

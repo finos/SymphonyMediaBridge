@@ -30,9 +30,12 @@
 #include "transport/dtls/SrtpClientFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
+#include "utils/SimpleJson.h"
 #include "utils/StringBuilder.h"
 #include <chrono>
 #include <complex>
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <memory>
 #include <sstream>
 #include <unordered_set>
@@ -1524,5 +1527,84 @@ TEST_F(IntegrationTest, neighbours)
         {
             EXPECT_NEAR(results[3].dominantFrequencies[0], 600.0, 50.0);
         }
+    });
+}
+
+class WebRtcListenerMock : public webrtc::WebRtcDataStream::Listener
+{
+public:
+    MOCK_METHOD(void, onWebRtcDataString, (const char* m, size_t len));
+};
+
+TEST_F(IntegrationTest, endpointMessage)
+{
+    using namespace testing;
+
+    runTestInThread(expectedTestThreadCount(1), [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1"
+        })");
+
+        const char* message = R"({
+        "payload":"Good",
+        "type":"connectivity" 
+        })";
+
+        WebRtcListenerMock listenerMock;
+
+        initBridge(_config);
+        const auto baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        static const double frequencies[] = {600, 1300};
+        for (size_t i = 0; i < group.clients.size(); ++i)
+        {
+            group.clients[i]->_audioSource->setFrequency(frequencies[i]);
+        }
+
+        for (auto& client : group.clients)
+        {
+            client->_audioSource->setVolume(0.6);
+        }
+
+        group.run(utils::Time::sec * 2);
+        group.clients[1]->setDataListener(&listenerMock);
+        int endpointMessageCount = 0;
+        ON_CALL(listenerMock, onWebRtcDataString).WillByDefault([&endpointMessageCount](const char* m, size_t len) {
+            auto json = utils::SimpleJson::create(m, len);
+            char typeName[100];
+            if (json["colibriClass"].getString(typeName) && std::strcmp(typeName, "EndpointMessage") == 0)
+            {
+                ++endpointMessageCount;
+            }
+        });
+
+        EXPECT_CALL(listenerMock, onWebRtcDataString(_, _)).Times(AtLeast(3));
+        group.clients[0]->sendEndpointMessage(group.clients[1]->getEndpointId(), message);
+
+        group.run(utils::Time::sec * 2);
+        EXPECT_EQ(endpointMessageCount, 1);
+
+        group.clients[0]->_transport->stop();
+        group.clients[1]->_transport->stop();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
     });
 }

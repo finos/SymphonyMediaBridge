@@ -149,21 +149,43 @@ public:
     Optional<double> getFloat() const;
     double getFloat(double defaultValue) const;
 
-    bool getString(const char*& out, size_t& outLen) const;
+    bool isString() const { return _type == Type::String; }
+    int strcmp(const char* s);
 
     template <size_t N>
     bool getString(char (&target)[N]) const
     {
-        const char* s;
-        size_t len;
-        if (getString(s, len) && len < N)
+        if (isString())
         {
-            std::strncpy(target, s, len);
-            target[len] = 0;
+            std::strncpy(target, _item.begin + 1, size() - 2);
+            target[size() - 2] = 0;
             return true;
         }
         target[0] = 0;
         return false;
+    }
+
+    std::string getString() const
+    {
+        if (!isString())
+        {
+            return std::string();
+        }
+
+        return std::string(_item.begin + 1, size() - 2);
+    }
+
+    template <size_t N>
+    bool copyTo(char (&target)[N]) const
+    {
+        if (N < _item.end - _item.begin)
+        {
+            target[0] = 0;
+            return false;
+        }
+
+        std::strcpy(target, _item.begin, _item.end - _item.begin);
+        return true;
     }
 
     Optional<bool> getBool() const;
@@ -171,6 +193,7 @@ public:
 
     bool isNone() const { return _type == Type::None; }
     size_t size() const { return _item.size(); }
+    const char* jsonBegin() const { return _item.begin; }
 
     static const SimpleJson SimpleJsonNone;
 
@@ -246,4 +269,5 @@ public:
 private:
     JsonToken _item;
 };
+
 }; // namespace utils

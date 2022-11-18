@@ -478,21 +478,26 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
 
         try
         {
-            auto json = nlohmann::json::parse(body);
+            auto json = utils::SimpleJson::create(reinterpret_cast<const char*>(sctpHeader.data()),
+                msgPacket->getLength() - sizeof(sctpHeader));
+
             if (api::DataChannelMessageParser::isPinnedEndpointsChanged(json))
             {
                 logger::debug("received pin msg %s", "MixerManager", body.c_str());
                 auto mixerIt = _mixers.find(mixer.getId());
                 if (mixerIt != _mixers.end())
                 {
-                    const auto& pinnedEndpoints = api::DataChannelMessageParser::getPinnedEndpoint(json);
-                    if (pinnedEndpoints.empty())
+                    const auto pinnedEndpoints = api::DataChannelMessageParser::getPinnedEndpoint(json);
+                    if (pinnedEndpoints.isNone())
                     {
                         mixerIt->second->unpinEndpoint(endpointIdHash);
                     }
                     else
                     {
-                        mixerIt->second->pinEndpoint(endpointIdHash, pinnedEndpoints[0]);
+                        auto endpoints = pinnedEndpoints.getArray();
+                        char endpointId[45];
+                        endpoints.front().getString(endpointId);
+                        mixerIt->second->pinEndpoint(endpointIdHash, endpointId);
                     }
                 }
             }
@@ -504,14 +509,15 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
                     return;
                 }
 
-                const auto toItr = api::DataChannelMessageParser::getEndpointMessageTo(json);
-                const auto payloadItr = api::DataChannelMessageParser::getEndpointMessagePayload(json);
-                if (toItr == json.end() || payloadItr == json.end())
+                const auto toJson = api::DataChannelMessageParser::getEndpointMessageTo(json);
+                const auto payloadJson = api::DataChannelMessageParser::getEndpointMessagePayload(json);
+                if (toJson.isNone() || payloadJson.isNone())
                 {
                     return;
                 }
 
-                mixerIt->second->sendEndpointMessage(toItr->get<std::string>(), endpointIdHash, payloadItr->dump());
+                auto toEndpoint = toJson.getString();
+                mixerIt->second->sendEndpointMessage(toEndpoint, endpointIdHash, payloadJson);
             }
         }
         catch (nlohmann::detail::parse_error e)

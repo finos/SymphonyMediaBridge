@@ -406,15 +406,16 @@ double SimpleJson::getFloat(double defaultValue) const
     return (optionalValue.isSet() ? optionalValue.get() : defaultValue);
 }
 
-bool SimpleJson::getString(const char*& out, size_t& outLen) const
+int SimpleJson::strcmp(const char* s)
 {
-    if (Type::String != _type || size() < 2)
+    const int len = std::strlen(s);
+    const int jsonStringLen = size() - 2;
+    if (len != jsonStringLen)
     {
-        return false;
+        return len - jsonStringLen;
     }
-    out = _item.begin + 1;
-    outLen = size() - 2;
-    return true;
+
+    return std::strncmp(_item.begin + 1, s, len);
 }
 
 Optional<bool> SimpleJson::getBool() const
