@@ -28,7 +28,7 @@ struct AudioStream
           transport(transport_),
           audioMixed(audioMixed_),
           markedForDeletion(false),
-          ssrcRewrite(ssrcRewrite),
+          ssrcRewrite(ssrcRewrite_),
           isDtlsLocalEnabled(isDtlsLocalEnabled_),
           isConfigured(false),
           idleTimeoutSeconds(idleTimeout.valueOr(0))

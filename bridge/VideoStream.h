@@ -14,24 +14,24 @@ namespace bridge
 
 struct VideoStream
 {
-    VideoStream(const std::string& id,
-        const std::string& endpointId,
-        const uint32_t localSsrc,
-        std::shared_ptr<transport::RtcTransport>& transport,
-        bool ssrcRewrite,
-        bool isDtlsLocalEnabled,
+    VideoStream(const std::string& id_,
+        const std::string& endpointId_,
+        const uint32_t localSsrc_,
+        std::shared_ptr<transport::RtcTransport>& transport_,
+        bool ssrcRewrite_,
+        bool isDtlsLocalEnabled_,
         utils::Optional<uint32_t> idleTimeout)
-        : id(id),
-          endpointId(endpointId),
+        : id(id_),
+          endpointId(endpointId_),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
-          localSsrc(localSsrc),
+          localSsrc(localSsrc_),
           simulcastStream{0},
-          transport(transport),
+          transport(transport_),
           markedForDeletion(false),
-          ssrcRewrite(ssrcRewrite),
-          isDtlsLocalEnabled(isDtlsLocalEnabled),
+          ssrcRewrite(ssrcRewrite_),
+          isDtlsLocalEnabled(isDtlsLocalEnabled_),
           isConfigured(false),
-          idleTimeoutSeconds(idleTimeout.isSet() ? idleTimeout.get() : 0)
+          idleTimeoutSeconds(idleTimeout.valueOr(0))
     {
     }
 
