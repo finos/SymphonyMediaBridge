@@ -1,0 +1,13 @@
+name: C++ Static code analysis
+
+on: [push, pull_request]
+
+jobs:
+  cppcheck:
+    name: run-cppcheck
+    runs-on: ubuntu-latest
+    container:
+      image: facthunder/cppcheck:latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: cppcheck --error-exitcode=1 .
