@@ -3,10 +3,9 @@
 
 using IceState = ice::IceSession::State;
 using DtlsState = transport::SrtpClient::State;
-namespace api
-{
-namespace utils
-{
+
+using namespace api::utils;
+
 TEST(ApiUtils, IceStateSerialization)
 {
     for (int state = 0; state < (int)IceState::LAST; state++)
@@ -36,5 +35,3 @@ TEST(ApiUtils, DtlsStateSerialization)
         ASSERT_EQ(state, (int)deserialized);
     }
 }
-} // namespace utils
-} // namespace api
