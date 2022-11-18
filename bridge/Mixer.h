@@ -37,6 +37,7 @@ class IdGenerator;
 class SsrcGenerator;
 template <typename T>
 class Optional;
+class SimpleJson;
 } // namespace utils
 
 namespace config
@@ -215,7 +216,7 @@ public:
     bool startBarbellTransport(const std::string& barbellId);
     void removeBarbell(const std::string& barbellId);
 
-    bool pinEndpoint(const size_t endpointIdHash, const std::string& pinnedEndpointId);
+    bool pinEndpoint(const size_t endpointIdHash, const char* pinnedEndpointId);
     bool unpinEndpoint(const size_t endpointIdHash);
 
     bool startAudioStreamTransport(const std::string& endpointId);
@@ -283,7 +284,7 @@ public:
 
     void sendEndpointMessage(const std::string& toEndpointId,
         const size_t fromEndpointIdHash,
-        const std::string& message);
+        const utils::SimpleJson& message);
 
     std::unordered_set<std::string> getEndpoints() const;
 

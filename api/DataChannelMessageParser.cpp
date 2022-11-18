@@ -1,5 +1,4 @@
 #include "api/DataChannelMessageParser.h"
-#include "legacyapi/DataChannelMessageParser.h"
 
 namespace api
 {
@@ -8,29 +7,34 @@ namespace DataChannelMessageParser
 {
 namespace
 {
-bool isLegacyApi(const nlohmann::json& messageJson)
+bool isLegacyApi(const utils::SimpleJson& messageJson)
 {
-    return messageJson.find("colibriClass") != messageJson.end();
+    return messageJson.exists("colibriClass");
 }
 } // namespace
 
-bool isPinnedEndpointsChanged(const nlohmann::json& messageJson)
+bool isPinnedEndpointsChanged(const utils::SimpleJson& messageJson)
 {
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::isPinnedEndpointsChanged(messageJson);
+        return messageJson["colibriClass"].strcmp("PinnedEndpointsChangedEvent") == 0;
     }
     else
     {
-        return messageJson["type"].get<std::string>().compare("PinnedEndpointsChanged") == 0;
+        auto typeItem = messageJson.find("type");
+        if (typeItem.isNone())
+        {
+            return false;
+        }
+        return typeItem.strcmp("PinnedEndpointsChanged") == 0;
     }
 }
 
-const nlohmann::json& getPinnedEndpoint(const nlohmann::json& messageJson)
+utils::SimpleJson getPinnedEndpoint(const utils::SimpleJson& messageJson)
 {
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::getPinnedEndpoint(messageJson);
+        return messageJson["pinnedEndpoints"];
     }
     else
     {
@@ -38,35 +42,28 @@ const nlohmann::json& getPinnedEndpoint(const nlohmann::json& messageJson)
     }
 }
 
-bool isEndpointMessage(const nlohmann::json& messageJson)
+bool isEndpointMessage(const utils::SimpleJson& messageJson)
 {
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::isEndpointMessage(messageJson);
+        return messageJson["colibriClass"].strcmp("EndpointMessage") == 0;
     }
     else
     {
-        return messageJson["type"].get<std::string>().compare("EndpointMessage") == 0;
+        return messageJson["type"].strcmp("EndpointMessage") == 0;
     }
 }
 
-nlohmann::json::const_iterator getEndpointMessageTo(const nlohmann::json& messageJson)
+utils::SimpleJson getEndpointMessageTo(const utils::SimpleJson& messageJson)
 {
-    if (isLegacyApi(messageJson))
-    {
-        return legacyapi::DataChannelMessageParser::getEndpointMessageTo(messageJson);
-    }
-    else
-    {
-        return messageJson.find("to");
-    }
+    return messageJson.find("to");
 }
 
-nlohmann::json::const_iterator getEndpointMessagePayload(const nlohmann::json& messageJson)
+utils::SimpleJson getEndpointMessagePayload(const utils::SimpleJson& messageJson)
 {
     if (isLegacyApi(messageJson))
     {
-        return legacyapi::DataChannelMessageParser::getEndpointMessagePayload(messageJson);
+        return messageJson.find("msgPayload");
     }
     else
     {
@@ -76,14 +73,12 @@ nlohmann::json::const_iterator getEndpointMessagePayload(const nlohmann::json& m
 
 bool isUserMediaMap(const utils::SimpleJson& json)
 {
-    char messageType[64];
-    return json["type"].getString(messageType) && 0 == std::strcmp(messageType, "user-media-map");
+    return json["type"].strcmp("user-media-map") == 0;
 }
 
 bool isMinUplinkBitrate(const utils::SimpleJson& json)
 {
-    char messageType[64];
-    return json["type"].getString(messageType) && 0 == std::strcmp(messageType, "min-uplink-bitrate");
+    return json["type"].strcmp("min-uplink-bitrate") == 0;
 }
 
 uint32_t getMinUplinkBitrate(const utils::SimpleJson& json)

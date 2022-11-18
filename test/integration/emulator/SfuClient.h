@@ -6,6 +6,7 @@
 #include "bridge/engine/PacketCache.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "codec/Vp8Header.h"
+#include "legacyapi/DataChannelMessage.h"
 #include "memory/Array.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
@@ -189,6 +190,7 @@ public:
     }
 
     size_t getEndpointIdHash() const { return _channel.getEndpointIdHash(); }
+    std::string getEndpointId() const { return _channel.getEndpointId(); }
 
     void processOffer()
     {
@@ -964,6 +966,20 @@ public:
         }
         return count;
     }
+
+    void sendEndpointMessage(const std::string& toEndpointId, const char* message)
+    {
+        if (!_dataStream)
+        {
+            return;
+        }
+
+        utils::StringBuilder<2048> builder;
+        legacyapi::DataChannelMessage::makeEndpointMessage(builder, toEndpointId, getEndpointId(), message);
+        _dataStream->sendString(builder.build().c_str(), builder.getLength());
+    }
+
+    void setDataListener(webrtc::WebRtcDataStream::Listener* listener) { _dataStream->setListener(listener); }
 
 private:
     utils::IdGenerator _idGenerator;

@@ -1,0 +1,3 @@
+version    : localbuild
+branch     : videofreeze
+commit hash: e42b7e775030a976cd68cafc35a8e1ea9e8f3699
