@@ -5,6 +5,7 @@ on: [push, pull_request]
 jobs:
   semgrep:
     name: run-semgrep
+    runs-on: ubuntu-latest
     container:
       image: returntocorp/semgrep
     steps:
