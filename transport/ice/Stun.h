@@ -7,6 +7,11 @@
 #include <random>
 #include <type_traits>
 
+namespace crypto
+{
+class HMAC;
+}
+
 namespace ice
 {
 const size_t MTU = 1280; // rfc states 576B for ipv4 and 1280 for ipv6
@@ -301,8 +306,8 @@ public:
     const_iterator end() const { return cend(); };
 
     uint32_t computeFingerprint() const;
-    void computeHMAC(const std::string& pwd, uint8_t* hash20b) const;
-    void addMessageIntegrity(const std::string& pwd);
+
+    void addMessageIntegrity(crypto::HMAC& hmacComputer);
     void addFingerprint();
     static const StunMessage* fromPtr(const void* ptr);
     size_t size() const { return header.length + sizeof(header); }
@@ -321,12 +326,15 @@ public:
     }
 
     bool isValid() const;
-    bool isAuthentic(const std::string& pwd) const;
+    bool isAuthentic(crypto::HMAC& hmacComputer) const;
 
     StunMessage& operator=(const StunMessage& b);
 
     StunHeader header;
     uint8_t attributes[MTU];
+
+private:
+    void computeHMAC(crypto::HMAC& hmacComputer, uint8_t* hash20b) const;
 };
 
 bool isStunMessage(const void* data, size_t length);

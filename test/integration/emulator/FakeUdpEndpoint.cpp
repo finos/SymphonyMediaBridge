@@ -430,12 +430,16 @@ void FakeUdpEndpoint::internalReceive()
         if (_receiveQueue.pop(packetInfo) && packetInfo.packet)
         {
             _rateMetrics.receiveTracker.update(packetInfo.packet->getLength(), receiveTime);
-            dispatchReceivedPacket(packetInfo.address, memory::makeUniquePacket(_allocator, *packetInfo.packet));
+            dispatchReceivedPacket(packetInfo.address,
+                memory::makeUniquePacket(_allocator, *packetInfo.packet),
+                receiveTime);
         }
     }
 }
 
-void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& srcAddress, memory::UniquePacket packet)
+void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& srcAddress,
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
     transport::UdpEndpointImpl::IEvents* listener = _defaultListener;
 
@@ -471,7 +475,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         }
         if (listener)
         {
-            listener->onIceReceived(*this, srcAddress, _localPort, std::move(packet));
+            listener->onIceReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
             return;
         }
     }
@@ -481,7 +485,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         listener = listener ? listener : _defaultListener.load();
         if (listener)
         {
-            listener->onDtlsReceived(*this, srcAddress, _localPort, std::move(packet));
+            listener->onDtlsReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
             return;
         }
     }
@@ -494,7 +498,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
 
             if (listener)
             {
-                listener->onRtcpReceived(*this, srcAddress, _localPort, std::move(packet));
+                listener->onRtcpReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
                 return;
             }
         }
@@ -508,7 +512,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
 
             if (listener)
             {
-                listener->onRtpReceived(*this, srcAddress, _localPort, std::move(packet));
+                listener->onRtpReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
                 return;
             }
         }

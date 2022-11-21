@@ -28,22 +28,26 @@ public:
         virtual void onRtpReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::UniquePacket packet) = 0;
+            memory::UniquePacket packet,
+            uint64_t timestamp) = 0;
 
         virtual void onDtlsReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::UniquePacket packet) = 0;
+            memory::UniquePacket packet,
+            uint64_t timestamp) = 0;
 
         virtual void onRtcpReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::UniquePacket packet) = 0;
+            memory::UniquePacket packet,
+            uint64_t timestamp) = 0;
 
         virtual void onIceReceived(Endpoint& endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::UniquePacket packet) = 0;
+            memory::UniquePacket packet,
+            uint64_t timestamp) = 0;
 
         virtual void onRegistered(Endpoint& endpoint) = 0;
         virtual void onUnregistered(Endpoint& endpoint) = 0;
@@ -91,7 +95,8 @@ public:
         virtual void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
             const SocketAddress& source,
             const SocketAddress& target,
-            memory::UniquePacket packet) = 0;
+            memory::UniquePacket packet,
+            uint64_t timestamp) = 0;
     };
 
     class IStopEvents

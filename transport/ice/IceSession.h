@@ -2,8 +2,10 @@
 #include "IceCandidate.h"
 #include "Stun.h"
 #include "concurrency/ScopedMutexGuard.h"
+#include "crypto/SslHelper.h"
 #include "utils/SocketAddress.h"
 #include <deque>
+
 namespace ice
 {
 
@@ -200,6 +202,7 @@ private:
             const IceCandidate& remote,
             StunTransactionIdGenerator& idGenerator,
             const SessionCredentials& credentials,
+            crypto::HMAC& hmacComputerRemote,
             const std::string& name,
             bool gathering);
 
@@ -257,6 +260,7 @@ private:
         StunTransactionIdGenerator& _idGenerator;
         const IceConfig& _config;
         const SessionCredentials& _credentials;
+        crypto::HMAC& _hmacComputer;
     };
 
     void addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate);
@@ -309,6 +313,12 @@ private:
     IEvents* const _eventSink;
     SessionCredentials _credentials;
     uint64_t _sessionStart;
+    struct HmacComputers
+    {
+        crypto::HMAC local;
+        crypto::HMAC remote;
+    };
+    mutable HmacComputers _hmacComputer;
 
     DBGCHECK_SINGLETHREADED_MUTEX(_mutexGuard);
 };

@@ -3261,6 +3261,7 @@ void EngineMixer::sendMessagesToNewDataStreams()
         auto* videoStream = _engineVideoStreams.getItem(endpointIdHash);
         if (!videoStream)
         {
+            dataStream->hasSeenInitialSpeakerList = true;
             continue;
         }
         const auto pinTarget = _engineStreamDirector->getPinTarget(endpointIdHash);

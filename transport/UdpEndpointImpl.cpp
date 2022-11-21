@@ -166,7 +166,9 @@ UdpEndpointImpl::IEvents* findListener(concurrency::MpmcHashmap32<KeyType, UdpEn
 }
 } // namespace
 
-void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet)
+void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
     UdpEndpointImpl::IEvents* listener = _defaultListener;
 
@@ -202,7 +204,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress, me
         }
         if (listener)
         {
-            listener->onIceReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
+            listener->onIceReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
             return;
         }
     }
@@ -212,7 +214,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress, me
         listener = listener ? listener : _defaultListener.load();
         if (listener)
         {
-            listener->onDtlsReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
+            listener->onDtlsReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
             return;
         }
     }
@@ -225,7 +227,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress, me
 
             if (listener)
             {
-                listener->onRtcpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
+                listener->onRtcpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
                 return;
             }
         }
@@ -239,7 +241,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress, me
 
             if (listener)
             {
-                listener->onRtpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
+                listener->onRtpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
                 return;
             }
         }

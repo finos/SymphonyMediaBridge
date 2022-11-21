@@ -327,7 +327,8 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
         if (packetCount == 1)
         {
             ssize_t byteCount = ::recvmsg(fd, &messageHeader[0].msg_hdr, flags);
-            _rateMetrics.receiveTracker.update(byteCount, utils::Time::getAbsoluteTime());
+            const auto receiveTime = utils::Time::getAbsoluteTime();
+            _rateMetrics.receiveTracker.update(byteCount, receiveTime);
             if (byteCount <= 0)
             {
                 break;
@@ -339,7 +340,8 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
 
             receiveMessage[0].packet->setLength(byteCount);
             dispatchReceivedPacket(SocketAddress(&receiveMessage[0].src_addr.gen, nullptr),
-                std::move(receiveMessage[0].packet));
+                std::move(receiveMessage[0].packet),
+                receiveTime);
             packetCount = 0;
 #ifndef __APPLE__
             limit = std::min(batchSize, 2u);
@@ -369,7 +371,8 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
                     receiveMessage[i].packet->setLength(0); // Attack with Jumbo frame. Discard.
                 }
                 dispatchReceivedPacket(SocketAddress(&receiveMessage[i].src_addr.gen, nullptr),
-                    std::move(receiveMessage[i].packet));
+                    std::move(receiveMessage[i].packet),
+                    receiveTime);
             }
             for (uint32_t i = 0; i < packetCount - count; ++i)
             {

@@ -360,6 +360,7 @@ void TcpServerEndpoint::internalReceive(int fd)
     auto packet = pendingTcp.packetizer.receive();
     if (packet)
     {
+        const uint64_t receiveTime = utils::Time::getAbsoluteTime();
         if (ice::isStunMessage(packet->get(), packet->getLength()))
         {
             auto msg = ice::StunMessage::fromPtr(packet->get());
@@ -381,7 +382,10 @@ void TcpServerEndpoint::internalReceive(int fd)
                         listenIt->second->onIceTcpConnect(endpoint,
                             pendingTcp.peerPort,
                             endpoint->getLocalPort(),
-                            std::move(packet));
+                            std::move(packet),
+                            receiveTime
+                            
+                            );
 
                         --_pendingEpollRegistrations; // it is not ours anymore
 

@@ -33,6 +33,7 @@ IceSession::IceSession(size_t sessionId,
     generateCredentialString(_idGenerator, ufrag, sizeof(ufrag) - 1);
     generateCredentialString(_idGenerator, pwd, sizeof(pwd) - 1);
     _credentials.local = std::make_pair<std::string, std::string>(ufrag, pwd);
+    _hmacComputer.local.init(_credentials.local.second.c_str(), _credentials.local.second.size());
 }
 
 // add most preferred UDP end point first. It will affect prioritization of candidates
@@ -109,6 +110,7 @@ void IceSession::gatherLocalCandidates(const std::vector<transport::SocketAddres
                     IceCandidate::Type::RELAY),
                 _idGenerator,
                 _credentials,
+                _hmacComputer.remote,
                 _logId,
                 true));
             auto& ct = _candidatePairs.back();
@@ -211,6 +213,7 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
             remoteCandidate,
             _idGenerator,
             _credentials,
+            _hmacComputer.remote,
             _logId,
             false));
     }
@@ -230,6 +233,7 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
             remoteCandidate,
             _idGenerator,
             _credentials,
+            _hmacComputer.remote,
             _logId,
             false));
     }
@@ -305,6 +309,7 @@ void IceSession::addLocalCandidate(const transport::SocketAddress& publicAddress
 
 const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate)
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     auto it = std::find_if(_remoteCandidates.cbegin(), _remoteCandidates.cend(), [candidate](const IceCandidate& x) {
         return x.transportType == candidate.transportType && x.address == candidate.address;
     });
@@ -320,6 +325,7 @@ const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate
 
 void IceSession::addRemoteCandidate(const IceCandidate& candidate, IceEndpoint* tcpEndpoint)
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     if (isAttached(tcpEndpoint))
     {
         return;
@@ -363,10 +369,11 @@ uint64_t IceSession::getSelectedPairRtt() const
 
 bool IceSession::isRequestAuthentic(const void* data, size_t len) const
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     const auto* stunMessage = StunMessage::fromPtr(data);
 
     if (stunMessage && stunMessage->isValid() && stunMessage->header.isRequest() &&
-        stunMessage->isAuthentic(_credentials.local.second))
+        stunMessage->isAuthentic(_hmacComputer.local))
     {
         const auto* attribute = stunMessage->getAttribute<StunUserName>(StunAttribute::USERNAME);
         return attribute && attribute->isTargetUser(_credentials.local.first.c_str());
@@ -377,9 +384,10 @@ bool IceSession::isRequestAuthentic(const void* data, size_t len) const
 
 bool IceSession::isResponseAuthentic(const void* data, size_t len) const
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     const auto* stunMessage = StunMessage::fromPtr(data);
     return stunMessage && stunMessage->isValid() && stunMessage->header.isResponse() &&
-        stunMessage->isAuthentic(_credentials.remote.second);
+        stunMessage->isAuthentic(_hmacComputer.remote);
 }
 
 void IceSession::onRequestReceived(IceEndpoint* endpoint,
@@ -405,7 +413,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
             "Unknown user " + userNames.first + ":" + userNames.second);
         return;
     }
-    if (!msg.isAuthentic(_credentials.local.second))
+    if (!msg.isAuthentic(_hmacComputer.local))
     {
         sendResponse(endpoint, sender, StunError::Code::Unauthorized, msg, now, "Unauthorized");
         return;
@@ -533,7 +541,7 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
 
     if (_state != State::GATHERING)
     {
-        if (!msg.isAuthentic(_credentials.remote.second))
+        if (!msg.isAuthentic(_hmacComputer.remote))
         {
             return;
         }
@@ -692,7 +700,7 @@ void IceSession::sendResponse(IceEndpoint* endpoint,
             StunGenericAttribute(StunAttribute::USERNAME, _credentials.local.first + ":" + _credentials.remote.first));
     }
 
-    response.addMessageIntegrity(_credentials.local.second);
+    response.addMessageIntegrity(_hmacComputer.local);
     response.addFingerprint();
     endpoint->sendStunTo(target, response.header.transactionId.get(), &response, response.size(), timestamp);
 }
@@ -981,16 +989,19 @@ const std::pair<std::string, std::string>& IceSession::getLocalCredentials() con
 void IceSession::setLocalCredentials(const std::pair<std::string, std::string>& credentials)
 {
     _credentials.local = credentials;
+    _hmacComputer.local.init(credentials.second.c_str(), credentials.second.size());
 }
 
 void IceSession::setRemoteCredentials(const std::string& ufrag, const std::string& pwd)
 {
-    _credentials.remote = std::make_pair(ufrag, pwd);
+    setRemoteCredentials(std::make_pair(ufrag, pwd));
 }
 
 void IceSession::setRemoteCredentials(const std::pair<std::string, std::string>& credentials)
 {
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
     _credentials.remote = credentials;
+    _hmacComputer.remote.init(credentials.second.c_str(), credentials.second.size());
 };
 
 // targetBuffer must be length + 1 for null termination
@@ -1024,6 +1035,7 @@ IceSession::CandidatePair::CandidatePair(const IceConfig& config,
     const IceCandidate& remote,
     StunTransactionIdGenerator& idGenerator,
     const SessionCredentials& credentials,
+    crypto::HMAC& hmacComputerRemote,
     const std::string& name,
     bool gathering)
     : localCandidate(local),
@@ -1041,7 +1053,8 @@ IceSession::CandidatePair::CandidatePair(const IceConfig& config,
       _name(name),
       _idGenerator(idGenerator),
       _config(config),
-      _credentials(credentials)
+      _credentials(credentials),
+      _hmacComputer(hmacComputerRemote)
 {
 }
 
@@ -1144,7 +1157,7 @@ void IceSession::CandidatePair::send(const uint64_t now)
 
     if (!gatheringProbe)
     {
-        stunMessage.addMessageIntegrity(_credentials.remote.second);
+        stunMessage.addMessageIntegrity(_hmacComputer);
         stunMessage.addFingerprint();
     }
 

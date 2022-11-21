@@ -37,44 +37,6 @@ namespace transport
 constexpr uint32_t Mbps100 = 100000;
 // we have to serialize operations on srtp client
 // timers, start and receive must be done from same serialized jobmanager.
-class PacketReceiveJob : public jobmanager::Job
-{
-public:
-    PacketReceiveJob(TransportImpl& transport,
-        Endpoint& endpoint,
-        const SocketAddress& source,
-        memory::UniquePacket packet,
-        void (TransportImpl::*receiveMethod)(Endpoint& endpoint,
-            const SocketAddress& source,
-            memory::UniquePacket packet,
-            uint64_t timestamp))
-        : _transport(transport),
-          _endpoint(endpoint),
-          _packet(std::move(packet)),
-          _source(source),
-          _timestamp(utils::Time::getAbsoluteTime()),
-          _receiveMethod(receiveMethod)
-    {
-    }
-
-    ~PacketReceiveJob() {}
-
-    void run() override
-    {
-        DBGCHECK_SINGLETHREADED(_transport._singleThreadMutex);
-        _transport._lastReceivedPacketTimestamp = _timestamp;
-        (_transport.*_receiveMethod)(_endpoint, _source, std::move(_packet), _timestamp);
-    }
-
-private:
-    TransportImpl& _transport;
-    Endpoint& _endpoint;
-    memory::UniquePacket _packet;
-    const SocketAddress _source;
-    uint64_t _timestamp;
-
-    void (TransportImpl::*_receiveMethod)(Endpoint&, const SocketAddress&, memory::UniquePacket packet, uint64_t);
-};
 
 class IceDisconnectJob : public jobmanager::Job
 {
@@ -782,20 +744,27 @@ void TransportImpl::onServerPortRegistered(ServerEndpoint& endpoint)
 void TransportImpl::onRtpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
-    if (!_jobQueue
-             .addJob<PacketReceiveJob>(*this, endpoint, source, std::move(packet), &TransportImpl::internalRtpReceived))
+    if (!_jobQueue.post(_jobCounter,
+            utils::bind(&TransportImpl::internalRtpReceived,
+                this,
+                std::ref(endpoint),
+                source,
+                utils::moveParam(packet),
+                timestamp)))
     {
         logger::error("job queue full RTP", _loggableId.c_str());
     }
 }
 
 void TransportImpl::internalRtpReceived(Endpoint& endpoint,
-    const SocketAddress& source,
+    const SocketAddress source,
     memory::UniquePacket packet,
     const uint64_t timestamp)
 {
+    _lastReceivedPacketTimestamp = timestamp;
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
 
@@ -877,23 +846,27 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
 void TransportImpl::onDtlsReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
-    if (!_jobQueue.addJob<PacketReceiveJob>(*this,
-            endpoint,
-            source,
-            std::move(packet),
-            &TransportImpl::internalDtlsReceived))
+    if (!_jobQueue.post(_jobCounter,
+            utils::bind(&TransportImpl::internalDtlsReceived,
+                this,
+                std::ref(endpoint),
+                source,
+                utils::moveParam(packet),
+                timestamp)))
     {
         logger::warn("job queue full DTLS", _loggableId.c_str());
     }
 }
 
 void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
-    const SocketAddress& source,
+    const SocketAddress source,
     memory::UniquePacket packet,
-    uint64_t timestamp)
+    const uint64_t timestamp)
 {
+    _lastReceivedPacketTimestamp = timestamp;
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
     if (packet->get()[0] == DTLSContentType::applicationData)
@@ -918,23 +891,27 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
 void TransportImpl::onRtcpReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
-    if (!_jobQueue.addJob<PacketReceiveJob>(*this,
-            endpoint,
-            source,
-            std::move(packet),
-            &TransportImpl::internalRtcpReceived))
+    if (!_jobQueue.post(_jobCounter,
+            utils::bind(&TransportImpl::internalRtcpReceived,
+                this,
+                std::ref(endpoint),
+                source,
+                utils::moveParam(packet),
+                timestamp)))
     {
         logger::warn("job queue full RTCP", _loggableId.c_str());
     }
 }
 
 void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
-    const SocketAddress& source,
+    const SocketAddress source,
     memory::UniquePacket packet,
-    uint64_t timestamp)
+    const uint64_t timestamp)
 {
+    _lastReceivedPacketTimestamp = timestamp;
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
     if (!_srtpClient->isDtlsConnected())
@@ -979,24 +956,21 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
 void TransportImpl::onIceReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
-    if (_rtpIceSession)
+    if (!_rtpIceSession)
     {
-        if (ice::isResponse(packet->get()) && !_rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
-        {
-            return;
-        }
-
-        if (_rtpIceSession->isRequestAuthentic(packet->get(), packet->getLength()) ||
-            _rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
-        {
-            endpoint.registerListener(source, this);
-        }
+        return;
     }
 
-    if (!_jobQueue
-             .addJob<PacketReceiveJob>(*this, endpoint, source, std::move(packet), &TransportImpl::internalIceReceived))
+    if (!_jobQueue.post(_jobCounter,
+            utils::bind(&TransportImpl::internalIceReceived,
+                this,
+                std::ref(endpoint),
+                source,
+                utils::moveParam(packet),
+                timestamp)))
     {
         logger::error("job queue full ICE", _loggableId.c_str());
     }
@@ -1005,12 +979,18 @@ void TransportImpl::onIceReceived(Endpoint& endpoint,
 void TransportImpl::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
-    memory::UniquePacket packet)
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
     if (_rtpIceSession && _isRunning)
     {
         const bool posted = _jobQueue.post(_jobCounter,
-            utils::bind(&TransportImpl::internalIceTcpConnect, this, endpoint, source, utils::moveParam(packet)));
+            utils::bind(&TransportImpl::internalIceTcpConnect,
+                this,
+                endpoint,
+                source,
+                utils::moveParam(packet),
+                timestamp));
 
         if (!posted)
         {
@@ -1020,8 +1000,9 @@ void TransportImpl::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
 }
 
 void TransportImpl::internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
-    const SocketAddress& source,
-    memory::UniquePacket packet)
+    const SocketAddress source,
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
     if (!_isRunning)
     {
@@ -1032,33 +1013,59 @@ void TransportImpl::internalIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
 
     endpoint->registerDefaultListener(this);
     _rtpEndpoints.push_back(endpoint);
-    internalIceReceived(*endpoint, source, std::move(packet), utils::Time::getAbsoluteTime());
+    internalIceReceived(*endpoint, source, std::move(packet), timestamp);
 }
 
 void TransportImpl::internalIceReceived(Endpoint& endpoint,
-    const SocketAddress& source,
+    const SocketAddress source,
     memory::UniquePacket packet,
-    uint64_t timestamp)
+    const uint64_t timestamp)
 {
+    _lastReceivedPacketTimestamp = timestamp;
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
+    _bwe->onUnmarkedTraffic(packet->getLength(), timestamp);
+
+    if (!_rtpIceSession)
+    {
+        return;
+    }
 
     const auto msg = ice::StunMessage::fromPtr(packet->get());
-    const auto responseCode = msg->getAttribute<ice::StunError>(ice::StunAttribute::ERROR_CODE);
-    if (responseCode && responseCode->isValid())
+    if (ice::isResponse(packet->get()))
     {
-        const auto code = responseCode->getCode();
-        if (code != 200)
+        const auto responseCode = msg->getAttribute<ice::StunError>(ice::StunAttribute::ERROR_CODE);
+        if (responseCode && responseCode->isValid())
         {
-            logger::warn("ICE response %d received, '%s', from %s",
-                getLoggableId().c_str(),
-                code,
-                responseCode->getPhrase().c_str(),
-                endpoint.getName());
+            const auto code = responseCode->getCode();
+            if (code != 200)
+            {
+                logger::warn("ICE response %d received, '%s', from %s",
+                    getLoggableId().c_str(),
+                    code,
+                    responseCode->getPhrase().c_str(),
+                    endpoint.getName());
+            }
         }
     }
-    if (_rtpIceSession && _rtpIceSession->isAttached(&endpoint))
+
+    if (_rtpIceSession->isAttached(&endpoint))
     {
+        if (ice::isResponse(packet->get()) && _rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
+        {
+            endpoint.registerListener(source, this);
+        }
+        else if (ice::isRequest(packet->get()) &&
+            _rtpIceSession->isRequestAuthentic(packet->get(), packet->getLength()))
+        {
+            endpoint.registerListener(source, this);
+        }
+        else
+        {
+            // TODO attack, add metric for this
+            return;
+        }
+
         _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
     }
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)

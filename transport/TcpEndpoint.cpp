@@ -450,14 +450,15 @@ void TcpEndpoint::internalReceive(int fd)
         {
             continue;
         }
+        const uint64_t receiveTime = utils::Time::getAbsoluteTime();
         if (ice::isStunMessage(packet->get(), packet->getLength()))
         {
-            listener->onIceReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
+            listener->onIceReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet), receiveTime);
             continue;
         }
         else if (transport::isDtlsPacket(packet->get()))
         {
-            listener->onDtlsReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
+            listener->onDtlsReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet), receiveTime);
             continue;
         }
         else if (rtp::isRtcpPacket(packet->get(), packet->getLength()))
@@ -465,7 +466,7 @@ void TcpEndpoint::internalReceive(int fd)
             auto rtcpReport = rtp::RtcpReport::fromPtr(packet->get(), packet->getLength());
             if (rtcpReport)
             {
-                listener->onRtcpReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
+                listener->onRtcpReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet), receiveTime);
                 continue;
             }
         }
@@ -474,7 +475,7 @@ void TcpEndpoint::internalReceive(int fd)
             auto rtpPacket = rtp::RtpHeader::fromPacket(*packet);
             if (rtpPacket)
             {
-                listener->onRtpReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet));
+                listener->onRtpReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet), receiveTime);
                 continue;
             }
         }

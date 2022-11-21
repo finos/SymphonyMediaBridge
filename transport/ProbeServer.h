@@ -1,5 +1,6 @@
 #pragma once
 #include "concurrency/MpmcQueue.h"
+#include "crypto/SslHelper.h"
 #include "ice/IceCandidate.h"
 #include "ice/Stun.h"
 #include "transport/Endpoint.h"
@@ -21,22 +22,26 @@ public:
     virtual void onRtpReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onDtlsReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onRtcpReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onIceReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     virtual void onRegistered(Endpoint&) override;
     virtual void onUnregistered(Endpoint&) override;
@@ -48,7 +53,8 @@ public:
     virtual void onIceTcpConnect(std::shared_ptr<Endpoint>,
         const SocketAddress& source,
         const SocketAddress& target,
-        memory::UniquePacket) override;
+        memory::UniquePacket,
+        uint64_t timestamp) override;
 
     // Endpoint::IStopEvents
     virtual void onEndpointStopped(Endpoint*) override;
@@ -77,6 +83,7 @@ private:
         uint64_t timestamp;
     };
 
+    crypto::HMAC _hmacComputer;
     std::vector<ProbeTcpConnection> _tcpConnections;
     concurrency::MpmcQueue<ProbeTcpConnection> _queue;
     std::atomic_bool _maintenanceThreadIsRunning;

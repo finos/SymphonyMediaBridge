@@ -150,8 +150,9 @@ TEST_F(RecordingTransportTest, protectAndSend)
         .WillByDefault([](Endpoint& endpoint,
                            const SocketAddress& source,
                            const SocketAddress& target,
-                           memory::UniquePacket packet) {});
-    EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
+                           memory::UniquePacket packet,
+                           uint64_t timestamp) {});
+    EXPECT_CALL(listener, onRtpReceived(_, _, _, _, _)).Times(100);
     EXPECT_CALL(listener, onRegistered(_)).Times(1);
 
     transport::EndpointFactoryImpl endpointFactory;
@@ -241,16 +242,18 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
         .WillByDefault([](Endpoint& endpoint,
                            const SocketAddress& source,
                            const SocketAddress& target,
-                           memory::UniquePacket packet) {});
+                           memory::UniquePacket packet,
+                           uint64_t timestamp) {});
 
     ON_CALL(listener, onRtcpReceived)
         .WillByDefault([](Endpoint& endpoint,
                            const SocketAddress& source,
                            const SocketAddress& target,
-                           memory::UniquePacket packet) {});
+                           memory::UniquePacket packet,
+                           uint64_t timestamp) {});
 
-    EXPECT_CALL(listener, onRtpReceived(_, _, _, _)).Times(100);
-    EXPECT_CALL(listener, onRtcpReceived(_, _, _, _)).Times(AtLeast(1));
+    EXPECT_CALL(listener, onRtpReceived(_, _, _, _, _)).Times(100);
+    EXPECT_CALL(listener, onRtcpReceived(_, _, _, _, _)).Times(AtLeast(1));
     EXPECT_CALL(listener, onRegistered(_)).Times(1);
 
     transport::EndpointFactoryImpl endpointFactory;

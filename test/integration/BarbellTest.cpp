@@ -239,12 +239,12 @@ TEST_F(BarbellTest, packetLossViaBarbell)
                 if (id == 0)
                 {
                     EXPECT_NEAR(fps, 30.0, 5.0);
-                    EXPECT_NEAR(videoStats.numDecodedFrames, 146, 7);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 146, 11);
                 }
                 else
                 {
                     EXPECT_NEAR(fps, 30.0, 1.0);
-                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 7);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 11);
                 }
             }
         }

@@ -126,10 +126,24 @@ TEST(IceTest, hmac1)
                                                         "\xe5\x7a\x3b\xcf";
 
     std::string pwd = "VOkJxbRl1RmTxUk/WvJxBt";
+    crypto::HMAC hmacComputer(pwd.c_str(), pwd.size());
     EXPECT_TRUE(ice::isStunMessage(req, sizeof(req) - 1));
     auto stun = ice::StunMessage::fromPtr(req);
     EXPECT_TRUE(stun->isValid());
-    EXPECT_TRUE(stun->isAuthentic(pwd));
+    EXPECT_TRUE(stun->isAuthentic(hmacComputer));
+}
+
+TEST(IceTest, HMACempty)
+{
+    alignas(memory::Packet) const unsigned char req[] = "\x00\x01\x00\x58";
+    std::string pwd = "VOkJxbRl1RmTxUk/WvJxBt";
+    crypto::HMAC hmac;
+    EXPECT_TRUE(hmac.init(pwd.c_str(), pwd.size()));
+    uint8_t result[20];
+    hmac.compute(result);
+    hmac.add(req, 5);
+
+    hmac.compute(result);
 }
 
 TEST(IceTest, jvbnice)
@@ -190,36 +204,38 @@ TEST(IceTest, jvbnice)
                                                                 "\x80\x28\x00\x04\xa2\x32\x42\xe4";
 
     // outbound leg, multi leg
-    const char* jvbUser1 = "6jp681dtt30kro";
-    const char* jvbPwd1 = "3s8tg4f159kdj7siunb3p9p248";
-    const char* niceUser2 = "dNRQ";
-    const char* nicePwd2 = "g1TyvQ7V0N8uCmpKJazelE";
+    std::string jvbUser1 = "6jp681dtt30kro";
+    std::string jvbPwd1 = "3s8tg4f159kdj7siunb3p9p248";
+    std::string niceUser2 = "dNRQ";
+    std::string nicePwd2 = "g1TyvQ7V0N8uCmpKJazelE";
+    crypto::HMAC hmacComputer1(jvbPwd1.c_str(), jvbPwd1.size());
+    crypto::HMAC hmacComputer2(nicePwd2.c_str(), nicePwd2.size());
 
     {
         auto reqJvb = StunMessage::fromPtr(reqFromJvb);
         EXPECT_TRUE(reqJvb->isValid());
-        EXPECT_TRUE(reqJvb->isAuthentic(nicePwd2));
+        EXPECT_TRUE(reqJvb->isAuthentic(hmacComputer2));
         auto user = reqJvb->getAttribute<ice::StunGenericAttribute>(ice::StunAttribute::USERNAME);
-        EXPECT_EQ(user->getUtf8(), std::string(niceUser2) + ":" + std::string(jvbUser1));
+        EXPECT_EQ(user->getUtf8(), niceUser2 + ":" + jvbUser1);
     }
     {
         auto rspNice = StunMessage::fromPtr(rspFromNice);
-        EXPECT_TRUE(rspNice->isAuthentic(nicePwd2));
+        EXPECT_TRUE(rspNice->isAuthentic(hmacComputer2));
         EXPECT_TRUE(rspNice->isValid());
         auto user = rspNice->getAttribute<ice::StunGenericAttribute>(ice::StunAttribute::USERNAME);
-        EXPECT_EQ(user->getUtf8(), std::string(niceUser2) + ":" + std::string(jvbUser1));
+        EXPECT_EQ(user->getUtf8(), niceUser2 + ":" + jvbUser1);
     }
     {
         auto reqNice = StunMessage::fromPtr(reqFromNice);
-        EXPECT_TRUE(reqNice->isAuthentic(jvbPwd1));
+        EXPECT_TRUE(reqNice->isAuthentic(hmacComputer1));
         auto user = reqNice->getAttribute<ice::StunGenericAttribute>(ice::StunAttribute::USERNAME);
-        EXPECT_EQ(user->getUtf8(), std::string(jvbUser1) + ":" + std::string(niceUser2));
+        EXPECT_EQ(user->getUtf8(), jvbUser1 + ":" + niceUser2);
     }
     {
         auto rspJvb = StunMessage::fromPtr(rspFromJvb);
-        EXPECT_TRUE(rspJvb->isAuthentic(jvbPwd1));
+        EXPECT_TRUE(rspJvb->isAuthentic(hmacComputer1));
         auto user = rspJvb->getAttribute<ice::StunGenericAttribute>(ice::StunAttribute::USERNAME);
-        EXPECT_EQ(user->getUtf8(), std::string(jvbUser1) + ":" + std::string(niceUser2));
+        EXPECT_EQ(user->getUtf8(), jvbUser1 + ":" + niceUser2);
     }
 }
 
@@ -241,10 +257,11 @@ TEST(IceTest, hmac2)
         "\x04\x36\x14\x1e";
 
     std::string pwd = "fpllngzieyoh43e0133ols";
+    crypto::HMAC hmacComputer1(pwd.c_str(), pwd.size());
     auto stun = ice::StunMessage::fromPtr(req);
     EXPECT_TRUE(ice::isStunMessage(req, sizeof(req) - 1));
     EXPECT_TRUE(stun->isValid());
-    EXPECT_TRUE(stun->isAuthentic(pwd));
+    EXPECT_TRUE(stun->isAuthentic(hmacComputer1));
 }
 
 TEST(IceTest, ipformat)
@@ -342,10 +359,12 @@ TEST(IceTest, build)
     msg.add(StunControlled(tieBreaker));
     msg.add(StunPriority(912837490u));
     const char* pwd = "Hw89ty98masndbn";
-    msg.addMessageIntegrity(pwd);
+    crypto::HMAC hmacComputer1(pwd, strlen(pwd));
+
+    msg.addMessageIntegrity(hmacComputer1);
     msg.addFingerprint();
     EXPECT_TRUE(msg.isValid());
-    EXPECT_TRUE(msg.isAuthentic(pwd));
+    EXPECT_TRUE(msg.isAuthentic(hmacComputer1));
 }
 
 class IceSocketAdapter : public ice::IceEndpoint
