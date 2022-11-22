@@ -120,7 +120,8 @@ private:
         {
             return EndpointMetrics(queueSize,
                 receiveTracker.snapshot.load() * 8 * utils::Time::ms,
-                sendTracker.snapshot.load() * 8 * utils::Time::ms);
+                sendTracker.snapshot.load() * 8 * utils::Time::ms,
+                0);
         }
     } _rateMetrics;
 

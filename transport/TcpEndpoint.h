@@ -116,7 +116,7 @@ public:
 
     EndpointMetrics getMetrics(uint64_t timestamp) const override
     {
-        return EndpointMetrics(_receiveJobs.getCount(), 0.0, 0.0);
+        return EndpointMetrics(_receiveJobs.getCount(), 0.0, 0.0, 0);
     }
 
 public:

@@ -58,8 +58,8 @@ UdpEndpointImpl::UdpEndpointImpl(jobmanager::JobManager& jobManager,
     bool isShared)
     : BaseUdpEndpoint("UdpEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
       _iceListeners(maxSessionCount * 2),
-      _dtlsListeners(maxSessionCount * 16),
-      _iceResponseListeners(maxSessionCount * 64)
+      _dtlsListeners(maxSessionCount * 2),
+      _iceResponseListeners(maxSessionCount * 4)
 {
 }
 
@@ -75,7 +75,7 @@ void UdpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
     uint64_t timestamp)
 {
     auto* msg = ice::StunMessage::fromPtr(data);
-    if (msg->header.isRequest() && !_iceResponseListeners.contains(transactionId) && !_dtlsListeners.contains(target))
+    if (msg->header.isRequest() && !_dtlsListeners.contains(target) && !_iceResponseListeners.contains(transactionId))
     {
         auto names = msg->getAttribute<ice::StunUserName>(ice::StunAttribute::USERNAME);
         if (names)

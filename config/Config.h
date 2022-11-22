@@ -119,6 +119,10 @@ public:
 
     CFG_PROP(uint32_t, mtu, 1480);
     CFG_PROP(uint32_t, ipOverhead, 20 + 14);
+
+    CFG_GROUP()
+    CFG_PROP(uint32_t, sendPool, 128 * 1024);
+    CFG_GROUP_END(mem);
 };
 
 } // namespace config

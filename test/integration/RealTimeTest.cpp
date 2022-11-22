@@ -269,6 +269,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 
     makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
 
+    group.disconnectClients();
     for (auto& client : group.clients)
     {
         client->_transport->stop();

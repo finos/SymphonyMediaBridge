@@ -117,6 +117,7 @@ std::string MixerManagerStats::describe()
     result["shared_udp_send_queue"] = udpSharedEndpointsSendQueue;
     result["shared_udp_receive_rate"] = udpSharedEndpointsReceiveKbps;
     result["shared_udp_send_rate"] = udpSharedEndpointsSendKbps;
+    result["shared_udp_end_drops"] = udpSharedEndpointsSendDrops;
 
     result["send_pool"] = sendPoolSize;
     result["receive_pool"] = receivePoolSize;

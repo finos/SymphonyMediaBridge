@@ -50,6 +50,8 @@ public: // internal job interface
 private:
     concurrency::MpmcHashmap32<std::string, IEvents*> _iceListeners;
     concurrency::MpmcHashmap32<SocketAddress, IEvents*> _dtlsListeners;
+
+    // mainly used for client requests. SMB mainly uses dtlsListener for IP:port
     concurrency::MpmcHashmap32<__uint128_t, IEvents*> _iceResponseListeners;
 };
 } // namespace transport

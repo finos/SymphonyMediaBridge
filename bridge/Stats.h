@@ -67,6 +67,7 @@ struct MixerManagerStats
     uint32_t udpSharedEndpointsSendQueue = 0;
     uint32_t udpSharedEndpointsReceiveKbps = 0;
     uint32_t udpSharedEndpointsSendKbps = 0;
+    uint64_t udpSharedEndpointsSendDrops = 0;
 
     std::string describe();
 };

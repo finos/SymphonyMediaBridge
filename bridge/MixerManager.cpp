@@ -634,6 +634,7 @@ Stats::MixerManagerStats MixerManager::getStats()
     result.udpSharedEndpointsSendQueue = udpMetrics.sendQueue;
     result.udpSharedEndpointsReceiveKbps = static_cast<uint32_t>(udpMetrics.receiveKbps);
     result.udpSharedEndpointsSendKbps = static_cast<uint32_t>(udpMetrics.sendKbps);
+    result.udpSharedEndpointsSendDrops = udpMetrics.sendQueueDrops;
 
     return result;
 }
