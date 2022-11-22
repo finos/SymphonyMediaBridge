@@ -36,6 +36,8 @@ public:
     void registerListener(const transport::SocketAddress& remotePort, IEvents* listener) override;
     void registerDefaultListener(IEvents* defaultListener) override;
     void unregisterListener(IEvents* listener) override;
+    void focusListener(const transport::SocketAddress& remotePort, IEvents* listener) override {}
+
     void start() override;
     void stop(IStopEvents* listener) override;
     bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;

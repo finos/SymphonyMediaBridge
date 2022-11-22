@@ -97,6 +97,7 @@ public:
     void registerDefaultListener(IEvents* defaultListener) override;
 
     void unregisterListener(IEvents* listener) override;
+    void focusListener(const SocketAddress& remotePort, IEvents* listener) override{};
 
     void start() override;
     void stop(Endpoint::IStopEvents* listener) override;

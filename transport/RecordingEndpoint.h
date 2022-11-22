@@ -42,6 +42,7 @@ public:
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override { assert(false); };
 
     void unregisterListener(IEvents* listener) override { assert(false); };
+    void focusListener(const SocketAddress& remotePort, IEvents* listener) override { assert(false); }
 
     void registerRecordingListener(const SocketAddress& remotePort, IRecordingEvents* listener);
 

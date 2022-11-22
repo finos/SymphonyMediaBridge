@@ -38,6 +38,7 @@ public:
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override;
 
     void unregisterListener(IEvents* listener) override;
+    void focusListener(const SocketAddress& remotePort, IEvents* listener) override;
 
 public: // internal job interface
     void dispatchReceivedPacket(const SocketAddress& srcAddress,
