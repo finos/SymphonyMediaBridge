@@ -113,10 +113,6 @@ node('be-integration') {
                     description: "Symphony media bridge binaries for linux",
                     publishConfig: [
                         registry: "https://repo.symphony.com/artifactory/api/npm/npm-virtual-dev/"
-                    ],
-                    scripts: [
-                        build: "echo \"No build script provided\"",
-                        test: "echo \"No test script provided\""
                     ]
                 ])
                 withNvm("v16.16.0", "npmrcFile") {
