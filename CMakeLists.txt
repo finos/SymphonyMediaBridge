@@ -422,11 +422,13 @@ set(FILES
         webrtc/WebRtcDataStream.h
         )
 
+add_library(smblib STATIC ${FILES})
+target_include_directories(smblib PUBLIC ${CMAKE_BINARY_DIR}/generated)
+
 add_executable(smb
-        ${FILES}
         main.cpp)
 
-target_link_libraries(smb Threads::Threads ${THIRD_PARTY_LIBS} git_version)
+target_link_libraries(smb smblib Threads::Threads ${THIRD_PARTY_LIBS} git_version)
 
 ##################
 # Test framework
@@ -451,38 +453,12 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 # the gtest and gtest_main targets.
 add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/googletest-src ${CMAKE_CURRENT_BINARY_DIR}/googletest-build EXCLUDE_FROM_ALL)
 
-set(TEST_FILES
-    test/api/ParserTest.cpp
-    test/memory/MapTest.cpp
-    test/memory/PoolAllocatorTest.cpp
-    test/memory/RingAllocatorTest.cpp
-    test/utils/StringTokenizerTest.cpp
-    test/utils/TrackerTest.cpp
-    test/memory/RingBufferTest.cpp
-    test/memory/ListTest.cpp
-    test/memory/ArrayTest.cpp
-    test/jobmanager/JobManagerTest.cpp
-    test/concurrency/ProcessIntervalTest.cpp
+set(TEST_LIB_FILES
     test/integration/SampleDataUtils.cpp
     test/integration/FFTanalysis.h
     test/integration/FFTanalysis.cpp
-    test/integration/IntegrationTest.cpp
-    test/integration/IntegrationTest.h
-    test/integration/RealTimeTest.cpp
-    test/integration/RealTimeTest.h    
-    test/integration/BarbellTest.cpp
-    test/integration/BarbellTest.h
-#    test/integration/MixerTimeoutTest.cpp
-#    test/integration/StatsTest.cpp
     test/sctp/SctpEndpoint.h
     test/sctp/SctpEndpoint.cpp
-    test/sctp/SctpBasicsTests.cpp
-    test/sctp/SctpTransferTests.cpp
-    test/transport/ice/IceCandidateTest.cpp
-    test/transport/SctpTest.cpp
-    test/transport/RtcpReportsProducerTest.cpp
-    test/transport/RtcTransportTest.cpp
-    test/transport/RtpTest.cpp
     test/transport/SrtpProtectJob.cpp
     test/transport/SrtpProtectJob.h
     test/transport/SrtpUnprotectJob.cpp
@@ -491,12 +467,6 @@ set(TEST_FILES
     test/transport/FakeNetwork.cpp
     test/transport/NetworkLink.h
     test/transport/NetworkLink.cpp
-    test/transport/IceIntegrationTest.cpp
-    test/transport/SctpIntegrationTest.cpp
-    test/transport/TransportIntegrationTest.cpp
-    test/transport/TransportIntegrationTest.h
-    test/transport/SrtpTest.cpp
-    test/transport/Ipv6Test.cpp
     test/integration/RtpDump.h
     test/integration/RtpDump.cpp
     test/integration/emulator/AudioSource.cpp
@@ -510,23 +480,14 @@ set(TEST_FILES
     test/integration/emulator/HttpRequests.cpp
     test/integration/emulator/TimeTurner.h
     test/integration/emulator/TimeTurner.cpp
-    test/integration/TimeTurnerTest.cpp
     test/integration/emulator/FakeEndpointFactory.h
     test/integration/emulator/FakeEndpointFactory.cpp
     test/integration/emulator/FakeUdpEndpoint.h
     test/integration/emulator/FakeUdpEndpoint.cpp
     test/integration/emulator/Httpd.cpp
-    test/config/ConfigTest.cpp
-    test/codec/AudioProcessingTest.cpp
-    test/gtest_main.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp
     test/ResourceLoader.cpp
-    test/concurrency/MpscTest.cpp
-    test/concurrency/MpmcMapTest.cpp
-    test/concurrency/LockFreeListTest.cpp
-    test/bwe/MatrixTests.cpp
-    test/bwe/EstimatorTestEasy.cpp
     test/bwe/FakeAudioSource.h
     test/bwe/FakeAudioSource.cpp
     test/bwe/FakeVideoSource.h
@@ -542,6 +503,51 @@ set(TEST_FILES
     test/bwe/EstimatorReRun.cpp
     test/bwe/BwBurstTracker.h
     test/bwe/BwBurstTracker.cpp
+    test/utils/ApiUtils.cpp
+    test/transport/EndpointListenerMock.h
+    test/bridge/DummyRtcTransport.h
+)
+
+set(TEST_FILES
+    test/api/ParserTest.cpp
+    test/memory/MapTest.cpp
+    test/memory/PoolAllocatorTest.cpp
+    test/memory/RingAllocatorTest.cpp
+    test/utils/StringTokenizerTest.cpp
+    test/utils/TrackerTest.cpp
+    test/memory/RingBufferTest.cpp
+    test/memory/ListTest.cpp
+    test/memory/ArrayTest.cpp
+    test/jobmanager/JobManagerTest.cpp
+    test/concurrency/ProcessIntervalTest.cpp
+    test/integration/IntegrationTest.cpp
+    test/integration/IntegrationTest.h
+    test/integration/RealTimeTest.cpp
+    test/integration/RealTimeTest.h
+    test/integration/BarbellTest.cpp
+    test/integration/BarbellTest.h
+#    test/integration/MixerTimeoutTest.cpp
+#    test/integration/StatsTest.cpp
+    test/sctp/SctpBasicsTests.cpp
+    test/sctp/SctpTransferTests.cpp
+    test/transport/ice/IceCandidateTest.cpp
+    test/transport/SctpTest.cpp
+    test/transport/RtcpReportsProducerTest.cpp
+    test/transport/RtcTransportTest.cpp
+    test/transport/RtpTest.cpp
+    test/transport/IceIntegrationTest.cpp
+    test/transport/SctpIntegrationTest.cpp
+    test/transport/TransportIntegrationTest.cpp
+    test/transport/TransportIntegrationTest.h
+    test/transport/SrtpTest.cpp
+    test/transport/Ipv6Test.cpp
+    test/integration/TimeTurnerTest.cpp
+    test/config/ConfigTest.cpp
+    test/codec/AudioProcessingTest.cpp
+    test/concurrency/MpscTest.cpp
+    test/concurrency/MpmcMapTest.cpp
+    test/concurrency/LockFreeListTest.cpp
+    test/bwe/MatrixTests.cpp
     test/bwe/RateControllerTest.cpp
     test/transport/IceTest.cpp
     test/utils/Crc32Test.cpp
@@ -567,7 +573,6 @@ set(TEST_FILES
     test/utils/Base64Test.cpp
     test/crypto/AesIvGeneratorTest.cpp
     test/transport/RecordingTransportTest.cpp
-    test/transport/EndpointListenerMock.h
     test/transport/recp/RecStartStopEventBuilderTest.cpp
     test/transport/recp/RecStreamAddedEventBuilderTest.cpp
     test/bridge/UnackedPacketsTrackerTest.cpp
@@ -576,27 +581,39 @@ set(TEST_FILES
     test/memory/StackMapTest.cpp
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/VideoNackReceiveJobTest.cpp
-    test/bridge/DummyRtcTransport.h
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp)
+
+set(LOAD_TEST_FILES
+    test/integration/RealTimeTest.cpp
+    test/integration/RealTimeTest.h
+    test/integration/LoadTestConfig.h
+)
 
 
 set(CMAKE_TEST_DIRECTORY "${CMAKE_BINARY_DIR}/test")
 set(CMAKE_TEST_INCLUDE "${CMAKE_TEST_DIRECTORY}/include")
 configure_file(test/TestConfig.h.in ${CMAKE_TEST_INCLUDE}/TestConfig.h)
 
+add_library(testlib STATIC ${TEST_LIB_FILES})
+target_include_directories(testlib PRIVATE ${CMAKE_TEST_INCLUDE} ${gtest_SOURCE_DIR}/include "test/include")
+
 add_executable(UnitTest
-    ${FILES}
-    ${TEST_FILES})
+    ${TEST_FILES} test/gtest_main.cpp)
 
 target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include")
 
 # Copy test Data
 file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
 
-target_link_libraries(UnitTest gtest gmock ${THIRD_PARTY_LIBS} git_version)
+target_link_libraries(UnitTest testlib smblib gtest gmock ${THIRD_PARTY_LIBS} git_version)
 
 add_test(AllUnitTests UnitTest)
+
+add_executable(LoadTest ${LOAD_TEST_FILES}
+    test/load_test_main.cpp)
+
+target_link_libraries(LoadTest testlib smblib gtest gmock ${THIRD_PARTY_LIBS} git_version)
 
 if(APPLE)
     source_group(TREE ${PROJECT_SOURCE_DIR} FILES ${FILES} ${TEST_FILES})

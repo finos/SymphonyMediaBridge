@@ -29,6 +29,7 @@
 #include "transport/dtls/SrtpClientFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
+#include "utils/MersienneRandom.h"
 #include "utils/StringBuilder.h"
 #include <chrono>
 #include <complex>
@@ -36,7 +37,10 @@
 #include <sstream>
 #include <unordered_set>
 
-#define USE_FAKENETWORK 1
+namespace config
+{
+const char* g_LoadTestConfigFile = nullptr;
+}
 
 RealTimeTest::RealTimeTest()
     : _sendAllocator(memory::packetPoolSize * 8, "RealTimeTest"),
@@ -47,8 +51,24 @@ RealTimeTest::RealTimeTest()
       _pacer(10 * utils::Time::ms),
       _instanceCounter(0),
       _numWorkerThreads(getNumWorkerThreads()),
-      _clientsConnectionTimeout(15)
+      _clientsConnectionTimeout(15),
+      _config(std::make_unique<config::LoadTestConfig>()),
+      _configInitialized(false)
 {
+    if (config::g_LoadTestConfigFile != nullptr)
+    {
+        _configInitialized = _config->readFromFile(config::g_LoadTestConfigFile);
+        if (!_configInitialized)
+        {
+            logger::error("Failed to read load test configuration from %s",
+                "RealTimeTest",
+                config::g_LoadTestConfigFile);
+        }
+    }
+    else
+    {
+        logger::info("No load test configuration provided, load test will fail.", "RealTimeTest");
+    }
 }
 
 // TimeTurner time source must be set before starting any threads.
@@ -119,8 +139,7 @@ void RealTimeTest::initLocalTransports()
     std::string configJson =
         "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10050, \"recording.singlePort\":0}";
     _clientConfig.readFromString(configJson);
-    std::vector<transport::SocketAddress> interfaces;
-    interfaces.push_back(transport::SocketAddress::parse(_clientConfig.ice.preferredIp, 0));
+    std::vector<transport::SocketAddress> interfaces = bridge::gatherInterfaces(_clientConfig);
 
     _clientsEndpointFactory = std::shared_ptr<transport::EndpointFactory>(new transport::EndpointFactoryImpl());
     _clientTransportFactory = transport::createTransportFactory(*_jobManager,
@@ -172,16 +191,37 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
 
 TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 {
-    _bridgeConfig.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "log.level": "INFO"
-        })");
+    std::string baseUrl = "http://127.0.0.1:8080";
+    auto numClients = 1000;
+    bool createTalker = true;
+    uint16_t duration = 60;
+    uint32_t rampup = 0;
+    uint32_t max_rampup = 0;
+    utils::MersienneRandom<uint32_t> randGen;
 
-    // initRealBridge(_config);
+    if (_configInitialized)
+    {
+        numClients = _config->numClients;
+        duration = _config->duration;
+        // rampup = _config->rampup;
+        max_rampup = _config->max_rampup;
+        rampup = randGen.next() % max_rampup;
 
-    const auto baseUrl = "http://127.0.0.1:8080";
+        utils::StringBuilder<1000> sb;
+        sb.append("http://");
+        sb.append(_config->ip.get().empty() ? _config->address : _config->ip);
+        sb.append(":");
+        sb.append(_config->port);
+        baseUrl = sb.build();
+        createTalker = _config->initiator.get();
+
+        assert(!_config->conference_id.get().empty());
+    }
+
+    logger::info("Starting smbMegaHoot test:\n\tbaseUrl: %s\n\tnumClients: %d",
+        "RealTimeTest",
+        baseUrl.c_str(),
+        numClients);
 
     GroupCall<SfuClient<Channel>> group(nullptr,
         _instanceCounter,
@@ -189,32 +229,45 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         _audioAllocator,
         *_clientTransportFactory,
         *_sslDtls,
-        1000);
+        numClients);
 
     Conference conf(nullptr);
 
-    bool startConfResult = group.startConference(conf, baseUrl);
-    if (!startConfResult)
+    if (_configInitialized)
+    {
+        conf.createFromExternal(_config->conference_id.get());
+    }
+    else if (!group.startConference(conf, baseUrl.c_str()))
     {
         return;
+    }
+
+    logger::info("Waiting before join for: %d s, start after: %d s", "RealTimeTest", rampup, max_rampup);
+
+    auto startTime = utils::Time::getAbsoluteTime();
+    if (rampup != 0)
+    {
+        utils::Time::nanoSleep(rampup * utils::Time::sec);
     }
 
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
-        if (count++ == 0)
-        {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, false, true);
-        }
-        else
-        {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Muted, false, true);
-        }
+        auto audio = createTalker && count == 0 ? emulator::Audio::Fake : emulator::Audio::Muted;
+        client->initiateCall(baseUrl.c_str(), conf.getId(), true, audio, false, true);
     }
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-    makeCallWithDefaultAudioProfile(group, 20 * utils::Time::sec);
+    if (max_rampup != 0 &&
+        utils::Time::diffGT(startTime, utils::Time::getAbsoluteTime(), utils::Time::sec * max_rampup))
+    {
+        auto diff = utils::Time::diff(startTime, utils::Time::getAbsoluteTime());
+        logger::info("Waiting before start for another: %lu s", "RealTimeTest", diff / utils::Time::sec);
+        utils::Time::nanoSleep(diff);
+    }
+
+    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
 
     for (auto& client : group.clients)
     {

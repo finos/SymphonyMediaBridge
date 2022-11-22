@@ -43,6 +43,8 @@ class Engine;
 class MixerManager;
 class ApiRequestHandler;
 
+std::vector<transport::SocketAddress> gatherInterfaces(const config::Config& config);
+
 class Bridge
 {
 public:
