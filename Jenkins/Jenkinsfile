@@ -3,7 +3,7 @@
 properties([
     buildDiscarder(logRotator(artifactNumToKeepStr: "15", numToKeepStr: "15")),
     parameters([
-        string(name: "ARTIFACTORY_CREDENTIALS_ID", defaultValue: "jenkins-artifactory-credentials", description: "Id of credentials for artifactory access for mt scripts"),
+        string(name: "ARTIFACTORY_CREDENTIALS_ID", defaultValue: "jenkins-artifactory-credentials", description: "Id of credentials for artifactory access for mt scripts")
     ])
 ])
 
@@ -98,6 +98,26 @@ node('be-integration') {
         docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:latest').inside {
             stage('Create archive') {
                 sh "zip -r ${baseName}-${version}.zip el7/smb/smb el7/smb/versioninfo.txt el7/smb/libs/ el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-focal/smb/smb ubuntu-focal/smb/versioninfo.txt ubuntu-focal/smb/libs/ ubuntu-focal-deb/smb/*.tar.gz ubuntu-focal-deb/smb/*.deb aws-linux/smb/versioninfo.txt aws-linux/smb/libs/ aws-linux/smb/smb"
+            }
+        }
+
+        stage ("npm publish") {
+            sh "mkdir npm-publish"
+            dir("npm-publish") {
+                sh "cp -R ../aws-linux/smb/libs ."
+                sh "cp ../aws-linux/smb/smb ."
+                sh "cp ../aws-linux/smb/versioninfo.txt ."
+                writeJSON(file: 'package.json', json: [
+                    name: "smb-linux",
+                    version: version,
+                    description: "Symphony media bridge binaries for linux",
+                    publishConfig: [
+                        registry: "https://repo.symphony.com/artifactory/api/npm/npm-virtual-dev/"
+                    ]
+                ])
+                withNvm("v16.16.0", "npmrcFile") {
+                    sh "npm publish"
+                }
             }
         }
 
