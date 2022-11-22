@@ -180,7 +180,7 @@ public:
 
     explicit MpmcHashmap32(size_t maxElements) : _end(0), _capacity(maxElements), _index(maxElements * 4)
     {
-        void* mem = page_allocator::allocate(page_allocator::pageAlignedSpace(_capacity * sizeof(Entry)));
+        void* mem = memory::page::allocate(memory::page::alignedSpace(_capacity * sizeof(Entry)));
 
         _elements = reinterpret_cast<Entry*>(mem);
         assert(reinterpret_cast<intptr_t>(_elements) != -1);
@@ -203,7 +203,7 @@ public:
             }
         }
 
-        page_allocator::free(_elements, page_allocator::pageAlignedSpace(_capacity * sizeof(Entry)));
+        memory::page::free(_elements, memory::page::alignedSpace(_capacity * sizeof(Entry)));
     }
 
     template <typename... Args>

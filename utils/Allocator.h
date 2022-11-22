@@ -15,7 +15,10 @@
 #include <string.h>
 #endif
 
-namespace page_allocator
+namespace memory
+{
+
+namespace page
 {
 
 inline size_t getPageSize()
@@ -49,10 +52,11 @@ inline void free(void* mem, size_t size)
 #endif
 }
 
-inline size_t pageAlignedSpace(size_t space)
+inline size_t alignedSpace(size_t space)
 {
     const size_t pageSize = getPageSize();
     return (space + pageSize - 1) & ~(pageSize - 1);
 }
 
-} // namespace page_allocator
+} // namespace page
+} // namespace memory

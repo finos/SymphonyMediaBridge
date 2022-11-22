@@ -56,7 +56,7 @@ public:
         : _deleter(this),
           _name(std::move(name)),
           _elements(nullptr),
-          _size(page_allocator::pageAlignedSpace(elementCount * sizeof(Entry))),
+          _size(memory::page::alignedSpace(elementCount * sizeof(Entry))),
           _popIndex(0),
           _pushIndex(0),
           _originalElementCount(_size / sizeof(Entry)),
@@ -66,7 +66,7 @@ public:
         _cacheLineSeparator2[0] = 0;
         _cacheLineSeparator3[0] = 0;
 
-        _elements = reinterpret_cast<Entry*>(page_allocator::allocate(_size));
+        _elements = reinterpret_cast<Entry*>(memory::page::allocate(_size));
         assert(reinterpret_cast<intptr_t>(_elements) != -1);
 
         static_assert(sizeof(Entry) % alignof(std::max_align_t) == 0, "ELEMENT_SIZE must be multiple of alignment");
@@ -81,7 +81,7 @@ public:
     ~PoolAllocator()
     {
         logAllocatedElements();
-        page_allocator::free(_elements, _size);
+        memory::page::free(_elements, _size);
     }
 
     Deleter& getDeleter() { return _deleter; }

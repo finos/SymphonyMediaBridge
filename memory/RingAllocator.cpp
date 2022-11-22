@@ -26,8 +26,8 @@ const uint32_t FREE = 0xFFBBEEDD;
 } // namespace
 
 RingAllocator::RingAllocator(size_t size)
-    : _size(page_allocator::pageAlignedSpace(size)),
-      _area(reinterpret_cast<uint8_t*>(page_allocator::allocate(_size))),
+    : _size(memory::page::alignedSpace(size)),
+      _area(reinterpret_cast<uint8_t*>(memory::page::allocate(_size))),
       _head(0),
       _tail(0)
 {
@@ -35,7 +35,7 @@ RingAllocator::RingAllocator(size_t size)
 
 RingAllocator::~RingAllocator()
 {
-    page_allocator::free(_area, _size);
+    memory::page::free(_area, _size);
 }
 
 // allocates continuous block after tail of buffer.

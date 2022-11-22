@@ -26,7 +26,9 @@ class MpmcQueue
 
 public:
     typedef T value_type;
-    explicit MpmcQueue(uint32_t maxElements) : _maxElements(maxElements), _blockSize(page_allocator::pageAlignedSpace(maxElements * sizeof(Entry)))
+    explicit MpmcQueue(uint32_t maxElements)
+        : _maxElements(maxElements),
+          _blockSize(memory::page::alignedSpace(maxElements * sizeof(Entry)))
     {
         _readCursor = 0;
         _writeCursor = 0;
@@ -35,8 +37,7 @@ public:
         _cacheLineSeparator1[0] = 0;
         _cacheLineSeparator2[0] = 0;
 
-        _elements = reinterpret_cast<Entry*>(
-            page_allocator::allocate(_blockSize));
+        _elements = reinterpret_cast<Entry*>(memory::page::allocate(_blockSize));
 
         for (uint32_t i = 0; i < _maxElements; ++i)
         {
@@ -51,7 +52,7 @@ public:
             _elements[i].~Entry();
         }
 
-        page_allocator::free(_elements, _blockSize);
+        memory::page::free(_elements, _blockSize);
     }
 
     // return false if empty

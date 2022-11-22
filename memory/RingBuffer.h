@@ -26,14 +26,14 @@ public:
           _reentrancyCount(0)
 #endif
     {
-        _size = page_allocator::pageAlignedSpace(S * sizeof(T));
-        _data = reinterpret_cast<T*>(page_allocator::allocate(_size));
+        _size = memory::page::alignedSpace(S * sizeof(T));
+        _data = reinterpret_cast<T*>(memory::page::allocate(_size));
 
         memset(_data, 0, _size);
         memset(_silenceBuffer, 0, silenceBufferSize * sizeof(T));
     }
 
-    ~RingBuffer() { page_allocator::free(_data, _size); }
+    ~RingBuffer() { memory::page::free(_data, _size); }
 
     /**
      * Reads size elements from the buffer to outData, but does not move the read head.
