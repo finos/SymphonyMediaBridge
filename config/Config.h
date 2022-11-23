@@ -121,7 +121,7 @@ public:
     CFG_PROP(uint32_t, ipOverhead, 20 + 14);
 
     CFG_GROUP()
-    CFG_PROP(uint32_t, sendPool, 128 * 1024);
+    CFG_PROP(uint32_t, sendPool, 128 * 1024); // # packets in send pool. Receive pool will have /4 as many
     CFG_GROUP_END(mem);
 };
 
