@@ -2369,6 +2369,7 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
 
     const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
     const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
+    const auto orignalSsrc = packetInfo.inboundContext()->ssrc;
 
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
@@ -2392,26 +2393,23 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
             }
         }
 
-        auto ssrc = packetInfo.inboundContext()->ssrc;
-        const bool ssrcRewrite = audioStream->ssrcRewrite;
         SsrcOutboundContext* ssrcOutboundContext;
-        if (ssrcRewrite)
+        if (audioStream->ssrcRewrite)
         {
             if (rewriteMapItr == audioSsrcRewriteMap.end())
             {
                 continue;
             }
-            ssrc = rewriteMapItr->second;
             ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
-                ssrc,
+                rewriteMapItr->second,
                 audioStream->rtpMap);
         }
         else
         {
             ssrcOutboundContext = obtainOutboundForwardSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
-                ssrc,
+                orignalSsrc,
                 audioStream->rtpMap);
         }
 
