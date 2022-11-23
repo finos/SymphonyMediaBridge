@@ -272,7 +272,7 @@ SystemStats SystemStatsCollector::collect(uint16_t httpPort, uint16_t tcpRtpPort
             break;
         }
 
-        if (!std::strcmp(taskSample.name, "(Worker)"))
+        if (!std::strcmp(taskSample.name, "(RTWorker)"))
         {
             workerCpu += static_cast<double>(taskSample.utime + taskSample.stime);
             ++workerCount;
