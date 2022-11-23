@@ -2389,51 +2389,48 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
             }
         }
 
-        if (audioStream->transport.isConnected())
+        auto ssrc = packetInfo.inboundContext()->ssrc;
+        const bool ssrcRewrite = audioStream->ssrcRewrite;
+        SsrcOutboundContext* ssrcOutboundContext;
+        if (ssrcRewrite)
         {
-            auto ssrc = packetInfo.inboundContext()->ssrc;
-            const bool ssrcRewrite = audioStream->ssrcRewrite;
-            SsrcOutboundContext* ssrcOutboundContext;
-            if (ssrcRewrite)
-            {
-                const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-                const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
-                if (rewriteMapItr == audioSsrcRewriteMap.end())
-                {
-                    continue;
-                }
-                ssrc = rewriteMapItr->second;
-                ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
-                    audioStream->ssrcOutboundContexts,
-                    ssrc,
-                    audioStream->rtpMap);
-            }
-            else
-            {
-                ssrcOutboundContext = obtainOutboundForwardSsrcContext(audioStream->endpointIdHash,
-                    audioStream->ssrcOutboundContexts,
-                    ssrc,
-                    audioStream->rtpMap);
-            }
-
-            if (!ssrcOutboundContext)
+            const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+            const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
+            if (rewriteMapItr == audioSsrcRewriteMap.end())
             {
                 continue;
             }
+            ssrc = rewriteMapItr->second;
+            ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
+                audioStream->ssrcOutboundContexts,
+                ssrc,
+                audioStream->rtpMap);
+        }
+        else
+        {
+            ssrcOutboundContext = obtainOutboundForwardSsrcContext(audioStream->endpointIdHash,
+                audioStream->ssrcOutboundContexts,
+                ssrc,
+                audioStream->rtpMap);
+        }
 
-            auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
-            if (packet)
-            {
-                audioStream->transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
-                    *(packetInfo.inboundContext()),
-                    std::move(packet),
-                    packetInfo.extendedSequenceNumber(),
-                    audioStream->transport);
-            }
-            else
-            {
-                logger::warn("send allocator depleted. forwardAudioRtpPacket", _loggableId.c_str());
-            }
+        if (!ssrcOutboundContext)
+        {
+            continue;
+        }
+
+        auto packet = memory::makeUniquePacket(_sendAllocator, *packetInfo.packet());
+        if (packet)
+        {
+            audioStream->transport.getJobQueue().addJob<AudioForwarderRewriteAndSendJob>(*ssrcOutboundContext,
+                *(packetInfo.inboundContext()),
+                std::move(packet),
+                packetInfo.extendedSequenceNumber(),
+                audioStream->transport);
+        }
+        else
+        {
+            logger::warn("send allocator depleted. forwardAudioRtpPacket", _loggableId.c_str());
         }
     }
 }

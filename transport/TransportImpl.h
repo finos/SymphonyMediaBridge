@@ -436,6 +436,7 @@ private:
     std::unique_ptr<logger::PacketLoggerThread> _packetLogger;
     std::atomic<ice::IceSession::State> _iceState;
     std::atomic<SrtpClient::State> _dtlsState;
+    std::atomic<bool> _isConnected;
     std::atomic<utils::Optional<ice::TransportType>> _transportType;
 
     RtcpReportProducer _rtcpProducer;
