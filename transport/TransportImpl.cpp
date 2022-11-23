@@ -227,7 +227,7 @@ public:
         }
 
         auto timestamp = utils::Time::getAbsoluteTime();
-        auto current = _sctpAssociation.nextTimeout(timestamp);
+        auto currentTimeout = _sctpAssociation.nextTimeout(timestamp);
         auto& header = *reinterpret_cast<SctpDataChunk*>(_packet->get());
         if (!_sctpAssociation.sendMessage(header.id,
                 header.payloadProtocol,
@@ -242,6 +242,7 @@ public:
                     toString(_sctpAssociation.getState()),
                     _sctpAssociation.getStreamCount(),
                     _sctpAssociation.outboundPendingSize());
+                return; // do not retry
             }
             else
             {
@@ -257,7 +258,7 @@ public:
         {
             nextTimeout = _sctpAssociation.processTimeout(timestamp);
         }
-        if (nextTimeout >= 0 && (current < 0 || current > nextTimeout))
+        if (nextTimeout >= 0 && (currentTimeout < 0 || currentTimeout > nextTimeout))
         {
             SctpTimerJob::start(_jobQueue, _transport, _sctpAssociation, nextTimeout);
         }
