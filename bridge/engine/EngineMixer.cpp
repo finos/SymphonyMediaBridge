@@ -2367,6 +2367,9 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
     const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
     auto srcUserId = getC9UserId(rtpHeader->ssrc);
 
+    const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+    const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
+
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
         auto audioStream = audioStreamEntry.second;
@@ -2394,8 +2397,6 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         SsrcOutboundContext* ssrcOutboundContext;
         if (ssrcRewrite)
         {
-            const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
-            const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
             if (rewriteMapItr == audioSsrcRewriteMap.end())
             {
                 continue;
