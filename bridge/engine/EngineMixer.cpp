@@ -2379,6 +2379,10 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         {
             continue;
         }
+        if (audioStream->ssrcRewrite && !sourceMapped)
+        {
+            continue;
+        }
 
         if (srcUserId.isSet() && audioStream->neighbours.contains(srcUserId.get()))
         {
@@ -2397,10 +2401,6 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         SsrcOutboundContext* ssrcOutboundContext = nullptr;
         if (audioStream->ssrcRewrite)
         {
-            if (!sourceMapped)
-            {
-                continue;
-            }
             ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
                 rewriteMapItr->second,
