@@ -8,7 +8,7 @@ MurmurHashIndex::MurmurHashIndex(size_t elementCount) : _index(elementCount), _m
     assert(reinterpret_cast<intptr_t>(&_index[0]) != -1); // must be atomically writeable
     assert(reinterpret_cast<intptr_t>(&_index[0].keyValue) != -1); // must be atomically writeable
     static_assert(sizeof(KeyValue) == 8, "Index entry must be 8 bytes on your platform to be atomically writeable");
-    static_assert(sizeof(Entry) == 64, "Index entry should be 64B to avoid cacheline contention");
+    static_assert(sizeof(Entry) == 16, "Index entry should be 16B to reduce cacheline contention");
     std::memset(_index.data(), 0, sizeof(Entry) * _index.size());
 }
 

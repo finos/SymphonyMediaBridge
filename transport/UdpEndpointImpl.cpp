@@ -58,8 +58,8 @@ UdpEndpointImpl::UdpEndpointImpl(jobmanager::JobManager& jobManager,
     bool isShared)
     : BaseUdpEndpoint("UdpEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
       _iceListeners(maxSessionCount * 2),
-      _dtlsListeners(maxSessionCount * 16),
-      _iceResponseListeners(maxSessionCount * 64)
+      _dtlsListeners(maxSessionCount * 2),
+      _iceResponseListeners(maxSessionCount * 4)
 {
 }
 
@@ -75,7 +75,7 @@ void UdpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
     uint64_t timestamp)
 {
     auto* msg = ice::StunMessage::fromPtr(data);
-    if (msg->header.isRequest() && !_iceResponseListeners.contains(transactionId) && !_dtlsListeners.contains(target))
+    if (msg->header.isRequest() && !_dtlsListeners.contains(target) && !_iceResponseListeners.contains(transactionId))
     {
         auto names = msg->getAttribute<ice::StunUserName>(ice::StunAttribute::USERNAME);
         if (names)
@@ -151,21 +151,6 @@ void UdpEndpointImpl::internalUnregisterListener(IEvents* listener)
     }
 }
 
-namespace
-{
-template <typename KeyType>
-UdpEndpointImpl::IEvents* findListener(concurrency::MpmcHashmap32<KeyType, UdpEndpointImpl::IEvents*>& map,
-    const KeyType& key)
-{
-    auto it = map.find(key);
-    if (it != map.cend())
-    {
-        return it->second;
-    }
-    return nullptr;
-}
-} // namespace
-
 void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
     memory::UniquePacket packet,
     const uint64_t timestamp)
@@ -182,7 +167,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
             if (users)
             {
                 auto userName = users->getNames().first;
-                listener = findListener(_iceListeners, userName);
+                listener = _iceListeners.getItem(userName);
             }
             logger::debug("ICE request to %s src %s",
                 _name.c_str(),
@@ -192,14 +177,14 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
         else if (msg->header.isResponse())
         {
             auto transactionId = msg->header.transactionId.get();
-            listener = findListener(_iceResponseListeners, transactionId);
+            listener = _iceResponseListeners.getItem(transactionId);
             if (listener)
             {
                 _iceResponseListeners.erase(transactionId);
             }
             else
             {
-                listener = findListener(_dtlsListeners, srcAddress);
+                listener = _dtlsListeners.getItem(srcAddress);
             }
         }
         if (listener)
@@ -210,7 +195,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
     }
     else if (transport::isDtlsPacket(packet->get()))
     {
-        listener = findListener(_dtlsListeners, srcAddress);
+        listener = _dtlsListeners.getItem(srcAddress);
         listener = listener ? listener : _defaultListener.load();
         if (listener)
         {
@@ -223,7 +208,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
         auto rtcpReport = rtp::RtcpReport::fromPtr(packet->get(), packet->getLength());
         if (rtcpReport)
         {
-            listener = findListener(_dtlsListeners, srcAddress);
+            listener = _dtlsListeners.getItem(srcAddress);
 
             if (listener)
             {
@@ -237,7 +222,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
         auto rtpPacket = rtp::RtpHeader::fromPacket(*packet);
         if (rtpPacket)
         {
-            listener = findListener(_dtlsListeners, srcAddress);
+            listener = _dtlsListeners.getItem(srcAddress);
 
             if (listener)
             {
@@ -287,6 +272,17 @@ void UdpEndpointImpl::registerListener(const SocketAddress& srcAddress, IEvents*
     {
         _dtlsListeners.emplace(srcAddress, listener);
         listener->onRegistered(*this);
+    }
+}
+
+void UdpEndpointImpl::focusListener(const SocketAddress& remotePort, IEvents* listener)
+{
+    for (auto& item : _dtlsListeners)
+    {
+        if (item.second == listener && item.first != remotePort)
+        {
+            _dtlsListeners.erase(item.first);
+        }
     }
 }
 

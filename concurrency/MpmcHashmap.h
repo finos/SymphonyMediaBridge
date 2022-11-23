@@ -54,11 +54,12 @@ private:
     class Entry
     {
     public:
-        Entry() { cacheLineSeparator[0] = {0}; }
+        Entry() : keyValue(KeyValue()), cacheLineSeparator(0) { cacheLineSeparator = 0; }
         std::atomic<KeyValue> keyValue;
 
     private:
-        uint64_t cacheLineSeparator[7];
+        uint64_t cacheLineSeparator;
+        // There is expected spread in vector so cache line contention should be small already.
     };
 
     void updateSpread(uint32_t i);

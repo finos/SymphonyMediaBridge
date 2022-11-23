@@ -76,14 +76,18 @@ protected:
 
     struct RateMetrics
     {
+        RateMetrics() : sendQueueDrops(0) {}
         utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> receiveTracker;
         utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> sendTracker;
         EndpointMetrics toEndpointMetrics(size_t queueSize) const
         {
             return EndpointMetrics(queueSize,
                 receiveTracker.snapshot.load() * 8 * utils::Time::ms,
-                sendTracker.snapshot.load() * 8 * utils::Time::ms);
+                sendTracker.snapshot.load() * 8 * utils::Time::ms,
+                sendQueueDrops.load());
         }
+
+        std::atomic_uint64_t sendQueueDrops;
     } _rateMetrics;
 
     jobmanager::JobQueue _receiveJobs;

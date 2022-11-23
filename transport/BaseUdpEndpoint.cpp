@@ -69,7 +69,7 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
       _receiveJobs(jobManager, 16),
       _sendJobs(jobManager, 16),
       _allocator(allocator),
-      _sendQueue(maxSessionCount * 256),
+      _sendQueue(maxSessionCount * 64),
       _epoll(epoll),
       _epollCountdown(2),
       _isShared(isShared),
@@ -116,6 +116,10 @@ void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::Uni
         {
             _sendJobs.addJob<SendJob>(*this);
         }
+    }
+    else
+    {
+        ++_rateMetrics.sendQueueDrops;
     }
 }
 

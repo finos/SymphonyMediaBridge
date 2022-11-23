@@ -170,8 +170,10 @@ SctpPacketW::SctpPacketW(uint32_t tag, uint16_t srcPort, uint16_t dstPort)
 
 void SctpPacketW::checkGuard() const
 {
+#ifdef DEBUG
     const auto guard = *reinterpret_cast<const uint32_t*>(reinterpret_cast<const uint8_t*>(_commonHeader) + _areaSize);
     assert(guard == 0xCDCDCDCD);
+#endif
 }
 
 void SctpPacketW::add(const ChunkField& field)
