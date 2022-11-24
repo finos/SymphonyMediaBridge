@@ -430,7 +430,15 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         startProbingVideoStream(*engineVideoStream);
     }
     const auto mapRevision = _activeMediaList->getMapRevision();
-    _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
+    const auto it = _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
+    if (!it.second)
+    {
+        logger::error("Emplace video stream has failed, transport %s, endpointIdHash %lu",
+            _loggableId.c_str(),
+            engineVideoStream->transport.getLoggableId().c_str(),
+            endpointIdHash);
+    }
+
     if (engineVideoStream->simulcastStream.numLevels > 0)
     {
         _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->simulcastStream);
@@ -535,7 +543,14 @@ void EngineMixer::removeStream(const EngineVideoStream* engineVideoStream)
         engineVideoStream->transport.getLoggableId().c_str(),
         endpointIdHash);
 
-    _engineVideoStreams.erase(endpointIdHash);
+    const bool streamFound = _engineVideoStreams.erase(endpointIdHash);
+    if (!streamFound)
+    {
+        logger::error("engineVideoStream has not been found, transport %s, endpointIdHash %lu",
+            _loggableId.c_str(),
+            engineVideoStream->transport.getLoggableId().c_str(),
+            endpointIdHash);
+    }
 
     engineVideoStream->transport.postOnQueue(
         [this, engineVideoStream]() { _messageListener.asyncVideoStreamRemoved(*this, *engineVideoStream); });
