@@ -7,7 +7,7 @@ jobs:
     name: run-cppcheck
     runs-on: ubuntu-latest
     container:
-      image: facthunder/cppcheck:2.7
+      image: ghcr.io/facthunder/cppcheck:latest
     steps:
     - uses: actions/checkout@v3
     - run: cppcheck --version
