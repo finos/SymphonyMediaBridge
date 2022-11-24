@@ -12,18 +12,18 @@ namespace bridge
 
 struct DataStream
 {
-    DataStream(const std::string& id_,
-        const std::string& endpointId_,
-        std::shared_ptr<transport::RtcTransport>& transport_,
+    DataStream(const std::string& id,
+        const std::string& endpointId,
+        std::shared_ptr<transport::RtcTransport>& transport,
         utils::Optional<uint32_t> idleTimeout)
-        : id(id_),
-          endpointId(endpointId_),
+        : id(id),
+          endpointId(endpointId),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
           localSctpPort(rand() % 19000 + 1000),
-          transport(transport_),
+          transport(transport),
           markedForDeletion(false),
           isConfigured(false),
-          idleTimeoutSeconds(idleTimeout.valueOr(0))
+          idleTimeoutSeconds(idleTimeout.isSet() ? idleTimeout.get() : 0)
     {
     }
 

@@ -13,25 +13,25 @@ namespace bridge
 
 struct AudioStream
 {
-    AudioStream(const std::string& id_,
-        const std::string& endpointId_,
-        const uint32_t localSsrc_,
-        std::shared_ptr<transport::RtcTransport>& transport_,
-        const bool audioMixed_,
-        bool ssrcRewrite_,
-        bool isDtlsLocalEnabled_,
+    AudioStream(const std::string& id,
+        const std::string& endpointId,
+        const uint32_t localSsrc,
+        std::shared_ptr<transport::RtcTransport>& transport,
+        const bool audioMixed,
+        bool ssrcRewrite,
+        bool isDtlsLocalEnabled,
         utils::Optional<uint32_t> idleTimeout)
-        : id(id_),
-          endpointId(endpointId_),
+        : id(id),
+          endpointId(endpointId),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
-          localSsrc(localSsrc_),
-          transport(transport_),
-          audioMixed(audioMixed_),
+          localSsrc(localSsrc),
+          transport(transport),
+          audioMixed(audioMixed),
           markedForDeletion(false),
-          ssrcRewrite(ssrcRewrite_),
-          isDtlsLocalEnabled(isDtlsLocalEnabled_),
+          ssrcRewrite(ssrcRewrite),
+          isDtlsLocalEnabled(isDtlsLocalEnabled),
           isConfigured(false),
-          idleTimeoutSeconds(idleTimeout.valueOr(0))
+          idleTimeoutSeconds(idleTimeout.isSet() ? idleTimeout.get() : 0)
     {
     }
 
