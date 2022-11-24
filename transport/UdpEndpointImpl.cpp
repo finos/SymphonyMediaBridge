@@ -277,16 +277,7 @@ void UdpEndpointImpl::registerListener(const SocketAddress& srcAddress, IEvents*
 
 void UdpEndpointImpl::focusListener(const SocketAddress& remotePort, IEvents* listener)
 {
-    _receiveJobs.post([this, remotePort, listener]() {
-        for (auto& item : _dtlsListeners)
-        {
-            if (item.second == listener && item.first != remotePort)
-            {
-                _dtlsListeners.erase(item.first);
-                listener->onUnregistered(*this);
-            }
-        }
-    });
+    return;
 }
 
 } // namespace transport
