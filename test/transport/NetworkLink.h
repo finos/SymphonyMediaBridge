@@ -20,7 +20,7 @@ namespace fakenet
 class NetworkLink
 {
 public:
-    explicit NetworkLink(std::string name, uint32_t bandwidthKbps, size_t bufferSize, size_t mtu)
+    explicit NetworkLink(const std::string& name, uint32_t bandwidthKbps, size_t bufferSize, size_t mtu)
         : _name(name),
           _releaseTime(0),
           _bandwidthKbps(bandwidthKbps),

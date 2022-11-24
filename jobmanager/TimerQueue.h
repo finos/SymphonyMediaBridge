@@ -11,7 +11,7 @@ class MultiStepJob;
 class TimerQueue
 {
 public:
-    TimerQueue(size_t maxElements);
+    explicit TimerQueue(size_t maxElements);
     ~TimerQueue();
 
     bool addTimer(uint32_t groupId, uint32_t id, uint64_t timeoutNs, MultiStepJob& job, JobManager& jobManager);
@@ -30,7 +30,7 @@ private:
         MultiStepJob* job;
         JobManager* jobManager;
 
-        TimerEntry() : endTime(0), id(0), groupId(0), job(nullptr) {}
+        TimerEntry() : endTime(0), id(0), groupId(0), job(nullptr), jobManager(nullptr) {}
 
         TimerEntry(uint64_t endTime, uint32_t id, uint32_t groupId, MultiStepJob* jobItem, JobManager* jobManager)
             : endTime(endTime),

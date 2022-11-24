@@ -11,9 +11,9 @@ namespace concurrency
 class StackItem
 {
 public:
-    StackItem() { _next = nullptr; }
+    StackItem() : _next(nullptr) {}
     StackItem(const StackItem&) = delete;
-    explicit StackItem(StackItem* tail) { _next = tail; }
+    explicit StackItem(StackItem* tail) : _next(tail) {}
 
 private:
     std::atomic<StackItem*> _next;
