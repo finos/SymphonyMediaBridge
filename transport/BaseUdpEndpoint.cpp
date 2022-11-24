@@ -72,6 +72,7 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
       _sendQueue(maxSessionCount * 64),
       _epoll(epoll),
       _epollCountdown(2),
+      _stopListener(nullptr),
       _isShared(isShared),
       _defaultListener(nullptr)
 {

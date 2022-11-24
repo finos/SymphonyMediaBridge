@@ -45,7 +45,7 @@ public:
     {
     public:
         Deleter() : _allocator(nullptr) {}
-        Deleter(PoolAllocator<ELEMENT_SIZE>* allocator) : _allocator(allocator) {}
+        explicit Deleter(PoolAllocator<ELEMENT_SIZE>* allocator) : _allocator(allocator) {}
 
         template <typename T>
         void operator()(T* r)
@@ -63,12 +63,13 @@ public:
     PoolAllocator(size_t elementCount, const std::string&& name)
         : _deleter(this),
           _name(std::move(name)),
+          _elements(nullptr),
+          _popIndex(0),
+          _pushIndex(0),
           _size(calculateNeededSpace(elementCount)),
-          _originalElementCount(_size / sizeof(Entry))
+          _originalElementCount(_size / sizeof(Entry)),
+          _count(_originalElementCount)
     {
-        _count = _originalElementCount;
-        _popIndex = 0;
-        _pushIndex = 0;
         _cacheLineSeparator1[0] = 0;
         _cacheLineSeparator2[0] = 0;
         _cacheLineSeparator3[0] = 0;

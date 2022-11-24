@@ -98,7 +98,7 @@ template <typename T, typename RT>
 class IndexableInteger
 {
 public:
-    IndexableInteger(const T& value) : _value(value) {}
+    explicit IndexableInteger(const T& value) : _value(value) {}
 
     RT operator[](size_t i) const
     {

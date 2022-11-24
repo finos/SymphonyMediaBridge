@@ -11,7 +11,7 @@ namespace concurrency
 class ListItem
 {
 public:
-    ListItem() { _next = nullptr; }
+    ListItem() : _next(nullptr) {}
 
 private:
     std::atomic<ListItem*> _next;

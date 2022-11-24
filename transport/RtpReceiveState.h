@@ -54,6 +54,7 @@ public:
     {
         ReceiveCounters()
             : octets(0),
+              headerOctets(0),
               extendedSequenceNumber(0),
               packets(0),
               lostPackets(0),

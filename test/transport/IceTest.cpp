@@ -1624,7 +1624,7 @@ TEST(IceTest, serialize)
 TEST(IceTest, transactionId)
 {
     __uint128_t id = (__uint128_t(0x9012121102568943ull) << 64) | 0x6623184555672389ull;
-    IndexableInteger<__uint128_t, uint32_t> id2 = id;
+    IndexableInteger<__uint128_t, uint32_t> id2(id);
     EXPECT_EQ(id2[0], 0x90121211);
     EXPECT_EQ(id2[1], 0x02568943);
     EXPECT_EQ(id2[2], 0x66231845);
