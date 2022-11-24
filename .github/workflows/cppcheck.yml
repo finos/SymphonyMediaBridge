@@ -10,5 +10,5 @@ jobs:
       image: facthunder/cppcheck:latest
     steps:
     - uses: actions/checkout@v3
-    - run: cppcheck --error-exitcode=1 --suppress=objectIndex:transport/ice/Stun.cpp -i test/ -I . .
-    - run: cppcheck --error-exitcode=1 -I . -I test/include ./test
+    - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ --suppress=objectIndex:transport/ice/Stun.cpp -i test/ -I . .
+    - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -I . -I test/include ./test
