@@ -27,19 +27,22 @@ const nlohmann::json& requiredJsonArray(const nlohmann::json& data, const char* 
     return *it;
 }
 
-template <typename T>
-void setIfExistsOrThrow(T& target, const nlohmann::json& data, const char* name)
+nlohmann::json& getJsonFieldOrThrow(const nlohmann::json& data, const char* name)
 {
     const auto& it = data.find(name);
-    if (it != data.end())
-    {
-        target = it->get<T>();
-    }
-    else
+    if (it == data.end())
     {
         const auto sb = std::string().append("Missing required property: ").append(name);
         throw nlohmann::detail::other_error::create(-1, sb);
     }
+
+    return *it;
+}
+
+template <typename T>
+void setIfExistsOrThrow(T& target, const nlohmann::json& data, const char* name)
+{
+    target = getJsonFieldOrThrow(data, name).get<T>();
 }
 
 template <typename T>
@@ -444,16 +447,9 @@ ConferenceEndpoint parseConferenceEndpoint(const nlohmann::json& data)
     setIfExistsOrThrow<>(iceStateStr, data, "iceState");
     setIfExistsOrThrow<>(dtlsStateStr, data, "dtlsState");
 
-    ice::IceSession::State iceState = utils::stringToIceState(iceStateStr);
-    if (iceState != ice::IceSession::State::LAST)
-    {
-        endpoint.iceState = iceState;
-    }
-    transport::SrtpClient::State dtlsState = utils::stringToDtlsState(dtlsStateStr);
-    if (dtlsState != transport::SrtpClient::State::LAST)
-    {
-        endpoint.dtlsState = dtlsState;
-    }
+    endpoint.iceState = utils::stringToIceState(iceStateStr);
+    endpoint.dtlsState = utils::stringToDtlsState(dtlsStateStr);
+
     return endpoint;
 }
 
@@ -536,10 +532,7 @@ BarbellDescription parsePatchBarbell(const nlohmann::json& data, const std::stri
     BarbellDescription barbellDescription;
     barbellDescription.barbellId = barbellId;
 
-    if (data.find("bundle-transport") != data.end())
-    {
-        barbellDescription.transport = parsePatchEndpointTransport(data["bundle-transport"]);
-    }
+    barbellDescription.transport = parsePatchEndpointTransport(getJsonFieldOrThrow(data, "bundle-transport"));
 
     if (data.find("audio") != data.end())
     {
@@ -605,14 +598,8 @@ BarbellDescription parsePatchBarbell(const nlohmann::json& data, const std::stri
         barbellDescription.video = videoChannel;
     }
 
-    if (data.find("data") != data.end())
-    {
-        api::Data dataChannel;
-        const auto& dataJson = data["data"];
-        const auto& portJson = dataJson["port"];
-        dataChannel.port = portJson.get<uint32_t>();
-        barbellDescription.data = dataChannel;
-    }
+    const auto& dataJson = getJsonFieldOrThrow(data, "data");
+    setIfExistsOrThrow(barbellDescription.data.port, dataJson, "port");
 
     return barbellDescription;
 }

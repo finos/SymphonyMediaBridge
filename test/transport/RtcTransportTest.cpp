@@ -483,8 +483,12 @@ TEST(TransportStats, MpmcPublish)
 {
     struct InfoObject
     {
+        InfoObject()
+            : id(0)
+        { }
+
+        uint32_t id
         uint32_t mem[20];
-        uint32_t id = 0;
     };
 
     const int THREAD_COUNT = 6;
