@@ -2802,7 +2802,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
 
         if (!videoStream->transport.isConnected())
         {
-            return;
+            continue;
         }
 
         ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
