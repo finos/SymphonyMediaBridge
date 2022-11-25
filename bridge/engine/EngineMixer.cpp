@@ -1561,12 +1561,18 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniqueP
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
     if (dataStream)
     {
+        const bool wasOpen = dataStream->stream.isOpen();
         dataStream->stream.onSctpMessage(&dataStream->transport,
             header.id,
             header.sequenceNumber,
             header.payloadProtocol,
             header.data(),
             packet->getLength() - sizeof(header));
+
+        if (!wasOpen && dataStream->stream.isOpen())
+        {
+            sendUserMediaMapMessage(endpointIdHash);
+        }
     }
 }
 
