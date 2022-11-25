@@ -424,11 +424,12 @@ set(FILES
 
 add_library(smblib STATIC ${FILES})
 target_include_directories(smblib PUBLIC ${CMAKE_BINARY_DIR}/generated)
+target_link_libraries(smblib PUBLIC ${THIRD_PARTY_LIBS})
 
 add_executable(smb
         main.cpp)
 
-target_link_libraries(smb smblib Threads::Threads ${THIRD_PARTY_LIBS} git_version)
+target_link_libraries(smb smblib Threads::Threads git_version)
 
 ##################
 # Test framework
@@ -597,6 +598,7 @@ configure_file(test/TestConfig.h.in ${CMAKE_TEST_INCLUDE}/TestConfig.h)
 
 add_library(testlib STATIC ${TEST_LIB_FILES})
 target_include_directories(testlib PRIVATE ${CMAKE_TEST_INCLUDE} ${gtest_SOURCE_DIR}/include "test/include")
+target_link_libraries(testlib PUBLIC smblib ${THIRD_PARTY_LIBS})
 
 add_executable(UnitTest
     ${TEST_FILES} test/gtest_main.cpp)
@@ -606,14 +608,14 @@ target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include"
 # Copy test Data
 file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
 
-target_link_libraries(UnitTest testlib smblib gtest gmock ${THIRD_PARTY_LIBS} git_version)
+target_link_libraries(UnitTest testlib gtest gmock git_version)
 
 add_test(AllUnitTests UnitTest)
 
 add_executable(LoadTest ${LOAD_TEST_FILES}
     test/load_test_main.cpp)
 
-target_link_libraries(LoadTest testlib smblib gtest gmock ${THIRD_PARTY_LIBS} git_version)
+target_link_libraries(LoadTest testlib gtest gmock git_version)
 
 if(APPLE)
     source_group(TREE ${PROJECT_SOURCE_DIR} FILES ${FILES} ${TEST_FILES})
