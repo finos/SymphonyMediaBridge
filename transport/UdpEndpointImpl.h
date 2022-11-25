@@ -40,15 +40,15 @@ public:
     void unregisterListener(IEvents* listener) override;
     void focusListener(const SocketAddress& remotePort, IEvents* listener) override;
 
-public: // internal job interface
+private:
     void dispatchReceivedPacket(const SocketAddress& srcAddress,
         memory::UniquePacket packet,
         uint64_t timestamp) override;
 
     void internalUnregisterListener(IEvents* listener);
     void internalUnregisterStunListener(__uint128_t transactionId);
+    void swapListener(const SocketAddress& srcAddress, IEvents* newListener);
 
-private:
     concurrency::MpmcHashmap32<std::string, IEvents*> _iceListeners;
     concurrency::MpmcHashmap32<SocketAddress, IEvents*> _dtlsListeners;
 

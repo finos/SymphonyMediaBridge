@@ -1065,7 +1065,8 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
             return;
         }
 
-        if (_rtpIceSession->getState() == ice::IceSession::State::CONNECTING)
+        const auto iceState = _rtpIceSession->getState();
+        if (iceState == ice::IceSession::State::CONNECTING || iceState == ice::IceSession::State::READY)
         {
             endpoint.registerListener(source, this);
         }

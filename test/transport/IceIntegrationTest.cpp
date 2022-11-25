@@ -274,7 +274,7 @@ TEST_F(IceIntegrationTest, dtlsRace)
     ASSERT_TRUE(_transportFactory2->isGood());
 
     std::vector<ClientPair*> clients;
-    for (int i = 0; i < 100; ++i)
+    for (int i = 0; i < 150; ++i)
     {
         clients.push_back(new ClientPair(*_transportFactory1,
             *_transportFactory2,
@@ -293,7 +293,7 @@ TEST_F(IceIntegrationTest, dtlsRace)
     }
 
     bool connected = false;
-    while (!connected && utils::Time::getAbsoluteTime() - startTime < 5 * utils::Time::sec)
+    while (!connected && utils::Time::getAbsoluteTime() - startTime < 10 * utils::Time::sec)
     {
         int64_t maxSleep = utils::Time::sec;
 
@@ -311,13 +311,20 @@ TEST_F(IceIntegrationTest, dtlsRace)
 
     int connectCount = 0;
     for (auto* clientPair : clients)
-
     {
         if (clientPair->isConnected())
         {
             ++connectCount;
         }
+        else
+        {
+            logger::warn("client not connected. %s -> %s",
+                "dtlsRace",
+                clientPair->_transport1->getLoggableId().c_str(),
+                clientPair->_transport2->getLoggableId().c_str());
+        }
     }
+    logger::flushLog();
     EXPECT_TRUE(connected);
     EXPECT_EQ(connectCount, clients.size());
     for (auto* clientPair : clients)

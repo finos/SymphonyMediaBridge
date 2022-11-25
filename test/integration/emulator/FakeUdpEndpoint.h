@@ -36,7 +36,7 @@ public:
     void registerListener(const transport::SocketAddress& remotePort, IEvents* listener) override;
     void registerDefaultListener(IEvents* defaultListener) override;
     void unregisterListener(IEvents* listener) override;
-    void focusListener(const transport::SocketAddress& remotePort, IEvents* listener) override {}
+    void focusListener(const transport::SocketAddress& remotePort, IEvents* listener) override;
 
     void start() override;
     void stop(IStopEvents* listener) override;
@@ -70,7 +70,7 @@ public:
 
     // Internal job interface.
     void internalUnregisterListener(IEvents* listener);
-
+    void swapListener(const transport::SocketAddress& srcAddress, IEvents* newListener);
     // called on receiveJobs threads
     void internalReceive();
     void dispatchReceivedPacket(const transport::SocketAddress& srcAddress,

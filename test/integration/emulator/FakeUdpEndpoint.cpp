@@ -4,67 +4,8 @@
 #include "transport/EndpointFactoryImpl.h"
 #include "transport/UdpEndpoint.h"
 #include "transport/dtls/SslDtls.h"
-
-namespace
-{
-using namespace emulator;
-class UnRegisterListenerJob : public jobmanager::Job
-{
-public:
-    UnRegisterListenerJob(FakeUdpEndpoint& endpoint, transport::Endpoint::IEvents* listener)
-        : _endpoint(endpoint),
-          _listener(listener)
-    {
-    }
-
-    void run() override { _endpoint.internalUnregisterListener(_listener); }
-
-private:
-    FakeUdpEndpoint& _endpoint;
-    transport::Endpoint::IEvents* _listener;
-};
-
-class UnRegisterNotifyListenerJob : public jobmanager::Job
-{
-public:
-    UnRegisterNotifyListenerJob(FakeUdpEndpoint& endpoint, transport::Endpoint::IEvents& listener)
-        : _endpoint(endpoint),
-          _listener(listener)
-    {
-    }
-
-    void run() override { _listener.onUnregistered(_endpoint); }
-
-private:
-    FakeUdpEndpoint& _endpoint;
-    transport::Endpoint::IEvents& _listener;
-};
-
-class ReceiveJob : public jobmanager::Job
-{
-public:
-    ReceiveJob(FakeUdpEndpoint& endpoint) : _endpoint(endpoint) {}
-
-    void run() override { _endpoint.internalReceive(); }
-
-private:
-    FakeUdpEndpoint& _endpoint;
-};
-
-template <typename KeyType>
-transport::UdpEndpointImpl::IEvents* findListener(
-    concurrency::MpmcHashmap32<KeyType, transport::UdpEndpointImpl::IEvents*>& map,
-    const KeyType& key)
-{
-    auto it = map.find(key);
-    if (it != map.cend())
-    {
-        return it->second;
-    }
-    return nullptr;
-}
-
-} // namespace
+#include "utils/Function.h"
+#include "utils/SocketAddress.h"
 
 namespace emulator
 {
@@ -82,7 +23,7 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
       _iceListeners(maxSessionCount * 2),
       _dtlsListeners(maxSessionCount * 16),
       _iceResponseListeners(maxSessionCount * 64),
-      _receiveJobs(jobManager, 16),
+      _receiveJobs(jobManager, maxSessionCount),
       _sendJobs(jobManager, 16),
       _allocator(allocator),
       _networkLinkAllocator(8092, "networkLink"),
@@ -110,7 +51,7 @@ void FakeUdpEndpoint::sendStunTo(const transport::SocketAddress& target,
     uint64_t timestamp)
 {
     auto* msg = ice::StunMessage::fromPtr(data);
-    if (msg->header.isRequest() && !_dtlsListeners.contains(target) && !_iceResponseListeners.contains(transactionId))
+    if (msg->header.isRequest() && !_iceResponseListeners.contains(transactionId))
     {
         auto names = msg->getAttribute<ice::StunUserName>(ice::StunAttribute::USERNAME);
         if (names)
@@ -149,11 +90,10 @@ transport::SocketAddress FakeUdpEndpoint::getLocalPort() const
 
 void FakeUdpEndpoint::cancelStunTransaction(__uint128_t transactionId)
 {
-    // Hashmap allows erasing elements while iterating.
-    auto itPair = _iceResponseListeners.find(transactionId);
-    if (itPair != _iceResponseListeners.cend())
+    const bool posted = _receiveJobs.post([this, transactionId]() { _iceResponseListeners.erase(transactionId); });
+    if (!posted)
     {
-        _iceResponseListeners.erase(transactionId);
+        logger::warn("failed to post unregister STUN transaction job", _name.c_str());
     }
 }
 
@@ -191,27 +131,43 @@ void FakeUdpEndpoint::registerListener(const std::string& stunUserName, IEvents*
 
 void FakeUdpEndpoint::registerListener(const transport::SocketAddress& srcAddress, IEvents* listener)
 {
-    auto dtlsIt = _dtlsListeners.find(srcAddress);
-    if (dtlsIt != _dtlsListeners.end())
+    auto it = _dtlsListeners.emplace(srcAddress, listener);
+    if (it.second)
+    {
+        logger::debug("register listener for %s", _name.c_str(), srcAddress.toString().c_str());
+        listener->onRegistered(*this);
+    }
+    else if (it.first != _dtlsListeners.cend() && it.first->second == listener)
+    {
+        // already registered
+    }
+    else
+    {
+        _receiveJobs.post(utils::bind(&FakeUdpEndpoint::swapListener, this, srcAddress, listener));
+    }
+}
+
+void FakeUdpEndpoint::swapListener(const transport::SocketAddress& srcAddress, IEvents* newListener)
+{
+    auto it = _dtlsListeners.find(srcAddress);
+    if (it != _dtlsListeners.cend())
     {
         // src port is re-used. Unregister will look at listener pointer
-        if (dtlsIt->second == listener)
+        if (it->second == newListener)
         {
             return;
         }
 
-        if (dtlsIt->second)
+        if (it->second)
         {
-            _receiveJobs.addJob<UnRegisterNotifyListenerJob>(*this, *dtlsIt->second);
+            it->second->onUnregistered(*this);
         }
-        dtlsIt->second = listener;
-        listener->onRegistered(*this);
+        it->second = newListener;
+        newListener->onRegistered(*this);
+        return;
     }
-    else
-    {
-        _dtlsListeners.emplace(srcAddress, listener);
-        listener->onRegistered(*this);
-    }
+
+    logger::warn("dtls listener swap on %s skipped. Already removed", _name.c_str(), srcAddress.toString().c_str());
 }
 
 void FakeUdpEndpoint::registerDefaultListener(IEvents* defaultListener)
@@ -221,7 +177,7 @@ void FakeUdpEndpoint::registerDefaultListener(IEvents* defaultListener)
 
 void FakeUdpEndpoint::unregisterListener(IEvents* listener)
 {
-    if (!_receiveJobs.addJob<UnRegisterListenerJob>(*this, listener))
+    if (!_receiveJobs.post(utils::bind(&FakeUdpEndpoint::internalUnregisterListener, this, listener)))
     {
         logger::error("failed to post unregister job", _name.c_str());
     }
@@ -308,7 +264,8 @@ void FakeUdpEndpoint::internalUnregisterListener(IEvents* listener)
         if (item.second == listener)
         {
             _iceListeners.erase(item.first);
-            _receiveJobs.addJob<UnRegisterNotifyListenerJob>(*this, *listener);
+            listener->onUnregistered(*this);
+            break;
         }
     }
 
@@ -317,7 +274,7 @@ void FakeUdpEndpoint::internalUnregisterListener(IEvents* listener)
         if (responseListener.second == listener)
         {
             _iceResponseListeners.erase(responseListener.first);
-            // must 7be iceListener to be iceResponseListener so no extra unreg notification
+            // must be iceListener to be iceResponseListener so no extra unreg notification
         }
     }
 
@@ -326,7 +283,7 @@ void FakeUdpEndpoint::internalUnregisterListener(IEvents* listener)
         if (item.second == listener)
         {
             _dtlsListeners.erase(item.first);
-            _receiveJobs.addJob<UnRegisterNotifyListenerJob>(*this, *listener);
+            listener->onUnregistered(*this);
         }
     }
 }
@@ -394,7 +351,7 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
 
         if (!_pendingRead.test_and_set())
         {
-            if (!_receiveJobs.addJob<ReceiveJob>(*this))
+            if (!_receiveJobs.post(utils::bind(&FakeUdpEndpoint::internalReceive, this)))
             {
                 logger::warn("receive queue full", _name.c_str());
             }
@@ -453,9 +410,9 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
             if (users)
             {
                 auto userName = users->getNames().first;
-                listener = findListener(_iceListeners, userName);
+                listener = _iceListeners.getItem(userName);
             }
-            logger::debug("ICE request to %s src %s",
+            logger::debug("ICE request for %s from %s",
                 _name.c_str(),
                 users->getNames().first.c_str(),
                 srcAddress.toString().c_str());
@@ -463,30 +420,41 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         else if (msg->header.isResponse())
         {
             auto transactionId = msg->header.transactionId.get();
-            listener = findListener(_iceResponseListeners, transactionId);
+            listener = _iceResponseListeners.getItem(transactionId);
             if (listener)
             {
+                const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
+                logger::debug("STUN response received for transaction %04x%04x%04x",
+                    _name.c_str(),
+                    id[1],
+                    id[2],
+                    id[3]);
                 _iceResponseListeners.erase(transactionId);
             }
-            else
-            {
-                listener = findListener(_dtlsListeners, srcAddress);
-            }
         }
+
         if (listener)
         {
             listener->onIceReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
             return;
         }
+        else
+        {
+            logger::debug("cannot find listener for STUN", _name.c_str());
+        }
     }
     else if (transport::isDtlsPacket(packet->get()))
     {
-        listener = findListener(_dtlsListeners, srcAddress);
+        listener = _dtlsListeners.getItem(srcAddress);
         listener = listener ? listener : _defaultListener.load();
         if (listener)
         {
             listener->onDtlsReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
             return;
+        }
+        else
+        {
+            logger::debug("cannot find listener for DTLS source %s", _name.c_str(), srcAddress.toString().c_str());
         }
     }
     else if (rtp::isRtcpPacket(packet->get(), packet->getLength()))
@@ -494,12 +462,16 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         auto rtcpReport = rtp::RtcpReport::fromPtr(packet->get(), packet->getLength());
         if (rtcpReport)
         {
-            listener = findListener(_dtlsListeners, srcAddress);
+            listener = _dtlsListeners.getItem(srcAddress);
 
             if (listener)
             {
                 listener->onRtcpReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
                 return;
+            }
+            else
+            {
+                logger::debug("cannot find listener for RTCP", _name.c_str());
             }
         }
     }
@@ -508,12 +480,16 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         auto rtpPacket = rtp::RtpHeader::fromPacket(*packet);
         if (rtpPacket)
         {
-            listener = findListener(_dtlsListeners, srcAddress);
+            listener = _dtlsListeners.getItem(srcAddress);
 
             if (listener)
             {
                 listener->onRtpReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
                 return;
+            }
+            else
+            {
+                logger::debug("cannot find listener for RTP", _name.c_str());
             }
         }
     }
@@ -522,6 +498,24 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         logger::info("Unexpected packet from %s", _name.c_str(), srcAddress.toString().c_str());
     }
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
+}
+
+void FakeUdpEndpoint::focusListener(const transport::SocketAddress& remotePort, IEvents* listener)
+{
+    _receiveJobs.post([this, remotePort, listener]() {
+        for (auto& item : _dtlsListeners)
+        {
+            if (item.second == listener && item.first != remotePort)
+            {
+                logger::debug("focus listener on %s, unlisten %s",
+                    _name.c_str(),
+                    remotePort.toString().c_str(),
+                    item.first.toString().c_str());
+                _dtlsListeners.erase(item.first);
+                listener->onUnregistered(*this);
+            }
+        }
+    });
 }
 
 void FakeUdpEndpoint::onSocketPollStarted(int fd) {}

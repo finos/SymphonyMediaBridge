@@ -1,60 +1,8 @@
 #include "transport/BaseUdpEndpoint.h"
+#include "utils/Function.h"
 
 namespace transport
 {
-namespace
-{
-using namespace transport;
-class SendJob : public jobmanager::Job
-{
-public:
-    explicit SendJob(BaseUdpEndpoint& endpoint) : _endpoint(endpoint) {}
-
-    void run() override { _endpoint.internalSend(); }
-
-private:
-    BaseUdpEndpoint& _endpoint;
-};
-class ReceiveJob : public jobmanager::Job
-{
-public:
-    ReceiveJob(BaseUdpEndpoint& endpoint, int fd) : _endpoint(endpoint), _fd(fd) {}
-
-    void run() override
-    {
-#ifdef __APPLE__
-        _endpoint.internalReceive(_fd, 1);
-#else
-        _endpoint.internalReceive(_fd, 400);
-#endif
-    }
-
-private:
-    BaseUdpEndpoint& _endpoint;
-    int _fd;
-};
-
-class StopPortJob : public jobmanager::Job
-{
-public:
-    StopPortJob(BaseUdpEndpoint& endpoint, std::atomic_uint32_t& countDown) : _endpoint(endpoint), _countDown(countDown)
-    {
-    }
-
-    void run() override
-    {
-        auto value = --_countDown;
-        if (value == 0)
-        {
-            _endpoint.internalStopped();
-        }
-    }
-
-private:
-    BaseUdpEndpoint& _endpoint;
-    std::atomic_uint32_t& _countDown;
-};
-} // namespace
 
 BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
     jobmanager::JobManager& jobManager,
@@ -66,7 +14,7 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
     : _state(Endpoint::CLOSED),
       _name(name),
       _localPort(localPort),
-      _receiveJobs(jobManager, 16),
+      _receiveJobs(jobManager, maxSessionCount),
       _sendJobs(jobManager, 16),
       _allocator(allocator),
       _sendQueue(maxSessionCount * 64),
@@ -86,14 +34,20 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
     }
 }
 
+/**
+ * Called once from receive thread, and once from send thread to assure empty queues
+ */
 void BaseUdpEndpoint::internalStopped()
 {
-    assert(_epollCountdown == 0);
-    _state = State::CREATED;
-
-    if (_stopListener)
+    auto value = --_epollCountdown;
+    if (value == 0)
     {
-        _stopListener->onEndpointStopped(this);
+        _state = State::CREATED;
+
+        if (_stopListener)
+        {
+            _stopListener->onEndpointStopped(this);
+        }
     }
 }
 
@@ -115,7 +69,7 @@ void BaseUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::Uni
     {
         if (!_pendingSend.test_and_set())
         {
-            _sendJobs.addJob<SendJob>(*this);
+            _sendJobs.post(utils::bind(&BaseUdpEndpoint::internalSend, this));
         }
     }
     else
@@ -236,11 +190,11 @@ void BaseUdpEndpoint::onSocketPollStarted(int fd)
 
 void BaseUdpEndpoint::onSocketPollStopped(int fd)
 {
-    if (!_receiveJobs.addJob<StopPortJob>(*this, _epollCountdown))
+    if (!_receiveJobs.post(utils::bind(&BaseUdpEndpoint::internalStopped, this)))
     {
         logger::error("failed to add poll stop job", _name.c_str());
     }
-    if (!_sendJobs.addJob<StopPortJob>(*this, _epollCountdown))
+    if (!_sendJobs.post(utils::bind(&BaseUdpEndpoint::internalStopped, this)))
     {
         logger::error("failed to add poll stop job", _name.c_str());
     }
@@ -250,9 +204,14 @@ void BaseUdpEndpoint::onSocketReadable(int fd)
 {
     if (!_pendingRead.test_and_set())
     {
-        if (!_receiveJobs.addJob<ReceiveJob>(*this, fd))
+#ifdef __APPLE__
+        const bool jobPosted = _receiveJobs.post(utils::bind(&BaseUdpEndpoint::internalReceive, this, fd, 1));
+#else
+        const bool jobPosted = _receiveJobs.post(utils::bind(&BaseUdpEndpoint::internalReceive, this, fd, 400));
+#endif
+        if (!jobPosted)
         {
-            logger::warn("receive queue full", _name.c_str());
+            logger::warn("receive job queue full", _name.c_str());
         }
     }
 }
