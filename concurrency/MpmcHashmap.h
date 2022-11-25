@@ -257,7 +257,7 @@ public:
         return std::make_pair(iterator(_elements, pos, pos + 1), true);
     }
 
-    void bool erase(const KeyT& key)
+    bool erase(const KeyT& key)
     {
         const uint64_t key64 = utils::hash<KeyT>{}(key);
         uint32_t pos = 0;

@@ -4092,7 +4092,9 @@ void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_
 
 void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 {
-    if (!utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3))
+    const bool hasLastCheckTimedout = utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3);
+    const bool shouldExecute = hasLastCheckTimedout || _engineStreamDirector->isNecessaryEstimateSlidesBandwidth();
+    if (!shouldExecute)
     {
         return;
     }
@@ -4146,7 +4148,7 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             slidesLimit,
             _sendAllocator);
 
-        _engineStreamDirector->setSlidesSsrcAndBitrate(presenterSimulcastLevel->ssrc, _config.slides.minBitrate);
+        _engineStreamDirector->setSlidesSsrcAndBitrate(presenterSimulcastLevel->ssrc, slidesLimit);
     }
     else
     {
