@@ -441,7 +441,15 @@ void EngineMixer::addVideoStream(EngineVideoStream* engineVideoStream)
         startProbingVideoStream(*engineVideoStream);
     }
     const auto mapRevision = _activeMediaList->getMapRevision();
-    _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
+    const auto it = _engineVideoStreams.emplace(endpointIdHash, engineVideoStream);
+    if (!it.second)
+    {
+        logger::error("Emplace video stream has failed, transport %s, endpointIdHash %lu",
+            _loggableId.c_str(),
+            engineVideoStream->transport.getLoggableId().c_str(),
+            endpointIdHash);
+    }
+
     if (engineVideoStream->simulcastStream.numLevels > 0)
     {
         _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->simulcastStream);
@@ -546,7 +554,14 @@ void EngineMixer::removeStream(EngineVideoStream* engineVideoStream)
         engineVideoStream->transport.getLoggableId().c_str(),
         endpointIdHash);
 
-    _engineVideoStreams.erase(endpointIdHash);
+    const bool streamFound = _engineVideoStreams.erase(endpointIdHash);
+    if (!streamFound)
+    {
+        logger::error("engineVideoStream has not been found, transport %s, endpointIdHash %lu",
+            _loggableId.c_str(),
+            engineVideoStream->transport.getLoggableId().c_str(),
+            endpointIdHash);
+    }
 
     EngineMessage::Message message(EngineMessage::Type::VideoStreamRemoved);
     message.command.videoStreamRemoved.mixer = this;
@@ -1561,12 +1576,18 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, const memory::P
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
     if (dataStream)
     {
+        const bool wasOpen = dataStream->stream.isOpen();
         dataStream->stream.onSctpMessage(&dataStream->transport,
             header.id,
             header.sequenceNumber,
             header.payloadProtocol,
             header.data(),
             packet.getLength() - sizeof(header));
+
+        if (!wasOpen && dataStream->stream.isOpen())
+        {
+            sendUserMediaMapMessage(endpointIdHash);
+        }
     }
 }
 
@@ -2810,7 +2831,7 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
 
         if (!videoStream->transport.isConnected())
         {
-            return;
+            continue;
         }
 
         ssrcOutboundContext->onRtpSent(timestamp); // marks that we have active jobs on this ssrc context
@@ -4099,7 +4120,9 @@ void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_
 
 void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 {
-    if (!utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3))
+    const bool isTimeToCheck = utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3);
+    const bool shouldExecute = isTimeToCheck || _engineStreamDirector->needsSlidesBitrateAllocation();
+    if (!shouldExecute)
     {
         return;
     }
@@ -4153,7 +4176,7 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             slidesLimit,
             _sendAllocator);
 
-        _engineStreamDirector->setSlidesSsrcAndBitrate(presenterSimulcastLevel->ssrc, _config.slides.minBitrate);
+        _engineStreamDirector->setSlidesSsrcAndBitrate(presenterSimulcastLevel->ssrc, slidesLimit);
     }
     else
     {
@@ -4185,7 +4208,7 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
             // WebRTC's incorrect implementation of TMBBR leads assigned bitrate to be
             // used for all members of the simulcast group, instead of the single layer.
             // That, in turn, leads to high res layer being switched on sometimes for a
-            // short burst of frames. SFU detects constant swithcing on and off as "unstable"
+            // short burst of frames. SFU detects constant switching on and off as "unstable"
             // behaviour and disables such layer forever. To prevent that side effect, we
             // reset "inactiveTransitionCount" when switching slides off.
             if (_slidesPresent && !slidesPresent)
