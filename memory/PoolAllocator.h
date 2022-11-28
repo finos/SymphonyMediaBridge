@@ -186,19 +186,16 @@ protected:
     }
 
 private:
-#if POOLALLOC_MEMGUARDS
     class Head : public concurrency::StackItem
     {
+#if POOLALLOC_MEMGUARDS
     public:
         Head() { _callStack[0] = nullptr; }
         void* _callStack[10];
         uint64_t _beginGuard = 0xABABABABABABABABLLU;
-    };
-#else
-    class Head : public concurrency::StackItem
-    {
-    };
 #endif
+    };
+
     class Entry : public Head
     {
     public:

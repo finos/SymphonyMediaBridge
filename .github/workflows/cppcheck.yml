@@ -1,0 +1,15 @@
+name: C++ Static code analysis
+
+on: [push, pull_request]
+
+jobs:
+  cppcheck:
+    name: run-cppcheck
+    runs-on: ubuntu-latest
+    container:
+      image: neszt/cppcheck-docker:2.9
+    steps:
+    - uses: actions/checkout@v3
+    - run: cppcheck --version
+    - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -i test/ -i external/ --suppressions-list=.cppcheck-suppressions .
+    - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -I test/include ./test --suppressions-list=.cppcheck-suppressions .

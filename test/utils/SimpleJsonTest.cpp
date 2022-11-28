@@ -5,8 +5,7 @@
 #include <string>
 #include <vector>
 
-namespace utils
-{
+using namespace utils;
 
 TEST(SimpleJson, ParseValidJson)
 {
@@ -246,4 +245,3 @@ TEST(SimpleJson, ParseLargeUMM)
     EXPECT_EQ(audioSsrc.size(), 5);
     EXPECT_EQ(videoSsrc.size(), 5);
 }
-} // namespace utils

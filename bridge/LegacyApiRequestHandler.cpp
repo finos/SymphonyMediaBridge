@@ -762,8 +762,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
             return response;
         }
 
-        if (legacyapi::Helpers::iceEnabled(channelBundle._transport) && transportDescription.ice.isSet() &&
-            transportDescription.dtls.isSet())
+        if (transportDescription.ice.isSet() && transportDescription.dtls.isSet())
         {
             const auto& transportDescriptionIce = transportDescription.ice.get();
             channelBundle._transport._ufrag.set(transportDescriptionIce.iceCredentials.first);

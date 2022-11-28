@@ -1,0 +1,4 @@
+uninitStructMember:external/http.h
+selfInitialization:bridge/AudioStream.h
+selfInitialization:bridge/DataStream.h
+selfInitialization:bridge/VideoStream.h

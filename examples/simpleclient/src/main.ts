@@ -95,7 +95,7 @@ function onTrack(event: RTCTrackEvent) {
         }
 
         remoteMediaStreams.add(stream.id);
-        console.log('Added remote stream ' + stream.id, ' audio ' + stream.getAudioTracks().length + ' video ' + stream.getVideoTracks().length);
+        console.log(`Added remote stream ${stream.id} audio ${stream.getAudioTracks().length} video ${stream.getVideoTracks().length}`);
 
         if (stream.getAudioTracks().length !== 0) {
             const audioElement = new Audio();

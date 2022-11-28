@@ -312,6 +312,8 @@ bool areAllConnected(std::vector<std::unique_ptr<ClientPair>>& testPairs)
     return true;
 }
 
+} // namespace
+
 TEST_F(SctpTransportTest, messages)
 {
     const int CLIENT_COUNT = 1;
@@ -354,5 +356,3 @@ TEST_F(SctpTransportTest, messages)
         EXPECT_EQ(std::strcmp(theMessage, clientpair->_recv2.substr(0, strlen(theMessage)).c_str()), 0);
     }
 }
-
-} // namespace

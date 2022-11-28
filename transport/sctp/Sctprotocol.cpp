@@ -412,6 +412,11 @@ void PaddingParameter::clearPadding(size_t totalPadding)
     case x:                                                                                                            \
         return #x
 
+#define DEFAULTCODEMSG(x)                                                                                              \
+    case x:                                                                                                            \
+    default:                                                                                                           \
+        return #x
+
 const char* toString(ErrorCause code)
 {
     switch (code)
@@ -428,7 +433,7 @@ const char* toString(ErrorCause code)
         CODEMSG(CookieReceivedWhileShuttingDown);
         CODEMSG(RestartOfAnAssociationWithNewAddresses);
         CODEMSG(UserInitiatedAbort);
-        CODEMSG(ProtocolError);
+        DEFAULTCODEMSG(ProtocolError);
     }
 }
 } // namespace sctp

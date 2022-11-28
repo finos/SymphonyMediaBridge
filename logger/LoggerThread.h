@@ -8,10 +8,10 @@ namespace logger
 {
 struct LogItem
 {
-    static const int maxLineLength = 4096;
+    constexpr static int maxLineLength() { return 4096; }
 
     std::chrono::system_clock::time_point timestamp;
-    char message[maxLineLength];
+    char message[maxLineLength()];
     const char* logLevel;
     void* threadId;
 };

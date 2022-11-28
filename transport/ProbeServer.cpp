@@ -310,12 +310,16 @@ void ProbeServer::run()
 
         auto now = utils::Time::getAbsoluteTime();
 
-        for (auto it = _tcpConnections.begin(); it != _tcpConnections.end(); ++it)
+        for (auto it = _tcpConnections.begin(); it != _tcpConnections.end(); )
         {
             if (utils::Time::diffGT(it->timestamp, now, _iceConfig.probeConnectionExpirationTimeout * utils::Time::sec))
             {
                 it->endpoint->stop(this);
-                _tcpConnections.erase(it);
+                it = _tcpConnections.erase(it);
+            }
+            else
+            {
+                ++it;
             }
         }
 
@@ -340,8 +344,9 @@ void ProbeServer::stop()
     for (auto it = _tcpConnections.begin(); it != _tcpConnections.end(); ++it)
     {
         it->endpoint->stop(this);
-        _tcpConnections.erase(it);
     }
+
+    _tcpConnections.clear();
 }
 
 // ICE
