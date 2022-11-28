@@ -34,8 +34,8 @@ void logv(const char* logLevel, const char* logGroup, const bool immediate, cons
         item.timestamp = utils::Time::now();
         item.logLevel = logLevel;
         item.threadId = (void*)pthread_self();
-        int consumed = snprintf(item.message, LogItem::MAX_LINE_LENGTH, "[%s] ", logGroup);
-        int remain = LogItem::MAX_LINE_LENGTH - consumed;
+        int consumed = snprintf(item.message, logger::MAX_LINE_LENGTH, "[%s] ", logGroup);
+        int remain = logger::MAX_LINE_LENGTH - consumed;
         vsnprintf(item.message + consumed, remain, format, args);
 
         if (immediate)
