@@ -83,6 +83,12 @@ struct hash<char*>
 };
 
 template <>
+struct hash<const char*>
+{
+    uint64_t operator()(const char* s) const { return hash<char*>{}(const_cast<char*>(s)); }
+};
+
+template <>
 struct hash<std::string>
 {
     uint64_t operator()(const std::string& s) const { return hash<char*>::hashBuffer(s.c_str(), s.size()); }
