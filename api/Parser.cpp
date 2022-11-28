@@ -27,7 +27,7 @@ const nlohmann::json& requiredJsonArray(const nlohmann::json& data, const char* 
     return *it;
 }
 
-nlohmann::json& getJsonFieldOrThrow(const nlohmann::json& data, const char* name)
+const nlohmann::json& getJsonFieldOrThrow(const nlohmann::json& data, const char* name)
 {
     const auto& it = data.find(name);
     if (it == data.end())
