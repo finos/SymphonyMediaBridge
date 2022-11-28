@@ -487,7 +487,7 @@ TEST(TransportStats, MpmcPublish)
             : id(0)
         { }
 
-        uint32_t id
+        uint32_t id;
         uint32_t mem[20];
     };
 

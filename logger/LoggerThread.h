@@ -11,7 +11,7 @@ struct LogItem
     constexpr static int maxLineLength() { return 4096; }
 
     std::chrono::system_clock::time_point timestamp;
-    char message[maxLineLength()];
+    char message[4096];
     const char* logLevel;
     void* threadId;
 };
