@@ -516,6 +516,7 @@ set(TEST_FILES
     test/memory/RingAllocatorTest.cpp
     test/utils/StringTokenizerTest.cpp
     test/utils/TrackerTest.cpp
+    test/utils/StdExtensionsTest.cpp
     test/memory/RingBufferTest.cpp
     test/memory/ListTest.cpp
     test/memory/ArrayTest.cpp
