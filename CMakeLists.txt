@@ -424,12 +424,12 @@ set(FILES
 
 add_library(smblib STATIC ${FILES})
 target_include_directories(smblib PUBLIC ${CMAKE_BINARY_DIR}/generated)
-target_link_libraries(smblib PUBLIC ${THIRD_PARTY_LIBS})
+target_link_libraries(smblib PUBLIC ${THIRD_PARTY_LIBS} git_version)
 
 add_executable(smb
         main.cpp)
 
-target_link_libraries(smb smblib Threads::Threads git_version)
+target_link_libraries(smb smblib Threads::Threads)
 
 ##################
 # Test framework
@@ -608,14 +608,14 @@ target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include"
 # Copy test Data
 file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
 
-target_link_libraries(UnitTest testlib gtest gmock git_version)
+target_link_libraries(UnitTest testlib gtest gmock)
 
 add_test(AllUnitTests UnitTest)
 
 add_executable(LoadTest ${LOAD_TEST_FILES}
     test/load_test_main.cpp)
 
-target_link_libraries(LoadTest testlib gtest gmock git_version)
+target_link_libraries(LoadTest testlib gtest gmock)
 
 if(APPLE)
     source_group(TREE ${PROJECT_SOURCE_DIR} FILES ${FILES} ${TEST_FILES})
