@@ -11,6 +11,7 @@ node('be-integration') {
     def artifactoryServer = Artifactory.server 'Symphony-Production-Artifactory'
     def baseName = "rtc-smb"
     def version = "0.0.2-${currentBuild.number}"
+    def masterVersion = "2.3.0-${currentBuild.number}"
     def promotion = true
     def buildInfo
     def scmVars
@@ -24,10 +25,10 @@ node('be-integration') {
             env.GIT_BRANCH = scmVars.GIT_BRANCH
 
             if (env.GIT_BRANCH.equals("master")) {
-                version = "2.2.0-${currentBuild.number}"
+                version = masterVersion
                 isReleaseBuild = true
-            } else if (env.GIT_BRANCH.equals("2.0.0")) {
-                version = "2.0.0-${currentBuild.number}"
+            } else if (env.GIT_BRANCH ==~ /\d+\.\d+\.\d+/) {
+                version = "${env.GIT_BRANCH}-${currentBuild.number}"
                 isReleaseBuild = true
             }
 
