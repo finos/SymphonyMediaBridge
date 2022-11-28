@@ -18,4 +18,6 @@ RUN rm -rf CMakeCache.txt
 
 RUN ./docker/ubuntu-focal-loadtest/buildscript.sh Release
 
+RUN useradd -ms /bin/bash builder
+USER builder
 ENTRYPOINT [ "./docker/ubuntu-focal-loadtest/startup.sh" ]

@@ -483,11 +483,9 @@ TEST(TransportStats, MpmcPublish)
 {
     struct InfoObject
     {
-        InfoObject()
-            : id(0)
-        { }
+        InfoObject() : id(0) {}
 
-        uint32_t id
+        uint32_t id;
         uint32_t mem[20];
     };
 
