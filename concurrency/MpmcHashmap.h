@@ -257,13 +257,13 @@ public:
         return std::make_pair(iterator(_elements, pos, pos + 1), true);
     }
 
-    void erase(const KeyT& key)
+    bool erase(const KeyT& key)
     {
         const uint64_t key64 = utils::hash<KeyT>{}(key);
         uint32_t pos = 0;
         if (!_index.get(key64, pos))
         {
-            return;
+            return false;
         }
         assert(pos > 0);
 
@@ -272,7 +272,10 @@ public:
             --pos;
             _elements[pos].state.store(State::tombstone);
             _freeItems.push(&_elements[pos]);
+            return true;
         }
+
+        return false;
     }
 
     bool contains(const KeyT& key) const { return _index.containsKey(utils::hash<KeyT>{}(key)); }

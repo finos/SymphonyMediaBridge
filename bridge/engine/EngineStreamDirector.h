@@ -113,6 +113,13 @@ public:
         {
             _midQualitySsrcs.emplace(primary.levels[midQuality].ssrc, endpointIdHash);
         }
+
+        if (primary.isSendingSlides())
+        {
+            // Set bwKbps, this will force EngineMixer to update bwKbps on next iteration
+            setSlidesSsrcAndBitrate(primary.levels[0].ssrc, 0);
+        }
+
         _requiredMidLevelBandwidth += bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
 
         if (secondary)
@@ -124,6 +131,13 @@ public:
             {
                 _midQualitySsrcs.emplace(secondary->levels[midQuality].ssrc, endpointIdHash);
             }
+
+            if (secondary->isSendingSlides())
+            {
+                // Set bwKbps, this will force EngineMixer to update bwKbps on next iteration
+                setSlidesSsrcAndBitrate(secondary->levels[0].ssrc, 0);
+            }
+
             _requiredMidLevelBandwidth += bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
 
             logger::info("addParticipant secondary, endpointIdHash %lu, %u %u %u",
@@ -155,6 +169,11 @@ public:
             _midQualitySsrcs.erase(participantStream.primary.levels[midQuality].ssrc);
             assert(_requiredMidLevelBandwidth > 0);
             _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
+
+            if (participantStream.primary.isSendingSlides())
+            {
+                _slidesBitrateKbps = 0;
+            }
         }
         if (participantStream.secondary.isSet() && participantStream.secondary.get().numLevels > 0)
         {
@@ -162,6 +181,11 @@ public:
             _midQualitySsrcs.erase(participantStream.secondary.get().levels[midQuality].ssrc);
             assert(_requiredMidLevelBandwidth > 0);
             _requiredMidLevelBandwidth -= bwe::BandwidthUtils::getSimulcastLevelKbps(midQuality);
+
+            if (participantStream.secondary.get().isSendingSlides())
+            {
+                _slidesBitrateKbps = 0;
+            }
         }
         _participantStreams.erase(endpointIdHash);
 
@@ -418,7 +442,7 @@ public:
             outFromEndpointId = midQualitySsrcsItr->second;
             return midQuality;
         }
-        // NOTE: fromEndpointId would be 0 for HighQuality, sice we store only low and mid quality maps.
+        // NOTE: fromEndpointId would be 0 for HighQuality, since we store only low and mid quality maps.
         outFromEndpointId = 0;
         return highQuality;
     }
@@ -659,8 +683,10 @@ public:
         _slidesBitrateKbps = bwKbps;
     }
 
+    bool needsSlidesBitrateAllocation() const { return _slidesSsrc != 0 && _slidesBitrateKbps == 0; }
+
 private:
-    /** All bandwidth valuea are in kbps. */
+    /** All bandwidth values are in kbps. */
     struct ConfigRow
     {
         const size_t BaseRate;
@@ -944,7 +970,7 @@ private:
 
         // We need to divide available bitrate (minus bitrate for slides, if present) to "maxReceivingVideoStreams".
         // "maxReceivingVideoStreams" can be 0, if we are the only one sending video, or the very first one in that case
-        // quality limits will be initially overestimated (but would be peridically updated with each uplink estimation
+        // quality limits will be initially overestimated (but would be periodically updated with each uplink estimation
         // anyway). To lookup "configLadder" we need at least one stream, thus capping to 1 from below.
 
         bool sendingVideo = participantStreams.primary.isSendingVideo() ||
