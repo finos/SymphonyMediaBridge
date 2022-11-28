@@ -683,7 +683,7 @@ public:
         _slidesBitrateKbps = bwKbps;
     }
 
-    bool isNecessaryEstimateSlidesBandwidth() const { return _slidesSsrc != 0 && _slidesBitrateKbps == 0; }
+    bool needsSlidesBitrateAllocation() const { return _slidesSsrc != 0 && _slidesBitrateKbps == 0; }
 
 private:
     /** All bandwidth values are in kbps. */

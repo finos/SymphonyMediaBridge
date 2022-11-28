@@ -4092,8 +4092,8 @@ void EngineMixer::reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_
 
 void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
 {
-    const bool hasLastCheckTimedout = utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3);
-    const bool shouldExecute = hasLastCheckTimedout || _engineStreamDirector->isNecessaryEstimateSlidesBandwidth();
+    const bool isTimeToCheck = utils::Time::diffGE(_lastVideoBandwidthCheck, timestamp, utils::Time::sec * 3);
+    const bool shouldExecute = isTimeToCheck || _engineStreamDirector->needsSlidesBitrateAllocation();
     if (!shouldExecute)
     {
         return;
