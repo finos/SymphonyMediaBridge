@@ -173,6 +173,7 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         std::make_shared<Mixer>(id,
             engineMixer->getLoggableId().getInstanceId(),
             _transportFactory,
+            _backgroundJobQueue,
             std::move(engineMixer),
             _idGenerator,
             _ssrcGenerator,
