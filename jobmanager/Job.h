@@ -42,8 +42,8 @@ public:
         return shouldRunAgain;
     }
 
-private:
-    uint64_t _timeLimit;
+protected:
+    const uint64_t _timeLimit;
 };
 
 // Job that can only run once
