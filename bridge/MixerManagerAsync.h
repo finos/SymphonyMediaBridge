@@ -37,7 +37,7 @@ class MixerManagerAsync
 public:
     virtual bool post(utils::Function&& task) = 0;
 
-private:
+protected:
     virtual void allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc) = 0;
     virtual void audioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream) = 0;
     virtual void engineMixerRemoved(EngineMixer& mixer) = 0;

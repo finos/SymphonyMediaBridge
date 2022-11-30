@@ -1,0 +1,350 @@
+#include "bridge/Mixer.h"
+#include "bridge/AudioStream.h"
+#include "bridge/DataStream.h"
+#include "bridge/RtpMap.h"
+#include "bridge/VideoStream.h"
+#include "bridge/engine/EngineAudioStream.h"
+#include "bridge/engine/EngineBarbell.h"
+#include "bridge/engine/EngineDataStream.h"
+#include "bridge/engine/EngineRecordingStream.h"
+#include "bridge/engine/EngineVideoStream.h"
+#include "concurrency/SynchronizationContext.h"
+#include "config/Config.h"
+#include "memory/AudioPacketPoolAllocator.h"
+#include "memory/PacketPoolAllocator.h"
+#include "mocks/MixerManagerAsyncMock.h"
+#include "mocks/RtcTransportMock.h"
+#include "mocks/TransportFactoryMock.h"
+#include "utils/IdGenerator.h"
+#include "utils/SsrcGenerator.h"
+#include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <memory>
+
+using namespace ::testing;
+using namespace ::test;
+using namespace ::bridge;
+
+namespace
+{
+
+constexpr const uint32_t LAST_N = 9;
+
+constexpr const uint32_t SCTP_PORT = 5000;
+constexpr const uint32_t LOCAL_VIDEO_SRC = 887766;
+constexpr const uint32_t REWRITE_AUDIO_SRC_0 = 220000;
+constexpr const uint32_t REWRITE_AUDIO_SRC_1 = 220002;
+constexpr const uint32_t REWRITE_AUDIO_SRC_2 = 220004;
+constexpr const uint32_t REWRITE_AUDIO_SRC_3 = 220006;
+constexpr const uint32_t REWRITE_AUDIO_SRC_4 = 220008;
+
+const bridge::RtpMap AUDIO_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::OPUS);
+const bridge::RtpMap VIDEO_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::VP8);
+const bridge::RtpMap FEEDBACK_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX);
+
+// FAIL()
+
+#define CHECK(EXPRESSION)                                                                                              \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (!(EXPRESSION))                                                                                             \
+        {                                                                                                              \
+            FAIL() << (std::string()                                                                                   \
+                           .append("Line ")                                                                            \
+                           .append(std::to_string(__LINE__))                                                           \
+                           .append(": expression has failed!. Expression: '")                                          \
+                           .append(#EXPRESSION)                                                                        \
+                           .append("'"));                                                                              \
+        }                                                                                                              \
+    } while (0)
+
+std::vector<uint32_t> getAudioSsrcs()
+{
+    return {REWRITE_AUDIO_SRC_0, REWRITE_AUDIO_SRC_1, REWRITE_AUDIO_SRC_2, REWRITE_AUDIO_SRC_3, REWRITE_AUDIO_SRC_4};
+}
+
+std::vector<api::SimulcastGroup> getVideoSsrcs(utils::SsrcGenerator& ssrcGenerator, uint32_t lastN)
+{
+    // Generate randomly for now
+    std::vector<api::SimulcastGroup> simulcastGroups;
+    for (uint32_t i = 0; i < lastN + 3; ++i)
+    {
+        simulcastGroups.emplace_back();
+        for (uint32_t layer = 0; layer < 3; ++layer)
+        {
+            simulcastGroups.back().push_back({ssrcGenerator.next(), ssrcGenerator.next()});
+        }
+    }
+
+    return simulcastGroups;
+}
+
+bridge::SimulcastStream emptySimulcast()
+{
+    bridge::SimulcastStream simulcast;
+    simulcast.numLevels = 0;
+    simulcast.highestActiveLevel = 0;
+    simulcast.contentType = bridge::SimulcastStream::VideoContentType::VIDEO;
+    return simulcast;
+}
+
+struct MixerTestScope
+{
+    MixerTestScope()
+        : transportFactoryMock(),
+          engineTaskQueue(512),
+          engineSyncContext(engineTaskQueue),
+          timeQueue(64),
+          wtJobManager(timeQueue, 512),
+          backgroundJobManager(timeQueue, 512),
+          packetAllocator(4096, "MixerTestPoolAllocator"),
+          audioPacketAllocator(4096, "MixerTestAudioPoolAllocator")
+    {
+    }
+
+    NiceMock<TransportFactoryMock> transportFactoryMock;
+    StrictMock<MixerManagerAsyncMock> mixerManagerAsyncMock;
+    concurrency::MpmcQueue<utils::Function> engineTaskQueue;
+    concurrency::SynchronizationContext engineSyncContext;
+    jobmanager::TimerQueue timeQueue;
+    jobmanager::JobManager wtJobManager;
+    jobmanager::JobManager backgroundJobManager;
+    memory::PacketPoolAllocator packetAllocator;
+    memory::AudioPacketPoolAllocator audioPacketAllocator;
+};
+
+} // namespace
+
+class MixerTest : public ::testing::Test
+{
+public:
+    using ::testing::Test::Test;
+
+protected:
+    void SetUp() override { _testScope = std::make_unique<MixerTestScope>(); }
+
+    void TearDown() override { _testScope.reset(); }
+
+    std::unique_ptr<Mixer> createMixer(const std::string& id, bool useGlobalPort)
+    {
+        auto audioSsrc = getAudioSsrcs();
+        auto videoSsrcs = getVideoSsrcs(_ssrcGenerator, LAST_N);
+        std::vector<api::SsrcPair> videoPinSsrc;
+        auto engineMixer = std::make_unique<EngineMixer>(id,
+            _testScope->wtJobManager,
+            _testScope->engineSyncContext,
+            _testScope->backgroundJobManager,
+            _testScope->mixerManagerAsyncMock,
+            LOCAL_VIDEO_SRC,
+            _config,
+            _testScope->packetAllocator,
+            _testScope->audioPacketAllocator,
+            audioSsrc,
+            videoSsrcs,
+            LAST_N);
+
+        return std::make_unique<Mixer>(id,
+            1,
+            _testScope->transportFactoryMock,
+            _testScope->backgroundJobManager,
+            std::move(engineMixer),
+            _idGenerator,
+            _ssrcGenerator,
+            _config,
+            audioSsrc,
+            videoSsrcs,
+            videoPinSsrc,
+            useGlobalPort);
+    }
+
+    void addEndpointWithBundleTransport(Mixer& mixer,
+        const std::string& endpointId,
+        bool useAudio,
+        bool useVideo,
+        bool useData)
+    {
+        std::string outId;
+        CHECK(mixer.addBundleTransportIfNeeded(endpointId, ice::IceRole::CONTROLLING));
+        CHECK(mixer.addBundledAudioStream(outId, endpointId, false, true));
+        CHECK(mixer.addBundledVideoStream(outId, endpointId, true));
+        CHECK(mixer.addBundledDataStream(outId, endpointId));
+        CHECK(mixer.configureAudioStream(endpointId, AUDIO_RTP_MAP, utils::Optional<uint32_t>(), {}));
+
+        CHECK(mixer.configureVideoStream(endpointId,
+            VIDEO_RTP_MAP,
+            FEEDBACK_RTP_MAP,
+            emptySimulcast(),
+            utils::Optional<SimulcastStream>(),
+            bridge::SsrcWhitelist()));
+
+        CHECK(mixer.configureDataStream(endpointId, SCTP_PORT));
+
+        CHECK(mixer.addAudioStreamToEngine(endpointId));
+        CHECK(mixer.addVideoStreamToEngine(endpointId));
+        CHECK(mixer.addDataStreamToEngine(endpointId));
+        CHECK(mixer.startBundleTransport(endpointId));
+    }
+
+    void dropAllBackGroupJobs()
+    {
+        jobmanager::MultiStepJob* job;
+        while ((job = _testScope->backgroundJobManager.pop()) != nullptr)
+        {
+            _testScope->backgroundJobManager.freeJob(job);
+        }
+    }
+
+    void processAllEngineQueue()
+    {
+        utils::Function func;
+        while (_testScope->engineTaskQueue.pop(func))
+        {
+            func();
+        }
+    }
+
+protected:
+    config::Config _config;
+    utils::IdGenerator _idGenerator;
+    utils::SsrcGenerator _ssrcGenerator;
+    std::unique_ptr<MixerTestScope> _testScope;
+};
+
+TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnAudioStream)
+{
+    const std::string endpointId0 = "ENDPOINT-0";
+    auto mixer = createMixer("MixerTest0", true);
+
+    auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
+
+    _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
+
+    addEndpointWithBundleTransport(*mixer, endpointId0, true, true, true);
+
+    auto* engineVideoStream = mixer->getEngineVideoStream(endpointId0);
+    auto* engineDataStream = mixer->getEngineDataStream(endpointId0);
+
+    ASSERT_NE(nullptr, engineVideoStream);
+    ASSERT_NE(nullptr, engineDataStream);
+
+    dropAllBackGroupJobs();
+
+    std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
+    transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
+
+    mixer->removeVideoStream(endpointId0);
+    mixer->removeDataStream(endpointId0);
+
+    mixer->engineVideoStreamRemoved(*engineVideoStream);
+    mixer->engineDataStreamRemoved(*engineDataStream);
+
+    ASSERT_NE(nullptr, transportMockWeakPointer.lock());
+    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+}
+
+TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnVideoStream)
+{
+    const std::string endpointId0 = "ENDPOINT-0";
+    auto mixer = createMixer("MixerTest0", true);
+
+    auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
+
+    _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
+
+    addEndpointWithBundleTransport(*mixer, endpointId0, true, true, true);
+
+    auto* engineAudioStream = mixer->getEngineAudioStream(endpointId0);
+    auto* engineDataStream = mixer->getEngineDataStream(endpointId0);
+
+    ASSERT_NE(nullptr, engineAudioStream);
+    ASSERT_NE(nullptr, engineDataStream);
+
+    dropAllBackGroupJobs();
+
+    std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
+    transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
+
+    mixer->removeAudioStream(endpointId0);
+    mixer->removeDataStream(endpointId0);
+
+    mixer->engineAudioStreamRemoved(*engineAudioStream);
+    mixer->engineDataStreamRemoved(*engineDataStream);
+
+    ASSERT_NE(nullptr, transportMockWeakPointer.lock());
+    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+}
+
+TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnDataStream)
+{
+    const std::string endpointId0 = "ENDPOINT-0";
+    auto mixer = createMixer("MixerTest0", true);
+
+    auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
+
+    _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
+
+    addEndpointWithBundleTransport(*mixer, endpointId0, true, true, true);
+
+    auto* engineAudioStream = mixer->getEngineAudioStream(endpointId0);
+    auto* engineVideoStream = mixer->getEngineVideoStream(endpointId0);
+
+    ASSERT_NE(nullptr, engineAudioStream);
+    ASSERT_NE(nullptr, engineVideoStream);
+
+    dropAllBackGroupJobs();
+
+    std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
+    transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
+
+    mixer->removeAudioStream(endpointId0);
+    mixer->removeVideoStream(endpointId0);
+
+    mixer->engineAudioStreamRemoved(*engineAudioStream);
+    mixer->engineVideoStreamRemoved(*engineVideoStream);
+
+    ASSERT_NE(nullptr, transportMockWeakPointer.lock());
+    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+}
+
+TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
+{
+    const std::string endpointId0 = "ENDPOINT-0";
+    auto mixer = createMixer("MixerTest0", true);
+
+    auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
+
+    _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
+
+    addEndpointWithBundleTransport(*mixer, endpointId0, true, true, true);
+
+    ASSERT_NE(nullptr, mixer->getEngineAudioStream(endpointId0));
+    ASSERT_NE(nullptr, mixer->getEngineVideoStream(endpointId0));
+    ASSERT_NE(nullptr, mixer->getEngineDataStream(endpointId0));
+
+    dropAllBackGroupJobs();
+    processAllEngineQueue();
+
+    EXPECT_CALL(*transportMock, hasPendingJobs()).WillOnce(Return(false));
+
+    std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
+    transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
+
+    mixer->removeAudioStream(endpointId0);
+    mixer->removeVideoStream(endpointId0);
+    mixer->removeDataStream(endpointId0);
+
+    // Remove should not really delete but trigger the deletion on EngineMixer
+    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+    ASSERT_NE(nullptr, transportMockWeakPointer.lock());
+    ASSERT_NE(nullptr, mixer->getEngineAudioStream(endpointId0));
+    ASSERT_NE(nullptr, mixer->getEngineVideoStream(endpointId0));
+    ASSERT_NE(nullptr, mixer->getEngineDataStream(endpointId0));
+
+    EXPECT_CALL(_testScope->mixerManagerAsyncMock, audioStreamRemoved(_, _));
+    EXPECT_CALL(_testScope->mixerManagerAsyncMock, videoStreamRemoved(_, _));
+    EXPECT_CALL(_testScope->mixerManagerAsyncMock, dataStreamRemoved(_, _));
+
+    // Process all engine queue. That should call the engineAudioStreamRemoved and callback again
+    // the mixer manager
+    processAllEngineQueue();
+}

@@ -288,6 +288,9 @@ public:
         const utils::SimpleJson& message);
 
     std::unordered_set<std::string> getEndpoints() const;
+    EngineAudioStream* getEngineAudioStream(const std::string& endpointId);
+    EngineVideoStream* getEngineVideoStream(const std::string& endpointId);
+    EngineDataStream* getEngineDataStream(const std::string& endpointId);
 
     EngineMixer* getEngineMixer() { return _engineMixer.get(); }
 
