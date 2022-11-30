@@ -10,9 +10,9 @@ RUN useradd -ms /bin/bash builder
 
 USER builder
 
-WORKDIR /build
-
 ADD --chown=builder "./" "/build"
+
+WORKDIR /build
 
 # Installing gcloud tools
 RUN curl https://sdk.cloud.google.com | bash
