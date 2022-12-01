@@ -16,7 +16,7 @@ WORKDIR /build
 
 # Installing gcloud tools
 RUN curl https://sdk.cloud.google.com | bash
-ENV PATH="./home/builder/google-cloud-sdk/bin:$PATH"
+ENV PATH="/home/builder/google-cloud-sdk/bin:$PATH"
 
 RUN rm -rf CMakeCache.txt
 
