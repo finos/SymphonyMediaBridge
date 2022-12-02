@@ -729,15 +729,15 @@ void Mixer::engineAudioStreamRemoved(const EngineAudioStream& engineStream)
         _audioBuffers.erase(engineStream.remoteSsrc.get());
     }
 
-    auto& stream = streamItr->second;
+    const auto& transport = streamItr->second->transport;
     logger::info("AudioStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->id.c_str(),
+        streamItr->second->id.c_str(),
         endpointId.c_str());
 
     _audioStreams.erase(streamItr);
     _audioEngineStreams.erase(endpointId);
-    stopTransportIfNeeded(stream->transport, endpointId);
+    stopTransportIfNeeded(transport, endpointId);
 }
 
 void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
@@ -755,15 +755,15 @@ void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
         return;
     }
 
-    auto& stream = streamItr->second;
+    const auto& transport = streamItr->second->transport;
     logger::info("VideoStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->id.c_str(),
+        streamItr->second->id.c_str(),
         endpointId.c_str());
 
     _videoStreams.erase(streamItr);
     _videoEngineStreams.erase(endpointId);
-    stopTransportIfNeeded(stream->transport, endpointId);
+    stopTransportIfNeeded(transport, endpointId);
 }
 
 void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
@@ -781,16 +781,15 @@ void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
         return;
     }
 
-    auto& stream = streamItr->second;
-
+    const auto& transport = streamItr->second->transport;
     logger::info("DataStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->id.c_str(),
+        streamItr->second->id.c_str(),
         endpointId.c_str());
 
     _dataStreams.erase(streamItr);
     _dataEngineStreams.erase(endpointId);
-    stopTransportIfNeeded(stream->transport, endpointId);
+    stopTransportIfNeeded(transport, endpointId);
 }
 
 std::unordered_set<std::string> Mixer::getEndpoints() const
