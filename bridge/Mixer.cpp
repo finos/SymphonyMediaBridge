@@ -735,9 +735,9 @@ void Mixer::engineAudioStreamRemoved(const EngineAudioStream& engineStream)
         stream->id.c_str(),
         endpointId.c_str());
 
-    stopTransportIfNeeded(stream->transport, endpointId);
     _audioStreams.erase(streamItr);
     _audioEngineStreams.erase(endpointId);
+    stopTransportIfNeeded(stream->transport, endpointId);
 }
 
 void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
@@ -761,9 +761,9 @@ void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
         stream->id.c_str(),
         endpointId.c_str());
 
-    stopTransportIfNeeded(stream->transport, endpointId);
     _videoStreams.erase(streamItr);
     _videoEngineStreams.erase(endpointId);
+    stopTransportIfNeeded(stream->transport, endpointId);
 }
 
 void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
@@ -788,9 +788,9 @@ void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
         stream->id.c_str(),
         endpointId.c_str());
 
-    stopTransportIfNeeded(stream->transport, endpointId);
     _dataStreams.erase(streamItr);
     _dataEngineStreams.erase(endpointId);
+    stopTransportIfNeeded(stream->transport, endpointId);
 }
 
 std::unordered_set<std::string> Mixer::getEndpoints() const
