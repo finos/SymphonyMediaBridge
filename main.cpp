@@ -2,6 +2,7 @@
 #include "concurrency/Semaphore.h"
 #include "concurrency/ThreadUtils.h"
 #include "config/Config.h"
+#include "git_version.h"
 #include "logger/Logger.h"
 #include "utils/Time.h"
 #include <execinfo.h>
@@ -150,14 +151,15 @@ int main(int argc, char** argv)
         bridge::Bridge environment(*config);
         environment.initialize();
 
-        logger::info("Build: %s",
+        logger::info("Build: %s %s",
             "main",
 #if DEBUG
             "Debug"
 #else
             "Release"
 #endif
-        );
+            ,
+            kGitHash);
 
         if (environment.isInitialized())
         {
