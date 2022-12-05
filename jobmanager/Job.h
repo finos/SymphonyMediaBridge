@@ -1,5 +1,6 @@
 #pragma once
 #include "utils/ScopedIncrement.h"
+#include "utils/Time.h"
 #include <atomic>
 
 namespace jobmanager
@@ -18,6 +19,33 @@ public:
     virtual bool runStep() = 0;
 };
 
+class MultiStepWithTimeoutJob : public MultiStepJob
+{
+public:
+    MultiStepWithTimeoutJob(uint64_t timeout) : _timeLimit(utils::Time::getAbsoluteTime() + timeout) {}
+
+    virtual void onTimeout() {} // Do nothing by default
+    virtual bool runTick() = 0;
+
+    bool runStep() final
+    {
+        const bool shouldRunAgain = runTick();
+        if (shouldRunAgain)
+        {
+            if (utils::Time::diffGE(_timeLimit, utils::Time::getAbsoluteTime(), 0))
+            {
+                onTimeout();
+                return false;
+            }
+        }
+
+        return shouldRunAgain;
+    }
+
+protected:
+    const uint64_t _timeLimit;
+};
+
 // Job that can only run once
 class Job : public MultiStepJob
 {
@@ -28,7 +56,7 @@ public:
     virtual ~Job() = default;
 
 private:
-    bool runStep() override
+    bool runStep() final
     {
         run();
         return false; // do not run again

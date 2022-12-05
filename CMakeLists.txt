@@ -521,6 +521,7 @@ set(TEST_FILES
     test/memory/ListTest.cpp
     test/memory/ArrayTest.cpp
     test/jobmanager/JobManagerTest.cpp
+    test/jobmanager/JobTest.cpp
     test/concurrency/ProcessIntervalTest.cpp
     test/integration/IntegrationTest.cpp
     test/integration/IntegrationTest.h

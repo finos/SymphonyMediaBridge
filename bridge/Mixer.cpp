@@ -6,6 +6,7 @@
 #include "bridge/Barbell.h"
 #include "bridge/BarbellVideoStreamDescription.h"
 #include "bridge/DataStreamDescription.h"
+#include "bridge/MixerJobs.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/VideoStreamDescription.h"
 #include "bridge/engine/Engine.h"
@@ -147,6 +148,7 @@ namespace bridge
 Mixer::Mixer(std::string id,
     size_t logInstanceId,
     transport::TransportFactory& transportFactory,
+    jobmanager::JobManager& backgroundJobQueue,
     std::unique_ptr<EngineMixer> engineMixer,
     utils::IdGenerator& idGenerator,
     utils::SsrcGenerator& ssrcGenerator,
@@ -163,6 +165,7 @@ Mixer::Mixer(std::string id,
       _videoSsrcs(videoSsrcs),
       _videoPinSsrcs(videoPinSsrcs),
       _transportFactory(transportFactory),
+      _backgroundJobQueue(backgroundJobQueue),
       _engineMixer(std::move(engineMixer)),
       _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
@@ -712,12 +715,10 @@ void Mixer::engineAudioStreamRemoved(const EngineAudioStream& engineStream)
 
     const auto endpointId = engineStream.endpointId;
     auto streamItr = _audioStreams.find(endpointId);
+    assert(streamItr != _audioStreams.end());
     if (streamItr == _audioStreams.end())
     {
-        stopTransportIfNeeded(&engineStream.transport, endpointId);
-        _audioEngineStreams.erase(endpointId);
-
-        logger::warn("EngineAudioStream endpointId %s removed, no matching audioStream found",
+        logger::error("EngineAudioStream endpointId %s removed, no matching audioStream found",
             _loggableId.c_str(),
             endpointId.c_str());
         return;
@@ -728,18 +729,15 @@ void Mixer::engineAudioStreamRemoved(const EngineAudioStream& engineStream)
         _audioBuffers.erase(engineStream.remoteSsrc.get());
     }
 
-    auto& stream = streamItr->second;
+    const auto& transport = streamItr->second->transport;
     logger::info("AudioStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->id.c_str(),
+        streamItr->second->id.c_str(),
         endpointId.c_str());
 
-    auto streamTransport = stream->transport;
-
-    _audioStreams.erase(endpointId);
-
-    stopTransportIfNeeded(streamTransport.get(), endpointId);
+    _audioStreams.erase(streamItr);
     _audioEngineStreams.erase(endpointId);
+    stopTransportIfNeeded(transport, endpointId);
 }
 
 void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
@@ -748,28 +746,24 @@ void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
 
     const auto endpointId = engineStream.endpointId;
     auto streamItr = _videoStreams.find(endpointId);
+    assert(streamItr != _videoStreams.end());
     if (streamItr == _videoStreams.end())
     {
-        stopTransportIfNeeded(&engineStream.transport, endpointId);
-        _videoEngineStreams.erase(endpointId);
-
-        logger::warn("EngineVideoStream endpointId %s removed, no matching videoStream found",
+        logger::error("EngineVideoStream endpointId %s removed, no matching videoStream found",
             _loggableId.c_str(),
             endpointId.c_str());
         return;
     }
 
-    auto& stream = streamItr->second;
+    const auto& transport = streamItr->second->transport;
     logger::info("VideoStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->id.c_str(),
+        streamItr->second->id.c_str(),
         endpointId.c_str());
 
-    auto streamTransport = stream->transport;
-    _videoStreams.erase(stream->endpointId);
-
-    stopTransportIfNeeded(streamTransport.get(), endpointId);
+    _videoStreams.erase(streamItr);
     _videoEngineStreams.erase(endpointId);
+    stopTransportIfNeeded(transport, endpointId);
 }
 
 void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
@@ -778,29 +772,24 @@ void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
 
     const auto endpointId = engineStream.endpointId;
     auto streamItr = _dataStreams.find(endpointId);
+    assert(streamItr != _dataStreams.end());
     if (streamItr == _dataStreams.end())
     {
-        stopTransportIfNeeded(&engineStream.transport, endpointId);
-        _dataEngineStreams.erase(endpointId);
-
-        logger::warn("EngineDataStream endpointId %s removed, no matching dataStream found",
+        logger::error("EngineDataStream endpointId %s removed, no matching dataStream found",
             _loggableId.c_str(),
             endpointId.c_str());
         return;
     }
 
-    auto& stream = streamItr->second;
-
+    const auto& transport = streamItr->second->transport;
     logger::info("DataStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
-        stream->id.c_str(),
+        streamItr->second->id.c_str(),
         endpointId.c_str());
 
-    auto streamTransport = stream->transport;
-    _dataStreams.erase(stream->endpointId);
-
-    stopTransportIfNeeded(streamTransport.get(), endpointId);
+    _dataStreams.erase(streamItr);
     _dataEngineStreams.erase(endpointId);
+    stopTransportIfNeeded(transport, endpointId);
 }
 
 std::unordered_set<std::string> Mixer::getEndpoints() const
@@ -1727,18 +1716,19 @@ RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)
     return nullptr;
 }
 
-void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId)
+void Mixer::stopTransportIfNeeded(const std::shared_ptr<transport::RtcTransport>& streamTransport,
+    const std::string& endpointId)
 {
-    transport::RtcTransport* transport = nullptr;
+    std::shared_ptr<transport::RtcTransport> transportToBeFinalized = nullptr;
 
     auto bundleTransportItr = _bundleTransports.find(endpointId);
 
-    bool audioStreamDeleted = _audioStreams.find(endpointId) == _audioStreams.end();
-    bool videoStreamDeleted = _videoStreams.find(endpointId) == _videoStreams.end();
-    bool dataStreamDeleted = _dataStreams.find(endpointId) == _dataStreams.end();
-
     if (bundleTransportItr != _bundleTransports.end())
     {
+        const bool audioStreamDeleted = _audioStreams.find(endpointId) == _audioStreams.end();
+        const bool videoStreamDeleted = _videoStreams.find(endpointId) == _videoStreams.end();
+        const bool dataStreamDeleted = _dataStreams.find(endpointId) == _dataStreams.end();
+
         if (audioStreamDeleted && videoStreamDeleted && dataStreamDeleted)
         {
             logger::info("EngineStream removed, endpointId %s. Has bundle transport %s but no other related streams.",
@@ -1746,7 +1736,8 @@ void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, cons
                 endpointId.c_str(),
                 bundleTransportItr->second._transport->getLoggableId().c_str());
 
-            transport = bundleTransportItr->second._transport.get();
+            transportToBeFinalized = bundleTransportItr->second._transport;
+            _bundleTransports.erase(bundleTransportItr);
         }
     }
     else
@@ -1755,31 +1746,23 @@ void Mixer::stopTransportIfNeeded(transport::RtcTransport* streamTransport, cons
             _loggableId.c_str(),
             endpointId.c_str());
 
-        transport = streamTransport;
+        transportToBeFinalized = streamTransport;
     }
 
-    if (transport == nullptr)
+    if (!transportToBeFinalized)
     {
         return;
     }
 
-    logTransportPacketLoss(endpointId, *transport, _loggableId.c_str());
+    logTransportPacketLoss(endpointId, *transportToBeFinalized, _loggableId.c_str());
 
     logger::info("Engine stream removed, stopping transport %s, endpointId %s.",
         _loggableId.c_str(),
-        transport->getLoggableId().c_str(),
+        transportToBeFinalized->getLoggableId().c_str(),
         endpointId.c_str());
 
-    // Allow pending transmissions to complete
-    transport->stop();
-    if (!waitForPendingJobs(700, 5, *transport))
-    {
-        logger::error("Transport for endpointId %s did not finish pending jobs in time. count=%u. Continuing "
-                      "deletion anyway.",
-            _loggableId.c_str(),
-            endpointId.c_str(),
-            transport->getJobCounter().load());
-    }
+    transportToBeFinalized->stop();
+    _backgroundJobQueue.addJob<FinalizeTransportJob>(transportToBeFinalized);
 }
 
 bool Mixer::addOrUpdateRecording(const std::string& conferenceId,

@@ -263,7 +263,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         utils::Time::diffGT(startTime, utils::Time::getAbsoluteTime(), utils::Time::sec * max_rampup))
     {
         auto diff = utils::Time::diff(startTime, utils::Time::getAbsoluteTime());
-        logger::info("Waiting before start for another: %lu s", "RealTimeTest", diff / utils::Time::sec);
+        logger::info("Waiting before start for another: %" PRId64 "s", "RealTimeTest", diff / utils::Time::sec);
         utils::Time::nanoSleep(diff);
     }
 

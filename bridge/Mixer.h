@@ -84,6 +84,7 @@ public:
     Mixer(std::string id,
         size_t logInstanceId,
         transport::TransportFactory& transportFactory,
+        jobmanager::JobManager& backgroundJobQueue,
         std::unique_ptr<EngineMixer> engineMixer,
         utils::IdGenerator& idGenerator,
         utils::SsrcGenerator& ssrcGenerator,
@@ -307,6 +308,7 @@ private:
     const std::vector<api::SsrcPair> _videoPinSsrcs;
 
     transport::TransportFactory& _transportFactory;
+    jobmanager::JobManager& _backgroundJobQueue;
     std::unique_ptr<EngineMixer> _engineMixer;
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
@@ -336,7 +338,8 @@ private:
 
     RecordingStream* findRecordingStream(const std::string& recordingId);
 
-    void stopTransportIfNeeded(transport::RtcTransport* streamTransport, const std::string& endpointId);
+    void stopTransportIfNeeded(const std::shared_ptr<transport::RtcTransport>& streamTransport,
+        const std::string& endpointId);
 };
 
 } // namespace bridge
