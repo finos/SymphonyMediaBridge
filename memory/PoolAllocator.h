@@ -56,9 +56,9 @@ public:
         : _deleter(this),
           _name(std::move(name)),
           _elements(nullptr),
-          _size(memory::page::alignedSpace(elementCount * sizeof(Entry))),
           _popIndex(0),
           _pushIndex(0),
+          _size(memory::page::alignedSpace(elementCount * sizeof(Entry))),
           _originalElementCount(_size / sizeof(Entry)),
           _count(_originalElementCount)
     {
