@@ -203,9 +203,8 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     {
         numClients = _config->numClients;
         duration = _config->duration;
-        // rampup = _config->rampup;
         max_rampup = _config->max_rampup;
-        rampup = randGen.next() % max_rampup;
+        rampup = max_rampup ? randGen.next() % max_rampup : 0;
 
         utils::StringBuilder<1000> sb;
         sb.append("http://");
