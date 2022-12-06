@@ -1,12 +1,11 @@
 #pragma once
 #include "LockFreeList.h"
 #include "memory/details.h"
+#include "utils/Allocator.h"
 #include "utils/StdExtensions.h"
 #include <algorithm>
 #include <atomic>
 #include <functional>
-#include <sys/mman.h>
-#include <unistd.h>
 #include <vector>
 
 namespace concurrency
@@ -181,16 +180,12 @@ public:
 
     explicit MpmcHashmap32(size_t maxElements) : _end(0), _capacity(maxElements), _index(maxElements * 4)
     {
-        void* mem = mmap(nullptr,
-            blockSizeFor(_capacity, sizeof(Entry)),
-            (PROT_READ | PROT_WRITE),
-            (MAP_PRIVATE | MAP_ANONYMOUS),
-            -1,
-            0);
+        void* mem = memory::page::allocate(memory::page::alignedSpace(_capacity * sizeof(Entry)));
+
         _elements = reinterpret_cast<Entry*>(mem);
         assert(reinterpret_cast<intptr_t>(_elements) != -1);
         assert(reinterpret_cast<intptr_t>(&_elements[1]) != -1);
-        std::memset(mem, 0, blockSizeFor(_capacity, sizeof(Entry)));
+
         for (size_t i = 0; i < _capacity; ++i)
         {
             _elements[i].state = State::empty;
@@ -207,7 +202,8 @@ public:
                 _elements[i].~Entry();
             }
         }
-        munmap(_elements, blockSizeFor(_capacity, sizeof(Entry)));
+
+        memory::page::free(_elements, memory::page::alignedSpace(_capacity * sizeof(Entry)));
     }
 
     template <typename... Args>
@@ -393,18 +389,6 @@ public:
     const PointerType getItem(const KeyT& key) const { return const_cast<MpmcHashmap32<KeyT, T>&>(*this).getItem(key); }
 
 private:
-    static size_t blockSizeFor(size_t count, size_t size)
-    {
-        const auto pageSize = getpagesize();
-        const auto used = (count * size);
-        const auto remaining = used % pageSize;
-        if (remaining != 0)
-        {
-            return used + (pageSize - remaining);
-        }
-        return used;
-    }
-
     Entry* _elements;
     std::atomic_uint32_t _end;
 

@@ -1,11 +1,10 @@
 #pragma once
 
+#include "utils/Allocator.h"
 #include "utils/ScopedReentrancyBlocker.h"
 #include <cassert>
 #include <cstddef>
 #include <cstring>
-#include <sys/mman.h>
-#include <unistd.h>
 
 namespace memory
 {
@@ -27,23 +26,14 @@ public:
           _reentrancyCount(0)
 #endif
     {
-        _size = S * sizeof(T);
-
-        const auto pageSize = getpagesize();
-        const auto remaining = _size % pageSize;
-        if (remaining != 0)
-        {
-            _size += (pageSize - remaining);
-        }
-        _data =
-            reinterpret_cast<T*>(mmap(nullptr, _size, (PROT_READ | PROT_WRITE), (MAP_PRIVATE | MAP_ANONYMOUS), -1, 0));
-        assert(reinterpret_cast<intptr_t>(_data) != -1);
+        _size = memory::page::alignedSpace(S * sizeof(T));
+        _data = reinterpret_cast<T*>(memory::page::allocate(_size));
 
         memset(_data, 0, _size);
         memset(_silenceBuffer, 0, silenceBufferSize * sizeof(T));
     }
 
-    ~RingBuffer() { munmap(_data, _size); }
+    ~RingBuffer() { memory::page::free(_data, _size); }
 
     /**
      * Reads size elements from the buffer to outData, but does not move the read head.

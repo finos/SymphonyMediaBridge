@@ -36,10 +36,10 @@ public:
     void free(void* data);
 
 private:
+    const size_t _size;
+    uint8_t* _area;
     uint32_t _head;
     uint32_t _tail;
-    uint8_t* _area;
-    const size_t _size;
 };
 
 } // namespace memory
