@@ -539,7 +539,12 @@ http_t* http_delete(char const* url, void* memctx)
         internal->request_header_large = (char*)HTTP_MALLOC(memctx, request_header_len + 1);
         request_header = internal->request_header_large;
     }
-    snprintf(request_header, request_header_len, "DELETE %s HTTP/1.0\r\nHost: %s:%s\r\n\r\n", resource, address, port);
+    snprintf(request_header,
+        request_header_len + 1,
+        "DELETE %s HTTP/1.0\r\nHost: %s:%s\r\n\r\n",
+        resource,
+        address,
+        port);
 
     return &internal->http;
 }
