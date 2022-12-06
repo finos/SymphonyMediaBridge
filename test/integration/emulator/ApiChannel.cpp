@@ -10,9 +10,10 @@ namespace
 std::string newGuuid()
 {
     utils::IdGenerator idGen;
-    char uuid[200];
+    std::string uuid(36, '\0');
 
-    sprintf(uuid,
+    snprintf(&uuid.front(), // + null terminator
+        uuid.size() + 1,
         "%08x-%04x-%04x-%04x-%012x",
         static_cast<uint32_t>(idGen.next() & 0xFFFFFFFFu),
         static_cast<uint32_t>(idGen.next() & 0xFFFFu),
@@ -26,9 +27,12 @@ std::string newGuuid()
 std::string newIdString()
 {
     utils::IdGenerator idGen;
-    char uuid[200];
+    std::string uuid(8, '\0');
 
-    sprintf(uuid, "%08u", static_cast<uint32_t>(idGen.next() & 0xFFFFFFFFu));
+    snprintf(&uuid.front(),
+        uuid.size() + 1, // + null terminator
+        "%08u",
+        static_cast<uint32_t>(idGen.next() & 0xFFFFFFFFu));
 
     return uuid;
 }
@@ -420,7 +424,7 @@ void ColibriChannel::create(const std::string& baseUrl,
     const uint32_t idleTimeout,
     const utils::Span<std::string> neighbours)
 {
-    // Colibry endpoints do not support idle timeouts.
+    // Colibri endpoints do not support idle timeouts.
     assert(0 == idleTimeout);
 
     _conferenceId = conferenceId;
