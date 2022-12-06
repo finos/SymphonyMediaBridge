@@ -2,6 +2,7 @@
 #include "logger/Logger.h"
 #include "utils/StringBuilder.h"
 #include "utils/Time.h"
+#include <array>
 
 namespace
 {
@@ -9,12 +10,12 @@ void logPacketError(void* p, const size_t len, const size_t baseHeaderLength)
 {
     logger::debug("RTP packet header invalid. Length %lu, baseHeaderLength %lu", "RtpHeader", len, baseHeaderLength);
     const auto pBytes = reinterpret_cast<uint8_t*>(p);
-    char byteString[4];
+    std::array<char, 4> byteString;
     utils::StringBuilder<256> loggerString;
     for (size_t i = 0; i < rtp::MIN_RTP_HEADER_SIZE; ++i)
     {
-        sprintf(byteString, "%02x ", pBytes[i]);
-        loggerString.append(byteString);
+        snprintf(byteString.data(), byteString.size(), "%02x ", pBytes[i]);
+        loggerString.append(byteString.data());
     }
 
     logger::debug("%s", "RtpHeader", loggerString.get());
