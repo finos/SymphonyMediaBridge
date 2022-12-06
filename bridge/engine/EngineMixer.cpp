@@ -405,12 +405,10 @@ void EngineMixer::removeStream(const EngineAudioStream* engineAudioStream)
         decommissionInboundContext(engineAudioStream->remoteSsrc.get());
         _mixerSsrcAudioBuffers.erase(engineAudioStream->remoteSsrc.get());
 
-        // will use engineAudioStream from a work thread
         markAssociatedAudioOutboundContextsForDeletion(engineAudioStream);
         sendAudioStreamToRecording(*engineAudioStream, false);
     }
 
-    // ... but it could be deleted here bevore job starts!
     _engineAudioStreams.erase(endpointIdHash);
 
     engineAudioStream->transport.postOnQueue(
