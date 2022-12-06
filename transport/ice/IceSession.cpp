@@ -525,19 +525,6 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
     {
         return;
     }
-    auto userNameAttribute = msg.getAttribute<StunUserName>(StunAttribute::USERNAME);
-    if (userNameAttribute)
-    {
-        const auto userNames = userNameAttribute->getNames();
-        if (userNames.second != _credentials.local.first || userNames.first != _credentials.remote.first)
-        {
-            logger::debug("Unrecognized user name in ICE response from %s, %s",
-                _logId.c_str(),
-                sender.toString().c_str(),
-                (userNames.first + ":" + userNames.second).c_str());
-            return;
-        }
-    }
 
     if (_state != State::GATHERING)
     {
@@ -599,7 +586,7 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
     logger::debug("response from %s, rtt %" PRIu64 "ms",
         _logId.c_str(),
         sender.toString().c_str(),
-        candidatePair->minRtt / utils::Time::ms);
+        candidatePair->getRtt() / utils::Time::ms);
 
     if (candidatePair->localCandidate.address != mappedAddress)
     {
@@ -649,6 +636,12 @@ void IceSession::onPacketReceived(IceEndpoint* socketEndpoint,
         return;
     }
 
+    if (_state == State::IDLE)
+    {
+        logger::debug("received STUN in idle state", _logId.c_str());
+        return;
+    }
+
     auto* msg = StunMessage::fromPtr(data);
     const auto method = msg->header.getMethod();
     if (method == StunHeader::BindingResponse || method == StunHeader::BindingErrorResponse)
@@ -693,11 +686,6 @@ void IceSession::sendResponse(IceEndpoint* endpoint,
     if (code != 0 && code != 200)
     {
         response.add(StunError(code, errorPhrase));
-    }
-    else if (!_credentials.remote.first.empty())
-    {
-        response.add(
-            StunGenericAttribute(StunAttribute::USERNAME, _credentials.local.first + ":" + _credentials.remote.first));
     }
 
     response.addMessageIntegrity(_hmacComputer.local);
@@ -1048,8 +1036,8 @@ IceSession::CandidatePair::CandidatePair(const IceConfig& config,
       replies(0),
       nominated(false),
       errorCode(IceError::Success),
-      minRtt(utils::Time::minute),
       state(Waiting),
+      _minRtt(utils::Time::minute),
       _name(name),
       _idGenerator(idGenerator),
       _config(config),
@@ -1203,6 +1191,8 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
         return;
     }
 
+    cancelPendingTransactionsBefore(*transaction);
+
     if (_transactions.size() == 1 && localEndpoint.endpoint->getTransportType() == ice::TransportType::TCP)
     {
         localCandidate.baseAddress = localEndpoint.endpoint->getLocalPort();
@@ -1213,7 +1203,7 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
     }
 
     transaction->rtt = now - transaction->time;
-    minRtt = std::min(transaction->rtt, minRtt);
+    _minRtt = std::min(transaction->rtt, _minRtt);
 
     auto errorAttribute = response.getAttribute<StunError>(StunAttribute::ERROR_CODE);
     if (errorAttribute)
@@ -1283,6 +1273,19 @@ void IceSession::CandidatePair::cancelPendingTransactions()
     _transactions.clear();
 }
 
+/**
+ * Cancelling any request sent before this acknowledged one ensures that minimum
+ * count of pending requests are registered at the end point.
+ */
+void IceSession::CandidatePair::cancelPendingTransactionsBefore(StunTransaction& transaction)
+{
+    while (!_transactions.empty() && &_transactions.front() != &transaction && !_transactions.front().acknowledged())
+    {
+        localEndpoint.endpoint->cancelStunTransaction(_transactions.front().id.get());
+        _transactions.pop_front();
+    }
+}
+
 bool IceSession::CandidatePair::isRecent(uint64_t now) const
 {
     if (gatheringProbe && state == InProgress)
@@ -1327,21 +1330,6 @@ void IceSession::CandidatePair::processTimeout(const uint64_t now)
             failCandidate();
         }
     }
-}
-
-// ns
-uint64_t IceSession::CandidatePair::getRtt() const
-{
-    uint64_t rtt = utils::Time::sec * 20;
-    for (auto& transaction : _transactions)
-    {
-        if (transaction.rtt > 0)
-        {
-            rtt = std::min(rtt, transaction.rtt);
-        }
-    }
-
-    return rtt;
 }
 
 bool IceSession::CandidatePair::hasTransaction(const StunMessage& response) const

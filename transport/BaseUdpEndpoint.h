@@ -41,20 +41,21 @@ public:
 
     Endpoint::State getState() const override { return _state; }
 
-    ice::TransportType getTransportType() const override { return ice::TransportType::UDP; }
+    ice::TransportType getTransportType() const override final { return ice::TransportType::UDP; }
 
     EndpointMetrics getMetrics(uint64_t timestamp) const override final;
 
-public: // internal job interface
-    // called on receiveJobs threads
+private:
+    // called on receiveJobs thread
     virtual void internalReceive(int fd, uint32_t batchSize);
     virtual void dispatchReceivedPacket(const SocketAddress& srcAddress,
         memory::UniquePacket packet,
         uint64_t timestamp) = 0;
-    // called on sendJobs threads
-    virtual void internalSend();
 
     virtual void internalStopped();
+
+    // called on sendJobs thread
+    virtual void internalSend();
 
 protected:
     std::atomic<Endpoint::State> _state;

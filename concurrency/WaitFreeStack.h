@@ -11,9 +11,18 @@ namespace concurrency
 class StackItem
 {
 public:
-    StackItem() : _next(nullptr) {}
+    StackItem() : _next(nullptr)
+    {
+        // _next must be initilized atomically. Cannot use constructor
+        _next = nullptr;
+    }
+
     StackItem(const StackItem&) = delete;
-    explicit StackItem(StackItem* tail) : _next(tail) {}
+    explicit StackItem(StackItem* tail)
+    {
+        // _next must be initilized atomically. Cannot use constructor
+        _next = tail;
+    }
 
 private:
     std::atomic<StackItem*> _next;

@@ -11,7 +11,11 @@ namespace concurrency
 class ListItem
 {
 public:
-    ListItem() { _next.store(nullptr); }
+    ListItem()
+    {
+        // _next must be initialied atomically. Cannot use constructor
+        _next = nullptr;
+    }
 
 private:
     std::atomic<ListItem*> _next;
