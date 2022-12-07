@@ -1032,11 +1032,11 @@ IceSession::CandidatePair::CandidatePair(const IceConfig& config,
       gatheringProbe(gathering),
       startTime(0),
       nextTransmission(0),
-      transmitInterval(config.RTO),
-      replies(0),
       nominated(false),
-      errorCode(IceError::Success),
       state(Waiting),
+      _transmitInterval(config.RTO),
+      _replies(0),
+      _errorCode(IceError::Success),
       _minRtt(utils::Time::minute),
       _name(name),
       _idGenerator(idGenerator),
@@ -1063,7 +1063,7 @@ int64_t IceSession::CandidatePair::nextTimeout(uint64_t now) const
         return -1;
     }
 
-    if (state == Succeeded && replies > 10 && !nominated)
+    if (state == Succeeded && _replies > 10 && !nominated)
     {
         return -1;
     }
@@ -1101,36 +1101,37 @@ void IceSession::CandidatePair::send(const uint64_t now)
 
     if (_transactions.empty())
     {
-        transmitInterval =
-            (localCandidate.transportType == ice::TransportType::UDP ? _config.RTO : _config.keepAliveInterval) *
+        const uint64_t initialInterval = (_minRtt < utils::Time::sec ? _minRtt + utils::Time::ms * 5 : _config.RTO);
+        _transmitInterval =
+            (localCandidate.transportType == ice::TransportType::UDP ? initialInterval : _config.keepAliveInterval) *
             utils::Time::ms;
-        nextTransmission = now + transmitInterval;
+        nextTransmission = now + _transmitInterval;
         startTime = now;
     }
-    else if (state == Succeeded && replies > 10 && nominated)
+    else if (state == Succeeded && _replies > 10 && nominated)
     {
-        transmitInterval = _config.keepAliveInterval * utils::Time::ms;
-        if (utils::Time::diffGE(nextTransmission, now, transmitInterval * 2))
+        _transmitInterval = _config.keepAliveInterval * utils::Time::ms;
+        if (utils::Time::diffGE(nextTransmission, now, _transmitInterval * 2))
         {
             nextTransmission = now;
         }
         else
         {
-            nextTransmission = nextTransmission + transmitInterval;
+            nextTransmission = nextTransmission + _transmitInterval;
         }
     }
     else
     {
         if (localCandidate.transportType == ice::TransportType::UDP)
         {
-            transmitInterval = std::min(transmitInterval * 2, _config.maxRTO * utils::Time::ms);
+            _transmitInterval = std::min(_transmitInterval * 2, _config.maxRTO * utils::Time::ms);
             const auto maxRttTransaction = std::max_element(_transactions.cbegin(),
                 _transactions.cend(),
                 [](const StunTransaction& cta, const StunTransaction& ctb) { return cta.rtt > ctb.rtt; });
-            transmitInterval =
-                std::max(transmitInterval, std::min(_config.maxRTO * utils::Time::ms, maxRttTransaction->rtt));
+            _transmitInterval =
+                std::max(_transmitInterval, std::min(_config.maxRTO * utils::Time::ms, maxRttTransaction->rtt));
         }
-        nextTransmission = nextTransmission + transmitInterval;
+        nextTransmission = nextTransmission + _transmitInterval;
     }
 
     StunTransaction transaction;
@@ -1155,7 +1156,8 @@ void IceSession::CandidatePair::send(const uint64_t now)
         state = InProgress;
     }
     _transactions.push_back(transaction);
-    if (_transactions.size() > 8)
+    const size_t pendingTransactionLimit = std::max(uint64_t(1), utils::Time::ms * 1500 / _transmitInterval);
+    if (_transactions.size() > pendingTransactionLimit)
     {
         if (localEndpoint.endpoint)
         {
@@ -1213,19 +1215,19 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
             state = CandidatePair::Waiting;
             nominated = false;
             nextTransmission = now;
-            replies = 0;
+            _replies = 0;
         }
         else
         {
             failCandidate();
             state = CandidatePair::Failed;
-            errorCode = static_cast<IceError>(errorAttribute->getCode());
-            ++replies;
+            _errorCode = static_cast<IceError>(errorAttribute->getCode());
+            ++_replies;
         }
         return;
     }
 
-    if (++replies > 0)
+    if (++_replies > 0)
     {
         state = CandidatePair::Succeeded;
     }
@@ -1234,7 +1236,7 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
 void IceSession::CandidatePair::onDisconnect()
 {
     failCandidate();
-    errorCode = IceError::ConnectionTimeoutOrFailure;
+    _errorCode = IceError::ConnectionTimeoutOrFailure;
     return;
 }
 
@@ -1305,7 +1307,7 @@ void IceSession::CandidatePair::processTimeout(const uint64_t now)
     if (gatheringProbe && state == InProgress && now - startTime > _config.gather.probeTimeout * utils::Time::ms)
     {
         failCandidate();
-        errorCode = IceError::RequestTimeout;
+        _errorCode = IceError::RequestTimeout;
         return;
     }
 

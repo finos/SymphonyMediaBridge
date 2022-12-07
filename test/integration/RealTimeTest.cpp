@@ -195,7 +195,7 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
     return it->isActiveTalker;
 }
 
-TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
+TEST_F(RealTimeTest, smbMegaHoot)
 {
     RealTimeTest::smbMegaHootTest(1);
 }
@@ -410,7 +410,7 @@ TEST_F(RealTimeTest, DISABLED_localMiniHoot)
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-    makeCallWithDefaultAudioProfile(group, 20 * utils::Time::sec);
+    makeCallWithDefaultAudioProfile(group, 40 * utils::Time::sec);
 
     group.disconnectClients();
 

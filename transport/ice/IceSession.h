@@ -236,10 +236,7 @@ private:
         const bool gatheringProbe;
         uint64_t startTime;
         uint64_t nextTransmission;
-        uint64_t transmitInterval;
-        int replies;
         bool nominated;
-        IceError errorCode;
 
         enum State
         {
@@ -256,6 +253,9 @@ private:
         void cancelPendingTransactions();
         void cancelPendingTransactionsBefore(StunTransaction& transaction);
 
+        uint64_t _transmitInterval;
+        int _replies;
+        IceError _errorCode;
         uint64_t _minRtt;
         const std::string& _name;
         std::deque<StunTransaction> _transactions; // TODO replace with inplace circular container
