@@ -88,6 +88,71 @@ bridge::SimulcastStream emptySimulcast()
     return simulcast;
 }
 
+struct JobManagerProcessor
+{
+    JobManagerProcessor(jobmanager::TimerQueue& timeQueue) : jobManager(timeQueue, 512) {}
+    ~JobManagerProcessor() { dropAll(); }
+
+    void runPendingJobs()
+    {
+        for (auto pendingJobIt = pendingJobs.begin(); pendingJobIt != pendingJobs.end();)
+        {
+            if (!(*pendingJobIt)->runStep())
+            {
+                jobManager.freeJob(*pendingJobIt);
+                pendingJobIt = pendingJobs.erase(pendingJobIt);
+            }
+            else
+            {
+                ++pendingJobIt;
+            }
+        }
+    }
+
+    void processAll()
+    {
+        runPendingJobs();
+
+        jobmanager::MultiStepJob* job;
+        while ((job = jobManager.pop()) != nullptr)
+        {
+            if (!job->runStep())
+            {
+                jobManager.freeJob(job);
+            }
+            else
+            {
+                pendingJobs.push_back(job);
+            }
+        }
+
+        runPendingJobs();
+    }
+
+    void dropAll()
+    {
+        jobmanager::MultiStepJob* job;
+        while ((job = jobManager.pop()) != nullptr)
+        {
+            jobManager.freeJob(job);
+        }
+
+        while (!pendingJobs.empty())
+        {
+            jobManager.freeJob(pendingJobs.back());
+            pendingJobs.pop_back();
+        }
+    }
+
+    jobmanager::JobManager& getJobManager() { return jobManager; }
+    size_t getPendingJobsCount() const { return pendingJobs.size(); }
+    size_t getJobsCount() const { return getPendingJobsCount() + jobManager.getCount(); }
+
+private:
+    jobmanager::JobManager jobManager;
+    std::vector<jobmanager::MultiStepJob*> pendingJobs;
+};
+
 struct MixerTestScope
 {
     MixerTestScope()
@@ -95,8 +160,8 @@ struct MixerTestScope
           engineTaskQueue(512),
           engineSyncContext(engineTaskQueue),
           timeQueue(64),
-          wtJobManager(timeQueue, 512),
-          backgroundJobManager(timeQueue, 512),
+          wtJobManagerProcessor(timeQueue),
+          backgroundJobManagerProcessor(timeQueue),
           packetAllocator(4096, "MixerTestPoolAllocator"),
           audioPacketAllocator(4096, "MixerTestAudioPoolAllocator")
     {
@@ -107,8 +172,8 @@ struct MixerTestScope
     concurrency::MpmcQueue<utils::Function> engineTaskQueue;
     concurrency::SynchronizationContext engineSyncContext;
     jobmanager::TimerQueue timeQueue;
-    jobmanager::JobManager wtJobManager;
-    jobmanager::JobManager backgroundJobManager;
+    JobManagerProcessor wtJobManagerProcessor;
+    JobManagerProcessor backgroundJobManagerProcessor;
     memory::PacketPoolAllocator packetAllocator;
     memory::AudioPacketPoolAllocator audioPacketAllocator;
 };
@@ -131,9 +196,9 @@ protected:
         auto videoSsrcs = getVideoSsrcs(_ssrcGenerator, LAST_N);
         std::vector<api::SsrcPair> videoPinSsrc;
         auto engineMixer = std::make_unique<EngineMixer>(id,
-            _testScope->wtJobManager,
+            _testScope->wtJobManagerProcessor.getJobManager(),
             _testScope->engineSyncContext,
-            _testScope->backgroundJobManager,
+            _testScope->backgroundJobManagerProcessor.getJobManager(),
             _testScope->mixerManagerAsyncMock,
             LOCAL_VIDEO_SRC,
             _config,
@@ -146,7 +211,7 @@ protected:
         return std::make_unique<Mixer>(id,
             1,
             _testScope->transportFactoryMock,
-            _testScope->backgroundJobManager,
+            _testScope->backgroundJobManagerProcessor.getJobManager(),
             std::move(engineMixer),
             _idGenerator,
             _ssrcGenerator,
@@ -185,14 +250,11 @@ protected:
         CHECK(mixer.startBundleTransport(endpointId));
     }
 
-    void dropAllBackGroupJobs()
-    {
-        jobmanager::MultiStepJob* job;
-        while ((job = _testScope->backgroundJobManager.pop()) != nullptr)
-        {
-            _testScope->backgroundJobManager.freeJob(job);
-        }
-    }
+    void dropAllBackgroundJobs() { _testScope->backgroundJobManagerProcessor.dropAll(); }
+    void dropAllWorkerThreadJobs() { _testScope->wtJobManagerProcessor.dropAll(); }
+
+    void processAllBackgroundJobs() { _testScope->backgroundJobManagerProcessor.processAll(); }
+    void processWorkerThreadJobs() { _testScope->wtJobManagerProcessor.processAll(); }
 
     void processAllEngineQueue()
     {
@@ -217,6 +279,8 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnAudioStream)
 
     auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
 
+    EXPECT_CALL(*transportMock, stop()).Times(0);
+
     _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
 
     addEndpointWithBundleTransport(*mixer, endpointId0, true, true, true);
@@ -227,7 +291,7 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnAudioStream)
     ASSERT_NE(nullptr, engineVideoStream);
     ASSERT_NE(nullptr, engineDataStream);
 
-    dropAllBackGroupJobs();
+    dropAllBackgroundJobs();
 
     std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
     transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
@@ -239,7 +303,7 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnAudioStream)
     mixer->engineDataStreamRemoved(*engineDataStream);
 
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
-    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
 }
 
 TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnVideoStream)
@@ -249,6 +313,8 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnVideoStream)
 
     auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
 
+    EXPECT_CALL(*transportMock, stop()).Times(0);
+
     _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
 
     addEndpointWithBundleTransport(*mixer, endpointId0, true, true, true);
@@ -259,7 +325,7 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnVideoStream)
     ASSERT_NE(nullptr, engineAudioStream);
     ASSERT_NE(nullptr, engineDataStream);
 
-    dropAllBackGroupJobs();
+    dropAllBackgroundJobs();
 
     std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
     transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
@@ -271,7 +337,7 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnVideoStream)
     mixer->engineDataStreamRemoved(*engineDataStream);
 
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
-    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
 }
 
 TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnDataStream)
@@ -280,6 +346,8 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnDataStream)
     auto mixer = createMixer("MixerTest0", true);
 
     auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
+
+    EXPECT_CALL(*transportMock, stop()).Times(0);
 
     _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
 
@@ -291,7 +359,7 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnDataStream)
     ASSERT_NE(nullptr, engineAudioStream);
     ASSERT_NE(nullptr, engineVideoStream);
 
-    dropAllBackGroupJobs();
+    dropAllBackgroundJobs();
 
     std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
     transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
@@ -303,7 +371,7 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnDataStream)
     mixer->engineVideoStreamRemoved(*engineVideoStream);
 
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
-    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
 }
 
 TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
@@ -313,18 +381,20 @@ TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
 
     auto transportMock = std::make_shared<NiceMock<RtcTransportMock>>();
 
+    EXPECT_CALL(*transportMock, hasPendingJobs()).WillOnce(Return(false));
+    EXPECT_CALL(*transportMock, stop());
+
     _testScope->transportFactoryMock.willReturnByDefaultForAllWeakly(transportMock);
 
     addEndpointWithBundleTransport(*mixer, endpointId0, true, true, true);
 
-    ASSERT_NE(nullptr, mixer->getEngineAudioStream(endpointId0));
-    ASSERT_NE(nullptr, mixer->getEngineVideoStream(endpointId0));
-    ASSERT_NE(nullptr, mixer->getEngineDataStream(endpointId0));
+    auto* engineAudioStream = mixer->getEngineAudioStream(endpointId0);
+    auto* engineVideoStream = mixer->getEngineVideoStream(endpointId0);
+    auto* engineDataStream = mixer->getEngineDataStream(endpointId0);
 
-    dropAllBackGroupJobs();
-    processAllEngineQueue();
-
-    EXPECT_CALL(*transportMock, hasPendingJobs()).WillOnce(Return(false));
+    ASSERT_NE(nullptr, engineAudioStream);
+    ASSERT_NE(nullptr, engineVideoStream);
+    ASSERT_NE(nullptr, engineDataStream);
 
     std::weak_ptr<RtcTransportMock> transportMockWeakPointer = transportMock;
     transportMock.reset(); // Allow to be deleted if a strong reference is lost in mixer
@@ -334,17 +404,28 @@ TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
     mixer->removeDataStream(endpointId0);
 
     // Remove should not really delete but trigger the deletion on EngineMixer
-    ASSERT_EQ(0, _testScope->backgroundJobManager.getCount());
+    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
     ASSERT_NE(nullptr, mixer->getEngineAudioStream(endpointId0));
     ASSERT_NE(nullptr, mixer->getEngineVideoStream(endpointId0));
     ASSERT_NE(nullptr, mixer->getEngineDataStream(endpointId0));
 
-    EXPECT_CALL(_testScope->mixerManagerAsyncMock, audioStreamRemoved(_, _));
-    EXPECT_CALL(_testScope->mixerManagerAsyncMock, videoStreamRemoved(_, _));
-    EXPECT_CALL(_testScope->mixerManagerAsyncMock, dataStreamRemoved(_, _));
+    dropAllBackgroundJobs();
 
-    // Process all engine queue. That should call the engineAudioStreamRemoved and callback again
-    // the mixer manager
-    processAllEngineQueue();
+    mixer->engineAudioStreamRemoved(*engineAudioStream);
+    mixer->engineVideoStreamRemoved(*engineVideoStream);
+    mixer->engineDataStreamRemoved(*engineDataStream);
+
+    ASSERT_NE(nullptr, transportMockWeakPointer.lock());
+    // 1 background job should be enqueued to delete transports
+    ASSERT_EQ(1, _testScope->backgroundJobManagerProcessor.getJobsCount());
+
+    // Now the engine streams must be removed and transport deleted
+    processAllBackgroundJobs();
+
+    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
+    ASSERT_EQ(nullptr, transportMockWeakPointer.lock());
+    ASSERT_EQ(nullptr, mixer->getEngineAudioStream(endpointId0));
+    ASSERT_EQ(nullptr, mixer->getEngineVideoStream(endpointId0));
+    ASSERT_EQ(nullptr, mixer->getEngineDataStream(endpointId0));
 }
