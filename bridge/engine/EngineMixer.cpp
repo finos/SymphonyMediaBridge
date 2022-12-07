@@ -718,22 +718,44 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport& transpor
         ssrcWhitelist.ssrcs[0],
         ssrcWhitelist.ssrcs[1]);
 
+    memory::Array<uint32_t, 12> decommissionedSsrcs;
+
     const auto mapRevision = _activeMediaList->getMapRevision();
-    if (engineVideoStream->simulcastStream.numLevels != 0 &&
-        (simulcastStream.numLevels == 0 ||
-            simulcastStream.levels[0].ssrc != engineVideoStream->simulcastStream.levels[0].ssrc))
+    if (engineVideoStream->simulcastStream.numLevels != 0)
     {
-        removeVideoSsrcFromRecording(*engineVideoStream, engineVideoStream->simulcastStream.levels[0].ssrc);
+        const bool hasLevelZeroChanged = simulcastStream.numLevels == 0 ||
+            simulcastStream.levels[0].ssrc != engineVideoStream->simulcastStream.levels[0].ssrc;
+
+        if (hasLevelZeroChanged)
+        {
+            removeVideoSsrcFromRecording(*engineVideoStream, engineVideoStream->simulcastStream.levels[0].ssrc);
+        }
+
+        for (auto& simulcastLevel : engineVideoStream->simulcastStream.getLevels())
+        {
+            decommissionedSsrcs.push_back(simulcastLevel.ssrc);
+            decommissionedSsrcs.push_back(simulcastLevel.feedbackSsrc);
+        }
     }
 
     if ((engineVideoStream->secondarySimulcastStream.isSet() &&
-            engineVideoStream->secondarySimulcastStream.get().numLevels != 0) &&
-        (!secondarySimulcastStream.isSet() ||
-            secondarySimulcastStream.get().levels[0].ssrc !=
-                engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc))
+            engineVideoStream->secondarySimulcastStream.get().numLevels != 0))
     {
-        removeVideoSsrcFromRecording(*engineVideoStream,
-            engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc);
+        const bool hasLevelZeroChanged = !secondarySimulcastStream.isSet() ||
+            secondarySimulcastStream.get().levels[0].ssrc !=
+                engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc;
+
+        if (hasLevelZeroChanged)
+        {
+            removeVideoSsrcFromRecording(*engineVideoStream,
+                engineVideoStream->secondarySimulcastStream.get().levels[0].ssrc);
+        }
+
+        for (auto& simulcastLevel : engineVideoStream->secondarySimulcastStream.get().getLevels())
+        {
+            decommissionedSsrcs.push_back(simulcastLevel.ssrc);
+            decommissionedSsrcs.push_back(simulcastLevel.feedbackSsrc);
+        }
     }
 
     engineVideoStream->simulcastStream = simulcastStream;
@@ -741,6 +763,8 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport& transpor
 
     _engineStreamDirector->removeParticipant(endpointIdHash);
     _activeMediaList->removeVideoParticipant(endpointIdHash);
+
+    auto decommissionedSsrcsEndIt = decommissionedSsrcs.end();
 
     if (engineVideoStream->simulcastStream.numLevels > 0)
     {
@@ -750,10 +774,26 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport& transpor
             _engineStreamDirector->addParticipant(endpointIdHash,
                 engineVideoStream->simulcastStream,
                 &engineVideoStream->secondarySimulcastStream.get());
+
+            for (auto& simulcastLevel : engineVideoStream->secondarySimulcastStream.get().getLevels())
+            {
+                decommissionedSsrcsEndIt =
+                    std::remove(decommissionedSsrcs.begin(), decommissionedSsrcsEndIt, simulcastLevel.ssrc);
+                decommissionedSsrcsEndIt =
+                    std::remove(decommissionedSsrcs.begin(), decommissionedSsrcsEndIt, simulcastLevel.feedbackSsrc);
+            }
         }
         else
         {
             _engineStreamDirector->addParticipant(endpointIdHash, engineVideoStream->simulcastStream);
+        }
+
+        for (auto& simulcastLevel : engineVideoStream->simulcastStream.getLevels())
+        {
+            decommissionedSsrcsEndIt =
+                std::remove(decommissionedSsrcs.begin(), decommissionedSsrcsEndIt, simulcastLevel.ssrc);
+            decommissionedSsrcsEndIt =
+                std::remove(decommissionedSsrcs.begin(), decommissionedSsrcsEndIt, simulcastLevel.feedbackSsrc);
         }
 
         _activeMediaList->addVideoParticipant(endpointIdHash,
@@ -771,6 +811,13 @@ void EngineMixer::reconfigureVideoStream(const transport::RtcTransport& transpor
     {
         _engineStreamDirector->addParticipant(endpointIdHash);
     }
+
+    const auto decommissionedSpan = utils::Span<uint32_t>(decommissionedSsrcs.begin(), decommissionedSsrcsEndIt);
+    for (const auto& decommissionedSsrc : decommissionedSpan)
+    {
+        decommissionInboundContext(decommissionedSsrc);
+    }
+
     updateBandwidthFloor();
     sendLastNListMessageToAll();
     if (mapRevision != _activeMediaList->getMapRevision())
