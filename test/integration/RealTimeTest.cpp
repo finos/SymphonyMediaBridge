@@ -258,9 +258,9 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-    auto now = utils::Time::getAbsoluteTime();
-    auto diff = utils::Time::diff(startTime, now);
-    auto waitForMore = utils::Time::diff(diff, max_rampup * utils::Time::sec);
+    const auto now = utils::Time::getAbsoluteTime();
+    const auto diff = utils::Time::diff(startTime, now);
+    const auto waitForMore = utils::Time::diff(diff, max_rampup * utils::Time::sec);
 
     if (max_rampup != 0 && waitForMore > 0)
     {
