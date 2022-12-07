@@ -420,7 +420,6 @@ TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
     // 1 background job should be enqueued to delete transports
     ASSERT_EQ(1, _testScope->backgroundJobManagerProcessor.getJobsCount());
 
-    // Now the engine streams must be removed and transport deleted
     processAllBackgroundJobs();
 
     ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
