@@ -414,6 +414,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _pacingInUse(false),
       _iceState(ice::IceSession::State::IDLE),
       _dtlsState(SrtpClient::State::IDLE),
+      _isConnected(false),
       _rtcpProducer(_loggableId, _config, _outboundSsrcCounters, _inboundSsrcCounters, _mainAllocator, *this),
       _uplinkEstimationEnabled(false),
       _downlinkEstimationEnabled(false),
@@ -1733,8 +1734,7 @@ bool TransportImpl::isGatheringComplete() const
 
 bool TransportImpl::isConnected()
 {
-    const bool rtpComplete = (!_rtpIceSession || _rtpIceSession->getState() == ice::IceSession::State::CONNECTED);
-    return rtpComplete && _srtpClient->isDtlsConnected();
+    return _isConnected;
 }
 
 void TransportImpl::connect()
@@ -1931,6 +1931,9 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
+    _isConnected = (!_rtpIceSession || _iceState == ice::IceSession::State::CONNECTED) &&
+        (_dtlsState == SrtpClient::State::CONNECTED);
+
     switch (state)
     {
     case ice::IceSession::State::CONNECTED:
@@ -2038,6 +2041,9 @@ void TransportImpl::setDataReceiver(DataReceiver* dataReceiver)
 void TransportImpl::onDtlsStateChange(SrtpClient*, const SrtpClient::State state)
 {
     _dtlsState = state;
+    _isConnected = (!_rtpIceSession || _iceState == ice::IceSession::State::CONNECTED) &&
+        (_dtlsState == SrtpClient::State::CONNECTED);
+
     logger::info("DTLS %s", getLoggableId().c_str(), api::utils::toString(state));
     if (state == SrtpClient::State::CONNECTED && isConnected())
     {
