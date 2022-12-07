@@ -252,7 +252,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
-        auto audio = createTalker && count == 0 ? emulator::Audio::Fake : emulator::Audio::Muted;
+        auto audio = createTalker && count++ == 0 ? emulator::Audio::Fake : emulator::Audio::Muted;
         client->initiateCall(baseUrl.c_str(), conf.getId(), true, audio, false, true);
     }
 
