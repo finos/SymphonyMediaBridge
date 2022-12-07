@@ -192,11 +192,11 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
 TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 {
     std::string baseUrl = "http://127.0.0.1:8080";
-    auto numClients = 1000;
+    auto numClients = 40;
     bool createTalker = true;
-    uint16_t duration = 60;
-    uint32_t rampup = 0;
-    uint32_t max_rampup = 0;
+    uint16_t duration = 15;
+    uint32_t rampup = 10;
+    uint32_t max_rampup = 30;
     utils::MersienneRandom<uint32_t> randGen;
 
     if (_configInitialized)
@@ -241,7 +241,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         return;
     }
 
-    logger::info("Waiting before join for: %d s, start after: %d s", "RealTimeTest", rampup, max_rampup);
+    logger::info("SYNC: Waiting before join for: %d s, start after: %d s", "RealTimeTest", rampup, max_rampup);
 
     auto startTime = utils::Time::getAbsoluteTime();
     if (rampup != 0)
@@ -252,20 +252,23 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
-        auto audio = createTalker && count == 0 ? emulator::Audio::Fake : emulator::Audio::Muted;
+        auto audio = createTalker && count++ == 0 ? emulator::Audio::Fake : emulator::Audio::Muted;
         client->initiateCall(baseUrl.c_str(), conf.getId(), true, audio, false, true);
     }
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-    if (max_rampup != 0 &&
-        utils::Time::diffGT(startTime, utils::Time::getAbsoluteTime(), utils::Time::sec * max_rampup))
+    const auto now = utils::Time::getAbsoluteTime();
+    const auto diff = utils::Time::diff(startTime, now);
+    const auto waitForMore = utils::Time::diff(diff, max_rampup * utils::Time::sec);
+
+    if (max_rampup != 0 && waitForMore > 0)
     {
-        auto diff = utils::Time::diff(startTime, utils::Time::getAbsoluteTime());
-        logger::info("Waiting before start for another: %" PRId64 "s", "RealTimeTest", diff / utils::Time::sec);
-        utils::Time::nanoSleep(diff);
+        logger::info("Waiting before start for another: %" PRId64 "s", "RealTimeTest", waitForMore / utils::Time::sec);
+        utils::Time::nanoSleep(waitForMore);
     }
 
+    logger::info("SYNC: starting audio", "RealTimeTest");
     makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
 
     group.disconnectClients();
