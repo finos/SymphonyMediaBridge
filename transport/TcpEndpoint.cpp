@@ -157,6 +157,7 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
     : _state(CLOSED),
       _name("TcpEndpoint"),
       _depacketizer(-1, allocator),
+      _localInterface(localInterface),
       _receiveJobs(jobManager, 16),
       _sendJobs(jobManager, 512),
       _allocator(allocator),
@@ -521,6 +522,21 @@ bool TcpEndpoint::configureBufferSizes(size_t sendBufferSize, size_t receiveBuff
 {
     logger::debug("tcp endpoint buffer sizes send %zu, recv %zu", _name.c_str(), sendBufferSize, receiveBufferSize);
     return 0 == _socket.setSendBuffer(sendBufferSize) && 0 == _socket.setReceiveBuffer(receiveBufferSize);
+}
+
+SocketAddress TcpEndpoint::getLocalPort() const
+{
+    const State currentState = _state.load();
+    if (currentState == State::CONNECTED)
+    {
+        return _socket.getBoundPort();
+    }
+    else if (currentState != State::CLOSED)
+    {
+        return _localInterface;
+    }
+
+    return transport::SocketAddress();
 }
 
 } // namespace transport

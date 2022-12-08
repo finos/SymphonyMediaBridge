@@ -67,6 +67,8 @@ private:
 } // namespace tcp
 
 // End point that package ICE, DTLS, RTP in TCP
+// You can call sendTo and sendStunTo on unconnected socket. It will connect and continue transmission as soon
+// as the socket becomes writeable
 class TcpEndpoint : public Endpoint, public RtcePoll::IEventListener
 {
 public:
@@ -104,7 +106,7 @@ public:
 
     void connect(const SocketAddress& remotePort);
 
-    SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
+    SocketAddress getLocalPort() const override;
     void cancelStunTransaction(__uint128_t transactionId) override{};
 
     bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
@@ -136,6 +138,7 @@ private:
     logger::LoggableId _name;
     RtcSocket _socket;
     RtpDepacketizer _depacketizer;
+    const SocketAddress _localInterface;
     SocketAddress _peerPort;
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 

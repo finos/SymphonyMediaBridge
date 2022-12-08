@@ -24,10 +24,11 @@ struct IceConfig
     uint32_t hostProbeTimeout = 5000; // probing towards host address
     uint32_t additionalCandidateTimeout = 2000; // before nominating TCP
     uint32_t connectTimeout = 30000;
-    uint32_t RTO = 50;
-    uint32_t maxRTO = 500;
+    uint32_t RTO = 50; // initial RTO. RFC8489 says 500ms. This is faster in case of loss.
+    uint32_t maxRTO = 1000;
     uint32_t probeReplicates = 1;
     uint32_t probeConnectionExpirationTimeout = 5000;
+    uint32_t transmitIntervalExtend = 10;
 
     std::string software = "slice"; // keep short please.
     transport::SocketAddress publicIpv4;

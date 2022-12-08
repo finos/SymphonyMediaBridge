@@ -1095,16 +1095,26 @@ void IceSession::CandidatePair::send(const uint64_t now)
     if (!gatheringProbe && _credentials.remote.second.empty())
     {
         // cannot send yet as we have not receive credentials
-        nextTransmission = now + 30 * utils::Time::ms;
+        nextTransmission = now + 50 * utils::Time::ms;
         return;
     }
 
     if (_transactions.empty())
     {
-        const uint64_t initialInterval = (_minRtt < utils::Time::sec ? _minRtt + utils::Time::ms * 5 : _config.RTO);
-        _transmitInterval =
-            (localCandidate.transportType == ice::TransportType::UDP ? initialInterval : _config.keepAliveInterval) *
-            utils::Time::ms;
+        if (localCandidate.transportType == ice::TransportType::UDP)
+        {
+            _transmitInterval = _config.RTO * utils::Time::ms;
+            if (_replies > 0)
+            {
+                _transmitInterval =
+                    std::max(_transmitInterval, _minRtt + utils::Time::ms * _config.transmitIntervalExtend);
+            }
+            _transmitInterval = std::min(_transmitInterval, _config.maxRTO * utils::Time::ms);
+        }
+        else
+        {
+            _transmitInterval = _config.keepAliveInterval * utils::Time::ms;
+        }
         nextTransmission = now + _transmitInterval;
         startTime = now;
     }
@@ -1125,11 +1135,6 @@ void IceSession::CandidatePair::send(const uint64_t now)
         if (localCandidate.transportType == ice::TransportType::UDP)
         {
             _transmitInterval = std::min(_transmitInterval * 2, _config.maxRTO * utils::Time::ms);
-            const auto maxRttTransaction = std::max_element(_transactions.cbegin(),
-                _transactions.cend(),
-                [](const StunTransaction& cta, const StunTransaction& ctb) { return cta.rtt > ctb.rtt; });
-            _transmitInterval =
-                std::max(_transmitInterval, std::min(_config.maxRTO * utils::Time::ms, maxRttTransaction->rtt));
         }
         nextTransmission = nextTransmission + _transmitInterval;
     }
@@ -1155,9 +1160,10 @@ void IceSession::CandidatePair::send(const uint64_t now)
     {
         state = InProgress;
     }
+
     _transactions.push_back(transaction);
-    const size_t pendingTransactionLimit = std::max(uint64_t(1), utils::Time::ms * 1500 / _transmitInterval);
-    if (_transactions.size() > pendingTransactionLimit)
+    const size_t pendingTransactionLimit = std::max(uint64_t(1), utils::Time::sec * 4 / _transmitInterval);
+    while (_transactions.size() > pendingTransactionLimit)
     {
         if (localEndpoint.endpoint)
         {

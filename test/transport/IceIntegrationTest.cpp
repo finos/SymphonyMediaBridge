@@ -63,7 +63,7 @@ TEST_F(IceIntegrationTest, connectUdp)
     const auto startTime = utils::Time::getAbsoluteTime();
     clients.connect(startTime);
 
-    while (utils::Time::getAbsoluteTime() - startTime < 200 * utils::Time::sec)
+    while (!clients.isConnected() && utils::Time::getAbsoluteTime() - startTime < 2 * utils::Time::sec)
     {
         utils::Time::nanoSleep(100 * utils::Time::ms);
         clients.tryConnect(utils::Time::getAbsoluteTime(), *_sslDtls);

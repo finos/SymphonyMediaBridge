@@ -9,7 +9,7 @@
 
 #include "crypto/SslHelper.h"
 
-#define DEBUG_ENDPOINT 1
+#define DEBUG_ENDPOINT 0
 
 #if DEBUG_ENDPOINT
 #define LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
@@ -166,6 +166,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
             listener = _iceResponseListeners.getItem(transactionId);
             if (listener)
             {
+                _iceResponseListeners.erase(transactionId);
                 const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
                 LOG("STUN response received for transaction %04x%04x%04x, count %" PRIu64,
                     _name.c_str(),
@@ -173,7 +174,6 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
                     id[2],
                     id[3],
                     _iceResponseListeners.size());
-                _iceResponseListeners.erase(transactionId);
             }
         }
 
