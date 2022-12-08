@@ -1,4 +1,5 @@
 #include "test/integration/RealTimeTest.h"
+#include "IntegrationTest.h"
 #include "api/Parser.h"
 #include "api/utils.h"
 #include "bridge/Mixer.h"
@@ -31,6 +32,7 @@
 #include "utils/IdGenerator.h"
 #include "utils/MersienneRandom.h"
 #include "utils/StringBuilder.h"
+#include <algorithm>
 #include <chrono>
 #include <complex>
 #include <memory>
@@ -157,13 +159,15 @@ void RealTimeTest::initLocalTransports()
 
 using namespace emulator;
 
+const double RealTimeTest::frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
+
 template <typename TChannel>
 void makeCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall, uint64_t duration)
 {
-    static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
     for (size_t i = 0; i < groupCall.clients.size(); ++i)
     {
-        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
+        groupCall.clients[i]->_audioSource->setFrequency(
+            RealTimeTest::frequencies[i % (sizeof(RealTimeTest::frequencies) / sizeof(RealTimeTest::frequencies[0]))]);
     }
 
     for (auto& client : groupCall.clients)
@@ -191,12 +195,42 @@ bool RealTimeTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>& en
 
 TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
 {
+    RealTimeTest::smbMegaHootTest(1);
+}
+
+TEST_F(RealTimeTest, DISABLED_smbMegaHoot_1)
+{
+    RealTimeTest::smbMegaHootTest(1);
+}
+
+TEST_F(RealTimeTest, DISABLED_smbMegaHoot_2)
+{
+    RealTimeTest::smbMegaHootTest(2);
+}
+
+TEST_F(RealTimeTest, DISABLED_smbMegaHoot_3)
+{
+    RealTimeTest::smbMegaHootTest(3);
+}
+
+TEST_F(RealTimeTest, DISABLED_smbMegaHoot_4)
+{
+    RealTimeTest::smbMegaHootTest(4);
+}
+
+TEST_F(RealTimeTest, DISABLED_smbMegaHoot_5)
+{
+    RealTimeTest::smbMegaHootTest(5);
+}
+
+void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
+{
     std::string baseUrl = "http://127.0.0.1:8080";
-    auto numClients = 40;
+    size_t numClients = 40;
     bool createTalker = true;
     uint16_t duration = 15;
-    uint32_t rampup = 10;
-    uint32_t max_rampup = 30;
+    uint32_t rampup = 5;
+    uint32_t max_rampup = 10;
     utils::MersienneRandom<uint32_t> randGen;
 
     if (_configInitialized)
@@ -217,7 +251,7 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
         assert(!_config->conference_id.get().empty());
     }
 
-    logger::info("Starting smbMegaHoot test:\n\tbaseUrl: %s\n\tnumClients: %d",
+    logger::info("Starting smbMegaHoot test:\n\tbaseUrl: %s\n\tnumClients: %zu",
         "RealTimeTest",
         baseUrl.c_str(),
         numClients);
@@ -252,8 +286,9 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
-        auto audio = createTalker && count++ == 0 ? emulator::Audio::Fake : emulator::Audio::Muted;
+        auto audio = createTalker && count++ < numSpeakers ? emulator::Audio::Opus : emulator::Audio::Muted;
         client->initiateCall(baseUrl.c_str(), conf.getId(), true, audio, false, true);
+        client->setExpectedAudioType(Audio::Opus);
     }
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
@@ -272,12 +307,66 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot)
     makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
 
     group.disconnectClients();
-    for (auto& client : group.clients)
-    {
-        client->_transport->stop();
-    }
+    group.stopTransports();
 
     group.awaitPendingJobs(utils::Time::sec * 4);
+
+    IntegrationTest::AudioAnalysisData results[numClients];
+    for (size_t id = 0; id < numClients; ++id)
+    {
+        auto durationForAnalizys = std::min(duration, (decltype(duration))15);
+        results[id] =
+            IntegrationTest::analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), durationForAnalizys, false);
+
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+        std::string clientName = "client_" + std::to_string(id);
+        group.clients[id]->_transport->getReportSummary(transportSummary);
+        logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+    }
+
+    for (size_t id = 0; id < numClients; ++id)
+    {
+        const auto expectedChannelsReceived = id < numSpeakers ? numSpeakers - 1 : numSpeakers;
+        if (expectedChannelsReceived)
+        {
+            std::unordered_set<double> received;
+            for (const auto& freq : results[id].dominantFrequencies)
+            {
+                received.insert(freq);
+
+                auto receivedBytes = results[id].receivedBytes[freq];
+                EXPECT_NEAR(receivedBytes,
+                    codec::Opus::sampleRate * duration,
+                    codec::Opus::sampleRate * duration * 0.05);
+                logger::info("Client %zu received: %zu bytes for freq %f", "RealTimeTest", id, receivedBytes, freq);
+            }
+
+            EXPECT_EQ(results[id].dominantFrequencies.size(), expectedChannelsReceived);
+            for (const auto& freq : results[id].dominantFrequencies)
+            {
+                for (size_t i = 0; i < numSpeakers; i++)
+                {
+                    // We should not receive our own audio
+                    if (i == id)
+                    {
+                        continue;
+                    }
+                    if (freq > RealTimeTest::frequencies[i] * 0.9 && freq < RealTimeTest::frequencies[i] * 1.1)
+                    {
+                        received.erase(freq);
+                    }
+                }
+            }
+            EXPECT_EQ(received.size(), 0);
+            if (received.size())
+            {
+                for (const auto& item : received)
+                {
+                    logger::error("Unexpected frequency %f", "RealTimeTest", item);
+                }
+            }
+        }
+    }
 }
 
 TEST_F(RealTimeTest, DISABLED_localMiniHoot)

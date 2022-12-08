@@ -21,7 +21,7 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, 
       _ptime(ptime),
       _isPtt(IsPttState::NotSpecified),
       _useAudioLevel(true),
-      _fakeAudio(fakeAudio)
+      _emulatedAudioType(fakeAudio)
 {
 }
 
@@ -55,7 +55,7 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     int16_t audio[codec::Opus::channelsPerFrame * samplesPerPacket];
     _rtpTimestamp += samplesPerPacket;
 
-    for (uint64_t x = 0; _fakeAudio == Audio::Opus && x < samplesPerPacket; ++x)
+    for (uint64_t x = 0; _emulatedAudioType == Audio::Opus && x < samplesPerPacket; ++x)
     {
         audio[x * 2] = _amplitude * sin(_phase + x * 2 * M_PI * _frequency / codec::Opus::sampleRate);
         audio[x * 2 + 1] = 0;
@@ -72,11 +72,11 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     {
         rtp::GeneralExtension1Byteheader audioLevel(1, 1);
 
-        if (_fakeAudio == Audio::Muted)
+        if (_emulatedAudioType == Audio::Muted)
         {
             audioLevel.data[0] = 127;
         }
-        else if (_fakeAudio == Audio::Fake)
+        else if (_emulatedAudioType == Audio::Fake)
         {
             audioLevel.data[0] = 28;
         }
@@ -109,7 +109,7 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     }
     assert(rtpHeader->headerLength() == expectedHeaderLength);
 
-    if (_fakeAudio == Audio::Opus)
+    if (_emulatedAudioType == Audio::Opus)
     {
         const auto bytesEncoded = _encoder.encode(audio,
             samplesPerPacket,

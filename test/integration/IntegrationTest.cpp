@@ -268,6 +268,7 @@ bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>&
 template <typename TClient>
 IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* client,
     double expectedDurationSeconds,
+    bool checkAmplitudeProfile,
     size_t mixedAudioSources,
     bool dumpPcmData)
 {
@@ -277,6 +278,7 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
 
     const auto& data = client->getAudioReceiveStats();
     IntegrationTest::AudioAnalysisData result;
+
     for (const auto& item : data)
     {
         if (client->isRemoteVideoSsrc(item.first))
@@ -289,6 +291,7 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
         std::vector<double> freqVector;
         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
         auto rec = item.second->getRecording();
+
         ::analyzeRecording(rec,
             freqVector,
             amplitudeProfile,
@@ -305,14 +308,22 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
             EXPECT_EQ(freqVector.size(), 1);
             EXPECT_NEAR(rec.size(), expectedDurationSeconds * codec::Opus::sampleRate, 3 * AUDIO_PACKET_SAMPLE_COUNT);
 
-            EXPECT_EQ(amplitudeProfile.size(), 2);
-            if (amplitudeProfile.size() > 1)
+            if (checkAmplitudeProfile)
             {
-                EXPECT_NEAR(amplitudeProfile[1].second, 5725, 125);
+                EXPECT_EQ(amplitudeProfile.size(), 2);
+                if (amplitudeProfile.size() > 1)
+                {
+                    EXPECT_NEAR(amplitudeProfile[1].second, 5725, 125);
+                }
             }
         }
 
         result.dominantFrequencies.insert(result.dominantFrequencies.begin(), freqVector.begin(), freqVector.end());
+        if (freqVector.size())
+        {
+            result.receivedBytes[freqVector[0]] = rec.size();
+        }
+
         result.amplitudeProfile.insert(result.amplitudeProfile.begin(),
             amplitudeProfile.begin(),
             amplitudeProfile.end());

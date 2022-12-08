@@ -116,7 +116,8 @@ public:
           _loggableId("client", id),
           _recordingActive(true),
           _ptime(ptime),
-          _audioType(Audio::None)
+          _audioType(Audio::None),
+          _expectedReceiveAudioType(Audio::None)
     {
     }
 
@@ -188,6 +189,8 @@ public:
             neighbours);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
+
+    void setExpectedAudioType(Audio audio) { _expectedReceiveAudioType = audio; }
 
     size_t getEndpointIdHash() const { return _channel.getEndpointIdHash(); }
     std::string getEndpointId() const { return _channel.getEndpointId(); }
@@ -385,12 +388,12 @@ public:
             uint32_t ssrc,
             const bridge::RtpMap& rtpMap,
             transport::RtcTransport* transport,
-            emulator::Audio fakeAudio,
+            emulator::Audio emulatedAudioType,
             uint64_t timestamp)
             : _rtpMap(rtpMap),
               _context(ssrc, _rtpMap, transport, timestamp),
               _loggableId("rtprcv", instanceId),
-              _fakeAudio(fakeAudio)
+              _emulatedAudioType(emulatedAudioType)
         {
             _recording.reserve(256 * 1024);
         }
@@ -407,7 +410,7 @@ public:
             }
 
             auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-            if (_fakeAudio == Audio::Opus)
+            if (_emulatedAudioType == Audio::Opus)
             {
                 addOpus(reinterpret_cast<unsigned char*>(rtpHeader->getPayload()),
                     packet.getLength() - rtpHeader->headerLength(),
@@ -450,7 +453,7 @@ public:
         codec::OpusDecoder _decoder;
         logger::LoggableId _loggableId;
         std::vector<int16_t> _recording;
-        const Audio _fakeAudio;
+        const Audio _emulatedAudioType;
     };
 
     class RtpVideoReceiver
@@ -702,7 +705,7 @@ public:
                         rtpHeader->ssrc.get(),
                         rtpMap,
                         sender,
-                        _audioType,
+                        _expectedReceiveAudioType == Audio::None ? _audioType : _expectedReceiveAudioType,
                         timestamp));
                 it = _audioReceivers.find(rtpHeader->ssrc.get());
             }
@@ -1001,6 +1004,7 @@ private:
     size_t _instanceId;
     RtxStats _rtxStats;
     Audio _audioType;
+    Audio _expectedReceiveAudioType;
 };
 
 template <typename TClient>
