@@ -30,7 +30,7 @@ UdpEndpointImpl::UdpEndpointImpl(jobmanager::JobManager& jobManager,
     : BaseUdpEndpoint("UdpEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
       _iceListeners(maxSessionCount * 2),
       _dtlsListeners(maxSessionCount * 2),
-      _iceResponseListeners(maxSessionCount * 4)
+      _iceResponseListeners(maxSessionCount * 16)
 {
 }
 
