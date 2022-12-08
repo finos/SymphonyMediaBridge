@@ -462,7 +462,8 @@ TEST_F(IntegrationTest, plain)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            const auto data =
+                analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -551,7 +552,7 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5);
+            const auto data = analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             EXPECT_EQ(data.amplitudeProfile.size(), 2);
             if (data.amplitudeProfile.size() > 1)
@@ -883,7 +884,7 @@ TEST_F(IntegrationTest, plainNewApi)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -974,7 +975,7 @@ TEST_F(IntegrationTest, ptime10)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -1420,7 +1421,7 @@ TEST_F(IntegrationTest, conferencePort)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 2 == id ? 2 : 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -1513,7 +1514,7 @@ TEST_F(IntegrationTest, neighbours)
         AudioAnalysisData results[4];
         for (size_t id = 0; id < 4; ++id)
         {
-            results[id] = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, chMixed[id]);
+            results[id] = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, chMixed[id]);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);

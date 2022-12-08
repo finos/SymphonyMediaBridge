@@ -354,7 +354,7 @@ TEST_F(BarbellTest, simpleBarbell)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -496,7 +496,7 @@ TEST_F(BarbellTest, barbellAfterClients)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             EXPECT_EQ(data.amplitudeProfile.size(), 2);
             if (data.amplitudeProfile.size() > 1)
@@ -626,7 +626,7 @@ TEST_F(BarbellTest, barbellNeighbours)
         const size_t expectedFreqCount[] = {2, 1, 1};
         for (size_t id = 0; id < 3; ++id)
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
             EXPECT_EQ(data.dominantFrequencies.size(), expectedFreqCount[id]);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
