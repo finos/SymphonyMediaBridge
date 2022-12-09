@@ -705,3 +705,47 @@ TEST_F(ActiveMediaListTest, mutedAreNotSwitchedIn)
 
     EXPECT_EQ(5, audioRewriteMap.size());
 }
+
+TEST_F(ActiveMediaListTest, mutedOutage)
+{
+    const int memberCount = 9;
+    for (int i = 1; i < memberCount; ++i)
+    {
+        _activeMediaList->addAudioParticipant(i, std::to_string(i).c_str());
+    }
+
+    const auto& audioRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
+    EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(6));
+    EXPECT_EQ(audioLastN + 2, audioRewriteMap.size());
+    uint64_t timestamp = utils::Time::sec;
+    // 2-5 are not sending media at all.
+    // 6-8 behave as muted, sending level 0x7F
+    for (int i = 0; i < 5950; ++i)
+    {
+        timestamp += 10;
+        if (!(i & 1) && !(i > 500 && i < 540) && !(i > 900 && i < 940))
+        {
+            _activeMediaList->onNewAudioLevel(1, 50, false);
+            _activeMediaList->onNewAudioLevel(6, 0x7F, false);
+            _activeMediaList->onNewAudioLevel(7, 0x7F, false);
+            _activeMediaList->onNewAudioLevel(8, 0x7F, false);
+        }
+        bool dominantSpeakerChanged = false;
+        bool videoMapChanged = false;
+        bool audioMapChanged = false;
+        _activeMediaList->process(timestamp * utils::Time::ms,
+            dominantSpeakerChanged,
+            videoMapChanged,
+            audioMapChanged);
+    }
+
+    for (int i = 1 + audioLastN + 2; i < memberCount; ++i)
+    {
+        EXPECT_EQ(audioRewriteMap.end(), audioRewriteMap.find(i));
+    }
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(1));
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(2));
+    EXPECT_NE(audioRewriteMap.end(), audioRewriteMap.find(3));
+
+    EXPECT_EQ(5, audioRewriteMap.size());
+}

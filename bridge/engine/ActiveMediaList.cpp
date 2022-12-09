@@ -383,8 +383,11 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
     {
         auto& audioParticipant = audioParticipantEntry.second;
         // Decay old max level over time (assuming process function called on average every 10ms)
-        audioParticipant.maxRecentLevel -=
-            (audioParticipant.maxRecentLevel - audioParticipant.noiseLevel) * AudioParticipant::MAX_LEVEL_DECAY;
+        if (audioParticipant.maxRecentLevel > audioParticipant.noiseLevel)
+        {
+            audioParticipant.maxRecentLevel -=
+                (audioParticipant.maxRecentLevel - audioParticipant.noiseLevel) * AudioParticipant::MAX_LEVEL_DECAY;
+        }
 
         const bool audioOutage =
             utils::Time::diffGT(audioParticipant.history.getUpdateTime(), timestamp, utils::Time::ms * 200);
