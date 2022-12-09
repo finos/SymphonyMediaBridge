@@ -116,7 +116,7 @@ public:
           _loggableId("client", id),
           _recordingActive(true),
           _ptime(ptime),
-          _audioType(Audio::None),
+          _sendAudioType(Audio::None),
           _expectedReceiveAudioType(Audio::None)
     {
     }
@@ -157,7 +157,7 @@ public:
         uint32_t idleTimeout = 0)
     {
         utils::Span<std::string> noNeighbours;
-        _audioType = audio;
+        _sendAudioType = audio;
         _channel.create(baseUrl,
             conferenceId,
             initiator,
@@ -178,7 +178,7 @@ public:
         const utils::Span<std::string>& neighbours,
         uint32_t idleTimeout = 0)
     {
-        _audioType = audio;
+        _sendAudioType = audio;
         _channel.create(baseUrl,
             conferenceId,
             initiator,
@@ -208,7 +208,7 @@ public:
 
         if (_channel.isAudioOffered())
         {
-            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _audioType);
+            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _sendAudioType);
             _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
         }
 
@@ -705,7 +705,7 @@ public:
                         rtpHeader->ssrc.get(),
                         rtpMap,
                         sender,
-                        _expectedReceiveAudioType == Audio::None ? _audioType : _expectedReceiveAudioType,
+                        _expectedReceiveAudioType == Audio::None ? _sendAudioType : _expectedReceiveAudioType,
                         timestamp));
                 it = _audioReceivers.find(rtpHeader->ssrc.get());
             }
@@ -1003,7 +1003,7 @@ private:
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
     size_t _instanceId;
     RtxStats _rtxStats;
-    Audio _audioType;
+    Audio _sendAudioType;
     Audio _expectedReceiveAudioType;
 };
 
