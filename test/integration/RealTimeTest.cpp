@@ -356,18 +356,21 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
         const auto expectedChannelsReceived = id < numSpeakers ? numSpeakers - 1 : numSpeakers;
         if (expectedChannelsReceived)
         {
+            size_t receivedBytesTotal = 0;
             for (const auto& receivedBytesPair : results[id].receivedBytes)
             {
-                auto receivedBytes = receivedBytesPair.second;
-                EXPECT_NEAR(receivedBytes,
-                    codec::Opus::sampleRate * duration,
-                    codec::Opus::sampleRate * duration * 0.05);
+                receivedBytesTotal += receivedBytesPair.second;
                 logger::info("Client %zu received: %zu bytes from ssrc %zu",
                     "RealTimeTest",
                     id,
-                    receivedBytes,
+                    receivedBytesPair.second,
                     receivedBytesPair.first);
             }
+
+            auto receivedBytesPerProducer = receivedBytesTotal / expectedChannelsReceived;
+            EXPECT_NEAR(receivedBytesPerProducer,
+                codec::Opus::sampleRate * duration,
+                codec::Opus::sampleRate * duration * 0.05);
         }
     }
 }
