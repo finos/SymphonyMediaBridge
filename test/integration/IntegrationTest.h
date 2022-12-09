@@ -98,7 +98,7 @@ struct IntegrationTest : public ::testing::Test
         std::vector<double> dominantFrequencies;
         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
         size_t audioSsrcCount = 0;
-        std::map<double, size_t> receivedBytes;
+        std::map<size_t, size_t> receivedBytes;
     };
 
     IntegrationTest();

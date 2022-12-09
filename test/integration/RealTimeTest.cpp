@@ -162,7 +162,9 @@ using namespace emulator;
 const double RealTimeTest::frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
 
 template <typename TChannel>
-void makeCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall, uint64_t duration)
+void makeCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall,
+    uint64_t duration,
+    size_t firstNclientsToModulate = 0)
 {
     for (size_t i = 0; i < groupCall.clients.size(); ++i)
     {
@@ -175,7 +177,7 @@ void makeCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall, 
         client->_audioSource->setVolume(0.6);
     }
 
-    groupCall.run(duration);
+    groupCall.run(duration, firstNclientsToModulate);
     utils::Time::nanoSleep(utils::Time::sec * 1);
 
     for (auto& client : groupCall.clients)
@@ -221,6 +223,32 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot_4)
 TEST_F(RealTimeTest, DISABLED_smbMegaHoot_5)
 {
     RealTimeTest::smbMegaHootTest(5);
+}
+
+template <typename TClient>
+RealTimeTest::AudioAnalysisData RealTimeTest::analyzeRecordingSimple(TClient* client,
+    double expectedDurationSeconds,
+    size_t expectedLossInPackets)
+{
+    auto audioCounters = client->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+    EXPECT_LE(audioCounters.lostPackets, expectedLossInPackets);
+
+    const auto& data = client->getAudioReceiveStats();
+    RealTimeTest::AudioAnalysisData result;
+
+    for (const auto& item : data)
+    {
+        if (client->isRemoteVideoSsrc(item.first))
+        {
+            continue;
+        }
+
+        result.audioSsrcCount++;
+        auto rec = item.second->getRecording();
+        result.receivedBytes[item.first] = rec.size();
+    }
+
+    return result;
 }
 
 void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
@@ -304,19 +332,18 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
     }
 
     logger::info("SYNC: starting audio", "RealTimeTest");
-    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
+    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec, numSpeakers);
 
     group.disconnectClients();
     group.stopTransports();
 
     group.awaitPendingJobs(utils::Time::sec * 4);
 
-    IntegrationTest::AudioAnalysisData results[numClients];
+    RealTimeTest::AudioAnalysisData results[numClients];
     for (size_t id = 0; id < numClients; ++id)
     {
-        auto durationForAnalizys = std::min(duration, (decltype(duration))15);
         results[id] =
-            IntegrationTest::analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), durationForAnalizys, false);
+            RealTimeTest::analyzeRecordingSimple<SfuClient<Channel>>(group.clients[id].get(), duration, (size_t)0);
 
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
         std::string clientName = "client_" + std::to_string(id);
@@ -329,42 +356,21 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
         const auto expectedChannelsReceived = id < numSpeakers ? numSpeakers - 1 : numSpeakers;
         if (expectedChannelsReceived)
         {
-            std::unordered_set<double> received;
-            for (const auto& freq : results[id].dominantFrequencies)
+            size_t receivedBytesTotal = 0;
+            for (const auto& receivedBytesPair : results[id].receivedBytes)
             {
-                received.insert(freq);
-
-                auto receivedBytes = results[id].receivedBytes[freq];
-                EXPECT_NEAR(receivedBytes,
-                    codec::Opus::sampleRate * duration,
-                    codec::Opus::sampleRate * duration * 0.05);
-                logger::info("Client %zu received: %zu bytes for freq %f", "RealTimeTest", id, receivedBytes, freq);
+                receivedBytesTotal += receivedBytesPair.second;
+                logger::info("Client %zu received: %zu bytes from ssrc %zu",
+                    "RealTimeTest",
+                    id,
+                    receivedBytesPair.second,
+                    receivedBytesPair.first);
             }
 
-            EXPECT_EQ(results[id].dominantFrequencies.size(), expectedChannelsReceived);
-            for (const auto& freq : results[id].dominantFrequencies)
-            {
-                for (size_t i = 0; i < numSpeakers; i++)
-                {
-                    // We should not receive our own audio
-                    if (i == id)
-                    {
-                        continue;
-                    }
-                    if (freq > RealTimeTest::frequencies[i] * 0.9 && freq < RealTimeTest::frequencies[i] * 1.1)
-                    {
-                        received.erase(freq);
-                    }
-                }
-            }
-            EXPECT_EQ(received.size(), 0);
-            if (received.size())
-            {
-                for (const auto& item : received)
-                {
-                    logger::error("Unexpected frequency %f", "RealTimeTest", item);
-                }
-            }
+            auto receivedBytesPerProducer = receivedBytesTotal / expectedChannelsReceived;
+            EXPECT_NEAR(receivedBytesPerProducer,
+                codec::Opus::sampleRate * duration,
+                codec::Opus::sampleRate * duration * 0.05);
         }
     }
 }
