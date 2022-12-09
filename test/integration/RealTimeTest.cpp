@@ -162,7 +162,9 @@ using namespace emulator;
 const double RealTimeTest::frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
 
 template <typename TChannel>
-void makeCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall, uint64_t duration)
+void makeCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall,
+    uint64_t duration,
+    size_t firstNclientsToModulate = 0)
 {
     for (size_t i = 0; i < groupCall.clients.size(); ++i)
     {
@@ -175,7 +177,7 @@ void makeCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall, 
         client->_audioSource->setVolume(0.6);
     }
 
-    groupCall.run(duration);
+    groupCall.run(duration, firstNclientsToModulate);
     utils::Time::nanoSleep(utils::Time::sec * 1);
 
     for (auto& client : groupCall.clients)
@@ -330,7 +332,7 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
     }
 
     logger::info("SYNC: starting audio", "RealTimeTest");
-    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec);
+    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec, numSpeakers);
 
     group.disconnectClients();
     group.stopTransports();

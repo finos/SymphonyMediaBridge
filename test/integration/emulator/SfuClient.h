@@ -1127,9 +1127,10 @@ public:
         return false;
     }
 
-    void run(uint64_t period)
+    void run(uint64_t period, const size_t modulateVolumeForNSpeakers = 0)
     {
         const auto start = utils::Time::getAbsoluteTime();
+        const size_t modulateFirstNSpeakers = std::min(modulateVolumeForNSpeakers, clients.size());
         utils::Pacer pacer(10 * utils::Time::ms);
         for (auto timestamp = utils::Time::getAbsoluteTime(); timestamp - start < period;)
         {
@@ -1140,6 +1141,17 @@ public:
             pacer.tick(utils::Time::getAbsoluteTime());
             utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
             timestamp = utils::Time::getAbsoluteTime();
+
+            if (modulateVolumeForNSpeakers > 0)
+            {
+                const size_t inveer_volume_window = 2;
+                auto window = (utils::Time::diff(start, timestamp) / utils::Time::sec) % 10;
+                for (size_t i = 0; i < modulateFirstNSpeakers; i++)
+                {
+                    auto volume = window < inveer_volume_window ? 0.4 : 0.6;
+                    clients[i]->_audioSource->setVolume(volume);
+                }
+            }
         }
     }
 
