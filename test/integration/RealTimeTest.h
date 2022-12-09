@@ -68,8 +68,12 @@ public:
         const char* baseUrl,
         const std::string& endpointId);
 
+public:
+    static const double frequencies[];
+
 protected:
     void initLocalTransports();
+    void smbMegaHootTest(const size_t numSpeakers);
 
 protected:
     const uint32_t _clientsConnectionTimeout;
@@ -79,16 +83,3 @@ protected:
 private:
     size_t getNumWorkerThreads() const;
 };
-
-namespace
-{
-class ScopedFinalize
-{
-public:
-    explicit ScopedFinalize(std::function<void()> finalizeMethod) : _method(finalizeMethod) {}
-    ~ScopedFinalize() { _method(); }
-
-private:
-    std::function<void()> _method;
-};
-} // namespace

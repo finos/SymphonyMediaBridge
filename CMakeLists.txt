@@ -588,6 +588,8 @@ set(TEST_FILES
     test/utils/FunctionTest.cpp)
 
 set(LOAD_TEST_FILES
+    test/integration/IntegrationTest.cpp
+    test/integration/IntegrationTest.h
     test/integration/RealTimeTest.cpp
     test/integration/RealTimeTest.h
     test/integration/LoadTestConfig.h

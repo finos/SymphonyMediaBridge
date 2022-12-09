@@ -98,6 +98,7 @@ struct IntegrationTest : public ::testing::Test
         std::vector<double> dominantFrequencies;
         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
         size_t audioSsrcCount = 0;
+        std::map<double, size_t> receivedBytes;
     };
 
     IntegrationTest();
@@ -152,6 +153,7 @@ public:
     template <typename TClient>
     static IntegrationTest::AudioAnalysisData analyzeRecording(TClient* client,
         double expectedDurationSeconds,
+        bool checkAmplitudeProfile = true,
         size_t mixedAudioSources = 0,
         bool dumpPcmData = false);
 

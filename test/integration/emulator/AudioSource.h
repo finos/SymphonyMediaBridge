@@ -50,7 +50,7 @@ private:
     uint32_t _ptime;
     IsPttState _isPtt;
     bool _useAudioLevel;
-    Audio _fakeAudio;
+    Audio _emulatedAudioType;
 };
 
 } // namespace emulator
