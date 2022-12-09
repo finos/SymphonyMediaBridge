@@ -332,7 +332,7 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
     }
 
     logger::info("SYNC: starting audio", "RealTimeTest");
-    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec, numSpeakers);
+    makeCallWithDefaultAudioProfile(group, duration * utils::Time::sec, createTalker ? numSpeakers : 0);
 
     group.disconnectClients();
     group.stopTransports();
@@ -353,7 +353,7 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
 
     for (size_t id = 0; id < numClients; ++id)
     {
-        const auto expectedChannelsReceived = id < numSpeakers ? numSpeakers - 1 : numSpeakers;
+        const auto expectedChannelsReceived = createTalker && (id < numSpeakers) ? numSpeakers - 1 : numSpeakers;
         if (expectedChannelsReceived)
         {
             size_t receivedBytesTotal = 0;
