@@ -223,6 +223,32 @@ TEST_F(RealTimeTest, DISABLED_smbMegaHoot_5)
     RealTimeTest::smbMegaHootTest(5);
 }
 
+template <typename TClient>
+RealTimeTest::AudioAnalysisData RealTimeTest::analyzeRecordingSimple(TClient* client,
+    double expectedDurationSeconds,
+    size_t expectedLossInPackets)
+{
+    auto audioCounters = client->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+    EXPECT_LE(audioCounters.lostPackets, expectedLossInPackets);
+
+    const auto& data = client->getAudioReceiveStats();
+    RealTimeTest::AudioAnalysisData result;
+
+    for (const auto& item : data)
+    {
+        if (client->isRemoteVideoSsrc(item.first))
+        {
+            continue;
+        }
+
+        result.audioSsrcCount++;
+        auto rec = item.second->getRecording();
+        result.receivedBytes[item.first] = rec.size();
+    }
+
+    return result;
+}
+
 void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
 {
     std::string baseUrl = "http://127.0.0.1:8080";
@@ -311,12 +337,11 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
 
     group.awaitPendingJobs(utils::Time::sec * 4);
 
-    IntegrationTest::AudioAnalysisData results[numClients];
+    RealTimeTest::AudioAnalysisData results[numClients];
     for (size_t id = 0; id < numClients; ++id)
     {
-        auto durationForAnalizys = std::min(duration, (decltype(duration))15);
         results[id] =
-            IntegrationTest::analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), durationForAnalizys, false);
+            RealTimeTest::analyzeRecordingSimple<SfuClient<Channel>>(group.clients[id].get(), duration, (size_t)0);
 
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
         std::string clientName = "client_" + std::to_string(id);
@@ -329,41 +354,17 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
         const auto expectedChannelsReceived = id < numSpeakers ? numSpeakers - 1 : numSpeakers;
         if (expectedChannelsReceived)
         {
-            std::unordered_set<double> received;
-            for (const auto& freq : results[id].dominantFrequencies)
+            for (const auto& receivedBytesPair : results[id].receivedBytes)
             {
-                received.insert(freq);
-
-                auto receivedBytes = results[id].receivedBytes[freq];
+                auto receivedBytes = receivedBytesPair.second;
                 EXPECT_NEAR(receivedBytes,
                     codec::Opus::sampleRate * duration,
                     codec::Opus::sampleRate * duration * 0.05);
-                logger::info("Client %zu received: %zu bytes for freq %f", "RealTimeTest", id, receivedBytes, freq);
-            }
-
-            EXPECT_EQ(results[id].dominantFrequencies.size(), expectedChannelsReceived);
-            for (const auto& freq : results[id].dominantFrequencies)
-            {
-                for (size_t i = 0; i < numSpeakers; i++)
-                {
-                    // We should not receive our own audio
-                    if (i == id)
-                    {
-                        continue;
-                    }
-                    if (freq > RealTimeTest::frequencies[i] * 0.9 && freq < RealTimeTest::frequencies[i] * 1.1)
-                    {
-                        received.erase(freq);
-                    }
-                }
-            }
-            EXPECT_EQ(received.size(), 0);
-            if (received.size())
-            {
-                for (const auto& item : received)
-                {
-                    logger::error("Unexpected frequency %f", "RealTimeTest", item);
-                }
+                logger::info("Client %zu received: %zu bytes from ssrc %zu",
+                    "RealTimeTest",
+                    id,
+                    receivedBytes,
+                    receivedBytesPair.first);
             }
         }
     }

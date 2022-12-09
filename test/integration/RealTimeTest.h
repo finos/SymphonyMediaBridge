@@ -25,6 +25,7 @@ struct RealTimeTest : public ::testing::Test
         std::vector<double> dominantFrequencies;
         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
         size_t audioSsrcCount = 0;
+        std::map<size_t, size_t> receivedBytes;
     };
 
     RealTimeTest();
@@ -67,6 +68,11 @@ public:
     static api::ConferenceEndpointExtendedInfo getEndpointExtendedInfo(emulator::HttpdFactory* httpd,
         const char* baseUrl,
         const std::string& endpointId);
+
+    template <typename TClient>
+    static AudioAnalysisData analyzeRecordingSimple(TClient* client,
+        double expectedDurationSeconds,
+        size_t expectedLossInPackets);
 
 public:
     static const double frequencies[];

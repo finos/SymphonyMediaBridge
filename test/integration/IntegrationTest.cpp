@@ -321,7 +321,7 @@ IntegrationTest::AudioAnalysisData IntegrationTest::analyzeRecording(TClient* cl
         result.dominantFrequencies.insert(result.dominantFrequencies.begin(), freqVector.begin(), freqVector.end());
         if (freqVector.size())
         {
-            result.receivedBytes[freqVector[0]] = rec.size();
+            result.receivedBytes[item.first] = rec.size();
         }
 
         result.amplitudeProfile.insert(result.amplitudeProfile.begin(),
