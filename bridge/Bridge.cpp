@@ -239,9 +239,10 @@ void Bridge::startWorkerThreads()
         }
         else
         {
-            numWorkerThreads = std::max(hardwareConcurrency - 1, 1U);
+            numWorkerThreads = (hardwareConcurrency >= 4 ? hardwareConcurrency - 1 : hardwareConcurrency);
         }
     }
+
     logger::info("Starting %u worker threads", "main", numWorkerThreads);
 
     _workerThreads.reserve(numWorkerThreads);
