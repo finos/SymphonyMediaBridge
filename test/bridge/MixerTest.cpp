@@ -93,10 +93,12 @@ struct JobManagerProcessor
     JobManagerProcessor(jobmanager::TimerQueue& timeQueue) : jobManager(timeQueue, 512) {}
     ~JobManagerProcessor() { dropAll(); }
 
-    void runPendingJobs()
+    size_t runPendingJobs()
     {
+        size_t processed = 0;
         for (auto pendingJobIt = pendingJobs.begin(); pendingJobIt != pendingJobs.end();)
         {
+            ++processed;
             if (!(*pendingJobIt)->runStep())
             {
                 jobManager.freeJob(*pendingJobIt);
@@ -107,15 +109,18 @@ struct JobManagerProcessor
                 ++pendingJobIt;
             }
         }
+
+        return processed;
     }
 
-    void processAll()
+    size_t processAll()
     {
-        runPendingJobs();
+        size_t processed = runPendingJobs();
 
         jobmanager::MultiStepJob* job;
         while ((job = jobManager.pop()) != nullptr)
         {
+            ++processed;
             if (!job->runStep())
             {
                 jobManager.freeJob(job);
@@ -126,7 +131,8 @@ struct JobManagerProcessor
             }
         }
 
-        runPendingJobs();
+        processed += runPendingJobs();
+        return processed;
     }
 
     void dropAll()
@@ -145,8 +151,6 @@ struct JobManagerProcessor
     }
 
     jobmanager::JobManager& getJobManager() { return jobManager; }
-    size_t getPendingJobsCount() const { return pendingJobs.size(); }
-    size_t getJobsCount() const { return getPendingJobsCount() + jobManager.getCount(); }
 
 private:
     jobmanager::JobManager jobManager;
@@ -253,9 +257,6 @@ protected:
     void dropAllBackgroundJobs() { _testScope->backgroundJobManagerProcessor.dropAll(); }
     void dropAllWorkerThreadJobs() { _testScope->wtJobManagerProcessor.dropAll(); }
 
-    void processAllBackgroundJobs() { _testScope->backgroundJobManagerProcessor.processAll(); }
-    void processWorkerThreadJobs() { _testScope->wtJobManagerProcessor.processAll(); }
-
     void processAllEngineQueue()
     {
         utils::Function func;
@@ -302,8 +303,9 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnAudioStream)
     mixer->engineVideoStreamRemoved(*engineVideoStream);
     mixer->engineDataStreamRemoved(*engineDataStream);
 
+    const size_t processedJobs = _testScope->backgroundJobManagerProcessor.processAll();
+    ASSERT_EQ(0, processedJobs);
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
-    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
 }
 
 TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnVideoStream)
@@ -336,8 +338,9 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnVideoStream)
     mixer->engineAudioStreamRemoved(*engineAudioStream);
     mixer->engineDataStreamRemoved(*engineDataStream);
 
+    const size_t processedJobs = _testScope->backgroundJobManagerProcessor.processAll();
+    ASSERT_EQ(0, processedJobs);
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
-    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
 }
 
 TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnDataStream)
@@ -370,8 +373,9 @@ TEST_F(MixerTest, bundleTransportShouldNotBeFinalizedWhenUsedOnDataStream)
     mixer->engineAudioStreamRemoved(*engineAudioStream);
     mixer->engineVideoStreamRemoved(*engineVideoStream);
 
+    const size_t processedJobs = _testScope->backgroundJobManagerProcessor.processAll();
+    ASSERT_EQ(0, processedJobs);
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
-    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
 }
 
 TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
@@ -404,7 +408,8 @@ TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
     mixer->removeDataStream(endpointId0);
 
     // Remove should not really delete but trigger the deletion on EngineMixer
-    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
+    size_t processedJobs = _testScope->backgroundJobManagerProcessor.processAll();
+    ASSERT_EQ(0, processedJobs);
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
     ASSERT_NE(nullptr, mixer->getEngineAudioStream(endpointId0));
     ASSERT_NE(nullptr, mixer->getEngineVideoStream(endpointId0));
@@ -417,12 +422,9 @@ TEST_F(MixerTest, bundleTransportShouldDeleteBundleTransport)
     mixer->engineDataStreamRemoved(*engineDataStream);
 
     ASSERT_NE(nullptr, transportMockWeakPointer.lock());
-    // 1 background job should be enqueued to delete transports
-    ASSERT_EQ(1, _testScope->backgroundJobManagerProcessor.getJobsCount());
 
-    processAllBackgroundJobs();
-
-    ASSERT_EQ(0, _testScope->backgroundJobManagerProcessor.getJobsCount());
+    processedJobs = _testScope->backgroundJobManagerProcessor.processAll();
+    ASSERT_EQ(1, processedJobs);
     ASSERT_EQ(nullptr, transportMockWeakPointer.lock());
     ASSERT_EQ(nullptr, mixer->getEngineAudioStream(endpointId0));
     ASSERT_EQ(nullptr, mixer->getEngineVideoStream(endpointId0));
