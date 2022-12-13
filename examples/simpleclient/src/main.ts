@@ -179,8 +179,8 @@ async function joinClicked() {
 }
 
 function main() {
-    joinButton.onclick = joinClicked;
     document.getElementById("confserver").innerHTML = serverUrl;
+    joinButton.onclick = joinClicked;
 }
 
 main();
