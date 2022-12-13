@@ -12,6 +12,11 @@
 
 namespace bridge
 {
+namespace
+{
+const uint8_t PTT_AUDIO_LEVEL = 25;
+const uint8_t PTT_SILENCE_LEVEL = 90;
+} // namespace
 
 void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, const uint8_t* decodedData)
 {
@@ -167,15 +172,22 @@ void AudioForwarderReceiveJob::run()
             if (!audioLevel.isSet())
             {
                 // We need to 'fake' reasonable audio levels for the reasons.
-                audioLevel.set(silence ? 90 : 25);
+                audioLevel.set(silence ? PTT_SILENCE_LEVEL : PTT_AUDIO_LEVEL);
             }
 
             _engineMixer.mapSsrc2UserId(_ssrcContext.ssrc, c9UserId);
         }
+        const bool hasLevelExtensions = audioLevel.isSet() || isPtt.isSet();
 
-        _activeMediaList.onNewAudioLevel(_packet->endpointIdHash,
-            audioLevel.valueOr(120),
-            isPtt.isSet() && isPtt.get());
+        if (hasLevelExtensions)
+        {
+            _activeMediaList.onNewAudioLevel(_packet->endpointIdHash, audioLevel.get(), isPtt.isSet() && isPtt.get());
+        }
+        else
+        {
+            // emulate ptt as it will push down noise level
+            _activeMediaList.onNewAudioLevel(_packet->endpointIdHash, PTT_AUDIO_LEVEL, true);
+        }
 
         if (silence)
         {
