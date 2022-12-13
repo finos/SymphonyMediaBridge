@@ -104,7 +104,7 @@ void Channel::create(const std::string& baseUrl,
 {
     assert(!conferenceId.empty());
     _conferenceId = conferenceId;
-    _relayType = forwardMedia ? "ssrc-rewrite" : "mixed";
+    _relayType = forwardMedia ? "forwarder" : "mixed";
     _baseUrl = baseUrl;
     _videoEnabled = video;
 
@@ -123,7 +123,7 @@ void Channel::create(const std::string& baseUrl,
     }
     if (video)
     {
-        body["video"] = {{"relay-type", "ssrc-rewrite"}};
+        body["video"] = {{"relay-type", "forwarder"}};
     }
     if (audio || video)
     {
