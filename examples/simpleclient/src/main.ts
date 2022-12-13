@@ -11,7 +11,7 @@ let localDataChannel: RTCDataChannel|undefined = undefined;
 let endpointId: string|undefined = undefined;
 let remoteMediaStreams: Set<string> = new Set();
 
-const serverUrl = 'https://localhost:8081/conferences/';
+const serverUrl = 'https://34.145.143.115:8081/conferences/';
 
 // Keeps a long-poll running for simpleserver to simpleclient communication
 async function startPoll() {
@@ -180,6 +180,7 @@ async function joinClicked() {
 
 function main() {
     joinButton.onclick = joinClicked;
+    document.getElementById("confserver").innerHTML = serverUrl;
 }
 
 main();
