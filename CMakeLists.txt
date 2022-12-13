@@ -505,7 +505,6 @@ set(TEST_LIB_FILES
     test/bwe/BwBurstTracker.h
     test/bwe/BwBurstTracker.cpp
     test/utils/ApiUtils.cpp
-    test/transport/EndpointListenerMock.h
     test/bridge/DummyRtcTransport.h
 )
 
@@ -583,6 +582,7 @@ set(TEST_FILES
     test/memory/BacklogTest.cpp
     test/memory/StackMapTest.cpp
     test/bridge/ActiveMediaListTestLevels.h
+    test/bridge/MixerTest.cpp
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp)

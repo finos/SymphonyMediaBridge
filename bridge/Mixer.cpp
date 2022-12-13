@@ -292,6 +292,11 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         ? _transportFactory.create(iceRole, 512, endpointIdHash)
         : _transportFactory.createOnPorts(iceRole, 512, endpointIdHash, _rtpPorts, 16, 256, true, true);
 
+    if (!transport)
+    {
+        return false;
+    }
+
     const auto emplaceResult = _bundleTransports.emplace(endpointId, transport);
     if (!emplaceResult.second)
     {
@@ -804,6 +809,30 @@ std::unordered_set<std::string> Mixer::getEndpoints() const
         endpoints.insert(it.first);
     }
     return endpoints;
+}
+
+EngineAudioStream* Mixer::getEngineAudioStream(const std::string& endpointId)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+
+    const auto it = _audioEngineStreams.find(endpointId);
+    return it == _audioEngineStreams.end() ? nullptr : it->second.get();
+}
+
+EngineVideoStream* Mixer::getEngineVideoStream(const std::string& endpointId)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+
+    const auto it = _videoEngineStreams.find(endpointId);
+    return it == _videoEngineStreams.end() ? nullptr : it->second.get();
+}
+
+EngineDataStream* Mixer::getEngineDataStream(const std::string& endpointId)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+
+    const auto it = _dataEngineStreams.find(endpointId);
+    return it == _dataEngineStreams.end() ? nullptr : it->second.get();
 }
 
 std::map<size_t, ActiveTalker> Mixer::getActiveTalkers()
