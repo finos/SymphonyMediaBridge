@@ -1287,7 +1287,7 @@ TEST_F(EngineStreamDirectorTest, pinnedHighQualityStreamIsForwardedAfter5s)
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(5, 1, true, true, 0));
 
     EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(7, 2, true, true, 0));
-    EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(9, 2, true, true, 0));
+    EXPECT_TRUE(_engineStreamDirector->isSsrcUsed(9, 2, true, true, 0));
     EXPECT_FALSE(_engineStreamDirector->isSsrcUsed(11, 2, true, true, 0));
 
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
@@ -1314,4 +1314,20 @@ TEST_F(EngineStreamDirectorTest, pinnedHighQualityStreamIsForwardedAfter5s)
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
     EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 3));
     EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 5));
+}
+
+TEST_F(EngineStreamDirectorTest, bitrate1200UnpinnedMiddleQuality)
+{
+    _engineStreamDirector->addParticipant(1, makeSimulcastStream(1, 2, 3, 4, 5, 6));
+    _engineStreamDirector->setUplinkEstimateKbps(2, 1200, 0 * utils::Time::sec);
+
+    _engineStreamDirector->addParticipant(2);
+    _engineStreamDirector->pin(2, 0);
+
+    _engineStreamDirector->setUplinkEstimateKbps(2, 1200, 60 * utils::Time::sec);
+    _engineStreamDirector->setUplinkEstimateKbps(2, 1200, 61 * utils::Time::sec);
+
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 1));
+    EXPECT_TRUE(_engineStreamDirector->shouldForwardSsrc(2, 3));
+    EXPECT_FALSE(_engineStreamDirector->shouldForwardSsrc(2, 5));
 }

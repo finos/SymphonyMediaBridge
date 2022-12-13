@@ -996,7 +996,8 @@ private:
             assert(configCost >= config.MinBitrateMargin + _slidesBitrateKbps);
             assert(configCost <= config.MaxBitrateMargin + _slidesBitrateKbps);
 
-            if (configCost >= bestConfigCost && configCost <= estimatedUplinkBandwidth)
+            const auto configIsBetter = bestConfigCost == 0 || configCost > bestConfigCost;
+            if (configIsBetter && configCost <= estimatedUplinkBandwidth)
             {
                 bestConfigCost = configCost;
                 bestConfigId = configId;
