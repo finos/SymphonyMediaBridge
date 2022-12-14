@@ -19,17 +19,32 @@ inline void rewriteHeaderExtensions(rtp::RtpHeader& rtpHeader,
         return;
     }
 
+    bool needToRewriteAudioLevelId = senderInboundContext.rtpMap.audioLevelExtId.isSet() &&
+        receiverOutboundContext.rtpMap.audioLevelExtId.isSet() &&
+        senderInboundContext.rtpMap.audioLevelExtId.get() != receiverOutboundContext.rtpMap.audioLevelExtId.get();
+
+    bool needToRewriteAbsSendTime = senderInboundContext.rtpMap.absSendTimeExtId.isSet() &&
+        receiverOutboundContext.rtpMap.absSendTimeExtId.isSet() &&
+        senderInboundContext.rtpMap.absSendTimeExtId.get() != receiverOutboundContext.rtpMap.absSendTimeExtId.get();
+
+    if (!(needToRewriteAbsSendTime || needToRewriteAudioLevelId))
+    {
+        return;
+    }
+
     for (auto& rtpHeaderExtension : headerExtensions->extensions())
     {
-        if (senderInboundContext.rtpMap.audioLevelExtId.isSet() &&
+        if (needToRewriteAudioLevelId &&
             rtpHeaderExtension.getId() == senderInboundContext.rtpMap.audioLevelExtId.get())
         {
             rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.audioLevelExtId.get());
+            needToRewriteAudioLevelId = false;
         }
-        else if (senderInboundContext.rtpMap.absSendTimeExtId.isSet() &&
+        else if (needToRewriteAbsSendTime &&
             rtpHeaderExtension.getId() == senderInboundContext.rtpMap.absSendTimeExtId.get())
         {
             rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.absSendTimeExtId.get());
+            needToRewriteAbsSendTime = false;
         }
     }
 }
