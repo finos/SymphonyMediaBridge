@@ -833,7 +833,12 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     auto* audioStream = _engineAudioStreams.getItem(endpointIdHash);
     if (audioStream && audioStream->rtpMap.payloadType == payloadType)
     {
-        if (!audioStream->remoteSsrc.isSet() || audioStream->remoteSsrc.get() != ssrc)
+        if (!audioStream->remoteSsrc.isSet())
+        {
+            audioStream->remoteSsrc.set(ssrc);
+            logger::info("picking up inbound audio on ssrc %u automatically", _loggableId.c_str(), ssrc);
+        }
+        else if (audioStream->remoteSsrc.get() != ssrc)
         {
             return nullptr;
         }
