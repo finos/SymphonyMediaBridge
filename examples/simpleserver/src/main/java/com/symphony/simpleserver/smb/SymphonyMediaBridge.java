@@ -1,18 +1,22 @@
 package com.symphony.simpleserver.smb;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.symphony.simpleserver.SmbException;
 import com.symphony.simpleserver.httpClient.HttpClient;
 import com.symphony.simpleserver.httpClient.HttpClientFactory;
+import com.symphony.simpleserver.httpClient.HttpClient.ResponsePair;
 import com.symphony.simpleserver.smb.api.SmbEndpointDescription;
 import org.apache.hc.core5.http.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 
@@ -29,15 +33,17 @@ public class SymphonyMediaBridge {
         this.objectMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
-    public String allocateConference() throws IOException, ParseException {
+    public String allocateConference() throws IOException, ParseException, SmbException {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
         final var response = httpClient.post(BASE_URL, requestBodyJson);
+
+        checkResponse(response);
 
         final var responseBodyJson = objectMapper.readTree(response.body);
         return responseBodyJson.get("id").asText();
     }
 
-    public JsonNode allocateEndpoint(String conferenceId, String endpointId, boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParseException {
+    public JsonNode allocateEndpoint(String conferenceId, String endpointId, boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParseException, SmbException {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
         requestBodyJson.put("action", "allocate");
 
@@ -72,13 +78,16 @@ public class SymphonyMediaBridge {
 
         final var url = BASE_URL + conferenceId + "/" + endpointId;
         final var response = httpClient.post(url, requestBodyJson);
+
+        checkResponse(response);
+
         final var responseBodyJson = objectMapper.readTree(response.body);
         LOGGER.info("Response\n{}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(responseBodyJson));
         return responseBodyJson;
     }
 
     public void configureEndpoint(
-            String conferenceId, String endpointId, SmbEndpointDescription endpointDescription) throws IOException, ParseException {
+            String conferenceId, String endpointId, SmbEndpointDescription endpointDescription) throws IOException, ParseException, SmbException {
 
         final var requestBodyJson = (ObjectNode) objectMapper.valueToTree(endpointDescription);
         requestBodyJson.put("action", "configure");
@@ -87,6 +96,7 @@ public class SymphonyMediaBridge {
 
         final var url = BASE_URL + conferenceId + "/" + endpointId;
         final var response = httpClient.post(url, requestBodyJson);
+        checkResponse(response);
         LOGGER.info("Response {}", response.statusCode);
     }
 
@@ -99,5 +109,27 @@ public class SymphonyMediaBridge {
         final var url = BASE_URL + conferenceId + "/" + endpointId;
         final var response = httpClient.post(url, requestBodyJson);
         LOGGER.info("Response {}", response.statusCode);
+    }
+
+    private void checkResponse(ResponsePair response) throws SmbException {
+        final var statusFirstDigit = response.statusCode / 100;
+        if (statusFirstDigit > 2) {
+            try {
+                if (!StringUtils.hasText(response.body)) {
+                    throw new SmbException("smb request has failed");
+                }
+
+                final var jsonNode = objectMapper.readTree(response.body);
+                final var messageNode = jsonNode.path("message");
+                if (messageNode.isTextual()) {
+                    throw new SmbException("smb request has failed", messageNode.asText());
+                }
+
+            } catch (JsonProcessingException e) {
+                // Do nothing
+            }
+
+            throw new SmbException("smb request has failed");
+        }
     }
 }

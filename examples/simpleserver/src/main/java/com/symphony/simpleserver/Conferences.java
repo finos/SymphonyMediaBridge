@@ -2,6 +2,7 @@ package com.symphony.simpleserver;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.symphony.simpleserver.sdp.ParserFailedException;
@@ -23,6 +24,7 @@ import javax.annotation.PreDestroy;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.regex.Pattern;
 
 @Component
 public class Conferences {
@@ -70,16 +72,32 @@ public class Conferences {
         timerCheckerSchedule.cancel(true);
     }
 
-    public synchronized String join(boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParserFailedException, InterruptedException, ParseException {
+    public synchronized String join(boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParserFailedException, InterruptedException, ParseException, SmbException {
         final var endpointId = UUID.randomUUID().toString();
 
         messageQueues.put(endpointId, new LinkedBlockingQueue<>());
+
 
         if (conferenceId == null) {
             conferenceId = symphonyMediaBridge.allocateConference();
         }
 
-        final var allocateEndpointResponse = symphonyMediaBridge.allocateEndpoint(conferenceId, endpointId, bundleTransport, enableDtls, enableIce);
+        JsonNode allocateEndpointResponse;
+        try {
+            allocateEndpointResponse = symphonyMediaBridge.allocateEndpoint(conferenceId, endpointId, bundleTransport, enableDtls, enableIce);
+        } catch (SmbException e) {
+            if (e.getSmbErrorMessage() == null) {
+                throw e;
+            }
+
+            if (!Pattern.matches("Conference .* not found", e.getSmbErrorMessage())) {
+                throw e;
+            }
+
+            // recreate
+            conferenceId = symphonyMediaBridge.allocateConference();
+            allocateEndpointResponse = symphonyMediaBridge.allocateEndpoint(conferenceId, endpointId, bundleTransport, enableDtls, enableIce);
+        }
         final var endpointDescription = objectMapper.treeToValue(allocateEndpointResponse,
                 SmbEndpointDescription.class);
         final var offer = parser.makeSdpOffer(endpointDescription, endpointId, endpointMediaStreams);
@@ -94,7 +112,8 @@ public class Conferences {
             IOException,
             ParserFailedException,
             InterruptedException,
-            ParseException
+            ParseException,
+            SmbException
     {
         final var message = objectMapper.readValue(messageString, Message.class);
         LOGGER.info("Message type {} from {}", message.type, endpointId);
@@ -109,7 +128,9 @@ public class Conferences {
     private boolean onAnswer(String endpointId, Message message) throws
             ParserFailedException,
             IOException,
-            InterruptedException, ParseException
+            InterruptedException,
+            ParseException,
+            SmbException
     {
         final var endpoint = endpoints.get(endpointId);
         if (endpoint.isConfigured) {
