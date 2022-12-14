@@ -1059,11 +1059,29 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
     }
     else if (!transport->isIceEnabled() && isDtlsEnabled)
     {
-        outTransportDescription = TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient());
+        if (!_config.ice.publicIpv4.get().empty())
+        {
+            auto publicPort = transport::SocketAddress::parse(_config.ice.publicIpv4);
+            publicPort.setPort(transport->getLocalRtpPort().getPort());
+            outTransportDescription = TransportDescription(publicPort, transport->isDtlsClient());
+        }
+        else
+        {
+            outTransportDescription = TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient());
+        }
     }
     else if (!transport->isIceEnabled() && !isDtlsEnabled)
     {
-        outTransportDescription = TransportDescription(transport->getLocalRtpPort());
+        if (!_config.ice.publicIpv4.get().empty())
+        {
+            auto publicPort = transport::SocketAddress::parse(_config.ice.publicIpv4);
+            publicPort.setPort(transport->getLocalRtpPort().getPort());
+            outTransportDescription = TransportDescription(publicPort);
+        }
+        else
+        {
+            outTransportDescription = TransportDescription(transport->getLocalRtpPort());
+        }
     }
 
     return true;
