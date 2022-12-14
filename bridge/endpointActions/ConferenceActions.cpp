@@ -292,7 +292,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         {
             const auto& audio = allocateChannel.audio.get();
             const auto mixed = audio.relayType.compare("mixed") == 0;
-            const auto ssrcRewrite = audio.relayType.compare("ssrc-rewrite") == 0;
+            const auto ssrcRewrite = audio.relayType.compare("forwarder") == 0;
 
             std::string outChannelId;
             if (!mixer->addBundledAudioStream(outChannelId,
@@ -311,7 +311,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         if (allocateChannel.video.isSet())
         {
             const auto& video = allocateChannel.video.get();
-            const auto ssrcRewrite = video.relayType.compare("ssrc-rewrite") == 0;
+            const auto ssrcRewrite = video.relayType.compare("forwarder") == 0;
 
             std::string outChannelId;
             if (!mixer->addBundledVideoStream(outChannelId,
