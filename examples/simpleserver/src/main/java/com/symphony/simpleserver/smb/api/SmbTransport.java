@@ -18,4 +18,5 @@ public class SmbTransport {
 
     public SmbIce ice;
     public SmbDtls dtls;
+    public SmbConnection connection;
 }

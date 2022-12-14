@@ -70,7 +70,7 @@ public class Conferences {
         timerCheckerSchedule.cancel(true);
     }
 
-    public synchronized String join() throws IOException, ParserFailedException, InterruptedException, ParseException {
+    public synchronized String join(boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParserFailedException, InterruptedException, ParseException {
         final var endpointId = UUID.randomUUID().toString();
 
         messageQueues.put(endpointId, new LinkedBlockingQueue<>());
@@ -79,7 +79,7 @@ public class Conferences {
             conferenceId = symphonyMediaBridge.allocateConference();
         }
 
-        final var allocateEndpointResponse = symphonyMediaBridge.allocateEndpoint(conferenceId, endpointId);
+        final var allocateEndpointResponse = symphonyMediaBridge.allocateEndpoint(conferenceId, endpointId, bundleTransport, enableDtls, enableIce);
         final var endpointDescription = objectMapper.treeToValue(allocateEndpointResponse,
                 SmbEndpointDescription.class);
         final var offer = parser.makeSdpOffer(endpointDescription, endpointId, endpointMediaStreams);

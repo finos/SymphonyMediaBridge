@@ -27,26 +27,31 @@ public class Parser {
         offer.group = new Group("BUNDLE");
         offer.msidSemantic = new MsidSemantic("WMS");
 
-        final var bundleTransport = endpointDescription.bundleTransport;
-        final var smbIce = bundleTransport.ice;
-        final var smbDtls = bundleTransport.dtls;
-
+        SmbIce bundleTransportIce = null;
+        SmbDtls bundleTransportDtls = null;
         final var candidates = new ArrayList<Candidate>();
-        for (var smbCandidate : smbIce.candidates) {
-            candidates.add(new Candidate(smbCandidate.foundation,
-                    Candidate.Component.fromString(smbCandidate.component.toString()),
-                    Candidate.TransportType.fromString(smbCandidate.protocol),
-                    smbCandidate.priority,
-                    smbCandidate.ip,
-                    smbCandidate.port,
-                    Candidate.Type.fromString(smbCandidate.type)));
+
+        final var bundleTransport = endpointDescription.bundleTransport;
+        if (bundleTransport != null) {
+            bundleTransportIce = bundleTransport.ice;
+            bundleTransportDtls = bundleTransport.dtls;
+
+            for (var smbCandidate : bundleTransportIce.candidates) {
+                candidates.add(new Candidate(smbCandidate.foundation,
+                        Candidate.Component.fromString(smbCandidate.component.toString()),
+                        Candidate.TransportType.fromString(smbCandidate.protocol),
+                        smbCandidate.priority,
+                        smbCandidate.ip,
+                        smbCandidate.port,
+                        Candidate.Type.fromString(smbCandidate.type)));
+            }
         }
 
         mediaDescriptionIndex = addSmbMids(endpointDescription,
                 mediaDescriptionIndex,
                 offer,
-                smbIce,
-                smbDtls,
+                bundleTransportIce,
+                bundleTransportDtls,
                 candidates);
 
         addParticipantMids(endpointDescription,
@@ -54,8 +59,8 @@ public class Parser {
                 endpointMediaStreams,
                 mediaDescriptionIndex,
                 offer,
-                smbIce,
-                smbDtls,
+                bundleTransportIce,
+                bundleTransportDtls,
                 candidates);
 
         return offer;
@@ -129,19 +134,20 @@ public class Parser {
             SmbEndpointDescription endpointDescription,
             int mediaDescriptionIndex,
             SessionDescription offer,
-            SmbIce smbIce,
-            SmbDtls smbDtls,
-            List<Candidate> candidates) throws ParserFailedException
+            SmbIce bundleTransportIce,
+            SmbDtls bundleTransportDtls,
+            List<Candidate> bundleTransportCandidates) throws ParserFailedException
     {
+
         final var smbAudioSsrc = new Ssrc(endpointDescription.audio.ssrcs.get(0));
         smbAudioSsrc.label = "smbaudiolabel";
         smbAudioSsrc.mslabel = "smbaudiomslabel";
         smbAudioSsrc.cname = "smbaudiocname";
         final var audio = makeAudioDescription(endpointDescription,
                 mediaDescriptionIndex,
-                smbIce,
-                smbDtls,
-                candidates,
+                bundleTransportIce,
+                bundleTransportDtls,
+                bundleTransportCandidates,
                 smbAudioSsrc);
 
         offer.mediaDescriptions.add(audio);
@@ -157,9 +163,9 @@ public class Parser {
         smbVideoSsrc.cname = "smbvideocname";
         final var video = makeVideoDescription(endpointDescription,
                 mediaDescriptionIndex,
-                smbIce,
-                smbDtls,
-                candidates,
+                bundleTransportIce,
+                bundleTransportDtls,
+                bundleTransportCandidates,
                 List.of(smbVideoSsrc),
                 List.of());
 
@@ -168,28 +174,30 @@ public class Parser {
         offer.msidSemantic.ids.add(smbVideoSsrc.mslabel);
         mediaDescriptionIndex++;
 
-        final var data = new MediaDescription();
-        data.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
-        data.type = MediaDescription.Type.APPLICATION;
-        data.port = 10000;
-        data.protocol = "DTLS/SCTP";
-        data.payloadTypes.add(5000);
-        data.label = "data" + mediaDescriptionIndex;
-        data.mid = Integer.toString(mediaDescriptionIndex);
-        data.rtcpMux = true;
-        data.ice = new Ice();
-        data.ice.ufrag = smbIce.ufrag;
-        data.ice.pwd = smbIce.pwd;
-        data.candidates = candidates;
-        data.setup = Types.Setup.fromString(smbDtls.setup);
-        data.fingerprint = new Fingerprint(smbDtls.type, smbDtls.hash);
-        data.direction = Types.Direction.SEND_RECV;
-        data.sctpMap = new SctpMap(5000, "webrtc-datachannel");
-        data.sctpMap.maxMessageSize = 1024;
+        if (endpointDescription.data != null) {
+            final var data = new MediaDescription();
+            data.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
+            data.type = MediaDescription.Type.APPLICATION;
+            data.port = 10000;
+            data.protocol = "DTLS/SCTP";
+            data.payloadTypes.add(endpointDescription.data.port);
+            data.label = "data" + mediaDescriptionIndex;
+            data.mid = Integer.toString(mediaDescriptionIndex);
+            data.rtcpMux = true;
+            data.ice = new Ice();
+            data.ice.ufrag = bundleTransportIce.ufrag;
+            data.ice.pwd = bundleTransportIce.pwd;
+            data.candidates = bundleTransportCandidates;
+            data.setup = Types.Setup.fromString(bundleTransportDtls.setup);
+            data.fingerprint = new Fingerprint(bundleTransportDtls.type, bundleTransportDtls.hash);
+            data.direction = Types.Direction.SEND_RECV;
+            data.sctpMap = new SctpMap(5000, "webrtc-datachannel");
+            data.sctpMap.maxMessageSize = 1024;
 
-        offer.group.mids.add(data.mid);
-        offer.mediaDescriptions.add(data);
-        mediaDescriptionIndex++;
+            offer.group.mids.add(data.mid);
+            offer.mediaDescriptions.add(data);
+            mediaDescriptionIndex++;
+        }
 
         return mediaDescriptionIndex;
     }
@@ -197,29 +205,57 @@ public class Parser {
     private MediaDescription makeAudioDescription(
             SmbEndpointDescription endpointDescription,
             int mediaDescriptionIndex,
-            SmbIce smbIce,
-            SmbDtls smbDtls,
-            List<Candidate> candidates,
+            SmbIce bundleTransportIce,
+            SmbDtls bundleTransportDtls,
+            List<Candidate> bundleTransportCandidates,
             Ssrc ssrc) throws ParserFailedException
     {
+        final var smbAudio = endpointDescription.audio;
+
+        SmbDtls dtls = bundleTransportDtls;
+        SmbIce ice = bundleTransportIce;
+        if (smbAudio.transport != null) {
+            dtls = smbAudio.transport.dtls;
+            ice = smbAudio.transport.ice;
+        }
+
         final var audio = new MediaDescription();
-        audio.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
+
+        if (dtls == null) {
+            audio.protocol = "RTP/AVPF";
+        } else {
+            audio.protocol = "UDP/TLS/RTP/SAVPF";
+        }
+
+        if (smbAudio.transport != null && smbAudio.transport.connection != null) {
+            audio.connection = new Connection(Types.Net.IN, Types.Address.IP4, smbAudio.transport.connection.ip);
+            audio.port = smbAudio.transport.connection.port;
+            audio.rtcpMux = smbAudio.transport.isRtcpMux();
+        } else {
+            audio.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
+            audio.port = 10000;
+            audio.rtcpMux = true;
+        }
+
+        if (ice != null) {
+            audio.ice = new Ice();
+            audio.ice.ufrag = ice.ufrag;
+            audio.ice.pwd = ice.pwd;
+            audio.candidates = bundleTransportCandidates;
+        }
+
+        if (dtls != null) {
+            audio.setup = Types.Setup.fromString(dtls.setup);
+            audio.fingerprint = new Fingerprint(dtls.type, dtls.hash);
+        }
+
         audio.type = MediaDescription.Type.AUDIO;
-        audio.port = 10000;
-        audio.protocol = "RTP/SAVPF";
         audio.label = "audio" + mediaDescriptionIndex;
         audio.mid = Integer.toString(mediaDescriptionIndex);
-        audio.rtcpMux = true;
-        audio.ice = new Ice();
-        audio.ice.ufrag = smbIce.ufrag;
-        audio.ice.pwd = smbIce.pwd;
-        audio.candidates = candidates;
-        audio.setup = Types.Setup.fromString(smbDtls.setup);
-        audio.fingerprint = new Fingerprint(smbDtls.type, smbDtls.hash);
+
         audio.direction = Types.Direction.SEND_RECV;
         audio.ssrcs.add(ssrc);
 
-        final var smbAudio = endpointDescription.audio;
         audio.payloadTypes.add(smbAudio.payloadType.id);
         audio.rtpMaps.put(smbAudio.payloadType.id,
                 new RtpMap(smbAudio.payloadType.name, smbAudio.payloadType.clockrate, smbAudio.payloadType.channels));
@@ -247,31 +283,58 @@ public class Parser {
     private MediaDescription makeVideoDescription(
             SmbEndpointDescription endpointDescription,
             int mediaDescriptionIndex,
-            SmbIce smbIce,
-            SmbDtls smbDtls,
-            List<Candidate> candidates,
+            SmbIce bundleTransportIce,
+            SmbDtls bundleTransportDtls,
+            List<Candidate> bundleTransportCandidates,
             List<Ssrc> ssrcs,
             List<SsrcGroup> ssrcGroups) throws ParserFailedException
     {
+        final var smbVideo = endpointDescription.video;
+
+        SmbDtls dtls = bundleTransportDtls;
+        SmbIce ice = bundleTransportIce;
+        if (smbVideo.transport != null) {
+            dtls = smbVideo.transport.dtls;
+            ice = smbVideo.transport.ice;
+        }
+
         final var video = new MediaDescription();
-        video.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
+        if (dtls == null) {
+            video.protocol = "RTP/AVPF";
+        } else {
+            video.protocol = "UDP/TLS/RTP/SAVPF";
+        }
+
+        if (smbVideo.transport != null && smbVideo.transport.connection != null) {
+            video.connection = new Connection(Types.Net.IN, Types.Address.IP4, smbVideo.transport.connection.ip);
+            video.port = smbVideo.transport.connection.port;
+            video.rtcpMux = smbVideo.transport.isRtcpMux();
+        } else {
+            video.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
+            video.port = 10000;
+            video.rtcpMux = true;
+        }
+
+        if (ice != null) {
+            video.ice = new Ice();
+            video.ice.ufrag = ice.ufrag;
+            video.ice.pwd = ice.pwd;
+            video.candidates = bundleTransportCandidates;
+        }
+
+        if (dtls != null) {
+            video.setup = Types.Setup.fromString(dtls.setup);
+            video.fingerprint = new Fingerprint(dtls.type, dtls.hash);
+        }
+
         video.type = MediaDescription.Type.VIDEO;
-        video.port = 10000;
-        video.protocol = "RTP/SAVPF";
         video.label = "video" + mediaDescriptionIndex;
         video.mid = Integer.toString(mediaDescriptionIndex);
         video.rtcpMux = true;
-        video.ice = new Ice();
-        video.ice.ufrag = smbIce.ufrag;
-        video.ice.pwd = smbIce.pwd;
-        video.candidates = candidates;
-        video.setup = Types.Setup.fromString(smbDtls.setup);
-        video.fingerprint = new Fingerprint(smbDtls.type, smbDtls.hash);
         video.direction = Types.Direction.SEND_RECV;
         video.ssrcs.addAll(ssrcs);
         video.ssrcGroups.addAll(ssrcGroups);
 
-        final var smbVideo = endpointDescription.video;
         for (var smbPayloadType : smbVideo.payloadTypes) {
             video.payloadTypes.add(smbPayloadType.id);
             video.rtpMaps.put(smbPayloadType.id, new RtpMap(smbPayloadType.name, smbPayloadType.clockrate, null));
@@ -308,20 +371,20 @@ public class Parser {
             throw new ParserFailedException();
         }
 
-        final var firstMediaDesription = sdpAnswer.mediaDescriptions.get(0);
+        final var firstMediaDescription = sdpAnswer.mediaDescriptions.get(0);
 
         final var bundleTransport = new SmbTransport();
         bundleTransport.rtcpMux = true;
         bundleTransport.ice = new SmbIce();
-        bundleTransport.ice.ufrag = firstMediaDesription.ice.ufrag;
-        bundleTransport.ice.pwd = firstMediaDesription.ice.pwd;
+        bundleTransport.ice.ufrag = firstMediaDescription.ice.ufrag;
+        bundleTransport.ice.pwd = firstMediaDescription.ice.pwd;
         bundleTransport.dtls = new SmbDtls();
-        bundleTransport.dtls.setup = firstMediaDesription.setup.toString();
-        bundleTransport.dtls.type = firstMediaDesription.fingerprint.type;
-        bundleTransport.dtls.hash = firstMediaDesription.fingerprint.hash;
+        bundleTransport.dtls.setup = firstMediaDescription.setup.toString();
+        bundleTransport.dtls.type = firstMediaDescription.fingerprint.type;
+        bundleTransport.dtls.hash = firstMediaDescription.fingerprint.hash;
 
         bundleTransport.ice.candidates = new ArrayList<>();
-        firstMediaDesription.candidates.forEach(candidate -> {
+        firstMediaDescription.candidates.forEach(candidate -> {
             final var smbCandidate = new SmbCandidate();
             smbCandidate.component = candidate.component == Candidate.Component.RTP ? 0 : 1;
             smbCandidate.generation = candidate.generation;

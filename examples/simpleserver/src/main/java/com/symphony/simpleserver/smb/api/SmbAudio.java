@@ -8,6 +8,7 @@ import java.util.List;
 public class SmbAudio {
     public List<Long> ssrcs;
 
+    public SmbTransport transport;
     public SmbPayloadType payloadType;
 
     @JsonGetter("payload-type")

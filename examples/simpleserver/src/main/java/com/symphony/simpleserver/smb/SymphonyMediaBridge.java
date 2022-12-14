@@ -37,22 +37,36 @@ public class SymphonyMediaBridge {
         return responseBodyJson.get("id").asText();
     }
 
-    public JsonNode allocateEndpoint(String conferenceId, String endpointId) throws IOException, ParseException {
+    public JsonNode allocateEndpoint(String conferenceId, String endpointId, boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParseException {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
         requestBodyJson.put("action", "allocate");
 
-        final var bundleTransportJson = requestBodyJson.putObject("bundle-transport");
-        bundleTransportJson.put("ice-controlling", true);
-        bundleTransportJson.put("ice", true);
-        bundleTransportJson.put("dtls", true);
+        if (bundleTransport) {
+            final var bundleTransportJson = requestBodyJson.putObject("bundle-transport");
+            bundleTransportJson.put("ice-controlling", true);
+            bundleTransportJson.put("ice", true);
+            bundleTransportJson.put("dtls", true);
+        }
 
         final var audioJson = requestBodyJson.putObject("audio");
         audioJson.put("relay-type", "forwarder");
+        if (!bundleTransport) {
+            final var transport = audioJson.putObject("transport");
+            transport.put("ice", enableIce);
+            transport.put("dtls", enableDtls);
+        }
 
         final var videoJson = requestBodyJson.putObject("video");
         videoJson.put("relay-type", "forwarder");
+        if (!bundleTransport) {
+            final var transport = videoJson.putObject("transport");
+            transport.put("ice", enableIce);
+            transport.put("dtls", enableDtls);
+        }
 
-        requestBodyJson.putObject("data");
+        if (bundleTransport) {
+            requestBodyJson.putObject("data");
+        }
 
         LOGGER.info("Request\n{}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestBodyJson));
 

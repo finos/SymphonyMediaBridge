@@ -1,13 +1,16 @@
 package com.symphony.simpleserver;
 
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 /**
  * Main entry point to the service. Spring URL mappings for the client API endpoints (join, request and conferences) as
@@ -31,7 +34,18 @@ public final class ConferenceRequestHandler {
             @RequestBody String message)
     {
         try {
-            final var endpointId = conferences.join();
+            boolean bundleTransport = true;
+            boolean enableIce = true;
+            boolean enableDtls = true;
+
+            if (StringUtils.hasText(message)) {
+                final var messageNode = new ObjectMapper().readTree(message);
+                bundleTransport = messageNode.path("bundle-transport").asBoolean(true);
+                enableIce = messageNode.path("ice").asBoolean(true);
+                enableDtls = messageNode.path("dtls").asBoolean(true);
+            }
+
+            final var endpointId = conferences.join(bundleTransport, enableIce, enableDtls);
 
             final var responseBodyJson = JsonNodeFactory.instance.objectNode();
             responseBodyJson.put("endpointId", endpointId);

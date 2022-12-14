@@ -10,6 +10,8 @@ public class SmbVideo {
 
     public List<SmbPayloadType> payloadTypes;
 
+    public SmbTransport transport;
+
     @JsonGetter("payload-types")
     public List<SmbPayloadType> getPayloadTypes() {
         return payloadTypes;
