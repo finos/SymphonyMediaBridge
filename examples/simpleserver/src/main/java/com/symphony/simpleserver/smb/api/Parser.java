@@ -5,6 +5,7 @@ import com.symphony.simpleserver.sdp.ParserFailedException;
 import com.symphony.simpleserver.sdp.SessionDescription;
 import com.symphony.simpleserver.sdp.objects.*;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -363,9 +364,9 @@ public class Parser {
     public SmbEndpointDescription makeEndpointDescription(SessionDescription sdpAnswer) throws ParserFailedException {
         SmbEndpointDescription endpointDescription = new SmbEndpointDescription();
 
-        if (!sdpAnswer.group.semantics.equals("BUNDLE")) {
-            throw new ParserFailedException();
-        }
+        //if (!sdpAnswer.group.semantics.equals("BUNDLE")) {
+        //    throw new ParserFailedException();
+        //}
 
         if (sdpAnswer.mediaDescriptions.isEmpty()) {
             throw new ParserFailedException();
@@ -373,34 +374,38 @@ public class Parser {
 
         final var firstMediaDescription = sdpAnswer.mediaDescriptions.get(0);
 
-        final var bundleTransport = new SmbTransport();
-        bundleTransport.rtcpMux = true;
-        bundleTransport.ice = new SmbIce();
-        bundleTransport.ice.ufrag = firstMediaDescription.ice.ufrag;
-        bundleTransport.ice.pwd = firstMediaDescription.ice.pwd;
-        bundleTransport.dtls = new SmbDtls();
-        bundleTransport.dtls.setup = firstMediaDescription.setup.toString();
-        bundleTransport.dtls.type = firstMediaDescription.fingerprint.type;
-        bundleTransport.dtls.hash = firstMediaDescription.fingerprint.hash;
+        boolean useBundleTransport = false;
+        if (sdpAnswer.group != null && "BUNDLE".equals(sdpAnswer.group.semantics)) {
+            useBundleTransport = true;
+            final var bundleTransport = new SmbTransport();
+            bundleTransport.rtcpMux = true;
+            bundleTransport.ice = new SmbIce();
+            bundleTransport.ice.ufrag = firstMediaDescription.ice.ufrag;
+            bundleTransport.ice.pwd = firstMediaDescription.ice.pwd;
+            bundleTransport.dtls = new SmbDtls();
+            bundleTransport.dtls.setup = firstMediaDescription.setup.toString();
+            bundleTransport.dtls.type = firstMediaDescription.fingerprint.type;
+            bundleTransport.dtls.hash = firstMediaDescription.fingerprint.hash;
 
-        bundleTransport.ice.candidates = new ArrayList<>();
-        firstMediaDescription.candidates.forEach(candidate -> {
-            final var smbCandidate = new SmbCandidate();
-            smbCandidate.component = candidate.component == Candidate.Component.RTP ? 0 : 1;
-            smbCandidate.generation = candidate.generation;
-            smbCandidate.protocol = candidate.transportType.toString();
-            smbCandidate.port = candidate.port;
-            smbCandidate.ip = candidate.address;
-            smbCandidate.relPort = candidate.remotePort;
-            smbCandidate.relAddr = candidate.remoteAddress;
-            smbCandidate.foundation = candidate.foundation;
-            smbCandidate.priority = candidate.priority;
-            smbCandidate.type = candidate.type.toString();
-            smbCandidate.network = candidate.networkId;
-            bundleTransport.ice.candidates.add(smbCandidate);
-        });
+            bundleTransport.ice.candidates = new ArrayList<>();
+            firstMediaDescription.candidates.forEach(candidate -> {
+                final var smbCandidate = new SmbCandidate();
+                smbCandidate.component = candidate.component == Candidate.Component.RTP ? 0 : 1;
+                smbCandidate.generation = candidate.generation;
+                smbCandidate.protocol = candidate.transportType.toString();
+                smbCandidate.port = candidate.port;
+                smbCandidate.ip = candidate.address;
+                smbCandidate.relPort = candidate.remotePort;
+                smbCandidate.relAddr = candidate.remoteAddress;
+                smbCandidate.foundation = candidate.foundation;
+                smbCandidate.priority = candidate.priority;
+                smbCandidate.type = candidate.type.toString();
+                smbCandidate.network = candidate.networkId;
+                bundleTransport.ice.candidates.add(smbCandidate);
+            });
 
-        endpointDescription.bundleTransport = bundleTransport;
+            endpointDescription.bundleTransport = bundleTransport;
+        }
 
         for (final var mediaDescription : sdpAnswer.mediaDescriptions) {
             if (mediaDescription.type != MediaDescription.Type.APPLICATION &&
@@ -421,6 +426,43 @@ public class Parser {
                 audio.payloadType.name = mediaDescription.rtpMaps.get(firstPayloadType).codec;
                 audio.payloadType.clockrate = mediaDescription.rtpMaps.get(firstPayloadType).clockRate;
                 audio.payloadType.channels = mediaDescription.rtpMaps.get(firstPayloadType).parameter;
+
+                if (!useBundleTransport) {
+                    audio.transport = new SmbTransport();
+                    if (mediaDescription.ice != null && StringUtils.hasText(mediaDescription.ice.ufrag)) {
+                        audio.transport.ice = new SmbIce();
+                        audio.transport.ice.ufrag = mediaDescription.ice.ufrag;
+                        audio.transport.ice.pwd = mediaDescription.ice.pwd;
+                    } else {
+                        audio.transport.connection = new SmbConnection();
+                        String address = null;
+                        if (mediaDescription.connection != null && StringUtils.hasText(mediaDescription.connection.address)) {
+                            if (!"0.0.0.0".equals(mediaDescription.connection.address)) {
+                                address = mediaDescription.connection.address;
+                            }
+                        }
+
+                        if (address == null && sdpAnswer.connection != null) {
+                            if (StringUtils.hasText(sdpAnswer.connection.address) && !"0.0.0.0".equals(sdpAnswer.connection.address)) {
+                                address = sdpAnswer.connection.address;
+                            }
+                        }
+
+                        if (address == null) {
+                            throw new ParserFailedException();
+                        }
+
+                        audio.transport.connection.ip = address;
+                        audio.transport.connection.port = mediaDescription.port;
+                    }
+
+                    if (mediaDescription.setup != null && mediaDescription.fingerprint != null && StringUtils.hasText(mediaDescription.fingerprint.hash)) {
+                        audio.transport.dtls = new SmbDtls();
+                        audio.transport.dtls.setup = mediaDescription.setup.toString();
+                        audio.transport.dtls.type = mediaDescription.fingerprint.type;
+                        audio.transport.dtls.hash = mediaDescription.fingerprint.hash;
+                    }
+                }
 
                 final var parameters = mediaDescription.fmtps.get(firstPayloadType);
                 if (parameters != null) {
@@ -444,6 +486,43 @@ public class Parser {
             } else if (mediaDescription.type == MediaDescription.Type.VIDEO) {
                 final var video = new SmbVideo();
                 final var streamsMap = new HashMap<String, SmbVideoStream>();
+
+                if (!useBundleTransport) {
+                    video.transport = new SmbTransport();
+                    if (mediaDescription.ice != null && StringUtils.hasText(mediaDescription.ice.ufrag)) {
+                        video.transport.ice = new SmbIce();
+                        video.transport.ice.ufrag = mediaDescription.ice.ufrag;
+                        video.transport.ice.pwd = mediaDescription.ice.pwd;
+                    } else {
+                        video.transport.connection = new SmbConnection();
+                        String address = null;
+                        if (mediaDescription.connection != null && StringUtils.hasText(mediaDescription.connection.address)) {
+                            if (!"0.0.0.0".equals(mediaDescription.connection.address)) {
+                                address = mediaDescription.connection.address;
+                            }
+                        }
+
+                        if (address == null && sdpAnswer.connection != null) {
+                            if (StringUtils.hasText(sdpAnswer.connection.address) && !"0.0.0.0".equals(sdpAnswer.connection.address)) {
+                                address = sdpAnswer.connection.address;
+                            }
+                        }
+
+                        if (address == null) {
+                            throw new ParserFailedException();
+                        }
+
+                        video.transport.connection.ip = address;
+                        video.transport.connection.port = mediaDescription.port;
+                    }
+
+                    if (mediaDescription.setup != null && mediaDescription.fingerprint != null && StringUtils.hasText(mediaDescription.fingerprint.hash)) {
+                        video.transport.dtls = new SmbDtls();
+                        video.transport.dtls.setup = mediaDescription.setup.toString();
+                        video.transport.dtls.type = mediaDescription.fingerprint.type;
+                        video.transport.dtls.hash = mediaDescription.fingerprint.hash;
+                    }
+                }
 
                 mediaDescription.ssrcs.forEach(ssrc -> {
                     final var smbVideoStream = streamsMap.computeIfAbsent(
