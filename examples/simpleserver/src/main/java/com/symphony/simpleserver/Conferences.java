@@ -140,22 +140,26 @@ public class Conferences {
         final var answer = new SessionDescription(message.payload);
         final var endpointDescription = parser.makeEndpointDescription(answer);
         final var mediaStreams = new ArrayList<MediaStream>();
+        LOGGER.info("sdp from client {}", answer.toString());
 
         for (var mediaDescription : answer.mediaDescriptions) {
-            if (mediaDescription.direction != Types.Direction.SEND_RECV || mediaDescription.ssrcs.isEmpty()) {
+            if (mediaDescription.direction != Types.Direction.SEND_RECV) {
                 continue;
             }
 
             final var mid = new MediaStream(mediaDescription.type);
 
             if (mediaDescription.type == MediaDescription.Type.AUDIO) {
-                mid.ssrcs = new ArrayList<>(mediaDescription.ssrcs);
-                mid.ssrcGroups = List.of();
-
-            } else if (mediaDescription.type == MediaDescription.Type.VIDEO) {
+                if (mediaDescription.ssrcs.isEmpty()) {
+                    mid.ssrcs = new ArrayList<>(mediaDescription.ssrcs);
+                    mid.ssrcGroups = List.of();
+                }
+            } else if (mediaDescription.type == MediaDescription.Type.VIDEO && !mediaDescription.ssrcs.isEmpty()) {
                 mid.type = MediaDescription.Type.VIDEO;
                 mid.ssrcs = new ArrayList<>(mediaDescription.ssrcs);
                 mid.ssrcGroups = new ArrayList<>(mediaDescription.ssrcGroups);
+            } else {
+                continue;
             }
 
             mediaStreams.add(mid);

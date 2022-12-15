@@ -23,6 +23,7 @@ import java.io.IOException;
 @Component
 public class SymphonyMediaBridge {
     private static final Logger LOGGER = LoggerFactory.getLogger(SymphonyMediaBridge.class);
+    //private static final String BASE_URL = "http://172.31.114.70:8080/conferences/";
     private static final String BASE_URL = "http://127.0.0.1:8080/conferences/";
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
