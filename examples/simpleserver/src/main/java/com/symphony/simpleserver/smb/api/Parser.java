@@ -55,14 +55,14 @@ public class Parser {
                 bundleTransportDtls,
                 candidates);
 
-        addParticipantMids(endpointDescription,
+        /*addParticipantMids(endpointDescription,
                 endpointId,
                 endpointMediaStreams,
                 mediaDescriptionIndex,
                 offer,
                 bundleTransportIce,
                 bundleTransportDtls,
-                candidates);
+                candidates);*/
 
         return offer;
     }
@@ -140,40 +140,46 @@ public class Parser {
             List<Candidate> bundleTransportCandidates) throws ParserFailedException
     {
 
-        final var smbAudioSsrc = new Ssrc(endpointDescription.audio.ssrcs.get(0));
-        smbAudioSsrc.label = "smbaudiolabel";
-        smbAudioSsrc.mslabel = "smbaudiomslabel";
-        smbAudioSsrc.cname = "smbaudiocname";
-        final var audio = makeAudioDescription(endpointDescription,
-                mediaDescriptionIndex,
-                bundleTransportIce,
-                bundleTransportDtls,
-                bundleTransportCandidates,
-                smbAudioSsrc);
+        int ssrcIndex = 0;
+        for (Long ssrc : endpointDescription.audio.ssrcs) {
+            final var smbAudioSsrc = new Ssrc(ssrc);
+            smbAudioSsrc.label = "smbaudiolabel" + ssrcIndex;
+            smbAudioSsrc.mslabel = "smbaudiomslabel" + ssrcIndex;
+            smbAudioSsrc.cname = "smbaudiocname" + ssrcIndex;
+            final var audio = makeAudioDescription(endpointDescription,
+                    mediaDescriptionIndex,
+                    bundleTransportIce,
+                    bundleTransportDtls,
+                    bundleTransportCandidates,
+                    smbAudioSsrc);
 
-        offer.mediaDescriptions.add(audio);
-        offer.group.mids.add(audio.mid);
-        offer.msidSemantic.ids.add(smbAudioSsrc.mslabel);
-        mediaDescriptionIndex++;
+            offer.mediaDescriptions.add(audio);
+            offer.group.mids.add(audio.mid);
+            offer.msidSemantic.ids.add(smbAudioSsrc.mslabel);
+            mediaDescriptionIndex++;
+            ssrcIndex++;
+        }
 
-        final var smbVideoStream = endpointDescription.video.streams.get(0);
-        final var smbVideoSsrc = new Ssrc(smbVideoStream.sources.get(0).main);
+        ssrcIndex = 0;
+        for (SmbVideoStream smbVideoStream : endpointDescription.video.streams) {
+            final var smbVideoSsrc = new Ssrc(smbVideoStream.sources.get(0).main);
 
-        smbVideoSsrc.label = "smbvideolabel";
-        smbVideoSsrc.mslabel = "smbvideomslabel";
-        smbVideoSsrc.cname = "smbvideocname";
-        final var video = makeVideoDescription(endpointDescription,
-                mediaDescriptionIndex,
-                bundleTransportIce,
-                bundleTransportDtls,
-                bundleTransportCandidates,
-                List.of(smbVideoSsrc),
-                List.of());
+            smbVideoSsrc.label = "smbvideolabel" + ssrcIndex;
+            smbVideoSsrc.mslabel = "smbvideomslabel" + ssrcIndex;
+            smbVideoSsrc.cname = "smbvideocname" + ssrcIndex;
+            final var video = makeVideoDescription(endpointDescription,
+                    mediaDescriptionIndex,
+                    bundleTransportIce,
+                    bundleTransportDtls,
+                    bundleTransportCandidates,
+                    List.of(smbVideoSsrc),
+                    List.of());
 
-        offer.mediaDescriptions.add(video);
-        offer.group.mids.add(video.mid);
-        offer.msidSemantic.ids.add(smbVideoSsrc.mslabel);
-        mediaDescriptionIndex++;
+            offer.mediaDescriptions.add(video);
+            offer.group.mids.add(video.mid);
+            offer.msidSemantic.ids.add(smbVideoSsrc.mslabel);
+            mediaDescriptionIndex++;
+        }
 
         if (endpointDescription.data != null) {
             final var data = new MediaDescription();

@@ -177,7 +177,7 @@ public class Conferences {
         endpoint.isConfigured = true;
         endpoints.put(endpointId, endpoint);
 
-        for (var endpointsEntry : endpoints.entrySet()) {
+        /*for (var endpointsEntry : endpoints.entrySet()) {
             if (endpointsEntry.getKey().equals(endpointId)) {
                 continue;
             }
@@ -187,7 +187,7 @@ public class Conferences {
                     endpointsEntry.getKey(),
                     endpointMediaStreams);
             sendMessage(endpointsEntry.getKey(), "offer", offer.toString());
-        }
+        }*/
 
         return true;
     }
