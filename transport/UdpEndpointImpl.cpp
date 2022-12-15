@@ -206,6 +206,10 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
         if (rtpPacket)
         {
             listener = _dtlsListeners.getItem(srcAddress);
+            if (!listener && !_isShared && _dtlsListeners.size() == 1)
+            {
+                listener = _dtlsListeners.begin()->second;
+            }
 
             if (listener)
             {
