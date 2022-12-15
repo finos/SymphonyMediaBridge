@@ -840,6 +840,11 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
         ssrcState.currentRtpSource = source;
     }
 
+    if (!_rtpIceSession && _peerRtpPort != source)
+    {
+        setRemotePeer(source);
+    }
+
     const uint32_t extendedSequenceNumber = ssrcState.getExtendedSequenceNumber() -
         static_cast<int16_t>(
             static_cast<uint16_t>(ssrcState.getExtendedSequenceNumber() & 0xFFFFu) - rtpHeader->sequenceNumber.get());
