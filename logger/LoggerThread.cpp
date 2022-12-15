@@ -2,19 +2,26 @@
 #include "concurrency/ThreadUtils.h"
 #include "utils/Time.h"
 #include <execinfo.h>
+#include <fstream>
 
 namespace logger
 {
 
 const auto timeStringLength = 32;
 
-LoggerThread::LoggerThread(FILE* logFile, bool logStdOut, size_t backlogSize)
+LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize)
     : _running(true),
       _logQueue(backlogSize),
-      _logFile(logFile),
       _logStdOut(logStdOut),
       _thread(new std::thread([this] { this->run(); }))
 {
+    _logFileName = logFileName && strlen(logFileName) > 0 ? logFileName : "";
+    reopenLogFile();
+}
+
+void LoggerThread::reopenLogFile()
+{
+    _logFile = _logFileName.size() ? fopen(_logFileName.c_str(), "a+") : nullptr;
 }
 
 namespace
@@ -57,6 +64,18 @@ void logStack(const LogItem& item, const char* localTime, bool logStdOut, FILE* 
 }
 } // namespace
 
+void LoggerThread::ensureLogFileExists()
+{
+    if (_logFileName.size())
+    {
+        std::ifstream f(_logFileName.c_str());
+        if (!f.good())
+        {
+            reopenLogFile();
+        }
+    }
+}
+
 void LoggerThread::run()
 {
     concurrency::setThreadName("Logger");
@@ -65,6 +84,8 @@ void LoggerThread::run()
     bool gotLogItem = false;
     for (;;)
     {
+        ensureLogFileExists();
+
         if (_logQueue.pop(item))
         {
             gotLogItem = true;
