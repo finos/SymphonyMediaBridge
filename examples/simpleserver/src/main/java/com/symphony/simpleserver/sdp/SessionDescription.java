@@ -359,8 +359,6 @@ public class SessionDescription {
     }
 
     private void handleDirection(String direction, ParserState parserState) throws ParserFailedException {
-        final MediaDescription mediaDescription = ;
-
         Types.Direction directionEnumValue = null;
 
         switch (direction) {
@@ -382,12 +380,9 @@ public class SessionDescription {
 
         if (parserState.globalMode) {
             this.direction = directionEnumValue;
-        }
-
-        if (parserState.currentMediaContentIndex == -1) {
+        } else {
             mediaDescriptions.get(parserState.currentMediaContentIndex).direction = this.direction;
         }
-
     }
 
     private void handleGroup(String line, ParserState parserState) throws ParserFailedException {
