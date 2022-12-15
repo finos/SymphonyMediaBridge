@@ -26,6 +26,8 @@
 #include <string>
 #include <utility>
 
+#define DEBUG_RTP 0
+
 #if DEBUG_RTP
 #define RTP_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
 #else
@@ -1702,6 +1704,11 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
 
 bool TransportImpl::unprotect(memory::Packet& packet)
 {
+    if (!_dtlsEnabled)
+    {
+        return true;
+    }
+
     if (_srtpClient && _srtpClient->isInitialized())
     {
         return _srtpClient->unprotect(packet);
@@ -1719,6 +1726,11 @@ void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 
 bool TransportImpl::setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
+    if (!_dtlsEnabled)
+    {
+        return true;
+    }
+
     if (_srtpClient && _srtpClient->isInitialized())
     {
         return _srtpClient->setRemoteRolloverCounter(ssrc, rolloverCounter);
