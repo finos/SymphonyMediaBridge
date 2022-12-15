@@ -36,6 +36,7 @@ public class SessionDescription {
     public List<Candidate> candidates;
     public List<MediaDescription> mediaDescriptions;
     public Bandwidth bandwidth;
+    public Types.Direction direction;
 
     public SessionDescription() {
         this.version = 0;
@@ -358,25 +359,35 @@ public class SessionDescription {
     }
 
     private void handleDirection(String direction, ParserState parserState) throws ParserFailedException {
-        final MediaDescription mediaDescription = mediaDescriptions.get(parserState.currentMediaContentIndex);
+        final MediaDescription mediaDescription = ;
+
+        Types.Direction directionEnumValue = null;
 
         switch (direction) {
             case "sendonly":
-                mediaDescription.direction = Types.Direction.SEND_ONLY;
+                directionEnumValue = Types.Direction.SEND_ONLY;
                 break;
             case "recvonly":
-                mediaDescription.direction = Types.Direction.RECV_ONLY;
+                directionEnumValue = Types.Direction.RECV_ONLY;
                 break;
             case "sendrecv":
-                mediaDescription.direction = Types.Direction.SEND_RECV;
+                directionEnumValue = Types.Direction.SEND_RECV;
                 break;
             case "inactive":
-                mediaDescription.direction = Types.Direction.INACTIVE;
+                directionEnumValue = Types.Direction.INACTIVE;
                 break;
             default:
                 throw new ParserFailedException(direction);
-
         }
+
+        if (parserState.globalMode) {
+            this.direction = directionEnumValue;
+        }
+
+        if (parserState.currentMediaContentIndex == -1) {
+            mediaDescriptions.get(parserState.currentMediaContentIndex).direction = this.direction;
+        }
+
     }
 
     private void handleGroup(String line, ParserState parserState) throws ParserFailedException {

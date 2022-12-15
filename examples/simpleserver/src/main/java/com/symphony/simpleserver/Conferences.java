@@ -142,8 +142,17 @@ public class Conferences {
         final var mediaStreams = new ArrayList<MediaStream>();
         LOGGER.info("sdp from client {}", answer.toString());
 
+        Types.Direction direction = answer.direction;
+        if (direction == null) {
+            direction = answer.direction;
+        }
+        if (direction == null) {
+            direction = Types.Direction.SEND_RECV;
+        }
+
+
         for (var mediaDescription : answer.mediaDescriptions) {
-            if (mediaDescription.direction != Types.Direction.SEND_RECV) {
+            if (direction != Types.Direction.SEND_RECV) {
                 continue;
             }
 

@@ -414,8 +414,17 @@ public class Parser {
         }
 
         for (final var mediaDescription : sdpAnswer.mediaDescriptions) {
+            Types.Direction direction = mediaDescription.direction;
+            if (direction == null) {
+                direction = sdpAnswer.direction;
+            }
+
+            if (direction == null) {
+                direction = Types.Direction.SEND_RECV;
+            }
+
             if (mediaDescription.type != MediaDescription.Type.APPLICATION &&
-                    mediaDescription.direction != Types.Direction.SEND_RECV)
+            direction != Types.Direction.SEND_RECV)
             {
                 continue;
             }
