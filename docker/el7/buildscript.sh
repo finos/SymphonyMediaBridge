@@ -11,11 +11,10 @@ function pr() {
 mkdir -p el7/smb
 pushd el7/smb
 
-#source scl_source enable devtoolset-7
-source scl_source enable llvm-toolset-7
+source scl_source enable devtoolset-9
 
-export CC=/opt/rh/llvm-toolset-7/root/usr/bin/clang
-export CXX=/opt/rh/llvm-toolset-7/root/usr/bin/clang++
+export CC=clang
+export CXX=clang++
 
 pr "Generating versioninfo"
 ../../tools/scripts/versioninfo.sh

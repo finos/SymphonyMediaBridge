@@ -5,25 +5,18 @@ RUN yum -y install centos-release-scl
 RUN yum -y install devtoolset-9
 
 # Install build dependenices
-RUN yum -y install git devtoolset-7 llvm-toolset-7 gtk-doc libtool lcov wget patchelf lsof
+RUN yum -y install git gtk-doc libtool lcov wget patchelf lsof
 RUN yum -y --enablerepo=extras install epel-release
-RUN yum -y install cmake3 ninja-build
+RUN yum -y install cmake3 ninja-build libstdc+
 RUN ln -s cmake3 /usr/bin/cmake
 
-# Fetch llvm and build libc++
-RUN cd /tmp/ \
-    && git clone https://github.com/llvm/llvm-project.git --branch llvmorg-12.0.0-rc3 --single-branch --depth 1 \
-    && cd /tmp/llvm-project/ \
-    && source scl_source enable devtoolset-9 \
-    && cmake \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DLLVM_ENABLE_PROJECTS='clang;compiler-rt;lld;parallel-libs;polly;pstl;libcxx;libcxxabi' \
-        -DCMAKE_INSTALL_PREFIX=/opt/llvm-12.0.0 \
-        -G "Ninja" \
-        -S 'llvm' \
-        -B 'build' \
-    && cmake --build build --target install \
-    && cd /tmp/ && rm -rf llvm-project
+RUN cd /tmp \
+    && wget -O clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz \
+    && tar xvf clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz \
+    && cd clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-* \
+    && cp -rn * /usr/local \
+    && cd /tmp && rm -rf clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-* \
+    && ln -s /usr/local/bin/lld /usr/local/bin/ld
 
 # Build openssl-1.1.1s
 RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
@@ -51,8 +44,14 @@ RUN cd /tmp && wget https://archive.mozilla.org/pub/opus/opus-1.3.1.tar.gz \
     && make -j5 \
     && make install
 
+# Restore old GCC's ld to build glibc
+RUN ln -sf /usr/bin/ld /usr/local/bin/ld
+
 RUN cd /tmp && wget http://ftp.gnu.org/gnu/glibc/glibc-2.18.tar.gz && tar zxvf glibc-2.18.tar.gz \
     && cd /tmp/glibc-2.18 && mkdir -p build && cd build \
-    && CC= CXX= LD_LIBRARY_PATH= ../configure --prefix=/opt/glibc-2.18 \
+    && CC=gcc CXX=gcc++ LD_LIBRARY_PATH= ../configure --prefix=/opt/glibc-2.18 \
     && make -j$(getconf _NPROCESSORS_ONLN) \
     && LD_LIBRARY_PATH= make install
+
+# Restore new CLANG's ld
+RUN ln -sf /usr/local/bin/lld /usr/local/bin/ld
