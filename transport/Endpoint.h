@@ -51,6 +51,8 @@ public:
 
         virtual void onRegistered(Endpoint& endpoint) = 0;
         virtual void onUnregistered(Endpoint& endpoint) = 0;
+
+        virtual void onTcpDisconnect(Endpoint& endpoint) = 0;
     };
 
     class IStopEvents

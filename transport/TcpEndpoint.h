@@ -16,8 +16,8 @@ public:
 
     memory::UniquePacket receive();
 
-    bool isGood() const { return fd != -1 && _streamPrestine; }
-
+    bool isGood() const { return fd != -1 && _streamPrestine && !_remoteDisconnect; }
+    bool hasRemoteDisconnected() const { return _remoteDisconnect; }
     void close();
 
     int fd;
@@ -28,6 +28,7 @@ private:
     memory::UniquePacket _incompletePacket;
     memory::PacketPoolAllocator& _allocator;
     bool _streamPrestine;
+    bool _remoteDisconnect;
 };
 
 namespace tcp
@@ -52,18 +53,6 @@ private:
     std::atomic_uint32_t& _countDown;
 };
 
-template <typename T>
-class ReceiveJob : public jobmanager::Job
-{
-public:
-    ReceiveJob(T& endpoint, int fd) : _endpoint(endpoint), _fd(fd) {}
-
-    void run() override { _endpoint.internalReceive(_fd); }
-
-private:
-    T& _endpoint;
-    int _fd;
-};
 } // namespace tcp
 
 // End point that package ICE, DTLS, RTP in TCP

@@ -47,6 +47,8 @@ struct EndpointListenerMock : public Endpoint::IEvents
             uint64_t timestamp),
         (override));
 
+    void onTcpDisconnect(Endpoint& endpoint) override {}
+
     MOCK_METHOD(void, onRegistered, (Endpoint & endpoint), (override));
     MOCK_METHOD(void, onUnregistered, (Endpoint & endpoint), (override));
 };

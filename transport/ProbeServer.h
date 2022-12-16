@@ -19,45 +19,47 @@ public:
     virtual ~ProbeServer(){};
 
     // Endpoint::IEvents
-    virtual void onRtpReceived(Endpoint&,
+    void onRtpReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
         memory::UniquePacket,
         uint64_t timestamp) override;
 
-    virtual void onDtlsReceived(Endpoint&,
+    void onDtlsReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
         memory::UniquePacket,
         uint64_t timestamp) override;
 
-    virtual void onRtcpReceived(Endpoint&,
+    void onRtcpReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
         memory::UniquePacket,
         uint64_t timestamp) override;
 
-    virtual void onIceReceived(Endpoint&,
+    void onIceReceived(Endpoint&,
         const SocketAddress& source,
         const SocketAddress& target,
         memory::UniquePacket,
         uint64_t timestamp) override;
 
-    virtual void onRegistered(Endpoint&) override;
-    virtual void onUnregistered(Endpoint&) override;
+    void onTcpDisconnect(Endpoint& endpoint) override {}
+
+    void onRegistered(Endpoint&) override;
+    void onUnregistered(Endpoint&) override;
 
     // ServerEndpoint::IEvents
-    virtual void onServerPortRegistered(ServerEndpoint&) override;
-    virtual void onServerPortUnregistered(ServerEndpoint&) override;
+    void onServerPortRegistered(ServerEndpoint&) override;
+    void onServerPortUnregistered(ServerEndpoint&) override;
 
-    virtual void onIceTcpConnect(std::shared_ptr<Endpoint>,
+    void onIceTcpConnect(std::shared_ptr<Endpoint>,
         const SocketAddress& source,
         const SocketAddress& target,
         memory::UniquePacket,
         uint64_t timestamp) override;
 
     // Endpoint::IStopEvents
-    virtual void onEndpointStopped(Endpoint*) override;
+    void onEndpointStopped(Endpoint*) override;
 
     // Ice
     const std::pair<std::string, std::string>& getCredentials() const;

@@ -1261,6 +1261,10 @@ void IceSession::CandidatePair::freeze()
 
 void IceSession::CandidatePair::failCandidate()
 {
+    logger::debug("candidate failed %s-%s",
+        _name.c_str(),
+        localCandidate.address.toString().c_str(),
+        remoteCandidate.address.toString().c_str());
     state = State::Failed;
     cancelPendingTransactions();
 }

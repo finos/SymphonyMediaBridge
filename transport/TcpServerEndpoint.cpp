@@ -3,85 +3,14 @@
 #include "ice/Stun.h"
 #include "memory/Packet.h"
 #include "memory/PacketPoolAllocator.h"
+#include "utils/Function.h"
 #include "utils/Time.h"
 #include <arpa/inet.h>
 #include <cstdint>
 #include <sys/socket.h>
+
 namespace transport
 {
-
-namespace
-{
-class UnRegisterServerListenerJob : public jobmanager::Job
-{
-public:
-    UnRegisterServerListenerJob(TcpServerEndpoint& endpoint,
-        const std::string& userName,
-        ServerEndpoint::IEvents* listener)
-        : _userName(userName),
-          _endpoint(endpoint),
-          _listener(listener)
-    {
-    }
-
-    void run() override { _endpoint.internalUnregisterListener(_userName, _listener); }
-
-private:
-    const std::string _userName;
-    TcpServerEndpoint& _endpoint;
-    ServerEndpoint::IEvents* _listener;
-};
-
-class AcceptJob : public jobmanager::Job
-{
-public:
-    AcceptJob(TcpServerEndpoint& endpoint) : _endpoint(endpoint) {}
-
-    void run() override { _endpoint.internalAccept(); }
-
-private:
-    TcpServerEndpoint& _endpoint;
-};
-} // namespace
-
-class EarlyShutdownJob : public jobmanager::Job
-{
-public:
-    EarlyShutdownJob(TcpServerEndpoint& endpoint, int fd) : _endpoint(endpoint), _fd(fd) {}
-
-    void run() override { _endpoint.internalShutdown(_fd); }
-
-private:
-    TcpServerEndpoint& _endpoint;
-    int _fd;
-};
-
-class CloseSocketJob : public jobmanager::Job
-{
-public:
-    CloseSocketJob(int fd) : _fd(fd) {}
-
-    void run() override { ::close(_fd); }
-
-private:
-    int _fd;
-};
-
-class MaintenanceJob : public jobmanager::Job
-{
-public:
-    MaintenanceJob(TcpServerEndpoint& serverEndpoint, uint64_t timestamp)
-        : _serverEndpoint(serverEndpoint),
-          _timestamp(timestamp)
-    {
-    }
-
-    void run() override { _serverEndpoint.internalMaintenance(_timestamp); }
-
-private:
-    TcpServerEndpoint& _serverEndpoint;
-    uint64_t _timestamp;
-};
 
 TcpServerEndpoint::PendingTcp::PendingTcp(int fd,
     memory::PacketPoolAllocator& allocator,
@@ -167,7 +96,7 @@ void TcpServerEndpoint::stop(ServerEndpoint::IStopEvents* listener)
 
 void TcpServerEndpoint::maintenance(uint64_t timestamp)
 {
-    _receiveJobs.addJob<MaintenanceJob>(*this, timestamp);
+    _receiveJobs.post(utils::bind(&TcpServerEndpoint::internalMaintenance, this, timestamp));
 }
 
 void TcpServerEndpoint::registerListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
@@ -182,7 +111,7 @@ void TcpServerEndpoint::registerListener(const std::string& stunUserName, Server
 
 void TcpServerEndpoint::unregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
 {
-    _receiveJobs.addJob<UnRegisterServerListenerJob>(*this, stunUserName, listener);
+    _receiveJobs.post(utils::bind(&TcpServerEndpoint::internalUnregisterListener, this, stunUserName, listener));
 }
 
 void TcpServerEndpoint::internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener)
@@ -218,7 +147,7 @@ void TcpServerEndpoint::onSocketPollStopped(int fd)
     }
     else
     {
-        _receiveJobs.addJob<CloseSocketJob>(fd);
+        _receiveJobs.post([fd]() { ::shutdown(fd, SHUT_RDWR); });
     }
 }
 
@@ -226,11 +155,11 @@ void TcpServerEndpoint::onSocketReadable(int fd)
 {
     if (fd == _socket.fd())
     {
-        _receiveJobs.addJob<AcceptJob>(*this);
+        _receiveJobs.post(utils::bind(&TcpServerEndpoint::internalAccept, this));
     }
     else
     {
-        _receiveJobs.addJob<tcp::ReceiveJob<TcpServerEndpoint>>(*this, fd);
+        _receiveJobs.post(utils::bind(&TcpServerEndpoint::internalReceive, this, fd));
     }
 }
 
@@ -384,8 +313,8 @@ void TcpServerEndpoint::internalReceive(int fd)
                             endpoint->getLocalPort(),
                             std::move(packet),
                             receiveTime
-                            
-                            );
+
+                        );
 
                         --_pendingEpollRegistrations; // it is not ours anymore
 
@@ -419,7 +348,7 @@ void TcpServerEndpoint::internalReceive(int fd)
                     ice::StunError::Code::Unauthorized,
                     "Unknown user");
 
-                tmpSocket.detachHandle(); // it must not be closed now
+                tmpSocket.detachHandle(); // fd will be closed in onSocketPollStopped once unreg from ePoll
                 _epoll.remove(fd, this);
                 _pendingConnections.erase(fd);
                 return;
@@ -443,7 +372,7 @@ void TcpServerEndpoint::onSocketShutdown(int fd)
 {
     if (_pendingConnections.contains(fd))
     {
-        _receiveJobs.addJob<EarlyShutdownJob>(*this, fd);
+        _receiveJobs.post(utils::bind(&TcpServerEndpoint::internalShutdown, this, fd));
     }
 }
 

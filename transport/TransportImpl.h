@@ -227,13 +227,13 @@ public: // end point callbacks
         memory::UniquePacket packet,
         uint64_t timestamp) override;
 
+    void onTcpDisconnect(Endpoint& endpoint) override;
+
     void onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
         const SocketAddress& source,
         const SocketAddress& target,
         memory::UniquePacket packet,
         uint64_t timestamp) override;
-
-    void onIceDisconnect(Endpoint& endpoint);
 
     // DataGramTransport for sctp
     virtual bool sendSctpPacket(const void* data, size_t length) override;

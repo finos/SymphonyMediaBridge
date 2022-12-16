@@ -194,6 +194,27 @@ int64_t TransportClientPair::tryConnect(const uint64_t timestamp, const transpor
     return utils::Time::sec;
 }
 
+int64_t TransportClientPair::tryConnect(const uint64_t timestamp,
+    const transport::SslDtls& sslDtls,
+    std::pair<std::string, std::string> transport1IceCredentials)
+{
+    if (_connectStart == 0)
+    {
+        return utils::Time::sec;
+    }
+
+    if (utils::Time::diffLT(_connectStart, timestamp, _signalDelay))
+    {
+        return utils::Time::diff(_connectStart + _signalDelay, timestamp);
+    }
+
+    _transport2->setRemoteIce(transport1IceCredentials, _candidates1, _audioAllocator);
+    _transport2->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
+    _transport2->connect();
+    _connectStart = 0;
+    return utils::Time::sec;
+}
+
 bool TransportClientPair::isConnected()
 {
     return _transport1->isConnected() && _transport2->isConnected();
