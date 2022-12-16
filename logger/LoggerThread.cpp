@@ -2,6 +2,7 @@
 #include "concurrency/ThreadUtils.h"
 #include "utils/Time.h"
 #include <execinfo.h>
+#include <filesystem>
 #include <fstream>
 
 namespace logger
@@ -68,11 +69,18 @@ void LoggerThread::ensureLogFileExists()
 {
     if (_logFileName.size())
     {
+#if 0
         std::ifstream f(_logFileName.c_str());
         if (!f.good())
         {
             reopenLogFile();
         }
+#else
+        if (!std::filesystem::exists(_logFileName.c_str()))
+        {
+            reopenLogFile();
+        }
+#endif
     }
 }
 
