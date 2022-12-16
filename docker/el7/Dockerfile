@@ -4,7 +4,10 @@ RUN yum -y update && yum -y upgrade && yum -y install epel-release
 RUN yum -y install centos-release-scl
 
 # Install build dependenices
-RUN yum -y install git devtoolset-7 llvm-toolset-7 llvm-toolset-7-cmake gtk-doc libtool lcov wget patchelf lsof
+RUN yum -y install git devtoolset-7 llvm-toolset-7 gtk-doc libtool lcov wget patchelf lsof
+RUN yum -y --enablerepo=extras install epel-release
+RUN yum -y install cmake3
+RUN ln -s cmake3 /usr/bin/cmake
 
 # Fetch llvm and build libc++
 RUN cd /tmp/ && git clone https://github.com/llvm/llvm-project.git --branch release/9.x --single-branch --depth 1 \
