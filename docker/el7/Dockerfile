@@ -2,20 +2,28 @@ FROM centos:7
 
 RUN yum -y update && yum -y upgrade && yum -y install epel-release
 RUN yum -y install centos-release-scl
+RUN yum -y install devtoolset-9
 
 # Install build dependenices
 RUN yum -y install git devtoolset-7 llvm-toolset-7 gtk-doc libtool lcov wget patchelf lsof
 RUN yum -y --enablerepo=extras install epel-release
-RUN yum -y install cmake3
+RUN yum -y install cmake3 ninja-build
 RUN ln -s cmake3 /usr/bin/cmake
 
 # Fetch llvm and build libc++
-RUN cd /tmp/ && git clone https://github.com/llvm/llvm-project.git --branch release/9.x --single-branch --depth 1 \
-    && cd /tmp/llvm-project/ && mkdir build && cd build \
-    && source scl_source enable llvm-toolset-7 \
-    && cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS='libcxx;libcxxabi' ../llvm/ \
-    && make -j5 cxx \
-    && make install-cxx install-cxxabi
+RUN cd /tmp/ \
+    && git clone https://github.com/llvm/llvm-project.git --branch llvmorg-12.0.0-rc3 --single-branch --depth 1 \
+    && cd /tmp/llvm-project/ \
+    && source scl_source enable devtoolset-9 \
+    && cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DLLVM_ENABLE_PROJECTS='clang;compiler-rt;lld;parallel-libs;polly;pstl;libcxx;libcxxabi' \
+        -DCMAKE_INSTALL_PREFIX=/opt/llvm-12.0.0 \
+        -G "Ninja" \
+        -S 'llvm' \
+        -B 'build' \
+    && cmake --build build --target install \
+    && cd /tmp/ && rm -rf llvm-project
 
 # Build openssl-1.1.1s
 RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
