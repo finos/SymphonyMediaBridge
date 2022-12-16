@@ -47,10 +47,10 @@ public class SymphonyMediaBridge {
         bundleTransportJson.put("dtls", true);
 
         final var audioJson = requestBodyJson.putObject("audio");
-        audioJson.put("relay-type", "forwarder");
+        audioJson.put("relay-type", "ssrc-rewrite");
 
         final var videoJson = requestBodyJson.putObject("video");
-        videoJson.put("relay-type", "forwarder");
+        videoJson.put("relay-type", "ssrc-rewrite");
 
         requestBodyJson.putObject("data");
 
