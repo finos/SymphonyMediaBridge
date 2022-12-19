@@ -13,16 +13,15 @@ function pr() {
 
 pushd tools/testfiles
 
-#source scl_source enable devtoolset-7
-source scl_source enable llvm-toolset-7
+source scl_source enable devtoolset-9
 
-export CC=/opt/rh/llvm-toolset-7/root/usr/bin/clang
-export CXX=/opt/rh/llvm-toolset-7/root/usr/bin/clang++
+export CC=clang
+export CXX=clang++
 
 ulimit -c unlimited
 export ASAN_OPTIONS=disable_coredump=0:unmap_shadow_on_exit=1:abort_on_error=1:detect_leaks=0:sleep_before_dying=15
-export ASAN_SYMBOLIZER_PATH=/opt/rh/llvm-toolset-7/root/usr/bin/llvm-symbolizer
-export MSAN_SYMBOLIZER_PATH=/opt/rh/llvm-toolset-7/root/usr/bin/llvm-symbolizer
+export ASAN_SYMBOLIZER_PATH=/opt/rh/devtoolset-9/root/usr/bin/llvm-symbolizer
+export MSAN_SYMBOLIZER_PATH=/opt/rh/devtoolset-9/root/usr/bin/llvm-symbolizer
 export LSAN_OPTIONS=log_threads=1
 
 pr "Running tests"

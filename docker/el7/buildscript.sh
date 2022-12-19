@@ -47,6 +47,10 @@ cp /usr/local/lib64/libssl.so.1.1 libs
 cp /usr/local/lib64/libcrypto.so.1.1 libs
 cp /usr/local/lib/libmicrohttpd.so.12 libs
 cp /usr/local/lib/libopus.so.0 libs
+cp /lib64/libgcc_s.so.1 ./libs
+patchelf --set-interpreter /opt/glibc-2.18/lib/ld-linux-x86-64.so.2 smb
+patchelf --set-interpreter /opt/glibc-2.18/lib/ld-linux-x86-64.so.2 UnitTest
+patchelf --set-interpreter /opt/glibc-2.18/lib/ld-linux-x86-64.so.2 LoadTest
 
 popd
 pr "Done building for CentOS7! Ready for packaging"
