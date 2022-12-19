@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.6.2)
 project(smb)
 
+
 include(version/CheckGit.cmake)
 CheckGitSetup()
 
@@ -57,7 +58,13 @@ elseif(UNIX)
 
     set(CMAKE_INSTALL_RPATH "./libs")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt -lc++fs")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt")
+
+# std::filesystem requires c++fs library before CLANG 9.1
+if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9_1)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}  -lc++fs")
+endif()
+
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
     set(CMAKE_EXE_LINKER_FLAGS_SYMRELEASE "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
     set(CMAKE_EXE_LINKER_FLAGS_DCHECK "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
