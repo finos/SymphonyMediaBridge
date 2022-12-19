@@ -36,7 +36,7 @@ node('be-integration') {
             env.VERSION=version
         }
 
-        docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:latest').inside {
+        docker.image('gcr.io/sym-dev-rtc/buildsmb-el7:14004a7').inside {
             stage('Build Centos 7') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
                 env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"

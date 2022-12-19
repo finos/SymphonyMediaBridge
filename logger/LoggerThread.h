@@ -39,7 +39,7 @@ private:
     concurrency::MpmcQueue<LogItem> _logQueue;
     FILE* _logFile;
     bool _logStdOut;
-    std::unique_ptr<std::thread> _thread;
     std::string _logFileName;
+    std::unique_ptr<std::thread> _thread;
 };
 } // namespace logger
