@@ -58,7 +58,5 @@ RUN ln -sf /usr/local/bin/lld /usr/local/bin/ld
 
 # Copy clang/c++ executable and libs to proper relative path in devtools root
 RUN export PATH=/opt/rh/devtoolset-9/root/usr/local/bin:$PATH
-RUN cp -r /usr/local/* /opt/rh/devtoolset-9/root/usr/local
+RUN cp -r /usr/local/* /opt/rh/devtoolset-9/root/usr/
 RUN cp -r /opt/rh/devtoolset-9/root/usr/lib/gcc/x86_64-redhat-linux/9/* /opt/rh/devtoolset-9/root/usr/local/bin/../lib64
-RUN ln -s /usr/local/bin/clang /opt/rh/devtoolset-9/root/usr/bin/clang
-RUN ln -s /usr/local/bin/clang++ /opt/rh/devtoolset-9/root/usr/bin/clang++

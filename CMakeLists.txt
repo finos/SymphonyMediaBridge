@@ -62,7 +62,7 @@ elseif(UNIX)
 
 # std::filesystem requires c++fs library before CLANG 9.1
 if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9_1)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}  -lc++fs")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++fs")
 endif()
 
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
