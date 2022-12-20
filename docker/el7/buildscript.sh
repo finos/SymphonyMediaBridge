@@ -41,16 +41,13 @@ if [ ! -d libs ]; then
   mkdir libs
 fi
 
-cp /usr/local/lib/libc++.so.1 libs
-cp /usr/local/lib/libc++abi.so.1 libs
+cp /tmp/libcxx-8.0.1.src/build/lib/libc++.so.1.0 libs
+cp /tmp/libcxxabi-8.0.1.src/build/lib/libc++abi.so.1.0 libs/libc++abi.so.1
 cp /usr/local/lib64/libssl.so.1.1 libs
 cp /usr/local/lib64/libcrypto.so.1.1 libs
 cp /usr/local/lib/libmicrohttpd.so.12 libs
 cp /usr/local/lib/libopus.so.0 libs
 cp /lib64/libgcc_s.so.1 ./libs
-patchelf --set-interpreter /opt/glibc-2.18/lib/ld-linux-x86-64.so.2 smb
-patchelf --set-interpreter /opt/glibc-2.18/lib/ld-linux-x86-64.so.2 UnitTest
-patchelf --set-interpreter /opt/glibc-2.18/lib/ld-linux-x86-64.so.2 LoadTest
 
 popd
 pr "Done building for CentOS7! Ready for packaging"

@@ -18,6 +18,29 @@ RUN cd /tmp \
     && cd /tmp && rm -rf clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-* \
     && ln -s /usr/local/bin/lld /usr/local/bin/ld
 
+# Build libcxx to /tmp/libcxx-8.0.1.src/build/lib/libc++.so.1.0 with GLIBC-2.17
+RUN cd /tmp \
+    && wget -O libcxx-8.0.1.src.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/libcxx-8.0.1.src.tar.xz \
+    && tar xvf libcxx-8.0.1.src.tar.xz \
+    && cd libcxx-8.0.1.src \ 
+    && source scl_source enable devtoolset-9 \
+    && mkdir build \
+    && cd build \
+    && cmake ../ -DCMAKE_BUILD_TYPE=release -G "Unix Makefiles" . \
+    && make -j$(getconf _NPROCESSORS_ONLN)
+
+
+# Build and libcxx-abi to /tmp/libcxxabi-8.0.1.src/build/lib/libc++abi.so.1.0 with GLIBC-2.17
+RUN cd /tmp \
+    && wget -O libcxxabi-8.0.1.src.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/libcxxabi-8.0.1.src.tar.xz \
+    && tar xvf libcxxabi-8.0.1.src.tar.xz \
+    && cd libcxxabi-8.0.1.src \
+    && mkdir build \
+    && cd build \
+    && cmake ../ -DCMAKE_BUILD_TYPE=release -G "Unix Makefiles" . \
+    && make -j$(getconf _NPROCESSORS_ONLN) \
+    && unset LD_LIBRARY_PATH
+
 # Build openssl-1.1.1s
 RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
 RUN cd /tmp/openssl-1.1.1s && ./config && make -j5 && make install_sw
