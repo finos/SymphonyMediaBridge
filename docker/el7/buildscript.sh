@@ -41,8 +41,8 @@ if [ ! -d libs ]; then
   mkdir libs
 fi
 
-cp /tmp/libcxx-8.0.1.src/build/lib/libc++.so.1.0 libs/libc++.so.1
-cp /tmp/libcxxabi-8.0.1.src/build/lib/libc++abi.so.1.0 libs/libc++abi.so.1
+cp /opt/libcxx-8.0.1/libc++.so.1.0 libs/libc++.so.1
+cp /opt/libcxxabi-8.0.1/libc++abi.so.1.0 libs/libc++abi.so.1
 cp /usr/local/lib64/libssl.so.1.1 libs
 cp /usr/local/lib64/libcrypto.so.1.1 libs
 cp /usr/local/lib/libmicrohttpd.so.12 libs

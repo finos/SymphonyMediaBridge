@@ -18,7 +18,7 @@ RUN cd /tmp \
     && cd /tmp && rm -rf clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-* \
     && ln -s /usr/local/bin/lld /usr/local/bin/ld
 
-# Build libcxx to /tmp/libcxx-8.0.1.src/build/lib/libc++.so.1.0 with GLIBC-2.17
+# Build libcxx to /opt/libcxx-8.0.1/libc++.so.1.0 with GLIBC-2.17
 RUN cd /tmp \
     && wget -O libcxx-8.0.1.src.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/libcxx-8.0.1.src.tar.xz \
     && tar xvf libcxx-8.0.1.src.tar.xz \
@@ -27,8 +27,8 @@ RUN cd /tmp \
     && mkdir build \
     && cd build \
     && cmake ../ -DCMAKE_BUILD_TYPE=release -G "Unix Makefiles" . \
-    && make -j$(getconf _NPROCESSORS_ONLN)
-
+    && make -j$(getconf _NPROCESSORS_ONLN) \
+    && cp -r lib/ /opt/libcxx-8.0.1
 
 # Build and libcxx-abi to /tmp/libcxxabi-8.0.1.src/build/lib/libc++abi.so.1.0 with GLIBC-2.17
 RUN cd /tmp \
@@ -40,7 +40,8 @@ RUN cd /tmp \
     && cd build \
     && cmake ../ -DCMAKE_BUILD_TYPE=release -G "Unix Makefiles" . \
     && make -j$(getconf _NPROCESSORS_ONLN) \
-    && unset LD_LIBRARY_PATH
+    && unset LD_LIBRARY_PATH \
+    && cp -r lib/ /opt/libcxxabi-8.0.1
 
 # Build openssl-1.1.1s
 RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
@@ -73,7 +74,7 @@ RUN ln -sf /usr/bin/ld /usr/local/bin/ld
 
 RUN cd /tmp && wget http://ftp.gnu.org/gnu/glibc/glibc-2.18.tar.gz && tar zxvf glibc-2.18.tar.gz \
     && cd /tmp/glibc-2.18 && mkdir -p build && cd build \
-    && CC=gcc CXX=gcc++ LD_LIBRARY_PATH= ../configure --prefix=/opt/glibc-2.18 \
+    && CC=gcc CXX= LD_LIBRARY_PATH= ../configure --prefix=/opt/glibc-2.18 \
     && make -j$(getconf _NPROCESSORS_ONLN) \
     && LD_LIBRARY_PATH= make install
 
