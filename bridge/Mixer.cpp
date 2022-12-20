@@ -729,7 +729,7 @@ void Mixer::engineAudioStreamRemoved(const EngineAudioStream& engineStream)
         _audioBuffers.erase(engineStream.remoteSsrc.get());
     }
 
-    const auto& transport = streamItr->second->transport;
+    const auto transport = streamItr->second->transport;
     logger::info("AudioStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
         streamItr->second->id.c_str(),
@@ -755,7 +755,7 @@ void Mixer::engineVideoStreamRemoved(const EngineVideoStream& engineStream)
         return;
     }
 
-    const auto& transport = streamItr->second->transport;
+    const auto transport = streamItr->second->transport;
     logger::info("VideoStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
         streamItr->second->id.c_str(),
@@ -781,7 +781,7 @@ void Mixer::engineDataStreamRemoved(const EngineDataStream& engineStream)
         return;
     }
 
-    const auto& transport = streamItr->second->transport;
+    const auto transport = streamItr->second->transport;
     logger::info("DataStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
         streamItr->second->id.c_str(),
