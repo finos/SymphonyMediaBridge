@@ -424,7 +424,7 @@ public class Parser {
             }
 
             if (mediaDescription.type != MediaDescription.Type.APPLICATION &&
-            direction != Types.Direction.SEND_RECV)
+                direction != Types.Direction.SEND_RECV)
             {
                 continue;
             }

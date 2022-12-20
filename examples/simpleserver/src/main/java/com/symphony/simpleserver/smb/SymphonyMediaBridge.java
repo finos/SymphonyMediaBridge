@@ -44,7 +44,7 @@ public class SymphonyMediaBridge {
         return responseBodyJson.get("id").asText();
     }
 
-    public JsonNode allocateEndpoint(String conferenceId, String endpointId, boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParseException, SmbException {
+    public JsonNodeallocateEndpoint(String conferenceId, String endpointId, boolean bundleTransport, boolean enableDtls, boolean enableIce) throws IOException, ParseException, SmbException {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
         requestBodyJson.put("action", "allocate");
 
