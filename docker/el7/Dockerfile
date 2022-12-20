@@ -35,6 +35,7 @@ RUN cd /tmp \
     && wget -O libcxxabi-8.0.1.src.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/libcxxabi-8.0.1.src.tar.xz \
     && tar xvf libcxxabi-8.0.1.src.tar.xz \
     && cd libcxxabi-8.0.1.src \
+    && source scl_source enable devtoolset-9 \
     && mkdir build \
     && cd build \
     && cmake ../ -DCMAKE_BUILD_TYPE=release -G "Unix Makefiles" . \
