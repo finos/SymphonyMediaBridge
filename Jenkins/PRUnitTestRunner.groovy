@@ -19,7 +19,7 @@ abortPreviousRunningBuilds()
 
 parallel "Release el7": {
     node('be-integration') {
-        prRunner("Release", "el7", "14004a7")
+        prRunner("Release", "el7", "1efe4ee")
     }
 }, "Release AWS-linux": {
     node('be-integration') {
