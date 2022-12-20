@@ -2,17 +2,46 @@ FROM centos:7
 
 RUN yum -y update && yum -y upgrade && yum -y install epel-release
 RUN yum -y install centos-release-scl
+RUN yum -y install devtoolset-9
 
 # Install build dependenices
-RUN yum -y install git devtoolset-7 llvm-toolset-7 llvm-toolset-7-cmake gtk-doc libtool lcov wget patchelf lsof
+RUN yum -y install git gtk-doc libtool lcov wget patchelf lsof
+RUN yum -y --enablerepo=extras install epel-release
+RUN yum -y install cmake3 ninja-build libstdc+
+RUN ln -s cmake3 /usr/bin/cmake
 
-# Fetch llvm and build libc++
-RUN cd /tmp/ && git clone https://github.com/llvm/llvm-project.git --branch release/9.x --single-branch --depth 1 \
-    && cd /tmp/llvm-project/ && mkdir build && cd build \
-    && source scl_source enable llvm-toolset-7 \
-    && cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release -DLLVM_ENABLE_PROJECTS='libcxx;libcxxabi' ../llvm/ \
-    && make -j5 cxx \
-    && make install-cxx install-cxxabi
+RUN cd /tmp \
+    && wget -O clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz \
+    && tar xvf clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-14.04.tar.xz \
+    && cd clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-* \
+    && cp -rn * /usr/local \
+    && cd /tmp && rm -rf clang+llvm-8.0.1-x86_64-linux-gnu-ubuntu-* \
+    && ln -s /usr/local/bin/lld /usr/local/bin/ld
+
+# Build libcxx to /opt/libcxx-8.0.1/libc++.so.1.0 with GLIBC-2.17
+RUN cd /tmp \
+    && wget -O libcxx-8.0.1.src.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/libcxx-8.0.1.src.tar.xz \
+    && tar xvf libcxx-8.0.1.src.tar.xz \
+    && cd libcxx-8.0.1.src \ 
+    && source scl_source enable devtoolset-9 \
+    && mkdir build \
+    && cd build \
+    && cmake ../ -DCMAKE_BUILD_TYPE=release -G "Unix Makefiles" . \
+    && make -j$(getconf _NPROCESSORS_ONLN) \
+    && cp -r lib/ /opt/libcxx-8.0.1
+
+# Build and libcxx-abi to /tmp/libcxxabi-8.0.1.src/build/lib/libc++abi.so.1.0 with GLIBC-2.17
+RUN cd /tmp \
+    && wget -O libcxxabi-8.0.1.src.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-8.0.1/libcxxabi-8.0.1.src.tar.xz \
+    && tar xvf libcxxabi-8.0.1.src.tar.xz \
+    && cd libcxxabi-8.0.1.src \
+    && source scl_source enable devtoolset-9 \
+    && mkdir build \
+    && cd build \
+    && cmake ../ -DCMAKE_BUILD_TYPE=release -G "Unix Makefiles" . \
+    && make -j$(getconf _NPROCESSORS_ONLN) \
+    && unset LD_LIBRARY_PATH \
+    && cp -r lib/ /opt/libcxxabi-8.0.1
 
 # Build openssl-1.1.1s
 RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
@@ -40,8 +69,19 @@ RUN cd /tmp && wget https://archive.mozilla.org/pub/opus/opus-1.3.1.tar.gz \
     && make -j5 \
     && make install
 
+# Restore old GCC's ld to build glibc
+RUN ln -sf /usr/bin/ld /usr/local/bin/ld
+
 RUN cd /tmp && wget http://ftp.gnu.org/gnu/glibc/glibc-2.18.tar.gz && tar zxvf glibc-2.18.tar.gz \
     && cd /tmp/glibc-2.18 && mkdir -p build && cd build \
-    && CC= CXX= LD_LIBRARY_PATH= ../configure --prefix=/opt/glibc-2.18 \
+    && CC=gcc CXX= LD_LIBRARY_PATH= ../configure --prefix=/opt/glibc-2.18 \
     && make -j$(getconf _NPROCESSORS_ONLN) \
     && LD_LIBRARY_PATH= make install
+
+# Restore new CLANG's ld
+RUN ln -sf /usr/local/bin/lld /usr/local/bin/ld
+
+# Copy clang/c++ executable and libs to proper relative path in devtools root
+RUN export PATH=/opt/rh/devtoolset-9/root/usr/local/bin:$PATH
+RUN cp -r /usr/local/* /opt/rh/devtoolset-9/root/usr/
+RUN cp -r /opt/rh/devtoolset-9/root/usr/lib/gcc/x86_64-redhat-linux/9/* /opt/rh/devtoolset-9/root/usr/local/bin/../lib64

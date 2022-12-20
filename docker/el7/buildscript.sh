@@ -11,11 +11,10 @@ function pr() {
 mkdir -p el7/smb
 pushd el7/smb
 
-#source scl_source enable devtoolset-7
-source scl_source enable llvm-toolset-7
+source scl_source enable devtoolset-9
 
-export CC=/opt/rh/llvm-toolset-7/root/usr/bin/clang
-export CXX=/opt/rh/llvm-toolset-7/root/usr/bin/clang++
+export CC=clang
+export CXX=clang++
 
 pr "Generating versioninfo"
 ../../tools/scripts/versioninfo.sh
@@ -42,12 +41,13 @@ if [ ! -d libs ]; then
   mkdir libs
 fi
 
-cp /usr/local/lib/libc++.so.1 libs
-cp /usr/local/lib/libc++abi.so.1 libs
+cp /opt/libcxx-8.0.1/libc++.so.1.0 libs/libc++.so.1
+cp /opt/libcxxabi-8.0.1/libc++abi.so.1.0 libs/libc++abi.so.1
 cp /usr/local/lib64/libssl.so.1.1 libs
 cp /usr/local/lib64/libcrypto.so.1.1 libs
 cp /usr/local/lib/libmicrohttpd.so.12 libs
 cp /usr/local/lib/libopus.so.0 libs
+cp /lib64/libgcc_s.so.1 ./libs
 
 popd
 pr "Done building for CentOS7! Ready for packaging"

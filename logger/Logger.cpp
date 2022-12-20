@@ -13,8 +13,7 @@ std::unique_ptr<LoggerThread> _logThread;
 void setup(const char* logFileName, bool logToStdOut, Level level, size_t backlogSize)
 {
     _logLevel = level;
-    FILE* logFileHandle = logFileName && strlen(logFileName) > 0 ? fopen(logFileName, "a+") : nullptr;
-    _logThread.reset(new LoggerThread(logFileHandle, logToStdOut, backlogSize));
+    _logThread.reset(new LoggerThread(logFileName, logToStdOut, backlogSize));
 }
 
 void stop()

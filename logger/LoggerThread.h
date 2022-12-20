@@ -2,6 +2,7 @@
 #include "concurrency/MpmcQueue.h"
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <thread>
 
 namespace logger
@@ -19,7 +20,7 @@ struct LogItem
 class LoggerThread
 {
 public:
-    LoggerThread(FILE* logFile, bool logStdOut, size_t backlogSize);
+    LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize);
 
     void post(const LogItem& item) { _logQueue.push(item); }
     void immediate(const LogItem& item);
@@ -31,11 +32,14 @@ public:
 private:
     void run();
     void formatTime(const LogItem& item, char* output);
+    void reopenLogFile();
+    void ensureLogFileExists();
 
     std::atomic_bool _running;
     concurrency::MpmcQueue<LogItem> _logQueue;
     FILE* _logFile;
     bool _logStdOut;
+    std::string _logFileName;
     std::unique_ptr<std::thread> _thread;
 };
 } // namespace logger

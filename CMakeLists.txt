@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.6.2)
 project(smb)
 
+
 include(version/CheckGit.cmake)
 CheckGitSetup()
 
@@ -27,7 +28,7 @@ if (ENABLE_LIBATOMIC)
     message(STATUS "Enable Atomic lib: ON")
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS_DEBUG "-stdlib=libc++ -glldb -O0 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces")
 set(CMAKE_CXX_FLAGS_DCHECK "-stdlib=libc++ -glldb -O0 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DDCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=address -fno-omit-frame-pointer")
 set(CMAKE_CXX_FLAGS_TCHECK "-stdlib=libc++ -glldb -O1 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DTCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=thread -fno-omit-frame-pointer")
@@ -58,6 +59,12 @@ elseif(UNIX)
     set(CMAKE_INSTALL_RPATH "./libs")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt")
+
+# std::filesystem requires c++fs library before CLANG 9.1
+if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9_1)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++fs")
+endif()
+
     set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
     set(CMAKE_EXE_LINKER_FLAGS_SYMRELEASE "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
     set(CMAKE_EXE_LINKER_FLAGS_DCHECK "${CMAKE_EXE_LINKER_FLAGS} -rdynamic")
