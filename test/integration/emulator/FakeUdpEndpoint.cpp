@@ -125,6 +125,7 @@ void FakeUdpEndpoint::registerListener(const std::string& stunUserName, IEvents*
         return;
     }
 
+    logger::debug("register ICE listener for %s", _name.c_str(), stunUserName.c_str());
     _iceListeners.emplace(stunUserName, listener);
     listener->onRegistered(*this);
 }
