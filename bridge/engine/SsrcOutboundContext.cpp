@@ -1,6 +1,5 @@
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "bridge/engine/SsrcInboundContext.h"
-#include "codec/Opus.h"
 #include "codec/Vp8.h"
 #include "codec/Vp8Header.h"
 #include "math/Fields.h"
@@ -35,6 +34,16 @@ constexpr uint16_t extractSequenceNumber(const uint32_t extendedSequenceNumber)
 constexpr uint16_t extractRolloverCounter(const uint32_t extendedSequenceNumber)
 {
     return static_cast<uint16_t>(extendedSequenceNumber >> 16);
+}
+
+inline uint32_t packetsPerSecond(bridge::RtpMap::Format format)
+{
+    // We always use a ptime 20ms for all supported audio codecs (pcma, pacmu and opus)
+    // So packets per seconds is always 50.
+    // TODO: C9 uses a ptime of 10ms. THen this should return 100 instead. But as this is only used for calculate the
+    // advance when we have dropped a telephone-event, this is still ok as C9 does not use telephone events
+
+    return 50;
 }
 
 } // namespace
@@ -212,7 +221,7 @@ bool SsrcOutboundContext::rewriteAudio(rtp::RtpHeader& header,
             _rewrite.lastSent.lastOriginalSequenceNumber = sequenceNumber - 1;
         }
         const uint32_t projectedRtpTimestamp = _rewrite.lastSent.timestamp +
-            (timestamp - _rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec;
+            (timestamp - _rewrite.lastSent.wallClock) * rtpMap.sampleRate / utils::Time::sec;
 
         _rewrite.offset.timestamp = projectedRtpTimestamp - header.timestamp.get();
         _rewrite.offset.sequenceNumber = _rewrite.lastSent.sequenceNumber + 1 - sequenceNumber;
@@ -224,7 +233,7 @@ bool SsrcOutboundContext::rewriteAudio(rtp::RtpHeader& header,
     else if (seqAdvance > MAX_AUDIO_SEQ_GAP)
     {
         const uint32_t projectedRtpTimestamp = _rewrite.lastSent.timestamp +
-            (timestamp - _rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec;
+            (timestamp - _rewrite.lastSent.wallClock) * rtpMap.sampleRate / utils::Time::sec;
 
         _rewrite.offset.sequenceNumber = _rewrite.lastSent.sequenceNumber + 1 - sequenceNumber;
         _rewrite.offset.timestamp = projectedRtpTimestamp - header.timestamp.get();
@@ -257,8 +266,8 @@ bool SsrcOutboundContext::rewriteAudio(rtp::RtpHeader& header,
         // no good way to project the right sequence using the data we have;
         const bool canBeCalculated = _rewrite.lastSent.lastOriginalSequenceNumber < sequenceNumber;
 
-        const int32_t projectedAdvance = (header.timestamp - _rewrite.lastSent.timestamp) /
-            (codec::Opus::sampleRate / codec::Opus::packetsPerSecond);
+        const int32_t projectedAdvance =
+            (header.timestamp - _rewrite.lastSent.timestamp) / packetsPerSecond(rtpMap.format);
 
         // If the projection is too high it is a small that something it might be wrong. Then if it's bigger than 60, we
         // will drop the packet. Projections <= 0 when `canBeCalculated` is `true` are definitely wrong

@@ -401,8 +401,8 @@ void AudioForwarderReceiveJob::run()
         decodeOpus(*_packet);
     }
     else if (_hasMixedAudioStreams &&
-        (rtpHeader->payloadType == codec::Pcma::payloadType ||
-            rtpHeader->payloadType == static_cast<uint16_t>(bridge::RtpMap::Format::PCMU)))
+        (_ssrcContext.rtpMap.format == bridge::RtpMap::Format::PCMA ||
+            _ssrcContext.rtpMap.format == bridge::RtpMap::Format::PCMU))
     {
         decodeG711(*_packet);
     }
