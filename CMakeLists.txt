@@ -505,7 +505,6 @@ set(TEST_LIB_FILES
     test/codec/AudioProcessingTest.cpp
     test/codec/G711CodecTest.cpp
     test/codec/OpusCodecTest.cpp
-    test/gtest_main.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp
     test/ResourceLoader.cpp

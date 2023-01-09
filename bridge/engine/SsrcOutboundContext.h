@@ -109,7 +109,7 @@ public:
 
     // Retain rec OutboundSsrc before marking for deletion to sustain retransmissions longer.
     bool recordingOutboundDecommissioned;
-    std::unique_ptr<codec::PcmResampler> _resampler;
+    std::unique_ptr<codec::PcmResampler> resampler;
 };
 
 } // namespace bridge

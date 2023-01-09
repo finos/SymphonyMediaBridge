@@ -88,6 +88,7 @@ public:
     uint32_t lastUnprotectedExtendedSequenceNumber;
     std::shared_ptr<VideoMissingPacketsTracker> videoMissingPacketsTracker;
     std::unique_ptr<codec::OpusDecoder> opusDecoder;
+    std::unique_ptr<codec::PcmResampler> resampler;
 
     // engine variables ==============================================
     bool activeMedia;
@@ -103,7 +104,6 @@ public:
 
 private:
     std::atomic_uint64_t _lastReceiveTime;
-    std::unique_ptr<codec::PcmResampler> _resampler;
 };
 
 } // namespace bridge
