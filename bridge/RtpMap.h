@@ -40,6 +40,16 @@ struct RtpMap
             sampleRate = 48000;
             channels.set(2);
             break;
+        case Format::PCMA:
+            payloadType = 8;
+            sampleRate = 8000;
+            channels.set(1);
+            break;
+        case Format::PCMU:
+            payloadType = 0;
+            sampleRate = 8000;
+            channels.set(1);
+            break;
         default:
             assert(false);
             payloadType = 0x7F;

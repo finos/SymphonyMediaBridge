@@ -56,21 +56,6 @@ AudioForwarderRewriteAndSendJob::AudioForwarderRewriteAndSendJob(SsrcOutboundCon
     assert(_packet->getLength() > 0);
 }
 
-namespace
-{
-uint32_t clockCyclesPerPacket(uint8_t payloadType)
-{
-    if (payloadType == codec::Pcmu::payloadType || payloadType == codec::Pcma::payloadType)
-    {
-        return codec::Pcma::sampleRate / codec::Pcma::packetsPerSecond;
-    }
-    else
-    {
-        return codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
-    }
-}
-} // namespace
-
 void AudioForwarderRewriteAndSendJob::run()
 {
     auto header = rtp::RtpHeader::fromPacket(*_packet);
