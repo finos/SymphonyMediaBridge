@@ -97,7 +97,7 @@ void LoggerThread::run()
         if (_logQueue.pop(item))
         {
             gotLogItem = true;
-            formatTime(item, localTime);
+            formatTime(item.timestamp, localTime);
 #ifdef DEBUG
             if (0 == std::strcmp(item.logLevel, "_STK_"))
             {
@@ -145,7 +145,7 @@ void LoggerThread::immediate(const LogItem& item)
 {
     char localTime[timeStringLength];
 
-    formatTime(item, localTime);
+    formatTime(item.timestamp, localTime);
 #ifdef DEBUG
     if (0 == std::strcmp(item.logLevel, "_STK_"))
     {
@@ -172,7 +172,7 @@ void LoggerThread::flush()
     while (_logQueue.pop(item))
     {
         char localTime[timeStringLength];
-        formatTime(item, localTime);
+        formatTime(item.timestamp, localTime);
 
         if (_logStdOut)
         {
@@ -203,14 +203,14 @@ void LoggerThread::stop()
     }
 }
 
-void LoggerThread::formatTime(const LogItem& item, char* output)
+void LoggerThread::formatTime(const std::chrono::system_clock::time_point timestamp, char* output)
 {
     using namespace std::chrono;
-    const std::time_t currentTime = system_clock::to_time_t(item.timestamp);
+    const std::time_t currentTime = system_clock::to_time_t(timestamp);
     tm currentLocalTime = {};
     localtime_r(&currentTime, &currentLocalTime);
 
-    const auto ms = duration_cast<milliseconds>(item.timestamp.time_since_epoch()).count();
+    const auto ms = duration_cast<milliseconds>(timestamp.time_since_epoch()).count();
 
     snprintf(output,
         timeStringLength,
