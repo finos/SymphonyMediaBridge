@@ -2,6 +2,7 @@
 #include "codec/OpusDecoder.h"
 #include "codec/OpusEncoder.h"
 #include "logger/Logger.h"
+#include "utils/Time.h"
 #include <cmath>
 #include <gtest/gtest.h>
 
@@ -10,6 +11,12 @@ namespace codec
 int computeAudioLevel(const int16_t* payload, int samples);
 }
 
+namespace
+{
+static const double sampleFrequency = 48000;
+static const int samples = sampleFrequency / 50;
+
+} // namespace
 struct OpusTest : testing::Test
 {
     void SetUp() override
@@ -22,11 +29,9 @@ struct OpusTest : testing::Test
     }
 
     static constexpr double PI = 3.14159;
-    static constexpr double sampleFrequency = 48000;
-    static constexpr int samples = sampleFrequency / 50;
     static constexpr double amplitude = 2000;
-    int16_t _pcmData[samples * 2];
-    uint8_t _opusData[samples];
+    int16_t _pcmData[960 * 2];
+    uint8_t _opusData[960];
 };
 
 TEST_F(OpusTest, encode)
@@ -34,19 +39,43 @@ TEST_F(OpusTest, encode)
     codec::OpusEncoder encoder;
     codec::OpusDecoder decoder;
 
-    auto opusBytes = encoder.encode(_pcmData, samples, _opusData, samples);
+    auto start = utils::Time::getAbsoluteTime();
+    int32_t opusBytes;
+    opusBytes = encoder.encode(_pcmData, samples, _opusData, samples);
+
     EXPECT_GT(opusBytes, 100);
 
-    uint32_t bytesProduced = 0;
-    auto decodeResult = decoder.decode(_opusData, opusBytes, 5, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_FALSE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
+    int16_t decodeBuffer[samples * 2];
+    uint32_t sequenceNumber = 10;
+    const auto framesInPacketBuffer = samples;
 
-    EXPECT_FALSE(decoder.decode(_opusData, opusBytes, 5, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced));
-    EXPECT_EQ(bytesProduced, 0);
+    auto startDecode = utils::Time::getAbsoluteTime();
+    int32_t samplesProduced = 0;
+    samplesProduced = decoder.decode(sequenceNumber,
+        _opusData,
+        opusBytes,
+        reinterpret_cast<unsigned char*>(decodeBuffer),
+        framesInPacketBuffer);
 
+    EXPECT_EQ(samplesProduced, samples);
+    auto endDecode = utils::Time::getAbsoluteTime();
+
+    logger::info("enc %" PRIu64 "ms dec %" PRIu64 "ms",
+        "",
+        (startDecode - start) / utils::Time::ms,
+        (endDecode - startDecode) / utils::Time::ms);
     auto dB = codec::computeAudioLevel(_pcmData, samples);
-    EXPECT_EQ(static_cast<int>(-31), -dB);
+    EXPECT_EQ(static_cast<int>(-27), -dB);
+
+    samplesProduced = decoder.decode(sequenceNumber,
+        _opusData,
+        opusBytes,
+        reinterpret_cast<unsigned char*>(decodeBuffer),
+        framesInPacketBuffer);
+    EXPECT_EQ(samplesProduced, samples);
+
+    // auto dB = codec::computeAudioLevel(_pcmData, samples);
+    // EXPECT_EQ(static_cast<int>(-31), -dB);
 }
 
 TEST_F(OpusTest, healing)
@@ -54,49 +83,64 @@ TEST_F(OpusTest, healing)
     codec::OpusEncoder encoder;
     codec::OpusDecoder decoder;
 
+    int16_t decodeBuffer[samples * 2];
+    uint32_t sequenceNumber = 10;
+    const auto framesInPacketBuffer = samples;
+
     auto opusBytes = encoder.encode(_pcmData, samples, _opusData, samples);
     EXPECT_GT(opusBytes, 100);
 
-    uint32_t bytesProduced = 0;
-    auto decodeResult = decoder.decode(_opusData, opusBytes, 5, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_FALSE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
+    auto samplesProduced = decoder.decode(sequenceNumber,
+        _opusData,
+        opusBytes,
+        reinterpret_cast<unsigned char*>(decodeBuffer),
+        framesInPacketBuffer);
+    EXPECT_EQ(samplesProduced, samples);
 
-    decodeResult = decoder.decode(_opusData, opusBytes, 8, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_TRUE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
-    decodeResult = decoder.decode(_opusData, opusBytes, 8, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_TRUE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
-    decodeResult = decoder.decode(_opusData, opusBytes, 8, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_FALSE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
+    samplesProduced = decoder.conceal(reinterpret_cast<unsigned char*>(decodeBuffer));
+    EXPECT_EQ(samplesProduced, samples);
+    samplesProduced = decoder.conceal(reinterpret_cast<unsigned char*>(decodeBuffer));
+
+    EXPECT_EQ(samplesProduced, samples);
+    samplesProduced = decoder.conceal(_opusData, opusBytes, reinterpret_cast<unsigned char*>(decodeBuffer));
+    EXPECT_EQ(samplesProduced, samples);
 
     auto dB = codec::computeAudioLevel(_pcmData, samples);
-    EXPECT_EQ(static_cast<int>(-25), -dB);
+    EXPECT_EQ(static_cast<int>(-27), -dB);
 }
 
 TEST_F(OpusTest, seqSkip)
 {
     codec::OpusEncoder encoder;
     codec::OpusDecoder decoder;
+    int16_t decodeBuffer[samples * 2];
+    uint32_t sequenceNumber = 10;
+    const auto framesInPacketBuffer = samples;
 
     auto opusBytes = encoder.encode(_pcmData, samples, _opusData, samples);
     EXPECT_GT(opusBytes, 100);
 
-    uint32_t bytesProduced = 0;
-    auto decodeResult = decoder.decode(_opusData, opusBytes, 5, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_FALSE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
+    auto samplesProduced = decoder.decode(sequenceNumber,
+        _opusData,
+        opusBytes,
+        reinterpret_cast<unsigned char*>(decodeBuffer),
+        framesInPacketBuffer);
+    EXPECT_EQ(samplesProduced, samples);
 
-    decodeResult = decoder.decode(_opusData, opusBytes, 16, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_TRUE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
+    samplesProduced = decoder.decode(sequenceNumber + 9,
+        _opusData,
+        opusBytes,
+        reinterpret_cast<unsigned char*>(decodeBuffer),
+        framesInPacketBuffer);
+    EXPECT_EQ(samplesProduced, samples);
 
-    decodeResult = decoder.decode(_opusData, opusBytes, 16, samples * 2 * sizeof(int16_t), _pcmData, bytesProduced);
-    EXPECT_FALSE(decodeResult);
-    EXPECT_EQ(bytesProduced, samples * 2 * sizeof(int16_t));
+    samplesProduced = decoder.decode(sequenceNumber + 9,
+        _opusData,
+        opusBytes,
+        reinterpret_cast<unsigned char*>(decodeBuffer),
+        framesInPacketBuffer);
+    EXPECT_EQ(samplesProduced, samples);
 
     auto dB = codec::computeAudioLevel(_pcmData, samples);
-    EXPECT_EQ(static_cast<int>(-24), -dB);
+    EXPECT_EQ(static_cast<int>(-27), -dB);
 }

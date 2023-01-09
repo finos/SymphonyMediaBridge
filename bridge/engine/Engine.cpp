@@ -54,7 +54,7 @@ void Engine::run()
     utils::Pacer pacer(intervalNs);
     EngineStats::EngineStats currentStatSample;
 
-    const int64_t TICK_TOLERANCE = utils::Time::us * 500;
+    const int64_t TICK_TOLERANCE = utils::Time::ms * 2;
     const int64_t IDLE_MARGIN = utils::Time::us * 50;
     uint64_t timestamp = utils::Time::getAbsoluteTime();
     uint64_t statsPollTime = timestamp - utils::Time::sec * 2;

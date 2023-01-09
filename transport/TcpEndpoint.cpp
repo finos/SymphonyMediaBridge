@@ -5,9 +5,11 @@
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtcpHeader.h"
 #include "rtp/RtpHeader.h"
+#include "utils/Function.h"
 #include <arpa/inet.h>
 #include <cstdint>
 #include <sys/socket.h>
+
 namespace transport
 {
 namespace
@@ -30,38 +32,14 @@ private:
     transport::SocketAddress _target;
 };
 
-class ContinueSendJob : public jobmanager::Job
-{
-public:
-    explicit ContinueSendJob(TcpEndpoint& endpoint) : _endpoint(endpoint) {}
-
-    void run() override { _endpoint.continueSend(); }
-
-private:
-    TcpEndpoint& _endpoint;
-};
-
-class UnRegisterListenerJob : public jobmanager::Job
-{
-public:
-    UnRegisterListenerJob(TcpEndpoint& endpoint, Endpoint::IEvents& listener) : _endpoint(endpoint), _listener(listener)
-    {
-    }
-
-    void run() override { _listener.onUnregistered(_endpoint); }
-
-private:
-    TcpEndpoint& _endpoint;
-    Endpoint::IEvents& _listener;
-};
-
 } // namespace
 
 RtpDepacketizer::RtpDepacketizer(int socketHandle, memory::PacketPoolAllocator& allocator)
     : fd(socketHandle),
       _receivedBytes(0),
       _allocator(allocator),
-      _streamPrestine(true)
+      _streamPrestine(true),
+      _remoteDisconnect(false)
 {
 }
 
@@ -78,6 +56,11 @@ memory::UniquePacket RtpDepacketizer::receive()
         auto* buffer = reinterpret_cast<uint8_t*>(&_header);
         int received = ::recv(fd, buffer + _receivedBytes, sizeof(_header) - _receivedBytes, flags);
 
+        if (received == 0)
+        {
+            _remoteDisconnect = true;
+            return nullptr;
+        }
         if (received > 0)
         {
             _receivedBytes += received;
@@ -114,6 +97,12 @@ memory::UniquePacket RtpDepacketizer::receive()
                 _receivedBytes = 0;
                 return std::move(_incompletePacket);
             }
+        }
+        else if (receivedBytes == 0)
+        {
+            _remoteDisconnect = true;
+            _incompletePacket.reset();
+            return nullptr;
         }
     }
 
@@ -157,6 +146,7 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
     : _state(CLOSED),
       _name("TcpEndpoint"),
       _depacketizer(-1, allocator),
+      _localInterface(localInterface),
       _receiveJobs(jobManager, 16),
       _sendJobs(jobManager, 512),
       _allocator(allocator),
@@ -358,7 +348,7 @@ void TcpEndpoint::onSocketShutdown(int fd)
     {
         logger::debug("peer shut down socket STOPPING", _name.c_str());
         _state = State::STOPPING;
-        if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
+        if (!_receiveJobs.post(utils::bind(&TcpEndpoint::internalReceive, this, _depacketizer.fd)))
         {
             logger::warn("failed to add ReceiveJob", _name.c_str());
         }
@@ -404,7 +394,7 @@ void TcpEndpoint::onSocketReadable(int fd)
     {
         if (!_pendingRead.test_and_set())
         {
-            if (!_receiveJobs.addJob<tcp::ReceiveJob<TcpEndpoint>>(*this, _depacketizer.fd))
+            if (!_receiveJobs.post(utils::bind(&TcpEndpoint::internalReceive, this, _depacketizer.fd)))
             {
                 logger::warn("failed to add Receivejob", _name.c_str());
             }
@@ -418,7 +408,7 @@ void TcpEndpoint::onSocketWriteable(int fd)
     {
         _state = State::CONNECTED;
         logger::debug("connected to %s", _name.c_str(), _peerPort.toString().c_str());
-        if (!_sendJobs.addJob<ContinueSendJob>(*this))
+        if (!_sendJobs.post(utils::bind(&TcpEndpoint::continueSend, this)))
         {
             logger::warn("failed to add ContinueSendJob", _name.c_str());
         }
@@ -430,7 +420,7 @@ void TcpEndpoint::unregisterListener(IEvents* listener)
     if (listener == _defaultListener)
     {
         _defaultListener = nullptr;
-        _receiveJobs.addJob<UnRegisterListenerJob>(*this, *listener);
+        _receiveJobs.post([this, listener]() { listener->onUnregistered(std::ref(*this)); });
     }
 }
 
@@ -439,13 +429,17 @@ void TcpEndpoint::internalReceive(int fd)
     _pendingRead.clear();
     while (true)
     {
+        TcpEndpoint::IEvents* listener = _defaultListener;
         auto packet = _depacketizer.receive();
         if (!packet)
         {
+            if (listener && _depacketizer.hasRemoteDisconnected())
+            {
+                listener->onTcpDisconnect(*this);
+            }
             break;
         }
 
-        TcpEndpoint::IEvents* listener = _defaultListener;
         if (!listener)
         {
             continue;
@@ -521,6 +515,21 @@ bool TcpEndpoint::configureBufferSizes(size_t sendBufferSize, size_t receiveBuff
 {
     logger::debug("tcp endpoint buffer sizes send %zu, recv %zu", _name.c_str(), sendBufferSize, receiveBufferSize);
     return 0 == _socket.setSendBuffer(sendBufferSize) && 0 == _socket.setReceiveBuffer(receiveBufferSize);
+}
+
+SocketAddress TcpEndpoint::getLocalPort() const
+{
+    const State currentState = _state.load();
+    if (currentState == State::CONNECTED)
+    {
+        return _socket.getBoundPort();
+    }
+    else if (currentState != State::CLOSED)
+    {
+        return _localInterface;
+    }
+
+    return transport::SocketAddress();
 }
 
 } // namespace transport

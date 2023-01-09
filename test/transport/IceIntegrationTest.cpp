@@ -393,3 +393,47 @@ TEST_F(IceIntegrationTest, portReuse)
     delete clients1;
     delete clients2;
 }
+
+TEST_F(IceIntegrationTest, tcpDisconnect)
+{
+    std::string configJson1 = R"({
+        "rtc.ip": "127.0.0.1",
+        "ice.singlePort":10020,
+        "ice.tcp.enable":true,
+        "ice.tcp.port":14757})";
+
+    std::string configJson2 = R"({
+        "rtc.ip": "127.0.0.1",
+        "ice.singlePort":10010,
+        "ice.tcp.enable":false,
+        "ice.tcp.port":14447})";
+
+    _config1.readFromString(configJson1);
+    _config2.readFromString(configJson2);
+
+    ASSERT_TRUE(init(configJson1, configJson2));
+    {
+        ClientPair clients(*_transportFactory1,
+            *_transportFactory2,
+            11001u,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_sslDtls,
+            *_jobManager,
+            true);
+
+        const auto startTime = utils::Time::getAbsoluteTime();
+        clients.connect(startTime);
+
+        while (!clients.isConnected() &&
+            utils::Time::diffLT(startTime, utils::Time::getAbsoluteTime(), 15 * utils::Time::sec))
+        {
+            utils::Time::nanoSleep(100 * utils::Time::ms);
+            clients.tryConnect(utils::Time::getAbsoluteTime(),
+                *_sslDtls,
+                std::make_pair(std::string("dolphin"), "orca"));
+        }
+        EXPECT_FALSE(clients.isConnected());
+        clients.stop();
+    }
+}

@@ -64,7 +64,12 @@ void UdpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
                 else
                 {
                     const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
-                    LOG("register ICE listener for %04x%04x%04x", _name.c_str(), id[1], id[2], id[3]);
+                    LOG("register ICE listener for %04x%04x%04x, count %" PRIu64,
+                        _name.c_str(),
+                        id[1],
+                        id[2],
+                        id[3],
+                        _iceResponseListeners.size());
                 }
             }
         }
@@ -83,7 +88,16 @@ void UdpEndpointImpl::unregisterListener(IEvents* listener)
 
 void UdpEndpointImpl::cancelStunTransaction(__uint128_t transactionId)
 {
-    const bool posted = _receiveJobs.post([this, transactionId]() { _iceResponseListeners.erase(transactionId); });
+    const bool posted = _receiveJobs.post([this, transactionId]() {
+        _iceResponseListeners.erase(transactionId);
+        const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
+        LOG("remove ICE listener for %04x%04x%04x, count %" PRIu64,
+            _name.c_str(),
+            id[1],
+            id[2],
+            id[3],
+            _iceResponseListeners.size());
+    });
     if (!posted)
     {
         logger::warn("failed to post unregister STUN transaction job", _name.c_str());
@@ -152,9 +166,14 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
             listener = _iceResponseListeners.getItem(transactionId);
             if (listener)
             {
-                const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
-                LOG("STUN response received for transaction %04x%04x%04x", _name.c_str(), id[1], id[2], id[3]);
                 _iceResponseListeners.erase(transactionId);
+                const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
+                LOG("STUN response received for transaction %04x%04x%04x, count %" PRIu64,
+                    _name.c_str(),
+                    id[1],
+                    id[2],
+                    id[3],
+                    _iceResponseListeners.size());
             }
         }
 

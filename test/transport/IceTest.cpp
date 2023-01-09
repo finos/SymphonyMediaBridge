@@ -10,6 +10,7 @@
 #include "transport/ice/IceSession.h"
 #include "transport/ice/Stun.h"
 #include <atomic>
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 namespace
@@ -1629,4 +1630,74 @@ TEST(IceTest, transactionId)
     EXPECT_EQ(id2[1], 0x02568943);
     EXPECT_EQ(id2[2], 0x66231845);
     EXPECT_EQ(id2[3], 0x55672389);
+}
+
+class IceEndpointMock : public ice::IceEndpoint
+{
+public:
+    MOCK_METHOD(void,
+        sendStunTo,
+        (const transport::SocketAddress& target,
+            __uint128_t transactionId,
+            const void* data,
+            size_t len,
+            uint64_t timestamp),
+        (override));
+
+    MOCK_METHOD(ice::TransportType, getTransportType, (), (const, override));
+    MOCK_METHOD(transport::SocketAddress, getLocalPort, (), (const, override));
+    MOCK_METHOD(void, cancelStunTransaction, (__uint128_t transactionId), (override));
+};
+
+TEST(IceTest, retransmissions)
+{
+    auto networkMockA = std::make_unique<testing::NiceMock<IceEndpointMock>>();
+    auto networkMockB = std::make_unique<testing::NiceMock<IceEndpointMock>>();
+
+    ON_CALL(*networkMockA.get(), getTransportType).WillByDefault([]() { return ice::TransportType::UDP; });
+    ON_CALL(*networkMockB.get(), getTransportType).WillByDefault([]() { return ice::TransportType::UDP; });
+    ON_CALL(*networkMockA.get(), getLocalPort).WillByDefault([]() {
+        return transport::SocketAddress::parse("127.0.0.1", 5600);
+    });
+    ON_CALL(*networkMockB.get(), getLocalPort).WillByDefault([]() {
+        return transport::SocketAddress::parse("127.0.0.1", 5602);
+    });
+
+    ice::IceConfig config;
+    IceSessions sessions;
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLED, nullptr));
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(2, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr));
+
+    sessions[0]->attachLocalEndpoint(networkMockA.get());
+    sessions[1]->attachLocalEndpoint(networkMockB.get());
+
+    std::vector<uint64_t> timestamps;
+    ON_CALL(*networkMockA.get(), sendStunTo)
+        .WillByDefault([&timestamps](const transport::SocketAddress& target,
+                           __uint128_t transactionId,
+                           const void* data,
+                           size_t len,
+                           uint64_t timestamp) { timestamps.push_back(timestamp); });
+
+    uint64_t timeSource = utils::Time::getAbsoluteTime();
+    exchangeInfo(sessions);
+    startProbes(sessions, timeSource);
+
+    for (int i = 0; i < 2000; ++i)
+    {
+        sessions[0]->processTimeout(timeSource);
+
+        timeSource += 10 * utils::Time::ms;
+    }
+
+    EXPECT_GT(timestamps.size(), 6);
+    int64_t expectedInterval = 2 * (timestamps[1] - timestamps[0]);
+
+    for (size_t t = 1; t < timestamps.size() - 1; ++t)
+    {
+        EXPECT_EQ(timestamps[t + 1] - timestamps[t], expectedInterval);
+        expectedInterval = std::min(2 * (timestamps[t + 1] - timestamps[t]), utils::Time::sec * 1);
+    }
 }

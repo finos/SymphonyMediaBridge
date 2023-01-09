@@ -24,10 +24,11 @@ struct IceConfig
     uint32_t hostProbeTimeout = 5000; // probing towards host address
     uint32_t additionalCandidateTimeout = 2000; // before nominating TCP
     uint32_t connectTimeout = 30000;
-    uint32_t RTO = 50;
-    uint32_t maxRTO = 500;
+    uint32_t RTO = 50; // initial RTO. RFC8489 says 500ms. This is faster in case of loss.
+    uint32_t maxRTO = 1000;
     uint32_t probeReplicates = 1;
     uint32_t probeConnectionExpirationTimeout = 5000;
+    uint32_t transmitIntervalExtend = 10;
 
     std::string software = "slice"; // keep short please.
     transport::SocketAddress publicIpv4;
@@ -236,10 +237,7 @@ private:
         const bool gatheringProbe;
         uint64_t startTime;
         uint64_t nextTransmission;
-        uint64_t transmitInterval;
-        int replies;
         bool nominated;
-        IceError errorCode;
 
         enum State
         {
@@ -256,6 +254,9 @@ private:
         void cancelPendingTransactions();
         void cancelPendingTransactionsBefore(StunTransaction& transaction);
 
+        uint64_t _transmitInterval;
+        int _replies;
+        IceError _errorCode;
         uint64_t _minRtt;
         const std::string& _name;
         std::deque<StunTransaction> _transactions; // TODO replace with inplace circular container

@@ -38,18 +38,6 @@ constexpr uint32_t Mbps100 = 100000;
 // we have to serialize operations on srtp client
 // timers, start and receive must be done from same serialized jobmanager.
 
-class IceDisconnectJob : public jobmanager::Job
-{
-public:
-    IceDisconnectJob(TransportImpl& transport, Endpoint& endpoint) : _transport(transport), _endpoint(endpoint) {}
-
-    void run() override { _transport.onIceDisconnect(_endpoint); }
-
-private:
-    TransportImpl& _transport;
-    Endpoint& _endpoint;
-};
-
 struct IceCredentials
 {
     char ufrag[64];
@@ -1079,9 +1067,9 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
     }
 }
 
-void TransportImpl::onIceDisconnect(Endpoint& endpoint)
+void TransportImpl::onTcpDisconnect(Endpoint& endpoint)
 {
-    _rtpIceSession->onTcpDisconnect(&endpoint);
+    _jobQueue.post([&]() { _rtpIceSession->onTcpDisconnect(&endpoint); });
 }
 
 namespace

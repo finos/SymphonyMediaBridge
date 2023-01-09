@@ -66,6 +66,11 @@ struct TransportClientPair : public transport::DataReceiver
     void connect(uint64_t timestamp);
 
     int64_t tryConnect(const uint64_t timestamp, const transport::SslDtls& sslDtls);
+
+    int64_t tryConnect(const uint64_t timestamp,
+        const transport::SslDtls& sslDtls,
+        std::pair<std::string, std::string> transport1IceCredentials);
+
     bool isConnected();
     void stop();
 
