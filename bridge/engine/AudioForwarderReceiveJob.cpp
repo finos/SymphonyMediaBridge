@@ -148,12 +148,12 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 
 void AudioForwarderReceiveJob::decodeG711(const memory::Packet& g711Packet)
 {
-    if (!_ssrcContext._resampler)
+    if (!_ssrcContext.resampler)
     {
-        _ssrcContext._resampler =
+        _ssrcContext.resampler =
             codec::createPcmResampler(codec::Opus::sampleRate / codec::Opus::packetsPerSecond, 8000, 48000);
     }
-    if (!_ssrcContext._resampler)
+    if (!_ssrcContext.resampler)
     {
         return;
     }
@@ -169,7 +169,7 @@ void AudioForwarderReceiveJob::decodeG711(const memory::Packet& g711Packet)
     {
         codec::PcmaCodec::decode(rtpHeader->getPayload(), pcmPayload, sampleCount);
 
-        auto producedSamples = _ssrcContext._resampler->resample(pcmPayload, sampleCount, pcmPayload);
+        auto producedSamples = _ssrcContext.resampler->resample(pcmPayload, sampleCount, pcmPayload);
         if (producedSamples < sampleCount)
         {
             return;
@@ -180,7 +180,7 @@ void AudioForwarderReceiveJob::decodeG711(const memory::Packet& g711Packet)
     else if (rtpHeader->payloadType == codec::Pcmu::payloadType)
     {
         codec::PcmuCodec::decode(rtpHeader->getPayload(), pcmPayload, sampleCount);
-        auto producedSamples = _ssrcContext._resampler->resample(pcmPayload, sampleCount, pcmPayload);
+        auto producedSamples = _ssrcContext.resampler->resample(pcmPayload, sampleCount, pcmPayload);
         if (producedSamples < sampleCount)
         {
             return;
@@ -189,7 +189,7 @@ void AudioForwarderReceiveJob::decodeG711(const memory::Packet& g711Packet)
         pcmPacket->setLength(pcmHeader->headerLength() + sampleCount * codec::Opus::channelsPerFrame * sizeof(int16_t));
     }
 
-    _engineMixer.onMixerAudioRtpPacketDecoded(_sender, std::move(pcmPacket));
+    _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
 }
 */
 

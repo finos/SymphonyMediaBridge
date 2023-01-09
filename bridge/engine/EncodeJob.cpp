@@ -118,7 +118,7 @@ void EncodeJob::run()
 
         if (targetFormat.format == bridge::RtpMap::Format::PCMA)
         {
-            codec::PcmuCodec::encode(pcm16Data, rtpHeader->getPayload(), pcm16DataLength);
+            codec::PcmaCodec::encode(pcm16Data, rtpHeader->getPayload(), pcm16DataLength);
             encodedPacket->setLength(rtpHeader->headerLength() + pcm16DataLength);
         }
         else if (targetFormat.format == bridge::RtpMap::Format::PCMU)
