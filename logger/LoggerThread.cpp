@@ -13,15 +13,21 @@ const auto timeStringLength = 32;
 LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize)
     : _running(true),
       _logQueue(backlogSize),
+      _logFile(nullptr),
       _logStdOut(logStdOut),
-      _logFileName(logFileName && strlen(logFileName) > 0 ? logFileName : ""),
+      _logFileName(logFileName && std::strlen(logFileName) > 0 ? logFileName : ""),
       _thread(new std::thread([this] { this->run(); }))
 {
+    _reOpenLog.test_and_set();
     reopenLogFile();
 }
 
 void LoggerThread::reopenLogFile()
 {
+    if (_logFile)
+    {
+        ::fclose(_logFile);
+    }
     _logFile = _logFileName.size() ? fopen(_logFileName.c_str(), "a+") : nullptr;
 }
 
@@ -65,25 +71,6 @@ void logStack(const LogItem& item, const char* localTime, bool logStdOut, FILE* 
 }
 } // namespace
 
-void LoggerThread::ensureLogFileExists()
-{
-    if (_logFileName.size())
-    {
-#if 0
-        std::ifstream f(_logFileName.c_str());
-        if (!f.good())
-        {
-            reopenLogFile();
-        }
-#else
-        if (!std::filesystem::exists(_logFileName.c_str()))
-        {
-            reopenLogFile();
-        }
-#endif
-    }
-}
-
 void LoggerThread::run()
 {
     concurrency::setThreadName("Logger");
@@ -92,8 +79,6 @@ void LoggerThread::run()
     bool gotLogItem = false;
     for (;;)
     {
-        ensureLogFileExists();
-
         if (_logQueue.pop(item))
         {
             gotLogItem = true;
@@ -124,6 +109,11 @@ void LoggerThread::run()
             {
                 fflush(_logFile);
             }
+            if (!_reOpenLog.test_and_set())
+            {
+                reopenLogFile();
+            }
+
             gotLogItem = false;
 
             if (!_running.load(std::memory_order::memory_order_relaxed))

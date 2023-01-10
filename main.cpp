@@ -53,6 +53,12 @@ void intSignalHandler(int32_t)
     running->post();
 }
 
+void hupSignalHandler(int32_t)
+{
+    logger::info("SIGHUP", "main");
+    logger::reOpenLog();
+}
+
 } // namespace
 
 static bool isEqualCaseInsensitive(const std::string& s1, const std::string& s2)
@@ -93,6 +99,14 @@ int main(int argc, char** argv)
         sigactionData.sa_flags = 0;
         sigemptyset(&sigactionData.sa_mask);
         sigaction(SIGINT, &sigactionData, nullptr);
+    }
+    {
+        struct sigaction sigactionData = {};
+        sigactionData.sa_handler = hupSignalHandler;
+        sigactionData.sa_flags = 0;
+        sigemptyset(&sigactionData.sa_mask);
+        sigaction(SIGUSR1, &sigactionData, nullptr);
+        sigaction(SIGHUP, &sigactionData, nullptr);
     }
 
     {
