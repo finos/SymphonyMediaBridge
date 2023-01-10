@@ -38,11 +38,11 @@ private:
     void ensureLogFileExists();
 
     std::atomic_bool _running;
+    std::atomic_flag _reOpenLog = ATOMIC_FLAG_INIT;
     concurrency::MpmcQueue<LogItem> _logQueue;
     FILE* _logFile;
     bool _logStdOut;
     std::string _logFileName;
-    std::unique_ptr<std::thread> _thread;
-    std::atomic_flag _reOpenLog = ATOMIC_FLAG_INIT;
+    std::unique_ptr<std::thread> _thread; // must be last
 };
 } // namespace logger
