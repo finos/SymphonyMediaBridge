@@ -28,7 +28,7 @@ inline void rewrite(bridge::SsrcOutboundContext& outboundContext, const uint32_t
     if (newSource)
     {
         outboundContext.rewrite.offset.timestamp = outboundContext.rewrite.lastSent.timestamp +
-            clockCyclesPerPacket(outboundContext.rtpMap.format) - header.timestamp.get();
+            outboundContext.rtpMap.sampleRate / codec::Opus::packetsPerSecond - header.timestamp.get();
         outboundContext.rewrite.offset.sequenceNumber =
             static_cast<int32_t>(outboundContext.rewrite.lastSent.sequenceNumber + 1 - sequenceNumber);
         outboundContext.rewrite.sequenceNumberStart = sequenceNumber;
