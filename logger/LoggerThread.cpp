@@ -15,7 +15,7 @@ LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backl
       _logQueue(backlogSize),
       _logFile(nullptr),
       _logStdOut(logStdOut),
-      _logFileName(logFileName && strlen(logFileName) > 0 ? logFileName : ""),
+      _logFileName(logFileName && std::strlen(logFileName) > 0 ? logFileName : ""),
       _thread(new std::thread([this] { this->run(); }))
 {
     _reOpenLog.test_and_set();
