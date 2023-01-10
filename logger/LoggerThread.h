@@ -26,6 +26,7 @@ public:
     void immediate(const LogItem& item);
     void flush();
     void stop();
+    void reopen() { _reOpenLog.clear(); }
 
     void awaitLogDrained(float level);
 
@@ -42,5 +43,6 @@ private:
     bool _logStdOut;
     std::string _logFileName;
     std::unique_ptr<std::thread> _thread;
+    std::atomic_flag _reOpenLog = ATOMIC_FLAG_INIT;
 };
 } // namespace logger

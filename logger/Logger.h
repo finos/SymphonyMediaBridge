@@ -18,6 +18,7 @@ enum class Level
 extern Level _logLevel;
 void setup(const char* logToFile, bool logToStdOut, Level level, size_t backlogSize = 4096);
 void stop();
+void reOpenLog();
 
 void logv(const char* logLevel, const char* logGroup, const bool immediate, const char* format, va_list args);
 void logv(const char* logLevel, const char* logGroup, const char* format, va_list args);

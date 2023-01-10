@@ -16,6 +16,14 @@ void setup(const char* logFileName, bool logToStdOut, Level level, size_t backlo
     _logThread.reset(new LoggerThread(logFileName, logToStdOut, backlogSize));
 }
 
+void reOpenLog()
+{
+    if (_logThread)
+    {
+        _logThread->reopen();
+    }
+}
+
 void stop()
 {
     if (_logThread)
