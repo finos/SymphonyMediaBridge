@@ -109,7 +109,7 @@ node('be-integration') {
                 sh "cp ../aws-linux/smb/smb ."
                 sh "cp ../aws-linux/smb/versioninfo.txt ."
                 writeJSON(file: 'package.json', json: [
-                    name: "smb-linux",
+                    name: "@symphony/smb-linux",
                     version: version,
                     description: "Symphony media bridge binaries for linux",
                     publishConfig: [
@@ -117,7 +117,7 @@ node('be-integration') {
                     ]
                 ])
                 withNvm("v16.16.0", "npmrcFile") {
-                    sh "npm publish"
+                    sh "npm publish --access public"
                 }
             }
         }
