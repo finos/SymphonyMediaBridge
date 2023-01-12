@@ -29,15 +29,23 @@ public:
         EngineMixer& engineMixer,
         SsrcInboundContext& ssrcContext,
         ActiveMediaList& activeMediaList,
-        const uint8_t silenceThresholdLevel,
-        const bool hasMixedAudioStreams,
-        const uint32_t extendedSequenceNumber);
+        uint8_t silenceThresholdLevel,
+        bool hasMixedAudioStreams,
+        bool needAudioLevel,
+        uint32_t extendedSequenceNumber);
 
     void run() override;
 
 private:
-    void decodeOpus(const memory::Packet& opusPacket);
+    int decodeOpus(const memory::Packet& opusPacket, bool needAudioLevel);
+    memory::UniqueAudioPacket decodeOpusPacket(const memory::Packet& opusPacket);
     void onPacketDecoded(const int32_t decodedFrames, const uint8_t* decodedData);
+    memory::UniqueAudioPacket makePcmPacket(const memory::Packet& opusPacket, uint32_t sequenceNumber);
+    void conceal(memory::AudioPacket& pcmPacket);
+    void conceal(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket);
+    void decode(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket);
+    bool unprotect(memory::Packet& opusPacket);
+    int computeOpusAudioLevel(const memory::Packet& opusPacket);
 
     memory::UniquePacket _packet;
     EngineMixer& _engineMixer;
@@ -47,6 +55,7 @@ private:
     const uint8_t _silenceThresholdLevel;
     const bool _hasMixedAudioStreams;
     const uint32_t _extendedSequenceNumber;
+    const bool _needAudioLevel;
 };
 
 } // namespace bridge

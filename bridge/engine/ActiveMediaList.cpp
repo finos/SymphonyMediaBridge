@@ -977,6 +977,11 @@ void ActiveMediaList::removeFromRewriteMap(size_t endpointIdHash)
     ++_ssrcMapRevision;
 }
 
+bool ActiveMediaList::isAudioLevelNeeded() const
+{
+    return _audioSsrcs.size() > _audioLastN;
+}
+
 #if DEBUG
 void ActiveMediaList::checkInvariant()
 {

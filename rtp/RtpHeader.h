@@ -112,6 +112,7 @@ struct RtpHeader
     RtpHeaderExtension* getExtensionHeader();
     const RtpHeaderExtension* getExtensionHeader() const { return const_cast<RtpHeader*>(this)->getExtensionHeader(); }
     void setExtensions(const RtpHeaderExtension& extensions);
+    void setExtensions(const RtpHeaderExtension& extensions, size_t payloadLength);
 };
 
 constexpr bool isRtpPacket(const void* buffer, const uint32_t length)
@@ -132,4 +133,28 @@ inline bool isRtpPacket(const memory::Packet& packet)
 
 void setTransmissionTimestamp(memory::Packet& packet, uint8_t extensionId, uint64_t timestamp);
 bool getTransmissionTimestamp(const memory::Packet& packet, uint8_t extensionId, uint32_t& sendTime);
+
+template <typename PacketT>
+void addAudioLevel(PacketT& packet, uint8_t extensionId, uint8_t level)
+{
+    if (!rtp::isRtpPacket(packet))
+    {
+        return;
+    }
+
+    auto* rtpHeader = RtpHeader::fromPacket(packet);
+    if (!rtpHeader)
+    {
+        return;
+    }
+
+    RtpHeaderExtension extensionHeader(rtpHeader->getExtensionHeader());
+
+    GeneralExtension1Byteheader audioHeader(extensionId, 1);
+    audioHeader.data[0] = level;
+    auto cursor = extensionHeader.extensions().end();
+    extensionHeader.addExtension(cursor, audioHeader);
+
+    rtpHeader->setExtensions(extensionHeader, packet.getLength() - rtpHeader->headerLength());
+}
 } // namespace rtp

@@ -1,6 +1,7 @@
 #include "bridge/engine/AudioForwarderReceiveJob.h"
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/EngineMixer.h"
+#include "codec/AudioLevel.h"
 #include "codec/Opus.h"
 #include "codec/OpusDecoder.h"
 #include "logger/Logger.h"
@@ -34,7 +35,113 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
     logger::error("Unable to decode opus packet, error code %d", "OpusDecodeJob", decodedFrames);
 }
 
-void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
+memory::UniqueAudioPacket AudioForwarderReceiveJob::makePcmPacket(const memory::Packet& opusPacket,
+    uint32_t sequenceNumber)
+{
+    const auto opusRtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
+    auto pcmPacket =
+        memory::makeUniquePacket(_engineMixer.getAudioAllocator(), opusPacket.get(), opusRtpHeader->headerLength());
+    if (!pcmPacket)
+    {
+        return nullptr;
+    }
+    auto pcmRtpHeader = rtp::RtpHeader::fromPacket(*pcmPacket);
+    pcmRtpHeader->sequenceNumber = sequenceNumber & 0xFFFFu;
+    pcmRtpHeader->payloadType = 10;
+    return pcmPacket;
+}
+
+void AudioForwarderReceiveJob::conceal(memory::AudioPacket& pcmPacket)
+{
+    codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
+    auto pcmHeader = rtp::RtpHeader::fromPacket(pcmPacket);
+    const auto decodedFrames = decoder.conceal(pcmHeader->getPayload());
+    if (decodedFrames > 0)
+    {
+        const auto decodedPayloadLength = decodedFrames * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
+        pcmPacket.setLength(pcmHeader->headerLength() + decodedPayloadLength);
+    }
+    else
+    {
+        pcmPacket.setLength(0);
+    }
+}
+
+void AudioForwarderReceiveJob::conceal(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket)
+{
+    codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
+    auto pcmHeader = rtp::RtpHeader::fromPacket(pcmPacket);
+    const auto opusHeader = rtp::RtpHeader::fromPacket(opusPacket);
+    const auto opusPayloadLength = opusPacket.getLength() - opusHeader->headerLength();
+    const auto decodedFrames = decoder.conceal(opusHeader->getPayload(), opusPayloadLength, pcmHeader->getPayload());
+    if (decodedFrames > 0)
+    {
+        const auto decodedPayloadLength = decodedFrames * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
+        pcmPacket.setLength(pcmHeader->headerLength() + decodedPayloadLength);
+    }
+    else
+    {
+        pcmPacket.setLength(0);
+    }
+}
+
+void AudioForwarderReceiveJob::decode(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket)
+{
+    const auto framesInPacketBuffer =
+        memory::AudioPacket::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
+
+    codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
+    auto pcmHeader = rtp::RtpHeader::fromPacket(pcmPacket);
+    const auto opusHeader = rtp::RtpHeader::fromPacket(opusPacket);
+    const auto decodedFrames = decoder.decode(_extendedSequenceNumber,
+        opusHeader->getPayload(),
+        opusPacket.getLength() - opusHeader->headerLength(),
+        pcmHeader->getPayload(),
+        framesInPacketBuffer);
+
+    if (decodedFrames > 0)
+    {
+        const auto decodedPayloadLength = decodedFrames * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
+        pcmPacket.setLength(pcmHeader->headerLength() + decodedPayloadLength);
+    }
+    else
+    {
+        pcmPacket.setLength(0);
+    }
+}
+
+bool AudioForwarderReceiveJob::unprotect(memory::Packet& opusPacket)
+{
+    const auto oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
+    const auto newRolloverCounter = _extendedSequenceNumber >> 16;
+    if (newRolloverCounter > oldRolloverCounter)
+    {
+        logger::debug("Setting new rollover counter for ssrc %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
+        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
+        {
+            logger::error("Failed to set rollover counter srtp %u, mixer %s",
+                "AudioForwarderReceiveJob",
+                _ssrcContext.ssrc,
+                _engineMixer.getLoggableId().c_str());
+            return false;
+        }
+    }
+
+    if (!_sender->unprotect(opusPacket))
+    {
+        logger::error("Failed to unprotect srtp %u, mixer %s",
+            "AudioForwarderReceiveJob",
+            _ssrcContext.ssrc,
+            _engineMixer.getLoggableId().c_str());
+        return false;
+    }
+    _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+
+    return true;
+}
+
+// @return -1 on error, otherwise audio level if requested.
+int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool needAudioLevel)
 {
     if (!_ssrcContext.opusDecoder)
     {
@@ -49,19 +156,15 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
 
     if (!decoder.isInitialized())
     {
-        return;
+        return -1;
     }
 
-    uint8_t decodedData[memory::AudioPacket::size];
+    // uint8_t decodedData[memory::AudioPacket::size];
     auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpPacket)
     {
-        return;
+        return -1;
     }
-
-    const uint32_t headerLength = rtpPacket->headerLength();
-    const uint32_t payloadLength = _packet->getLength() - headerLength;
-    auto payloadStart = rtpPacket->getPayload();
 
     if (decoder.hasDecoded() && _extendedSequenceNumber != decoder.getExpectedSequenceNumber())
     {
@@ -72,7 +175,7 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
                 "OpusDecodeJob",
                 _extendedSequenceNumber,
                 decoder.getExpectedSequenceNumber());
-            return;
+            return -1;
         }
 
         logger::debug("Lost opus packet sequence %u expected %u, fec",
@@ -81,22 +184,63 @@ void AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket)
             decoder.getExpectedSequenceNumber());
 
         const auto concealCount = std::min(5u, _extendedSequenceNumber - decoder.getExpectedSequenceNumber() - 1);
-        for (uint32_t i = 0; i < concealCount; ++i)
+        for (uint32_t i = 0; concealCount > 1 && i < concealCount - 1; ++i)
         {
-            const auto decodedFrames = decoder.conceal(decodedData);
-            onPacketDecoded(decodedFrames, decodedData);
+            const uint32_t sequenceNumber = _extendedSequenceNumber - concealCount - 1 + i;
+            auto pcmPacket = makePcmPacket(*_packet, sequenceNumber);
+            if (!pcmPacket)
+            {
+                return -1;
+            }
+            conceal(*pcmPacket);
+            if (pcmPacket->getLength() > 0)
+            {
+                _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
+            }
         }
 
-        const auto decodedFrames = decoder.conceal(payloadStart, payloadLength, decodedData);
-        onPacketDecoded(decodedFrames, decodedData);
+        auto pcmPacket = makePcmPacket(*_packet, _extendedSequenceNumber - 1);
+        if (!pcmPacket)
+        {
+            return -1;
+        }
+        conceal(*_packet, *pcmPacket);
+        if (pcmPacket->getLength() > 0)
+        {
+            _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
+        }
     }
 
-    const auto framesInPacketBuffer =
-        memory::AudioPacket::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample;
+    auto pcmPacket = makePcmPacket(*_packet, _extendedSequenceNumber);
+    if (!pcmPacket)
+    {
+        return -1;
+    }
+    decode(*_packet, *pcmPacket);
+    if (pcmPacket->getLength() == 0)
+    {
+        return -1;
+    }
+    int audioLevel = 0;
+    if (needAudioLevel)
+    {
+        audioLevel = codec::computeAudioLevel(*pcmPacket);
+    }
+    _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
+    return audioLevel;
+}
 
-    const auto decodedFrames =
-        decoder.decode(_extendedSequenceNumber, payloadStart, payloadLength, decodedData, framesInPacketBuffer);
-    onPacketDecoded(decodedFrames, decodedData);
+int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPacket)
+{
+    const auto rtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
+    memory::AudioPacket pcmPacket;
+    pcmPacket.append(_packet->get(), rtpHeader->headerLength());
+    decode(opusPacket, pcmPacket);
+    if (pcmPacket.getLength() == 0)
+    {
+        return -1;
+    }
+    return codec::computeAudioLevel(pcmPacket);
 }
 
 AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
@@ -106,6 +250,7 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
     ActiveMediaList& activeMediaList,
     const uint8_t silenceThresholdLevel,
     const bool hasMixedAudioStreams,
+    const bool needAudioLevel,
     const uint32_t extendedSequenceNumber)
     : CountedJob(sender->getJobCounter()),
       _packet(std::move(packet)),
@@ -115,7 +260,8 @@ AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
       _activeMediaList(activeMediaList),
       _silenceThresholdLevel(silenceThresholdLevel),
       _hasMixedAudioStreams(hasMixedAudioStreams),
-      _extendedSequenceNumber(extendedSequenceNumber)
+      _extendedSequenceNumber(extendedSequenceNumber),
+      _needAudioLevel(needAudioLevel)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -130,14 +276,14 @@ void AudioForwarderReceiveJob::run()
     }
 
     bool silence = false;
+    utils::Optional<uint8_t> audioLevel;
+    utils::Optional<bool> isPtt;
     const auto rtpHeaderExtensions = rtpHeader->getExtensionHeader();
     if (rtpHeaderExtensions)
     {
         auto c9infoExtId = _ssrcContext.rtpMap.c9infoExtId.valueOr(0);
         auto audioLevelExtId = _ssrcContext.rtpMap.audioLevelExtId.valueOr(0);
 
-        utils::Optional<uint8_t> audioLevel;
-        utils::Optional<bool> isPtt;
         uint32_t c9UserId = 0;
 
         for (const auto& rtpHeaderExtension : rtpHeaderExtensions->extensions())
@@ -150,32 +296,19 @@ void AudioForwarderReceiveJob::run()
                 c9UserId |= rtpHeaderExtension.data[1];
                 c9UserId <<= 8;
                 c9UserId |= rtpHeaderExtension.data[2];
+                _engineMixer.mapSsrc2UserId(_ssrcContext.ssrc, c9UserId);
             }
             else if (0 != audioLevelExtId && rtpHeaderExtension.getId() == audioLevelExtId)
             {
                 audioLevel.set(rtpHeaderExtension.data[0] & 0x7F);
+                silence = audioLevel.get() > _silenceThresholdLevel;
             }
         }
+    }
 
-        if (audioLevel.isSet())
-        {
-            silence = audioLevel.get() > _silenceThresholdLevel;
-        }
-        if (isPtt.isSet())
-        {
-            silence = !isPtt.get();
-            if (!audioLevel.isSet())
-            {
-                // We need to 'fake' reasonable audio levels for the reasons.
-                audioLevel.set(silence ? 90 : 25);
-            }
-
-            _engineMixer.mapSsrc2UserId(_ssrcContext.ssrc, c9UserId);
-        }
-
-        _activeMediaList.onNewAudioLevel(_packet->endpointIdHash,
-            audioLevel.valueOr(120),
-            isPtt.isSet() && isPtt.get());
+    if (audioLevel.isSet())
+    {
+        _activeMediaList.onNewAudioLevel(_packet->endpointIdHash, audioLevel.get(), isPtt.isSet() && isPtt.get());
 
         if (silence)
         {
@@ -188,34 +321,43 @@ void AudioForwarderReceiveJob::run()
         }
     }
 
-    const auto oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
-    const auto newRolloverCounter = _extendedSequenceNumber >> 16;
-    if (newRolloverCounter > oldRolloverCounter)
+    if (!unprotect(*_packet))
     {
-        logger::debug("Setting new rollover counter for ssrc %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
-        {
-            logger::error("Failed to set rollover counter srtp %u, mixer %s",
-                "AudioForwarderReceiveJob",
-                _ssrcContext.ssrc,
-                _engineMixer.getLoggableId().c_str());
-            return;
-        }
-    }
-
-    if (!_sender->unprotect(*_packet))
-    {
-        logger::error("Failed to unprotect srtp %u, mixer %s",
-            "AudioForwarderReceiveJob",
-            _ssrcContext.ssrc,
-            _engineMixer.getLoggableId().c_str());
         return;
     }
-    _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
 
+    int calculatedAudioLevel = -1;
     if (_hasMixedAudioStreams && _ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS)
     {
-        decodeOpus(*_packet);
+        calculatedAudioLevel = decodeOpus(*_packet, !audioLevel.isSet());
+    }
+    else if (_ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS && _needAudioLevel && !audioLevel.isSet())
+    {
+        calculatedAudioLevel = computeOpusAudioLevel(*_packet);
+    }
+
+    if (!audioLevel.isSet())
+    {
+        if (calculatedAudioLevel < 0)
+        {
+            calculatedAudioLevel = 120;
+        }
+        _activeMediaList.onNewAudioLevel(_packet->endpointIdHash, calculatedAudioLevel, false);
+        silence = calculatedAudioLevel > _silenceThresholdLevel;
+        if (_ssrcContext.rtpMap.audioLevelExtId.isSet())
+        {
+            rtp::addAudioLevel(*_packet, calculatedAudioLevel, _ssrcContext.rtpMap.audioLevelExtId.get());
+        }
+
+        if (silence)
+        {
+            if (_ssrcContext.markNextPacket)
+            {
+                return;
+            }
+            // Let first silent packet through to clients and barbells
+            _ssrcContext.markNextPacket = true;
+        }
     }
 
     if (_ssrcContext.markNextPacket && !silence)

@@ -72,6 +72,29 @@ struct RtpMap
     bool isAudio() const { return format == Format::OPUS; }
     bool isVideo() const { return format == Format::VP8 || format == Format::VP8RTX; }
 
+    uint8_t suggestAudioLevelExtensionId() const
+    {
+        if (audioLevelExtId.isSet())
+        {
+            return audioLevelExtId.get();
+        }
+
+        return getFreeExtensionId();
+    }
+
+    uint8_t getFreeExtensionId() const
+    {
+        for (uint8_t id = 1; id < 16; ++id)
+        {
+            if (absSendTimeExtId.valueOr(16) != id && c9infoExtId.valueOr(16) != id &&
+                audioLevelExtId.valueOr(16) != id)
+            {
+                return id;
+            }
+        }
+        return 16; // invalid id}
+    }
+
     Format format;
     uint8_t payloadType;
     uint32_t sampleRate;

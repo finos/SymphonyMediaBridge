@@ -91,6 +91,43 @@ void RtpHeader::setExtensions(const RtpHeaderExtension& extensions)
     std::memcpy(target, &extensions, extensions.size());
 }
 
+void RtpHeader::setExtensions(const RtpHeaderExtension& extensions, size_t payloadLength)
+{
+    auto currentExtensions = getExtensionHeader();
+    ssize_t diff = 0;
+    if (currentExtensions)
+    {
+        diff = static_cast<ssize_t>(extensions.size() - currentExtensions->size());
+    }
+    else
+    {
+        diff = extensions.size();
+    }
+
+    if (diff < 0)
+    {
+        auto* src = getPayload();
+        auto* dst = getPayload() + diff;
+        for (size_t i = 0; i < payloadLength; ++i)
+        {
+            *dst = *src;
+            ++dst;
+            ++src;
+        }
+    }
+    else if (diff > 0)
+    {
+        auto* src = getPayload() + payloadLength - 1;
+        auto* dst = getPayload() + diff + payloadLength - 1;
+        for (size_t i = 0; i < payloadLength; ++i)
+        {
+            *dst = *src;
+            --dst;
+            --src;
+        }
+    }
+}
+
 void RtpHeaderExtension::addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension)
 {
     const auto target = reinterpret_cast<uint8_t*>(&(*cursor));

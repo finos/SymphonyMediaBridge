@@ -1465,6 +1465,7 @@ void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
             *_activeMediaList,
             _config.audio.silenceThresholdLevel,
             _numMixedAudioStreams != 0,
+            !_engineBarbells.empty() || _activeMediaList->isAudioLevelNeeded(),
             extendedSequenceNumber);
     }
 }
@@ -2144,7 +2145,17 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto emplaceResult = _allSsrcInboundContexts.emplace(ssrc, ssrc, audioStream->rtpMap, sender, timestamp);
+        auto rtpMap = audioStream->rtpMap;
+        if (!rtpMap.audioLevelExtId.isSet())
+        {
+            auto id = rtpMap.suggestAudioLevelExtensionId();
+            if (id != 16)
+            {
+                rtpMap.audioLevelExtId.set(id);
+            }
+        }
+
+        auto emplaceResult = _allSsrcInboundContexts.emplace(ssrc, ssrc, rtpMap, sender, timestamp);
 
         if (!emplaceResult.second && emplaceResult.first == _allSsrcInboundContexts.end())
         {
