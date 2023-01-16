@@ -148,14 +148,15 @@ void addAudioLevel(PacketT& packet, uint8_t extensionId, uint8_t level)
     {
         return;
     }
+    const auto payloadLength = packet.getLength() - rtpHeader->headerLength();
 
     RtpHeaderExtension extensionHeader(rtpHeader->getExtensionHeader());
-
     GeneralExtension1Byteheader audioHeader(extensionId, 1);
     audioHeader.data[0] = level;
     auto cursor = extensionHeader.extensions().end();
     extensionHeader.addExtension(cursor, audioHeader);
 
-    rtpHeader->setExtensions(extensionHeader, packet.getLength() - rtpHeader->headerLength());
+    rtpHeader->setExtensions(extensionHeader, payloadLength);
+    packet.setLength(rtpHeader->headerLength() + payloadLength);
 }
 } // namespace rtp

@@ -1650,7 +1650,7 @@ TEST_F(IntegrationTest, noAudioLevelExt)
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
-        group.clients[2]->_audioSource->setUseAudioLevel(true);
+        group.clients[2]->_audioSource->setUseAudioLevel(false);
 
         make5secCallWithDefaultAudioProfile(group);
 

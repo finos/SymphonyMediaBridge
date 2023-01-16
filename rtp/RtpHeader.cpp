@@ -106,9 +106,10 @@ void RtpHeader::setExtensions(const RtpHeaderExtension& extensions, size_t paylo
 
     std::memmove(getPayload() + diff, getPayload(), payloadLength);
 
-    const size_t baseHeaderLength = MIN_RTP_HEADER_SIZE + csrcCount * sizeof(u_int32_t);
+    extension = 0;
+    const auto rtpBaseHeaderLength = headerLength();
+    auto target = reinterpret_cast<char*>(this) + rtpBaseHeaderLength;
     extension = 1;
-    auto target = reinterpret_cast<char*>(this) + baseHeaderLength;
     std::memcpy(target, &extensions, extensions.size());
 }
 
