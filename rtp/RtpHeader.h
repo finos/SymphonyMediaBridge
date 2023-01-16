@@ -9,6 +9,7 @@ namespace rtp
 
 /**
  * Id of 15 means end of list and and iteration can be aborted
+ * Id 0 is single byte padding item
  */
 class GeneralExtension1Byteheader
 {
@@ -55,7 +56,7 @@ struct RtpHeaderExtension
 
     size_t size() const { return minSize() + length * sizeof(uint32_t); }
     constexpr static size_t minSize() { return 2 * sizeof(uint16_t); }
-    void addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension);
+    void addExtension(iterator1& cursor, const GeneralExtension1Byteheader& extension);
     bool empty() const { return length.get() == 0; }
 
     bool isValid() const;

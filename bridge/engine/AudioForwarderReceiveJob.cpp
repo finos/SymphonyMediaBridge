@@ -232,6 +232,15 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
 
 int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPacket)
 {
+    if (!_ssrcContext.opusDecoder)
+    {
+        logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
+            "OpusDecodeJob",
+            _ssrcContext.ssrc,
+            _engineMixer.getLoggableId().c_str());
+        _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
+    }
+
     const auto rtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
     memory::AudioPacket pcmPacket;
     pcmPacket.append(_packet->get(), rtpHeader->headerLength());
@@ -346,7 +355,7 @@ void AudioForwarderReceiveJob::run()
         silence = calculatedAudioLevel > _silenceThresholdLevel;
         if (_ssrcContext.rtpMap.audioLevelExtId.isSet())
         {
-            rtp::addAudioLevel(*_packet, calculatedAudioLevel, _ssrcContext.rtpMap.audioLevelExtId.get());
+            rtp::addAudioLevel(*_packet, _ssrcContext.rtpMap.audioLevelExtId.get(), calculatedAudioLevel);
         }
 
         if (silence)

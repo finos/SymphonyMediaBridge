@@ -104,32 +104,21 @@ void RtpHeader::setExtensions(const RtpHeaderExtension& extensions, size_t paylo
         diff = extensions.size();
     }
 
-    if (diff < 0)
-    {
-        auto* src = getPayload();
-        auto* dst = getPayload() + diff;
-        for (size_t i = 0; i < payloadLength; ++i)
-        {
-            *dst = *src;
-            ++dst;
-            ++src;
-        }
-    }
-    else if (diff > 0)
-    {
-        auto* src = getPayload() + payloadLength - 1;
-        auto* dst = getPayload() + diff + payloadLength - 1;
-        for (size_t i = 0; i < payloadLength; ++i)
-        {
-            *dst = *src;
-            --dst;
-            --src;
-        }
-    }
+    std::memmove(getPayload() + diff, getPayload(), payloadLength);
+
+    const size_t baseHeaderLength = MIN_RTP_HEADER_SIZE + csrcCount * sizeof(u_int32_t);
+    extension = 1;
+    auto target = reinterpret_cast<char*>(this) + baseHeaderLength;
+    std::memcpy(target, &extensions, extensions.size());
 }
 
-void RtpHeaderExtension::addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension)
+void RtpHeaderExtension::addExtension(iterator1& cursor, const GeneralExtension1Byteheader& extension)
 {
+    if (extension.getId() == 0)
+    {
+        return; // padding
+    }
+
     const auto target = reinterpret_cast<uint8_t*>(&(*cursor));
     const int newLength = target + extension.size() - data;
     const int diff = newLength % sizeof(uint32_t);
@@ -145,11 +134,20 @@ namespace
 {
 const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
 {
+    const uint8_t* endCandidate = nullptr;
     for (const uint8_t* cursor = data; cursor < dataEnd;)
     {
         const auto& item = *reinterpret_cast<const GeneralExtension1Byteheader*>(cursor);
+        if (*cursor == 0 && !endCandidate)
+        {
+            endCandidate = cursor;
+        }
         if (item.getId() == 15)
         {
+            if (endCandidate)
+            {
+                return endCandidate;
+            }
             return cursor;
         }
         else if (cursor + item.size() > dataEnd)
@@ -160,7 +158,15 @@ const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
         else
         {
             cursor += item.size();
+            if (item.getId() != 0)
+            {
+                endCandidate = nullptr;
+            }
         }
+    }
+    if (endCandidate)
+    {
+        return endCandidate;
     }
     return dataEnd;
 }
@@ -190,13 +196,26 @@ utils::TlvCollection<GeneralExtension1Byteheader> RtpHeaderExtension::extensions
 
 bool RtpHeaderExtension::isValid() const
 {
-    auto extEnd = findExtensionsEnd(data, data + length * sizeof(uint32_t));
-    if (extEnd == data + length * sizeof(uint32_t) || (*extEnd & 0xF0) == 0xF0)
+    const uint8_t* dataEnd = data + length * sizeof(uint32_t);
+    for (const uint8_t* cursor = data; cursor < dataEnd;)
     {
-        return true;
+        const auto& item = *reinterpret_cast<const GeneralExtension1Byteheader*>(cursor);
+        if (item.getId() == 15)
+        {
+            return true;
+        }
+        else if (cursor + item.size() > dataEnd)
+        {
+            // corrupt
+            return false;
+        }
+        else
+        {
+            cursor += item.size();
+        }
     }
 
-    return false;
+    return true;
 }
 
 size_t GeneralExtension1Byteheader::size() const

@@ -98,17 +98,6 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
 
     rtpHeader->setExtensions(extensionHead);
 
-    size_t expectedHeaderLength = 22;
-    if (_useAudioLevel)
-    {
-        expectedHeaderLength += 2;
-    }
-    if (IsPttState::NotSpecified != _isPtt)
-    {
-        expectedHeaderLength += 6;
-    }
-    assert(rtpHeader->headerLength() == expectedHeaderLength);
-
     if (_emulatedAudioType == Audio::Opus)
     {
         const auto bytesEncoded = _encoder.encode(audio,
