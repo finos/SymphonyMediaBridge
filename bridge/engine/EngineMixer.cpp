@@ -1465,7 +1465,7 @@ void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
             *_activeMediaList,
             _config.audio.silenceThresholdLevel,
             _numMixedAudioStreams != 0,
-            !_engineBarbells.empty() || _activeMediaList->isAudioLevelNeeded(),
+            !_engineBarbells.empty() || _engineAudioStreams.size() > 2,
             extendedSequenceNumber);
     }
 }
@@ -2149,7 +2149,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
         if (!rtpMap.audioLevelExtId.isSet())
         {
             auto id = rtpMap.suggestAudioLevelExtensionId();
-            if (id != 16)
+            if (id != RtpMap::ExtHeaderIdentifiers::EOL)
             {
                 rtpMap.audioLevelExtId.set(id);
             }

@@ -417,11 +417,7 @@ void ActiveMediaList::updateLevels(const uint64_t timestamp)
         audioParticipant.ptt = levelEntry.ptt;
         audioParticipant.onNewLevel(levelEntry.level, timestamp);
 
-        if (audioParticipant.ptt)
-        {
-            audioParticipant.noiseLevel = 37;
-        }
-        else if (audioParticipant.history.allNonZero())
+        if (audioParticipant.history.allNonZero())
         {
             audioParticipant.noiseLevel = std::min(audioParticipant.noiseLevel, audioParticipant.history.average());
         }
@@ -521,6 +517,8 @@ void ActiveMediaList::process(const uint64_t timestamp,
     size_t speakerCount = rankSpeakers();
     if (speakerCount == 0)
     {
+        TActiveTalkersSnapshot activeTalkersSnapshot;
+        _activeTalkerSnapshot.write(activeTalkersSnapshot);
         return;
     }
 
@@ -538,16 +536,13 @@ void ActiveMediaList::process(const uint64_t timestamp,
         outAudioMapChanged |= updateActiveAudioList(top.participant);
         auto const& curParticipant = _audioParticipants.find(top.participant);
 
-        if (top.score - top.noiseLevel > _activeTalkerSilenceThresholdDb)
+        if (top.score > _activeTalkerSilenceThresholdDb && activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
         {
-            if (activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
-            {
-                ActiveTalker talker = {top.participant,
-                    curParticipant != _audioParticipants.end() ? false : curParticipant->second.ptt,
-                    (uint8_t)top.score,
-                    (uint8_t)top.noiseLevel};
-                activeTalkersSnapshot.activeTalker[activeTalkersSnapshot.count++] = talker;
-            }
+            ActiveTalker talker = {top.participant,
+                curParticipant != _audioParticipants.end() ? false : curParticipant->second.ptt,
+                (uint8_t)top.score,
+                (uint8_t)top.noiseLevel};
+            activeTalkersSnapshot.activeTalker[activeTalkersSnapshot.count++] = talker;
         }
         heap.pop();
     }
@@ -975,11 +970,6 @@ void ActiveMediaList::removeFromRewriteMap(size_t endpointIdHash)
         _videoSsrcs.push(simulcastGroup);
     }
     ++_ssrcMapRevision;
-}
-
-bool ActiveMediaList::isAudioLevelNeeded() const
-{
-    return _audioParticipants.size() > _audioLastN;
 }
 
 #if DEBUG

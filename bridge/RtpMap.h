@@ -19,6 +19,12 @@ struct RtpMap
         EMPTY
     };
 
+    enum ExtHeaderIdentifiers : uint8_t
+    {
+        PADDING = 0,
+        EOL = 15
+    };
+
     RtpMap() : format(Format::EMPTY), payloadType(0x7F), sampleRate(0) {}
 
     explicit RtpMap(const Format format) : format(format)
@@ -72,6 +78,7 @@ struct RtpMap
     bool isAudio() const { return format == Format::OPUS; }
     bool isVideo() const { return format == Format::VP8 || format == Format::VP8RTX; }
 
+    // @return 15 if none found
     uint8_t suggestAudioLevelExtensionId() const
     {
         if (audioLevelExtId.isSet())
@@ -82,9 +89,10 @@ struct RtpMap
         return getFreeExtensionId();
     }
 
+    // @return 15 if none found
     uint8_t getFreeExtensionId() const
     {
-        for (uint8_t id = 1; id < 16; ++id)
+        for (uint8_t id = 1; id < ExtHeaderIdentifiers::EOL; ++id)
         {
             if (absSendTimeExtId.valueOr(16) != id && c9infoExtId.valueOr(16) != id &&
                 audioLevelExtId.valueOr(16) != id)
@@ -92,7 +100,7 @@ struct RtpMap
                 return id;
             }
         }
-        return 16; // invalid id}
+        return ExtHeaderIdentifiers::EOL;
     }
 
     Format format;

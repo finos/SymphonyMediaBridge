@@ -6,7 +6,11 @@
 
 namespace rtp
 {
-
+enum ExtHeaderIdentifiers : uint8_t
+{
+    PADDING = 0,
+    EOL = 15
+};
 /**
  * Id of 15 means end of list and and iteration can be aborted
  * Id 0 is single byte padding item
@@ -31,6 +35,7 @@ public:
     inline void setId(const uint8_t id) { _id = id; }
     void setDataLength(uint8_t length);
     uint8_t getDataLength() const;
+    void fillWithPadding();
 
     size_t size() const;
 };

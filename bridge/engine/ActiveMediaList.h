@@ -164,7 +164,6 @@ public:
 #endif
 
     void logAudioList();
-    bool isAudioLevelNeeded() const;
 
 private:
     static const size_t INTERVAL_MS = 10;

@@ -15,7 +15,7 @@ enum Audio
 class AudioSource
 {
 public:
-    enum IsPttState
+    enum PttState
     {
         NotSpecified = 0,
         Unset,
@@ -33,7 +33,7 @@ public:
 
     void setVolume(double normalized) { _amplitude = 15000 * normalized; }
     void setFrequency(double frequency) { _frequency = frequency; }
-    void setIsPtt(const IsPttState isPtt);
+    void setPtt(const PttState isPtt);
     void setUseAudioLevel(const bool useAudioLevel);
 
 private:
@@ -48,7 +48,7 @@ private:
     uint16_t _amplitude;
     double _frequency;
     uint32_t _ptime;
-    IsPttState _isPtt;
+    PttState _isPtt;
     bool _useAudioLevel;
     Audio _emulatedAudioType;
 };

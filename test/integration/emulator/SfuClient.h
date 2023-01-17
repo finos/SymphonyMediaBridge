@@ -1153,6 +1153,7 @@ public:
                 }
             }
         }
+        logger::debug("exit run period", "SfuClient");
     }
 
     bool awaitPendingJobs(uint64_t timeout)

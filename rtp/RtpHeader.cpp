@@ -115,9 +115,9 @@ void RtpHeader::setExtensions(const RtpHeaderExtension& extensions, size_t paylo
 
 void RtpHeaderExtension::addExtension(iterator1& cursor, const GeneralExtension1Byteheader& extension)
 {
-    if (extension.getId() == 0)
+    if (extension.getId() == ExtHeaderIdentifiers::PADDING)
     {
-        return; // padding
+        return; // padding is automatically added
     }
 
     const auto target = reinterpret_cast<uint8_t*>(&(*cursor));
@@ -139,11 +139,11 @@ const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
     for (const uint8_t* cursor = data; cursor < dataEnd;)
     {
         const auto& item = *reinterpret_cast<const GeneralExtension1Byteheader*>(cursor);
-        if (*cursor == 0 && !endCandidate)
+        if (item.getId() == ExtHeaderIdentifiers::PADDING && !endCandidate)
         {
             endCandidate = cursor;
         }
-        if (item.getId() == 15)
+        if (item.getId() == ExtHeaderIdentifiers::EOL)
         {
             if (endCandidate)
             {
@@ -159,7 +159,7 @@ const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
         else
         {
             cursor += item.size();
-            if (item.getId() != 0)
+            if (item.getId() != ExtHeaderIdentifiers::PADDING)
             {
                 endCandidate = nullptr;
             }
@@ -201,7 +201,7 @@ bool RtpHeaderExtension::isValid() const
     for (const uint8_t* cursor = data; cursor < dataEnd;)
     {
         const auto& item = *reinterpret_cast<const GeneralExtension1Byteheader*>(cursor);
-        if (item.getId() == 15)
+        if (item.getId() == ExtHeaderIdentifiers::EOL)
         {
             return true;
         }
@@ -221,9 +221,9 @@ bool RtpHeaderExtension::isValid() const
 
 size_t GeneralExtension1Byteheader::size() const
 {
-    if (_id == 0)
+    if (_id == ExtHeaderIdentifiers::PADDING)
     {
-        return 1; // 0 padding
+        return 1;
     }
     return 2 + _length;
 }
@@ -236,6 +236,11 @@ void GeneralExtension1Byteheader::setDataLength(uint8_t length)
 uint8_t GeneralExtension1Byteheader::getDataLength() const
 {
     return _length + 1;
+}
+
+void GeneralExtension1Byteheader::fillWithPadding()
+{
+    std::memset(reinterpret_cast<uint8_t*>(this), size(), 0);
 }
 
 // convert to 24 bit seconds fixed point format 6.18
