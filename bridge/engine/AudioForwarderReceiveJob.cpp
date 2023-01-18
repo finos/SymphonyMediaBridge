@@ -159,7 +159,6 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
         return -1;
     }
 
-    // uint8_t decodedData[memory::AudioPacket::size];
     auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpPacket)
     {
