@@ -91,8 +91,35 @@ void RtpHeader::setExtensions(const RtpHeaderExtension& extensions)
     std::memcpy(target, &extensions, extensions.size());
 }
 
-void RtpHeaderExtension::addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension)
+void RtpHeader::setExtensions(const RtpHeaderExtension& extensions, size_t payloadLength)
 {
+    auto currentExtensions = getExtensionHeader();
+    ssize_t diff = 0;
+    if (currentExtensions)
+    {
+        diff = static_cast<ssize_t>(extensions.size() - currentExtensions->size());
+    }
+    else
+    {
+        diff = extensions.size();
+    }
+
+    std::memmove(getPayload() + diff, getPayload(), payloadLength);
+
+    extension = 0;
+    const auto rtpBaseHeaderLength = headerLength();
+    auto target = reinterpret_cast<char*>(this) + rtpBaseHeaderLength;
+    extension = 1;
+    std::memcpy(target, &extensions, extensions.size());
+}
+
+void RtpHeaderExtension::addExtension(iterator1& cursor, const GeneralExtension1Byteheader& extension)
+{
+    if (extension.getId() == ExtHeaderIdentifiers::PADDING)
+    {
+        return; // padding is automatically added
+    }
+
     const auto target = reinterpret_cast<uint8_t*>(&(*cursor));
     const int newLength = target + extension.size() - data;
     const int diff = newLength % sizeof(uint32_t);
@@ -108,11 +135,20 @@ namespace
 {
 const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
 {
+    const uint8_t* endCandidate = nullptr;
     for (const uint8_t* cursor = data; cursor < dataEnd;)
     {
         const auto& item = *reinterpret_cast<const GeneralExtension1Byteheader*>(cursor);
-        if (item.getId() == 15)
+        if (item.getId() == ExtHeaderIdentifiers::PADDING && !endCandidate)
         {
+            endCandidate = cursor;
+        }
+        if (item.getId() == ExtHeaderIdentifiers::EOL)
+        {
+            if (endCandidate)
+            {
+                return endCandidate;
+            }
             return cursor;
         }
         else if (cursor + item.size() > dataEnd)
@@ -123,7 +159,15 @@ const uint8_t* findExtensionsEnd(const uint8_t* data, const uint8_t* dataEnd)
         else
         {
             cursor += item.size();
+            if (item.getId() != ExtHeaderIdentifiers::PADDING)
+            {
+                endCandidate = nullptr;
+            }
         }
+    }
+    if (endCandidate)
+    {
+        return endCandidate;
     }
     return dataEnd;
 }
@@ -153,20 +197,33 @@ utils::TlvCollection<GeneralExtension1Byteheader> RtpHeaderExtension::extensions
 
 bool RtpHeaderExtension::isValid() const
 {
-    auto extEnd = findExtensionsEnd(data, data + length * sizeof(uint32_t));
-    if (extEnd == data + length * sizeof(uint32_t) || (*extEnd & 0xF0) == 0xF0)
+    const uint8_t* dataEnd = data + length * sizeof(uint32_t);
+    for (const uint8_t* cursor = data; cursor < dataEnd;)
     {
-        return true;
+        const auto& item = *reinterpret_cast<const GeneralExtension1Byteheader*>(cursor);
+        if (item.getId() == ExtHeaderIdentifiers::EOL)
+        {
+            return true;
+        }
+        else if (cursor + item.size() > dataEnd)
+        {
+            // corrupt
+            return false;
+        }
+        else
+        {
+            cursor += item.size();
+        }
     }
 
-    return false;
+    return true;
 }
 
 size_t GeneralExtension1Byteheader::size() const
 {
-    if (_id == 0)
+    if (_id == ExtHeaderIdentifiers::PADDING)
     {
-        return 1; // 0 padding
+        return 1;
     }
     return 2 + _length;
 }
@@ -179,6 +236,11 @@ void GeneralExtension1Byteheader::setDataLength(uint8_t length)
 uint8_t GeneralExtension1Byteheader::getDataLength() const
 {
     return _length + 1;
+}
+
+void GeneralExtension1Byteheader::fillWithPadding()
+{
+    std::memset(reinterpret_cast<uint8_t*>(this), size(), 0);
 }
 
 // convert to 24 bit seconds fixed point format 6.18

@@ -861,7 +861,7 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
             endpoint.dtlsState = transport->getDtlsState();
 
             auto const& it = activeTalkers.find(audio->second->endpointIdHash);
-            endpoint.isActiveTalker = it != activeTalkers.end();
+            endpoint.isActiveTalker = (it != activeTalkers.end());
 
             if (it != activeTalkers.end())
             {

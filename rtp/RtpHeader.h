@@ -6,9 +6,14 @@
 
 namespace rtp
 {
-
+enum ExtHeaderIdentifiers : uint8_t
+{
+    PADDING = 0,
+    EOL = 15
+};
 /**
  * Id of 15 means end of list and and iteration can be aborted
+ * Id 0 is single byte padding item
  */
 class GeneralExtension1Byteheader
 {
@@ -30,6 +35,7 @@ public:
     inline void setId(const uint8_t id) { _id = id; }
     void setDataLength(uint8_t length);
     uint8_t getDataLength() const;
+    void fillWithPadding();
 
     size_t size() const;
 };
@@ -55,7 +61,7 @@ struct RtpHeaderExtension
 
     size_t size() const { return minSize() + length * sizeof(uint32_t); }
     constexpr static size_t minSize() { return 2 * sizeof(uint16_t); }
-    void addExtension(iterator1& cursor, GeneralExtension1Byteheader& extension);
+    void addExtension(iterator1& cursor, const GeneralExtension1Byteheader& extension);
     bool empty() const { return length.get() == 0; }
 
     bool isValid() const;
@@ -112,6 +118,7 @@ struct RtpHeader
     RtpHeaderExtension* getExtensionHeader();
     const RtpHeaderExtension* getExtensionHeader() const { return const_cast<RtpHeader*>(this)->getExtensionHeader(); }
     void setExtensions(const RtpHeaderExtension& extensions);
+    void setExtensions(const RtpHeaderExtension& extensions, size_t payloadLength);
 };
 
 constexpr bool isRtpPacket(const void* buffer, const uint32_t length)
@@ -132,4 +139,29 @@ inline bool isRtpPacket(const memory::Packet& packet)
 
 void setTransmissionTimestamp(memory::Packet& packet, uint8_t extensionId, uint64_t timestamp);
 bool getTransmissionTimestamp(const memory::Packet& packet, uint8_t extensionId, uint32_t& sendTime);
+
+template <typename PacketT>
+void addAudioLevel(PacketT& packet, uint8_t extensionId, uint8_t level)
+{
+    if (!rtp::isRtpPacket(packet))
+    {
+        return;
+    }
+
+    auto* rtpHeader = RtpHeader::fromPacket(packet);
+    if (!rtpHeader)
+    {
+        return;
+    }
+    const auto payloadLength = packet.getLength() - rtpHeader->headerLength();
+
+    RtpHeaderExtension extensionHeader(rtpHeader->getExtensionHeader());
+    GeneralExtension1Byteheader audioHeader(extensionId, 1);
+    audioHeader.data[0] = level;
+    auto cursor = extensionHeader.extensions().end();
+    extensionHeader.addExtension(cursor, audioHeader);
+
+    rtpHeader->setExtensions(extensionHeader, payloadLength);
+    packet.setLength(rtpHeader->headerLength() + payloadLength);
+}
 } // namespace rtp

@@ -19,7 +19,7 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, 
       _amplitude(0),
       _frequency(340.0),
       _ptime(ptime),
-      _isPtt(IsPttState::NotSpecified),
+      _isPtt(PttState::NotSpecified),
       _useAudioLevel(true),
       _emulatedAudioType(fakeAudio)
 {
@@ -87,27 +87,16 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
         extensionHead.addExtension(cursor, audioLevel);
     }
 
-    if (IsPttState::NotSpecified != _isPtt)
+    if (PttState::NotSpecified != _isPtt)
     {
         rtp::GeneralExtension1Byteheader c9hdrExtension(8, 4);
         // Construct pseudo user-id (we need 24 bits only) from ssrc,
-        *((uint32_t*)&c9hdrExtension.data[0]) = (uint32_t)_ssrc;
-        c9hdrExtension.data[3] = IsPttState::Set == _isPtt ? 0x80 : 0x00;
+        *((uint32_t*)&c9hdrExtension.data[0]) = _ssrc;
+        c9hdrExtension.data[3] = PttState::Set == _isPtt ? 0x80 : 0x00;
         extensionHead.addExtension(cursor, c9hdrExtension);
     }
 
     rtpHeader->setExtensions(extensionHead);
-
-    size_t expectedHeaderLength = 22;
-    if (_useAudioLevel)
-    {
-        expectedHeaderLength += 2;
-    }
-    if (IsPttState::NotSpecified != _isPtt)
-    {
-        expectedHeaderLength += 6;
-    }
-    assert(rtpHeader->headerLength() == expectedHeaderLength);
 
     if (_emulatedAudioType == Audio::Opus)
     {
@@ -119,6 +108,10 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
         {
             packet->setLength(rtpHeader->headerLength() + bytesEncoded);
             return packet;
+        }
+        else
+        {
+            logger::error("failed to encode opus", "AudioSource");
         }
     }
     else
@@ -146,7 +139,7 @@ int64_t AudioSource::timeToRelease(uint64_t timestamp) const
     return 0;
 }
 
-void AudioSource::setIsPtt(const IsPttState isPtt)
+void AudioSource::setPtt(const PttState isPtt)
 {
     _isPtt = isPtt;
 }

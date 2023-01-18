@@ -1042,9 +1042,9 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.clients[1]->_audioSource->setFrequency(1300);
         group.clients[2]->_audioSource->setFrequency(2100);
 
-        group.clients[0]->_audioSource->setVolume(0.6);
-        group.clients[1]->_audioSource->setVolume(0.6);
-        group.clients[2]->_audioSource->setVolume(0.6);
+        group.clients[0]->_audioSource->setVolume(0.001);
+        group.clients[1]->_audioSource->setVolume(0.001);
+        group.clients[2]->_audioSource->setVolume(0.001);
 
         // Disable audio level extension, otherwise constant signal will lead to the 'noise leve' equal to the
         // signal and detection would fail
@@ -1052,12 +1052,18 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.clients[1]->_audioSource->setUseAudioLevel(false);
         group.clients[2]->_audioSource->setUseAudioLevel(false);
 
+        group.run(utils::Time::ms * 300);
+
         // =============================== PART 1: #1 & #2 talking ====================
 
-        group.clients[0]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
-        group.clients[1]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
-        group.clients[2]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+        group.clients[0]->_audioSource->setPtt(emulator::AudioSource::PttState::Set);
+        group.clients[1]->_audioSource->setPtt(emulator::AudioSource::PttState::Set);
+        group.clients[0]->_audioSource->setVolume(0.8);
+        group.clients[1]->_audioSource->setVolume(0.8);
+        group.clients[2]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[2]->_audioSource->setVolume(0.0);
 
+        logger::info("Send on user 0, 1", "Test");
         group.run(utils::Time::sec * 2);
 
         auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
@@ -1082,25 +1088,38 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         // =============================== PART 2: #2 talking =========================
 
-        group.clients[0]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
-        group.clients[1]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
-        group.clients[2]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
+        group.clients[0]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[0]->_audioSource->setVolume(0.0);
+        group.clients[1]->_audioSource->setPtt(emulator::AudioSource::PttState::Set);
+        group.clients[1]->_audioSource->setVolume(0.8);
+        group.clients[2]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[2]->_audioSource->setVolume(0.0);
+        logger::info("Send on user 1", "Test");
 
         group.run(utils::Time::sec * 2);
+        endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
+        EXPECT_FALSE(isActiveTalker(endpoints, group.clients[0]->_channel.getEndpointId()));
+        EXPECT_TRUE(isActiveTalker(endpoints, group.clients[1]->_channel.getEndpointId()));
+        EXPECT_FALSE(isActiveTalker(endpoints, group.clients[2]->_channel.getEndpointId()));
+
         utils::Time::nanoSleep(utils::Time::sec * 1);
 
         endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
         EXPECT_EQ(3, endpoints.size());
 
         EXPECT_FALSE(isActiveTalker(endpoints, group.clients[0]->_channel.getEndpointId()));
-        EXPECT_TRUE(isActiveTalker(endpoints, group.clients[1]->_channel.getEndpointId()));
+        EXPECT_FALSE(isActiveTalker(endpoints, group.clients[1]->_channel.getEndpointId()));
         EXPECT_FALSE(isActiveTalker(endpoints, group.clients[2]->_channel.getEndpointId()));
 
         // =============================== PART 3: #3 talking =========================
 
-        group.clients[0]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
-        group.clients[1]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
-        group.clients[2]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Set);
+        group.clients[0]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[0]->_audioSource->setVolume(0.0);
+        group.clients[1]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[1]->_audioSource->setVolume(0.0);
+        group.clients[2]->_audioSource->setPtt(emulator::AudioSource::PttState::Set);
+        group.clients[2]->_audioSource->setVolume(0.8);
+        logger::info("Send on user 2", "Test");
 
         group.run(utils::Time::sec * 2);
 
@@ -1113,10 +1132,13 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         // =============================== PART 4: nobody talking =====================
 
-        group.clients[0]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
-        group.clients[1]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
-        group.clients[2]->_audioSource->setIsPtt(emulator::AudioSource::IsPttState::Unset);
-
+        group.clients[0]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[1]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[2]->_audioSource->setPtt(emulator::AudioSource::PttState::Unset);
+        group.clients[0]->_audioSource->setVolume(0.0);
+        group.clients[1]->_audioSource->setVolume(0.0);
+        group.clients[2]->_audioSource->setVolume(0.0);
+        logger::info("Send on none", "Test");
         group.run(utils::Time::sec * 2);
 
         endpoints = getConferenceEndpointsInfo(_httpd, baseUrl);
@@ -1618,5 +1640,75 @@ TEST_F(IntegrationTest, endpointMessage)
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
+    });
+}
+
+TEST_F(IntegrationTest, noAudioLevelExt)
+{
+    runTestInThread(expectedTestThreadCount(1), [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "audio.lastN":1
+        })");
+
+        initBridge(_config);
+
+        const std::string baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+        group.clients[2]->_audioSource->setUseAudioLevel(false);
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
+        EXPECT_EQ(3, endpoints.size());
+        size_t dominantSpeakerCount = 0;
+        for (const auto& endpoint : endpoints)
+        {
+            if (endpoint.isDominantSpeaker)
+            {
+                dominantSpeakerCount++;
+            }
+            EXPECT_TRUE(endpoint.dtlsState == transport::SrtpClient::State::CONNECTED);
+            EXPECT_TRUE(endpoint.iceState == ice::IceSession::State::CONNECTED);
+        }
+        EXPECT_EQ(1, dominantSpeakerCount);
+
+        group.stopTransports();
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
+        size_t freqId = 0;
+        for (auto id : {0, 1, 2})
+        {
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
+            EXPECT_EQ(data.dominantFrequencies.size(), 2);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+        }
     });
 }
