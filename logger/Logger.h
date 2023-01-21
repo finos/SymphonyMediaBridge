@@ -22,7 +22,7 @@ void reOpenLog();
 
 void logv(const char* logLevel, const char* logGroup, const bool immediate, const char* format, va_list args);
 void logv(const char* logLevel, const char* logGroup, const char* format, va_list args);
-void logStack(const void* stack, int frames, const char* logGroup);
+void logStack(void* const* stack, int frames, const char* logGroup);
 void flushLog();
 void awaitLogDrained(float level = 0.0f);
 

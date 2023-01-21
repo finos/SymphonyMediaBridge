@@ -37,38 +37,31 @@ void logv(const char* logLevel, const char* logGroup, const bool immediate, cons
 {
     if (_logThread)
     {
-        LogItem item;
-        item.timestamp = utils::Time::now();
-        item.logLevel = logLevel;
-        item.threadId = (void*)pthread_self();
-        int consumed = snprintf(item.message, logger::MAX_LINE_LENGTH, "[%s] ", logGroup);
-        int remain = logger::MAX_LINE_LENGTH - consumed;
-        vsnprintf(item.message + consumed, remain, format, args);
+        auto timestamp = utils::Time::now();
+        auto threadId = (void*)pthread_self();
 
         if (immediate)
         {
-            _logThread->immediate(std::move(item));
+            _logThread->immediate(timestamp, logLevel, logGroup, threadId, format, args);
         }
         else
         {
-            _logThread->post(std::move(item));
+            _logThread->post(timestamp, logLevel, logGroup, threadId, format, args);
         }
     }
 }
 
-void logStack(const void* stack, int frames, const char* logGroup)
+void logStack(void* const* stack, int frames, const char* logGroup)
 {
     if (_logThread)
     {
-        LogItem item;
-        item.timestamp = utils::Time::now();
-        item.logLevel = "_STK_";
-        item.threadId = (void*)pthread_self();
-        const int byteCount = sizeof(void*) * frames;
-        std::memcpy(item.message, stack, byteCount);
-        std::memset(item.message + byteCount, 0, sizeof(void*));
-        std::strcpy(item.message + byteCount + sizeof(void*), logGroup);
-        _logThread->immediate(std::move(item));
+        char** strings = backtrace_symbols(stack, frames);
+
+        for (int i = 0; i < frames; ++i)
+        {
+            logger::warnImmediate("%s", logGroup, strings[i]);
+        }
+        free(strings);
     }
 }
 
