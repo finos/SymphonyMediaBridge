@@ -1,5 +1,6 @@
 #include "TestValues.h"
 #include "concurrency/MpmcQueue.h"
+#include "concurrency/MpscMemoryQueue.h"
 #include "logger/Logger.h"
 #include <gtest/gtest.h>
 #include <inttypes.h>
@@ -346,4 +347,115 @@ TEST(Mpmc, uniqueptr)
     }
     EXPECT_EQ(counter, 0);
     delete queue;
+}
+
+TEST(MpscMemQueue, basic)
+{
+    MpscMemoryQueue q(32 * 1024);
+
+    int count = 0;
+    for (int i = 0; i < 1024; ++i)
+    {
+        auto p = q.allocate(819);
+        if (p)
+        {
+            q.commit(p);
+            ++count;
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    EXPECT_EQ(count, 39);
+
+    q.pop();
+
+    q.allocate(819);
+}
+
+struct ComplxEntry
+{
+    bool g;
+    char data[120];
+};
+
+TEST(MpscMemQueue, scope)
+{
+    MpscMemoryQueue q(32 * 1024);
+
+    {
+        ScopedAllocCommit a1(q, sizeof(ComplxEntry));
+        auto& obj = a1.get<ComplxEntry>();
+        obj.g = false;
+        std::sprintf(obj.data, "test %d", 56);
+    }
+
+    EXPECT_GE(q.frontSize(), sizeof(ComplxEntry));
+    auto e = q.front<ComplxEntry>();
+    EXPECT_EQ(e->g, false);
+    EXPECT_EQ(std::strcmp(e->data, "test 56"), 0);
+}
+
+struct FakeLogItem
+{
+    int id;
+    char s[125];
+};
+
+void itemProducerRun(int id, MpscMemoryQueue* q)
+{
+    MpscMemoryQueue& queue(*q);
+    while (producerRunning)
+    {
+        ScopedAllocCommit c(queue, 205);
+        if (!c)
+        {
+            utils::Time::nanoSleep(10);
+            continue;
+        }
+        auto& item = c.get<FakeLogItem>();
+        item.id = id;
+        std::sprintf(item.s, "log from runner %d", id);
+    }
+}
+
+TEST(MpscMemQueue, multithread)
+{
+    MpscMemoryQueue queue(32 * 1024);
+    std::unique_ptr<std::thread> prod[PRODUCER_COUNT];
+    for (int i = 0; i < PRODUCER_COUNT; ++i)
+    {
+        prod[i] = std::make_unique<std::thread>(itemProducerRun, i, &queue);
+    }
+
+    auto start = utils::Time::getAbsoluteTime();
+    uint32_t count = 0;
+    while (utils::Time::getAbsoluteTime() - start < utils::Time::sec * 3)
+    {
+        auto entry = queue.front<FakeLogItem>();
+        if (!entry)
+        {
+            utils::Time::nanoSleep(10);
+            continue;
+        }
+        ++count;
+        EXPECT_EQ(queue.frontSize(), 208);
+        queue.pop();
+    }
+
+    producerRunning = false;
+    for (auto& t : prod)
+    {
+        t->join();
+    }
+
+    while (queue.front())
+    {
+        queue.pop();
+        ++count;
+    }
+    EXPECT_GT(count, 5000000);
+    EXPECT_TRUE(queue.empty());
 }
