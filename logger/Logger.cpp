@@ -51,17 +51,15 @@ void logv(const char* logLevel, const char* logGroup, const bool immediate, cons
     }
 }
 
-void logStack(const void* stack, int frames, const char* logGroup)
+void logStack(void* const* stack, int frames, const char* logGroup)
 {
     if (_logThread)
     {
-        void* array[16];
-        const auto size = backtrace(array, 16);
-        char** strings = backtrace_symbols(array, size);
+        char** strings = backtrace_symbols(stack, frames);
 
-        for (auto i = 0; i < size; ++i)
+        for (int i = 0; i < frames; ++i)
         {
-            logger::debug("%s", "STACK", strings[i]);
+            logger::warnImmediate("%s", "STACK", strings[i]);
         }
         free(strings);
     }
