@@ -19,6 +19,7 @@ LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backl
       _logFile(nullptr),
       _logStdOut(logStdOut),
       _logFileName(logFileName && std::strlen(logFileName) > 0 ? logFileName : ""),
+      _droppedLogs(0),
       _thread(new std::thread([this] { this->run(); }))
 {
     _reOpenLog.test_and_set();
@@ -36,6 +37,13 @@ void LoggerThread::reopenLogFile()
 
 namespace
 {
+struct LogItem
+{
+    std::chrono::system_clock::time_point timestamp;
+    const char* logLevel;
+    void* threadId;
+    char message[1];
+};
 
 inline void formatTo(FILE* fh, const char* localTime, const char* level, const void* threadId, const char* message)
 {
@@ -100,6 +108,9 @@ void LoggerThread::run()
     }
 }
 
+/**
+ * logLevel must be static eternal const string in memory.
+ */
 void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
     const char* logLevel,
     const char* logGroup,
@@ -111,32 +122,35 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
     va_copy(args2ndSprintf, args);
 
     const int maxMessageLength = 300;
-    char mediumMessage[maxMessageLength + 1];
-    const int consumed = snprintf(mediumMessage, maxMessageLength, "[%s] ", logGroup);
-    const int remain = maxMessageLength - consumed;
-    const int neededSpace = vsnprintf(mediumMessage + consumed, remain, format, args);
-    const int totalSpace = neededSpace + consumed + 1;
+    char smallMessage[maxMessageLength + 1];
+    const int groupLength = snprintf(smallMessage, maxMessageLength, "[%s] ", logGroup);
+    const int messageLength = vsnprintf(smallMessage + groupLength, maxMessageLength - groupLength, format, args);
+    const int logLength = messageLength + groupLength;
 
-    concurrency::ScopedAllocCommit item(_logQueue, totalSpace + sizeof(LogItem));
-    if (item)
+    concurrency::ScopedAllocCommit memBlock(_logQueue, logLength + sizeof(LogItem));
+    if (memBlock)
     {
-
-        LogItem& log = item.get<LogItem>();
+        LogItem& log = memBlock.get<LogItem>();
         log.logLevel = logLevel;
         log.threadId = threadId;
         log.timestamp = timestamp;
-        if (neededSpace < maxMessageLength - consumed)
+        if (logLength <= maxMessageLength)
         {
-            std::strncpy(log.message, mediumMessage, totalSpace);
+            std::strncpy(log.message, smallMessage, logLength + 1);
         }
         else
         {
-            const int consumed = snprintf(log.message, maxMessageLength, "[%s] ", logGroup);
-            const int remain = totalSpace - consumed;
-            const int neededSpace = vsnprintf(log.message + consumed, remain, format, args2ndSprintf);
-            assert(neededSpace + consumed < totalSpace);
+            const int groupLength = snprintf(log.message, maxMessageLength, "[%s] ", logGroup);
+            const int messageLength =
+                vsnprintf(log.message + groupLength, logLength + 1 - groupLength, format, args2ndSprintf);
+            assert(messageLength + groupLength <= logLength);
         }
     }
+    else
+    {
+        ++_droppedLogs;
+    }
+
     va_end(args2ndSprintf);
 }
 
@@ -152,19 +166,18 @@ void LoggerThread::immediate(std::chrono::system_clock::time_point timestamp,
     formatTime(timestamp, localTime);
 
     const size_t maxMessageLength = 4096;
-    char mediumMessage[maxMessageLength + 1];
-    const int consumed = snprintf(mediumMessage, maxMessageLength, "[%s] ", logGroup);
-    const int remain = maxMessageLength - consumed;
-    vsnprintf(mediumMessage + consumed, remain, format, args);
+    char message[maxMessageLength + 1];
+    const int groupLength = snprintf(message, maxMessageLength, "[%s] ", logGroup);
+    vsnprintf(message + groupLength, maxMessageLength - groupLength, format, args);
 
     if (_logStdOut)
     {
-        formatTo(stdout, localTime, logLevel, threadId, mediumMessage);
+        formatTo(stdout, localTime, logLevel, threadId, message);
         fflush(stdout);
     }
     if (_logFile)
     {
-        formatTo(_logFile, localTime, logLevel, threadId, mediumMessage);
+        formatTo(_logFile, localTime, logLevel, threadId, message);
         fflush(_logFile);
     }
 }

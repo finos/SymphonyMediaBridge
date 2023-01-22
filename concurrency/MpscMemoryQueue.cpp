@@ -6,7 +6,6 @@ namespace concurrency
 MpscMemoryQueue::MpscMemoryQueue(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
 {
     _queuestate = {0, 0};
-
     _data = reinterpret_cast<uint8_t*>(memory::page::allocate(_capacity));
     std::memset(_data, emptySlot, _capacity);
 }
@@ -59,8 +58,6 @@ void* MpscMemoryQueue::allocate(uint32_t size)
     }
 
     const auto entrySize = size + Entry::headSize();
-    // must check if we need to instert padding
-    // must check if queue is full
     for (auto state = _queuestate.load(); entrySize + state.size <= _capacity;)
     {
         if (isPaddingNeeded(state, size))
@@ -106,7 +103,7 @@ MpscMemoryQueue::CursorState MpscMemoryQueue::pad(CursorState originalState)
 {
     const uint32_t padding = _capacity - originalState.write;
     CursorState newState = originalState;
-    newState.write = (newState.write + padding) % _capacity;
+    newState.write = 0;
     newState.size += padding;
     assert(newState.size <= _capacity);
 
