@@ -152,7 +152,7 @@ int main(int argc, char** argv)
     }
 
     utils::Time::initialize();
-    logger::setup(config->logFile.get().c_str(), config->logStdOut, parseLogLevel(config->logLevel), 16 * 1024 * 1024);
+    logger::setup(config->logFile.get().c_str(), config->logStdOut, parseLogLevel(config->logLevel), 4 * 1024 * 1024);
     logger::info("Starting httpd on port %u", "main", config->port.get());
     logger::info("Configured udp port range: %s  %u - %u",
         "main",

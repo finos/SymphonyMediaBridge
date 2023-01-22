@@ -456,6 +456,9 @@ TEST(MpscMemQueue, multithread)
         queue.pop();
         ++count;
     }
+#ifndef NOPERF_TEST
     EXPECT_GT(count, 5000000);
+#endif
+
     EXPECT_TRUE(queue.empty());
 }

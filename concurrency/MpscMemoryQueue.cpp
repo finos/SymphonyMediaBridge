@@ -3,13 +3,12 @@
 
 namespace concurrency
 {
-MpscMemoryQueue::MpscMemoryQueue(uint32_t size) : _readCursor(0), _blockSize(memory::page::alignedSpace(size))
+MpscMemoryQueue::MpscMemoryQueue(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
 {
-    assert(0x100000000ull % _blockSize == 0);
-    _cursor = {0, 0};
+    _queuestate = {0, 0};
 
-    _data = reinterpret_cast<uint8_t*>(memory::page::allocate(_blockSize));
-    std::memset(_data, emptySlot, _blockSize);
+    _data = reinterpret_cast<uint8_t*>(memory::page::allocate(_capacity));
+    std::memset(_data, emptySlot, _capacity);
 }
 
 void* MpscMemoryQueue::front()
@@ -62,7 +61,7 @@ void* MpscMemoryQueue::allocate(uint32_t size)
     const auto entrySize = size + Entry::headSize();
     // must check if we need to instert padding
     // must check if queue is full
-    for (auto state = _cursor.load(); entrySize + state.size <= _blockSize;)
+    for (auto state = _queuestate.load(); entrySize + state.size <= _capacity;)
     {
         if (isPaddingNeeded(state, size))
         {
@@ -71,12 +70,12 @@ void* MpscMemoryQueue::allocate(uint32_t size)
         }
 
         CursorState newState = state;
-        newState.write += entrySize;
+        newState.write = (newState.write + entrySize) % _capacity;
         newState.size += entrySize;
-        assert(newState.size <= _blockSize);
-        if (_cursor.compare_exchange_weak(state, newState))
+        assert(newState.size <= _capacity);
+        if (_queuestate.compare_exchange_weak(state, newState))
         {
-            auto& entry = reinterpret_cast<Entry&>(_data[state.write % _blockSize]);
+            auto& entry = reinterpret_cast<Entry&>(_data[state.write]);
             entry.size = size;
             entry.state.store(CellState::allocated);
             return entry.data;
@@ -94,29 +93,28 @@ void MpscMemoryQueue::commit(void* p)
 
 MpscMemoryQueue::Entry* MpscMemoryQueue::frontEntry()
 {
-    auto entry = reinterpret_cast<Entry*>(&_data[_readCursor % _blockSize]);
+    auto entry = reinterpret_cast<Entry*>(&_data[_readCursor]);
     if (entry->state.load() <= allocated)
     {
         return nullptr;
     }
-    assert(_cursor.load().size >= entry->entrySize());
+    assert(_queuestate.load().size >= entry->entrySize());
     return entry;
 }
 
 MpscMemoryQueue::CursorState MpscMemoryQueue::pad(CursorState originalState)
 {
-    const uint32_t remainder = originalState.write % _blockSize;
+    const uint32_t padding = _capacity - originalState.write;
     CursorState newState = originalState;
-    const uint32_t padding = _blockSize - remainder;
-    newState.write += padding;
+    newState.write = (newState.write + padding) % _capacity;
     newState.size += padding;
-    assert(newState.size <= _blockSize);
+    assert(newState.size <= _capacity);
 
     for (CursorState state = originalState;;)
     {
-        if (_cursor.compare_exchange_weak(state, newState))
+        if (_queuestate.compare_exchange_weak(state, newState))
         {
-            auto& entry = reinterpret_cast<Entry&>(_data[state.write % _blockSize]);
+            auto& entry = reinterpret_cast<Entry&>(_data[state.write]);
             entry.size = padding - Entry::headSize();
             entry.state.store(CellState::padding);
             return newState;
@@ -130,8 +128,7 @@ MpscMemoryQueue::CursorState MpscMemoryQueue::pad(CursorState originalState)
 
 bool MpscMemoryQueue::isPaddingNeeded(CursorState cursor, uint32_t wantedAllocation) const
 {
-    const uint32_t pos = cursor.write % _blockSize;
-    const uint32_t spaceLeft = _blockSize - pos;
+    const uint32_t spaceLeft = _capacity - cursor.write;
 
     if (spaceLeft >= wantedAllocation + 2 * Entry::headSize() || spaceLeft == wantedAllocation + Entry::headSize())
     {
@@ -149,13 +146,13 @@ void MpscMemoryQueue::pop(Entry* entry)
     // entries are variable size so the cell state can end up anywhere and it must already be set emptySlot
     std::memset(entry, CellState::emptySlot, entrySize);
 
-    _readCursor += entrySize;
-    for (auto state = _cursor.load();;)
+    _readCursor = (_readCursor + entrySize) % _capacity;
+    for (auto state = _queuestate.load();;)
     {
         CursorState newState = state;
         assert(state.size >= entrySize);
         newState.size -= entrySize;
-        if (_cursor.compare_exchange_weak(state, newState))
+        if (_queuestate.compare_exchange_weak(state, newState))
         {
             return;
         }

@@ -46,7 +46,7 @@ class MpscMemoryQueue
 public:
     explicit MpscMemoryQueue(uint32_t size);
 
-    ~MpscMemoryQueue() { memory::page::free(_data, _blockSize); }
+    ~MpscMemoryQueue() { memory::page::free(_data, _capacity); }
 
     void* front();
     template <class T>
@@ -63,15 +63,15 @@ public:
 
     size_t size() const
     {
-        auto state = _cursor.load();
+        auto state = _queuestate.load();
         return state.size;
     }
 
     bool empty() const { return size() == 0; }
 
-    void clear() { _cursor = {0, 0}; }
+    void clear() { _queuestate = {0, 0}; }
 
-    uint32_t capacity() const { return _blockSize; }
+    uint32_t capacity() const { return _capacity; }
 
 private: // methods
     Entry* frontEntry();
@@ -82,10 +82,10 @@ private: // methods
     void pop(Entry* entry);
 
 private:
-    std::atomic<CursorState> _cursor;
+    std::atomic<CursorState> _queuestate;
     uint32_t _readCursor;
     uint8_t* _data;
-    const size_t _blockSize;
+    const size_t _capacity;
 };
 
 class ScopedAllocCommit
