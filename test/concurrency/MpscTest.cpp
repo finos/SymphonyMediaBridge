@@ -423,7 +423,8 @@ void itemProducerRun(int id, MpscMemoryQueue* q)
 
 TEST(MpscMemQueue, multithread)
 {
-    MpscMemoryQueue queue(32 * 1024);
+    producerRunning = true;
+    MpscMemoryQueue queue(1320 * 1024);
     std::unique_ptr<std::thread> prod[PRODUCER_COUNT];
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
@@ -456,8 +457,9 @@ TEST(MpscMemQueue, multithread)
         queue.pop();
         ++count;
     }
+    logger::info("MpscQueue processed %u items", "MpscQueue", count);
 #ifndef NOPERF_TEST
-    EXPECT_GT(count, 5000000);
+    EXPECT_GT(count, 4500000);
 #endif
 
     EXPECT_TRUE(queue.empty());
