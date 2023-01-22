@@ -10,6 +10,9 @@ namespace logger
 
 const auto timeStringLength = 32;
 
+/**
+ * backlogSize in bytes must be 2^n
+ */
 LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize)
     : _running(true),
       _logQueue(backlogSize),
@@ -33,42 +36,12 @@ void LoggerThread::reopenLogFile()
 
 namespace
 {
-inline void formatTo(FILE* fh,
-    const char* localTime,
-    const char* level,
-    const void* threadId,
-    const char* logGroup,
-    const char* message)
-{
-    fprintf(fh, "%s %s [%p][%s] %s\n", localTime, level, threadId, logGroup, message);
-}
 
 inline void formatTo(FILE* fh, const char* localTime, const char* level, const void* threadId, const char* message)
 {
     fprintf(fh, "%s %s [%p]%s\n", localTime, level, threadId, message);
 }
 
-void logStack(const LogItem& item, const char* localTime, bool logStdOut, FILE* logFile)
-{
-    int frames = 0;
-    auto stack = reinterpret_cast<void**>(const_cast<LogItem&>(item).message);
-    for (frames = 0; stack[frames] != nullptr; ++frames) {}
-    auto logGroup = reinterpret_cast<const char*>(&stack[frames + 1]);
-    char** strs = backtrace_symbols(stack, frames);
-
-    for (int i = 0; i < frames; ++i)
-    {
-        if (logStdOut)
-        {
-            formatTo(stdout, localTime, "STACK", item.threadId, logGroup, strs[i]);
-        }
-        if (logFile)
-        {
-            formatTo(logFile, localTime, "STACK", item.threadId, logGroup, strs[i]);
-        }
-    }
-    free(strs);
-}
 } // namespace
 
 void LoggerThread::run()
@@ -79,25 +52,21 @@ void LoggerThread::run()
     bool gotLogItem = false;
     for (;;)
     {
-        if (_logQueue.pop(item))
+        auto item = _logQueue.front<LogItem>();
+        if (item)
         {
             gotLogItem = true;
-            formatTime(item.timestamp, localTime);
-#ifdef DEBUG
-            if (0 == std::strcmp(item.logLevel, "_STK_"))
-            {
-                logStack(item, localTime, _logStdOut, _logFile);
-                continue;
-            }
-#endif
+            formatTime(item->timestamp, localTime);
+
             if (_logStdOut)
             {
-                formatTo(stdout, localTime, item.logLevel, item.threadId, item.message);
+                formatTo(stdout, localTime, item->logLevel, item->threadId, item->message);
             }
             if (_logFile)
             {
-                formatTo(_logFile, localTime, item.logLevel, item.threadId, item.message);
+                formatTo(_logFile, localTime, item->logLevel, item->threadId, item->message);
             }
+            _logQueue.pop();
         }
         else
         {
@@ -131,27 +100,71 @@ void LoggerThread::run()
     }
 }
 
-void LoggerThread::immediate(const LogItem& item)
+void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
+    const char* logLevel,
+    const char* logGroup,
+    void* threadId,
+    const char* format,
+    va_list args)
+{
+    va_list args2ndSprintf;
+    va_copy(args2ndSprintf, args);
+
+    const int maxMessageLength = 300;
+    char mediumMessage[maxMessageLength + 1];
+    const int consumed = snprintf(mediumMessage, maxMessageLength, "[%s] ", logGroup);
+    const int remain = maxMessageLength - consumed;
+    const int neededSpace = vsnprintf(mediumMessage + consumed, remain, format, args);
+    const int totalSpace = neededSpace + consumed + 1;
+
+    concurrency::ScopedAllocCommit item(_logQueue, totalSpace + sizeof(LogItem));
+    if (item)
+    {
+
+        LogItem& log = item.get<LogItem>();
+        log.logLevel = logLevel;
+        log.threadId = threadId;
+        log.timestamp = timestamp;
+        if (neededSpace < maxMessageLength - consumed)
+        {
+            std::strncpy(log.message, mediumMessage, totalSpace);
+        }
+        else
+        {
+            const int consumed = snprintf(log.message, maxMessageLength, "[%s] ", logGroup);
+            const int remain = totalSpace - consumed;
+            const int neededSpace = vsnprintf(log.message + consumed, remain, format, args2ndSprintf);
+            assert(neededSpace + consumed < totalSpace);
+        }
+    }
+    va_end(args2ndSprintf);
+}
+
+void LoggerThread::immediate(std::chrono::system_clock::time_point timestamp,
+    const char* logLevel,
+    const char* logGroup,
+    void* threadId,
+    const char* format,
+    va_list args)
 {
     char localTime[timeStringLength];
 
-    formatTime(item.timestamp, localTime);
-#ifdef DEBUG
-    if (0 == std::strcmp(item.logLevel, "_STK_"))
-    {
-        logStack(item, localTime, _logStdOut, _logFile);
-        fflush(stdout);
-        return;
-    }
-#endif
+    formatTime(timestamp, localTime);
+
+    const size_t maxMessageLength = 4096;
+    char mediumMessage[maxMessageLength + 1];
+    const int consumed = snprintf(mediumMessage, maxMessageLength, "[%s] ", logGroup);
+    const int remain = maxMessageLength - consumed;
+    vsnprintf(mediumMessage + consumed, remain, format, args);
+
     if (_logStdOut)
     {
-        formatTo(stdout, localTime, item.logLevel, item.threadId, item.message);
+        formatTo(stdout, localTime, logLevel, threadId, mediumMessage);
         fflush(stdout);
     }
     if (_logFile)
     {
-        formatTo(_logFile, localTime, item.logLevel, item.threadId, item.message);
+        formatTo(_logFile, localTime, logLevel, threadId, mediumMessage);
         fflush(_logFile);
     }
 }
@@ -159,18 +172,22 @@ void LoggerThread::immediate(const LogItem& item)
 void LoggerThread::flush()
 {
     LogItem item;
-    while (_logQueue.pop(item))
+    while (!_logQueue.empty())
     {
-        char localTime[timeStringLength];
-        formatTime(item.timestamp, localTime);
+        auto item = _logQueue.front<LogItem>();
+        if (item)
+        {
+            char localTime[timeStringLength];
+            formatTime(item->timestamp, localTime);
 
-        if (_logStdOut)
-        {
-            formatTo(stdout, localTime, item.logLevel, item.threadId, item.message);
-        }
-        if (_logFile)
-        {
-            formatTo(_logFile, localTime, item.logLevel, item.threadId, item.message);
+            if (_logStdOut)
+            {
+                formatTo(stdout, localTime, item->logLevel, item->threadId, item->message);
+            }
+            if (_logFile)
+            {
+                formatTo(_logFile, localTime, item->logLevel, item->threadId, item->message);
+            }
         }
     }
 
