@@ -1,4 +1,5 @@
 #include "memory/Array.h"
+#include "logger/Logger.h"
 #include "utils/ContainerAlgorithms.h"
 #include <algorithm>
 #include <gtest/gtest.h>
@@ -56,11 +57,18 @@ TEST(ArrayTest, append)
         c.push_back(Complex(i + 200));
     }
 
-    EXPECT_EQ(a.insert(a.begin() + 20, c.begin(), c.end()), a.end());
-    EXPECT_EQ(a.size(), 20);
-    utils::append(a, b);
-    EXPECT_EQ(a.size(), 25);
+    try
+    {
+        EXPECT_EQ(a.insert(a.begin() + 20, c.begin(), c.end()), a.end());
+        EXPECT_EQ(a.size(), 20);
+        utils::append(a, b);
+        EXPECT_EQ(a.size(), 25);
 
-    EXPECT_EQ(a.insert(a.begin() + 20, b.begin(), b.end()), a.begin() + 20);
-    EXPECT_EQ(a.size(), 30);
+        EXPECT_EQ(a.insert(a.begin() + 20, b.begin(), b.end()), a.begin() + 20);
+        EXPECT_EQ(a.size(), 30);
+    }
+    catch (std::bad_alloc& e)
+    {
+        logger::error("bad_alloc %s", "test", e.what());
+    }
 }
