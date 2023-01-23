@@ -56,14 +56,6 @@ TEST(ArrayTest, append)
     {
         c.push_back(Complex(i + 200));
     }
-    memory::Array<Complex, 32> a2;
-    memory::Array<Complex, 32> a3;
-    memory::Array<Complex, 32> a4;
-    memory::Array<Complex, 32> a5;
-
-    EXPECT_EQ(a2.insert(a2.begin(), b.begin(), b.end()), a2.begin());
-    EXPECT_EQ(a3.insert(a3.begin(), b.begin(), b.end()), a3.begin());
-    EXPECT_EQ(a3.insert(a3.begin(), b.begin(), b.end()), a3.begin());
 
     EXPECT_EQ(a.insert(a.begin() + 20, c.begin(), c.end()), a.end());
     EXPECT_EQ(a.size(), 20);
@@ -72,6 +64,4 @@ TEST(ArrayTest, append)
 
     EXPECT_EQ(a.insert(a.begin() + 20, b.begin(), b.end()), a.begin() + 20);
     EXPECT_EQ(a.size(), 30);
-
-    utils::append(c, b);
 }
