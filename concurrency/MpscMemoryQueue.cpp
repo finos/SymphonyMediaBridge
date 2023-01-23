@@ -3,11 +3,27 @@
 
 namespace concurrency
 {
+
+void MpscMemoryQueue::Entry::checkGuards() const
+{
+#ifdef DEBUG
+    Guard a(true);
+
+    assert(frontGuard == a);
+    assert(tailGuard() == a);
+#endif
+}
+
 MpscMemoryQueue::MpscMemoryQueue(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
 {
     _queuestate = {0, 0};
     _data = reinterpret_cast<uint8_t*>(memory::page::allocate(_capacity));
     std::memset(_data, emptySlot, _capacity);
+}
+
+MpscMemoryQueue::~MpscMemoryQueue()
+{
+    memory::page::free(_data, _capacity);
 }
 
 void* MpscMemoryQueue::front()
@@ -57,10 +73,11 @@ void* MpscMemoryQueue::allocate(uint32_t size)
         size = (size + sizeof(uint64_t)) & ~mask;
     }
 
-    const auto entrySize = size + Entry::headSize();
+    const auto entrySize = size + Entry::entryOverHead();
+
     for (auto state = _queuestate.load(); entrySize + state.size <= _capacity;)
     {
-        if (isPaddingNeeded(state, size))
+        if (isPaddingNeeded(state, entrySize))
         {
             state = pad(state);
             continue;
@@ -74,6 +91,14 @@ void* MpscMemoryQueue::allocate(uint32_t size)
         {
             auto& entry = reinterpret_cast<Entry&>(_data[state.write]);
             entry.size = size;
+#ifdef DEBUG
+            Guard zeroes;
+            assert(entry.frontGuard == zeroes);
+            assert(entry.tailGuard() == zeroes);
+            Guard a(true);
+            entry.frontGuard = a;
+            entry.tailGuard() = a;
+#endif
             entry.state.store(CellState::allocated);
             return entry.data;
         }
@@ -85,6 +110,9 @@ void* MpscMemoryQueue::allocate(uint32_t size)
 void MpscMemoryQueue::commit(void* p)
 {
     auto entry = Entry::fromPtr(p);
+#ifdef DEBUG
+    entry->checkGuards();
+#endif
     entry->state.store(CellState::committed);
 }
 
@@ -112,7 +140,15 @@ MpscMemoryQueue::CursorState MpscMemoryQueue::pad(CursorState originalState)
         if (_queuestate.compare_exchange_weak(state, newState))
         {
             auto& entry = reinterpret_cast<Entry&>(_data[state.write]);
-            entry.size = padding - Entry::headSize();
+            entry.size = padding - Entry::entryOverHead();
+#ifdef DEBUG
+            Guard zeroes;
+            assert(entry.frontGuard == zeroes);
+            assert(entry.tailGuard() == zeroes);
+            Guard a(true);
+            entry.frontGuard = a;
+            entry.tailGuard() = a;
+#endif
             entry.state.store(CellState::padding);
             return newState;
         }
@@ -123,11 +159,10 @@ MpscMemoryQueue::CursorState MpscMemoryQueue::pad(CursorState originalState)
     }
 }
 
-bool MpscMemoryQueue::isPaddingNeeded(CursorState cursor, uint32_t wantedAllocation) const
+bool MpscMemoryQueue::isPaddingNeeded(CursorState cursor, uint32_t entrySize) const
 {
     const uint32_t spaceLeft = _capacity - cursor.write;
-
-    if (spaceLeft >= wantedAllocation + 2 * Entry::headSize() || spaceLeft == wantedAllocation + Entry::headSize())
+    if (spaceLeft >= entrySize + Entry::entryOverHead() || spaceLeft == entrySize)
     {
         return false;
     }
@@ -139,6 +174,9 @@ void MpscMemoryQueue::pop(Entry* entry)
     assert(entry);
 
     const uint32_t entrySize = entry->entrySize();
+#ifdef DEBUG
+    entry->checkGuards();
+#endif
 
     // entries are variable size so the cell state can end up anywhere and it must already be set emptySlot
     std::memset(entry, CellState::emptySlot, entrySize);

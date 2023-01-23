@@ -9,7 +9,7 @@ namespace concurrency
 {
 /**
  * Multiple producer single consumer queue of arbitrary large memory blocks.
- * This can be used to reduce memory consumption for queues with variable sized items.
+ * Useful as wait free queue for variable size items in mpsc setting.
  */
 class MpscMemoryQueue
 {
@@ -20,16 +20,48 @@ class MpscMemoryQueue
         committed,
         padding
     };
+
+    struct Guard
+    {
+        Guard() {}
+        explicit Guard(bool allocated)
+        {
+            if (allocated)
+            {
+                std::memcpy(pattern, "ABXYGAHAERLKBOSP", 16);
+            }
+        }
+
+        bool operator==(const Guard& o) const { return 0 == std::memcmp(pattern, o.pattern, sizeof(pattern)); }
+
+        char pattern[16] = {0};
+    };
+
     struct Entry
     {
         Entry() : state(CellState::emptySlot) {}
-        size_t entrySize() const { return headSize() + size; }
-        static constexpr uint32_t headSize() { return sizeof(uint32_t) * 2; }
-        static Entry* fromPtr(void* p)
+        size_t entrySize() const { return entryOverHead() + size; }
+        static constexpr uint32_t headSize() { return sizeof(Entry); }
+        static constexpr uint32_t entryOverHead()
         {
-            return reinterpret_cast<Entry*>(reinterpret_cast<uint8_t*>(p) - sizeof(int32_t) * 2);
+#ifdef DEBUG
+            return sizeof(Entry) + sizeof(Guard);
+#else
+            return sizeof(Entry);
+#endif
         }
 
+        static Entry* fromPtr(void* p)
+        {
+            return reinterpret_cast<Entry*>(reinterpret_cast<uint8_t*>(p) - sizeof(Entry));
+        }
+
+        void checkGuards() const;
+        Guard& tailGuard() { return *reinterpret_cast<Guard*>(data + size); }
+        const Guard& tailGuard() const { return *reinterpret_cast<const Guard*>(data + size); }
+#ifdef DEBUG
+        Guard frontGuard;
+#endif
         std::atomic<CellState> state;
         uint32_t size;
         uint8_t data[];
@@ -46,7 +78,7 @@ class MpscMemoryQueue
 public:
     explicit MpscMemoryQueue(uint32_t size);
 
-    ~MpscMemoryQueue() { memory::page::free(_data, _capacity); }
+    ~MpscMemoryQueue();
 
     void* front();
     template <class T>
@@ -78,7 +110,7 @@ private: // methods
     const Entry* frontEntry() const { return const_cast<MpscMemoryQueue*>(this)->frontEntry(); }
 
     CursorState pad(CursorState originalState);
-    bool isPaddingNeeded(CursorState cursor, uint32_t wantedAllocation) const;
+    bool isPaddingNeeded(CursorState cursor, uint32_t entrySize) const;
     void pop(Entry* entry);
 
 private:
@@ -99,6 +131,7 @@ public:
 
     explicit operator bool() noexcept { return _ptr != nullptr; }
     void* operator->() { return _ptr; }
+
     template <class T>
     T& get()
     {
