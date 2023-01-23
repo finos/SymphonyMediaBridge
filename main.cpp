@@ -20,14 +20,8 @@ void fatalSignalHandler(int32_t signalId)
 {
     void* array[16];
     const auto size = backtrace(array, 16);
-    char** strings = backtrace_symbols(array, size);
     logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
-
-    for (auto i = 0; i < size; ++i)
-    {
-        logger::errorImmediate("%s", "fatalSignalHandler", strings[i]);
-    }
-    free(strings);
+    logger::logStack(array, size, "fatalSignalHandler");
 
     logger::flushLog();
 
