@@ -57,9 +57,10 @@ TEST(ArrayTest, append)
     }
 
     EXPECT_EQ(a.insert(a.begin() + 20, c.begin(), c.end()), a.end());
-
+    EXPECT_EQ(a.size(), 20);
     utils::append(a, b);
     EXPECT_EQ(a.size(), 25);
 
     EXPECT_EQ(a.insert(a.begin() + 20, b.begin(), b.end()), a.begin() + 20);
+    EXPECT_EQ(a.size(), 30);
 }

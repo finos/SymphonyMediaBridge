@@ -10,9 +10,6 @@ namespace logger
 
 const auto timeStringLength = 32;
 
-/**
- * backlogSize in bytes must be 2^n
- */
 LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize)
     : _running(true),
       _logQueue(backlogSize),
@@ -119,12 +116,24 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
     va_list args)
 {
     va_list args2ndSprintf;
-    va_copy(args2ndSprintf, args);
 
     const int maxMessageLength = 300;
     char smallMessage[maxMessageLength + 1];
     const int groupLength = snprintf(smallMessage, maxMessageLength, "[%s] ", logGroup);
+    if (groupLength < 0)
+    {
+        assert(false);
+        return;
+    }
+
+    va_copy(args2ndSprintf, args);
     const int messageLength = vsnprintf(smallMessage + groupLength, maxMessageLength - groupLength, format, args);
+    if (messageLength < 0)
+    {
+        assert(false);
+        va_end(args2ndSprintf);
+        return;
+    }
     const int logLength = messageLength + groupLength;
 
     concurrency::ScopedAllocCommit memBlock(_logQueue, logLength + sizeof(LogItem));
