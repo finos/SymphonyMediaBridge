@@ -70,5 +70,6 @@ TEST(ArrayTest, append)
     catch (std::bad_alloc& e)
     {
         logger::error("bad_alloc %s", "test", e.what());
+        GTEST_FAIL();
     }
 }
