@@ -3,6 +3,7 @@
 
 namespace utils
 {
+
 template <typename T, class UnaryPredicate>
 bool contains(const T& container, UnaryPredicate predicate)
 {
