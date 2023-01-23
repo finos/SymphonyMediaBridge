@@ -125,6 +125,10 @@ public:
     {
         assert(pos >= begin() && pos <= end());
         const auto count = std::distance(startIt, endIt);
+        if (count == 0)
+        {
+            return pos;
+        }
         if (_size + count > _capacity)
         {
             return end();
