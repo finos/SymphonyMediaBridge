@@ -1,10 +1,18 @@
-#include "MpscMemoryQueue.h"
+#include "MpscQueue.h"
 #include "utils/Allocator.h"
 
 namespace concurrency
 {
 
-void MpscMemoryQueue::Entry::checkGuards() const
+MpscQueueBase::Guard::Guard(bool allocated)
+{
+    if (allocated)
+    {
+        std::memcpy(pattern, "ABXYGAHAERLKBOSP", 16);
+    }
+}
+
+void MpscQueueBase::Entry::checkGuards() const
 {
 #ifdef DEBUG
     Guard a(true);
@@ -14,19 +22,19 @@ void MpscMemoryQueue::Entry::checkGuards() const
 #endif
 }
 
-MpscMemoryQueue::MpscMemoryQueue(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
+MpscQueueBase::MpscQueueBase(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
 {
     _queuestate = {0, 0};
     _data = reinterpret_cast<uint8_t*>(memory::page::allocate(_capacity));
     std::memset(_data, emptySlot, _capacity);
 }
 
-MpscMemoryQueue::~MpscMemoryQueue()
+MpscQueueBase::~MpscQueueBase()
 {
     memory::page::free(_data, _capacity);
 }
 
-void* MpscMemoryQueue::front()
+void* MpscQueueBase::front()
 {
     Entry* entry = frontEntry();
     if (!entry)
@@ -43,7 +51,7 @@ void* MpscMemoryQueue::front()
     return &(entry->data);
 }
 
-uint32_t MpscMemoryQueue::frontSize() const
+uint32_t MpscQueueBase::frontSize() const
 {
     auto entry = frontEntry();
     if (!entry)
@@ -54,7 +62,7 @@ uint32_t MpscMemoryQueue::frontSize() const
     return entry->size;
 }
 
-void MpscMemoryQueue::pop()
+void MpscQueueBase::pop()
 {
     auto entry = frontEntry();
     if (!entry)
@@ -65,7 +73,7 @@ void MpscMemoryQueue::pop()
     pop(entry);
 }
 
-void* MpscMemoryQueue::allocate(uint32_t size)
+void* MpscQueueBase::allocate(uint32_t size)
 {
     constexpr uint32_t mask = sizeof(uint64_t) - 1;
     if (size & mask)
@@ -107,7 +115,7 @@ void* MpscMemoryQueue::allocate(uint32_t size)
     return nullptr;
 }
 
-void MpscMemoryQueue::commit(void* p)
+void MpscQueueBase::commit(void* p)
 {
     auto entry = Entry::fromPtr(p);
 #ifdef DEBUG
@@ -116,7 +124,7 @@ void MpscMemoryQueue::commit(void* p)
     entry->state.store(CellState::committed);
 }
 
-MpscMemoryQueue::Entry* MpscMemoryQueue::frontEntry()
+MpscQueueBase::Entry* MpscQueueBase::frontEntry()
 {
     auto entry = reinterpret_cast<Entry*>(&_data[_readCursor]);
     if (entry->state.load() <= allocated)
@@ -127,7 +135,7 @@ MpscMemoryQueue::Entry* MpscMemoryQueue::frontEntry()
     return entry;
 }
 
-MpscMemoryQueue::CursorState MpscMemoryQueue::pad(CursorState originalState)
+MpscQueueBase::CursorState MpscQueueBase::pad(CursorState originalState)
 {
     const uint32_t padding = _capacity - originalState.write;
     CursorState newState = originalState;
@@ -159,7 +167,7 @@ MpscMemoryQueue::CursorState MpscMemoryQueue::pad(CursorState originalState)
     }
 }
 
-bool MpscMemoryQueue::isPaddingNeeded(CursorState cursor, uint32_t entrySize) const
+bool MpscQueueBase::isPaddingNeeded(CursorState cursor, uint32_t entrySize) const
 {
     const uint32_t spaceLeft = _capacity - cursor.write;
     if (spaceLeft >= entrySize + Entry::entryOverHead() || spaceLeft == entrySize)
@@ -169,7 +177,7 @@ bool MpscMemoryQueue::isPaddingNeeded(CursorState cursor, uint32_t entrySize) co
     return true;
 }
 
-void MpscMemoryQueue::pop(Entry* entry)
+void MpscQueueBase::pop(Entry* entry)
 {
     assert(entry);
 

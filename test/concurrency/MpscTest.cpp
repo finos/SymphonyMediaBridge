@@ -1,6 +1,6 @@
 #include "TestValues.h"
 #include "concurrency/MpmcQueue.h"
-#include "concurrency/MpscMemoryQueue.h"
+#include "concurrency/MpscQueue.h"
 #include "logger/Logger.h"
 #include <gtest/gtest.h>
 #include <inttypes.h>
@@ -351,7 +351,7 @@ TEST(Mpmc, uniqueptr)
 
 TEST(MpscMemQueue, basic)
 {
-    MpscMemoryQueue q(32 * 1024);
+    MpscQueue<uint8_t> q(32 * 1024);
 
     int count = 0;
     for (int i = 0; i < 1024; ++i)
@@ -383,17 +383,17 @@ struct ComplxEntry
 
 TEST(MpscMemQueue, scope)
 {
-    MpscMemoryQueue q(32 * 1024);
+    MpscQueue<ComplxEntry> q(32 * 1024);
 
     {
-        ScopedAllocCommit a1(q, sizeof(ComplxEntry));
-        auto& obj = a1.get<ComplxEntry>();
+        ScopedAllocCommit<ComplxEntry> a1(q, sizeof(ComplxEntry));
+        auto& obj = *a1;
         obj.g = false;
         std::sprintf(obj.data, "test %d", 56);
     }
 
     EXPECT_GE(q.frontSize(), sizeof(ComplxEntry));
-    auto e = q.front<ComplxEntry>();
+    auto e = q.front();
     EXPECT_EQ(e->g, false);
     EXPECT_EQ(std::strcmp(e->data, "test 56"), 0);
 }
@@ -404,18 +404,18 @@ struct FakeLogItem
     char s[125];
 };
 
-void itemProducerRun(int id, MpscMemoryQueue* q)
+void itemProducerRun(int id, MpscQueue<FakeLogItem>* q)
 {
-    MpscMemoryQueue& queue(*q);
+    MpscQueue<FakeLogItem>& queue(*q);
     while (producerRunning)
     {
-        ScopedAllocCommit c(queue, 205);
+        ScopedAllocCommit<FakeLogItem> c(queue, 205);
         if (!c)
         {
             utils::Time::nanoSleep(10);
             continue;
         }
-        auto& item = c.get<FakeLogItem>();
+        auto& item = *c;
         item.id = id;
         std::sprintf(item.s, "log from runner %d", id);
     }
@@ -424,7 +424,7 @@ void itemProducerRun(int id, MpscMemoryQueue* q)
 TEST(MpscMemQueue, multithread)
 {
     producerRunning = true;
-    MpscMemoryQueue queue(1320 * 1024);
+    MpscQueue<FakeLogItem> queue(1320 * 1024);
     std::unique_ptr<std::thread> prod[PRODUCER_COUNT];
     for (int i = 0; i < PRODUCER_COUNT; ++i)
     {
@@ -435,7 +435,7 @@ TEST(MpscMemQueue, multithread)
     uint32_t count = 0;
     while (utils::Time::getAbsoluteTime() - start < utils::Time::sec * 3)
     {
-        auto entry = queue.front<FakeLogItem>();
+        auto entry = queue.front();
         if (!entry)
         {
             utils::Time::nanoSleep(10);

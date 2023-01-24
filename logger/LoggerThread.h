@@ -1,5 +1,5 @@
 #pragma once
-#include "concurrency/MpscMemoryQueue.h"
+#include "concurrency/MpscQueue.h"
 #include <atomic>
 #include <chrono>
 #include <string>
@@ -10,6 +10,14 @@ namespace logger
 
 class LoggerThread
 {
+    struct LogItem
+    {
+        std::chrono::system_clock::time_point timestamp;
+        const char* logLevel;
+        void* threadId;
+        char message[1];
+    };
+
 public:
     LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize);
 
@@ -42,7 +50,7 @@ private:
 
     std::atomic_bool _running;
     std::atomic_flag _reOpenLog = ATOMIC_FLAG_INIT;
-    concurrency::MpscMemoryQueue _logQueue;
+    concurrency::MpscQueue<LogItem> _logQueue;
     FILE* _logFile;
     bool _logStdOut;
     std::string _logFileName;

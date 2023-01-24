@@ -236,8 +236,8 @@ set(FILES
         concurrency/MpmcHashmap.h
         concurrency/MpmcPublish.h
         concurrency/MpmcQueue.h
-        concurrency/MpscMemoryQueue.h
-        concurrency/MpscMemoryQueue.cpp
+        concurrency/MpscQueue.h
+        concurrency/MpscQueue.cpp
         concurrency/ScopedMutexGuard.h
         concurrency/ScopedSpinLocker.h
         concurrency/Semaphore.cpp

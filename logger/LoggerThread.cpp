@@ -34,13 +34,6 @@ void LoggerThread::reopenLogFile()
 
 namespace
 {
-struct LogItem
-{
-    std::chrono::system_clock::time_point timestamp;
-    const char* logLevel;
-    void* threadId;
-    char message[1];
-};
 
 inline void formatTo(FILE* fh, const char* localTime, const char* level, const void* threadId, const char* message)
 {
@@ -57,7 +50,7 @@ void LoggerThread::run()
     bool gotLogItem = false;
     for (;;)
     {
-        auto item = _logQueue.front<LogItem>();
+        auto item = _logQueue.front();
         if (item)
         {
             gotLogItem = true;
@@ -136,10 +129,10 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
     }
     const int logLength = messageLength + groupLength;
 
-    concurrency::ScopedAllocCommit memBlock(_logQueue, logLength + sizeof(LogItem));
+    concurrency::ScopedAllocCommit<LogItem> memBlock(_logQueue, logLength + sizeof(LogItem));
     if (memBlock)
     {
-        LogItem& log = memBlock.get<LogItem>();
+        LogItem& log = *memBlock;
         log.logLevel = logLevel;
         log.threadId = threadId;
         log.timestamp = timestamp;
@@ -196,7 +189,7 @@ void LoggerThread::flush()
     LogItem item;
     while (!_logQueue.empty())
     {
-        auto item = _logQueue.front<LogItem>();
+        auto item = _logQueue.front();
         if (item)
         {
             char localTime[timeStringLength];

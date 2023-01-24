@@ -7,11 +7,8 @@
 
 namespace concurrency
 {
-/**
- * Multiple producer single consumer queue of arbitrary large memory blocks.
- * Useful as wait free queue for variable size items in mpsc setting.
- */
-class MpscMemoryQueue
+
+class MpscQueueBase
 {
     enum CellState : uint32_t
     {
@@ -24,13 +21,7 @@ class MpscMemoryQueue
     struct Guard
     {
         Guard() {}
-        explicit Guard(bool allocated)
-        {
-            if (allocated)
-            {
-                std::memcpy(pattern, "ABXYGAHAERLKBOSP", 16);
-            }
-        }
+        explicit Guard(bool allocated);
 
         bool operator==(const Guard& o) const { return 0 == std::memcmp(pattern, o.pattern, sizeof(pattern)); }
 
@@ -64,6 +55,7 @@ class MpscMemoryQueue
 #endif
         std::atomic<CellState> state;
         uint32_t size;
+        uint32_t _align32;
         uint8_t data[];
     };
 
@@ -76,17 +68,11 @@ class MpscMemoryQueue
     };
 
 public:
-    explicit MpscMemoryQueue(uint32_t size);
+    explicit MpscQueueBase(uint32_t size);
 
-    ~MpscMemoryQueue();
+    ~MpscQueueBase();
 
     void* front();
-    template <class T>
-    T* front()
-    {
-        return reinterpret_cast<T*>(front());
-    }
-
     uint32_t frontSize() const;
     void pop();
 
@@ -107,7 +93,7 @@ public:
 
 private: // methods
     Entry* frontEntry();
-    const Entry* frontEntry() const { return const_cast<MpscMemoryQueue*>(this)->frontEntry(); }
+    const Entry* frontEntry() const { return const_cast<MpscQueueBase*>(this)->frontEntry(); }
 
     CursorState pad(CursorState originalState);
     bool isPaddingNeeded(CursorState cursor, uint32_t entrySize) const;
@@ -120,23 +106,61 @@ private:
     const size_t _capacity;
 };
 
+/**
+ * Multiple producer single consumer queue of arbitrary large memory blocks.
+ * Useful as wait free queue for variable size items in mpsc setting.
+ * You can allocate variable size objects in the queue by using the size
+ * parameter in allocate.
+ */
+template <typename T>
+class MpscQueue
+{
+public:
+    MpscQueue(uint32_t sizeInBytes) : _queue(sizeInBytes) {}
+
+    T* allocate(uint32_t size = sizeof(T))
+    {
+        auto p = _queue.allocate(size);
+        if (p)
+        {
+            return new (p) T();
+        }
+        return nullptr;
+    }
+
+    void commit(T* p) { _queue.commit(p); }
+
+    T* front() { return reinterpret_cast<T*>(_queue.front()); }
+    uint32_t frontSize() const { return _queue.frontSize(); }
+    void pop() { _queue.pop(); }
+
+    size_t size() const { return _queue.size(); }
+    bool empty() const { return size() == 0; }
+    uint32_t capacity() const { return _queue.capacity(); }
+
+    void clear() { _queue.clear(); }
+
+private:
+    MpscQueueBase _queue;
+};
+
+/**
+ * This is similar to a smart pointer but the purpose is to assure allocate and commit phase of an item in
+ * MpscQueue. An allocated item must be commited or the queue popping will halt.
+ */
+template <typename T>
 class ScopedAllocCommit
 {
 public:
-    ScopedAllocCommit(MpscMemoryQueue& heap, uint32_t size) : _heap(heap), _committed(false)
+    explicit ScopedAllocCommit(MpscQueue<T>& heap, uint32_t size = sizeof(T)) : _heap(heap), _committed(false)
     {
         _ptr = heap.allocate(size);
     }
     ~ScopedAllocCommit() { commit(); }
 
     explicit operator bool() noexcept { return _ptr != nullptr; }
-    void* operator->() { return _ptr; }
-
-    template <class T>
-    T& get()
-    {
-        return *reinterpret_cast<T*>(_ptr);
-    }
+    T* operator->() { return _ptr; }
+    T& operator*() { return *_ptr; }
 
     void commit()
     {
@@ -148,8 +172,8 @@ public:
     }
 
 private:
-    MpscMemoryQueue& _heap;
+    MpscQueue<T>& _heap;
     bool _committed;
-    void* _ptr;
+    T* _ptr;
 };
 } // namespace concurrency
