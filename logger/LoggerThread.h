@@ -15,7 +15,7 @@ class LoggerThread
         std::chrono::system_clock::time_point timestamp;
         const char* logLevel;
         void* threadId;
-        char message[1];
+        char message[];
     };
 
 public:
