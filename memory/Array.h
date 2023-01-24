@@ -124,7 +124,7 @@ public:
     iterator insert(iterator pos, const_iterator startIt, const_iterator endIt)
     {
         assert(pos >= begin() && pos <= end());
-        const auto count = std::distance(startIt, endIt);
+        const int count = std::distance(startIt, endIt);
         if (count == 0)
         {
             return pos;
@@ -145,19 +145,26 @@ public:
         else
         {
             const auto tailCount = std::distance(pos, end());
-            auto targetIt = pos + tailCount + count;
+            auto targetIt = pos + tailCount + count - 1;
+            auto sourceIt = pos + tailCount - 1;
+
             for (int i = 0; i < tailCount; ++i)
             {
-                new (targetIt) T(*(pos + tailCount - i));
+                assert(targetIt < _dataPtr + _capacity && targetIt >= _dataPtr);
+                assert(sourceIt < _dataPtr + _capacity && sourceIt >= _dataPtr);
+                assert(sourceIt < targetIt);
+                new (targetIt) T(std::move(*(sourceIt)));
+                sourceIt->~T();
                 --targetIt;
-                (pos + tailCount - i)->~T();
+                --sourceIt;
             }
 
             auto it = startIt;
+            targetIt = pos;
             for (int i = 0; i < count; ++i)
             {
-                new (pos + i) T(*it);
-                ++it;
+                assert(targetIt < _dataPtr + _capacity && targetIt >= _dataPtr);
+                new (targetIt++) T(*it++);
             }
             _size += count;
             return pos;
