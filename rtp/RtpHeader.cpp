@@ -240,7 +240,7 @@ uint8_t GeneralExtension1Byteheader::getDataLength() const
 
 void GeneralExtension1Byteheader::fillWithPadding()
 {
-    std::memset(reinterpret_cast<uint8_t*>(this), size(), 0);
+    std::memset(reinterpret_cast<uint8_t*>(this), 0, size());
 }
 
 // convert to 24 bit seconds fixed point format 6.18
