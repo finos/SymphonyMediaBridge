@@ -117,6 +117,7 @@ void* MpscQueueBase::allocate(uint32_t size)
             entry.frontGuard = a;
             entry.tailGuard() = a;
 #endif
+            assert(entry.entrySize() == entrySize);
             entry.state.store(Entry::State::allocated);
             return entry.data;
         }

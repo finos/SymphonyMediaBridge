@@ -112,7 +112,7 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
 
     const int maxMessageLength = 300;
     char smallMessage[maxMessageLength + 1];
-    const int groupLength = snprintf(smallMessage, maxMessageLength, "[%s] ", logGroup);
+    const int groupLength = snprintf(smallMessage, sizeof(smallMessage), "[%s] ", logGroup);
     if (groupLength < 0)
     {
         assert(false);
@@ -120,7 +120,7 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
     }
 
     va_copy(args2ndSprintf, args);
-    const int messageLength = vsnprintf(smallMessage + groupLength, maxMessageLength - groupLength, format, args);
+    const int messageLength = vsnprintf(smallMessage + groupLength, sizeof(smallMessage) - groupLength, format, args);
     if (messageLength < 0)
     {
         assert(false);
@@ -129,7 +129,7 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
     }
     const int logLength = messageLength + groupLength;
 
-    concurrency::ScopedAllocCommit<LogItem> memBlock(_logQueue, logLength + sizeof(LogItem));
+    concurrency::ScopedAllocCommit<LogItem> memBlock(_logQueue, logLength + 1 + sizeof(LogItem));
     if (memBlock)
     {
         LogItem& log = *memBlock;
@@ -142,7 +142,7 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
         }
         else
         {
-            const int groupLength = snprintf(log.message, maxMessageLength, "[%s] ", logGroup);
+            const int groupLength = snprintf(log.message, logLength + 1, "[%s] ", logGroup);
             const int messageLength =
                 vsnprintf(log.message + groupLength, logLength + 1 - groupLength, format, args2ndSprintf);
             assert(messageLength + groupLength <= logLength);
