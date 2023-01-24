@@ -14,7 +14,7 @@ class MpscQueueBase
     {
         Guard() {}
         explicit Guard(bool allocated);
-
+        void clear() { std::memset(pattern, 0, sizeof(pattern)); }
         bool operator==(const Guard& o) const { return 0 == std::memcmp(pattern, o.pattern, sizeof(pattern)); }
 
         char pattern[16] = {0};

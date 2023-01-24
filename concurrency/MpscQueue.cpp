@@ -24,9 +24,11 @@ void MpscQueueBase::Entry::checkGuards() const
 
 void MpscQueueBase::Entry::clear()
 {
-    std::memset(data, State::emptySlot, size);
-    size = State::emptySlot;
-    _align32 = State::emptySlot;
+#ifdef DEBUG
+    frontGuard.clear();
+    tailGuard().clear();
+#endif
+    std::memset(&size, State::emptySlot, size + sizeof(uint64_t));
     state.store(State::emptySlot, std::memory_order_relaxed);
 }
 
