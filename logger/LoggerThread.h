@@ -43,6 +43,8 @@ public:
 
     static void formatTime(const std::chrono::system_clock::time_point timestamp, char* output);
 
+    uint32_t getDroppedLogCount() const { return _droppedLogs; }
+
 private:
     void run();
     void reopenLogFile();
