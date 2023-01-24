@@ -22,11 +22,19 @@ void MpscQueueBase::Entry::checkGuards() const
 #endif
 }
 
+void MpscQueueBase::Entry::clear()
+{
+    std::memset(data, State::emptySlot, size);
+    size = State::emptySlot;
+    _align32 = State::emptySlot;
+    state.store(State::emptySlot, std::memory_order_relaxed);
+}
+
 MpscQueueBase::MpscQueueBase(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
 {
     _queuestate = {0, 0};
     _data = reinterpret_cast<uint8_t*>(memory::page::allocate(_capacity));
-    std::memset(_data, emptySlot, _capacity);
+    std::memset(_data, Entry::State::emptySlot, _capacity);
 }
 
 MpscQueueBase::~MpscQueueBase()
@@ -42,7 +50,7 @@ void* MpscQueueBase::front()
         return nullptr;
     }
 
-    if (entry->state.load() == CellState::padding)
+    if (entry->state.load() == Entry::State::padding)
     {
         pop(entry);
         return front();
@@ -107,7 +115,7 @@ void* MpscQueueBase::allocate(uint32_t size)
             entry.frontGuard = a;
             entry.tailGuard() = a;
 #endif
-            entry.state.store(CellState::allocated);
+            entry.state.store(Entry::State::allocated);
             return entry.data;
         }
     }
@@ -121,13 +129,13 @@ void MpscQueueBase::commit(void* p)
 #ifdef DEBUG
     entry->checkGuards();
 #endif
-    entry->state.store(CellState::committed);
+    entry->state.store(Entry::State::committed);
 }
 
 MpscQueueBase::Entry* MpscQueueBase::frontEntry()
 {
     auto entry = reinterpret_cast<Entry*>(&_data[_readCursor]);
-    if (entry->state.load() <= allocated)
+    if (entry->state.load() <= Entry::State::allocated)
     {
         return nullptr;
     }
@@ -157,7 +165,7 @@ MpscQueueBase::CursorState MpscQueueBase::pad(CursorState originalState)
             entry.frontGuard = a;
             entry.tailGuard() = a;
 #endif
-            entry.state.store(CellState::padding);
+            entry.state.store(Entry::State::padding);
             return newState;
         }
         if (originalState != state)
@@ -187,7 +195,7 @@ void MpscQueueBase::pop(Entry* entry)
 #endif
 
     // entries are variable size so the cell state can end up anywhere and it must already be set emptySlot
-    std::memset(entry, CellState::emptySlot, entrySize);
+    entry->clear();
 
     _readCursor = (_readCursor + entrySize) % _capacity;
     for (auto state = _queuestate.load();;)

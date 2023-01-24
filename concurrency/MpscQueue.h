@@ -10,14 +10,6 @@ namespace concurrency
 
 class MpscQueueBase
 {
-    enum CellState : uint32_t
-    {
-        emptySlot = 0,
-        allocated,
-        committed,
-        padding
-    };
-
     struct Guard
     {
         Guard() {}
@@ -30,7 +22,15 @@ class MpscQueueBase
 
     struct Entry
     {
-        Entry() : state(CellState::emptySlot) {}
+        enum State : uint32_t
+        {
+            emptySlot = 0,
+            allocated,
+            committed,
+            padding
+        };
+
+        Entry() : state(State::emptySlot), size(0), _align32(0) {}
         size_t entrySize() const { return entryOverHead() + size; }
         static constexpr uint32_t headSize() { return sizeof(Entry); }
         static constexpr uint32_t entryOverHead()
@@ -46,14 +46,14 @@ class MpscQueueBase
         {
             return reinterpret_cast<Entry*>(reinterpret_cast<uint8_t*>(p) - sizeof(Entry));
         }
-
+        void clear();
         void checkGuards() const;
         Guard& tailGuard() { return *reinterpret_cast<Guard*>(data + size); }
         const Guard& tailGuard() const { return *reinterpret_cast<const Guard*>(data + size); }
 #ifdef DEBUG
         Guard frontGuard;
 #endif
-        std::atomic<CellState> state;
+        std::atomic<State> state;
         uint32_t size;
         uint32_t _align32;
         uint8_t data[];
