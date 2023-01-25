@@ -5,8 +5,8 @@ namespace concurrency
 MurmurHashIndex::MurmurHashIndex(size_t elementCount) : _index(elementCount), _maxSpread(1)
 {
     assert((elementCount & (elementCount - 1)) == 0); // must be power of two
-    assert(reinterpret_cast<intptr_t>(&_index[0]) != -1); // must be atomically writeable
-    assert(reinterpret_cast<intptr_t>(&_index[0].keyValue) != -1); // must be atomically writeable
+    assert(memory::isAligned<uint64_t>(&_index[0])); // must be atomically writeable
+    assert(memory::isAligned<uint64_t>(&_index[0].keyValue)); // must be atomically writeable
     static_assert(sizeof(KeyValue) == 8, "Index entry must be 8 bytes on your platform to be atomically writeable");
     static_assert(sizeof(Entry) == 16, "Index entry should be 16B to reduce cacheline contention");
     std::memset(_index.data(), 0, sizeof(Entry) * _index.size());

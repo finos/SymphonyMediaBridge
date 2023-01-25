@@ -1,6 +1,8 @@
 #pragma once
 
+#include "memory/details.h"
 #include <cassert>
+#include <cstdint>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -36,7 +38,7 @@ inline void* allocate(size_t size)
     // initialize memory to zero to mimics behaviour of MAP_ANONYMOUS
     ::memset(mem, 0, size);
 #endif
-    assert(mem && reinterpret_cast<intptr_t>(mem) != -1);
+    assert(mem && memory::isAligned<uint64_t>(mem));
     return mem;
 }
 
@@ -59,4 +61,5 @@ inline size_t alignedSpace(size_t space)
 }
 
 } // namespace page
+
 } // namespace memory

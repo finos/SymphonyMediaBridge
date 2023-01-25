@@ -1,5 +1,5 @@
 #pragma once
-#include "utils/Allocator.h"
+#include "memory/Allocator.h"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -17,10 +17,9 @@ class MpmcQueue
     };
     struct Entry
     {
-        Entry() : state(emptySlot), padding(0) {}
+        Entry() : state(emptySlot) {}
 
         std::atomic<CellState> state;
-        uint32_t padding;
         T value;
     };
 

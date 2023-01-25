@@ -3,7 +3,7 @@
 #include "concurrency/LockFreeList.h"
 #include "concurrency/WaitFreeStack.h"
 #include "logger/Logger.h"
-#include "utils/Allocator.h"
+#include "memory/Allocator.h"
 #include <cassert>
 #include <cstddef>
 #include <iterator>
@@ -67,7 +67,7 @@ public:
         _cacheLineSeparator3[0] = 0;
 
         _elements = reinterpret_cast<Entry*>(memory::page::allocate(_size));
-        assert(reinterpret_cast<intptr_t>(_elements) != -1);
+        assert(memory::isAligned<uint64_t>(_elements));
 
         static_assert(sizeof(Entry) % alignof(std::max_align_t) == 0, "ELEMENT_SIZE must be multiple of alignment");
 

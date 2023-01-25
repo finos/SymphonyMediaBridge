@@ -1,5 +1,5 @@
 #include "RingAllocator.h"
-#include "utils/Allocator.h"
+#include "memory/Allocator.h"
 #include <cassert>
 #include <cstddef>
 
