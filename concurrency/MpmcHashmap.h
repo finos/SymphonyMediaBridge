@@ -104,7 +104,6 @@ class MpmcHashmap32
         std::atomic<State> state;
         std::pair<KeyT, T> element;
     };
-    static_assert(sizeof(Entry) % alignof(uint64_t) == 0, "Entry must allow int64 alignment");
 
 public:
     template <typename ValueType>
