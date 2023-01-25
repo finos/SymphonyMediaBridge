@@ -20,14 +20,8 @@ void fatalSignalHandler(int32_t signalId)
 {
     void* array[16];
     const auto size = backtrace(array, 16);
-    char** strings = backtrace_symbols(array, size);
     logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
-
-    for (auto i = 0; i < size; ++i)
-    {
-        logger::errorImmediate("%s", "fatalSignalHandler", strings[i]);
-    }
-    free(strings);
+    logger::logStack(array, size, "fatalSignalHandler");
 
     logger::flushLog();
 
@@ -152,7 +146,7 @@ int main(int argc, char** argv)
     }
 
     utils::Time::initialize();
-    logger::setup(config->logFile.get().c_str(), config->logStdOut, parseLogLevel(config->logLevel));
+    logger::setup(config->logFile.get().c_str(), config->logStdOut, parseLogLevel(config->logLevel), 4 * 1024 * 1024);
     logger::info("Starting httpd on port %u", "main", config->port.get());
     logger::info("Configured udp port range: %s  %u - %u",
         "main",
