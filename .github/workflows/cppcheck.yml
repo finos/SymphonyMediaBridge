@@ -9,7 +9,7 @@ jobs:
     container:
       image: neszt/cppcheck-docker:2.9
     steps:
-    - uses: actions/checkout@v3
-    - run: cppcheck --version
-    - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -i test/ -i external/ --suppressions-list=.cppcheck-suppressions .
-    - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -I test/include --suppressions-list=.cppcheck-suppressions ./test
+      - uses: actions/checkout@v3
+      - run: cppcheck --version
+      - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -i test/ -i external/ --suppressions-list=.cppcheck-suppressions --inline-suppr .
+      - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -I test/include --suppressions-list=.cppcheck-suppressions --inline-suppr ./test

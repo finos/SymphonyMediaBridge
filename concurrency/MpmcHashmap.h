@@ -1,7 +1,7 @@
 #pragma once
 #include "LockFreeList.h"
+#include "memory/Allocator.h"
 #include "memory/details.h"
-#include "utils/Allocator.h"
 #include "utils/StdExtensions.h"
 #include <algorithm>
 #include <atomic>
@@ -183,8 +183,7 @@ public:
         void* mem = memory::page::allocate(memory::page::alignedSpace(_capacity * sizeof(Entry)));
 
         _elements = reinterpret_cast<Entry*>(mem);
-        assert(reinterpret_cast<intptr_t>(_elements) != -1);
-        assert(reinterpret_cast<intptr_t>(&_elements[1]) != -1);
+        assert(memory::isAligned<std::max_align_t>(_elements));
 
         for (size_t i = 0; i < _capacity; ++i)
         {

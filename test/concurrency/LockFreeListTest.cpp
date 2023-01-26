@@ -1,6 +1,7 @@
 #include "concurrency/LockFreeList.h"
 #include "concurrency/ScopedSpinLocker.h"
 #include "logger/Logger.h"
+#include "memory/details.h"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <queue>
@@ -67,7 +68,7 @@ void consistencyTest(const int threadCount, const int elementCount)
         prod[i] = new std::thread(workRun<T, DataItem<typename T::NodeType>>, &list, &running);
     }
 
-    assert(reinterpret_cast<intptr_t>(data) != -1);
+    assert(memory::isAligned<uint64_t>(data));
     for (int i = 0; i < elementCount; ++i)
     {
         data[i].set(i + 0x400);

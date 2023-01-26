@@ -1,5 +1,5 @@
 #pragma once
-#include "utils/Allocator.h"
+#include "memory/Allocator.h"
 #include <algorithm>
 #include <atomic>
 #include <cassert>
@@ -19,6 +19,8 @@ class MpscQueueBase
 
         char pattern[16] = {0};
     };
+    static_assert(sizeof(Guard) % alignof(std::max_align_t) == 0,
+        "MpscQueueBase::Guard must allow proper alignment of data");
 
     struct Entry
     {
@@ -30,9 +32,8 @@ class MpscQueueBase
             padding
         };
 
-        Entry() : state(State::emptySlot), size(0), _align32(0) {}
+        Entry() : state(State::emptySlot), size(0) {}
         size_t entrySize() const { return entryOverHead() + size; }
-        static constexpr uint32_t headSize() { return sizeof(Entry); }
         static constexpr uint32_t entryOverHead()
         {
 #ifdef DEBUG
@@ -55,9 +56,9 @@ class MpscQueueBase
 #endif
         std::atomic<State> state;
         uint32_t size;
-        uint32_t _align32;
-        uint8_t data[];
+        alignas(alignof(uint64_t)) uint8_t data[];
     };
+    static_assert(sizeof(Entry) % alignof(uint64_t) == 0, "Entry must allow 64bit alignment of data");
 
     struct CursorState
     {

@@ -1,5 +1,5 @@
 #include "MpscQueue.h"
-#include "utils/Allocator.h"
+#include "memory/Allocator.h"
 
 namespace concurrency
 {
@@ -28,8 +28,8 @@ void MpscQueueBase::Entry::clear()
     frontGuard.clear();
     tailGuard().clear();
 #endif
-    std::memset(&size, State::emptySlot, size + sizeof(uint64_t));
-    state.store(State::emptySlot, std::memory_order_relaxed);
+    // cppcheck-suppress memsetClass
+    std::memset(this, State::emptySlot, entrySize()); // entire Entry must be cleared
 }
 
 MpscQueueBase::MpscQueueBase(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
@@ -37,6 +37,7 @@ MpscQueueBase::MpscQueueBase(uint32_t size) : _readCursor(0), _capacity(memory::
     _queuestate = {0, 0};
     _data = reinterpret_cast<uint8_t*>(memory::page::allocate(_capacity));
     std::memset(_data, Entry::State::emptySlot, _capacity);
+    assert(memory::isAligned<uint64_t>(reinterpret_cast<Entry*>(_data)->data));
 }
 
 MpscQueueBase::~MpscQueueBase()
@@ -85,10 +86,10 @@ void MpscQueueBase::pop()
 
 void* MpscQueueBase::allocate(uint32_t size)
 {
-    constexpr uint32_t mask = sizeof(uint64_t) - 1;
+    constexpr uint32_t mask = alignof(uint64_t) - 1;
     if (size & mask)
     {
-        size = (size + sizeof(uint64_t)) & ~mask;
+        size = (size + alignof(uint64_t)) & ~mask;
     }
 
     const auto entrySize = size + Entry::entryOverHead();
@@ -116,6 +117,7 @@ void* MpscQueueBase::allocate(uint32_t size)
             Guard a(true);
             entry.frontGuard = a;
             entry.tailGuard() = a;
+            assert(memory::isAligned<uint64_t>(entry.data));
 #endif
             assert(entry.entrySize() == entrySize);
             entry.state.store(Entry::State::allocated);

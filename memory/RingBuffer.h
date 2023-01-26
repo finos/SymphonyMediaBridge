@@ -1,6 +1,6 @@
 #pragma once
 
-#include "utils/Allocator.h"
+#include "memory/Allocator.h"
 #include "utils/ScopedReentrancyBlocker.h"
 #include <cassert>
 #include <cstddef>

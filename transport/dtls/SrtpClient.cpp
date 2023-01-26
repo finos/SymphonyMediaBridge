@@ -270,7 +270,7 @@ bool SrtpClient::unprotect(memory::Packet& packet)
     }
 
     // srtp_unprotect assumes data is word aligned
-    assert(reinterpret_cast<uintptr_t>(packet.get()) % 4 == 0);
+    assert(memory::isAligned<uint32_t>(packet.get()));
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
 
@@ -340,7 +340,7 @@ bool SrtpClient::protect(memory::Packet& packet)
     }
 
     // srtp_protect assumes data is word aligned
-    assert(reinterpret_cast<uintptr_t>(packet.get()) % 4 == 0);
+    assert(memory::isAligned<uint32_t>(packet.get()));
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
 
