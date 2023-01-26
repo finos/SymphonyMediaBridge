@@ -56,7 +56,7 @@ class MpscQueueBase
 #endif
         std::atomic<State> state;
         uint32_t size;
-        uint8_t data[];
+        alignas(alignof(uint64_t)) uint8_t data[];
     };
     static_assert(sizeof(Entry) % alignof(uint64_t) == 0, "Entry must allow 64bit alignment of data");
 

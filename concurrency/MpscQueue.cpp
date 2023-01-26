@@ -28,9 +28,8 @@ void MpscQueueBase::Entry::clear()
     frontGuard.clear();
     tailGuard().clear();
 #endif
-    std::memset(&data, State::emptySlot, size);
-    size = 0;
-    state.store(State::emptySlot, std::memory_order_relaxed);
+    // cppcheck-suppress memsetClass
+    std::memset(this, State::emptySlot, entrySize()); // entire Entry must be cleared
 }
 
 MpscQueueBase::MpscQueueBase(uint32_t size) : _readCursor(0), _capacity(memory::page::alignedSpace(size))
