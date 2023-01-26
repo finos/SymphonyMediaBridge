@@ -34,7 +34,6 @@ class MpscQueueBase
 
         Entry() : state(State::emptySlot), size(0) {}
         size_t entrySize() const { return entryOverHead() + size; }
-        static constexpr uint32_t headSize() { return sizeof(Entry); }
         static constexpr uint32_t entryOverHead()
         {
 #ifdef DEBUG
@@ -59,7 +58,7 @@ class MpscQueueBase
         uint32_t size;
         uint8_t data[];
     };
-    static_assert(sizeof(Entry) % alignof(uint64_t) == 0, "MpscQueueBase::Guard must allow 64bit alignment of data");
+    static_assert(sizeof(Entry) % alignof(uint64_t) == 0, "Entry must allow 64bit alignment of data");
 
     struct CursorState
     {

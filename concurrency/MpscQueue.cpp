@@ -28,7 +28,8 @@ void MpscQueueBase::Entry::clear()
     frontGuard.clear();
     tailGuard().clear();
 #endif
-    std::memset(&size, State::emptySlot, size + reinterpret_cast<uint8_t*>(&data) - reinterpret_cast<uint8_t*>(&size));
+    std::memset(&data, State::emptySlot, size);
+    size = 0;
     state.store(State::emptySlot, std::memory_order_relaxed);
 }
 
