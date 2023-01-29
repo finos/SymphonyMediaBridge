@@ -1,6 +1,5 @@
 #pragma once
 
-#include "concurrency/LockFreeList.h"
 #include "concurrency/WaitFreeStack.h"
 #include "logger/Logger.h"
 #include "memory/Allocator.h"

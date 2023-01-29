@@ -79,21 +79,18 @@ void consumerRun(Q* queue, TransmissionReport reports[], bool validateSeqNo)
     int sleepCount = 0;
     for (;;)
     {
-        while (!queue->empty())
+        typename Q::value_type val;
+        while (queue->pop(val))
         {
-            typename Q::value_type val;
-            if (queue->pop(val))
+            ++reports[val.ssrc].received;
+            ++count;
+            if (validateSeqNo)
             {
-                ++reports[val.ssrc].received;
-                ++count;
-                if (validateSeqNo)
+                if (reports[val.ssrc].expSeqNo != val.seqNo)
                 {
-                    if (reports[val.ssrc].expSeqNo != val.seqNo)
-                    {
-                        ++reports[val.ssrc].disordered;
-                    }
-                    reports[val.ssrc].expSeqNo = val.seqNo + 1;
+                    ++reports[val.ssrc].disordered;
                 }
+                reports[val.ssrc].expSeqNo = val.seqNo + 1;
             }
         }
         if (queue->empty() && !consumerRunning)
@@ -114,7 +111,7 @@ void produceRun(uint32_t id, Q* queue, TransmissionReport reports[])
     int count = 0;
     while (producerRunning)
     {
-        for (int i = 0; i < 3000; ++i)
+        for (int i = 0; i < 5000; ++i)
         {
             if (queue->push(typename Q::value_type(id, count)))
             {

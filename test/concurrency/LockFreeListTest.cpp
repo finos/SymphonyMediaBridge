@@ -1,4 +1,5 @@
 #include "concurrency/LockFreeList.h"
+#include "concurrency/MpmcQueue.h"
 #include "concurrency/ScopedSpinLocker.h"
 #include "logger/Logger.h"
 #include "memory/details.h"
@@ -148,4 +149,134 @@ TEST(LFList, consistencyFew)
 TEST(LFList, plainConsistencyPlenty)
 {
     consistencyTest<QueueWrapper>(8, 7 * BATCH_SIZE);
+}
+
+struct TransmissionReport
+{
+    TransmissionReport() : ssrc(0), sent(0), received(0), disordered(0), fullHits(0), expSeqNo(0), sleepCount(0) {}
+
+    int ssrc;
+    std::atomic_int sent;
+    std::atomic_int received;
+    int disordered;
+    std::atomic_int fullHits;
+    int expSeqNo;
+    int sleepCount;
+};
+
+bool throughputRunning = true;
+template <typename QItem, typename Q>
+void throughputRun(Q* queue, TransmissionReport* reports, bool validateSeqNo)
+{
+    int count = 0;
+    int sleepCount = 0;
+    std::vector<ListItem*> elements;
+    elements.reserve(3000);
+    uint32_t _pushFails = 0;
+
+    for (; throughputRunning;)
+    {
+        ListItem* p;
+        const auto loops = static_cast<size_t>(rand() + 100) % 3000;
+        while (elements.size() < loops && queue->pop(p))
+        {
+            QItem* val = reinterpret_cast<QItem*>(p);
+            ++reports[val->ssrc].received;
+            ++count;
+            if (validateSeqNo)
+            {
+                if (reports[val->ssrc].expSeqNo != val->seqNo)
+                {
+                    ++reports[val->ssrc].disordered;
+                }
+                reports[val->ssrc].expSeqNo = val->seqNo + 1;
+            }
+
+            elements.push_back(val);
+        }
+        for (auto& e : elements)
+        {
+            while (!queue->push(e))
+            {
+                _pushFails++;
+                if (!throughputRunning)
+                {
+                    break;
+                }
+                std::this_thread::yield();
+            }
+        }
+        elements.clear();
+
+        ++sleepCount;
+        utils::Time::nanoSleep(10);
+    }
+
+    for (ListItem* p = nullptr; queue->pop(p);)
+    {
+        ++count;
+    }
+
+    logger::info("got %d, slept %d, pushfails %u", "consumer", count, sleepCount, _pushFails);
+}
+
+struct ValueItem : public concurrency::ListItem
+{
+    uint32_t ssrc;
+    int seqNo;
+    uint64_t separator[7];
+};
+
+template <typename QItem, typename Q>
+void throughputTest(Q& queue, const uint32_t threadCount, TransmissionReport* reports)
+{
+    throughputRunning = true;
+    auto data = new QItem[3000 * threadCount];
+    uint32_t ssrc = 0;
+    for (uint32_t i = 0; i < 3000 * threadCount; ++i)
+    {
+        data[i].seqNo = 50 + i;
+        data[i].ssrc = ssrc;
+        if (i % 3000 == 2999)
+        {
+            ssrc++;
+        }
+        queue.push(&data[i]);
+    }
+
+    std::thread* prod[threadCount];
+    for (uint32_t i = 0; i < threadCount; ++i)
+    {
+        prod[i] = new std::thread(throughputRun<QItem, Q>, &queue, reports, false);
+    }
+
+    utils::Time::nanoSleep(4 * utils::Time::sec);
+    throughputRunning = false;
+    for (uint32_t i = 0; i < threadCount; ++i)
+    {
+        prod[i]->join();
+    }
+
+    delete[] data;
+}
+
+TEST(LFList, throughput)
+{
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
+    LockFreeList queue;
+    TransmissionReport reports[7];
+    throughputTest<ValueItem>(queue, 7, reports);
+}
+
+TEST(LFList, throughputMQ)
+{
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
+    MpmcQueue<ListItem*> queue(3000 * 7 + 50003);
+
+    TransmissionReport reports[7];
+    throughputTest<ValueItem>(queue, 7, reports);
 }

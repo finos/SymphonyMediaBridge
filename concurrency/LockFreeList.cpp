@@ -11,7 +11,7 @@ LockFreeList::LockFreeList() : _head(&_eol), _tail(&_eol), _count(0)
 }
 
 // Possible to push a list of items too
-void LockFreeList::push(ListItem* item)
+bool LockFreeList::push(ListItem* item)
 {
     ListItem* last = nullptr;
     const uint32_t version = _versionCounter.fetch_add(1);
@@ -57,7 +57,7 @@ void LockFreeList::push(ListItem* item)
     {
         // if we won this, the popper will have to move head to us
         _count.fetch_add(count, std::memory_order::memory_order_relaxed);
-        return;
+        return true;
     }
     else
     {
@@ -65,7 +65,7 @@ void LockFreeList::push(ListItem* item)
         // re-inserted at end popped empty, we must attach to head
         _head.store(itemNode);
         _count.fetch_add(count, std::memory_order::memory_order_relaxed);
-        return;
+        return true;
     }
 }
 
