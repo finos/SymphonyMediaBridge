@@ -32,7 +32,7 @@ public:
     LockFreeList();
     ~LockFreeList() = default;
 
-    void push(ListItem* item);
+    bool push(ListItem* item);
     bool pop(ListItem*& item);
 
     bool empty() const { return getPointer(_head.load()) == &_eol; }

@@ -5,40 +5,86 @@
 #include <cassert>
 namespace concurrency
 {
-// It is wise to make your queue entries at least 56B large
-// to facilitate cache line separation
+
+// High performing thread safe Multiple Producer, Multiple Consumer, Wait-free queue but...
+// If a reader is pre-empted when reading the element and a writer catches up, the writer will fail to push as the write
+// slot is still being read. This happens typically when the queue is rather full and there are competing threads in the
+// system.
 template <typename T>
 class MpmcQueue
 {
-    enum CellState : int
+    struct CellState
     {
-        emptySlot,
-        committed
+        uint32_t version = 0;
+        enum State : uint32_t
+        {
+            emptySlot = 0,
+            committed
+        } state = emptySlot;
     };
+
     struct Entry
     {
-        Entry() : state(emptySlot) {}
+        Entry() {}
 
+        T& value() { return reinterpret_cast<T&>(data); }
         std::atomic<CellState> state;
-        T value;
+        uint8_t data[sizeof(T)];
     };
+
+    struct VersionedIndex
+    {
+        uint32_t version = 0;
+        uint32_t pos = 0;
+
+        bool operator==(const VersionedIndex& i) const { return version == i.version && pos == i.pos; }
+    };
+
+    uint32_t indexTransform(VersionedIndex v) const
+    {
+        if (_entriesPerCacheline == 1)
+        {
+            return v.pos % _capacity;
+        }
+
+        const auto p = v.pos * _entriesPerCacheline;
+        return (p / _capacity + p) % _capacity;
+    }
+
+    VersionedIndex nextPosition(VersionedIndex index) const
+    {
+        if (index.pos + 1 < _capacity)
+        {
+            ++index.pos;
+            return index;
+        }
+        else
+        {
+            ++index.version;
+            index.pos = 0;
+            return index;
+        }
+    }
 
 public:
     typedef T value_type;
-    explicit MpmcQueue(uint32_t maxElements)
-        : _maxElements(maxElements),
-          _blockSize(memory::page::alignedSpace(maxElements * sizeof(Entry)))
+    explicit MpmcQueue(uint32_t capacity)
+        : _entriesPerCacheline((63 + sizeof(Entry)) / sizeof(Entry)),
+          _capacity(_entriesPerCacheline * ((capacity + _entriesPerCacheline - 1) / _entriesPerCacheline)),
+          _blockSize(memory::page::alignedSpace(_capacity * sizeof(Entry))),
+          _elements(reinterpret_cast<Entry*>(memory::page::allocate(_blockSize)))
     {
-        _readCursor = 0;
-        _writeCursor = 0;
-        assert(0x100000000ull % _maxElements == 0); // "size % 2^32 must be zero";
+        assert(_capacity > 7);
+        assert(capacity < 0x80000000u);
+        assert(_capacity % _entriesPerCacheline == 0);
+
+        _readCursor = VersionedIndex();
+        _writeCursor = VersionedIndex();
 
         _cacheLineSeparator1[0] = 0;
         _cacheLineSeparator2[0] = 0;
 
-        _elements = reinterpret_cast<Entry*>(memory::page::allocate(_blockSize));
-
-        for (uint32_t i = 0; i < _maxElements; ++i)
+        for (uint32_t i = 0; i < _capacity; ++i)
         {
             new (&_elements[i]) Entry();
         }
@@ -46,71 +92,77 @@ public:
 
     ~MpmcQueue()
     {
-        for (uint32_t i = 0; i < _maxElements; ++i)
+        for (uint32_t i = 0; i < _capacity; ++i)
         {
+            if (_elements[i].state.load().state == CellState::State::committed)
+            {
+                _elements[i].value().~T();
+            }
             _elements[i].~Entry();
         }
 
         memory::page::free(_elements, _blockSize);
     }
 
-    // return false if empty
     bool pop(T& target)
     {
-        uint32_t pos = _readCursor;
-        for (;;)
+        for (auto pos = _readCursor.load(std::memory_order_consume);;)
         {
             if (!isReadable(pos))
             {
-                if (pos == _readCursor)
+                const auto readCursor = _readCursor.load(std::memory_order_consume);
+                if (pos == readCursor)
                 {
                     return false;
                 }
-                pos = _readCursor;
+                pos = readCursor;
                 continue;
             }
 
-            if (_readCursor.compare_exchange_weak(pos, pos + 1))
+            const auto newPos = nextPosition(pos);
+
+            if (_readCursor.compare_exchange_weak(pos, newPos, std::memory_order_seq_cst))
             {
                 // we own the read position now. If thread pauses here,
                 // A writer cannot write due to committed state and will not increase write cursor.
                 // A reader fail to update readCursor and has to try next slot.
-                // A reader that wrapped will not pass readable test because the pos == writepos
-                auto& entry = _elements[pos % _maxElements];
-                target = std::move(entry.value);
-                entry.state.store(CellState::emptySlot, std::memory_order_release);
+                // A reader that wrapped will not pass readable test because the readcursor version does not match cell
+                // state version
+                auto& entry = _elements[indexTransform(pos)];
+                target = std::move(entry.value());
+                entry.value().~T();
+                entry.state.store(CellState{pos.version + 1, CellState::emptySlot}, std::memory_order_release);
                 return true;
             }
         }
     }
 
-    // return false if full
-    // to reduce spin contention, avoid filling queue to full
     bool push(T&& obj)
     {
-        uint32_t pos = _writeCursor;
-        for (;;)
+        for (auto pos = _writeCursor.load(std::memory_order_consume);;)
         {
             if (!isWritable(pos))
             {
-                if (pos == _writeCursor)
+                const auto writeCursor = _writeCursor.load(std::memory_order_consume);
+                if (pos == writeCursor)
                 {
                     return false;
                 }
-                pos = _writeCursor;
+                pos = writeCursor;
                 continue;
             }
 
-            if (_writeCursor.compare_exchange_weak(pos, pos + 1))
+            const auto newPos = nextPosition(pos);
+
+            if (_writeCursor.compare_exchange_weak(pos, newPos, std::memory_order_seq_cst))
             {
                 // Assume we pause here.
                 // The emptyslot state will stop read cursor.
                 // The writeCursor has moved and another writer will have to try the next slot.
-                // If writers wrap back here, they cannot write because q is full as read cursor could not pass this
-                // point.
-                auto& entry = _elements[pos % _maxElements];
-                entry.value = std::move(obj);
-                entry.state.store(CellState::committed, std::memory_order_release);
+                // If writers wrap back here, element is not writeable as the version is not the expected one
+                auto& entry = _elements[indexTransform(pos)];
+                new (entry.data) T(std::move(obj));
+                entry.state.store(CellState{pos.version, CellState::committed}, std::memory_order_release);
                 return true;
             }
         }
@@ -119,14 +171,51 @@ public:
     template <typename... U>
     bool push(U&&... args)
     {
-        return push(T(std::forward<U>(args)...));
+        for (auto pos = _writeCursor.load(std::memory_order_consume);;)
+        {
+            if (!isWritable(pos))
+            {
+                const auto writeCursor = _writeCursor.load(std::memory_order_consume);
+                if (pos == writeCursor)
+                {
+                    return false;
+                }
+                pos = writeCursor;
+                continue;
+            }
+
+            const auto newPos = nextPosition(pos);
+
+            if (_writeCursor.compare_exchange_weak(pos, newPos, std::memory_order_seq_cst))
+            {
+                // Assume we pause here.
+                // The emptyslot state will stop read cursor.
+                // The writeCursor has moved and another writer will have to try the next slot.
+                // If writers wrap back here, element is not writeable as the version is not the expected one
+                auto& entry = _elements[indexTransform(pos)];
+                new (entry.data) T(std::forward<U>(args)...);
+                entry.state.store(CellState{pos.version, CellState::committed}, std::memory_order_release);
+                return true;
+            }
+        }
     }
 
+    // will return correct size if queue is not in motion.
     size_t size() const
     {
-        return std::max(0,
-            static_cast<int32_t>(
-                _writeCursor.load(std::memory_order_relaxed) - _readCursor.load(std::memory_order_relaxed)));
+        const auto writePos = _writeCursor.load(std::memory_order_relaxed);
+        const auto readPos = _readCursor.load(std::memory_order_relaxed);
+
+        if (writePos == readPos)
+        {
+            return 0; // empty atm
+        }
+        else if (writePos.pos == readPos.pos)
+        {
+            return _capacity;
+        }
+
+        return std::max(uint32_t(1), (_capacity + writePos.pos - readPos.pos) % _capacity);
     }
 
     bool full() const { return !isWritable(_writeCursor.load(std::memory_order_consume)); }
@@ -143,27 +232,30 @@ public:
         }
     }
 
-    uint32_t capacity() const { return _maxElements; }
+    uint32_t capacity() const { return _capacity; }
 
 private:
-    const uint32_t _maxElements;
-    std::atomic_uint32_t _readCursor;
-    uint64_t _cacheLineSeparator1[7];
-    std::atomic_uint32_t _writeCursor;
-    uint64_t _cacheLineSeparator2[7];
-    Entry* _elements;
+    bool isWritable(const VersionedIndex& index) const
+    {
+        const auto cell = _elements[indexTransform(index)].state.load(std::memory_order_consume);
+        return cell.state == CellState::emptySlot && cell.version == index.version;
+    }
+
+    bool isReadable(const VersionedIndex& index) const
+    {
+        const auto cell = _elements[indexTransform(index)].state.load(std::memory_order_consume);
+        return cell.state == CellState::committed && cell.version == index.version;
+    }
+
+    // Layout below must be maintained for performance. The non atomic member variables may not be place before read
+    // cursor.
+    std::atomic<VersionedIndex> _readCursor;
+    uint32_t _cacheLineSeparator1[14];
+    std::atomic<VersionedIndex> _writeCursor;
+    uint32_t _cacheLineSeparator2[14];
+    const uint32_t _entriesPerCacheline;
+    const uint32_t _capacity;
     const size_t _blockSize;
-
-    bool isWritable(const uint32_t pos) const
-    {
-        return _elements[pos % _maxElements].state.load(std::memory_order_consume) == CellState::emptySlot &&
-            pos - _readCursor.load(std::memory_order_consume) < _maxElements;
-    }
-
-    bool isReadable(const uint32_t pos) const
-    {
-        return _elements[pos % _maxElements].state.load(std::memory_order_consume) == CellState::committed &&
-            pos != _writeCursor.load(std::memory_order_consume);
-    }
+    Entry* const _elements;
 };
 } // namespace concurrency
