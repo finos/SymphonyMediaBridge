@@ -4,7 +4,6 @@ namespace concurrency
 {
 MurmurHashIndex::MurmurHashIndex(size_t elementCount) : _index(elementCount), _maxSpread(1)
 {
-    assert((elementCount & (elementCount - 1)) == 0); // must be power of two
     assert(memory::isAligned<uint64_t>(&_index[0])); // must be atomically writeable
     assert(memory::isAligned<uint64_t>(&_index[0].keyValue)); // must be atomically writeable
     static_assert(sizeof(KeyValue) == 8, "Index entry must be 8 bytes on your platform to be atomically writeable");

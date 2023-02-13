@@ -29,6 +29,7 @@ struct IceConfig
     uint32_t probeReplicates = 1;
     uint32_t probeConnectionExpirationTimeout = 5000;
     uint32_t transmitIntervalExtend = 10;
+    uint32_t maxCandidateCount = 15;
 
     std::string software = "slice"; // keep short please.
     transport::SocketAddress publicIpv4;
@@ -109,6 +110,9 @@ public:
         virtual void onIcePreliminary(IceSession* session,
             IceEndpoint* endpoint,
             const transport::SocketAddress& sourcePort) = 0;
+        virtual void onIceDiscardCandidate(IceSession* session,
+            IceEndpoint* endpoint,
+            const transport::SocketAddress& sourcePort) = 0;
     };
 
     IceSession(const IceSession&) = delete;
@@ -166,6 +170,8 @@ public:
 
     void stop();
 
+    bool isValidSource(uint64_t timestamp, const transport::SocketAddress& address) const;
+
 private:
     struct SessionCredentials
     {
@@ -222,6 +228,7 @@ private:
         bool hasTransaction(const StunMessage& response) const;
         StunTransaction* findTransaction(const StunMessage& response);
         void onResponse(uint64_t now, const StunMessage& response);
+        void onRequest(uint64_t timestamp, const StunMessage& request);
         void onDisconnect();
         void nominate(uint64_t now);
         void freeze();
@@ -238,6 +245,7 @@ private:
         uint64_t startTime;
         uint64_t nextTransmission;
         bool nominated;
+        uint64_t receivedProbeTimestamp;
 
         enum State
         {

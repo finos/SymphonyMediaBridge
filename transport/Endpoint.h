@@ -70,7 +70,7 @@ public:
     virtual void registerDefaultListener(IEvents* defaultListener) = 0;
 
     virtual void unregisterListener(IEvents* listener) = 0;
-    virtual void focusListener(const SocketAddress& remotePort, IEvents* listener) = 0;
+    virtual void unregisterListener(const SocketAddress& remotePort, IEvents* listener) = 0;
 
     virtual void start() = 0;
     virtual void stop(IStopEvents* listener) = 0;

@@ -29,7 +29,7 @@ UdpEndpointImpl::UdpEndpointImpl(jobmanager::JobManager& jobManager,
     bool isShared)
     : BaseUdpEndpoint("UdpEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
       _iceListeners(maxSessionCount * 2),
-      _dtlsListeners(maxSessionCount * 2),
+      _dtlsListeners(maxSessionCount * 5),
       _iceResponseListeners(maxSessionCount * 16)
 {
 }
@@ -154,11 +154,16 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
             {
                 auto userName = users->getNames().first;
                 listener = _iceListeners.getItem(userName);
+                LOG("ICE request for %s src %s, %c",
+                    _name.c_str(),
+                    users->getNames().first.c_str(),
+                    srcAddress.toString().c_str(),
+                    listener ? "" : "unknown user");
             }
-            LOG("ICE request for %s src %s",
-                _name.c_str(),
-                users->getNames().first.c_str(),
-                srcAddress.toString().c_str());
+            if (!users || !listener)
+            {
+                return;
+            }
         }
         else if (msg->header.isResponse())
         {
@@ -297,22 +302,24 @@ void UdpEndpointImpl::swapListener(const SocketAddress& srcAddress, IEvents* new
     logger::warn("dtls listener swap on %s skipped. Already removed", _name.c_str(), srcAddress.toString().c_str());
 }
 
-void UdpEndpointImpl::focusListener(const SocketAddress& remotePort, IEvents* listener)
+void UdpEndpointImpl::unregisterListener(const SocketAddress& remotePort, IEvents* listener)
 {
     _receiveJobs.post([this, remotePort, listener]() {
-        for (auto& item : _dtlsListeners)
+        auto it = _dtlsListeners.find(remotePort);
+        if (it == _dtlsListeners.end())
         {
-            if (item.second == listener && item.first != remotePort)
-            {
-                LOG("focus listener on %s, unlisten %s",
-                    _name.c_str(),
-                    remotePort.toString().c_str(),
-                    item.first.toString().c_str());
-                _dtlsListeners.erase(item.first);
-                listener->onUnregistered(*this);
-            }
+            return;
+        }
+
+        if (it->second == listener)
+        {
+            LOG("remove listener on %s, unlisten %s",
+                _name.c_str(),
+                remotePort.toString().c_str(),
+                item.first.toString().c_str());
+            _dtlsListeners.erase(it->first);
+            listener->onUnregistered(*this);
         }
     });
 }
-
 } // namespace transport

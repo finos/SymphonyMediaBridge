@@ -249,10 +249,11 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
             _component,
             remoteCandidate.transportType))));
 
-    logger::debug("added candidate pair %s-%s",
+    logger::debug("added candidate pair %s-%s HOST-%s",
         _logId.c_str(),
         endpointAddress.toString().c_str(),
-        remoteCandidate.address.toString().c_str());
+        remoteCandidate.address.toString().c_str(),
+        ice::toString(remoteCandidate.type).c_str());
 }
 
 void IceSession::addLocalCandidate(const IceCandidate& candidate)
@@ -395,6 +396,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     const StunMessage& msg,
     const uint64_t now)
 {
+    const auto state = _state.load();
     if (!msg.isValid() || msg.getAttribute(StunAttribute::MESSAGE_INTEGRITY) == nullptr ||
         msg.getAttribute(StunAttribute::USERNAME) == nullptr)
     {
@@ -470,12 +472,22 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         auto& candidatePair = _candidatePairs.back();
         if (_state == State::CONNECTING)
         {
+            candidatePair->onRequest(now, msg);
             candidatePair->send(now);
             sortCheckList();
         }
     }
 
-    if (endpoint->getTransportType() == TransportType::UDP && (_state == State::CONNECTING || _state == State::READY) &&
+    if (_remoteCandidates.size() >= _config.maxCandidateCount)
+    {
+        logger::info("too many PRFLX candidates %u, %s",
+            _logId.c_str(),
+            _config.maxCandidateCount,
+            sender.toString().c_str());
+        return;
+    }
+
+    if (endpoint->getTransportType() == TransportType::UDP && isValidSource(now, sender) &&
         !utils::contains(_remoteCandidates,
             [sender](const IceCandidate& x) { return x.address == sender && x.transportType == TransportType::UDP; }))
     {
@@ -486,7 +498,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
             sender,
             IceCandidate::Type::PRFLX);
         remoteCandidate = addRemoteCandidate(remoteCandidate);
-        if (_state == State::CONNECTING)
+        if (state == State::CONNECTING || state == State::CONNECTED)
         {
             for (auto& localEndpoint : _endpoints)
             {
@@ -498,11 +510,12 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     }
 
     auto useCandidate = msg.getAttribute(StunAttribute::USE_CANDIDATE);
-    if (_credentials.role == IceRole::CONTROLLED && useCandidate)
+    for (auto& candidatePair : _candidatePairs)
     {
-        for (auto& candidatePair : _candidatePairs)
+        if (candidatePair->remoteCandidate.address == sender && candidatePair->localEndpoint.endpoint == endpoint)
         {
-            if (candidatePair->remoteCandidate.address == sender && candidatePair->localEndpoint.endpoint == endpoint)
+            candidatePair->onRequest(now, msg);
+            if (_credentials.role == IceRole::CONTROLLED && useCandidate)
             {
                 logger::debug("remote nominated %s-%s",
                     _logId.c_str(),
@@ -510,8 +523,8 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
                     candidatePair->remoteCandidate.address.toString().c_str());
                 candidatePair->nominate(now);
                 processTimeout(now);
-                break;
             }
+            break;
         }
     }
 }
@@ -944,11 +957,25 @@ int64_t IceSession::processTimeout(const uint64_t now)
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     if (_state == State::CONNECTED)
     {
-        for (auto& candidatePair : _candidatePairs)
+        for (auto it = _candidatePairs.begin(); it != _candidatePairs.end(); ++it)
         {
+            auto& candidatePair = *it;
+
             if (candidatePair->nominated)
             {
                 candidatePair->processTimeout(now);
+            }
+            else if (candidatePair->state != CandidatePair::Failed &&
+                utils::Time::diffGE(candidatePair->receivedProbeTimestamp, now, _config.keepAliveInterval * 2))
+            {
+                candidatePair->failCandidate();
+                if (_eventSink)
+                {
+                    _eventSink->onIceDiscardCandidate(this,
+                        candidatePair->localEndpoint.endpoint,
+                        candidatePair->remoteCandidate.address);
+                }
+                _candidatePairs.erase(it);
                 break;
             }
         }
@@ -1033,6 +1060,7 @@ IceSession::CandidatePair::CandidatePair(const IceConfig& config,
       startTime(0),
       nextTransmission(0),
       nominated(false),
+      receivedProbeTimestamp(0),
       state(Waiting),
       _transmitInterval(config.RTO),
       _replies(0),
@@ -1199,6 +1227,8 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
         return;
     }
 
+    receivedProbeTimestamp = now;
+
     cancelPendingTransactionsBefore(*transaction);
 
     if (_transactions.size() == 1 && localEndpoint.endpoint->getTransportType() == ice::TransportType::TCP)
@@ -1237,6 +1267,11 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
     {
         state = CandidatePair::Succeeded;
     }
+}
+
+void IceSession::CandidatePair::onRequest(uint64_t timestamp, const StunMessage& request)
+{
+    receivedProbeTimestamp = timestamp;
 }
 
 void IceSession::CandidatePair::onDisconnect()
@@ -1387,5 +1422,16 @@ void IceSession::reportState(State newState)
     {
         _eventSink->onIceStateChanged(this, _state);
     }
+}
+
+bool IceSession::isValidSource(uint64_t timestamp, const transport::SocketAddress& address) const
+{
+    auto state = _state.load();
+    if (state == State::CONNECTING || state == State::READY)
+    {
+        return true;
+    }
+    return (state == State::CONNECTED &&
+        utils::Time::diffLT(_sessionStart, timestamp, _config.reflexiveProbeTimeout * utils::Time::ms));
 }
 } // namespace ice

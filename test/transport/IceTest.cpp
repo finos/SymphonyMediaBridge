@@ -761,7 +761,7 @@ void logStatus(IceSessions& sessions)
     {
         logger::info("session %d local candidates", "", si);
         log(session->getLocalCandidates());
-        logger::info("session %d remote candidates", "", si++);
+        logger::info("session %d remote candidates", "", si);
         log(session->getRemoteCandidates());
 
         if (session->getState() == ice::IceSession::State::CONNECTED)
@@ -771,6 +771,7 @@ void logStatus(IceSessions& sessions)
             log(selectedPair1.first, "local");
             log(selectedPair1.second, "remote");
         }
+        ++si;
     }
 }
 
@@ -1700,4 +1701,57 @@ TEST(IceTest, retransmissions)
         EXPECT_EQ(timestamps[t + 1] - timestamps[t], expectedInterval);
         expectedInterval = std::min(2 * (timestamps[t + 1] - timestamps[t]), utils::Time::sec * 1);
     }
+}
+
+// client has one port created by stun probe through fw.
+// Client also has another vpn interface that can reach SMB directly.
+// SMB is not told about the client candidates.
+TEST(IceTest, vpnStun)
+{
+    fakenet::Internet internet;
+
+    FakeStunServer stunServer(transport::SocketAddress::parse("64.233.165.127", 19302), internet);
+    fakenet::Firewall firewallLocal(transport::SocketAddress::parse("216.93.246.10", 0), internet);
+    fakenet::Firewall firewallVpn(transport::SocketAddress::parse("116.93.24.11", 0), internet);
+
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("192.168.1.10", 2000), firewallLocal);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.0.20", 3000), firewallVpn);
+
+    FakeEndpoint smbEndpoint(transport::SocketAddress::parse("111.11.1.11", 10000), internet);
+
+    ice::IceConfig config;
+    IceSessions sessions;
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr));
+
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(2, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLED, nullptr));
+
+    endpoint1.attach(sessions[0]);
+    endpoint2.attach(sessions[0]);
+
+    smbEndpoint.attach(sessions[1]);
+
+    std::vector<transport::SocketAddress> stunServers;
+    stunServers.push_back(stunServer.getIp());
+
+    uint64_t timeSource = utils::Time::getAbsoluteTime();
+    gatherCandidates(internet, stunServers, sessions, timeSource);
+
+    setRemoteCandidates(*sessions[0], *sessions[1]);
+    sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
+    sessions[1]->setRemoteCredentials(sessions[0]->getLocalCredentials());
+
+    startProbes(sessions, timeSource);
+    establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
+    logStatus(sessions);
+
+    auto candidates1 = sessions[0]->getLocalCandidates();
+    EXPECT_EQ(candidates1[0].address, endpoint1._address);
+    EXPECT_TRUE(candidates1[2].address.equalsIp(firewallLocal.getPublicIp()));
+
+    auto selectedPair1 = sessions[0]->getSelectedPair();
+    EXPECT_TRUE(selectedPair1.first.baseAddress.equalsIp(endpoint1.getLocalPort()));
+    EXPECT_FALSE(selectedPair1.first.address.empty());
+    EXPECT_FALSE(selectedPair1.second.address.empty());
 }
