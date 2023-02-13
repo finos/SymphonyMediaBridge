@@ -1948,8 +1948,6 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                 _peerRtpPort = candidatePair.second.address;
                 _peerRtcpPort = candidatePair.second.address;
 
-                _selectedRtp->focusListener(_peerRtpPort, this);
-
                 _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
 
                 logger::info("candidate selected %s %s, %s",
@@ -1957,10 +1955,6 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                     _peerRtpPort.getFamilyString().c_str(),
                     ice::toString(endpoint->getTransportType()).c_str(),
                     ice::toString(candidatePair.second.type).c_str());
-            }
-            else
-            {
-                endpoint->focusListener(SocketAddress(), this); // remove all src ip listeners for this transport
             }
         }
 
