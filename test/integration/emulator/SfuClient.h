@@ -220,7 +220,7 @@ public:
         utils::Optional<uint32_t> slidesSsrc = _channel.getOfferedScreensharingSsrc();
 
         bridge::RtpMap videoRtpMap(bridge::RtpMap::Format::VP8);
-        bridge::RtpMap feedbackRtpMap(bridge::RtpMap::Format::VP8RTX);
+        bridge::RtpMap feedbackRtpMap(bridge::RtpMap::Format::RTX);
 
         bool isLocalSsrcFound = false;
 
@@ -720,7 +720,7 @@ public:
         else
         {
             bridge::RtpMap rtpMap(bridge::RtpMap::Format::VP8);
-            bridge::RtpMap fbMap(bridge::RtpMap::Format::VP8RTX);
+            bridge::RtpMap fbMap(bridge::RtpMap::Format::RTX);
 
             auto it = _videoSsrcMap.find(rtpHeader->ssrc.get());
             if (it == _videoSsrcMap.end())
@@ -881,7 +881,7 @@ public:
         }
 
         rtpHeader->ssrc = feedbackSsrc;
-        rtpHeader->payloadType = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX).payloadType;
+        rtpHeader->payloadType = bridge::RtpMap(bridge::RtpMap::Format::RTX).payloadType;
         rtpHeader->sequenceNumber = sequenceCounter & 0xFFFF;
 
         videoFeedbackSequenceCounterItr->second++;

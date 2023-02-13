@@ -11,6 +11,7 @@
 #include "bridge/RequestLogger.h"
 #include "bridge/TransportDescription.h"
 #include "bridge/VideoStreamDescription.h"
+#include "config/Config.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "transport/dtls/SslDtls.h"
@@ -90,6 +91,16 @@ httpd::Response generateBarbellResponse(ActionContext* context,
             stream.content = (group.slides ? api::VideoStream::slidesContent : api::VideoStream::videoContent);
         }
 
+        if (context->config.codec.videoCodec.get() == "H264")
+        {
+            addH264VideoProperties(responseVideo,
+                context->config.codec.h264ProfileLevelId.get(),
+                context->config.codec.h264PacketizationMode.get());
+        }
+        else
+        {
+            addVp8VideoProperties(responseVideo);
+        }
         addDefaultVideoProperties(responseVideo);
         channelsDescription.video = responseVideo;
     }

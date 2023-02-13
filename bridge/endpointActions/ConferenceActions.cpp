@@ -9,6 +9,7 @@
 #include "bridge/TransportDescription.h"
 #include "bridge/VideoStreamDescription.h"
 #include "bridge/endpointActions/ApiHelpers.h"
+#include "config/Config.h"
 #include "httpd/RequestErrorException.h"
 #include "nlohmann/json.hpp"
 #include "transport/dtls/SslDtls.h"
@@ -225,6 +226,17 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             }
 
             responseVideo.transport.set(responseTransport);
+        }
+
+        if (context->config.codec.videoCodec.get() == "H264")
+        {
+            addH264VideoProperties(responseVideo,
+                context->config.codec.h264ProfileLevelId.get(),
+                context->config.codec.h264PacketizationMode.get());
+        }
+        else
+        {
+            addVp8VideoProperties(responseVideo);
         }
 
         addDefaultVideoProperties(responseVideo);

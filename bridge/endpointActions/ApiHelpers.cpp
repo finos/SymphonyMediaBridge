@@ -8,6 +8,7 @@
 #include "httpd/RequestErrorException.h"
 #include "utils/CheckedCast.h"
 #include "utils/Format.h"
+#include <string>
 
 namespace bridge
 {
@@ -41,25 +42,63 @@ void addDefaultAudioProperties(api::Audio& audioChannel)
     audioChannel.rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
 }
 
-void addDefaultVideoProperties(api::Video& videoChannel)
+void addVp8VideoProperties(api::EndpointDescription::Video& videoChannel)
 {
+    api::EndpointDescription::PayloadType vp8;
+    vp8._id = 100;
+    vp8._name = "VP8";
+    vp8._clockRate = 90000;
+    vp8._rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
+    vp8._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
+    vp8._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
+    videoChannel.payloadTypes.push_back(vp8);
+}
+
+void addH264VideoProperties(api::EndpointDescription::Video& videoChannel,
+    const std::string& profileLevelId,
+    const uint32_t packetizationMode)
+{
+    api::EndpointDescription::PayloadType h264;
+    h264._id = 100;
+    h264._name = "H264";
+    h264._clockRate = 90000;
+    h264._parameters.emplace_back("level-asymmetry-allowed", "1");
+
+    if (packetizationMode > 1)
     {
-        api::PayloadType vp8;
-        vp8.id = codec::Vp8::payloadType;
-        vp8.name = "VP8";
-        vp8.clockRate = codec::Vp8::sampleRate;
-        vp8.rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
-        vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
-        vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
-        videoChannel.payloadTypes.push_back(vp8);
+        logger::warn("ApiRequestHandler", "Unsupported H264 packetizationMode in config, using default 0");
+        h264._parameters.emplace_back("packetization-mode", "0");
+    }
+    else
+    {
+        h264._parameters.emplace_back("packetization-mode", std::to_string(packetizationMode));
     }
 
+    if (profileLevelId.empty() || profileLevelId.size() != 6)
     {
-        api::PayloadType vp8Rtx;
-        vp8Rtx.id = codec::Vp8::rtxPayloadType;
-        vp8Rtx.name = "rtx";
-        vp8Rtx.clockRate = codec::Vp8::sampleRate;
-        vp8Rtx.parameters.emplace_back("apt", std::to_string(codec::Vp8::payloadType));
+        logger::warn("ApiRequestHandler", "Malformed H264 profileLevelId in config, using default 42001f");
+        h264._parameters.emplace_back("profile-level-id", "42001f");
+    }
+    else
+    {
+        h264._parameters.emplace_back("profile-level-id", profileLevelId);
+    }
+
+    h264._parameters.emplace_back("profile-level-id", profileLevelId);
+    h264._rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
+    h264._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
+    h264._rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
+    videoChannel.payloadTypes.push_back(h264);
+}
+
+void addDefaultVideoProperties(api::EndpointDescription::Video& videoChannel)
+{
+    {
+        api::EndpointDescription::PayloadType vp8Rtx;
+        vp8Rtx._id = 96;
+        vp8Rtx._name = "rtx";
+        vp8Rtx._clockRate = codec::Vp8::sampleRate;
+        vp8Rtx._parameters.emplace_back("apt", std::to_string(codec::Vp8::payloadType));
         videoChannel.payloadTypes.push_back(vp8Rtx);
     }
 
@@ -217,9 +256,13 @@ bridge::RtpMap makeRtpMap(const api::Video& video, const api::PayloadType& paylo
     {
         rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8, payloadType.id, payloadType.clockRate);
     }
+    else if (payloadType._name.compare("H264") == 0)
     else if (payloadType.name.compare("rtx") == 0)
     {
-        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX, codec::Vp8::rtxPayloadType, codec::Vp8::sampleRate);
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::H264, payloadType._id, payloadType._clockRate);
+    }
+    {
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::RTX, codec::Vp8::rtxPayloadType, codec::Vp8::sampleRate);
     }
     else
     {

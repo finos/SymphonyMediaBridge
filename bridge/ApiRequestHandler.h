@@ -11,6 +11,11 @@
 #include "bridge/LegacyApiRequestHandler.h"
 #endif
 
+namespace config
+{
+class Config;
+}
+
 namespace api
 {
 struct AllocateEndpoint;
