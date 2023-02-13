@@ -1,5 +1,6 @@
-#include "ApiActions.h"
 #include "bridge/RequestLogger.h"
+#include "bridge/endpointActions/ApiActions.h"
+#include "config/Config.h"
 #include "git_version.h"
 #include "utils/StringTokenizer.h"
 

@@ -429,7 +429,8 @@ set(FILES
         webrtc/DataChannel.cpp
         webrtc/DataChannel.h
         webrtc/WebRtcDataStream.cpp
-        webrtc/WebRtcDataStream.h)
+        webrtc/WebRtcDataStream.h
+        )
 
 add_library(smblib STATIC ${FILES})
 target_include_directories(smblib PUBLIC ${CMAKE_BINARY_DIR}/generated)

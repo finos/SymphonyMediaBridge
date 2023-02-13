@@ -1,5 +1,4 @@
 #pragma once
-#include "config/Config.h"
 #include <atomic>
 
 namespace config

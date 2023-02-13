@@ -40,7 +40,7 @@ constexpr const uint32_t REWRITE_AUDIO_SRC_4 = 220008;
 
 const bridge::RtpMap AUDIO_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::OPUS);
 const bridge::RtpMap VIDEO_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::VP8);
-const bridge::RtpMap FEEDBACK_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX);
+const bridge::RtpMap FEEDBACK_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::RTX);
 
 // FAIL()
 

@@ -41,7 +41,7 @@ struct RtpMap
             sampleRate = 90000;
             break;
         case Format::H264:
-            payloadType = 101;
+            payloadType = 100;
             sampleRate = 90000;
             break;
         case Format::OPUS:
