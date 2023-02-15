@@ -55,3 +55,9 @@ TEST(H264HeaderTest, stapAContainsNoStartOfKeyFrame)
     std::array<uint8_t, 10> data = {0x18, 0x00, 0x01, 0x05, 0x00, 0x00, 0x02, 0x05, 0x00, 0x00};
     EXPECT_FALSE(codec::H264Header::isKeyFrame(data.data(), data.size()));
 }
+
+TEST(H264HeaderTest, malformedStapAInvalidSize)
+{
+    std::array<uint8_t, 7> data = {0x18, 0x00, 0x10, 0x05, 0x00, 0x00, 0x00};
+    EXPECT_FALSE(codec::H264Header::isKeyFrame(data.data(), data.size()));
+}
