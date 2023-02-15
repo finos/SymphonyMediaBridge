@@ -545,9 +545,9 @@ TEST_F(IceTest, gather)
         }
     }
 
-    utils::Time::initialize();
+    std::thread t([&infra]() { infra.stop(); });
     timeSource.shutdown();
-    infra.stop();
+    t.join();
 }
 
 typedef std::vector<std::unique_ptr<ice::IceSession>> IceSessions;
