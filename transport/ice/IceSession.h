@@ -291,9 +291,10 @@ private:
     bool isIceComplete(uint64_t now);
     void stateCheck(uint64_t now);
     void nominate(uint64_t now);
-    void freezePendingProbes();
+    void freezePendingProbes(uint64_t now);
     bool hasNomination() const;
     uint64_t getMaxStunServerCandidateAge(uint64_t now) const;
+    IceCandidate::Type inferCandidateType(const transport::SocketAddress& mappedAddress);
 
     void onRequestReceived(IceEndpoint* endpoint,
         const transport::SocketAddress& sender,

@@ -42,6 +42,7 @@ public:
     }
 
     void nanoSleep(uint64_t ns) override { rawNanoSleep(ns); }
+    void advance(uint64_t ns) override { rawNanoSleep(ns); }
 
     std::chrono::system_clock::time_point wallClock() const override { return std::chrono::system_clock::now(); }
 };

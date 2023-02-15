@@ -19,6 +19,7 @@ public:
     virtual void nanoSleep(uint64_t nanoSeconds) = 0;
 
     virtual std::chrono::system_clock::time_point wallClock() const = 0;
+    virtual void advance(uint64_t nanoSeconds) = 0;
 };
 
 namespace Time

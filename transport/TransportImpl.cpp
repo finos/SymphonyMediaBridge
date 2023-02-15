@@ -1059,7 +1059,18 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
             endpoint.registerListener(source, this);
         }
 
+        auto timeout = _rtpIceSession->nextTimeout(timestamp);
         _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        auto newTimeout = _rtpIceSession->nextTimeout(timestamp);
+        if (newTimeout != timeout)
+        {
+            _jobQueue.getJobManager().replaceTimedJob<IceTimerTriggerJob>(getId(),
+                IceTimerTriggerJob::TIMER_ID,
+                newTimeout / 1000,
+                *this,
+                _jobQueue,
+                *_rtpIceSession);
+        }
     }
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)
     {
