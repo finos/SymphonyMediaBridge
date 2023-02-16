@@ -29,7 +29,7 @@ inline bool isKeyFrame(const uint8_t* payload, const size_t payloadSize)
         size_t offset = 1;
         while (offset + 3 <= payloadSize)
         {
-            const uint16_t naluSize = *reinterpret_cast<const uint16_t*>(&payload[offset]);
+            const uint16_t naluSize = payload[offset] | (payload[offset + 1] << 8);
             offset += 2;
             if (getNalUnitType(payload[offset]) == 7)
             {
