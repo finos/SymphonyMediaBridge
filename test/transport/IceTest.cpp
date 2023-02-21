@@ -4,6 +4,7 @@
 #include "logger/Logger.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/Packet.h"
+#include "test/integration/emulator/TimeTurner.h"
 #include "transport/RtcSocket.h"
 #include "transport/RtcePoll.h"
 #include "transport/ice/IceSerialize.h"
@@ -24,7 +25,21 @@ void setRemoteCandidates(ice::IceSession& target, ice::IceSession& source)
     }
 }
 } // namespace
-TEST(IceTest, utf8)
+
+class IceTest : public testing::Test
+{
+public:
+    void SetUp() override { utils::Time::initialize(timeSource); }
+    void TearDown() override
+    {
+        timeSource.shutdown();
+        utils::Time::initialize();
+    }
+
+    emulator::TimeTurner timeSource;
+};
+
+TEST_F(IceTest, utf8)
 {
     ice::StunMessage stun;
     ice::StunTransactionIdGenerator gen;
@@ -40,7 +55,7 @@ TEST(IceTest, utf8)
     EXPECT_EQ(software.getUtf8(), "Symphony Mixer");
 }
 
-TEST(IceTest, parseprobe)
+TEST_F(IceTest, parseprobe)
 {
     using namespace ice;
     alignas(memory::Packet) const char* raw = "\x01\x01\x00\x3c\x21\x12\xa4\x42"
@@ -97,7 +112,7 @@ TEST(IceTest, parseprobe)
 }
 
 // test vector from RFC
-TEST(IceTest, hmac1)
+TEST_F(IceTest, hmac1)
 {
     using namespace ice;
     alignas(memory::Packet) const unsigned char req[] = "\x00\x01\x00\x58"
@@ -134,7 +149,7 @@ TEST(IceTest, hmac1)
     EXPECT_TRUE(stun->isAuthentic(hmacComputer));
 }
 
-TEST(IceTest, HMACempty)
+TEST_F(IceTest, HMACempty)
 {
     alignas(memory::Packet) const unsigned char req[] = "\x00\x01\x00\x58";
     std::string pwd = "VOkJxbRl1RmTxUk/WvJxBt";
@@ -147,7 +162,7 @@ TEST(IceTest, HMACempty)
     hmac.compute(result);
 }
 
-TEST(IceTest, jvbnice)
+TEST_F(IceTest, jvbnice)
 {
     using namespace ice;
     alignas(memory::Packet) const unsigned char reqFromJvb[] = "\x00\x01\x00\x5c\x21\x12\xa4\x42"
@@ -240,7 +255,7 @@ TEST(IceTest, jvbnice)
     }
 }
 
-TEST(IceTest, hmac2)
+TEST_F(IceTest, hmac2)
 {
     using namespace ice;
     alignas(memory::Packet) const unsigned char req[] =
@@ -265,7 +280,7 @@ TEST(IceTest, hmac2)
     EXPECT_TRUE(stun->isAuthentic(hmacComputer1));
 }
 
-TEST(IceTest, ipformat)
+TEST_F(IceTest, ipformat)
 {
     using namespace transport;
     auto a = SocketAddress::parse("192.10.14.231");
@@ -285,7 +300,7 @@ TEST(IceTest, ipformat)
     EXPECT_EQ(c.toString(), "fe80::1:3ba9:6b1f:f7f2");
 }
 
-TEST(IceTest, linkLocal)
+TEST_F(IceTest, linkLocal)
 {
     using namespace transport;
     auto b = SocketAddress::parse("167.254.1.1", 4700);
@@ -300,7 +315,7 @@ TEST(IceTest, linkLocal)
     EXPECT_FALSE(d.isLinkLocal());
 }
 
-TEST(IceTest, ipv6Response)
+TEST_F(IceTest, ipv6Response)
 {
     alignas(memory::Packet) const unsigned char rsp[] = "\x01\x01\x00\x48" //     Response type and message length
                                                         "\x21\x12\xa4\x42" //     Magic cookie
@@ -334,7 +349,7 @@ TEST(IceTest, ipv6Response)
     EXPECT_TRUE(expected == address);
 }
 
-TEST(IceTest, stunv6)
+TEST_F(IceTest, stunv6)
 {
     ice::StunMessage msg;
     msg.header.setMethod(ice::StunHeader::BindingRequest);
@@ -347,7 +362,7 @@ TEST(IceTest, stunv6)
     EXPECT_TRUE(address == readAddress);
 }
 
-TEST(IceTest, build)
+TEST_F(IceTest, build)
 {
     using namespace ice;
     ice::StunMessage msg;
@@ -488,7 +503,7 @@ public:
     concurrency::MpmcQueue<fakenet::Packet> _inboundPackets;
 };
 
-TEST(IceTest, gather)
+TEST_F(IceTest, gather)
 {
     auto interfaces = transport::SocketAddress::activeInterfaces(false, false);
     ice::IceConfig config;
@@ -502,17 +517,16 @@ TEST(IceTest, gather)
         }
     }
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(transport::SocketAddress::parse("64.233.165.127", 19302));
     stunServers.push_back(transport::SocketAddress::parse("216.93.246.18", 3478));
-    infra.session.gatherLocalCandidates(stunServers, timeSource);
+    infra.session.gatherLocalCandidates(stunServers, timeSource.getAbsoluteTime());
     for (int i = 0; i < 1000; ++i)
     {
-        const auto timeout = infra.session.nextTimeout(timeSource);
-        timeSource += timeout + 2;
+        const auto timeout = infra.session.nextTimeout(timeSource.getAbsoluteTime());
+        timeSource.runFor(timeout + 2);
 
-        infra.process(timeSource);
+        infra.process(timeSource.getAbsoluteTime());
         if (infra.session.getState() == ice::IceSession::State::READY)
         {
             break;
@@ -530,7 +544,10 @@ TEST(IceTest, gather)
                 candidate.address.getPort());
         }
     }
-    infra.stop();
+
+    std::thread t([&infra]() { infra.stop(); });
+    timeSource.shutdown();
+    t.join();
 }
 
 typedef std::vector<std::unique_ptr<ice::IceSession>> IceSessions;
@@ -699,22 +716,22 @@ void log(const std::vector<ice::IceCandidate>& candidates)
 void gatherCandidates(fakenet::NetworkNode& internet,
     std::vector<transport::SocketAddress>& stunServers,
     IceSessions& sessions,
-    uint64_t& timeSource)
+    utils::TimeSource& timeSource)
 {
-    const uint64_t startTime = timeSource;
+    const uint64_t startTime = timeSource.getAbsoluteTime();
     for (auto& session : sessions)
     {
-        session->gatherLocalCandidates(stunServers, timeSource);
+        session->gatherLocalCandidates(stunServers, timeSource.getAbsoluteTime());
     }
 
     for (bool running = true; running;)
     {
-        internet.process(timeSource);
+        internet.process(timeSource.getAbsoluteTime());
         running = false;
         int64_t timeout = std::numeric_limits<int64_t>::max();
         for (auto& session : sessions)
         {
-            auto nextTimeout = session->processTimeout(timeSource);
+            auto nextTimeout = session->processTimeout(timeSource.getAbsoluteTime());
             if (session->getState() != ice::IceSession::State::READY)
             {
                 running = true;
@@ -729,9 +746,10 @@ void gatherCandidates(fakenet::NetworkNode& internet,
         {
             break;
         }
-        timeSource += timeout + 2;
+        timeSource.advance(timeout + 2);
     }
-    logger::info("gather complete in %" PRIu64 "ms", "", (timeSource - startTime) / utils::Time::ms);
+    logger::info("gather complete in %" PRIu64 "ms", "", (timeSource.getAbsoluteTime() - startTime) / utils::Time::ms);
+    timeSource.advance(2 * utils::Time::ms);
 }
 
 void exchangeInfo(ice::IceSession& session1, ice::IceSession& session2)
@@ -761,7 +779,7 @@ void logStatus(IceSessions& sessions)
     {
         logger::info("session %d local candidates", "", si);
         log(session->getLocalCandidates());
-        logger::info("session %d remote candidates", "", si++);
+        logger::info("session %d remote candidates", "", si);
         log(session->getRemoteCandidates());
 
         if (session->getState() == ice::IceSession::State::CONNECTED)
@@ -771,10 +789,11 @@ void logStatus(IceSessions& sessions)
             log(selectedPair1.first, "local");
             log(selectedPair1.second, "remote");
         }
+        ++si;
     }
 }
 
-void startProbes(IceSessions& sessions, uint64_t& timeSource)
+void startProbes(IceSessions& sessions, uint64_t timeSource)
 {
     for (size_t i = 0; i < sessions.size(); ++i)
     {
@@ -783,19 +802,22 @@ void startProbes(IceSessions& sessions, uint64_t& timeSource)
     }
 }
 
-bool establishIce(fakenet::NetworkNode& internet, IceSessions& sessions, uint64_t& timeSource, uint64_t runTime)
+bool establishIce(fakenet::NetworkNode& internet,
+    IceSessions& sessions,
+    utils::TimeSource& timeSource,
+    uint64_t runTime)
 {
-    const auto start = timeSource;
+    const auto start = timeSource.getAbsoluteTime();
     bool running = true;
     for (running = true; running;)
     {
-        internet.process(timeSource);
+        internet.process(timeSource.getAbsoluteTime());
         int64_t timeout = std::numeric_limits<int64_t>::max();
         running = false;
         for (auto& session : sessions)
         {
-            auto sessionTimeout = session->processTimeout(timeSource);
-            internet.process(timeSource);
+            auto sessionTimeout = session->processTimeout(timeSource.getAbsoluteTime());
+            internet.process(timeSource.getAbsoluteTime());
             if (session->getState() == ice::IceSession::State::CONNECTING)
             {
                 running = true;
@@ -807,18 +829,46 @@ bool establishIce(fakenet::NetworkNode& internet, IceSessions& sessions, uint64_
         }
         if (running && timeout > 0)
         {
-            if (utils::Time::diffGE(start, timeSource + timeout + 2, runTime))
+            if (utils::Time::diffGE(start, timeSource.getAbsoluteTime() + timeout + 2, runTime))
             {
                 return false;
             }
-            timeSource += timeout + 2;
+            timeSource.advance(timeout + 2);
         }
     }
 
     return !running;
 }
 
-TEST(IceTest, iceprobes)
+bool runIce(fakenet::NetworkNode& internet, IceSessions& sessions, utils::TimeSource& timeSource, uint64_t runTime)
+{
+    const auto start = timeSource.getAbsoluteTime();
+    while (true)
+    {
+        internet.process(timeSource.getAbsoluteTime());
+        int64_t timeout = std::numeric_limits<int64_t>::max();
+
+        for (auto& session : sessions)
+        {
+            auto sessionTimeout = session->processTimeout(timeSource.getAbsoluteTime());
+            internet.process(timeSource.getAbsoluteTime());
+            if (sessionTimeout >= 0)
+            {
+                timeout = std::min(timeout, sessionTimeout);
+            }
+        }
+        if (timeout > 0)
+        {
+            if (utils::Time::diffGE(start, timeSource.getAbsoluteTime() + timeout + 2, runTime))
+            {
+                return false;
+            }
+            timeSource.advance(timeout + 2);
+        }
+    }
+}
+
+TEST_F(IceTest, iceprobes)
 {
     fakenet::Internet internet;
 
@@ -842,10 +892,9 @@ TEST(IceTest, iceprobes)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
     logStatus(sessions);
 
@@ -858,7 +907,7 @@ TEST(IceTest, iceprobes)
     EXPECT_FALSE(selectedPair1.second.address.empty());
 }
 
-TEST(IceTest, iceprobes2)
+TEST_F(IceTest, iceprobes2)
 {
     fakenet::Internet internet;
 
@@ -884,10 +933,9 @@ TEST(IceTest, iceprobes2)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -901,7 +949,7 @@ TEST(IceTest, iceprobes2)
     EXPECT_TRUE(firewall2.hasIp(pair2.first.address));
 }
 
-TEST(IceTest, timerNoCandidates)
+TEST_F(IceTest, timerNoCandidates)
 {
     fakenet::Internet internet;
 
@@ -927,25 +975,24 @@ TEST(IceTest, timerNoCandidates)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     setRemoteCandidates(*sessions[1], *sessions[0]);
     // session[0] will not have remote candidates
     sessions[1]->setRemoteCredentials(sessions[0]->getLocalCredentials());
     sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
 
-    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLED, timeSource);
-    sessions[0]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource);
+    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLED, timeSource.getAbsoluteTime());
+    sessions[0]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource.getAbsoluteTime());
 
-    EXPECT_LE(sessions[1]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
-    EXPECT_EQ(sessions[0]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
+    EXPECT_LE(sessions[1]->nextTimeout(timeSource.getAbsoluteTime()), config.maxRTO * utils::Time::ms);
+    EXPECT_EQ(sessions[0]->nextTimeout(timeSource.getAbsoluteTime()), config.maxRTO * utils::Time::ms);
 
     auto rc = establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
     EXPECT_TRUE(rc);
 }
 
 // ice must work also if one endpoint cannot acquire public candidates using stun
-TEST(IceTest, timerNoPublicCandidates)
+TEST_F(IceTest, timerNoPublicCandidates)
 {
     fakenet::Internet internet;
 
@@ -964,19 +1011,18 @@ TEST(IceTest, timerNoPublicCandidates)
     endpoint1.attach(sessions[0]);
     endpoint2.attach(sessions[1]);
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     setRemoteCandidates(*sessions[1], *sessions[0]);
     // session[0] will not have remote candidates
     sessions[1]->setRemoteCredentials(sessions[0]->getLocalCredentials());
     sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
-    sessions[0]->probeRemoteCandidates(ice::IceRole::CONTROLLED, timeSource);
+    sessions[0]->probeRemoteCandidates(ice::IceRole::CONTROLLED, timeSource.getAbsoluteTime());
 
     auto rc = establishIce(internet, sessions, timeSource, utils::Time::sec * 2);
 
-    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource);
+    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource.getAbsoluteTime());
 
-    EXPECT_LE(sessions[1]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
-    EXPECT_EQ(sessions[0]->nextTimeout(timeSource), config.maxRTO * utils::Time::ms);
+    EXPECT_LE(sessions[1]->nextTimeout(timeSource.getAbsoluteTime()), config.maxRTO * utils::Time::ms);
+    EXPECT_EQ(sessions[0]->nextTimeout(timeSource.getAbsoluteTime()), config.maxRTO * utils::Time::ms);
 
     rc = establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
     EXPECT_TRUE(rc);
@@ -985,7 +1031,7 @@ TEST(IceTest, timerNoPublicCandidates)
 // client1 behind 2 firewalls. fw2 has private stun server
 // fw1 has two public stun servers
 // client2 directly on internet
-TEST(IceTest, iceblockedroutes)
+TEST_F(IceTest, iceblockedroutes)
 {
     fakenet::Internet internet;
 
@@ -1019,10 +1065,9 @@ TEST(IceTest, iceblockedroutes)
     stunServers.push_back(stunServer2.getIp());
     stunServers.push_back(stunServer3.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -1033,7 +1078,7 @@ TEST(IceTest, iceblockedroutes)
     EXPECT_TRUE(pair2.first.baseAddress == endpoint2._address);
 }
 
-TEST(IceTest, fixedportmap)
+TEST_F(IceTest, fixedportmap)
 {
     fakenet::Internet internet;
 
@@ -1061,21 +1106,20 @@ TEST(IceTest, fixedportmap)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer1.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
-    sessions[0]->gatherLocalCandidates(stunServers, timeSource);
+    sessions[0]->gatherLocalCandidates(stunServers, timeSource.getAbsoluteTime());
 
     while (sessions[0]->getState() != ice::IceSession::State::READY)
     {
-        internet.process(timeSource);
-        sessions[0]->processTimeout(timeSource);
-        internet.process(timeSource);
+        internet.process(timeSource.getAbsoluteTime());
+        sessions[0]->processTimeout(timeSource.getAbsoluteTime());
+        internet.process(timeSource.getAbsoluteTime());
         if (sessions[0]->getState() != ice::IceSession::State::READY)
         {
-            timeSource += sessions[0]->nextTimeout(timeSource) + 2;
+            timeSource.advance(sessions[0]->nextTimeout(timeSource.getAbsoluteTime()) + 2);
         }
     }
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -1086,7 +1130,7 @@ TEST(IceTest, fixedportmap)
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
 }
 
-TEST(IceTest, noroute)
+TEST_F(IceTest, noroute)
 {
     fakenet::Internet internet;
 
@@ -1109,9 +1153,8 @@ TEST(IceTest, noroute)
     endpoint1.attach(sessions[0]);
     endpoint2.attach(sessions[1]);
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -1120,7 +1163,7 @@ TEST(IceTest, noroute)
     EXPECT_TRUE(pair2.second.empty());
 }
 
-TEST(IceTest, fixedportmapNogathering)
+TEST_F(IceTest, fixedportmapNogathering)
 {
     fakenet::Internet internet;
 
@@ -1151,9 +1194,8 @@ TEST(IceTest, fixedportmapNogathering)
         endpoint2._address,
         ice::IceCandidate::Type::SRFLX));
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -1164,7 +1206,7 @@ TEST(IceTest, fixedportmapNogathering)
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
 }
 
-TEST(IceTest, icev6)
+TEST_F(IceTest, icev6)
 {
     fakenet::Internet internet;
 
@@ -1188,10 +1230,9 @@ TEST(IceTest, icev6)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -1202,7 +1243,7 @@ TEST(IceTest, icev6)
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
 }
 
-TEST(IceTest, icev6sameFw)
+TEST_F(IceTest, icev6sameFw)
 {
     fakenet::Internet internet;
 
@@ -1225,10 +1266,9 @@ TEST(IceTest, icev6sameFw)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -1239,7 +1279,7 @@ TEST(IceTest, icev6sameFw)
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
 }
 
-TEST(IceTest, icev6v4Mix)
+TEST_F(IceTest, icev6v4Mix)
 {
     fakenet::Internet internet;
 
@@ -1270,10 +1310,9 @@ TEST(IceTest, icev6v4Mix)
     stunServers.push_back(stunServer.getIp());
     stunServers.push_back(stunServerIp4.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     auto pair1 = sessions[0]->getSelectedPair();
@@ -1289,7 +1328,11 @@ TEST(IceTest, icev6v4Mix)
     EXPECT_EQ(endpoint4.addressIncompatibilityCount, 0);
 }
 
-TEST(IceRobustness, badLength)
+class IceRobustness : public IceTest
+{
+};
+
+TEST_F(IceRobustness, badLength)
 {
     using namespace ice;
     StunMessage msg;
@@ -1302,7 +1345,7 @@ TEST(IceRobustness, badLength)
     EXPECT_FALSE(msg.isValid());
 }
 
-TEST(IceRobustness, badAddress)
+TEST_F(IceRobustness, badAddress)
 {
     using namespace ice;
     StunMessage msg;
@@ -1316,7 +1359,7 @@ TEST(IceRobustness, badAddress)
     EXPECT_FALSE(msg.isValid());
 }
 
-TEST(IceRobustness, stringNullTermination)
+TEST_F(IceRobustness, stringNullTermination)
 {
     using namespace ice;
     StunMessage msg;
@@ -1334,7 +1377,7 @@ TEST(IceRobustness, stringNullTermination)
     EXPECT_TRUE(msg.isValid());
 }
 
-TEST(IceRobustness, earlyProbes)
+TEST_F(IceRobustness, earlyProbes)
 {
     fakenet::Internet internet;
 
@@ -1358,7 +1401,6 @@ TEST(IceRobustness, earlyProbes)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     // provide one side with candidates and credentials
     logger::info("GATHER PHASE COMPLETE", "");
@@ -1377,19 +1419,20 @@ TEST(IceRobustness, earlyProbes)
     EXPECT_EQ(sessions[0]->getRemoteCandidates().size(), 0);
 
     logger::info("probing from session %u", "", 0);
-    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource);
+    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource.getAbsoluteTime());
 
     int iterations = 0;
-    const auto startTimeNoCredentials = timeSource;
-    for (bool running = true; running && timeSource - startTimeNoCredentials < utils::Time::sec * 5; iterations++)
+    const auto startTimeNoCredentials = timeSource.getAbsoluteTime();
+    for (bool running = true; running && timeSource.getAbsoluteTime() - startTimeNoCredentials < utils::Time::sec * 5;
+         iterations++)
     {
-        internet.process(timeSource);
+        internet.process(timeSource.getAbsoluteTime());
         int64_t timeout = std::numeric_limits<int64_t>::max();
         running = false;
         for (auto& session : sessions)
         {
-            auto sessionTimeout = session->processTimeout(timeSource);
-            internet.process(timeSource);
+            auto sessionTimeout = session->processTimeout(timeSource.getAbsoluteTime());
+            internet.process(timeSource.getAbsoluteTime());
             if (session->getState() == ice::IceSession::State::CONNECTING)
             {
                 running = true;
@@ -1401,7 +1444,7 @@ TEST(IceRobustness, earlyProbes)
         }
         if (running && timeout > 0)
         {
-            timeSource += timeout + 2;
+            timeSource.advance(timeout + 2);
         }
     }
 
@@ -1415,16 +1458,16 @@ TEST(IceRobustness, earlyProbes)
 
     sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
     setRemoteCandidates(*sessions[0], *sessions[1]);
-    sessions[0]->probeRemoteCandidates(sessions[1]->getRole(), timeSource);
+    sessions[0]->probeRemoteCandidates(sessions[1]->getRole(), timeSource.getAbsoluteTime());
     for (bool running = true; running; iterations++)
     {
-        internet.process(timeSource);
+        internet.process(timeSource.getAbsoluteTime());
         int64_t timeout = std::numeric_limits<int64_t>::max();
         running = false;
         for (auto& session : sessions)
         {
-            auto sessionTimeout = session->processTimeout(timeSource);
-            internet.process(timeSource);
+            auto sessionTimeout = session->processTimeout(timeSource.getAbsoluteTime());
+            internet.process(timeSource.getAbsoluteTime());
             if (session->getState() == ice::IceSession::State::CONNECTING)
             {
                 running = true;
@@ -1436,7 +1479,7 @@ TEST(IceRobustness, earlyProbes)
         }
         if (running && timeout > 0)
         {
-            timeSource += timeout + 2;
+            timeSource.advance(timeout + 2);
         }
     }
 
@@ -1456,7 +1499,7 @@ TEST(IceRobustness, earlyProbes)
         log(selectedPair1.second, "remote");
     }
 
-    const auto duration = timeSource - startTimeNoCredentials;
+    const auto duration = timeSource.getAbsoluteTime() - startTimeNoCredentials;
     EXPECT_LT(duration, utils::Time::sec * 6);
     auto candidates1 = sessions[0]->getLocalCandidates();
     ASSERT_EQ(candidates1.size(), 2);
@@ -1466,7 +1509,7 @@ TEST(IceRobustness, earlyProbes)
     auto selectedPair0 = sessions[0]->getSelectedPair();
     EXPECT_EQ(selectedPair0.first.baseAddress, endpoint1._address);
     EXPECT_TRUE(selectedPair0.first.address.equalsIp(firewall1.getPublicIp()));
-    EXPECT_EQ(selectedPair0.first.type, ice::IceCandidate::Type::PRFLX);
+    EXPECT_EQ(selectedPair0.first.type, ice::IceCandidate::Type::SRFLX);
     EXPECT_TRUE(selectedPair0.second.address.equalsIp(firewall2.getPublicIp()));
 
     auto remoteCandidates1 = sessions[0]->getRemoteCandidates();
@@ -1475,7 +1518,7 @@ TEST(IceRobustness, earlyProbes)
     EXPECT_TRUE(selectedPair1.second.address.equalsIp(firewall1.getPublicIp()));
 }
 
-TEST(IceRobustness, roleConflict)
+TEST_F(IceRobustness, roleConflict)
 {
     fakenet::Internet internet;
 
@@ -1499,12 +1542,11 @@ TEST(IceRobustness, roleConflict)
     std::vector<transport::SocketAddress> stunServers;
     stunServers.push_back(stunServer.getIp());
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     gatherCandidates(internet, stunServers, sessions, timeSource);
     // provide one side with candidates and credentials
     logger::info("GATHER PHASE COMPLETE", "");
     exchangeInfo(*sessions[0], *sessions[1]);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     ASSERT_EQ(sessions[0]->getState(), ice::IceSession::State::CONNECTED);
@@ -1524,7 +1566,7 @@ TEST(IceRobustness, roleConflict)
     }
 }
 
-TEST(IceTest, udpTcpTimeout)
+TEST_F(IceTest, udpTcpTimeout)
 {
     fakenet::Internet internet;
 
@@ -1549,8 +1591,6 @@ TEST(IceTest, udpTcpTimeout)
     endpoint2.attach(sessions[1]);
     endpoint2b.attach(sessions[1]);
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
-
     exchangeInfo(*sessions[0], *sessions[1]);
     sessions[0]->addRemoteCandidate(ice::IceCandidate("werwe",
                                         ice::IceComponent::RTP,
@@ -1566,7 +1606,7 @@ TEST(IceTest, udpTcpTimeout)
         endpoint2b._address,
         ice::TcpType::PASSIVE);
 
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
     establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
 
     ASSERT_EQ(sessions[0]->getState(), ice::IceSession::State::CONNECTED);
@@ -1578,7 +1618,7 @@ TEST(IceTest, udpTcpTimeout)
     EXPECT_EQ(selectedPairClient.second.address.getPort(), 3000);
 }
 
-TEST(IceTest, serialize)
+TEST_F(IceTest, serialize)
 {
     memory::AudioPacket p;
     memory::MemoryFile f(p.get(), memory::AudioPacket::size);
@@ -1622,7 +1662,7 @@ TEST(IceTest, serialize)
     }
 }
 
-TEST(IceTest, transactionId)
+TEST_F(IceTest, transactionId)
 {
     __uint128_t id = (__uint128_t(0x9012121102568943ull) << 64) | 0x6623184555672389ull;
     IndexableInteger<__uint128_t, uint32_t> id2(id);
@@ -1649,7 +1689,7 @@ public:
     MOCK_METHOD(void, cancelStunTransaction, (__uint128_t transactionId), (override));
 };
 
-TEST(IceTest, retransmissions)
+TEST_F(IceTest, retransmissions)
 {
     auto networkMockA = std::make_unique<testing::NiceMock<IceEndpointMock>>();
     auto networkMockB = std::make_unique<testing::NiceMock<IceEndpointMock>>();
@@ -1681,15 +1721,14 @@ TEST(IceTest, retransmissions)
                            size_t len,
                            uint64_t timestamp) { timestamps.push_back(timestamp); });
 
-    uint64_t timeSource = utils::Time::getAbsoluteTime();
     exchangeInfo(sessions);
-    startProbes(sessions, timeSource);
+    startProbes(sessions, timeSource.getAbsoluteTime());
 
     for (int i = 0; i < 2000; ++i)
     {
-        sessions[0]->processTimeout(timeSource);
+        sessions[0]->processTimeout(timeSource.getAbsoluteTime());
 
-        timeSource += 10 * utils::Time::ms;
+        timeSource.advance(10 * utils::Time::ms);
     }
 
     EXPECT_GT(timestamps.size(), 6);
@@ -1700,4 +1739,58 @@ TEST(IceTest, retransmissions)
         EXPECT_EQ(timestamps[t + 1] - timestamps[t], expectedInterval);
         expectedInterval = std::min(2 * (timestamps[t + 1] - timestamps[t]), utils::Time::sec * 1);
     }
+}
+
+// client has one port created by stun probe through fw.
+// Client also has another vpn interface that can reach SMB directly.
+// SMB is not told about the client candidates.
+TEST_F(IceTest, vpnStun)
+{
+    fakenet::Internet internet;
+
+    FakeStunServer stunServer(transport::SocketAddress::parse("64.233.165.127", 19302), internet);
+    fakenet::Firewall firewallLocal(transport::SocketAddress::parse("216.93.246.10", 0), internet);
+    fakenet::Firewall firewallVpn(transport::SocketAddress::parse("116.93.24.11", 0), internet);
+
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("192.168.1.10", 2000), firewallLocal);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.0.20", 3000), firewallVpn);
+
+    FakeEndpoint smbEndpoint(transport::SocketAddress::parse("111.11.1.11", 10000), internet);
+
+    ice::IceConfig config;
+    IceSessions sessions;
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr));
+
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(2, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLED, nullptr));
+
+    endpoint1.attach(sessions[0]);
+    endpoint2.attach(sessions[0]);
+
+    smbEndpoint.attach(sessions[1]);
+
+    std::vector<transport::SocketAddress> stunServers;
+    stunServers.push_back(stunServer.getIp());
+
+    gatherCandidates(internet, stunServers, sessions, timeSource);
+
+    setRemoteCandidates(*sessions[0], *sessions[1]);
+    sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
+    sessions[1]->setRemoteCredentials(sessions[0]->getLocalCredentials());
+
+    startProbes(sessions, timeSource.getAbsoluteTime());
+    establishIce(internet, sessions, timeSource, utils::Time::sec * 30);
+
+    logStatus(sessions);
+    runIce(internet, sessions, timeSource, utils::Time::sec * 90);
+
+    auto candidates1 = sessions[0]->getLocalCandidates();
+    EXPECT_EQ(candidates1[0].address, endpoint1._address);
+    EXPECT_TRUE(candidates1[2].address.equalsIp(firewallLocal.getPublicIp()));
+
+    auto selectedPair1 = sessions[0]->getSelectedPair();
+    EXPECT_TRUE(selectedPair1.first.baseAddress.equalsIp(endpoint1.getLocalPort()));
+    EXPECT_FALSE(selectedPair1.first.address.empty());
+    EXPECT_FALSE(selectedPair1.second.address.empty());
 }

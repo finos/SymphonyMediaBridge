@@ -35,7 +35,7 @@ public:
     void reInitialize();
 
 private:
-    uint32_t position(uint64_t hashValue, uint32_t offset) const { return (hashValue + offset) & (_index.size() - 1); }
+    uint32_t position(uint64_t hashValue, uint32_t offset) const { return (hashValue + offset) % _index.size(); }
 
     // Key and value will be stored atomically and is therefore exactly 64 bits.
     // A value of zero means empty slot

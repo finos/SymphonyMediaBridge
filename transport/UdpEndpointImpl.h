@@ -38,7 +38,7 @@ public:
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override;
 
     void unregisterListener(IEvents* listener) override;
-    void focusListener(const SocketAddress& remotePort, IEvents* listener) override;
+    void unregisterListener(const SocketAddress& remotePort, IEvents* listener) override;
 
 private:
     void dispatchReceivedPacket(const SocketAddress& srcAddress,

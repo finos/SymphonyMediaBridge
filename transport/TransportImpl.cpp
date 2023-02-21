@@ -1054,12 +1054,23 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
             return;
         }
 
-        const auto iceState = _rtpIceSession->getState();
-        if (iceState == ice::IceSession::State::CONNECTING || iceState == ice::IceSession::State::READY)
+        if (_rtpIceSession->isValidSource(timestamp, source))
         {
             endpoint.registerListener(source, this);
         }
+
+        auto timeout = _rtpIceSession->nextTimeout(timestamp);
         _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        auto newTimeout = _rtpIceSession->nextTimeout(timestamp);
+        if (newTimeout != timeout)
+        {
+            _jobQueue.getJobManager().replaceTimedJob<IceTimerTriggerJob>(getId(),
+                IceTimerTriggerJob::TIMER_ID,
+                newTimeout / 1000,
+                *this,
+                _jobQueue,
+                *_rtpIceSession);
+        }
     }
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)
     {
@@ -1948,8 +1959,6 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                 _peerRtpPort = candidatePair.second.address;
                 _peerRtcpPort = candidatePair.second.address;
 
-                _selectedRtp->focusListener(_peerRtpPort, this);
-
                 _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
 
                 logger::info("candidate selected %s %s, %s",
@@ -1957,10 +1966,6 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                     _peerRtpPort.getFamilyString().c_str(),
                     ice::toString(endpoint->getTransportType()).c_str(),
                     ice::toString(candidatePair.second.type).c_str());
-            }
-            else
-            {
-                endpoint->focusListener(SocketAddress(), this); // remove all src ip listeners for this transport
             }
         }
 
@@ -2326,6 +2331,29 @@ void TransportImpl::drainPacingBuffer(uint64_t timestamp, DrainPacingBufferMode 
 void TransportImpl::setTag(const char* tag)
 {
     utils::strncpy(_tag, tag, sizeof(_tag));
+}
+
+void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
+    ice::IceEndpoint* endpoint,
+    const transport::SocketAddress& sourcePort)
+{
+    for (auto& udpEndpoint : _rtpEndpoints)
+    {
+        if (endpoint == udpEndpoint.get())
+        {
+            udpEndpoint->unregisterListener(sourcePort, this);
+            return;
+        }
+    }
+
+    for (auto& udpEndpoint : _rtcpEndpoints)
+    {
+        if (endpoint == udpEndpoint.get())
+        {
+            udpEndpoint->unregisterListener(sourcePort, this);
+            return;
+        }
+    }
 }
 
 } // namespace transport

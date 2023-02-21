@@ -24,7 +24,7 @@ public:
     void shutdown();
 
     void advance();
-    void advance(uint64_t nanoSeconds);
+    void advance(uint64_t nanoSeconds) override;
     void waitForThreadsToSleep(uint32_t expectedCount, uint64_t timeoutNs);
     void runFor(uint64_t durationNs);
 

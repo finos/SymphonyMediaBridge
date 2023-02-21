@@ -184,6 +184,14 @@ void FakeUdpEndpoint::unregisterListener(IEvents* listener)
     }
 }
 
+void FakeUdpEndpoint::unregisterListener(const transport::SocketAddress& remotePort, IEvents* listener)
+{
+    if (!_receiveJobs.post(utils::bind(&FakeUdpEndpoint::internalUnregisterSourceListener, this, remotePort, listener)))
+    {
+        logger::error("failed to post unregister job", _name.c_str());
+    }
+}
+
 void FakeUdpEndpoint::start()
 {
     if (_state == CREATED)
@@ -285,6 +293,32 @@ void FakeUdpEndpoint::internalUnregisterListener(IEvents* listener)
         {
             _dtlsListeners.erase(item.first);
             listener->onUnregistered(*this);
+        }
+    }
+}
+
+void FakeUdpEndpoint::internalUnregisterSourceListener(const transport::SocketAddress& remotePort, IEvents* listener)
+{
+    // Hashmap allows erasing elements while iterating.
+    logger::debug("unregister %p", _name.c_str(), listener);
+
+    auto it = _dtlsListeners.find(remotePort);
+    if (it == _dtlsListeners.end())
+    {
+        return;
+    }
+
+    for (auto& item : _dtlsListeners)
+    {
+        if (item.second == listener)
+        {
+            logger::debug("remove listener on %s, unlisten %s",
+                _name.c_str(),
+                remotePort.toString().c_str(),
+                item.first.toString().c_str());
+            _dtlsListeners.erase(item.first);
+            listener->onUnregistered(*this);
+            break;
         }
     }
 }
@@ -499,24 +533,6 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         logger::info("Unexpected packet from %s", _name.c_str(), srcAddress.toString().c_str());
     }
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
-}
-
-void FakeUdpEndpoint::focusListener(const transport::SocketAddress& remotePort, IEvents* listener)
-{
-    _receiveJobs.post([this, remotePort, listener]() {
-        for (auto& item : _dtlsListeners)
-        {
-            if (item.second == listener && item.first != remotePort)
-            {
-                logger::debug("focus listener on %s, unlisten %s",
-                    _name.c_str(),
-                    remotePort.toString().c_str(),
-                    item.first.toString().c_str());
-                _dtlsListeners.erase(item.first);
-                listener->onUnregistered(*this);
-            }
-        }
-    });
 }
 
 void FakeUdpEndpoint::onSocketPollStarted(int fd) {}

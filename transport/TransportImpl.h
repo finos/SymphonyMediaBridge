@@ -186,20 +186,22 @@ public: // Transport
 
     uint64_t getLastReceivedPacketTimestamp() const override { return _lastReceivedPacketTimestamp; }
 
-public: // SslWriteBioListener
+private: // SslWriteBioListener
     // Called from Transport serial thread
     int32_t sendDtls(const char* buffer, uint32_t length) override;
     void onDtlsStateChange(SrtpClient* srtpClient, SrtpClient::State state) override;
 
-public:
     /** Called from transport's serial jobmanager */
     void onIceStateChanged(ice::IceSession* session, ice::IceSession::State state) override;
     void onIceCompleted(ice::IceSession* session) override;
     void onIcePreliminary(ice::IceSession* session,
         ice::IceEndpoint* endpoint,
         const SocketAddress& sourcePort) override;
+    void onIceDiscardCandidate(ice::IceSession* session,
+        ice::IceEndpoint* endpoint,
+        const transport::SocketAddress& sourcePort) override;
 
-public: // end point callbacks
+    // end point callbacks
     void onRegistered(Endpoint& endpoint) override;
     void onServerPortRegistered(ServerEndpoint& endpoint) override;
     void onUnregistered(Endpoint& endpoint) override;
