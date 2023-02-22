@@ -32,7 +32,7 @@ class VideoNackReceiveJobTest : public ::testing::Test
 
         _rtxOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(rtxSsrc,
             *_allocator,
-            bridge::RtpMap(bridge::RtpMap::Format::VP8RTX));
+            bridge::RtpMap(bridge::RtpMap::Format::RTX));
 
         _packetCache = std::make_unique<bridge::PacketCache>("VideoNackReceiveJobTest", mediaSsrc);
         _mainOutboundContext->packetCache.set(_packetCache.get());

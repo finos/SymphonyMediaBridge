@@ -1,7 +1,6 @@
 #pragma once
 
 #include "bridge/endpointActions/ActionContext.h"
-#include "config/Config.h"
 #include "httpd/HttpRequestHandler.h"
 #include <functional>
 #include <map>
@@ -26,6 +25,7 @@ class ProbeServer;
 
 namespace utils
 {
+class Config;
 namespace StringTokenizer
 {
 struct Token;

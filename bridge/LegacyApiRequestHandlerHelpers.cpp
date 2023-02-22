@@ -65,9 +65,13 @@ std::vector<RtpMap> makeRtpMaps(const legacyapi::Channel& channel)
         {
             rtpMaps.emplace_back(RtpMap::Format::VP8);
         }
+        else if (payloadType._name.compare("H264") == 0)
+        {
+            rtpMaps.emplace_back(RtpMap::Format::H264);
+        }
         else if (payloadType._name.compare("rtx") == 0)
         {
-            rtpMaps.emplace_back(RtpMap::Format::VP8RTX);
+            rtpMaps.emplace_back(RtpMap::Format::RTX);
         }
 
         for (const auto& parameter : payloadType._parameters)

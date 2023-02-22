@@ -1,7 +1,7 @@
 #include "bridge/engine/VideoForwarderRtxReceiveJob.h"
 #include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineMixer.h"
-#include "bridge/engine/Vp8Rewriter.h"
+#include "bridge/engine/RtpVideoRewriter.h"
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "rtp/RtpHeader.h"
@@ -73,7 +73,7 @@ void VideoForwarderRtxReceiveJob::run()
     }
 
     _rtxSsrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
-    Vp8Rewriter::rewriteRtxPacket(*_packet,
+    RtpVideoRewriter::rewriteRtxPacket(*_packet,
         _mainSsrc,
         _ssrcContext.rtpMap.payloadType,
         _sender->getLoggableId().c_str());

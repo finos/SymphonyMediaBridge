@@ -1,9 +1,13 @@
 #pragma once
-#include "config/Config.h"
 #include <atomic>
+
+namespace config
+{
+class Config;
+}
+
 namespace bridge
 {
-
 class MixerManager;
 } // namespace bridge
 
@@ -33,4 +37,5 @@ struct ActionContext
     transport::ProbeServer& probeServer;
     const config::Config& config;
 };
+
 } // namespace bridge

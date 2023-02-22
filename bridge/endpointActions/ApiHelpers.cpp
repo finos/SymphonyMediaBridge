@@ -1,13 +1,14 @@
-#include "ApiHelpers.h"
-#include "ActionContext.h"
+#include "bridge/endpointActions/ApiHelpers.h"
 #include "api/EndpointDescription.h"
 #include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
+#include "bridge/endpointActions/ActionContext.h"
 #include "codec/Opus.h"
 #include "codec/Vp8.h"
 #include "httpd/RequestErrorException.h"
 #include "utils/CheckedCast.h"
 #include "utils/Format.h"
+#include <string>
 
 namespace bridge
 {
@@ -25,7 +26,7 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext* context,
     return scopedMixerLock;
 }
 
-void addDefaultAudioProperties(api::Audio& audioChannel)
+void addDefaultAudioProperties(api::Audio& audio)
 {
     api::PayloadType opus;
     opus.id = codec::Opus::payloadType;
@@ -35,36 +36,70 @@ void addDefaultAudioProperties(api::Audio& audioChannel)
     opus.parameters.emplace_back("minptime", "10");
     opus.parameters.emplace_back("useinbandfec", "1");
 
-    audioChannel.payloadType.set(opus);
-    audioChannel.rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
-    audioChannel.rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
-    audioChannel.rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
+    audio.payloadType.set(opus);
+    audio.rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
+    audio.rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
+    audio.rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
 }
 
-void addDefaultVideoProperties(api::Video& videoChannel)
+void addVp8VideoProperties(api::Video& video)
 {
+    api::PayloadType vp8;
+    vp8.id = 100;
+    vp8.name = "VP8";
+    vp8.clockRate = 90000;
+    vp8.rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
+    vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
+    vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
+    video.payloadTypes.push_back(vp8);
+}
+
+void addH264VideoProperties(api::Video& video, const std::string& profileLevelId, const uint32_t packetizationMode)
+{
+    api::PayloadType h264;
+    h264.id = 100;
+    h264.name = "H264";
+    h264.clockRate = 90000;
+    h264.parameters.emplace_back("level-asymmetry-allowed", "1");
+
+    if (packetizationMode > 1)
     {
-        api::PayloadType vp8;
-        vp8.id = codec::Vp8::payloadType;
-        vp8.name = "VP8";
-        vp8.clockRate = codec::Vp8::sampleRate;
-        vp8.rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
-        vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
-        vp8.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
-        videoChannel.payloadTypes.push_back(vp8);
+        logger::warn("ApiRequestHandler", "Unsupported H264 packetizationMode in config, using default 0");
+        h264.parameters.emplace_back("packetization-mode", "0");
+    }
+    else
+    {
+        h264.parameters.emplace_back("packetization-mode", std::to_string(packetizationMode));
     }
 
+    if (profileLevelId.empty() || profileLevelId.size() != 6)
     {
-        api::PayloadType vp8Rtx;
-        vp8Rtx.id = codec::Vp8::rtxPayloadType;
-        vp8Rtx.name = "rtx";
-        vp8Rtx.clockRate = codec::Vp8::sampleRate;
-        vp8Rtx.parameters.emplace_back("apt", std::to_string(codec::Vp8::payloadType));
-        videoChannel.payloadTypes.push_back(vp8Rtx);
+        logger::warn("ApiRequestHandler", "Malformed H264 profileLevelId in config, using default 42001f");
+        h264.parameters.emplace_back("profile-level-id", "42001f");
+    }
+    else
+    {
+        h264.parameters.emplace_back("profile-level-id", profileLevelId);
     }
 
-    videoChannel.rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
-    videoChannel.rtpHeaderExtensions.emplace_back(4, "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id");
+    h264.parameters.emplace_back("profile-level-id", profileLevelId);
+    h264.rtcpFeedbacks.emplace_back("goog-remb", utils::Optional<std::string>());
+    h264.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>());
+    h264.rtcpFeedbacks.emplace_back("nack", utils::Optional<std::string>("pli"));
+    video.payloadTypes.push_back(h264);
+}
+
+void addDefaultVideoProperties(api::Video& video)
+{
+    api::PayloadType vp8Rtx;
+    vp8Rtx.id = 96;
+    vp8Rtx.name = "rtx";
+    vp8Rtx.clockRate = 90000;
+    vp8Rtx.parameters.emplace_back("apt", std::to_string(codec::Vp8::payloadType));
+    video.payloadTypes.push_back(vp8Rtx);
+
+    video.rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
+    video.rtpHeaderExtensions.emplace_back(4, "urn:ietf:params:rtp-hdrext:sdes:rtp-stream-id");
 }
 
 ice::TransportType parseTransportType(const std::string& protocol)
@@ -213,13 +248,17 @@ bridge::RtpMap makeRtpMap(const api::Video& video, const api::PayloadType& paylo
 {
     bridge::RtpMap rtpMap;
 
-    if (payloadType.name.compare("VP8") == 0)
+    if (payloadType.name == "VP8")
     {
         rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8, payloadType.id, payloadType.clockRate);
     }
-    else if (payloadType.name.compare("rtx") == 0)
+    else if (payloadType.name == "H264")
     {
-        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::VP8RTX, codec::Vp8::rtxPayloadType, codec::Vp8::sampleRate);
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::H264, payloadType.id, payloadType.clockRate);
+    }
+    else if (payloadType.name == "rtx")
+    {
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::RTX, payloadType.id, payloadType.clockRate);
     }
     else
     {

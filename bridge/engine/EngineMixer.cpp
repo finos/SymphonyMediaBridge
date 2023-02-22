@@ -1246,7 +1246,7 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
         auto receiveCounters = inboundContext.sender->getCumulativeReceiveCounters(ssrc);
 
         if (!recentActivity && receiveCounters.packets > 5 && inboundContext.activeMedia &&
-            inboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
+            inboundContext.rtpMap.format != RtpMap::Format::RTX)
         {
             inboundContext.activeMedia = false;
             _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false);
@@ -1286,7 +1286,7 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
                     decommissionInboundContext(inboundContext.ssrc);
                 }
             }
-            else if (inboundContext.rtpMap.format != RtpMap::Format::VP8RTX)
+            else if (inboundContext.rtpMap.format != RtpMap::Format::RTX)
             {
                 logger::info("Inbound context ssrc %u has been idle for 5 minutes", _loggableId.c_str(), ssrc);
                 decommissionInboundContext(inboundContext.ssrc);
@@ -1892,9 +1892,10 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         onAudioRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
     case bridge::RtpMap::Format::VP8:
+    case bridge::RtpMap::Format::H264:
         onVideoRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
-    case bridge::RtpMap::Format::VP8RTX:
+    case bridge::RtpMap::Format::RTX:
         onVideoRtpRtxPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
     default:
