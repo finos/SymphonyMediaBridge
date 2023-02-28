@@ -566,6 +566,7 @@ set(TEST_FILES
     test/utils/TimeSourceTest.cpp
     test/utils/ApiUtils.cpp
     test/utils/SimpleJsonTest.cpp
+    test/utils/NeighboursTest.cpp
     test/legacyapi/ParserTest.cpp
     test/legacyapi/GeneratorTest.cpp
     test/bridge/EngineStreamDirectorTest.cpp

@@ -42,6 +42,7 @@
 #include "transport/recp/RecStartStopEventBuilder.h"
 #include "transport/recp/RecStreamAddedEventBuilder.h"
 #include "transport/recp/RecStreamRemovedEventBuilder.h"
+#include "utils/Neighbours.h"
 #include "utils/SimpleJson.h"
 #include "utils/Span.h"
 #include "webrtc/DataChannel.h"
@@ -2364,50 +2365,6 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
         }
     }
 }
-
-namespace
-{
-template <class V, class T>
-bool isNeighbour(const V& groupList, const T& lookupTable)
-{
-    for (auto& entry : groupList)
-    {
-        if (lookupTable.contains(entry))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-template <class TMap>
-bool areNeighbours(const TMap& table1, const TMap& table2)
-{
-    if (table1.size() < table2.size())
-    {
-        for (auto& entry : table1)
-        {
-            if (table2.contains(entry.first))
-            {
-                return true;
-            }
-        }
-    }
-    else
-    {
-        for (auto& entry : table2)
-        {
-            if (table1.contains(entry.first))
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-} // namespace
 
 void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp)
 {
