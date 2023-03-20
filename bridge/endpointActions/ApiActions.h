@@ -16,6 +16,7 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext*, const std::strin
 httpd::Response allocateConference(ActionContext*, RequestLogger&, const httpd::Request&);
 
 httpd::Response getConferences(ActionContext* context, RequestLogger&);
+httpd::Response fetchBriefConferenceList(ActionContext* context, RequestLogger& requestLogger);
 
 httpd::Response processEndpointPostRequest(ActionContext* context,
     RequestLogger& requestLogger,
@@ -32,9 +33,7 @@ httpd::Response getEndpointInfo(ActionContext*,
     const httpd::Request&,
     const std::string& conferenceId,
     const std::string& endpointId);
-httpd::Response handleStats(ActionContext*,
-    RequestLogger&,
-    const httpd::Request&);
+httpd::Response handleStats(ActionContext*, RequestLogger&, const httpd::Request&);
 httpd::Response handleAbout(ActionContext*,
     RequestLogger&,
     const httpd::Request&,

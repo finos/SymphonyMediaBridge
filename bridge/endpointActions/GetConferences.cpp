@@ -20,4 +20,36 @@ httpd::Response getConferences(ActionContext* context, RequestLogger& requestLog
     requestLogger.setResponse(response);
     return response;
 }
+
+httpd::Response fetchBriefConferenceList(ActionContext* context, RequestLogger& requestLogger)
+{
+    nlohmann::json responseBodyJson = nlohmann::json::array();
+    auto& mixerManager = context->mixerManager;
+
+    auto mixerIds = mixerManager.getMixerIds();
+
+    for (const auto& mixerId : mixerIds)
+    {
+        Mixer* mixer;
+        auto mixerLock = context->mixerManager.getMixer(mixerId, mixer);
+        if (mixer)
+        {
+            nlohmann::json mixJson = {{"id", mixerId}};
+            auto endpoints = mixer->getEndpoints();
+            mixJson["usercount"] = endpoints.size();
+            mixJson["users"] = nlohmann::json::array();
+            auto& endpointArray = mixJson["users"];
+            for (auto& uid : endpoints)
+            {
+                endpointArray.push_back(uid);
+            }
+            responseBodyJson.push_back(mixJson);
+        };
+    }
+
+    httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
+    response._headers["Content-type"] = "text/json";
+    requestLogger.setResponse(response);
+    return response;
+}
 } // namespace bridge
