@@ -150,6 +150,7 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
             _ssrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
         _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
+        _ssrcContext.opusPacketRate.reset(new utils::AvgRateTracker(0.1));
     }
 
     codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
@@ -220,6 +221,7 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
     {
         return -1;
     }
+    _ssrcContext.opusPacketRate->update(1, utils::Time::getAbsoluteTime());
     int audioLevel = 0;
     if (needAudioLevel)
     {
@@ -238,6 +240,7 @@ int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPa
             _ssrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
         _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
+        _ssrcContext.opusPacketRate.reset(new utils::AvgRateTracker(0.1));
     }
 
     const auto rtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
@@ -248,6 +251,7 @@ int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPa
     {
         return -1;
     }
+    _ssrcContext.opusPacketRate->update(1, utils::Time::getAbsoluteTime());
     return codec::computeAudioLevel(pcmPacket);
 }
 
@@ -328,6 +332,11 @@ void AudioForwarderReceiveJob::run()
             _ssrcContext.markNextPacket = true;
         }
     }
+    else if (!_ssrcContext.opusDecoder)
+    {
+        // will touch the atomic only once. Reduces contention
+        _ssrcContext.hasAudioLevelExtension = false;
+    }
 
     if (!unprotect(*_packet))
     {
@@ -350,7 +359,7 @@ void AudioForwarderReceiveJob::run()
         {
             calculatedAudioLevel = 120;
         }
-        _activeMediaList.onNewAudioLevel(_packet->endpointIdHash, calculatedAudioLevel, false);
+        _activeMediaList.onNewAudioLevel(_packet->endpointIdHash, calculatedAudioLevel, isPtt.isSet() && isPtt.get());
         silence = calculatedAudioLevel > _silenceThresholdLevel;
         if (_ssrcContext.rtpMap.audioLevelExtId.isSet())
         {

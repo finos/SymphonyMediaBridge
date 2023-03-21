@@ -1682,6 +1682,10 @@ TEST_F(IntegrationTest, noAudioLevelExt)
             1500 * utils::Time::ms,
             responseBody);
         EXPECT_TRUE(statsSuccess);
+        logger::info("%s", "Test", responseBody.dump(3).c_str());
+        EXPECT_EQ(responseBody["inbound_audio_streams"].get<uint32_t>(), 3);
+        EXPECT_EQ(responseBody["inbound_audio_ext_streams"].get<uint32_t>(), 2);
+        EXPECT_NEAR(responseBody["opus_decode_packet_rate"].get<double>(), 50.0, 1.0);
 
         auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(3, endpoints.size());

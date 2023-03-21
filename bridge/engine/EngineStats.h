@@ -33,6 +33,9 @@ struct MixerStats
     uint32_t pacingQueue = 0;
     uint32_t rtxPacingQueue = 0;
 
+    double opusDecodePacketsPerSecond = 0;
+    uint32_t audioLevelExtensionStreamCount = 0;
+
     MixerStats& operator+=(const MixerStats& b)
     {
         audioInQueueSamples += b.audioInQueueSamples;
@@ -49,6 +52,8 @@ struct MixerStats
 
         pacingQueue += b.pacingQueue;
         rtxPacingQueue += b.rtxPacingQueue;
+        opusDecodePacketsPerSecond += b.opusDecodePacketsPerSecond;
+        audioLevelExtensionStreamCount += b.audioLevelExtensionStreamCount;
 
         return *this;
     }

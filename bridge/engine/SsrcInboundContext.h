@@ -47,6 +47,8 @@ public:
           isSsrcUsed(true),
           endpointIdHash(sender ? sender->getEndpointIdHash() : 0),
           shouldDropPackets(false),
+          hasAudioLevelExtension(true),
+          opusDecodePacketRate(0),
           _lastReceiveTime(timestamp)
     {
     }
@@ -87,6 +89,7 @@ public:
     uint32_t lastUnprotectedExtendedSequenceNumber;
     std::shared_ptr<VideoMissingPacketsTracker> videoMissingPacketsTracker;
     std::unique_ptr<codec::OpusDecoder> opusDecoder;
+    std::unique_ptr<utils::AvgRateTracker> opusPacketRate; // pkt/s
 
     // engine variables ==============================================
     bool activeMedia;
@@ -99,6 +102,8 @@ public:
     /** If an inbound stream is considered unstable, we can, in a simulcast scenario, decide to drop an inbound stream
      * early to avoid toggling between quality levels. If this is set to true, all incoming packets will be dropped. */
     std::atomic_bool shouldDropPackets;
+    std::atomic_bool hasAudioLevelExtension;
+    std::atomic<double> opusDecodePacketRate;
 
 private:
     std::atomic_uint64_t _lastReceiveTime;

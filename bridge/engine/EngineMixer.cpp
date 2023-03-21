@@ -1236,7 +1236,21 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
 
         if (!inboundContext.activeMedia)
         {
+            if (inboundContext.rtpMap.isAudio())
+            {
+                inboundContext.opusDecodePacketRate = 0;
+            }
             continue; // it will turn active on next packet arrival
+        }
+
+        if (inboundContext.rtpMap.isAudio() && inboundContext.sender)
+        {
+            inboundContext.sender->postOnQueue([&inboundContext]() {
+                if (inboundContext.opusPacketRate)
+                {
+                    inboundContext.opusDecodePacketRate = inboundContext.opusPacketRate->get();
+                }
+            });
         }
 
         const auto endpointIdHash = inboundContext.endpointIdHash.load();
@@ -1389,23 +1403,34 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
 
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
-        const auto audioRecvCounters = audioStreamEntry.second->transport.getAudioReceiveCounters(idleTimestamp);
-        const auto audioSendCounters = audioStreamEntry.second->transport.getAudioSendCounters(idleTimestamp);
-        const auto videoRecvCounters = audioStreamEntry.second->transport.getVideoReceiveCounters(idleTimestamp);
-        const auto videoSendCounters = audioStreamEntry.second->transport.getVideoSendCounters(idleTimestamp);
-        const auto pacingQueueCount = audioStreamEntry.second->transport.getPacingQueueCount();
-        const auto rtxPacingQueueCount = audioStreamEntry.second->transport.getRtxPacingQueueCount();
+        const auto* audioStream = audioStreamEntry.second;
+        const auto audioRecvCounters = audioStream->transport.getAudioReceiveCounters(idleTimestamp);
+        const auto audioSendCounters = audioStream->transport.getAudioSendCounters(idleTimestamp);
+        const auto videoRecvCounters = audioStream->transport.getVideoReceiveCounters(idleTimestamp);
+        const auto videoSendCounters = audioStream->transport.getVideoSendCounters(idleTimestamp);
+        const auto pacingQueueCount = audioStream->transport.getPacingQueueCount();
+        const auto rtxPacingQueueCount = audioStream->transport.getRtxPacingQueueCount();
 
         stats.inbound.audio += audioRecvCounters;
         stats.outbound.audio += audioSendCounters;
         stats.inbound.video += videoRecvCounters;
         stats.outbound.video += videoSendCounters;
-        stats.inbound.transport.addBandwidthGroup(audioStreamEntry.second->transport.getDownlinkEstimateKbps());
-        stats.inbound.transport.addRttGroup(audioStreamEntry.second->transport.getRtt() / utils::Time::ms);
+        stats.inbound.transport.addBandwidthGroup(audioStream->transport.getDownlinkEstimateKbps());
+        stats.inbound.transport.addRttGroup(audioStream->transport.getRtt() / utils::Time::ms);
         stats.inbound.transport.addLossGroup((audioRecvCounters + videoRecvCounters).getReceiveLossRatio());
         stats.outbound.transport.addLossGroup((audioSendCounters + videoSendCounters).getSendLossRatio());
         stats.pacingQueue += pacingQueueCount;
         stats.rtxPacingQueue += rtxPacingQueueCount;
+
+        if (audioStream->detectedAudioSsrc.isSet())
+        {
+            auto inboundSsrcContext = _ssrcInboundContexts.getItem(audioStream->detectedAudioSsrc.get());
+            if (inboundSsrcContext)
+            {
+                stats.opusDecodePacketsPerSecond += inboundSsrcContext->opusDecodePacketRate.load();
+                stats.audioLevelExtensionStreamCount += inboundSsrcContext->hasAudioLevelExtension ? 1 : 0;
+            }
+        }
     }
 
     for (auto& videoStreamEntry : _engineVideoStreams)
@@ -2429,11 +2454,16 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
     const auto& audioSsrcRewriteMap = _activeMediaList->getAudioSsrcRewriteMap();
     const auto rewriteMapItr = audioSsrcRewriteMap.find(packetInfo.packet()->endpointIdHash);
     const bool sourceMapped = (rewriteMapItr != audioSsrcRewriteMap.end());
-    const auto orignalSsrc = packetInfo.inboundContext()->ssrc;
+    const auto originalSsrc = packetInfo.inboundContext()->ssrc;
 
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
         auto* audioStream = audioStreamEntry.second;
+
+        if (audioStream && &audioStream->transport == packetInfo.transport())
+        {
+            audioStream->detectedAudioSsrc.set(originalSsrc);
+        }
         if (!audioStream || &audioStream->transport == packetInfo.transport() || audioStream->audioMixed)
         {
             continue;
@@ -2469,7 +2499,7 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         {
             ssrcOutboundContext = obtainOutboundForwardSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
-                orignalSsrc,
+                originalSsrc,
                 audioStream->rtpMap);
         }
 
@@ -2646,6 +2676,11 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
             continue;
         }
 
+        auto ssrcContext = packetInfo.inboundContext();
+        if (ssrcContext && !ssrcContext->activeMedia)
+        {
+            ssrcContext->activeMedia = true;
+        }
         forwardAudioRtpPacket(packetInfo, timestamp);
         forwardAudioRtpPacketRecording(packetInfo, timestamp);
         forwardAudioRtpPacketOverBarbell(packetInfo, timestamp);
