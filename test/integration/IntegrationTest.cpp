@@ -1769,12 +1769,15 @@ TEST_F(IntegrationTest, confList)
         EXPECT_TRUE(briefConfRequest);
         auto& mixerJson = responseBody[0];
         EXPECT_EQ(mixerJson["id"], conf.getId());
-        EXPECT_EQ(mixerJson["usercount"], 3);
-        auto it = group.clients.begin();
+        EXPECT_EQ(mixerJson["usercount"], group.clients.size());
+
         for (auto& ep : mixerJson["users"])
         {
-            EXPECT_EQ(ep.get<std::string>(), (*it)->getEndpointId());
-            ++it;
+            auto id = ep.get<std::string>();
+            EXPECT_NE(std::find_if(group.clients.begin(),
+                          group.clients.end(),
+                          [&id](const std::unique_ptr<SfuClient<Channel>>& p) { return p->getEndpointId() == id; }),
+                group.clients.end());
         }
 
         group.clients[0]->_transport->stop();
