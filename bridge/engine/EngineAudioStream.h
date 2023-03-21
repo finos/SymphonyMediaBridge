@@ -61,6 +61,8 @@ struct EngineAudioStream
     const uint64_t createdAt;
 
     memory::Map<uint32_t, bool, MAX_NEIGHBOUR_COUNT> neighbours;
+
+    utils::Optional<uint32_t> detectedAudioSsrc;
 };
 
 } // namespace bridge

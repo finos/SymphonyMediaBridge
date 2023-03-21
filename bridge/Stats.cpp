@@ -107,6 +107,9 @@ std::string MixerManagerStats::describe()
     result["inbound_video_streams"] = engineStats.activeMixers.inbound.video.activeStreamCount;
     result["outbound_video_streams"] = engineStats.activeMixers.outbound.video.activeStreamCount;
 
+    result["inbound_audio_ext_streams"] = engineStats.activeMixers.audioLevelExtensionStreamCount;
+    result["opus_decode_packet_rate"] = engineStats.activeMixers.opusDecodePacketsPerSecond;
+
     result["job_queue"] = jobQueueLength;
     result["loss_upload"] = engineStats.activeMixers.outbound.total().getSendLossRatio();
     result["loss_download"] = engineStats.activeMixers.inbound.total().getReceiveLossRatio();

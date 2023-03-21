@@ -1682,6 +1682,10 @@ TEST_F(IntegrationTest, noAudioLevelExt)
             1500 * utils::Time::ms,
             responseBody);
         EXPECT_TRUE(statsSuccess);
+        logger::info("%s", "Test", responseBody.dump(3).c_str());
+        EXPECT_EQ(responseBody["inbound_audio_streams"].get<uint32_t>(), 3);
+        EXPECT_EQ(responseBody["inbound_audio_ext_streams"].get<uint32_t>(), 2);
+        EXPECT_NEAR(responseBody["opus_decode_packet_rate"].get<double>(), 50.0, 1.0);
 
         auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(3, endpoints.size());
@@ -1765,12 +1769,15 @@ TEST_F(IntegrationTest, confList)
         EXPECT_TRUE(briefConfRequest);
         auto& mixerJson = responseBody[0];
         EXPECT_EQ(mixerJson["id"], conf.getId());
-        EXPECT_EQ(mixerJson["usercount"], 3);
-        auto it = group.clients.begin();
+        EXPECT_EQ(mixerJson["usercount"], group.clients.size());
+
         for (auto& ep : mixerJson["users"])
         {
-            EXPECT_EQ(ep.get<std::string>(), (*it)->getEndpointId());
-            ++it;
+            auto id = ep.get<std::string>();
+            EXPECT_NE(std::find_if(group.clients.begin(),
+                          group.clients.end(),
+                          [&id](const std::unique_ptr<SfuClient<Channel>>& p) { return p->getEndpointId() == id; }),
+                group.clients.end());
         }
 
         group.clients[0]->_transport->stop();
