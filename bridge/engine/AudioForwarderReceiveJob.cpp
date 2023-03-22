@@ -335,6 +335,13 @@ void AudioForwarderReceiveJob::run()
     else if (!_ssrcContext.opusDecoder)
     {
         // will touch the atomic only once. Reduces contention
+        if (_ssrcContext.hasAudioLevelExtension.load())
+        {
+            logger::info("endpoint %zu does not send audio level RTP header extension. ssrc %u ",
+                "AudioForwarderReceiveJob",
+                _sender->getEndpointIdHash(),
+                _ssrcContext.ssrc);
+        }
         _ssrcContext.hasAudioLevelExtension = false;
     }
 

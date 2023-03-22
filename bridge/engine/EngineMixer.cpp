@@ -1428,7 +1428,7 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
             if (inboundSsrcContext)
             {
                 stats.opusDecodePacketsPerSecond += inboundSsrcContext->opusDecodePacketRate.load();
-                stats.audioLevelExtensionStreamCount += inboundSsrcContext->hasAudioLevelExtension ? 1 : 0;
+                stats.audioLevelExtensionStreamCount += inboundSsrcContext->hasAudioLevelExtension.load() ? 1 : 0;
             }
         }
     }
