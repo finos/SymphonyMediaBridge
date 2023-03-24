@@ -536,6 +536,11 @@ void ActiveMediaList::process(const uint64_t timestamp,
         outAudioMapChanged |= updateActiveAudioList(top.participant);
         auto const& curParticipant = _audioParticipants.find(top.participant);
 
+        logger::debug("active talker %zu at score %.3f, noise %.3f",
+            _logId.c_str(),
+            top.participant,
+            top.score,
+            top.noiseLevel);
         if (top.score > _activeTalkerSilenceThresholdDb && activeTalkersSnapshot.count < activeTalkersSnapshot.maxSize)
         {
             ActiveTalker talker = {top.participant,
