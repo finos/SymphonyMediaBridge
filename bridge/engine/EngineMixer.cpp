@@ -2462,6 +2462,15 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
 
         if (audioStream && &audioStream->transport == packetInfo.transport())
         {
+            if (!audioStream->detectedAudioSsrc.isSet())
+            {
+                logger::info("%zu detected audio ssrc %u, negotiated ssrc %u, audio-lvl-extid %u",
+                    _loggableId.c_str(),
+                    audioStream->endpointIdHash,
+                    originalSsrc,
+                    audioStream->remoteSsrc.get(),
+                    audioStream->rtpMap.audioLevelExtId.valueOr(0));
+            }
             audioStream->detectedAudioSsrc.set(originalSsrc);
         }
         if (!audioStream || &audioStream->transport == packetInfo.transport() || audioStream->audioMixed)
