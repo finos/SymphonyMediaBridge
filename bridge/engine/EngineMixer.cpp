@@ -1236,15 +1236,12 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
 
         if (!inboundContext.activeMedia)
         {
-            if (inboundContext.rtpMap.isAudio())
-            {
-                inboundContext.opusDecodePacketRate = 0;
-            }
             continue; // it will turn active on next packet arrival
         }
 
         if (inboundContext.rtpMap.isAudio() && inboundContext.sender)
         {
+            logger::debug("pulling opus decode rate for %u", _loggableId.c_str(), inboundContext.ssrc);
             inboundContext.sender->postOnQueue([&inboundContext]() {
                 if (inboundContext.opusPacketRate)
                 {
@@ -1264,6 +1261,11 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
         {
             inboundContext.activeMedia = false;
             _engineStreamDirector->streamActiveStateChanged(endpointIdHash, ssrc, false);
+            if (inboundContext.rtpMap.isAudio())
+            {
+                logger::debug("clearing opus decode rate %u", _loggableId.c_str(), inboundContext.ssrc);
+                inboundContext.opusDecodePacketRate = 0;
+            }
 
             if (inboundContext.rtpMap.isVideo() && _engineVideoStreams.contains(endpointIdHash))
             {
