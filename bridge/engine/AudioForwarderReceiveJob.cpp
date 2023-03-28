@@ -357,6 +357,10 @@ void AudioForwarderReceiveJob::run()
     {
         calculatedAudioLevel = computeOpusAudioLevel(*_packet);
     }
+    else if (_ssrcContext.opusPacketRate)
+    {
+        _ssrcContext.opusPacketRate->set(0, 0);
+    }
 
     if (!audioLevel.isSet())
     {

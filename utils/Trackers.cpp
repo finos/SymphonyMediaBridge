@@ -49,6 +49,12 @@ void AvgRateTracker::update(double value, uint64_t timestamp)
     _prevTimestamp = timestamp;
 }
 
+void AvgRateTracker::set(double value, uint64_t interval)
+{
+    _value = value;
+    _avgTime = interval;
+}
+
 void MaxTracker::update(double value)
 {
     while (true)

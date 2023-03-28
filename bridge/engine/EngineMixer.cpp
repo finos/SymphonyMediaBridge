@@ -1243,14 +1243,9 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
         {
             if (inboundContext.hasRecentActivity(utils::Time::sec, timestamp))
             {
-                logger::debug("pulling opus decode rate for %u", _loggableId.c_str(), inboundContext.ssrc);
                 inboundContext.sender->postOnQueue([&inboundContext]() {
                     inboundContext.opusDecodePacketRate =
                         inboundContext.opusPacketRate ? inboundContext.opusPacketRate->get() : 0;
-                    logger::debug("opus decode rate for %u is %.2fpps",
-                        "Transport",
-                        inboundContext.ssrc,
-                        inboundContext.opusDecodePacketRate.load());
                 });
             }
             else
@@ -1434,11 +1429,6 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
             auto inboundSsrcContext = _ssrcInboundContexts.getItem(audioStream->detectedAudioSsrc.get());
             if (inboundSsrcContext)
             {
-                logger::debug("%zu collect opus stats from %u, %.1f pps",
-                    _loggableId.c_str(),
-                    audioStream->endpointIdHash,
-                    inboundSsrcContext->ssrc,
-                    inboundSsrcContext->opusDecodePacketRate.load());
                 stats.opusDecodePacketsPerSecond += inboundSsrcContext->opusDecodePacketRate.load();
                 stats.audioLevelExtensionStreamCount += inboundSsrcContext->hasAudioLevelExtension.load() ? 1 : 0;
             }
