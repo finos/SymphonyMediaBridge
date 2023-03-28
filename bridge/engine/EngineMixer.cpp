@@ -1241,13 +1241,18 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
 
         if (inboundContext.rtpMap.isAudio() && inboundContext.sender)
         {
-            logger::debug("pulling opus decode rate for %u", _loggableId.c_str(), inboundContext.ssrc);
-            inboundContext.sender->postOnQueue([&inboundContext]() {
-                if (inboundContext.opusPacketRate)
-                {
-                    inboundContext.opusDecodePacketRate = inboundContext.opusPacketRate->get();
-                }
-            });
+            if (inboundContext.hasRecentActivity(utils::Time::sec, timestamp))
+            {
+                logger::debug("pulling opus decode rate for %u", _loggableId.c_str(), inboundContext.ssrc);
+                inboundContext.sender->postOnQueue([&inboundContext]() {
+                    inboundContext.opusDecodePacketRate =
+                        inboundContext.opusPacketRate ? inboundContext.opusPacketRate->get() : 0;
+                });
+            }
+            else
+            {
+                inboundContext.opusDecodePacketRate = 0;
+            }
         }
 
         const auto endpointIdHash = inboundContext.endpointIdHash.load();
