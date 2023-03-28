@@ -248,7 +248,7 @@ int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPa
         logger::warn("opus decode failed for ssrc %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
         return -1;
     }
-    logger::debug("!!! dec opus to compute audio level for %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
+
     _ssrcContext.opusPacketRate->update(1, utils::Time::getAbsoluteTime());
     return codec::computeAudioLevel(pcmPacket);
 }
