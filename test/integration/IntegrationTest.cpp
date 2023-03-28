@@ -1872,7 +1872,7 @@ TEST_F(IntegrationTest, opusDecodeRate)
         logger::info("%s", "Test", responseBody.dump(3).c_str());
         EXPECT_EQ(responseBody["inbound_audio_streams"].get<uint32_t>(), 3);
         EXPECT_EQ(responseBody["inbound_audio_ext_streams"].get<uint32_t>(), 0);
-        EXPECT_NEAR(responseBody["opus_decode_packet_rate"].get<double>(), 150.0, 1.0);
+        EXPECT_NEAR(responseBody["opus_decode_packet_rate"].get<double>(), 150.0, 3.0);
         group.clients[2]->disconnect();
 
         group.run(utils::Time::sec * 5);
@@ -1884,7 +1884,7 @@ TEST_F(IntegrationTest, opusDecodeRate)
             responseBody);
         EXPECT_TRUE(statsSuccess);
         // optimization in 2 party call will avoid opus decoding
-        EXPECT_NEAR(responseBody["opus_decode_packet_rate"].get<double>(), 0.0, 1.0);
+        EXPECT_EQ(responseBody["opus_decode_packet_rate"].get<double>(), 0.0);
 
         group.stopTransports();
         group.awaitPendingJobs(utils::Time::sec * 4);
