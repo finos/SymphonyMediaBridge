@@ -45,7 +45,7 @@ void AvgRateTracker::update(double value, uint64_t timestamp)
     }
 
     _value += _alpha * (value - _value);
-    _avgTime += _alpha * ((timestamp - _prevTimestamp) - _avgTime);
+    _avgTime += _alpha * (static_cast<double>(timestamp - _prevTimestamp) - _avgTime);
     _prevTimestamp = timestamp;
 }
 
