@@ -1827,3 +1827,77 @@ TEST_F(IntegrationTest, confList)
         }
     });
 }
+
+TEST_F(IntegrationTest, opusDecodeRate)
+{
+    runTestInThread(expectedTestThreadCount(1), [this]() {
+        _config.readFromString(R"({
+        "ip":"127.0.0.1",
+        "ice.preferredIp":"127.0.0.1",
+        "ice.publicIpv4":"127.0.0.1",
+        "audio.lastN":1
+        })");
+
+        initBridge(_config);
+
+        const std::string baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>>
+            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, true);
+        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
+        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+        group.clients[0]->_audioSource->setUseAudioLevel(false);
+        group.clients[1]->_audioSource->setUseAudioLevel(false);
+        group.clients[2]->_audioSource->setUseAudioLevel(false);
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+        logger::info("%s", "Test", responseBody.dump(3).c_str());
+        EXPECT_EQ(responseBody["inbound_audio_streams"].get<uint32_t>(), 3);
+        EXPECT_EQ(responseBody["inbound_audio_ext_streams"].get<uint32_t>(), 0);
+        EXPECT_NEAR(responseBody["opus_decode_packet_rate"].get<double>(), 150.0, 1.0);
+        group.clients[2]->disconnect();
+
+        group.run(utils::Time::sec * 5);
+        utils::Time::nanoSleep(utils::Time::sec * 1);
+
+        statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+        // optimization in 2 party call will avoid opus decoding
+        EXPECT_NEAR(responseBody["opus_decode_packet_rate"].get<double>(), 0.0, 1.0);
+
+        group.stopTransports();
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
+        size_t freqId = 0;
+        for (auto id : {0, 1, 2})
+        {
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
+            EXPECT_EQ(data.dominantFrequencies.size(), 2);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+        }
+    });
+}
