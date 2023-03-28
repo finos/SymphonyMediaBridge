@@ -1434,6 +1434,11 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
             auto inboundSsrcContext = _ssrcInboundContexts.getItem(audioStream->detectedAudioSsrc.get());
             if (inboundSsrcContext)
             {
+                logger::debug("%zu collect opus stats from %u, %.1f pps",
+                    _loggableId.c_str(),
+                    audioStream->endpointIdHash,
+                    inboundSsrcContext->ssrc,
+                    inboundSsrcContext->opusDecodePacketRate.load());
                 stats.opusDecodePacketsPerSecond += inboundSsrcContext->opusDecodePacketRate.load();
                 stats.audioLevelExtensionStreamCount += inboundSsrcContext->hasAudioLevelExtension.load() ? 1 : 0;
             }
