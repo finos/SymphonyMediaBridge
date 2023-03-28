@@ -43,6 +43,7 @@ public:
 
     void update(double value, uint64_t timestamp);
     double get() const;
+    double get(uint64_t timestamp, uint64_t maxSilence) const;
 
 private:
     double _value;

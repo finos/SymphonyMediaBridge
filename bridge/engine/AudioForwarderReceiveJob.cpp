@@ -32,7 +32,7 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
         return;
     }
 
-    logger::error("Unable to decode opus packet, error code %d", "OpusDecodeJob", decodedFrames);
+    logger::error("Unable to decode opus packet, error code %d", "AudioForwarderReceiveJob", decodedFrames);
 }
 
 memory::UniqueAudioPacket AudioForwarderReceiveJob::makePcmPacket(const memory::Packet& opusPacket,
@@ -146,7 +146,7 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
     if (!_ssrcContext.opusDecoder)
     {
         logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
-            "OpusDecodeJob",
+            "AudioForwarderReceiveJob",
             _ssrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
         _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
@@ -172,14 +172,14 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
         if (lossCount <= 0)
         {
             logger::debug("Old opus packet sequence %u expected %u, discarding",
-                "OpusDecodeJob",
+                "AudioForwarderReceiveJob",
                 _extendedSequenceNumber,
                 decoder.getExpectedSequenceNumber());
             return -1;
         }
 
         logger::debug("Lost opus packet sequence %u expected %u, fec",
-            "OpusDecodeJob",
+            "AudioForwarderReceiveJob",
             _extendedSequenceNumber,
             decoder.getExpectedSequenceNumber());
 
@@ -222,11 +222,7 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
         return -1;
     }
     _ssrcContext.opusPacketRate->update(1, utils::Time::getAbsoluteTime());
-    int audioLevel = 0;
-    if (needAudioLevel)
-    {
-        audioLevel = codec::computeAudioLevel(*pcmPacket);
-    }
+    const int audioLevel = needAudioLevel ? codec::computeAudioLevel(*pcmPacket) : 0;
     _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
     return audioLevel;
 }
@@ -236,7 +232,7 @@ int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPa
     if (!_ssrcContext.opusDecoder)
     {
         logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
-            "OpusDecodeJob",
+            "AudioForwarderReceiveJob",
             _ssrcContext.ssrc,
             _engineMixer.getLoggableId().c_str());
         _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
@@ -249,8 +245,10 @@ int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPa
     decode(opusPacket, pcmPacket);
     if (pcmPacket.getLength() == 0)
     {
+        logger::warn("opus decode failed for ssrc %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
         return -1;
     }
+    logger::debug("!!! dec opus to compute audio level for %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
     _ssrcContext.opusPacketRate->update(1, utils::Time::getAbsoluteTime());
     return codec::computeAudioLevel(pcmPacket);
 }

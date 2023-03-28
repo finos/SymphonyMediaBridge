@@ -1244,9 +1244,14 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
             if (inboundContext.hasRecentActivity(utils::Time::sec, timestamp))
             {
                 logger::debug("pulling opus decode rate for %u", _loggableId.c_str(), inboundContext.ssrc);
-                inboundContext.sender->postOnQueue([&inboundContext]() {
-                    inboundContext.opusDecodePacketRate =
-                        inboundContext.opusPacketRate ? inboundContext.opusPacketRate->get() : 0;
+                inboundContext.sender->postOnQueue([&inboundContext, timestamp]() {
+                    inboundContext.opusDecodePacketRate = inboundContext.opusPacketRate
+                        ? inboundContext.opusPacketRate->get(timestamp, utils::Time::sec)
+                        : 0;
+                    logger::debug("opus decode rate for %u is %.2fpps",
+                        "Transport",
+                        inboundContext.ssrc,
+                        inboundContext.opusDecodePacketRate.load());
                 });
             }
             else
