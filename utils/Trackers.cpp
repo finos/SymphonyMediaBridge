@@ -24,13 +24,13 @@ double AvgRateTracker::get() const
     return _value * utils::Time::sec / _avgTime;
 }
 
-double AvgRateTracker::get(const uint64_t timestamp, const uint64_t maxSilence) const
+double AvgRateTracker::get(const uint64_t timestamp, const uint64_t maxTimeSinceSample) const
 {
     if (_avgTime == 0)
     {
         return 0;
     }
-    if (utils::Time::diffGE(_prevTimestamp, timestamp, maxSilence))
+    if (utils::Time::diffGE(_prevTimestamp, timestamp, maxTimeSinceSample))
     {
         return 0;
     }

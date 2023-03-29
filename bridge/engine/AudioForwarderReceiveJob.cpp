@@ -349,17 +349,21 @@ void AudioForwarderReceiveJob::run()
     }
 
     int calculatedAudioLevel = -1;
-    if (_hasMixedAudioStreams && _ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS)
+    if (_ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS)
     {
-        calculatedAudioLevel = decodeOpus(*_packet, !audioLevel.isSet());
-    }
-    else if (_ssrcContext.rtpMap.format == bridge::RtpMap::Format::OPUS && _needAudioLevel && !audioLevel.isSet())
-    {
-        calculatedAudioLevel = computeOpusAudioLevel(*_packet);
-    }
-    else if (_ssrcContext.opusPacketRate)
-    {
-        _ssrcContext.opusPacketRate->set(0, 0);
+        if (_hasMixedAudioStreams)
+        {
+            calculatedAudioLevel = decodeOpus(*_packet, !audioLevel.isSet());
+        }
+        else if (_needAudioLevel && !audioLevel.isSet())
+        {
+            calculatedAudioLevel = computeOpusAudioLevel(*_packet);
+        }
+        else if (_ssrcContext.opusPacketRate && _ssrcContext.opusPacketRate->get() != 0)
+        {
+            logger::debug("stop decoding opus audio level for %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
+            _ssrcContext.opusPacketRate->set(0, 0);
+        }
     }
 
     if (!audioLevel.isSet())
