@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cstdint>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -18,19 +19,20 @@ class RequestLogger
 public:
     RequestLogger(const httpd::Request& request, std::atomic<uint32_t>& lastAutoRequestId)
         : _request(request),
-        _responseStatusCode(0)
+          _responseStatusCode(0)
     {
         if (shouldLog(request._url))
         {
             const auto traceIdHeader = request._headers.find("X-Trace-Id");
             _requestId = (traceIdHeader != request._headers.end() ? traceIdHeader->second
-                                                              : std::to_string(1000 + (++lastAutoRequestId)));
+                                                                  : std::to_string(1000 + (++lastAutoRequestId)));
 
-            logger::info("Incoming request [%s] %s %s",
+            logger::info("Incoming request [%s] %s %s%s",
                 "RequestHandler",
                 _requestId.c_str(),
                 request._methodString.c_str(),
-                request._url.c_str());
+                request._url.c_str(),
+                request.paramsToString().c_str());
         }
     }
 
@@ -39,10 +41,7 @@ public:
         _responseStatusCode = static_cast<uint32_t>(response._statusCode);
     }
 
-    void setErrorMessage(const std::string& message)
-    {
-        _errorMessages = message;
-    }
+    void setErrorMessage(const std::string& message) { _errorMessages = message; }
 
     ~RequestLogger()
     {
@@ -55,19 +54,28 @@ public:
         }
         else if (!_requestId.empty())
         {
-            logger::warn("Outgoing response [%s] %u. Error message: %s", "RequestHandler", _requestId.c_str(), _responseStatusCode, _errorMessages.c_str());
+            logger::warn("Outgoing response [%s] %u. Error message: %s",
+                "RequestHandler",
+                _requestId.c_str(),
+                _responseStatusCode,
+                _errorMessages.c_str());
         }
         else
         {
-            logger::error("Outgoing response for '%s' %u. Error message: %s", "RequestHandler", _request._url.c_str(), _responseStatusCode, _errorMessages.c_str());
+            logger::error("Outgoing response for '%s' %u. Error message: %s",
+                "RequestHandler",
+                _request._url.c_str(),
+                _responseStatusCode,
+                _errorMessages.c_str());
         }
     }
 
 private:
     bool shouldLog(const std::string& uri)
     {
-        return _logFilter.end() == (std::find_if(_logFilter.begin(), _logFilter.end(),
-                [&uri] (const auto& f) { return utils::startsWith(f, uri); }));
+        return _logFilter.end() == (std::find_if(_logFilter.begin(), _logFilter.end(), [&uri](const auto& f) {
+            return utils::startsWith(f, uri);
+        }));
     }
 
 private:

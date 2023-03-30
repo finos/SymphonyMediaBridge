@@ -1761,7 +1761,7 @@ TEST_F(IntegrationTest, confList)
         EXPECT_TRUE(confRequest);
 
         auto briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/conferences?brief",
+            std::string(baseUrl) + "/conferences?brief=1",
             1500 * utils::Time::ms,
             responseBody);
         logger::info("%s", "test", responseBody.dump(3).c_str());
