@@ -49,7 +49,7 @@ public:
           shouldDropPackets(false),
           hasAudioLevelExtension(true),
           opusDecodePacketRate(0),
-          _lastReceiveTime(timestamp)
+          _lastRtpReceiveTime(timestamp)
     {
     }
 
@@ -61,10 +61,10 @@ public:
     {
     }
 
-    void onRtpPacketReceived(const uint64_t timestamp) { _lastReceiveTime = timestamp; }
+    void onRtpPacketReceived(const uint64_t timestamp) { _lastRtpReceiveTime = timestamp; }
     bool hasRecentActivity(const uint64_t intervalNs, const uint64_t timestamp)
     {
-        return utils::Time::diffLT(_lastReceiveTime.load(), timestamp, intervalNs);
+        return utils::Time::diffLT(_lastRtpReceiveTime.load(), timestamp, intervalNs);
     }
 
     // make ready for reactivation
@@ -106,7 +106,7 @@ public:
     std::atomic<double> opusDecodePacketRate;
 
 private:
-    std::atomic_uint64_t _lastReceiveTime;
+    std::atomic_uint64_t _lastRtpReceiveTime;
 };
 
 } // namespace bridge

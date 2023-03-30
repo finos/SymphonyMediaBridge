@@ -1236,21 +1236,23 @@ void EngineMixer::checkInboundPacketCounters(const uint64_t timestamp)
 
         if (!inboundContext.activeMedia)
         {
-            if (inboundContext.rtpMap.isAudio())
-            {
-                inboundContext.opusDecodePacketRate = 0;
-            }
             continue; // it will turn active on next packet arrival
         }
 
         if (inboundContext.rtpMap.isAudio() && inboundContext.sender)
         {
-            inboundContext.sender->postOnQueue([&inboundContext]() {
-                if (inboundContext.opusPacketRate)
-                {
-                    inboundContext.opusDecodePacketRate = inboundContext.opusPacketRate->get();
-                }
-            });
+            if (inboundContext.hasRecentActivity(utils::Time::sec, timestamp))
+            {
+                inboundContext.sender->postOnQueue([&inboundContext]() {
+                    inboundContext.opusDecodePacketRate =
+                        inboundContext.opusPacketRate ? inboundContext.opusPacketRate->get() : 0;
+                });
+            }
+            else
+            {
+                inboundContext.activeMedia = false;
+                inboundContext.opusDecodePacketRate = 0;
+            }
         }
 
         const auto endpointIdHash = inboundContext.endpointIdHash.load();
@@ -2462,6 +2464,15 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
 
         if (audioStream && &audioStream->transport == packetInfo.transport())
         {
+            if (!audioStream->detectedAudioSsrc.isSet())
+            {
+                logger::info("%zu detected audio ssrc %u, negotiated ssrc %u, audio-lvl-extid %u",
+                    _loggableId.c_str(),
+                    audioStream->endpointIdHash,
+                    originalSsrc,
+                    audioStream->remoteSsrc.get(),
+                    audioStream->rtpMap.audioLevelExtId.valueOr(0));
+            }
             audioStream->detectedAudioSsrc.set(originalSsrc);
         }
         if (!audioStream || &audioStream->transport == packetInfo.transport() || audioStream->audioMixed)

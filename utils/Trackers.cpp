@@ -24,6 +24,19 @@ double AvgRateTracker::get() const
     return _value * utils::Time::sec / _avgTime;
 }
 
+double AvgRateTracker::get(const uint64_t timestamp, const uint64_t maxTimeSinceSample) const
+{
+    if (_avgTime == 0)
+    {
+        return 0;
+    }
+    if (utils::Time::diffGE(_prevTimestamp, timestamp, maxTimeSinceSample))
+    {
+        return 0;
+    }
+    return _value * utils::Time::sec / _avgTime;
+}
+
 void AvgRateTracker::update(double value, uint64_t timestamp)
 {
     if (_prevTimestamp == 0)
@@ -32,8 +45,14 @@ void AvgRateTracker::update(double value, uint64_t timestamp)
     }
 
     _value += _alpha * (value - _value);
-    _avgTime += _alpha * ((timestamp - _prevTimestamp) - _avgTime);
+    _avgTime += _alpha * (static_cast<double>(timestamp - _prevTimestamp) - _avgTime);
     _prevTimestamp = timestamp;
+}
+
+void AvgRateTracker::set(double value, uint64_t interval)
+{
+    _value = value;
+    _avgTime = interval;
 }
 
 void MaxTracker::update(double value)

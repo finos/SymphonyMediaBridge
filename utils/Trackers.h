@@ -43,6 +43,8 @@ public:
 
     void update(double value, uint64_t timestamp);
     double get() const;
+    double get(uint64_t timestamp, uint64_t maxTimeSinceSample) const;
+    void set(double value, uint64_t interval);
 
 private:
     double _value;
