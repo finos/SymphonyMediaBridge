@@ -459,6 +459,26 @@ TEST_F(RealTimeTest, localVideoMeeting)
 
     makeCallWithDefaultAudioProfile(group, 20 * utils::Time::sec);
 
+    nlohmann::json responseBody;
+    auto briefConfRequest = emulator::awaitResponse<HttpGetRequest>(nullptr,
+        std::string(baseUrl) + "/conferences?brief=1",
+        1500 * utils::Time::ms,
+        responseBody);
+    logger::info("%s", "test", responseBody.dump(3).c_str());
+    EXPECT_TRUE(responseBody.size() == 1);
+    EXPECT_TRUE(briefConfRequest);
+    auto& mixerJson = responseBody[0];
+    EXPECT_EQ(mixerJson["id"], conf.getId());
+    EXPECT_EQ(mixerJson["usercount"], group.clients.size());
+
+    briefConfRequest = emulator::awaitResponse<HttpGetRequest>(nullptr,
+        std::string(baseUrl) + "/conferences?brief",
+        1500 * utils::Time::ms,
+        responseBody);
+    logger::info("%s", "test", responseBody.dump(3).c_str());
+    EXPECT_TRUE(briefConfRequest);
+    EXPECT_TRUE(responseBody.size() == 1);
+
     group.disconnectClients();
 
     for (auto& client : group.clients)

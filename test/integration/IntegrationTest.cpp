@@ -1771,6 +1771,14 @@ TEST_F(IntegrationTest, confList)
         EXPECT_EQ(mixerJson["id"], conf.getId());
         EXPECT_EQ(mixerJson["usercount"], group.clients.size());
 
+        briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences?brief",
+            1500 * utils::Time::ms,
+            responseBody);
+        logger::info("%s", "test", responseBody.dump(3).c_str());
+        EXPECT_TRUE(briefConfRequest);
+        EXPECT_TRUE(responseBody.size() == 1);
+
         for (auto& ep : mixerJson["users"])
         {
             auto id = ep.get<std::string>();
