@@ -1771,14 +1771,6 @@ TEST_F(IntegrationTest, confList)
         EXPECT_EQ(mixerJson["id"], conf.getId());
         EXPECT_EQ(mixerJson["usercount"], group.clients.size());
 
-        briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/conferences?brief",
-            1500 * utils::Time::ms,
-            responseBody);
-        logger::info("%s", "test", responseBody.dump(3).c_str());
-        EXPECT_TRUE(briefConfRequest);
-        EXPECT_TRUE(responseBody.size() == 1);
-
         for (auto& ep : mixerJson["users"])
         {
             auto id = ep.get<std::string>();
@@ -1787,6 +1779,14 @@ TEST_F(IntegrationTest, confList)
                           [&id](const std::unique_ptr<SfuClient<Channel>>& p) { return p->getEndpointId() == id; }),
                 group.clients.end());
         }
+
+        briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences?brief",
+            1500 * utils::Time::ms,
+            responseBody);
+        logger::info("%s", "test", responseBody.dump(3).c_str());
+        EXPECT_TRUE(briefConfRequest);
+        EXPECT_TRUE(responseBody.size() == 1);
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
