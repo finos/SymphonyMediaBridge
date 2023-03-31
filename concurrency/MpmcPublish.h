@@ -35,7 +35,7 @@ public:
         for (auto* cell = _readPointer.load(std::memory_order_consume); cell;
              cell = _readPointer.load(std::memory_order_consume))
         {
-            auto prevCount = cell->refCount.fetch_add(1);
+            const auto prevCount = cell->refCount.fetch_add(1);
             if (prevCount > 0)
             {
                 target = cell->value;
