@@ -497,14 +497,20 @@ TEST(TransportStats, MpmcPublish)
     std::atomic_bool running(true);
     std::thread* threads[READER_COUNT];
     std::thread* writers[WRITER_COUNT];
+    uint32_t writeOps[WRITER_COUNT];
+    uint32_t readOps[READER_COUNT];
+    std::fill(readOps, readOps + READER_COUNT, 0);
+    std::fill(writeOps, writeOps + WRITER_COUNT, 0);
 
     for (int i = 0; i < WRITER_COUNT; ++i)
     {
-        writers[i] = new std::thread([&board, &running]() {
+        uint32_t* counter = &writeOps[i];
+        writers[i] = new std::thread([&board, &running, counter]() {
             InfoObject data;
             while (running)
             {
                 EXPECT_TRUE(board.write(data));
+                ++(*counter);
                 utils::Time::uSleep(10);
             }
         });
@@ -512,27 +518,34 @@ TEST(TransportStats, MpmcPublish)
 
     for (int i = 0; i < READER_COUNT; ++i)
     {
-        threads[i] = new std::thread([&board, &running]() {
+        uint32_t* counter = &readOps[i];
+        threads[i] = new std::thread([&board, &running, counter]() {
             InfoObject data;
             while (running)
             {
                 EXPECT_TRUE(board.read(data));
+                ++(*counter);
             }
         });
     }
 
-    utils::Time::uSleep(5000000);
+    utils::Time::mSleep(5000);
     running = false;
+    uint32_t reads = 0;
+    uint32_t writes = 0;
     for (int i = 0; i < READER_COUNT; ++i)
     {
         threads[i]->join();
         delete threads[i];
+        reads += readOps[i];
     }
     for (int i = 0; i < WRITER_COUNT; ++i)
     {
         writers[i]->join();
         delete writers[i];
+        writes += writeOps[i];
     }
+    logger::info("reads %u, writes %u", "MpmcPublishTest", reads, writes);
 }
 
 TEST(TransportStats, MpmcPublish2)
