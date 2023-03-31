@@ -9,9 +9,10 @@ namespace concurrency
 // publishes a value
 // multiple consumers and multiple publishers
 // wait-free. writers are never stalled, readers will read somewhat older information at worst.
-template <typename T, int MAX_THREADS = 32>
+template <typename T, size_t MAX_THREADS = 32>
 class MpmcPublish
 {
+    static const size_t SLOTS = MAX_THREADS + 1;
     struct Entry
     {
         Entry() : refCount(0) {}
@@ -55,17 +56,16 @@ public:
     {
         auto readPointer = _readPointer.load(std::memory_order_consume);
         const uint32_t offset = readPointer ? std::distance(&_elements[0], readPointer) + 1 : 0;
-        for (int i = 0; i < MAX_THREADS * 20; ++i)
+        for (size_t i = 0; i < SLOTS * 20; ++i)
         {
-            Entry& writeCell = _elements[(i + offset) % MAX_THREADS];
+            Entry& writeCell = _elements[(i + offset) % SLOTS];
             if (writeCell.refCount.fetch_add(1) == 0)
             {
                 // it is mine now
                 writeCell.value = obj;
                 if (!_readPointer.compare_exchange_strong(readPointer, &writeCell, std::memory_order_release))
                 {
-                    auto prevCount = writeCell.refCount.fetch_sub(1);
-                    assert(prevCount == 1);
+                    writeCell.refCount.fetch_sub(1);
                     // ok, we lost race
                 }
                 else if (readPointer)
@@ -87,6 +87,7 @@ public:
 
 private:
     std::atomic<Entry*> _readPointer;
-    Entry _elements[MAX_THREADS];
+    // all threads + one published slot.
+    Entry _elements[SLOTS];
 };
 } // namespace concurrency
