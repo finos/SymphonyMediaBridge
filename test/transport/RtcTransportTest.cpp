@@ -489,13 +489,13 @@ TEST(TransportStats, MpmcPublish)
         uint32_t mem[20];
     };
 
-    const int THREAD_COUNT = 6;
+    const int READER_COUNT = 6;
     const int WRITER_COUNT = 2;
-    concurrency::MpmcPublish<InfoObject, THREAD_COUNT + WRITER_COUNT> board;
+    concurrency::MpmcPublish<InfoObject, READER_COUNT + WRITER_COUNT> board;
 
     board.write(InfoObject());
     std::atomic_bool running(true);
-    std::thread* threads[THREAD_COUNT];
+    std::thread* threads[READER_COUNT];
     std::thread* writers[WRITER_COUNT];
 
     for (int i = 0; i < WRITER_COUNT; ++i)
@@ -510,7 +510,7 @@ TEST(TransportStats, MpmcPublish)
         });
     }
 
-    for (int i = 0; i < THREAD_COUNT; ++i)
+    for (int i = 0; i < READER_COUNT; ++i)
     {
         threads[i] = new std::thread([&board, &running]() {
             InfoObject data;
@@ -523,7 +523,7 @@ TEST(TransportStats, MpmcPublish)
 
     utils::Time::uSleep(5000000);
     running = false;
-    for (int i = 0; i < THREAD_COUNT; ++i)
+    for (int i = 0; i < READER_COUNT; ++i)
     {
         threads[i]->join();
         delete threads[i];
