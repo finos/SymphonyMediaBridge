@@ -1,5 +1,3 @@
-#include "api/DataChannelMessage.h"
-#include "api/DataChannelMessageParser.h"
 #include "bridge/MixerManagerAsync.h"
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/AddPacketCacheJob.h"
@@ -18,10 +16,6 @@
 #include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
 #include "bridge/engine/VideoForwarderRtxReceiveJob.h"
 #include "bridge/engine/VideoNackReceiveJob.h"
-#include "rtp/RtcpFeedback.h"
-#include "utils/SimpleJson.h"
-#include "utils/StringBuilder.h"
-#include "webrtc/DataChannel.h"
 
 namespace
 {
