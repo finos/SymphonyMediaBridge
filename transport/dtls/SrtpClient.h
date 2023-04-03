@@ -46,6 +46,7 @@ public:
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool isDtlsClient);
+    void setCryptoKeys(srtp_profile_t cryptoSuite, unsigned char* localKey, unsigned char* remoteKey);
 
     bool unprotect(memory::Packet& packet);
     bool protect(memory::Packet& packet);
@@ -69,6 +70,7 @@ public:
 private:
     void dtlsHandShake();
     void logSslError(const char* msg, int sslCode);
+    bool isDtlsAvailable() const { return !_remoteDtlsFingerprintHash.empty(); }
     bool _isInitialized;
     std::atomic<State> _state;
     logger::LoggableId _loggableId;
@@ -95,6 +97,7 @@ private:
     void sslRead();
     bool compareFingerprint();
     bool createSrtp();
+    bool createSrtp(srtp_profile_t protectionProfile, unsigned char* localKey, unsigned char* remoteKey);
     static const char* getErrorMessage(int sslErrorCode);
 };
 } // namespace transport

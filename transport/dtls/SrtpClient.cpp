@@ -582,6 +582,71 @@ bool SrtpClient::createSrtp()
     return true;
 }
 
+/**
+ * @param protectionProfile is either SRTP_AES128_CM_SHA1_80 or SRTP_AES128_CM_SHA1_32
+ * @param keyMaterial 16B aes key and 14B salt
+ */
+bool SrtpClient::createSrtp(srtp_profile_t protectionProfile, unsigned char* localKey, unsigned char* remoteKey)
+{
+    srtp_policy_t srtpPolicy;
+    memset(&srtpPolicy, 0, sizeof(srtpPolicy));
+
+    switch (protectionProfile)
+    {
+    case srtp_profile_aes128_cm_sha1_80:
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp_profile_aes128_cm_sha1_32:
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_32(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    default:
+        assert(false);
+        break;
+    }
+
+    srtpPolicy.ssrc.value = 0;
+    srtpPolicy.next = nullptr;
+    srtpPolicy.ssrc.type = ssrc_any_outbound;
+    srtpPolicy.key = localKey;
+
+    auto createResult = srtp_create(&_localSrtp, &srtpPolicy);
+    if (createResult != srtp_err_status_ok)
+    {
+        logger::error("Failed to create localSrtp: %d", _loggableId.c_str(), createResult);
+        return false;
+    }
+
+    srtpPolicy.ssrc.type = ssrc_any_inbound;
+    srtpPolicy.key = remoteKey;
+
+    createResult = srtp_create(&_remoteSrtp, &srtpPolicy);
+    if (createResult != srtp_err_status_ok)
+    {
+        logger::error("Failed to create localSrtp: %d", _loggableId.c_str(), createResult);
+        return false;
+    }
+
+    _nullCipher = false;
+
+    return true;
+}
+
+void SrtpClient::setCryptoKeys(srtp_profile_t cryptoSuite, unsigned char* localKey, unsigned char* remoteKey)
+{
+    if (cryptoSuite != SRTP_AES128_CM_SHA1_80 || cryptoSuite != SRTP_AES128_CM_SHA1_32)
+    {
+        logger::error("unsupported crypto suite %u", _loggableId.c_str(), cryptoSuite);
+        return;
+    }
+
+    if (!createSrtp(cryptoSuite, localKey, remoteKey))
+    {
+        logger::error("failed to create srtp context", _loggableId.c_str());
+    }
+}
+
 void SrtpClient::onMessageReceived(memory::UniquePacket packet)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
@@ -594,7 +659,7 @@ void SrtpClient::onMessageReceived(memory::UniquePacket packet)
         return;
     }
 
-    if (!!_nullCipher)
+    if (_nullCipher)
     {
         logger::debug("null cipher postponing message", _loggableId.c_str());
         return;
@@ -650,10 +715,11 @@ bool SrtpClient::unprotectApplicationData(memory::Packet& packet)
         logger::debug("null cipher ignoring message", _loggableId.c_str());
         return false;
     }
-    if (_state != State::CONNECTED)
+    if (_state != State::CONNECTED || !isDtlsAvailable())
     {
         return false;
     }
+
     BIO_write(_readBio, packet.get(), utils::checkedCast<int32_t>(packet.getLength()));
     ERR_clear_error();
     auto bytesRead = SSL_read(_ssl, packet.get(), packet.size);
@@ -681,6 +747,10 @@ bool SrtpClient::unprotectApplicationData(memory::Packet& packet)
 void SrtpClient::sendApplicationData(const void* data, size_t length)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    if (!isDtlsAvailable())
+    {
+        return;
+    }
 
     auto bytesWritten = SSL_write(_ssl, data, length);
     if (bytesWritten < 0)
