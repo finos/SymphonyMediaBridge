@@ -99,6 +99,8 @@ public:
     const std::string& getId() const { return _id; }
     const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
+    static memory::UniquePacket createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator);
+
 public:
     void forwardPackets(const uint64_t engineTimestamp);
     void clear();

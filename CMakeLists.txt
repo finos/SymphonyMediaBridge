@@ -157,11 +157,21 @@ set(FILES
         bridge/engine/AudioForwarderRewriteAndSendJob.h
         bridge/engine/EncodeJob.cpp
         bridge/engine/EncodeJob.h
+        bridge/engine/AddPacketCacheJob.h
+        bridge/engine/AddPacketCacheJob.cpp
+        bridge/engine/FinalizeNonSsrcRewriteOutboundContextJob.h
+        bridge/engine/FinalizeNonSsrcRewriteOutboundContextJob.cpp
+        bridge/engine/RemovePacketCacheJob.cpp
+        bridge/engine/RemovePacketCacheJob.h
         bridge/engine/Engine.cpp
         bridge/engine/Engine.h
         bridge/engine/EngineAudioStream.h
         bridge/engine/EngineDataStream.h
         bridge/engine/EngineMixer.cpp
+        bridge/engine/EngineMixerBarbell.cpp
+        bridge/engine/EngineMixerRecording.cpp
+        bridge/engine/EngineMixerAudio.cpp
+        bridge/engine/EngineMixerVideo.cpp
         bridge/engine/EngineMixer.h
         bridge/engine/EngineStats.h
         bridge/engine/EngineStreamDirector.h
@@ -638,3 +648,4 @@ if(APPLE)
 endif()
 
 install(TARGETS smb CONFIGURATIONS Release DESTINATION bin)
+
