@@ -1784,6 +1784,12 @@ TEST_F(IntegrationTest, confList)
             std::string(baseUrl) + "/conferences?brief",
             1500 * utils::Time::ms,
             responseBody);
+
+        briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences?brief=1&bread=true&butter",
+            1500 * utils::Time::ms,
+            responseBody);
+
         logger::info("%s", "test", responseBody.dump(3).c_str());
         EXPECT_TRUE(briefConfRequest);
         EXPECT_TRUE(responseBody.size() == 1);

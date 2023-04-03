@@ -37,12 +37,12 @@ httpd::Response HttpdFactory::sendRequest(httpd::Method method, const char* url,
     std::string fqUrl = url;
     if (utils::startsWith("http://", fqUrl))
     {
-        auto urlStart = fqUrl.find('/', 7);
-        auto paramStart = fqUrl.find('?', urlStart + 8);
+        const auto urlStart = fqUrl.find('/', 7);
+        const auto paramStart = fqUrl.find('?', urlStart + 2);
         if (paramStart != std::string::npos)
         {
             request._url = fqUrl.substr(urlStart, paramStart - urlStart);
-            auto params = fqUrl.substr(paramStart + 1);
+            const auto params = fqUrl.substr(paramStart + 1);
             for (auto keyValueToken = utils::StringTokenizer::tokenize(params.c_str(), params.size(), "&");
                  !keyValueToken.empty();
                  keyValueToken = utils::StringTokenizer::tokenize(keyValueToken, "&"))
