@@ -72,7 +72,6 @@ private:
     bool _isInitialized;
     std::atomic<State> _state;
     logger::LoggableId _loggableId;
-    SslDtls& _sslDtls;
 
     SSL* _ssl;
     BIO* _readBio;

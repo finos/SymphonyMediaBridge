@@ -42,8 +42,7 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     : _isInitialized(false),
       _state(State::IDLE),
       _loggableId("SrtpClient"),
-      _sslDtls(sslDtls),
-      _ssl(SSL_new(_sslDtls.getSslContext())),
+      _ssl(SSL_new(sslDtls.getSslContext())),
       _readBio(nullptr),
       _writeBio(nullptr),
       _isDtlsClient(true),
@@ -71,7 +70,7 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     }
     BIO_set_mem_eof_return(_readBio, -1);
 
-    _writeBio = BIO_new(_sslDtls.getWriteBioMethods());
+    _writeBio = BIO_new(sslDtls.getWriteBioMethods());
     assert(_writeBio);
     if (!_writeBio)
     {
