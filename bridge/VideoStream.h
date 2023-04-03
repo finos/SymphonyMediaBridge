@@ -19,7 +19,6 @@ struct VideoStream
         const uint32_t localSsrc,
         std::shared_ptr<transport::RtcTransport>& transport,
         bool ssrcRewrite,
-        bool isDtlsLocalEnabled,
         utils::Optional<uint32_t> idleTimeout)
         : id(id),
           endpointId(endpointId),
@@ -29,7 +28,7 @@ struct VideoStream
           transport(transport),
           markedForDeletion(false),
           ssrcRewrite(ssrcRewrite),
-          isDtlsLocalEnabled(isDtlsLocalEnabled),
+          srtpMode(srtp::Mode::UNDEFINED),
           isConfigured(false),
           idleTimeoutSeconds(idleTimeout.isSet() ? idleTimeout.get() : 0)
     {
@@ -50,7 +49,7 @@ struct VideoStream
 
     bool markedForDeletion;
     const bool ssrcRewrite;
-    const bool isDtlsLocalEnabled;
+    srtp::Mode srtpMode;
     bool isConfigured;
     const uint32_t idleTimeoutSeconds;
 };

@@ -7,7 +7,7 @@ The Symphony Media Bridge (SMB) is a media server application that handles audio
 In RTC conferencing systems, when more than two participants are in a conference there is usually a media server component involved. Each participant in the conference will send their audio and video streams to the media server. The media server is then responsible for sending the correct media streams to each receiving participant.
 
 Conferencing media servers are typically divided into two categories, multipoint conference units (MCU) and selective forwarding units (SFU).
- MCUs decode, mix and transcode media streams delivering a single or a few output streams to each receiver. SFUs do not decode or transcode media streams from participants, but forwards a selection of the incoming media streams to each receiver in some intelligent way. Not all incoming streams are forwarded, but typically more than one stream to each receiver.
+MCUs decode, mix and transcode media streams delivering a single or a few output streams to each receiver. SFUs do not decode or transcode media streams from participants, but forwards a selection of the incoming media streams to each receiver in some intelligent way. Not all incoming streams are forwarded, but typically more than one stream to each receiver.
 
 SMB is an SFU at its core, but has some hybrid MCU like solutions. Video streams are forwarded and not transcoded, but participants can request a mixed, transcoded audio stream instead of forwarded streams. SMB can also be run in a mode where multiple streams are forwarded, but the contents of each stream can vary between different participants in the conference. This allows for larger conferences than SFUs can typically handle.
 
@@ -15,18 +15,20 @@ Written as a high performance native application with efficient resource managem
 
 ## Documentation
 
-- [Wiki](https://github.com/finos/SymphonyMediaBridge/wiki)
-- [Usage example](https://github.com/finos/SymphonyMediaBridge/tree/master/examples)
+-   [Wiki](https://github.com/finos/SymphonyMediaBridge/wiki)
+-   [Usage example](https://github.com/finos/SymphonyMediaBridge/tree/master/examples)
+-   [HTTP API documentation](https://github.com/finos/SymphonyMediaBridge/tree/master/doc/READMEapi.md)
 
 ## Installing
 
 The Supported platforms for the release builds are
-- Ubuntu Server 20.04 LTS
-- Ubuntu Server 21.10
+
+-   Ubuntu Server 20.04 LTS
+-   Ubuntu Server 21.10
 
 The following additional dependencies have to be installed:
 
-```apt-get install libc++-dev libc++abi-dev libsrtp2-1 libmicrohttpd12 libopus0```
+`apt-get install libc++-dev libc++abi-dev libsrtp2-1 libmicrohttpd12 libopus0`
 
 ### Alternative 1. Installing the .deb package
 
@@ -34,23 +36,23 @@ The following additional dependencies have to be installed:
 
 #### 2. Install
 
-```dpkg -i finos-rtc-smb_<version>.deb```
+`dpkg -i finos-rtc-smb_<version>.deb`
 
 #### 3. Start with the default empty config file
 
-```smb /etc/finos-rtc-smb/config.json```
+`smb /etc/finos-rtc-smb/config.json`
 
-### Alternative 2. Download the .tar.gz file 
+### Alternative 2. Download the .tar.gz file
 
 #### 1. Download and extract the .tar.gz file from a release
 
 #### 2. Add realtime priority capabilities to the smb binary
 
-```setcap CAP_SYS_NICE+ep smb```
+`setcap CAP_SYS_NICE+ep smb`
 
 #### 3. Start with the default empty config file
 
-```./smb config.json```
+`./smb config.json`
 
 ## Development setup
 
@@ -60,36 +62,37 @@ The Symphony Media Bridge is a cmake based project that can be built and run for
 
 #### 1. Install the required dependencies
 
-```apt-get install cmake llvm clang lldb libc++-dev libc++abi-dev libssl-dev libsrtp2-dev libmicrohttpd-dev libopus-dev libunwind-13-dev```
+`apt-get install cmake llvm clang lldb libc++-dev libc++abi-dev libssl-dev libsrtp2-dev libmicrohttpd-dev libopus-dev libunwind-13-dev`
 
 #### 2. Set Clang as compiler
 
-```export CC=clang && export CXX=clang++```
+`export CC=clang && export CXX=clang++`
 
 #### 3. Generate the Makefile
 
-```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .```
+`cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .`
 
 ### Building for MacOSX
 
 #### 1. Install the required dependencies using brew
 
-```brew install cmake srtp openssl@1.1 libmicrohttpd opus```
+`brew install cmake srtp openssl@1.1 libmicrohttpd opus`
 
 #### 2.1 Generate the Makefile
 
-```cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .```
+`cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .`
 
 #### 2.2 Alternatively generate Xcode project files
 
-```cmake -G "Xcode" .```
+`cmake -G "Xcode" .`
 
 ### Running the application
 
-``` ./smb config.json ```
+`./smb config.json`
 
 ### Running the local test suite
-```./UnitTest```
+
+`./UnitTest`
 
 ## Contributing
 
@@ -102,8 +105,7 @@ The Symphony Media Bridge is a cmake based project that can be built and run for
 
 _NOTE:_ Commits and pull requests to FINOS repositories will only be accepted from those contributors with an active, executed Individual Contributor License Agreement (ICLA) with FINOS OR who are covered under an existing and active Corporate Contribution License Agreement (CCLA) executed with FINOS. Commits from individuals not covered under an ICLA or CCLA will be flagged and blocked by the FINOS Clabot tool (or [EasyCLA](https://github.com/finos/community/blob/master/governance/Software-Projects/EasyCLA.md)). Please note that some CCLAs require individuals/employees to be explicitly named on the CCLA.
 
-*Need an ICLA? Unsure if you are covered under an existing CCLA? Email [help@finos.org](mailto:help@finos.org)*
-
+_Need an ICLA? Unsure if you are covered under an existing CCLA? Email [help@finos.org](mailto:help@finos.org)_
 
 ## License
 

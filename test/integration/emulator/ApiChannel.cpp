@@ -1,6 +1,8 @@
 #include "ApiChannel.h"
 #include "HttpRequests.h"
+#include "api/utils.h"
 #include "test/integration/emulator/Httpd.h"
+#include "utils/Base64.h"
 #include "utils/Format.h"
 #include "utils/IdGenerator.h"
 #include "utils/StringBuilder.h"
@@ -114,51 +116,38 @@ void BaseChannel::addIpv6RemoteCandidates(transport::RtcTransport& transport)
     }
 }
 
-void Channel::create(const std::string& baseUrl,
-    const std::string& conferenceId,
-    const bool initiator,
-    const bool audio,
-    const bool video,
-    const bool forwardMedia,
-    const uint32_t idleTimeout,
-    const utils::Span<std::string> neighbours)
+void Channel::create(const bool initiator, const CallConfig& config)
 {
-    assert(!conferenceId.empty());
-    _conferenceId = conferenceId;
-    _relayType = forwardMedia ? "ssrc-rewrite" : "mixed";
-    _baseUrl = baseUrl;
-    _videoEnabled = video;
-
-    for (auto& n : neighbours)
-    {
-        _answerOptions.neighbours.push_back(n);
-    }
+    _callConfig = config;
 
     using namespace nlohmann;
     json body = {{"action", "allocate"},
-        {"bundle-transport", {{"ice-controlling", true}, {"ice", true}, {"dtls", true}, {"rtcp-mux", true}}}};
+        {"bundle-transport", {{"ice-controlling", true}, {"ice", true}, {"rtcp-mux", true}}}};
 
-    if (audio)
+    body["bundle-transport"]["dtls"] = _callConfig.dtls;
+    body["bundle-transport"]["sdes"] = _callConfig.sdes;
+
+    if (_callConfig.audio)
     {
-        body["audio"] = {{"relay-type", _relayType.c_str()}};
+        body["audio"] = {{"relay-type", _callConfig.relayType.c_str()}};
     }
-    if (video)
+    if (_callConfig.video)
     {
         body["video"] = {{"relay-type", "ssrc-rewrite"}};
     }
-    if (audio || video)
+    if (_callConfig.audio || _callConfig.video)
     {
         body["data"] = json::object();
     }
-    if (idleTimeout)
+    if (_callConfig.idleTimeout)
     {
-        body["idleTimeout"] = idleTimeout;
+        body["idleTimeout"] = _callConfig.idleTimeout;
     }
 
     logger::debug("allocate ch with %s", "ApiChannel", body.dump().c_str());
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPostRequest>(_httpd,
-        std::string(baseUrl) + "/conferences/" + conferenceId + "/" + _id,
+        std::string(_callConfig.baseUrl) + "/conferences/" + _callConfig.conferenceId + "/" + _id,
         body.dump(),
         9 * utils::Time::sec,
         responseBody);
@@ -178,13 +167,24 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     const ice::IceCandidates& candidates,
     const std::string& fingerprint,
     uint32_t audioSsrc,
-    uint32_t* videoSsrcs)
+    uint32_t* videoSsrcs,
+    srtp::AesKey& remoteSdesKey)
 {
     using namespace nlohmann;
     json body = {{"action", "configure"}};
 
-    auto transportSpec = json::object({{"dtls", {{"setup", "active"}, {"type", "sha-256"}, {"hash", fingerprint}}},
-        {"ice", {{"ufrag", iceCredentials.first}, {"pwd", iceCredentials.second}, {"candidates", json::array()}}}});
+    auto transportSpec = json::object(
+        {{"ice", {{"ufrag", iceCredentials.first}, {"pwd", iceCredentials.second}, {"candidates", json::array()}}}});
+
+    if (_callConfig.dtls)
+    {
+        transportSpec["dtls"] = json::object({{"setup", "active"}, {"type", "sha-256"}, {"hash", fingerprint}});
+    }
+    if (_callConfig.sdes)
+    {
+        transportSpec["sdes"] = json::object({{"profile", api::utils::toString(remoteSdesKey.profile)},
+            {"key", utils::Base64::encode(remoteSdesKey.keySalt, remoteSdesKey.getLength())}});
+    }
 
     for (auto& c : candidates)
     {
@@ -240,7 +240,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
                     {{"type", "nack"}},
                     {{"type", "nack"}, {"subtype", "pli"}}})}}));
 
-        if (!_answerOptions.rtxDisabled)
+        if (_callConfig.rtx)
         {
             payloadTypes.push_back(json::object({{"id", 96},
                 {"name", "rtx"},
@@ -273,12 +273,12 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     body["data"] = json::object({{"port", 5000}});
 
-    if (!_answerOptions.neighbours.empty())
+    if (!_callConfig.neighbours.empty())
     {
         auto neighbours = json::object();
         auto groups = json::array();
         neighbours["action"] = "mute";
-        for (auto& id : _answerOptions.neighbours)
+        for (auto& id : _callConfig.neighbours)
         {
             groups.push_back(id);
         }
@@ -291,7 +291,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPostRequest>(_httpd,
-        _baseUrl + "/conferences/" + _conferenceId + "/" + _id,
+        _callConfig.baseUrl + "/conferences/" + _callConfig.conferenceId + "/" + _id,
         body.dump(),
         3 * utils::Time::sec,
         responseBody);
@@ -310,7 +310,7 @@ void Channel::disconnect()
 {
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpDeleteRequest>(_httpd,
-        _baseUrl + "/conferences/" + _conferenceId + "/" + _id,
+        _callConfig.baseUrl + "/conferences/" + _callConfig.conferenceId + "/" + _id,
         3 * utils::Time::sec,
         responseBody);
 
@@ -325,8 +325,23 @@ void Channel::configureTransport(transport::RtcTransport& transport, memory::Aud
     auto bundle = _offer["bundle-transport"];
     setRemoteIce(transport, bundle, ICE_GROUP, allocator);
 
-    std::string fingerPrint = bundle["dtls"]["hash"];
-    transport.setRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
+    if (bundle.find("dtls") != bundle.end())
+    {
+        std::string fingerPrint = bundle["dtls"]["hash"];
+        transport.asyncSetRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
+    }
+    else if (bundle.find("sdes") != bundle.end())
+    {
+        for (auto sdesSpec : bundle["sdes"])
+        {
+            srtp::AesKey key;
+            key.profile = api::utils::stringToSrtpProfile(sdesSpec["profile"]);
+            auto keyLen = utils::Base64::decode(sdesSpec["key"], key.keySalt, sizeof(key.keySalt));
+            assert(keyLen == key.getLength());
+            transport.asyncSetRemoteSdesKey(key);
+            break;
+        }
+    }
 }
 
 std::unordered_set<uint32_t> Channel::getOfferedVideoSsrcs() const
@@ -441,37 +456,30 @@ nlohmann::json newContent(const std::string& endpointId, const char* type, const
     return contentItem;
 }
 
-void ColibriChannel::create(const std::string& baseUrl,
-    const std::string& conferenceId,
-    const bool initiator,
-    const bool audio,
-    const bool video,
-    const bool forwardMedia,
-    const uint32_t idleTimeout,
-    const utils::Span<std::string> neighbours)
+void ColibriChannel::create(bool initiator, const CallConfig& config)
 {
+    _callConfig = config;
+    if (_callConfig.relayType == "mixed")
+    {
+        _callConfig.relayType = "mixer";
+    }
     // Colibri endpoints do not support idle timeouts.
-    assert(0 == idleTimeout);
-
-    _conferenceId = conferenceId;
-    _relayType = forwardMedia ? "ssrc-rewrite" : "mixer";
-    _baseUrl = baseUrl;
-    _videoEnabled = video;
+    assert(0 == _callConfig.idleTimeout);
 
     using namespace nlohmann;
-    json body = {{"id", conferenceId}, {"contents", json::array()}};
+    json body = {{"id", _callConfig.conferenceId}, {"contents", json::array()}};
 
-    if (audio)
+    if (_callConfig.audio)
     {
-        body["contents"].push_back(newContent(_id, "audio", _relayType.c_str(), initiator));
+        body["contents"].push_back(newContent(_id, "audio", _callConfig.relayType.c_str(), initiator));
     }
-    if (video)
+    if (_callConfig.video)
     {
         auto videoContent = newContent(_id, "video", "ssrc-rewrite", initiator);
         videoContent["channels"][0]["last-n"] = 5;
         body["contents"].push_back(videoContent);
     }
-    if (audio || video)
+    if (_callConfig.audio || _callConfig.video)
     {
         // data must be last or request handler cannot decide if bundling is used
         body["contents"].push_back(json::object({{"name", "data"},
@@ -483,7 +491,7 @@ void ColibriChannel::create(const std::string& baseUrl,
     logger::debug("allocate ch with %s", "ApiChannel", body.dump().c_str());
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPatchRequest>(_httpd,
-        std::string(baseUrl) + "/colibri/conferences/" + conferenceId,
+        std::string(_callConfig.baseUrl) + "/colibri/conferences/" + _callConfig.conferenceId,
         body.dump(),
         90 * utils::Time::sec,
         responseBody);
@@ -502,10 +510,11 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
     const ice::IceCandidates& candidates,
     const std::string& fingerprint,
     uint32_t audioSsrc,
-    uint32_t* videoSsrcs)
+    uint32_t* videoSsrcs,
+    srtp::AesKey& remoteSdesKey)
 {
     using namespace nlohmann;
-    json body = {{"id", _conferenceId},
+    json body = {{"id", _callConfig.conferenceId},
         {"contents", json::array()},
         {"channel-bundles", json::array({json::object({{"id", _id}})})}};
 
@@ -541,7 +550,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
                     {"expire", 180},
                     {"id", _audioId},
                     {"channel-bundle-id", _id},
-                    {"rtp-level-relay-type", _relayType},
+                    {"rtp-level-relay-type", _callConfig.relayType},
                     {"direction", "sendrecv"},
                     {"rtp-hdrexts",
                         json::array({{{"id", 1}, {"uri", "urn:ietf:params:rtp-hdrext:ssrc-audio-level"}},
@@ -583,7 +592,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
             {"expire", 180},
             {"id", _videoId},
             {"channel-bundle-id", _id},
-            {"rtp-level-relay-type", _relayType},
+            {"rtp-level-relay-type", _callConfig.relayType},
             {"direction", "sendrecv"},
             {"rtp-hdrexts",
                 json::array({{{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}},
@@ -599,7 +608,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
                     {{"type", "nack"}},
                     {{"type", "nack"}, {"subtype", "pli"}}})}}));
 
-        if (!_answerOptions.rtxDisabled)
+        if (_callConfig.rtx)
         {
             payloadTypes.push_back(json::object({{"id", 96},
                 {"name", "rtx"},
@@ -644,7 +653,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPatchRequest>(_httpd,
-        _baseUrl + "/colibri/conferences/" + _conferenceId,
+        _callConfig.baseUrl + "/colibri/conferences/" + _callConfig.conferenceId,
         body.dump(),
         3 * utils::Time::sec,
         responseBody);
@@ -662,7 +671,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
 void ColibriChannel::disconnect()
 {
     using namespace nlohmann;
-    json body = {{"id", _conferenceId},
+    json body = {{"id", _callConfig.conferenceId},
         {"contents", json::array()},
         {"channel-bundles", json::array({json::object({{"id", _id}, {"transport", json::object()}})})}};
 
@@ -679,7 +688,7 @@ void ColibriChannel::disconnect()
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPatchRequest>(_httpd,
-        _baseUrl + "/colibri/conferences/" + _conferenceId,
+        _callConfig.baseUrl + "/colibri/conferences/" + _callConfig.conferenceId,
         body.dump(),
         3 * utils::Time::sec,
         responseBody);
@@ -697,7 +706,7 @@ void ColibriChannel::configureTransport(transport::RtcTransport& transport, memo
         setRemoteIce(transport, bundle, TRANSPORT_GROUP, allocator);
 
         std::string fingerPrint = bundle["transport"]["fingerprints"][0]["fingerprint"];
-        transport.setRemoteDtlsFingerprint(bundle["transport"]["fingerprints"][0]["hash"], fingerPrint, true);
+        transport.asyncSetRemoteDtlsFingerprint(bundle["transport"]["fingerprints"][0]["hash"], fingerPrint, true);
     }
 }
 

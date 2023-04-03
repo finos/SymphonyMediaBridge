@@ -311,12 +311,27 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
         utils::Time::nanoSleep(rampup * utils::Time::sec);
     }
 
+    CallConfigBuilder cfg(conf.getId());
+    cfg.url(baseUrl).withOpus();
+
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
-        auto audio = createTalker && count++ < numSpeakers ? emulator::Audio::Opus : emulator::Audio::Muted;
-        client->initiateCall(baseUrl.c_str(), conf.getId(), true, audio, false, true);
+        if (!createTalker || count == numSpeakers)
+        {
+            cfg.muted();
+        }
+
+        if (count == 0)
+        {
+            client->initiateCall(cfg.build());
+        }
+        else
+        {
+            client->joinCall(cfg.build());
+        }
         client->setExpectedAudioType(Audio::Opus);
+        ++count;
     }
 
     ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
@@ -394,17 +409,19 @@ TEST_F(RealTimeTest, DISABLED_localMiniHoot)
     Conference conf(nullptr);
 
     group.startConference(conf, baseUrl);
+    CallConfigBuilder cfg(conf.getId());
+    cfg.url(baseUrl).withAudio();
 
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
         if (count++ == 0)
         {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, false, true);
+            client->initiateCall(cfg.withAudio().build());
         }
         else
         {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Muted, false, true);
+            client->joinCall(cfg.muted().build());
         }
     }
 
@@ -441,17 +458,23 @@ TEST_F(RealTimeTest, localVideoMeeting)
     Conference conf(nullptr);
 
     group.startConference(conf, baseUrl);
+    CallConfigBuilder cfg(conf.getId());
+    cfg.url(baseUrl).withAudio().withVideo();
 
     uint32_t count = 0;
     for (auto& client : group.clients)
     {
         if (count++ == 0)
         {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, true, true);
+            client->initiateCall(cfg.build());
         }
         else
         {
-            client->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Fake, count < 11, true);
+            if (count == 11)
+            {
+                cfg.noVideo();
+            }
+            client->joinCall(cfg.build());
         }
     }
 

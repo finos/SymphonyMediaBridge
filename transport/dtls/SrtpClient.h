@@ -6,6 +6,7 @@
 #include "logger/PruneSpam.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/dtls/DtlsMessageListener.h"
+#include "transport/dtls/SrtpProfiles.h"
 #include <openssl/ssl.h>
 #include <srtp2/srtp.h>
 
@@ -47,13 +48,16 @@ public:
         const std::string& fingerprintHash,
         const bool isDtlsClient);
 
+    void getLocalKey(srtp::Profile profile, srtp::AesKey& keyOut);
+    void setRemoteKey(const srtp::AesKey& key);
+
     bool unprotect(memory::Packet& packet);
     bool protect(memory::Packet& packet);
     void removeLocalSsrc(const uint32_t ssrc);
     bool setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
     bool setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
 
-    bool isDtlsConnected() const { return (_state == State::CONNECTED); }
+    bool isConnected() const { return (_state == State::CONNECTED); }
     bool isDtlsClient() const { return _isDtlsClient; }
 
     void onMessageReceived(memory::UniquePacket packet) override;
@@ -66,13 +70,15 @@ public:
     bool unprotectApplicationData(memory::Packet& packet);
     void sendApplicationData(const void* data, size_t length);
 
+    srtp::Mode getMode() const { return _mode; }
+
 private:
     void dtlsHandShake();
     void logSslError(const char* msg, int sslCode);
+
     bool _isInitialized;
     std::atomic<State> _state;
     logger::LoggableId _loggableId;
-    SslDtls& _sslDtls;
 
     SSL* _ssl;
     BIO* _readBio;
@@ -83,7 +89,9 @@ private:
     srtp_t _remoteSrtp;
     srtp_t _localSrtp;
 
-    bool _nullCipher;
+    srtp::Mode _mode;
+
+    srtp::AesKey _localKey;
 
     IEvents* _eventSink;
     logger::PruneSpam _rtpAntiSpam;
@@ -96,6 +104,7 @@ private:
     void sslRead();
     bool compareFingerprint();
     bool createSrtp();
+    bool createSrtp(const srtp::AesKey& key);
     static const char* getErrorMessage(int sslErrorCode);
 };
 } // namespace transport

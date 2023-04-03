@@ -58,7 +58,7 @@ elseif(UNIX)
 
     set(CMAKE_INSTALL_RPATH "./libs")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=lld -lc++abi -lrt")
 
 # std::filesystem requires c++fs library before CLANG 9.1
 if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9_1)
@@ -78,6 +78,7 @@ find_package(OpenSSL REQUIRED)
 find_package(Srtp2 REQUIRED)
 find_package(Opus REQUIRED)
 find_package(LibMicrohttpd REQUIRED)
+link_directories(/usr/local/lib)
 
 include_directories(.)
 include_directories(external)
@@ -388,6 +389,8 @@ set(FILES
         transport/dtls/SslDtls.cpp
         transport/dtls/SslDtls.h
         transport/dtls/SslWriteBioListener.h
+        transport/dtls/SrtpProfiles.h
+        transport/dtls/SrtpProfiles.cpp
         transport/ice/IceCandidate.cpp
         transport/ice/IceCandidate.h
         transport/ice/IceComponent.h
@@ -558,6 +561,7 @@ set(TEST_FILES
     test/integration/BarbellTest.h
     test/integration/ConfIntegrationTest.cpp
     test/integration/IceTransportTest.cpp
+    test/integration/SrtpIntegrationTest.cpp
     
 #    test/integration/MixerTimeoutTest.cpp
 #    test/integration/StatsTest.cpp
