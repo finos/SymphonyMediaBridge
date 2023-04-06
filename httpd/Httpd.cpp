@@ -23,6 +23,21 @@ int32_t getHeaders(void* cls, MHD_ValueKind, const char* key, const char* value)
     return MHD_YES;
 }
 
+int32_t getParams(void* cls, MHD_ValueKind, const char* key, const char* value)
+{
+    auto request = reinterpret_cast<httpd::Request*>(cls);
+    if (value)
+    {
+        request->_params.emplace(key, value);
+    }
+    else
+    {
+        request->_params.emplace(key, std::string());
+    }
+
+    return MHD_YES;
+}
+
 int32_t addCorsHeaders(const httpd::Request& request, MHD_Response* response)
 {
     int32_t result = MHD_YES;
@@ -74,7 +89,7 @@ int32_t answerCallback(void* cls,
 {
     auto context = reinterpret_cast<Context*>(*conCls);
 
-    if (strncmp(method, "POST", 4) == 0 || strncmp(method, "PATCH", 5) == 0)
+    if (strncmp(method, "POST", 4) == 0 || strncmp(method, "PATCH", 5) == 0 || strncmp(method, "PUT", 3) == 0)
     {
         if (!context)
         {
@@ -127,6 +142,7 @@ int32_t answerCallback(void* cls,
 
     auto httpRequestHandler = reinterpret_cast<httpd::HttpRequestHandler*>(cls);
     MHD_get_connection_values(connection, MHD_HEADER_KIND, (MHD_KeyValueIterator)(&getHeaders), request);
+    MHD_get_connection_values(connection, MHD_GET_ARGUMENT_KIND, (MHD_KeyValueIterator)(&getParams), request);
     context->_response = new httpd::Response(httpRequestHandler->onRequest(*request));
 
     MHD_Response* mhdResponse;

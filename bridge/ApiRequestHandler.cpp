@@ -107,7 +107,7 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
         RequestLogger requestLogger(request, _lastAutoRequestId);
         try
         {
-            auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), "/?");
+            auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), "/");
             if (utils::StringTokenizer::isEqual(token, "about") && token.next && request._method == httpd::Method::GET)
             {
                 return handleAbout(this, requestLogger, request, token);
@@ -118,18 +118,16 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             }
             else if (utils::StringTokenizer::isEqual(token, "conferences") && !token.next)
             {
-                return handleConferenceRequest(requestLogger, request);
-            }
-            else if (utils::StringTokenizer::isEqual(token, "conferences") && token.next && token.delimiter == '?')
-            {
-                token = utils::StringTokenizer::tokenize(token, '?');
-                const auto listType = token.str();
-                if (!token.next && listType == "brief")
+                if (request._params.empty())
+                {
+                    return handleConferenceRequest(requestLogger, request);
+                }
+                else if (request._params.find("brief") != request._params.end())
                 {
                     return fetchBriefConferenceList(this, requestLogger);
                 }
             }
-            else if (utils::StringTokenizer::isEqual(token, "conferences") && token.next && token.delimiter == '/')
+            else if (utils::StringTokenizer::isEqual(token, "conferences") && token.next)
             {
                 token = utils::StringTokenizer::tokenize(token, '/');
                 const auto conferenceId = token.str();

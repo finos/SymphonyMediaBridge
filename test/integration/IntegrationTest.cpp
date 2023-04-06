@@ -1761,7 +1761,7 @@ TEST_F(IntegrationTest, confList)
         EXPECT_TRUE(confRequest);
 
         auto briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/conferences?brief",
+            std::string(baseUrl) + "/conferences?brief=1",
             1500 * utils::Time::ms,
             responseBody);
         logger::info("%s", "test", responseBody.dump(3).c_str());
@@ -1779,6 +1779,20 @@ TEST_F(IntegrationTest, confList)
                           [&id](const std::unique_ptr<SfuClient<Channel>>& p) { return p->getEndpointId() == id; }),
                 group.clients.end());
         }
+
+        briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences?brief",
+            1500 * utils::Time::ms,
+            responseBody);
+
+        briefConfRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences?brief=1&bread=true&butter",
+            1500 * utils::Time::ms,
+            responseBody);
+
+        logger::info("%s", "test", responseBody.dump(3).c_str());
+        EXPECT_TRUE(briefConfRequest);
+        EXPECT_TRUE(responseBody.size() == 1);
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();

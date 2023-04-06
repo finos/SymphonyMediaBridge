@@ -13,7 +13,8 @@ enum class Method
     POST,
     DELETE,
     PATCH,
-    OPTIONS
+    OPTIONS,
+    PUT
 };
 
 struct Request
@@ -39,6 +40,10 @@ struct Request
         else if (strncmp(methodString, "OPTIONS", 7) == 0)
         {
             _method = Method::OPTIONS;
+        }
+        else if (strncmp(methodString, "PUT", 3) == 0)
+        {
+            _method = Method::PUT;
         }
         else
         {
@@ -66,15 +71,40 @@ struct Request
         case Method::OPTIONS:
             _methodString = "OPTIONS";
             break;
+        case Method::PUT:
+            _methodString = "PUT";
+            break;
         default:
             assert(false);
         }
+    }
+
+    std::string paramsToString() const
+    {
+        if (_params.empty())
+        {
+            return "";
+        }
+
+        std::string r;
+        r.reserve(50);
+        r += "?";
+        for (auto& pair : _params)
+        {
+            if (r.size() > 1)
+            {
+                r += "&";
+            }
+            r += pair.first + (pair.second.empty() ? "" : "=" + pair.second);
+        }
+        return r;
     }
 
     Method _method;
     std::string _methodString;
     std::string _url;
     std::unordered_map<std::string, std::string> _headers;
+    std::unordered_map<std::string, std::string> _params;
     utils::StringBuilder<8192> _body;
 };
 
