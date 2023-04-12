@@ -6,6 +6,7 @@
 #include "transport/RtcTransport.h"
 #include "transport/RtcePoll.h"
 #include "transport/TransportFactory.h"
+#include "utils/Function.h"
 #include "gmock/gmock-matchers.h"
 #include <cstdint>
 #include <gtest/gtest.h>
@@ -436,4 +437,54 @@ TEST_F(IceIntegrationTest, tcpDisconnect)
         EXPECT_FALSE(clients.isConnected());
         clients.stop();
     }
+}
+
+TEST_F(IceIntegrationTest, hiload)
+{
+    ASSERT_TRUE(_transportFactory1->isGood());
+    ASSERT_TRUE(_transportFactory2->isGood());
+
+    ClientPair clients(*_transportFactory1,
+        *_transportFactory2,
+        11001u,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_sslDtls,
+        *_jobManager,
+        false);
+
+    const auto startTime = utils::Time::getAbsoluteTime();
+    clients.connect(startTime);
+
+    while (!clients.isConnected() && utils::Time::getAbsoluteTime() - startTime < 2 * utils::Time::sec)
+    {
+        utils::Time::nanoSleep(100 * utils::Time::ms);
+        clients.tryConnect(utils::Time::getAbsoluteTime(), *_sslDtls);
+    }
+    EXPECT_TRUE(clients.isConnected());
+
+    size_t sendCount = 0;
+    memory::PacketPoolAllocator pool(256000, "test_pool");
+    for (size_t i = 0; i < 50000; ++i)
+    {
+        auto packet = memory::makeUniquePacket(pool);
+        if (!packet)
+        {
+            utils::Time::nanoSleep(5000);
+            continue;
+        }
+        auto rtpHeader = rtp::RtpHeader::create(*packet);
+        rtpHeader->ssrc = 15;
+        rtpHeader->sequenceNumber = i + 100;
+        packet->setLength(521);
+
+        ++sendCount;
+        clients._transport1->getJobQueue().post(clients._transport1->getJobCounter(),
+            utils::bind(&RtcTransport::protectAndSend, clients._transport1.get(), utils::moveParam(packet)));
+        utils::Time::nanoSleep(1);
+    }
+
+    logger::info("sent %zu, pkts", "", sendCount);
+    utils::Time::nanoSleep(utils::Time::sec * 5);
+    clients.stop();
 }

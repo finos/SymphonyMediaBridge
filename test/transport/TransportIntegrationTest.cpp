@@ -232,10 +232,10 @@ void TransportClientPair::onRtpPacketReceived(transport::RtcTransport* sender,
 
     if ((_receivedPacketCount++ % 250) == 0)
     {
-        logger::info("channel %u bit rate %ld, rcv %u, packets %u",
+        logger::info("channel rcv %u %ldkbps, %uB, packets %upkts",
             "ClientPair",
             _ssrc,
-            _receivedByteCount.load() * 8u / (1u + std::time(nullptr) - _receiveStart),
+            _receivedByteCount.load() / (125 * (1u + std::time(nullptr) - _receiveStart)),
             _receivedByteCount.load(),
             _receivedPacketCount.load());
     }
