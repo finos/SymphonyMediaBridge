@@ -21,6 +21,7 @@ void fatalSignalHandler(int32_t signalId)
     void* array[16];
     const auto size = backtrace(array, 16);
     logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
+    logger::error("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
     logger::logStack(array, size, "fatalSignalHandler");
 
     logger::flushLog();
