@@ -139,7 +139,7 @@ public:
         TcpType tcpType);
 
     const IceCandidate& addRemoteCandidate(const IceCandidate& udpCandidate);
-    void addRemoteCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
+    void addRemoteTcpCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
 
     void setRemoteCredentials(const std::string& ufrag, const std::string& pwd);
     void setRemoteCredentials(const std::pair<std::string, std::string>& credentials);

@@ -1852,7 +1852,7 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
                     endpoint->registerDefaultListener(this);
                     _rtpEndpoints.push_back(endpoint);
 
-                    _rtpIceSession->addRemoteCandidate(candidate, endpoint.get());
+                    _rtpIceSession->addRemoteTcpCandidate(candidate, endpoint.get());
                 }
             }
         }
@@ -1961,10 +1961,11 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
 
                 _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
 
-                logger::info("candidate selected %s %s, %s",
+                logger::info("candidate selected %s %s, %s-%s",
                     _loggableId.c_str(),
                     _peerRtpPort.getFamilyString().c_str(),
                     ice::toString(endpoint->getTransportType()).c_str(),
+                    ice::toString(candidatePair.first.type).c_str(),
                     ice::toString(candidatePair.second.type).c_str());
             }
         }

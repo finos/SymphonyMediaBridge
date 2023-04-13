@@ -202,14 +202,21 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
 
     if (remoteCandidate.transportType == TransportType::UDP)
     {
-        IceCandidate& localCandidate =
-            *std::find_if(_localCandidates.begin(), _localCandidates.end(), [endpointAddress](const IceCandidate& c) {
+        auto localCandidateIt =
+            std::find_if(_localCandidates.begin(), _localCandidates.end(), [&endpointAddress](const IceCandidate& c) {
                 return endpointAddress == c.baseAddress && c.type == IceCandidate::Type::HOST;
             });
+        if (localCandidateIt == _localCandidates.end())
+        {
+            logger::error("Failed to add probe. Endpoint address %s is not in local candidates list",
+                _logId.c_str(),
+                endpointAddress.toString().c_str());
+            return;
+        }
 
         _candidatePairs.emplace_back(std::make_unique<CandidatePair>(_config,
             endpoint,
-            localCandidate,
+            *localCandidateIt,
             remoteCandidate,
             _idGenerator,
             _credentials,
@@ -332,7 +339,7 @@ const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate
     return _remoteCandidates.back();
 }
 
-void IceSession::addRemoteCandidate(const IceCandidate& candidate, IceEndpoint* tcpEndpoint)
+void IceSession::addRemoteTcpCandidate(const IceCandidate& candidate, IceEndpoint* tcpEndpoint)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     if (isAttached(tcpEndpoint))
@@ -476,7 +483,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
             sender,
             sender,
             IceCandidate::Type::PRFLX);
-        addRemoteCandidate(remoteCandidate, endpoint);
+        addRemoteTcpCandidate(remoteCandidate, endpoint);
         auto& candidatePair = _candidatePairs.back();
         if (_state == State::CONNECTING)
         {
