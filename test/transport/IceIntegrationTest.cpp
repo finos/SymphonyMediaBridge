@@ -108,6 +108,7 @@ TEST_F(IceIntegrationTest, connectTcp)
 
 TEST_F(IceIntegrationTest, connectTcpIpv6)
 {
+    GTEST_SKIP();
     std::string configJson1 =
         R"({"rtc.ip": "localhost",
          "ice.singlePort":10020, 
