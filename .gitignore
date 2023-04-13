@@ -33,4 +33,4 @@ Release/
 *.xcodeproj/
 coverage/*
 git_version.*
-TestConfig.h
+*/smb/test/include/TestConfig.h
