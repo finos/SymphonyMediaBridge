@@ -64,7 +64,7 @@ node('be-integration') {
             stage('Build Ubuntu Focal') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
                 env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-                sh "docker/ubuntu-focal/buildscript.sh Release"
+                sh "docker/ubuntu-focal/buildscript.sh Debug"
             }
 
             stage('Run tests Ubuntu Focal') {
@@ -76,7 +76,7 @@ node('be-integration') {
             stage('Build Ubuntu Focal deb release') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
                 env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-                sh "docker/ubuntu-focal-deb/buildscript.sh Release $version"
+                sh "docker/ubuntu-focal-deb/buildscript.sh Debug $version"
             }
 
             stage('Run tests Ubuntu Focal deb release') {
