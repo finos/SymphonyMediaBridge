@@ -46,11 +46,10 @@ void LoggerThread::run()
 {
     concurrency::setThreadName("Logger");
     char localTime[timeStringLength];
-    LogItem item;
     bool gotLogItem = false;
     for (;;)
     {
-        auto item = _logQueue.front();
+        const auto item = _logQueue.front();
         if (item)
         {
             gotLogItem = true;
@@ -184,38 +183,6 @@ void LoggerThread::immediate(std::chrono::system_clock::time_point timestamp,
     }
 }
 
-void LoggerThread::flush()
-{
-    LogItem item;
-    while (!_logQueue.empty())
-    {
-        auto item = _logQueue.front();
-        if (item)
-        {
-            char localTime[timeStringLength];
-            formatTime(item->timestamp, localTime);
-
-            if (_logStdOut)
-            {
-                formatTo(stdout, localTime, item->logLevel, item->threadId, item->message);
-            }
-            if (_logFile)
-            {
-                formatTo(_logFile, localTime, item->logLevel, item->threadId, item->message);
-            }
-        }
-    }
-
-    if (_logStdOut)
-    {
-        fflush(stdout);
-    }
-    if (_logFile)
-    {
-        fflush(_logFile);
-    }
-}
-
 void LoggerThread::stop()
 {
     _running = false;
@@ -246,7 +213,7 @@ void LoggerThread::formatTime(const std::chrono::system_clock::time_point timest
         static_cast<int>(ms % 1000));
 }
 
-void LoggerThread::awaitLogDrained(float level)
+void LoggerThread::awaitLogDrained(float level, uint64_t timeoutNs)
 {
     level = std::max(0.0f, std::min(1.0f, level));
     if (_logQueue.size() <= _logQueue.capacity() * level)
@@ -254,9 +221,11 @@ void LoggerThread::awaitLogDrained(float level)
         return;
     }
 
-    while (!_logQueue.empty())
+    auto start = utils::Time::getRawAbsoluteTime();
+    while (!_logQueue.empty() && _running.load() &&
+        utils::Time::diffLT(start, utils::Time::getRawAbsoluteTime(), timeoutNs))
     {
-        utils::Time::rawNanoSleep(100000);
+        std::this_thread::yield();
     }
 }
 

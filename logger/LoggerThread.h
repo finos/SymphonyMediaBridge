@@ -35,11 +35,10 @@ public:
         const char* format,
         va_list args);
 
-    void flush();
     void stop();
     void reopen() { _reOpenLog.clear(); }
 
-    void awaitLogDrained(float level);
+    void awaitLogDrained(float level, uint64_t timeoutNs);
 
     static void formatTime(const std::chrono::system_clock::time_point timestamp, char* output);
 
