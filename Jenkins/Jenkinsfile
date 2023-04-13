@@ -29,7 +29,7 @@ node('be-integration') {
                 isReleaseBuild = true
             } else if (env.GIT_BRANCH ==~ /\d+\.\d+\.\d+/) {
                 version = "${env.GIT_BRANCH}-${currentBuild.number}"
-                isReleaseBuild = true
+                isReleaseBuild = !env.GIT_BRANCH.startsWith("0");
             }
 
             // Set the version env variable so that it's picked up by versioninfo.sh run as part of the build
