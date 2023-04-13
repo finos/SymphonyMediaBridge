@@ -32,3 +32,6 @@ Debug/
 Release/
 *.xcodeproj/
 coverage/*
+git_version.*
+*/smb/test/include/TestConfig.h
+versioninfo.txt

@@ -33,8 +33,6 @@ void TransportIntegrationTest::SetUp()
         "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10010, \"recording.singlePort\":0}";
     _config1.readFromString(configJson1);
     _config2.readFromString(configJson2);
-    std::vector<transport::SocketAddress> interfaces;
-    interfaces.push_back(transport::SocketAddress::parse(_config1.ice.preferredIp, 0));
 
     init(configJson1, configJson2);
 }

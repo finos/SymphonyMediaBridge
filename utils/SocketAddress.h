@@ -28,7 +28,7 @@ public:
     SocketAddress(const uint8_t* ipv6_networkOrder, uint16_t port, const char* nicName = nullptr);
     SocketAddress(const SocketAddress& other) : SocketAddress(&other._address.gen)
     {
-        memcpy(_nicName, other._nicName, NIC_NAME_MAX_SIZE);
+        std::memcpy(_nicName, other._nicName, NIC_NAME_MAX_SIZE);
     }
     SocketAddress(const SocketAddress& ip, uint16_t port) : SocketAddress(&ip._address.gen) { setPort(port); }
 

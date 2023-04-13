@@ -130,7 +130,7 @@ public:
     void setLocalCredentials(const std::pair<std::string, std::string>& credentials);
     IceCandidates getLocalCandidates() const;
     void addLocalCandidate(const IceCandidate& candidate);
-    void addLocalCandidate(const transport::SocketAddress& publicAddress, IceEndpoint* udpEndpoint);
+    void addLocalUdpCandidate(const transport::SocketAddress& publicAddress, IceEndpoint* udpEndpoint);
 
     void addLocalTcpCandidate(IceCandidate::Type type,
         int interfaceIndex,
@@ -139,7 +139,7 @@ public:
         TcpType tcpType);
 
     const IceCandidate& addRemoteCandidate(const IceCandidate& udpCandidate);
-    void addRemoteCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
+    void addRemoteTcpCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
 
     void setRemoteCredentials(const std::string& ufrag, const std::string& pwd);
     void setRemoteCredentials(const std::pair<std::string, std::string>& credentials);

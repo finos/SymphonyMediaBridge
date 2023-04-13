@@ -535,13 +535,13 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
         {
             auto addressPort = iceConfig.publicIpv4;
             addressPort.setPort(endpoint->getLocalPort().getPort());
-            _rtpIceSession->addLocalCandidate(addressPort, endpoint.get());
+            _rtpIceSession->addLocalUdpCandidate(addressPort, endpoint.get());
         }
         if (!iceConfig.publicIpv6.empty() && endpoint->getLocalPort().getFamily() == AF_INET6)
         {
             auto addressPort = iceConfig.publicIpv6;
             addressPort.setPort(endpoint->getLocalPort().getPort());
-            _rtpIceSession->addLocalCandidate(addressPort, endpoint.get());
+            _rtpIceSession->addLocalUdpCandidate(addressPort, endpoint.get());
         }
     }
     int index = 0;
@@ -1852,7 +1852,7 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
                     endpoint->registerDefaultListener(this);
                     _rtpEndpoints.push_back(endpoint);
 
-                    _rtpIceSession->addRemoteCandidate(candidate, endpoint.get());
+                    _rtpIceSession->addRemoteTcpCandidate(candidate, endpoint.get());
                 }
             }
         }
@@ -1961,25 +1961,13 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
 
                 _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
 
-                logger::info("candidate selected %s %s, %s",
+                logger::info("candidate selected %s %s, %s-%s",
                     _loggableId.c_str(),
                     _peerRtpPort.getFamilyString().c_str(),
                     ice::toString(endpoint->getTransportType()).c_str(),
+                    ice::toString(candidatePair.first.type).c_str(),
                     ice::toString(candidatePair.second.type).c_str());
             }
-        }
-
-        while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
-            _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
-        {
-            _rtpEndpoints.back()->unregisterListener(this);
-            _rtpEndpoints.pop_back();
-        }
-        while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
-            _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
-        {
-            _rtpEndpoints.front()->unregisterListener(this);
-            _rtpEndpoints.erase(_rtpEndpoints.begin());
         }
 
         if (isConnected())

@@ -106,6 +106,51 @@ TEST_F(IceIntegrationTest, connectTcp)
     }
 }
 
+TEST_F(IceIntegrationTest, connectTcpIpv6)
+{
+    GTEST_SKIP();
+    std::string configJson1 =
+        R"({"rtc.ip": "localhost",
+         "ice.singlePort":10020, 
+         "ice.tcp.enable":true,
+         "ice.tcp.port":14757,
+         "ice.enableIpv6":true,
+         "ice.preferredIp":"::1"})";
+    std::string configJson2 =
+        R"({"rtc.ip": "localhost",
+         "ice.singlePort":10010,
+          "ice.tcp.enable":true,
+           "ice.tcp.port":14447,
+           "ice.enableIpv6":true,
+           "ice.preferredIp":"::1"})";
+    _config1.readFromString(configJson1);
+    _config2.readFromString(configJson2);
+
+    ASSERT_TRUE(init(configJson1, configJson2));
+    {
+        ClientPair clients(*_transportFactory1,
+            *_transportFactory2,
+            11001u,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_sslDtls,
+            *_jobManager,
+            true);
+
+        const auto startTime = utils::Time::getAbsoluteTime();
+        clients.connect(startTime);
+
+        while (!clients.isConnected() &&
+            utils::Time::diffLT(startTime, utils::Time::getAbsoluteTime(), 15 * utils::Time::sec))
+        {
+            utils::Time::nanoSleep(100 * utils::Time::ms);
+            clients.tryConnect(utils::Time::getAbsoluteTime(), *_sslDtls);
+        }
+        EXPECT_TRUE(clients.isConnected());
+        clients.stop();
+    }
+}
+
 TEST_F(IceIntegrationTest, connectTcpAlias)
 {
     std::string configJson1 = "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10020, "

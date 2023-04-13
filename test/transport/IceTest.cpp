@@ -1592,13 +1592,13 @@ TEST_F(IceTest, udpTcpTimeout)
     endpoint2b.attach(sessions[1]);
 
     exchangeInfo(*sessions[0], *sessions[1]);
-    sessions[0]->addRemoteCandidate(ice::IceCandidate("werwe",
-                                        ice::IceComponent::RTP,
-                                        ice::TransportType::TCP,
-                                        12312,
-                                        endpoint2b._address,
-                                        ice::IceCandidate::Type::HOST,
-                                        ice::TcpType::PASSIVE),
+    sessions[0]->addRemoteTcpCandidate(ice::IceCandidate("werwe",
+                                           ice::IceComponent::RTP,
+                                           ice::TransportType::TCP,
+                                           12312,
+                                           endpoint2b._address,
+                                           ice::IceCandidate::Type::HOST,
+                                           ice::TcpType::PASSIVE),
         &endpoint1b);
     sessions[1]->addLocalTcpCandidate(ice::IceCandidate::Type::HOST,
         0,
