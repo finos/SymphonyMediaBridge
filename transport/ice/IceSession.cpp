@@ -299,7 +299,7 @@ void IceSession::addLocalTcpCandidate(IceCandidate::Type type,
     addLocalCandidate(candidate);
 }
 
-void IceSession::addLocalCandidate(const transport::SocketAddress& publicAddress, IceEndpoint* endpoint)
+void IceSession::addLocalUdpCandidate(const transport::SocketAddress& publicAddress, IceEndpoint* endpoint)
 {
     for (auto& endpointInfo : _endpoints)
     {
@@ -339,6 +339,9 @@ const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate
     return _remoteCandidates.back();
 }
 
+/**
+ * Once added, the endpoint cannot be removed for the duration of the IceSession.
+ */
 void IceSession::addRemoteTcpCandidate(const IceCandidate& candidate, IceEndpoint* tcpEndpoint)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
