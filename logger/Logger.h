@@ -23,8 +23,9 @@ void reOpenLog();
 void logv(const char* logLevel, const char* logGroup, const bool immediate, const char* format, va_list args);
 void logv(const char* logLevel, const char* logGroup, const char* format, va_list args);
 void logStack(void* const* stack, int frames, const char* logGroup);
+void logStackImmediate(void* const* stack, int frames, const char* logGroup);
 void flushLog();
-void awaitLogDrained(float level = 0.0f);
+void awaitLogDrained(float level = 0.0f, uint64_t timeoutNs = 2000'000'000);
 
 __attribute__((format(printf, 1, 3))) inline void info(const char* format, const char* logGroup, ...)
 {
