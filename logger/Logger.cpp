@@ -51,7 +51,7 @@ void logv(const char* logLevel, const char* logGroup, const bool immediate, cons
     }
 }
 
-void logStack(void* const* stack, int frames, const char* logGroup)
+void logStackImmediate(void* const* stack, int frames, const char* logGroup)
 {
     if (_logThread)
     {
@@ -65,18 +65,36 @@ void logStack(void* const* stack, int frames, const char* logGroup)
     }
 }
 
+void logStack(void* const* stack, int frames, const char* logGroup)
+{
+    if (_logThread)
+    {
+        char** strings = backtrace_symbols(stack, frames);
+
+        for (int i = 0; i < frames; ++i)
+        {
+            logger::warn("%s", logGroup, strings[i]);
+        }
+        free(strings);
+    }
+}
+
 void flushLog()
 {
     if (!_logThread)
     {
         return;
     }
-    _logThread->flush();
+    _logThread->awaitLogDrained(0, utils::Time::ms * 500);
 }
 
-void awaitLogDrained(float level)
+void awaitLogDrained(float level, uint64_t timeoutNs)
 {
-    _logThread->awaitLogDrained(level);
+    if (!_logThread)
+    {
+        return;
+    }
+    _logThread->awaitLogDrained(level, timeoutNs);
 }
 
 } // namespace logger

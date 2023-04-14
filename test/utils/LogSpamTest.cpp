@@ -3,6 +3,7 @@
 #include "logger/PruneSpam.h"
 #include "logger/SuspendSpam.h"
 #include <gtest/gtest.h>
+#include <unordered_map>
 
 TEST(LogSpam, prune)
 {
@@ -54,4 +55,72 @@ TEST(LogSpam, logSizes)
     }
 
     EXPECT_EQ(logger::_logThread->getDroppedLogCount(), 0);
+}
+
+TEST(Logger, flush)
+{
+    for (int i = 0; i < 500; ++i)
+    {
+        logger::info("test rather long log %d, test rather long log test rather long log test rather long log test "
+                     "rather long log test rather long log test rather long log test rather long log ",
+            "test",
+            i);
+    }
+
+    logger::flushLog();
+    EXPECT_TRUE(true);
+}
+
+namespace
+{
+std::unordered_map<int32_t, struct sigaction> oldSignalHandlers;
+
+void fatalSignalHandler(int32_t signalId)
+{
+    void* array[16];
+    const auto size = backtrace(array, 16);
+    logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
+    logger::logStack(array, size, "fatalSignalHandler");
+    logger::error("signalHandler %d", "fatalSignalHandler", signalId);
+
+    logger::flushLog();
+
+    if (signalId == SIGPIPE)
+    {
+        return;
+    }
+
+    auto oldSignalHandlersItr = oldSignalHandlers.find(signalId);
+    if (oldSignalHandlersItr != oldSignalHandlers.end())
+    {
+        if (sigaction(signalId, &oldSignalHandlersItr->second, nullptr) != 0)
+        {
+            exit(signalId);
+        }
+    }
+}
+} // namespace
+
+TEST(Logger, crash)
+{
+    GTEST_SKIP();
+    struct sigaction sigactionData = {};
+    sigactionData.sa_handler = fatalSignalHandler;
+    sigactionData.sa_flags = 0;
+    sigemptyset(&sigactionData.sa_mask);
+    struct sigaction oldHandler = {};
+
+    sigaction(SIGSEGV, &sigactionData, &oldHandler);
+    oldSignalHandlers.emplace(SIGSEGV, oldHandler);
+
+    for (int i = 0; i < 500; ++i)
+    {
+        logger::info("test rather long log %d, test rather long log test rather long log test rather long log test "
+                     "rather long log test rather long log test rather long log test rather long log ",
+            "test",
+            i);
+    }
+
+    int* p = nullptr;
+    auto h = p[9];
 }
