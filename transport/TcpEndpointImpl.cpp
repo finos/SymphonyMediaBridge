@@ -1,4 +1,4 @@
-#include "TcpEndpoint.h"
+#include "TcpEndpointImpl.h"
 #include "dtls/SslDtls.h"
 #include "ice/Stun.h"
 #include "memory/Packet.h"
@@ -17,7 +17,7 @@ namespace
 class SendJob : public jobmanager::Job
 {
 public:
-    SendJob(TcpEndpoint& endpoint, memory::UniquePacket packet, const transport::SocketAddress& target)
+    SendJob(TcpEndpointImpl& endpoint, memory::UniquePacket packet, const transport::SocketAddress& target)
         : _endpoint(endpoint),
           _packet(std::move(packet)),
           _target(target)
@@ -27,7 +27,7 @@ public:
     void run() override { _endpoint.internalSendTo(_target, std::move(_packet)); }
 
 private:
-    TcpEndpoint& _endpoint;
+    TcpEndpointImpl& _endpoint;
     memory::UniquePacket _packet;
     transport::SocketAddress _target;
 };
@@ -116,14 +116,14 @@ void RtpDepacketizer::close()
 }
 
 // Used for accepted socket
-TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
+TcpEndpointImpl::TcpEndpointImpl(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
     RtcePoll& epoll,
     int fd,
     const SocketAddress& localPort,
     const SocketAddress& peerPort)
     : _state(State::CONNECTED),
-      _name("TcpEndpoint"),
+      _name("TcpEndpointImpl"),
       _socket(fd, localPort),
       _depacketizer(fd, allocator),
       _peerPort(peerPort),
@@ -139,12 +139,12 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
 }
 
 // Used for connecting client socket
-TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
+TcpEndpointImpl::TcpEndpointImpl(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
     SocketAddress localInterface,
     RtcePoll& epoll)
     : _state(CLOSED),
-      _name("TcpEndpoint"),
+      _name("TcpEndpointImpl"),
       _depacketizer(-1, allocator),
       _localInterface(localInterface),
       _receiveJobs(jobManager, 16),
@@ -168,12 +168,12 @@ TcpEndpoint::TcpEndpoint(jobmanager::JobManager& jobManager,
     _state = State::CREATED;
 }
 
-TcpEndpoint::~TcpEndpoint()
+TcpEndpointImpl::~TcpEndpointImpl()
 {
     logger::debug("removed", _name.c_str());
 }
 
-void TcpEndpoint::connect(const SocketAddress& remotePort)
+void TcpEndpointImpl::connect(const SocketAddress& remotePort)
 {
     if (_state == State::CREATED)
     {
@@ -192,7 +192,7 @@ void TcpEndpoint::connect(const SocketAddress& remotePort)
     }
 }
 
-void TcpEndpoint::sendStunTo(const transport::SocketAddress& target,
+void TcpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
     __uint128_t transactionId,
     const void* data,
     size_t len,
@@ -217,7 +217,7 @@ void TcpEndpoint::sendStunTo(const transport::SocketAddress& target,
     }
 }
 
-void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
+void TcpEndpointImpl::sendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
 {
     assert(!memory::PacketPoolAllocator::isCorrupt(packet.get()));
     if (_state == State::CONNECTING || _state == State::CONNECTED)
@@ -229,7 +229,7 @@ void TcpEndpoint::sendTo(const transport::SocketAddress& target, memory::UniqueP
     }
 }
 
-void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
+void TcpEndpointImpl::internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet)
 {
     if (_state == State::CONNECTING)
     {
@@ -257,7 +257,7 @@ void TcpEndpoint::internalSendTo(const transport::SocketAddress& target, memory:
     sendPacket(*packet);
 }
 
-void TcpEndpoint::continueSend()
+void TcpEndpointImpl::continueSend()
 {
     _socket.updateBoundPort();
     if (_pendingStunRequest && _state == State::CONNECTED)
@@ -269,7 +269,7 @@ void TcpEndpoint::continueSend()
     }
 }
 
-void TcpEndpoint::sendPacket(const memory::Packet& packet)
+void TcpEndpointImpl::sendPacket(const memory::Packet& packet)
 {
     if (_remainder.getLength() > 0)
     {
@@ -322,7 +322,7 @@ void TcpEndpoint::sendPacket(const memory::Packet& packet)
 // - unregister from rtcepoll incoming data
 // - await pending receive jobs to complete
 // - await pending send jobs to complete
-void TcpEndpoint::stop(Endpoint::IStopEvents* listener)
+void TcpEndpointImpl::stop(Endpoint::IStopEvents* listener)
 {
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
@@ -342,13 +342,13 @@ void TcpEndpoint::stop(Endpoint::IStopEvents* listener)
 // closed from remote side
 // read pending data
 // then start close port procedure
-void TcpEndpoint::onSocketShutdown(int fd)
+void TcpEndpointImpl::onSocketShutdown(int fd)
 {
     if (_depacketizer.fd == fd && (_state == State::CONNECTING || _state == State::CONNECTED))
     {
         logger::debug("peer shut down socket STOPPING", _name.c_str());
         _state = State::STOPPING;
-        if (!_receiveJobs.post(utils::bind(&TcpEndpoint::internalReceive, this, _depacketizer.fd)))
+        if (!_receiveJobs.post(utils::bind(&TcpEndpointImpl::internalReceive, this, _depacketizer.fd)))
         {
             logger::warn("failed to add ReceiveJob", _name.c_str());
         }
@@ -356,7 +356,7 @@ void TcpEndpoint::onSocketShutdown(int fd)
     }
 }
 
-void TcpEndpoint::onSocketPollStarted(int fd)
+void TcpEndpointImpl::onSocketPollStarted(int fd)
 {
     if (_state == State::CONNECTING && !_peerPort.empty())
     {
@@ -372,14 +372,14 @@ void TcpEndpoint::onSocketPollStarted(int fd)
     }
 }
 
-void TcpEndpoint::onSocketPollStopped(int fd)
+void TcpEndpointImpl::onSocketPollStopped(int fd)
 {
     _epollCountdown = 2;
-    _receiveJobs.addJob<tcp::PortStoppedJob<TcpEndpoint>>(*this, _epollCountdown);
-    _sendJobs.addJob<tcp::PortStoppedJob<TcpEndpoint>>(*this, _epollCountdown);
+    _receiveJobs.addJob<tcp::PortStoppedJob<TcpEndpointImpl>>(*this, _epollCountdown);
+    _sendJobs.addJob<tcp::PortStoppedJob<TcpEndpointImpl>>(*this, _epollCountdown);
 }
 
-void TcpEndpoint::internalStopped()
+void TcpEndpointImpl::internalStopped()
 {
     _state = State::CREATED;
     if (_stopListener)
@@ -388,13 +388,13 @@ void TcpEndpoint::internalStopped()
     }
 }
 
-void TcpEndpoint::onSocketReadable(int fd)
+void TcpEndpointImpl::onSocketReadable(int fd)
 {
     if (fd == _depacketizer.fd)
     {
         if (!_pendingRead.test_and_set())
         {
-            if (!_receiveJobs.post(utils::bind(&TcpEndpoint::internalReceive, this, _depacketizer.fd)))
+            if (!_receiveJobs.post(utils::bind(&TcpEndpointImpl::internalReceive, this, _depacketizer.fd)))
             {
                 logger::warn("failed to add Receivejob", _name.c_str());
             }
@@ -402,20 +402,20 @@ void TcpEndpoint::onSocketReadable(int fd)
     }
 }
 
-void TcpEndpoint::onSocketWriteable(int fd)
+void TcpEndpointImpl::onSocketWriteable(int fd)
 {
     if (fd == _depacketizer.fd && _state == State::CONNECTING)
     {
         _state = State::CONNECTED;
         logger::debug("connected to %s", _name.c_str(), _peerPort.toString().c_str());
-        if (!_sendJobs.post(utils::bind(&TcpEndpoint::continueSend, this)))
+        if (!_sendJobs.post(utils::bind(&TcpEndpointImpl::continueSend, this)))
         {
             logger::warn("failed to add ContinueSendJob", _name.c_str());
         }
     }
 }
 
-void TcpEndpoint::unregisterListener(IEvents* listener)
+void TcpEndpointImpl::unregisterListener(IEvents* listener)
 {
     if (listener == _defaultListener)
     {
@@ -424,12 +424,12 @@ void TcpEndpoint::unregisterListener(IEvents* listener)
     }
 }
 
-void TcpEndpoint::internalReceive(int fd)
+void TcpEndpointImpl::internalReceive(int fd)
 {
     _pendingRead.clear();
     while (true)
     {
-        TcpEndpoint::IEvents* listener = _defaultListener;
+        TcpEndpointImpl::IEvents* listener = _defaultListener;
         auto packet = _depacketizer.receive();
         if (!packet)
         {
@@ -482,7 +482,7 @@ void TcpEndpoint::internalReceive(int fd)
 }
 
 // used when routing is not possible and there is a single owner of the endpoint
-void TcpEndpoint::registerDefaultListener(IEvents* listener)
+void TcpEndpointImpl::registerDefaultListener(IEvents* listener)
 {
     if (_defaultListener == listener)
     {
@@ -497,27 +497,27 @@ void TcpEndpoint::registerDefaultListener(IEvents* listener)
     listener->onRegistered(*this);
 }
 
-void TcpEndpoint::registerListener(const std::string& stunUserName, IEvents* listener)
+void TcpEndpointImpl::registerListener(const std::string& stunUserName, IEvents* listener)
 {
     registerDefaultListener(listener);
 }
 
 // registration of DTLS listener is automatic when ICE is used
-void TcpEndpoint::registerListener(const SocketAddress& srcAddress, IEvents* listener)
+void TcpEndpointImpl::registerListener(const SocketAddress& srcAddress, IEvents* listener)
 {
     registerDefaultListener(listener);
 }
 
 // already added to epoll in constructor or on accept
-void TcpEndpoint::start() {}
+void TcpEndpointImpl::start() {}
 
-bool TcpEndpoint::configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize)
+bool TcpEndpointImpl::configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize)
 {
     logger::debug("tcp endpoint buffer sizes send %zu, recv %zu", _name.c_str(), sendBufferSize, receiveBufferSize);
     return 0 == _socket.setSendBuffer(sendBufferSize) && 0 == _socket.setReceiveBuffer(receiveBufferSize);
 }
 
-SocketAddress TcpEndpoint::getLocalPort() const
+SocketAddress TcpEndpointImpl::getLocalPort() const
 {
     const State currentState = _state.load();
     if (currentState == State::CONNECTED)

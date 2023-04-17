@@ -433,7 +433,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
     memory::UniquePacket packet,
     const uint64_t timestamp)
 {
-    transport::UdpEndpointImpl::IEvents* listener = _defaultListener;
+    transport::UdpEndpoint::IEvents* listener = _defaultListener;
 
     if (ice::isStunMessage(packet->get(), packet->getLength()))
     {

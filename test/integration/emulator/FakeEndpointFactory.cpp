@@ -25,4 +25,24 @@ transport::UdpEndpoint* FakeEndpointFactory::createUdpEndpoint(jobmanager::JobMa
 
     return static_cast<transport::UdpEndpoint*>(endpoint);
 }
+
+transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobManager& jobManager,
+    memory::PacketPoolAllocator& allocator,
+    const transport::SocketAddress& localPort,
+    transport::RtcePoll& epoll)
+{
+    return nullptr;
+}
+
+transport::TcpServerEndpoint* FakeEndpointFactory::createTcpServerEndpoint(jobmanager::JobManager& jobManager,
+    memory::PacketPoolAllocator& allocator,
+    transport::RtcePoll& epoll,
+    uint32_t acceptBacklog,
+    transport::TcpEndpointFactory* transportFactory,
+    const transport::SocketAddress& localPort,
+    const config::Config& config)
+{
+    return nullptr;
+}
+
 } // namespace emulator

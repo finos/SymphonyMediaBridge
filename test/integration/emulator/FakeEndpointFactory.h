@@ -38,6 +38,19 @@ public:
         transport::RtcePoll& epoll,
         bool isShared) override;
 
+    virtual transport::TcpEndpoint* createTcpEndpoint(jobmanager::JobManager& jobManager,
+        memory::PacketPoolAllocator& allocator,
+        const transport::SocketAddress& localPort,
+        transport::RtcePoll& epoll) override;
+
+    virtual transport::TcpServerEndpoint* createTcpServerEndpoint(jobmanager::JobManager& jobManager,
+        memory::PacketPoolAllocator& allocator,
+        transport::RtcePoll& epoll,
+        uint32_t acceptBacklog,
+        transport::TcpEndpointFactory* transportFactory,
+        const transport::SocketAddress& localPort,
+        const config::Config& config) override;
+
 private:
     std::shared_ptr<fakenet::Gateway> _network;
     EndpointCallback _callback;

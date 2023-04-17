@@ -111,8 +111,13 @@ public:
             for (SocketAddress portAddress : interfaces)
             {
                 portAddress.setPort(config.ice.tcp.port);
-                auto endPoint = std::shared_ptr<TcpServerEndpoint>(
-                    new TcpServerEndpoint(_jobManager, _mainAllocator, _rtcePoll, 1024, *this, portAddress, config),
+                auto endPoint = std::shared_ptr<ServerEndpoint>(_endpointFactory->createTcpServerEndpoint(_jobManager,
+                                                                    _mainAllocator,
+                                                                    _rtcePoll,
+                                                                    1024,
+                                                                    this,
+                                                                    portAddress,
+                                                                    config),
                     getDeleter());
 
                 if (endPoint->isGood())
@@ -292,7 +297,8 @@ public:
 
     std::shared_ptr<Endpoint> createTcpEndpoint(const transport::SocketAddress& baseAddress) override
     {
-        return std::shared_ptr<TcpEndpoint>(new TcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll),
+        return std::shared_ptr<TcpEndpoint>(
+            _endpointFactory->createTcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll),
             getDeleter());
     }
 
@@ -301,7 +307,7 @@ public:
         const transport::SocketAddress& peerPort) override
     {
         auto endpoint = std::shared_ptr<TcpEndpoint>(
-            new TcpEndpoint(_jobManager, _mainAllocator, _rtcePoll, fd, localPort, peerPort),
+            new TcpEndpointImpl(_jobManager, _mainAllocator, _rtcePoll, fd, localPort, peerPort),
             getDeleter());
 
         // if read event is fired now we may miss it and it is edge triggered.

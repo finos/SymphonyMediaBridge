@@ -361,8 +361,8 @@ set(FILES
         transport/RtpSenderState.h
         transport/SctpJob.cpp
         transport/SctpJob.h
-        transport/TcpEndpoint.cpp
-        transport/TcpEndpoint.h
+        transport/TcpEndpointImpl.cpp
+        transport/TcpEndpointImpl.h
         transport/TcpServerEndpoint.cpp
         transport/TcpServerEndpoint.h
         transport/Transport.h

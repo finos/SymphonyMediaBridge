@@ -2,6 +2,11 @@
 #include "transport/EndpointFactory.h"
 #include <memory>
 
+namespace config
+{
+class Config;
+}
+
 namespace jobmanager
 {
 class JobManager;
@@ -32,5 +37,18 @@ public:
         const SocketAddress& localPort,
         RtcePoll& epoll,
         bool isShared) override;
+
+    virtual TcpEndpoint* createTcpEndpoint(jobmanager::JobManager& jobManager,
+        memory::PacketPoolAllocator& allocator,
+        const SocketAddress& localPort,
+        RtcePoll& epoll) override;
+
+    virtual TcpServerEndpoint* createTcpServerEndpoint(jobmanager::JobManager& jobManager,
+        memory::PacketPoolAllocator& allocator,
+        RtcePoll& epoll,
+        uint32_t acceptBacklog,
+        TcpEndpointFactory* transportFactory,
+        const SocketAddress& localPort,
+        const config::Config& config) override;
 };
 } // namespace transport

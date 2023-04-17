@@ -3,7 +3,7 @@
 #include "memory/PacketPoolAllocator.h"
 #include "transport/Endpoint.h"
 #include "transport/RtcSocket.h"
-#include "transport/RtcePoll.h"
+#include "transport/TcpEndpoint.h"
 #include "utils/SocketAddress.h"
 
 namespace transport
@@ -58,22 +58,22 @@ private:
 // End point that package ICE, DTLS, RTP in TCP
 // You can call sendTo and sendStunTo on unconnected socket. It will connect and continue transmission as soon
 // as the socket becomes writeable
-class TcpEndpoint : public Endpoint, public RtcePoll::IEventListener
+class TcpEndpointImpl : public TcpEndpoint
 {
 public:
-    TcpEndpoint(jobmanager::JobManager& jobManager,
+    TcpEndpointImpl(jobmanager::JobManager& jobManager,
         memory::PacketPoolAllocator& allocator,
         RtcePoll& epoll,
         int fd,
         const SocketAddress& localPort,
         const SocketAddress& peerPort);
 
-    TcpEndpoint(jobmanager::JobManager& jobManager,
+    TcpEndpointImpl(jobmanager::JobManager& jobManager,
         memory::PacketPoolAllocator& allocator,
         SocketAddress localInterface,
         RtcePoll& epoll);
 
-    virtual ~TcpEndpoint();
+    virtual ~TcpEndpointImpl();
 
     void sendStunTo(const transport::SocketAddress& target,
         __uint128_t transactionId,
@@ -120,7 +120,7 @@ public:
     void internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet);
     void continueSend();
 
-    void internalStopped();
+    void internalStopped() override;
 
 private:
     std::atomic<Endpoint::State> _state;

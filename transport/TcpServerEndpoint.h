@@ -1,7 +1,7 @@
 #pragma once
 
 #include "concurrency/MpmcHashmap.h"
-#include "transport/TcpEndpoint.h"
+#include "transport/TcpEndpointImpl.h"
 
 namespace config
 {
@@ -30,9 +30,9 @@ public:
 
     virtual ~TcpServerEndpoint();
 
-    void start();
+    void start() override;
     void stop(ServerEndpoint::IStopEvents* listener) override;
-    bool isGood() const { return _socket.isGood(); }
+    bool isGood() const override { return _socket.isGood(); }
 
     const SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
 

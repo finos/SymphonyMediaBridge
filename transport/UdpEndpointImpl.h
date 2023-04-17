@@ -3,11 +3,6 @@
 #include "memory/PacketPoolAllocator.h"
 #include "transport/BaseUdpEndpoint.h"
 
-namespace emulator
-{
-class FakeEndpointFactory;
-}
-
 namespace transport
 {
 class EndpointFactoryImpl;
