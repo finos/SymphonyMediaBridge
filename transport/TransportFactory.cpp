@@ -307,12 +307,9 @@ public:
         const transport::SocketAddress& peerPort) override
     {
         auto endpoint = std::shared_ptr<TcpEndpoint>(
-            new TcpEndpointImpl(_jobManager, _mainAllocator, _rtcePoll, fd, localPort, peerPort),
+            _endpointFactory->createTcpEndpoint(_jobManager, _mainAllocator, _rtcePoll, fd, localPort, peerPort),
             getDeleter());
 
-        // if read event is fired now we may miss it and it is edge triggered.
-        // everything relies on that the ice session will want to respond to the request
-        _rtcePoll.add(fd, endpoint.get());
         return endpoint;
     }
 

@@ -34,7 +34,23 @@ TcpEndpoint* EndpointFactoryImpl::createTcpEndpoint(jobmanager::JobManager& jobM
     return new TcpEndpointImpl(jobManager, allocator, nic, epoll);
 }
 
-TcpServerEndpoint* EndpointFactoryImpl::createTcpServerEndpoint(jobmanager::JobManager& jobManager,
+TcpEndpoint* EndpointFactoryImpl::createTcpEndpoint(jobmanager::JobManager& jobManager,
+    memory::PacketPoolAllocator& allocator,
+    RtcePoll& epoll,
+    int fd,
+    const SocketAddress& localPort,
+    const transport::SocketAddress& peerPort)
+{
+
+    auto endpoint = new TcpEndpointImpl(jobManager, allocator, epoll, fd, localPort, peerPort);
+    // if read event is fired now we may miss it and it is edge triggered.
+    // everything relies on that the ice session will want to respond to the request
+
+    epoll.add(fd, endpoint);
+    return endpoint;
+}
+
+ServerEndpoint* EndpointFactoryImpl::createTcpServerEndpoint(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
     RtcePoll& epoll,
     uint32_t acceptBacklog,

@@ -43,7 +43,14 @@ public:
         const transport::SocketAddress& localPort,
         transport::RtcePoll& epoll) override;
 
-    virtual transport::TcpServerEndpoint* createTcpServerEndpoint(jobmanager::JobManager& jobManager,
+    virtual transport::TcpEndpoint* createTcpEndpoint(jobmanager::JobManager& jobManager,
+        memory::PacketPoolAllocator& allocator,
+        transport::RtcePoll& epoll,
+        int fd,
+        const transport::SocketAddress& localPort,
+        const transport::SocketAddress& peerPort) override;
+
+    virtual transport::ServerEndpoint* createTcpServerEndpoint(jobmanager::JobManager& jobManager,
         memory::PacketPoolAllocator& allocator,
         transport::RtcePoll& epoll,
         uint32_t acceptBacklog,

@@ -34,7 +34,17 @@ transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobMa
     return nullptr;
 }
 
-transport::TcpServerEndpoint* FakeEndpointFactory::createTcpServerEndpoint(jobmanager::JobManager& jobManager,
+transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobManager& jobManager,
+    memory::PacketPoolAllocator& allocator,
+    transport::RtcePoll& epoll,
+    int fd,
+    const transport::SocketAddress& localPort,
+    const transport::SocketAddress& peerPort)
+{
+    return nullptr;
+}
+
+transport::ServerEndpoint* FakeEndpointFactory::createTcpServerEndpoint(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
     transport::RtcePoll& epoll,
     uint32_t acceptBacklog,
