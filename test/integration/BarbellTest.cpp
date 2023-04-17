@@ -49,29 +49,6 @@ void BarbellTest::TearDown()
 
 using namespace emulator;
 
-template <typename TChannel>
-void make5secCallWithDefaultAudioProfile(GroupCall<SfuClient<TChannel>>& groupCall)
-{
-    static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
-    for (size_t i = 0; i < groupCall.clients.size(); ++i)
-    {
-        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
-    }
-
-    for (auto& client : groupCall.clients)
-    {
-        client->_audioSource->setVolume(0.6);
-    }
-
-    groupCall.run(utils::Time::sec * 5);
-    utils::Time::nanoSleep(utils::Time::sec * 1);
-
-    for (auto& client : groupCall.clients)
-    {
-        client->stopRecording();
-    }
-}
-
 /*
 Test setup:
 1. Topology:

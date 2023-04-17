@@ -4,17 +4,14 @@
 #include "bridge/Bridge.h"
 #include "config/Config.h"
 #include "emulator/TimeTurner.h"
+#include "test/integration/FFTanalysis.h"
 #include "test/integration/emulator/Httpd.h"
-#include "test/transport/FakeNetwork.h"
+#include "test/integration/emulator/SfuClient.h"
 #include "transport/EndpointFactory.h"
 #include "transport/RtcTransport.h"
 #include "utils/Pacer.h"
-#include <atomic>
-#include <condition_variable>
 #include <cstdint>
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <mutex>
 
 namespace
 {
@@ -155,7 +152,74 @@ public:
         double expectedDurationSeconds,
         bool checkAmplitudeProfile = true,
         size_t mixedAudioSources = 0,
-        bool dumpPcmData = false);
+        bool dumpPcmData = false)
+    {
+        constexpr auto AUDIO_PACKET_SAMPLE_COUNT = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
+        auto audioCounters = client->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        const auto& data = client->getAudioReceiveStats();
+        IntegrationTest::AudioAnalysisData result;
+
+        for (const auto& item : data)
+        {
+            if (client->isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            result.audioSsrcCount++;
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+
+            ::analyzeRecording(rec,
+                freqVector,
+                amplitudeProfile,
+                item.second->getLoggableId().c_str(),
+                mixedAudioSources ? expectedDurationSeconds * utils::Time::ms : 0);
+
+            if (mixedAudioSources)
+            {
+                EXPECT_EQ(freqVector.size(), mixedAudioSources);
+                EXPECT_GE(rec.size(), expectedDurationSeconds * codec::Opus::sampleRate);
+            }
+            else
+            {
+                EXPECT_EQ(freqVector.size(), 1);
+                EXPECT_NEAR(rec.size(),
+                    expectedDurationSeconds * codec::Opus::sampleRate,
+                    3 * AUDIO_PACKET_SAMPLE_COUNT);
+
+                if (checkAmplitudeProfile)
+                {
+                    EXPECT_EQ(amplitudeProfile.size(), 2);
+                    if (amplitudeProfile.size() > 1)
+                    {
+                        EXPECT_NEAR(amplitudeProfile[1].second, 5725, 125);
+                    }
+                }
+            }
+
+            result.dominantFrequencies.insert(result.dominantFrequencies.begin(), freqVector.begin(), freqVector.end());
+            if (freqVector.size())
+            {
+                result.receivedBytes[item.first] = rec.size();
+            }
+
+            result.amplitudeProfile.insert(result.amplitudeProfile.begin(),
+                amplitudeProfile.begin(),
+                amplitudeProfile.end());
+            if (dumpPcmData)
+            {
+                item.second->dumpPcmData();
+            }
+        }
+
+        std::sort(result.dominantFrequencies.begin(), result.dominantFrequencies.end());
+        return result;
+    }
 
 protected:
     void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
@@ -190,4 +254,28 @@ public:
 private:
     std::function<void()> _method;
 };
+
+template <typename TChannel>
+void make5secCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClient<TChannel>>& groupCall)
+{
+    static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
+    for (size_t i = 0; i < groupCall.clients.size(); ++i)
+    {
+        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
+    }
+
+    for (auto& client : groupCall.clients)
+    {
+        client->_audioSource->setVolume(0.6);
+    }
+
+    groupCall.run(utils::Time::sec * 5);
+    utils::Time::nanoSleep(utils::Time::sec * 1);
+
+    for (auto& client : groupCall.clients)
+    {
+        client->stopRecording();
+    }
+}
+
 } // namespace

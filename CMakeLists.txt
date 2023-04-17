@@ -490,6 +490,8 @@ set(TEST_LIB_FILES
     test/transport/NetworkLink.cpp
     test/integration/RtpDump.h
     test/integration/RtpDump.cpp
+    test/integration/IntegrationTest.cpp
+    test/integration/IntegrationTest.h
     test/integration/emulator/AudioSource.cpp
     test/integration/emulator/AudioSource.h
     test/integration/emulator/ApiChannel.h
@@ -543,12 +545,12 @@ set(TEST_FILES
     test/jobmanager/JobTest.cpp
     test/codec/OpusCodecTest.cpp
     test/concurrency/ProcessIntervalTest.cpp
-    test/integration/IntegrationTest.cpp
-    test/integration/IntegrationTest.h
     test/integration/RealTimeTest.cpp
     test/integration/RealTimeTest.h
     test/integration/BarbellTest.cpp
     test/integration/BarbellTest.h
+    test/integration/ConfIntegrationTest.cpp
+    test/integration/IceIntegrationTest.cpp
 #    test/integration/MixerTimeoutTest.cpp
 #    test/integration/StatsTest.cpp
     test/sctp/SctpBasicsTests.cpp
