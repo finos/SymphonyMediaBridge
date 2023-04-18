@@ -18,6 +18,14 @@
 #endif
 namespace transport
 {
+/*logger::LoggableId& name,
+    jobmanager::JobManager& jobManager,
+    size_t maxSessionCount,
+    memory::PacketPoolAllocator& allocator,
+    const SocketAddress& localPort,
+    RtcePoll& epoll,
+    DispatchMethod dispatchMethod,
+    Endpoint* endpoint*/
 
 // When this endpoint is shared the number of registration jobs and packets in queue will be plenty
 // and the data structures are therefore larger
@@ -27,7 +35,19 @@ UdpEndpointImpl::UdpEndpointImpl(jobmanager::JobManager& jobManager,
     const SocketAddress& localPort,
     RtcePoll& epoll,
     bool isShared)
-    : BaseUdpEndpoint("UdpEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
+    : _name("UdpEndpointImpl"),
+      _baseUdpEndpoint(_name,
+          jobManager,
+          maxSessionCount,
+          allocator,
+          localPort,
+          epoll,
+          std::bind(&UdpEndpointImpl::dispatchReceivedPacket,
+              this,
+              std::placeholders::_1,
+              std::placeholders::_2,
+              std::placeholders::_3),
+          this),
       _iceListeners(maxSessionCount * 2),
       _dtlsListeners(maxSessionCount * 5),
       _iceResponseListeners(maxSessionCount * 16)
@@ -75,12 +95,12 @@ void UdpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
         }
     }
 
-    sendTo(target, memory::makeUniquePacket(_allocator, data, len));
+    sendTo(target, memory::makeUniquePacket(_baseUdpEndpoint._allocator, data, len));
 }
 
 void UdpEndpointImpl::unregisterListener(IEvents* listener)
 {
-    if (!_receiveJobs.post(utils::bind(&UdpEndpointImpl::internalUnregisterListener, this, listener)))
+    if (!_baseUdpEndpoint._receiveJobs.post(utils::bind(&UdpEndpointImpl::internalUnregisterListener, this, listener)))
     {
         logger::error("failed to post unregister job", _name.c_str());
     }
@@ -88,7 +108,7 @@ void UdpEndpointImpl::unregisterListener(IEvents* listener)
 
 void UdpEndpointImpl::cancelStunTransaction(__uint128_t transactionId)
 {
-    const bool posted = _receiveJobs.post([this, transactionId]() {
+    const bool posted = _baseUdpEndpoint._receiveJobs.post([this, transactionId]() {
         _iceResponseListeners.erase(transactionId);
         const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
         LOG("remove ICE listener for %04x%04x%04x, count %" PRIu64,
@@ -138,7 +158,7 @@ void UdpEndpointImpl::internalUnregisterListener(IEvents* listener)
 }
 
 void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
-    memory::UniquePacket packet,
+    std::unique_ptr<memory::Packet, memory::PacketPoolAllocator::Deleter> packet,
     const uint64_t timestamp)
 {
     UdpEndpointImpl::IEvents* listener = _defaultListener;
@@ -184,7 +204,11 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
 
         if (listener)
         {
-            listener->onIceReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
+            listener->onIceReceived(*this,
+                srcAddress,
+                _baseUdpEndpoint._socket.getBoundPort(),
+                std::move(packet),
+                timestamp);
             return;
         }
         else
@@ -198,7 +222,11 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
         listener = listener ? listener : _defaultListener.load();
         if (listener)
         {
-            listener->onDtlsReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
+            listener->onDtlsReceived(*this,
+                srcAddress,
+                _baseUdpEndpoint._socket.getBoundPort(),
+                std::move(packet),
+                timestamp);
             return;
         }
         else
@@ -215,7 +243,11 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
 
             if (listener)
             {
-                listener->onRtcpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
+                listener->onRtcpReceived(*this,
+                    srcAddress,
+                    _baseUdpEndpoint._socket.getBoundPort(),
+                    std::move(packet),
+                    timestamp);
                 return;
             }
             else
@@ -233,7 +265,11 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
 
             if (listener)
             {
-                listener->onRtpReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet), timestamp);
+                listener->onRtpReceived(*this,
+                    srcAddress,
+                    _baseUdpEndpoint._socket.getBoundPort(),
+                    std::move(packet),
+                    timestamp);
                 return;
             }
             else
@@ -275,7 +311,7 @@ void UdpEndpointImpl::registerListener(const SocketAddress& srcAddress, IEvents*
     }
     else
     {
-        _receiveJobs.post(utils::bind(&UdpEndpointImpl::swapListener, this, srcAddress, listener));
+        _baseUdpEndpoint._receiveJobs.post(utils::bind(&UdpEndpointImpl::swapListener, this, srcAddress, listener));
     }
 }
 
@@ -304,7 +340,7 @@ void UdpEndpointImpl::swapListener(const SocketAddress& srcAddress, IEvents* new
 
 void UdpEndpointImpl::unregisterListener(const SocketAddress& remotePort, IEvents* listener)
 {
-    _receiveJobs.post([this, remotePort, listener]() {
+    _baseUdpEndpoint._receiveJobs.post([this, remotePort, listener]() {
         auto it = _dtlsListeners.find(remotePort);
         if (it == _dtlsListeners.end())
         {

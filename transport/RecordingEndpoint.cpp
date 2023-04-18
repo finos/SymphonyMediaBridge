@@ -1,5 +1,6 @@
 #include "transport/RecordingEndpoint.h"
 #include "transport/recp/RecControlHeader.h"
+#include <functional>
 
 namespace transport
 {
@@ -29,7 +30,19 @@ RecordingEndpointImpl::RecordingEndpointImpl(jobmanager::JobManager& jobManager,
     const SocketAddress& localPort,
     RtcePoll& epoll,
     bool isShared)
-    : BaseUdpEndpoint("RecordingEndpointImpl", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
+    : _name("RecordingEndpointImpl"),
+      _udpEndpoint(_name,
+          jobManager,
+          maxSessionCount,
+          allocator,
+          localPort,
+          epoll,
+          std::bind(&RecordingEndpointImpl::dispatchReceivedPacket,
+              this,
+              std::placeholders::_1,
+              std::placeholders::_2,
+              std::placeholders::_3),
+          this),
       _listeners(maxSessionCount)
 {
 }
@@ -82,7 +95,10 @@ void RecordingEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddre
             auto listener = findListener(_listeners, srcAddress);
             if (listener)
             {
-                listener->onRecControlReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
+                listener->onRecControlReceived(*this,
+                    srcAddress,
+                    _udpEndpoint._socket.getBoundPort(),
+                    std::move(packet));
                 return;
             }
         }
@@ -108,7 +124,7 @@ void RecordingEndpointImpl::registerRecordingListener(const SocketAddress& srcAd
 
 void RecordingEndpointImpl::unregisterRecordingListener(IRecordingEvents* listener)
 {
-    if (!_receiveJobs.addJob<UnRegisterRecordingListenerJob>(*this, listener))
+    if (!_udpEndpoint._receiveJobs.addJob<UnRegisterRecordingListenerJob>(*this, listener))
     {
         logger::error("failed to post unregister job", _name.c_str());
     }
