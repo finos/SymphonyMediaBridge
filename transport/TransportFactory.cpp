@@ -143,8 +143,16 @@ public:
                 {
                     portAddress.setPort(config.recording.singlePort + portOffset);
                     auto endPoint = std::shared_ptr<RecordingEndpoint>(
-                        new RecordingEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
+                        _endpointFactory
+                            ->createRecordingEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
                         getDeleter());
+                    if (!endPoint)
+                    {
+                        logger::warn("failed to create recording endpoint for interface %s",
+                            _name,
+                            portAddress.toString().c_str());
+                        continue;
+                    }
 
                     if (endPoint->isGood())
                     {
@@ -507,6 +515,11 @@ public:
 
     void shutdownEndpoint(Endpoint* endpoint)
     {
+        if (!endpoint)
+        {
+            return;
+        }
+
         logger::debug("closing %s", _name, endpoint->getName());
         ++_pendingTasks;
         endpoint->stop(this);
@@ -514,6 +527,11 @@ public:
 
     void shutdownEndpoint(ServerEndpoint* endpoint)
     {
+        if (!endpoint)
+        {
+            return;
+        }
+
         logger::debug("closing %s", _name, endpoint->getName());
         ++_pendingTasks;
         endpoint->stop(this);

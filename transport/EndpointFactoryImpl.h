@@ -31,31 +31,38 @@ public:
         RtcePoll& epoll,
         bool isShared);
 
-    virtual UdpEndpoint* createUdpEndpoint(jobmanager::JobManager& jobManager,
+    UdpEndpoint* createUdpEndpoint(jobmanager::JobManager& jobManager,
         size_t maxSessionCount,
         memory::PacketPoolAllocator& allocator,
         const SocketAddress& localPort,
         RtcePoll& epoll,
         bool isShared) override;
 
-    virtual TcpEndpoint* createTcpEndpoint(jobmanager::JobManager& jobManager,
+    TcpEndpoint* createTcpEndpoint(jobmanager::JobManager& jobManager,
         memory::PacketPoolAllocator& allocator,
         const SocketAddress& localPort,
         RtcePoll& epoll) override;
 
-    virtual TcpEndpoint* createTcpEndpoint(jobmanager::JobManager& jobManager,
+    TcpEndpoint* createTcpEndpoint(jobmanager::JobManager& jobManager,
         memory::PacketPoolAllocator& allocator,
         RtcePoll& epoll,
         int fd,
         const SocketAddress& localPort,
         const transport::SocketAddress& peerPort) override;
 
-    virtual ServerEndpoint* createTcpServerEndpoint(jobmanager::JobManager& jobManager,
+    ServerEndpoint* createTcpServerEndpoint(jobmanager::JobManager& jobManager,
         memory::PacketPoolAllocator& allocator,
         RtcePoll& epoll,
         uint32_t acceptBacklog,
         TcpEndpointFactory* transportFactory,
         const SocketAddress& localPort,
         const config::Config& config) override;
+
+    RecordingEndpointImpl* createRecordingEndpoint(jobmanager::JobManager& jobManager,
+        size_t maxSessionCount,
+        memory::PacketPoolAllocator& allocator,
+        const SocketAddress& localPort,
+        RtcePoll& epoll,
+        bool isShared) override;
 };
 } // namespace transport

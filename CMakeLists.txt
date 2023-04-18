@@ -505,8 +505,14 @@ set(TEST_LIB_FILES
     test/integration/emulator/TimeTurner.cpp
     test/integration/emulator/FakeEndpointFactory.h
     test/integration/emulator/FakeEndpointFactory.cpp
+    test/integration/emulator/FakeEndpointImpl.h
+    test/integration/emulator/FakeEndpointImpl.cpp
     test/integration/emulator/FakeUdpEndpoint.h
     test/integration/emulator/FakeUdpEndpoint.cpp
+    test/integration/emulator/FakeTcpEndpoint.h
+    test/integration/emulator/FakeTcpEndpoint.cpp
+    test/integration/emulator/FakeTcpServerEndpoint.h
+    test/integration/emulator/FakeTcpServerEndpoint.cpp
     test/integration/emulator/Httpd.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp
@@ -551,6 +557,7 @@ set(TEST_FILES
     test/integration/BarbellTest.h
     test/integration/ConfIntegrationTest.cpp
     test/integration/IceTransportTest.cpp
+    
 #    test/integration/MixerTimeoutTest.cpp
 #    test/integration/StatsTest.cpp
     test/sctp/SctpBasicsTests.cpp

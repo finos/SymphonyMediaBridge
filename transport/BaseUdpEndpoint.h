@@ -11,7 +11,7 @@
 
 namespace transport
 {
-class BaseUdpEndpoint : public UdpEndpoint
+class BaseUdpEndpoint : public UdpEndpoint, public RtcePoll::IEventListener
 {
 public:
     BaseUdpEndpoint(const char* name,
@@ -32,8 +32,6 @@ public:
     SocketAddress getLocalPort() const override { return _socket.getBoundPort(); }
 
     bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
-
-    bool isShared() const override { return _isShared; }
 
     const char* getName() const override { return _name.c_str(); }
 

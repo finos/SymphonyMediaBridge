@@ -123,6 +123,8 @@ struct IntegrationTest : public ::testing::Test
     std::shared_ptr<fakenet::InternetRunner> _internet;
     std::shared_ptr<transport::EndpointFactory> _bridgeEndpointFactory;
     std::shared_ptr<transport::EndpointFactory> _clientsEndpointFactory;
+    std::shared_ptr<fakenet::Firewall> _firewall;
+    std::shared_ptr<fakenet::Firewall> _firewallV6;
 
     uint32_t _instanceCounter;
     const size_t _numWorkerThreads;
@@ -131,6 +133,7 @@ struct IntegrationTest : public ::testing::Test
     void TearDown() override;
 
     void initBridge(config::Config& config);
+    void initBridge(config::Config& config, config::Config& configClients);
     void finalizeSimulationWithTimeout(uint64_t rampdownTimeout);
     void finalizeSimulation();
 

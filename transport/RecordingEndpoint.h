@@ -1,10 +1,12 @@
+#pragma once
 #include "concurrency/MpmcHashmap.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/BaseUdpEndpoint.h"
 
 namespace transport
 {
-class RecordingEndpoint : public BaseUdpEndpoint
+
+/*class RecordingEndpoint
 {
 public:
     class IRecordingEvents
@@ -18,14 +20,33 @@ public:
         virtual void onUnregistered(RecordingEndpoint& endpoint) = 0;
     };
 
-    RecordingEndpoint(jobmanager::JobManager& jobManager,
+    virtual void registerRecordingListener(const SocketAddress& remotePort, IRecordingEvents* listener) = 0;
+
+    virtual void unregisterRecordingListener(IRecordingEvents* listener) = 0;
+};*/
+
+class RecordingEndpointImpl : public BaseUdpEndpoint
+{
+public:
+    class IRecordingEvents
+    {
+    public:
+        virtual void onRecControlReceived(RecordingEndpointImpl& endpoint,
+            const SocketAddress& source,
+            const SocketAddress& target,
+            memory::UniquePacket packet) = 0;
+
+        virtual void onUnregistered(RecordingEndpointImpl& endpoint) = 0;
+    };
+
+    RecordingEndpointImpl(jobmanager::JobManager& jobManager,
         size_t maxSessionCount,
         memory::PacketPoolAllocator& allocator,
         const SocketAddress& localPort,
         RtcePoll& epoll,
         bool isShared);
 
-    ~RecordingEndpoint();
+    ~RecordingEndpointImpl();
 
     void sendStunTo(const transport::SocketAddress& target,
         __uint128_t transactionId,
@@ -58,4 +79,6 @@ public: // internal job interface
 private:
     concurrency::MpmcHashmap32<SocketAddress, IRecordingEvents*> _listeners;
 };
+
+typedef RecordingEndpointImpl RecordingEndpoint;
 } // namespace transport

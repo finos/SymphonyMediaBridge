@@ -16,9 +16,8 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
     transport::RtcePoll& epoll,
     bool isShared,
     std::shared_ptr<fakenet::Gateway> network)
-    : _state(CLOSED),
-      _name("FakeUdpEndpoint"),
-      _isShared(isShared),
+    : _name("FakeUdpEndpoint"),
+      _state(CLOSED),
       _localPort(localPort),
       _iceListeners(maxSessionCount * 2),
       _dtlsListeners(maxSessionCount * 16),
@@ -112,7 +111,7 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::Uni
     }
 
     assert(!memory::PacketPoolAllocator::isCorrupt(uniquePacket.get()));
-    if (!_sendQueue.push({target, memory::makeUniquePacket(_networkLinkAllocator, *uniquePacket)}))
+    if (!_sendQueue.push({_localPort, target, memory::makeUniquePacket(_networkLinkAllocator, *uniquePacket)}))
     {
         logger::error("Can't send: send queue is full!", _name.c_str());
     }
@@ -225,11 +224,6 @@ bool FakeUdpEndpoint::configureBufferSizes(size_t sendBufferSize, size_t receive
     return true;
 }
 
-bool FakeUdpEndpoint::isShared() const
-{
-    return _isShared;
-}
-
 const char* FakeUdpEndpoint::getName() const
 {
     return _name.c_str();
@@ -258,11 +252,6 @@ bool FakeUdpEndpoint::isGood() const
 {
     return _state != State::CLOSED;
 };
-
-EndpointMetrics FakeUdpEndpoint::getMetrics(uint64_t timestamp) const
-{
-    return _rateMetrics.toEndpointMetrics(_sendQueue.size());
-}
 
 void FakeUdpEndpoint::internalUnregisterListener(IEvents* listener)
 {
@@ -323,33 +312,6 @@ void FakeUdpEndpoint::internalUnregisterSourceListener(const transport::SocketAd
     }
 }
 
-memory::UniquePacket FakeUdpEndpoint::serializeInbound(const transport::SocketAddress& source,
-    const void* data,
-    size_t length)
-{
-    memory::FixedPacket<2000> packet;
-    auto ip = source.ipToString();
-    packet.append(ip.c_str(), ip.length() + 1);
-    uint16_t port = source.getPort();
-    packet.append((void*)&port, sizeof(uint16_t));
-    packet.append(data, length);
-
-    return memory::makeUniquePacket(_networkLinkAllocator, packet.get(), packet.getLength());
-}
-
-FakeUdpEndpoint::InboundPacket FakeUdpEndpoint::deserializeInbound(memory::UniquePacket packet)
-{
-    const auto ipLen = strlen((char*)packet->get()) + 1;
-    const auto prefixLength = ipLen + sizeof(uint16_t);
-    const auto dataLength = packet->getLength() - prefixLength;
-    const auto ip = std::string((char*)packet->get());
-    const int* const port = (int*)(packet->get() + ipLen);
-
-    const auto source = transport::SocketAddress::parse(ip, *port);
-
-    return {source, memory::makeUniquePacket(_networkLinkAllocator, packet->get() + prefixLength, dataLength)};
-}
-
 void FakeUdpEndpoint::sendTo(const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
@@ -357,7 +319,7 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& source,
     uint64_t timestamp)
 {
     assert(hasIp(target));
-    _networkLink->push(serializeInbound(source, data, length), timestamp);
+    _networkLink->push(serializeInbound(_networkLinkAllocator, source, data, length), timestamp);
 }
 
 bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
@@ -382,7 +344,7 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
     // Retrieve those packets that are due to releasing after delay.
     for (auto packet = _networkLink->pop(timestamp); packet; packet = _networkLink->pop(timestamp))
     {
-        _receiveQueue.push(deserializeInbound(std::move(packet)));
+        _receiveQueue.push(deserializeInbound(_networkLinkAllocator, std::move(packet)));
 
         if (!_pendingRead.test_and_set())
         {
@@ -400,7 +362,7 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 
-        _network->sendTo(_localPort, packetInfo.address, packet->get(), packet->getLength(), start);
+        _network->sendTo(_localPort, packetInfo.targetAddress, packet->get(), packet->getLength(), start);
     }
 
     const auto sendTimestamp = utils::Time::getAbsoluteTime();
@@ -433,7 +395,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
     memory::UniquePacket packet,
     const uint64_t timestamp)
 {
-    transport::UdpEndpoint::IEvents* listener = _defaultListener;
+    transport::Endpoint::IEvents* listener = _defaultListener;
 
     if (ice::isStunMessage(packet->get(), packet->getLength()))
     {
@@ -534,11 +496,5 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
     }
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
 }
-
-void FakeUdpEndpoint::onSocketPollStarted(int fd) {}
-void FakeUdpEndpoint::onSocketPollStopped(int fd) {}
-void FakeUdpEndpoint::onSocketReadable(int fd) {}
-void FakeUdpEndpoint::onSocketWriteable(int fd) {}
-void FakeUdpEndpoint::onSocketShutdown(int fd) {}
 
 } // namespace emulator

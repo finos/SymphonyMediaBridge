@@ -47,6 +47,11 @@ void IntegrationTest::SetUp()
     utils::Time::initialize(_timeSource);
     _httpd = new emulator::HttpdFactory();
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
+    _firewall =
+        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse("192.168.0.1"), *_internet->getNetwork());
+    _firewallV6 =
+        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse("fc00:1808:1808:1808:1808:1808:1808:1100"),
+            *_internet->getNetwork());
     _timers = std::make_unique<jobmanager::TimerQueue>(4096);
     _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
@@ -116,7 +121,10 @@ void IntegrationTest::initBridge(config::Config& config)
                 this->_endpointNetworkLinkMap.emplace(name, NetworkLinkInfo{netLink.get(), addr});
             }));
 
-    _bridge->initialize(_bridgeEndpointFactory, *_httpd);
+    std::vector<transport::SocketAddress> interfaces;
+    //   interfaces.push_back(transport::SocketAddress::parse("35.240.205.93"));
+    //   interfaces.push_back(transport::SocketAddress::parse("2600:1900:4080:1627:0:22:0:0"));
+    _bridge->initialize(_bridgeEndpointFactory, *_httpd, interfaces);
 
     initLocalTransports();
 }

@@ -9,7 +9,7 @@ using namespace transport;
 class UnRegisterRecordingListenerJob : public jobmanager::Job
 {
 public:
-    UnRegisterRecordingListenerJob(RecordingEndpoint& endpoint, RecordingEndpoint::IRecordingEvents* listener)
+    UnRegisterRecordingListenerJob(RecordingEndpointImpl& endpoint, RecordingEndpointImpl::IRecordingEvents* listener)
         : _endpoint(endpoint),
           _listener(listener)
     {
@@ -18,28 +18,28 @@ public:
     void run() override { _endpoint.internalUnregisterListener(_listener); }
 
 private:
-    RecordingEndpoint& _endpoint;
-    RecordingEndpoint::IRecordingEvents* _listener;
+    RecordingEndpointImpl& _endpoint;
+    RecordingEndpointImpl::IRecordingEvents* _listener;
 };
 } // namespace
 
-RecordingEndpoint::RecordingEndpoint(jobmanager::JobManager& jobManager,
+RecordingEndpointImpl::RecordingEndpointImpl(jobmanager::JobManager& jobManager,
     size_t maxSessionCount,
     memory::PacketPoolAllocator& allocator,
     const SocketAddress& localPort,
     RtcePoll& epoll,
     bool isShared)
-    : BaseUdpEndpoint("RecordingEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
+    : BaseUdpEndpoint("RecordingEndpointImpl", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
       _listeners(maxSessionCount)
 {
 }
 
-RecordingEndpoint::~RecordingEndpoint()
+RecordingEndpointImpl::~RecordingEndpointImpl()
 {
     logger::debug("removed", _name.c_str());
 }
 
-void RecordingEndpoint::internalUnregisterListener(IRecordingEvents* listener)
+void RecordingEndpointImpl::internalUnregisterListener(IRecordingEvents* listener)
 {
     // Hashmap allows erasing elements while iterating.
     logger::debug("unregister %p", _name.c_str(), listener);
@@ -57,8 +57,8 @@ void RecordingEndpoint::internalUnregisterListener(IRecordingEvents* listener)
 namespace
 {
 template <typename KeyType>
-RecordingEndpoint::IRecordingEvents* findListener(
-    concurrency::MpmcHashmap32<KeyType, RecordingEndpoint::IRecordingEvents*>& map,
+RecordingEndpointImpl::IRecordingEvents* findListener(
+    concurrency::MpmcHashmap32<KeyType, RecordingEndpointImpl::IRecordingEvents*>& map,
     const KeyType& key)
 {
     auto it = map.find(key);
@@ -70,7 +70,7 @@ RecordingEndpoint::IRecordingEvents* findListener(
 }
 } // namespace
 
-void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress,
+void RecordingEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
     memory::UniquePacket packet,
     const uint64_t timestamp)
 {
@@ -92,7 +92,7 @@ void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress,
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
 }
 
-void RecordingEndpoint::registerRecordingListener(const SocketAddress& srcAddress, IRecordingEvents* listener)
+void RecordingEndpointImpl::registerRecordingListener(const SocketAddress& srcAddress, IRecordingEvents* listener)
 {
     auto listenerIt = _listeners.find(srcAddress);
     if (listenerIt != _listeners.end())
@@ -106,7 +106,7 @@ void RecordingEndpoint::registerRecordingListener(const SocketAddress& srcAddres
     }
 }
 
-void RecordingEndpoint::unregisterRecordingListener(IRecordingEvents* listener)
+void RecordingEndpointImpl::unregisterRecordingListener(IRecordingEvents* listener)
 {
     if (!_receiveJobs.addJob<UnRegisterRecordingListenerJob>(*this, listener))
     {

@@ -1,4 +1,5 @@
 #include "FakeEndpointFactory.h"
+#include "FakeTcpServerEndpoint.h"
 #include "FakeUdpEndpoint.h"
 #include <memory>
 
@@ -31,7 +32,9 @@ transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobMa
     const transport::SocketAddress& localPort,
     transport::RtcePoll& epoll)
 {
-    return nullptr;
+    auto endpoint = new FakeTcpEndpoint(jobManager, allocator, localPort, _network);
+    _network->addLocal(endpoint);
+    return endpoint;
 }
 
 transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobManager& jobManager,
@@ -51,6 +54,23 @@ transport::ServerEndpoint* FakeEndpointFactory::createTcpServerEndpoint(jobmanag
     transport::TcpEndpointFactory* transportFactory,
     const transport::SocketAddress& localPort,
     const config::Config& config)
+{
+    auto serverEndpoint =
+        new FakeTcpServerEndpoint(jobManager, allocator, acceptBacklog, transportFactory, localPort, config, _network);
+
+    _network->addLocal(static_cast<fakenet::NetworkNode*>(serverEndpoint));
+
+    _callback(serverEndpoint->getDownlink(), localPort, serverEndpoint->getName());
+
+    return serverEndpoint;
+}
+
+transport::RecordingEndpointImpl* FakeEndpointFactory::createRecordingEndpoint(jobmanager::JobManager& jobManager,
+    size_t maxSessionCount,
+    memory::PacketPoolAllocator& allocator,
+    const transport::SocketAddress& localPort,
+    transport::RtcePoll& epoll,
+    bool isShared)
 {
     return nullptr;
 }

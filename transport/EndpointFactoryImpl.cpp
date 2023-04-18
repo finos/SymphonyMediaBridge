@@ -1,4 +1,5 @@
 #include "transport/EndpointFactoryImpl.h"
+#include "transport/RecordingEndpoint.h"
 #include "transport/TcpEndpointImpl.h"
 #include "transport/UdpEndpointImpl.h"
 #include <memory>
@@ -59,6 +60,16 @@ ServerEndpoint* EndpointFactoryImpl::createTcpServerEndpoint(jobmanager::JobMana
     const config::Config& config)
 {
     return new TcpServerEndpoint(jobManager, allocator, epoll, acceptBacklog, *transportFactory, localPort, config);
+}
+
+RecordingEndpoint* EndpointFactoryImpl::createRecordingEndpoint(jobmanager::JobManager& jobManager,
+    size_t maxSessionCount,
+    memory::PacketPoolAllocator& allocator,
+    const SocketAddress& localPort,
+    RtcePoll& epoll,
+    bool isShared)
+{
+    return new RecordingEndpoint(jobManager, 1024, allocator, localPort, epoll, isShared);
 }
 
 } // namespace transport

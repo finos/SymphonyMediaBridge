@@ -58,7 +58,7 @@ private:
 // End point that package ICE, DTLS, RTP in TCP
 // You can call sendTo and sendStunTo on unconnected socket. It will connect and continue transmission as soon
 // as the socket becomes writeable
-class TcpEndpointImpl : public TcpEndpoint
+class TcpEndpointImpl : public TcpEndpoint, public RtcePoll::IEventListener
 {
 public:
     TcpEndpointImpl(jobmanager::JobManager& jobManager,
@@ -100,7 +100,6 @@ public:
 
     bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
 
-    bool isShared() const override { return false; }
     ice::TransportType getTransportType() const override { return ice::TransportType::TCP; }
 
     const char* getName() const override { return _name.c_str(); }
@@ -120,7 +119,7 @@ public:
     void internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet);
     void continueSend();
 
-    void internalStopped() override;
+    void internalStopped();
 
 private:
     std::atomic<Endpoint::State> _state;

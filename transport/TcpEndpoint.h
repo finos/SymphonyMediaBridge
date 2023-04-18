@@ -5,12 +5,9 @@
 namespace transport
 {
 
-class TcpEndpoint : public Endpoint, public RtcePoll::IEventListener
+class TcpEndpoint : public Endpoint
 {
 public:
-    virtual void internalStopped() = 0;
-
-    ice::TransportType getTransportType() const override { return ice::TransportType::TCP; }
 };
 
 } // namespace transport

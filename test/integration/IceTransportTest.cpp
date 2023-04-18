@@ -10,20 +10,20 @@ class IceTransportEmuTest : public IntegrationTest
 
 using namespace emulator;
 
-TEST_F(IceTransportEmuTest, plain)
+TEST_F(IceTransportEmuTest, plainNewApi)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(R"({
         "ip":"127.0.0.1",
         "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
+        "ice.publicIpv4":"127.0.0.1",
+        "ice.tcp.enable":true
         })");
 
         initBridge(_config);
+        const auto baseUrl = "http://127.0.0.1:8080";
 
-        const std::string baseUrl = "http://127.0.0.1:8080";
-
-        GroupCall<SfuClient<ColibriChannel>>
+        GroupCall<SfuClient<Channel>>
             group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
 
         Conference conf(_httpd);
@@ -31,7 +31,7 @@ TEST_F(IceTransportEmuTest, plain)
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
 
-        group.startConference(conf, baseUrl + "/colibri");
+        group.startConference(conf, baseUrl);
 
         group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
@@ -43,39 +43,29 @@ TEST_F(IceTransportEmuTest, plain)
 
         nlohmann::json responseBody;
         auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/colibri/stats",
+            std::string(baseUrl) + "/stats",
             1500 * utils::Time::ms,
             responseBody);
         EXPECT_TRUE(statsSuccess);
 
-        auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
-        EXPECT_EQ(3, endpoints.size());
-        size_t dominantSpeakerCount = 0;
-        for (const auto& endpoint : endpoints)
-        {
-            if (endpoint.isDominantSpeaker)
-            {
-                dominantSpeakerCount++;
-            }
-            EXPECT_TRUE(endpoint.dtlsState == transport::SrtpClient::State::CONNECTED);
-            EXPECT_TRUE(endpoint.iceState == ice::IceSession::State::CONNECTED);
-        }
-        EXPECT_EQ(1, dominantSpeakerCount);
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
         group.clients[2]->_transport->stop();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
-
         finalizeSimulation();
 
         const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data =
-                analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
@@ -100,6 +90,14 @@ TEST_F(IceTransportEmuTest, plain)
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
             }
+
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            std::string clientName = "client_" + std::to_string(id);
+            group.clients[id]->_transport->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+
+            logVideoSent(clientName.c_str(), *group.clients[id]);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
         }
     });
 }

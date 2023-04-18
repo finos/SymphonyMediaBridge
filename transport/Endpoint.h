@@ -77,8 +77,6 @@ public:
 
     virtual bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) = 0;
 
-    virtual bool isShared() const = 0;
-
     virtual const char* getName() const = 0;
     virtual State getState() const = 0;
 
