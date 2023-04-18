@@ -44,7 +44,7 @@ public:
         uint64_t timestamp) override
     {
         assert(false);
-    };
+    }
 
     void cancelStunTransaction(__uint128_t transactionId) override { assert(false); }
 

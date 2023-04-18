@@ -27,7 +27,6 @@ BaseUdpEndpoint::BaseUdpEndpoint(logger::LoggableId& name,
 {
     _pendingRead.clear();
     _pendingSend.clear();
-    _isFull.clear();
     auto result = _socket.open(localPort, localPort.getPort());
     if (result == 0)
     {
@@ -102,7 +101,6 @@ void BaseUdpEndpoint::internalSend()
         packetCounter += count;
         if (count == 0)
         {
-            _isFull.clear();
             break;
         }
 

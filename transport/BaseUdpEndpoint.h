@@ -96,7 +96,6 @@ public:
 
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
     std::atomic_flag _pendingSend = ATOMIC_FLAG_INIT;
-    std::atomic_flag _isFull = ATOMIC_FLAG_INIT;
 
     Endpoint* _parentEndpoint;
 };
