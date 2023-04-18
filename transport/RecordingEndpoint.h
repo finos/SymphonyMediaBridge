@@ -6,7 +6,7 @@
 namespace transport
 {
 
-/*class RecordingEndpoint
+class RecordingEndpoint : public UdpEndpoint
 {
 public:
     class IRecordingEvents
@@ -23,22 +23,11 @@ public:
     virtual void registerRecordingListener(const SocketAddress& remotePort, IRecordingEvents* listener) = 0;
 
     virtual void unregisterRecordingListener(IRecordingEvents* listener) = 0;
-};*/
+};
 
-class RecordingEndpointImpl : public UdpEndpoint
+class RecordingEndpointImpl : public RecordingEndpoint
 {
 public:
-    class IRecordingEvents
-    {
-    public:
-        virtual void onRecControlReceived(RecordingEndpointImpl& endpoint,
-            const SocketAddress& source,
-            const SocketAddress& target,
-            memory::UniquePacket packet) = 0;
-
-        virtual void onUnregistered(RecordingEndpointImpl& endpoint) = 0;
-    };
-
     RecordingEndpointImpl(jobmanager::JobManager& jobManager,
         size_t maxSessionCount,
         memory::PacketPoolAllocator& allocator,
@@ -65,9 +54,9 @@ public:
     void unregisterListener(Endpoint::IEvents* listener) override { assert(false); };
     void unregisterListener(const SocketAddress& remotePort, Endpoint::IEvents* listener) override { assert(false); }
 
-    void registerRecordingListener(const SocketAddress& remotePort, IRecordingEvents* listener);
+    void registerRecordingListener(const SocketAddress& remotePort, IRecordingEvents* listener) override;
 
-    void unregisterRecordingListener(IRecordingEvents* listener);
+    void unregisterRecordingListener(IRecordingEvents* listener) override;
 
     bool openPort(uint16_t port) override { return _udpEndpoint.openPort(port); }
     bool isGood() const override { return _udpEndpoint.isGood(); }
@@ -105,5 +94,4 @@ private:
     concurrency::MpmcHashmap32<SocketAddress, IRecordingEvents*> _listeners;
 };
 
-typedef RecordingEndpointImpl RecordingEndpoint;
 } // namespace transport

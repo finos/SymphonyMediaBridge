@@ -20,7 +20,7 @@ class RtcePoll;
 class TcpEndpoint;
 class UdpEndpoint;
 class ServerEndpoint;
-class RecordingEndpointImpl;
+class RecordingEndpoint;
 
 class EndpointFactory
 {
@@ -54,7 +54,7 @@ public:
         const SocketAddress& localPort,
         const config::Config& config) = 0;
 
-    virtual RecordingEndpointImpl* createRecordingEndpoint(jobmanager::JobManager& jobManager,
+    virtual RecordingEndpoint* createRecordingEndpoint(jobmanager::JobManager& jobManager,
         size_t maxSessionCount,
         memory::PacketPoolAllocator& allocator,
         const SocketAddress& localPort,

@@ -58,7 +58,7 @@ public:
         const SocketAddress& localPort,
         const config::Config& config) override;
 
-    RecordingEndpointImpl* createRecordingEndpoint(jobmanager::JobManager& jobManager,
+    RecordingEndpoint* createRecordingEndpoint(jobmanager::JobManager& jobManager,
         size_t maxSessionCount,
         memory::PacketPoolAllocator& allocator,
         const SocketAddress& localPort,

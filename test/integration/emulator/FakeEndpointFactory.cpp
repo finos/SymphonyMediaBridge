@@ -65,7 +65,7 @@ transport::ServerEndpoint* FakeEndpointFactory::createTcpServerEndpoint(jobmanag
     return serverEndpoint;
 }
 
-transport::RecordingEndpointImpl* FakeEndpointFactory::createRecordingEndpoint(jobmanager::JobManager& jobManager,
+transport::RecordingEndpoint* FakeEndpointFactory::createRecordingEndpoint(jobmanager::JobManager& jobManager,
     size_t maxSessionCount,
     memory::PacketPoolAllocator& allocator,
     const transport::SocketAddress& localPort,

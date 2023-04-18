@@ -69,7 +69,7 @@ RecordingEndpoint* EndpointFactoryImpl::createRecordingEndpoint(jobmanager::JobM
     RtcePoll& epoll,
     bool isShared)
 {
-    return new RecordingEndpoint(jobManager, 1024, allocator, localPort, epoll, isShared);
+    return new RecordingEndpointImpl(jobManager, 1024, allocator, localPort, epoll, isShared);
 }
 
 } // namespace transport
