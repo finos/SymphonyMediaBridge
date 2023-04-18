@@ -12,10 +12,7 @@
 namespace transport
 {
 
-typedef std::function<void(const SocketAddress& srcAddress,
-    std::unique_ptr<memory::Packet, memory::PacketPoolAllocator::Deleter>,
-    uint64_t timestamp)>
-    DispatchMethod;
+typedef std::function<void(const SocketAddress& srcAddress, memory::UniquePacket, uint64_t timestamp)> DispatchMethod;
 
 class BaseUdpEndpoint : public RtcePoll::IEventListener
 {

@@ -158,7 +158,7 @@ void UdpEndpointImpl::internalUnregisterListener(IEvents* listener)
 }
 
 void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
-    std::unique_ptr<memory::Packet, memory::PacketPoolAllocator::Deleter> packet,
+    memory::UniquePacket packet,
     const uint64_t timestamp)
 {
     UdpEndpointImpl::IEvents* listener = _defaultListener;

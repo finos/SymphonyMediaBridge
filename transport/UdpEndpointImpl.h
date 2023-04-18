@@ -64,9 +64,7 @@ public:
     }
 
 private:
-    void dispatchReceivedPacket(const SocketAddress& srcAddress,
-        std::unique_ptr<memory::Packet, memory::PacketPoolAllocator::Deleter> packet,
-        const uint64_t timestamp);
+    void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet, const uint64_t timestamp);
 
     void internalUnregisterListener(IEvents* listener);
     void internalUnregisterStunListener(__uint128_t transactionId);
