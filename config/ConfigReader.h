@@ -49,21 +49,30 @@ protected:
     {
     public:
         PropertyImpl(const char* location,
-                     T defaultValue,
-                     std::vector<IProperty*>& properties,
-                     const std::string& groupName)
-            : _name(makeName(location, groupName)), _value(defaultValue), _optional(true)
+            T defaultValue,
+            std::vector<IProperty*>& properties,
+            const std::string& groupName)
+            : _name(makeName(location, groupName)),
+              _value(defaultValue),
+              _optional(true)
         {
             properties.push_back(this);
         }
 
         PropertyImpl(const char* location, std::vector<IProperty*>& properties, const std::string& groupName)
-            : _name(makeName(location, groupName)), _value(T()), _optional(false)
+            : _name(makeName(location, groupName)),
+              _value(T()),
+              _optional(false)
         {
             properties.push_back(this);
         }
 
         const T& get() const { return _value; }
+        const T& operator=(const T& v)
+        {
+            _value = v;
+            return _value;
+        }
 
         operator const T&() const { return _value; }
 
@@ -99,7 +108,7 @@ protected:
     std::vector<IProperty*> _properties;
     std::string _groupName;
 };
-}
+} // namespace config
 
 #define __CFG_READER_MERGE_HELPER(x, y) x##y
 #define __CFG_READER_MERGE_HELPER2(x, y) __CFG_READER_MERGE_HELPER(x, y)
@@ -111,7 +120,8 @@ protected:
         std::vector<IProperty*>& _properties;                                                                          \
         __CFG_READER_MERGE_HELPER2(Group, __LINE__)                                                                    \
         (const std::string& parent, const std::string& name, std::vector<IProperty*>& p)                               \
-            : _groupName(parent.empty() ? name : parent + "." + name), _properties(p)                                  \
+            : _groupName(parent.empty() ? name : parent + "." + name),                                                 \
+              _properties(p)                                                                                           \
         {                                                                                                              \
         }
 #define CFG_GROUP_END(name)                                                                                            \
