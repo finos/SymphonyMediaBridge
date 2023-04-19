@@ -103,6 +103,7 @@ struct IntegrationTest : public ::testing::Test
     emulator::HttpdFactory* _httpd;
     std::unique_ptr<bridge::Bridge> _bridge;
     config::Config _config;
+    config::Config _clientConfig;
 
     memory::PacketPoolAllocator _sendAllocator;
     memory::AudioPacketPoolAllocator _audioAllocator;
@@ -239,7 +240,7 @@ protected:
     void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
     void startSimulation();
 
-    void initLocalTransports();
+    void initLocalTransports(config::Config& bridgeConfig);
 
 protected:
     emulator::TimeTurner _timeSource;

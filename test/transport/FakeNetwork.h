@@ -103,12 +103,18 @@ public:
     void addLocal(NetworkNode* endpoint) override;
     void addPublic(NetworkNode* endpoint) override;
 
+    void addPublicIp(const transport::SocketAddress& addr);
+
     bool isLocalPortFree(const transport::SocketAddress& ipPort) const override;
     bool isPublicPortFree(const transport::SocketAddress& ipPort) const override;
 
-    bool hasIp(const transport::SocketAddress& port) override { return _publicInterface.equalsIp(port); }
+    bool hasIp(const transport::SocketAddress& port) override
+    {
+        return _publicIpv4.equalsIp(port) || _publicIpv6.equalsIp(port);
+    }
 
-    transport::SocketAddress getPublicIp() const { return _publicInterface; }
+    transport::SocketAddress getPublicIp() const { return _publicIpv4; }
+    transport::SocketAddress getPublicIpv6() const { return _publicIpv6; }
     void process(uint64_t timestamp) override;
 
     bool addPortMapping(const transport::SocketAddress& source, int publicPort);
@@ -128,7 +134,8 @@ private:
 
     transport::SocketAddress acquirePortMapping(const transport::SocketAddress& source);
 
-    const transport::SocketAddress _publicInterface;
+    transport::SocketAddress _publicIpv4;
+    transport::SocketAddress _publicIpv6;
     std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>> _portMappings;
     std::vector<NetworkNode*> _endpoints;
     std::vector<NetworkNode*> _publicEndpoints;

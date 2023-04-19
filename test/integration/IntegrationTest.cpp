@@ -54,7 +54,8 @@ void IntegrationTest::SetUp()
     _defaultSmbConfig = utils::format(R"({
         "ip":"127.0.0.1",
         "ice.publicIpv4":"%s",
-        "ice.tcp.enable":false
+        "ice.tcp.enable":false,
+        "ice.enableIpv6:true"
         })",
         _ipv4.smb.c_str());
 
@@ -63,8 +64,8 @@ void IntegrationTest::SetUp()
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
     _firewall =
         std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse(_ipv4.firewall), *_internet->getNetwork());
-    _firewallV6 =
-        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse(_ipv6.firewall), *_internet->getNetwork());
+    _firewall->addPublicIp(transport::SocketAddress::parse(_ipv6.firewall));
+
     _timers = std::make_unique<jobmanager::TimerQueue>(4096);
     _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
@@ -135,10 +136,10 @@ void IntegrationTest::initBridge(config::Config& config)
 
     _bridge->initialize(_bridgeEndpointFactory, *_httpd, _smbInterfaces);
 
-    initLocalTransports();
+    initLocalTransports(config);
 }
 
-void IntegrationTest::initLocalTransports()
+void IntegrationTest::initLocalTransports(config::Config& bridgeConfig)
 {
     _sslDtls = &_bridge->getSslDtls();
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
@@ -147,15 +148,16 @@ void IntegrationTest::initLocalTransports()
         utils::format(R"({"ice.preferredIp": "%s", "ice.singlePort":10050, "recording.singlePort":0})",
             _ipv4.client.c_str());
 
-    _config.readFromString(configJson);
+    _clientConfig.readFromString(configJson);
+    _clientConfig.ice.enableIpv6 = bridgeConfig.ice.enableIpv6.get();
 
     std::vector<transport::SocketAddress> interfaces;
-    interfaces.push_back(transport::SocketAddress::parse(_config.ice.preferredIp, 0));
-    // interfaces.push_back(transport::SocketAddress::parse(_ipv6.client, 0));
+    interfaces.push_back(transport::SocketAddress::parse(_ipv4.client, 0));
+    interfaces.push_back(transport::SocketAddress::parse(_ipv6.client, 0));
 
     _clientTransportFactory = transport::createTransportFactory(*_jobManager,
         *_srtpClientFactory,
-        _config,
+        _clientConfig,
         _sctpConfig,
         _iceConfig,
         _bweConfig,

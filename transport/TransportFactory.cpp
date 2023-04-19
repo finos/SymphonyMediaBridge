@@ -351,7 +351,12 @@ public:
         const size_t endpointId) override
     {
         Endpoints rtpPorts;
-        if (openPorts(_interfaces.front(), rtpPorts, 8))
+        for (auto& interface : _interfaces)
+        {
+            openPorts(interface, rtpPorts, 8);
+        }
+
+        if (!rtpPorts.empty())
         {
             return transport::createTransport(_jobManager,
                 _srtpClientFactory,
@@ -371,7 +376,6 @@ public:
                 false,
                 false);
         }
-
         return nullptr;
     }
 

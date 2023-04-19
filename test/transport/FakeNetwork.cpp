@@ -105,11 +105,9 @@ void Internet::process(const uint64_t timestamp)
     }
 }
 
-Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet)
-    : _publicInterface(publicIp),
-      _internet(internet)
+Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet) : _internet(internet)
 {
-    assert(!publicIp.empty());
+    addPublicIp(publicIp);
     internet.addLocal(this);
 }
 
@@ -117,10 +115,11 @@ Firewall::~Firewall()
 {
     if (!_packets.empty())
     {
-        logger::warn("%zu packets pending in firewall %s",
+        logger::warn("%zu packets pending in firewall %s, %s",
             "Firewall",
             _packets.size(),
-            _publicInterface.toString().c_str());
+            _publicIpv4.toString().c_str(),
+            _publicIpv6.toString().c_str());
     }
 }
 
@@ -221,9 +220,8 @@ void Firewall::process(const uint64_t timestamp)
     {
         assert(!packet->source.empty());
         assert(!packet->target.empty());
-        assert(packet->source.getFamily() == _publicInterface.getFamily());
 
-        if (_publicInterface.equalsIp(packet->target))
+        if (hasIp(packet->target))
         {
             dispatchNAT(*packet, timestamp);
             continue;
@@ -296,11 +294,23 @@ bool Firewall::addPortMapping(const transport::SocketAddress& source, int public
     {
         return false;
     }
-    auto publicAddress = _publicInterface;
-    assert(source.getFamily() == publicAddress.getFamily());
+    auto publicAddress = (source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4);
+
     publicAddress.setPort(publicPort);
     _portMappings.push_back(std::make_pair(source, publicAddress));
     return true;
+}
+
+void Firewall::addPublicIp(const transport::SocketAddress& addr)
+{
+    if (addr.getFamily() == AF_INET6)
+    {
+        _publicIpv6 = addr;
+    }
+    else
+    {
+        _publicIpv4 = addr;
+    }
 }
 
 InternetRunner::InternetRunner(const uint64_t interval)
