@@ -61,7 +61,7 @@ public:
     }
 
     // NetworkNode
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,

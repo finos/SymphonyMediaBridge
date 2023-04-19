@@ -24,9 +24,17 @@ FakeTcpServerEndpoint::FakeTcpServerEndpoint(jobmanager::JobManager& jobManager,
       _network(gateway),
       _networkLink(std::make_shared<fakenet::NetworkLink>(_name.c_str(), 1500000, 1950 * 1024, 3000))
 {
+    if (!_network->isLocalPortFree(_localPort))
+    {
+        logger::error("TCP port already in use", _name.c_str());
+    }
+    else
+    {
+        _network->addLocal(this);
+    }
 }
 
-void FakeTcpServerEndpoint::sendTo(const transport::SocketAddress& source,
+void FakeTcpServerEndpoint::onReceive(const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
@@ -67,7 +75,11 @@ void FakeTcpServerEndpoint::process(uint64_t timestamp)
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 
-        _network->sendTo(packetInfo.sourceAddress, packetInfo.targetAddress, packet->get(), packet->getLength(), start);
+        _network->onReceive(packetInfo.sourceAddress,
+            packetInfo.targetAddress,
+            packet->get(),
+            packet->getLength(),
+            start);
     }
 
     const auto sendTimestamp = utils::Time::getAbsoluteTime();

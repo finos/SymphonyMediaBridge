@@ -18,7 +18,7 @@ class NetworkNode
 public:
     virtual ~NetworkNode() {}
 
-    virtual void sendTo(const transport::SocketAddress& source,
+    virtual void onReceive(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -62,7 +62,7 @@ public:
     virtual bool isLocalPortFree(const transport::SocketAddress&) const = 0;
     virtual bool isPublicPortFree(const transport::SocketAddress&) const = 0;
 
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -75,6 +75,7 @@ protected:
 class Internet : public Gateway
 {
 public:
+    ~Internet();
     bool hasIp(const transport::SocketAddress& target) override { return true; }
 
     void addLocal(NetworkNode* node) override;
@@ -97,7 +98,7 @@ class Firewall : public Gateway
 {
 public:
     Firewall(const transport::SocketAddress& publicIp, Gateway& internet);
-    virtual ~Firewall() = default;
+    virtual ~Firewall();
 
     void addLocal(NetworkNode* endpoint) override;
     void addPublic(NetworkNode* endpoint) override;
@@ -116,11 +117,16 @@ public:
     std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
 
 private:
-    void sendToPublic(const transport::SocketAddress& source,
+    void dispatchPublicly(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t len,
         uint64_t timestamp);
+    void processEndpoints(const uint64_t timestamp);
+    void dispatchNAT(const Packet& packet, const uint64_t timestamp);
+    bool dispatchLocally(const Packet& packet, const uint64_t timestamp);
+
+    transport::SocketAddress acquirePortMapping(const transport::SocketAddress& source);
 
     const transport::SocketAddress _publicInterface;
     std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>> _portMappings;

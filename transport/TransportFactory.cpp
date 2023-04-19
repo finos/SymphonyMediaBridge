@@ -599,7 +599,7 @@ private:
 
     void onEndpointStopped(Endpoint* endpoint) override
     {
-        logger::info("%s stopped.", _name, endpoint->getName());
+        logger::info("%s stopped. %u", _name, endpoint->getName(), _pendingTasks.load());
         _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }

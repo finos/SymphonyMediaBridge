@@ -41,18 +41,19 @@ using namespace emulator;
 TEST_F(IntegrationTest, plain)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<ColibriChannel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -135,18 +136,19 @@ TEST_F(IntegrationTest, plain)
 TEST_F(IntegrationTest, twoClientsAudioOnly)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
+        GroupCall<SfuClient<ColibriChannel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            2);
 
         Conference conf(_httpd);
 
@@ -207,8 +209,7 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
 TEST_F(IntegrationTest, audioOnlyNoPadding)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString("{\"ip\":\"127.0.0.1\", "
-                               "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+        _config.readFromString(_defaultSmbConfig);
 
         printf("T%" PRIu64 " test running\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
 
@@ -216,8 +217,13 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<ColibriChannel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
@@ -263,14 +269,18 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
 TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString("{\"ip\":\"127.0.0.1\", "
-                               "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\"}");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<ColibriChannel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -375,16 +385,20 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
            call that became audio-only.
         */
 
-        _config.readFromString(
-            "{\"ip\":\"127.0.0.1\", "
-            "\"ice.preferredIp\":\"127.0.0.1\",\"ice.publicIpv4\":\"127.0.0.1\", \"rctl.cooldownInterval\":1}");
+        _config.readFromString(_defaultSmbConfig);
+        _config.rctl.cooldownInterval = 1;
 
         initBridge(_config);
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
+        GroupCall<SfuClient<ColibriChannel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            2);
 
         Conference conf(_httpd);
 
@@ -473,17 +487,18 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 TEST_F(IntegrationTest, plainNewApi)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -564,17 +579,18 @@ TEST_F(IntegrationTest, plainNewApi)
 TEST_F(IntegrationTest, ptime10)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -647,18 +663,19 @@ TEST_F(IntegrationTest, ptime10)
 TEST_F(IntegrationTest, detectIsPtt)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
 
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -817,11 +834,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
     runTestInThread(expectedTestThreadCount(1), [this]() {
         constexpr auto PACKET_LOSS_RATE = 0.04;
 
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
 
@@ -832,8 +845,13 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<ColibriChannel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
+        GroupCall<SfuClient<ColibriChannel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            2);
 
         Conference conf(_httpd);
 
@@ -911,11 +929,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 TEST_F(IntegrationTest, endpointAutoRemove)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
 
@@ -924,8 +938,13 @@ TEST_F(IntegrationTest, endpointAutoRemove)
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
         group.startConference(conf, baseUrl + "/colibri");
@@ -971,11 +990,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
 TEST_F(IntegrationTest, probing)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
 
@@ -1000,7 +1015,7 @@ TEST_F(IntegrationTest, probing)
 
         // Setup transport and attempt to connect to trigger ICE probing
         // Note: use CONTROLLING role
-        auto transport = _transportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 256 * 1024, 1);
+        auto transport = _clientTransportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 256 * 1024, 1);
 
         transport->setRemoteIce(candidatesAndCredentials.second, candidatesAndCredentials.first, _audioAllocator);
         transport->start();
@@ -1030,17 +1045,18 @@ TEST_F(IntegrationTest, probing)
 TEST_F(IntegrationTest, conferencePort)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -1123,17 +1139,18 @@ TEST_F(IntegrationTest, conferencePort)
 TEST_F(IntegrationTest, neighbours)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 4);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            4);
 
         Conference conf(_httpd);
 
@@ -1215,11 +1232,7 @@ TEST_F(IntegrationTest, endpointMessage)
     using namespace testing;
 
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         const char* message = R"({
         "payload":"Good",
@@ -1231,8 +1244,13 @@ TEST_F(IntegrationTest, endpointMessage)
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            2);
 
         Conference conf(_httpd);
 
@@ -1286,19 +1304,20 @@ TEST_F(IntegrationTest, endpointMessage)
 TEST_F(IntegrationTest, noAudioLevelExt)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "audio.lastN":1
-        })");
+        _config.readFromString(_defaultSmbConfig);
+        _config.audio.lastN = 1;
 
         initBridge(_config);
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -1360,17 +1379,18 @@ TEST_F(IntegrationTest, noAudioLevelExt)
 TEST_F(IntegrationTest, confList)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1"
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 
@@ -1485,19 +1505,21 @@ TEST_F(IntegrationTest, confList)
 TEST_F(IntegrationTest, opusDecodeRate)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "audio.lastN":1
-        })");
+        _config.readFromString(_defaultSmbConfig);
+
+        _config.audio.lastN = 1;
 
         initBridge(_config);
 
         const std::string baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 

@@ -29,6 +29,7 @@
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SrtpClientFactory.h"
 #include "transport/dtls/SslDtls.h"
+#include "utils/Format.h"
 #include "utils/IdGenerator.h"
 #include "utils/StringBuilder.h"
 #include <complex>
@@ -40,6 +41,26 @@ BarbellTest::BarbellTest() {}
 
 void BarbellTest::SetUp()
 {
+    _smbConfig1 = utils::format(R"({
+        "ip":"127.0.0.1",
+        "ice.publicIpv4":"%s",
+        "rctl.enable": false,
+        "bwe.enable":false
+        })",
+        _ipv4.smb.c_str());
+
+    _smbConfig2 = utils::format(R"({
+        "ip":"127.0.0.1",
+        "ice.publicIpv4":"%s",
+        "ice.singlePort":12000,
+        "port":8090,
+        "recording.singlePort":12500,
+        "rctl.enable": false
+        })",
+        "35.240.203.95");
+
+    _smb2interfaces.push_back(transport::SocketAddress::parse("35.240.203.95"));
+
     IntegrationTest::SetUp();
 }
 void BarbellTest::TearDown()
@@ -66,31 +87,16 @@ TEST_F(BarbellTest, packetLossViaBarbell)
     runTestInThread(expectedTestThreadCount(2), [this]() {
         constexpr auto PACKET_LOSS_RATE = 0.03;
 
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "rctl.enable": false,
-        "bwe.enable":false
-        })");
+        _config.readFromString(_smbConfig1);
 
         initBridge(_config);
 
         config::Config config2;
-        config2.readFromString(
-            R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "ice.singlePort":12000,
-        "port":8090,
-        "recording.singlePort":12500,
-        "rctl.enable": false
-        })");
+        config2.readFromString(_smbConfig2);
 
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_bridgeEndpointFactory, httpd2);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2, _smb2interfaces);
 
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
@@ -101,8 +107,13 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             linkInfo.second.ptrLink->setBandwidthKbps(1000000);
         }
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 0);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            0);
         group.add(_httpd);
         group.add(&httpd2);
         group.add(&httpd2);
@@ -231,31 +242,16 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 TEST_F(BarbellTest, simpleBarbell)
 {
     runTestInThread(expectedTestThreadCount(2), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "rctl.enable": false,
-        "bwe.enable":false
-        })");
+        _config.readFromString(_smbConfig1);
 
         initBridge(_config);
 
         config::Config config2;
-        config2.readFromString(
-            R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "ice.singlePort":12000,
-        "port":8090,
-        "recording.singlePort":12500,
-        "rctl.enable": false
-        })");
+        config2.readFromString(_smbConfig2);
 
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_bridgeEndpointFactory, httpd2);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2, _smb2interfaces);
 
         for (const auto& linkInfo : _endpointNetworkLinkMap)
         {
@@ -266,8 +262,13 @@ TEST_F(BarbellTest, simpleBarbell)
         const auto baseUrl = "http://127.0.0.1:8080";
         const auto baseUrl2 = "http://127.0.0.1:8090";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 1);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            1);
         group.add(&httpd2);
         group.add(&httpd2);
 
@@ -362,31 +363,16 @@ TEST_F(BarbellTest, simpleBarbell)
 TEST_F(BarbellTest, barbellAfterClients)
 {
     runTestInThread(expectedTestThreadCount(2), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "rctl.enable": false,
-        "bwe.enable":false
-        })");
+        _config.readFromString(_smbConfig1);
 
         initBridge(_config);
 
         config::Config config2;
-        config2.readFromString(
-            R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "ice.singlePort":12000,
-        "port":8090,
-        "recording.singlePort":12500,
-        "rctl.enable": false
-        })");
+        config2.readFromString(_smbConfig2);
 
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(config2);
-        bridge2->initialize(_bridgeEndpointFactory, httpd2);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2, _smb2interfaces);
 
         for (const auto& linkInfo : _endpointNetworkLinkMap)
         {
@@ -399,8 +385,13 @@ TEST_F(BarbellTest, barbellAfterClients)
 
         utils::Time::nanoSleep(1 * utils::Time::sec);
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 1);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            1);
         group.add(&httpd2);
 
         Conference conf(_httpd);
@@ -508,31 +499,16 @@ TEST_F(BarbellTest, barbellAfterClients)
 TEST_F(BarbellTest, barbellNeighbours)
 {
     runTestInThread(expectedTestThreadCount(2), [this]() {
-        _config.readFromString(R"({
-        "ip":"72.0.83.1",
-        "ice.preferredIp":"72.0.83.1",
-        "ice.publicIpv4":"72.0.83.1",
-        "rctl.enable": false,
-        "bwe.enable":false
-        })");
+        _config.readFromString(_smbConfig1);
 
         initBridge(_config);
 
         config::Config smbConfig2;
-        smbConfig2.readFromString(
-            R"({
-        "ip":"72.0.83.2",
-        "ice.preferredIp":"72.0.83.2",
-        "ice.publicIpv4":"72.0.83.2",
-        "ice.singlePort":12000,
-        "port":8090,
-        "recording.singlePort":12500,
-        "rctl.enable": false
-        })");
+        smbConfig2.readFromString(_smbConfig2);
 
         emulator::HttpdFactory httpd2;
         auto bridge2 = std::make_unique<bridge::Bridge>(smbConfig2);
-        bridge2->initialize(_bridgeEndpointFactory, httpd2);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2, _smb2interfaces);
 
         for (const auto& linkInfo : _endpointNetworkLinkMap)
         {
@@ -543,8 +519,13 @@ TEST_F(BarbellTest, barbellNeighbours)
         const auto baseUrl = "http://72.0.83.1:8080";
         const auto baseUrl2 = "http://72.0.83.2:8090";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 2);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            2);
         group.add(&httpd2);
 
         Conference conf(_httpd);

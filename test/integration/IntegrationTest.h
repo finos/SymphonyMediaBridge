@@ -119,7 +119,8 @@ struct IntegrationTest : public ::testing::Test
     bwe::RateControllerConfig _rateControlConfig;
     utils::Pacer _pacer;
 
-    std::unique_ptr<transport::TransportFactory> _transportFactory;
+    std::vector<transport::SocketAddress> _smbInterfaces;
+    std::unique_ptr<transport::TransportFactory> _clientTransportFactory;
     std::shared_ptr<fakenet::InternetRunner> _internet;
     std::shared_ptr<transport::EndpointFactory> _bridgeEndpointFactory;
     std::shared_ptr<transport::EndpointFactory> _clientsEndpointFactory;
@@ -128,6 +129,16 @@ struct IntegrationTest : public ::testing::Test
 
     uint32_t _instanceCounter;
     const size_t _numWorkerThreads;
+
+    struct Ips
+    {
+        const std::string client;
+        const std::string smb;
+        const std::string firewall;
+    };
+    Ips _ipv4;
+    Ips _ipv6;
+    std::string _defaultSmbConfig;
 
     void SetUp() override;
     void TearDown() override;

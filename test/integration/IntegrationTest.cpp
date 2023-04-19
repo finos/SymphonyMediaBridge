@@ -10,6 +10,7 @@
 #include "transport/Transport.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SrtpClientFactory.h"
+#include "utils/Format.h"
 #include <gtest/gtest.h>
 
 IntegrationTest::IntegrationTest()
@@ -22,6 +23,10 @@ IntegrationTest::IntegrationTest()
       _pacer(10 * utils::Time::ms),
       _instanceCounter(0),
       _numWorkerThreads(getNumWorkerThreads()),
+      _ipv4({"192.168.0.11", "35.240.205.93", "31.208.187.140"}),
+      _ipv6({"fc00:1208:1208:1208:1208:1208:1208:1100",
+          "2600:1900:4080:1627:0:22:0:0",
+          "fc00:1808:1808:1808:1808:1808:1808:1100"}),
       _clientsConnectionTimeout(15)
 {
 }
@@ -44,14 +49,22 @@ void IntegrationTest::SetUp()
 
     using namespace std;
 
+    _smbInterfaces.push_back(transport::SocketAddress::parse(_ipv4.smb));
+    _smbInterfaces.push_back(transport::SocketAddress::parse(_ipv6.smb));
+    _defaultSmbConfig = utils::format(R"({
+        "ip":"127.0.0.1",
+        "ice.publicIpv4":"%s",
+        "ice.tcp.enable":false
+        })",
+        _ipv4.smb.c_str());
+
     utils::Time::initialize(_timeSource);
     _httpd = new emulator::HttpdFactory();
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
     _firewall =
-        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse("192.168.0.1"), *_internet->getNetwork());
+        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse(_ipv4.firewall), *_internet->getNetwork());
     _firewallV6 =
-        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse("fc00:1808:1808:1808:1808:1808:1808:1100"),
-            *_internet->getNetwork());
+        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse(_ipv6.firewall), *_internet->getNetwork());
     _timers = std::make_unique<jobmanager::TimerQueue>(4096);
     _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
     for (size_t threadIndex = 0; threadIndex < getNumWorkerThreads(); ++threadIndex)
@@ -70,7 +83,7 @@ void IntegrationTest::TearDown()
 #endif
 
     _bridge.reset();
-    _transportFactory.reset();
+    _clientTransportFactory.reset();
     _timers->stop();
     _jobManager->stop();
     for (auto& worker : _workerThreads)
@@ -99,14 +112,13 @@ size_t IntegrationTest::getNumWorkerThreads()
 
 void IntegrationTest::initBridge(config::Config& config)
 {
-    _clientsEndpointFactory =
-        std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_internet->getNetwork(),
-            [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
-                logger::info("Client %s endpoint uses address %s",
-                    "IntegrationTest",
-                    name.c_str(),
-                    addr.toString().c_str());
-            }));
+    _clientsEndpointFactory = std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_firewall,
+        [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
+            logger::info("Client %s endpoint uses address %s",
+                "IntegrationTest",
+                name.c_str(),
+                addr.toString().c_str());
+        }));
 
     _bridge = std::make_unique<bridge::Bridge>(config);
     _bridgeEndpointFactory =
@@ -121,10 +133,7 @@ void IntegrationTest::initBridge(config::Config& config)
                 this->_endpointNetworkLinkMap.emplace(name, NetworkLinkInfo{netLink.get(), addr});
             }));
 
-    std::vector<transport::SocketAddress> interfaces;
-    //   interfaces.push_back(transport::SocketAddress::parse("35.240.205.93"));
-    //   interfaces.push_back(transport::SocketAddress::parse("2600:1900:4080:1627:0:22:0:0"));
-    _bridge->initialize(_bridgeEndpointFactory, *_httpd, interfaces);
+    _bridge->initialize(_bridgeEndpointFactory, *_httpd, _smbInterfaces);
 
     initLocalTransports();
 }
@@ -135,12 +144,16 @@ void IntegrationTest::initLocalTransports()
     _srtpClientFactory = std::make_unique<transport::SrtpClientFactory>(*_sslDtls);
 
     std::string configJson =
-        "{\"ice.preferredIp\": \"127.0.0.1\", \"ice.singlePort\":10050, \"recording.singlePort\":0}";
+        utils::format(R"({"ice.preferredIp": "%s", "ice.singlePort":10050, "recording.singlePort":0})",
+            _ipv4.client.c_str());
+
     _config.readFromString(configJson);
+
     std::vector<transport::SocketAddress> interfaces;
     interfaces.push_back(transport::SocketAddress::parse(_config.ice.preferredIp, 0));
+    // interfaces.push_back(transport::SocketAddress::parse(_ipv6.client, 0));
 
-    _transportFactory = transport::createTransportFactory(*_jobManager,
+    _clientTransportFactory = transport::createTransportFactory(*_jobManager,
         *_srtpClientFactory,
         _config,
         _sctpConfig,

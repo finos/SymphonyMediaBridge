@@ -559,7 +559,7 @@ public:
         fakenet::Gateway& gateway,
         ice::TransportType transporType = ice::TransportType::UDP);
 
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(const transport::SocketAddress& source,
         const transport::SocketAddress& sender,
         const void* data,
         size_t length,
@@ -615,7 +615,7 @@ FakeEndpoint::FakeEndpoint(const transport::SocketAddress& port,
     gateway.addLocal(this);
 }
 
-void FakeEndpoint::sendTo(const transport::SocketAddress& source,
+void FakeEndpoint::onReceive(const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
@@ -639,17 +639,25 @@ void FakeEndpoint::sendTo(const transport::SocketAddress& source,
             source.toString().c_str(),
             target.toString().c_str(),
             _transportType == ice::TransportType::UDP ? "udp" : "tcp");
-        _gateway->sendTo(source, target, data, length, timestamp);
+        _gateway->onReceive(source, target, data, length, timestamp);
     }
 }
 
 void FakeEndpoint::sendStunTo(const transport::SocketAddress& target,
     __uint128_t transactionId,
     const void* data,
-    size_t len,
+    size_t length,
     const uint64_t timestamp)
 {
-    sendTo(_address, target, data, len, timestamp);
+    if (_gateway)
+    {
+        logger::debug("sent %s -> %s, %s",
+            "FakeEndpoint",
+            _address.toString().c_str(),
+            target.toString().c_str(),
+            _transportType == ice::TransportType::UDP ? "udp" : "tcp");
+        _gateway->onReceive(_address, target, data, length, timestamp);
+    }
 };
 
 class FakeStunServer : public fakenet::NetworkNode
@@ -662,7 +670,7 @@ public:
         assert(!port.empty());
         internet.addPublic(this);
     }
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -680,7 +688,7 @@ public:
                 response.add(ice::StunXorMappedAddress(source, response.header));
                 response.add(ice::StunGenericAttribute(ice::StunAttribute::SOFTWARE, "stunny.org"));
 
-                _internet.sendTo(_address, source, &response, response.size(), timestamp);
+                _internet.onReceive(_address, source, &response, response.size(), timestamp);
             }
         }
     }

@@ -1180,6 +1180,7 @@ public:
                 return true;
             }
         }
+        logger::warn("pending jobs not completed", "GroupCall");
         return false;
     }
 

@@ -24,7 +24,7 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
       _receiveJobs(jobManager, 256 * 1024),
       _sendJobs(jobManager, 256 * 1024)
 {
-    if (_network->hasIp(_localPort))
+    if (!_network->isLocalPortFree(_localPort))
     {
         logger::warn("TCP port already in use", _name.c_str());
         _state = State::CLOSED;
@@ -60,6 +60,7 @@ void FakeTcpEndpoint::sendStunTo(const transport::SocketAddress& target,
 
 void FakeTcpEndpoint::connect(const transport::SocketAddress& target)
 {
+    _network->addLocal(this);
     _state = State::CONNECTED; // could delay this and use SYN-ACK
     ProtocolIndicator protocol = ProtocolIndicator::SYN;
     auto packet = memory::makeUniquePacket(_networkLinkAllocator, &protocol, 1);
@@ -89,7 +90,7 @@ void FakeTcpEndpoint::sendTo(const transport::SocketAddress& target, memory::Uni
     }
 }
 
-void FakeTcpEndpoint::sendTo(const transport::SocketAddress& source,
+void FakeTcpEndpoint::onReceive(const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
@@ -229,7 +230,7 @@ void FakeTcpEndpoint::process(uint64_t timestamp)
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 
-        _network->sendTo(_localPort, packetInfo.targetAddress, packet->get(), packet->getLength(), start);
+        _network->onReceive(_localPort, packetInfo.targetAddress, packet->get(), packet->getLength(), start);
     }
 
     const auto sendTimestamp = utils::Time::getAbsoluteTime();

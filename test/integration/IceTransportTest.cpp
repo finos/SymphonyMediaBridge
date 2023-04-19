@@ -1,6 +1,7 @@
 #include "test/integration/IntegrationTest.h"
 #include "test/integration/emulator/ApiChannel.h"
 #include "test/integration/emulator/HttpRequests.h"
+#include "utils/Format.h"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
@@ -13,18 +14,18 @@ using namespace emulator;
 TEST_F(IceTransportEmuTest, plainNewApi)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
-        _config.readFromString(R"({
-        "ip":"127.0.0.1",
-        "ice.preferredIp":"127.0.0.1",
-        "ice.publicIpv4":"127.0.0.1",
-        "ice.tcp.enable":true
-        })");
+        _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
 
-        GroupCall<SfuClient<Channel>>
-            group(_httpd, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_transportFactory, *_sslDtls, 3);
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
 
         Conference conf(_httpd);
 

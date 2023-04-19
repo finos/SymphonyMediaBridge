@@ -39,7 +39,10 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
 
 FakeUdpEndpoint::~FakeUdpEndpoint()
 {
-    logger::warn("~FakeUdpEndpoint, pending packets in the network link %zu", _name.c_str(), _networkLink->count());
+    if (!_networkLink->empty())
+    {
+        logger::warn("~FakeUdpEndpoint, pending packets in the network link %zu", _name.c_str(), _networkLink->count());
+    }
 }
 
 // ice::IceEndpoint
@@ -70,6 +73,10 @@ void FakeUdpEndpoint::sendStunTo(const transport::SocketAddress& target,
                     const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
                     logger::debug("register ICE listener for %04x%04x%04x", _name.c_str(), id[1], id[2], id[3]);
                 }
+            }
+            else
+            {
+                logger::warn("sending from unregistered ICE uname", _name.c_str());
             }
         }
     }
@@ -143,7 +150,10 @@ void FakeUdpEndpoint::registerListener(const transport::SocketAddress& srcAddres
     }
     else
     {
-        _receiveJobs.post(utils::bind(&FakeUdpEndpoint::swapListener, this, srcAddress, listener));
+        if (!_receiveJobs.post(utils::bind(&FakeUdpEndpoint::swapListener, this, srcAddress, listener)))
+        {
+            logger::error("failed to post receive job, will stall", _name.c_str());
+        }
     }
 }
 
@@ -240,10 +250,12 @@ bool FakeUdpEndpoint::openPort(uint16_t port)
     wantedAddress.setPort(port);
     if (!_network->isLocalPortFree(wantedAddress))
     {
+        logger::error("UDP port already in use", _name.c_str());
         return false;
     }
 
     _localPort.setPort(port);
+    _network->addLocal(this);
     _state = Endpoint::State::CREATED;
     return true;
 }
@@ -312,14 +324,17 @@ void FakeUdpEndpoint::internalUnregisterSourceListener(const transport::SocketAd
     }
 }
 
-void FakeUdpEndpoint::sendTo(const transport::SocketAddress& source,
+void FakeUdpEndpoint::onReceive(const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
     uint64_t timestamp)
 {
     assert(hasIp(target));
-    _networkLink->push(serializeInbound(_networkLinkAllocator, source, data, length), timestamp);
+    if (!_networkLink->push(serializeInbound(_networkLinkAllocator, source, data, length), timestamp))
+    {
+        logger::warn("receive link full", _name.c_str());
+    }
 }
 
 bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
@@ -344,13 +359,16 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
     // Retrieve those packets that are due to releasing after delay.
     for (auto packet = _networkLink->pop(timestamp); packet; packet = _networkLink->pop(timestamp))
     {
-        _receiveQueue.push(deserializeInbound(_networkLinkAllocator, std::move(packet)));
+        if (!_receiveQueue.push(deserializeInbound(_networkLinkAllocator, std::move(packet))))
+        {
+            logger::warn("receive queue full", _name.c_str());
+        }
 
         if (!_pendingRead.test_and_set())
         {
             if (!_receiveJobs.post(utils::bind(&FakeUdpEndpoint::internalReceive, this)))
             {
-                logger::warn("receive queue full", _name.c_str());
+                logger::warn("receive job queue full", _name.c_str());
             }
         }
     }
@@ -362,7 +380,7 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 
-        _network->sendTo(_localPort, packetInfo.targetAddress, packet->get(), packet->getLength(), start);
+        _network->onReceive(_localPort, packetInfo.targetAddress, packet->get(), packet->getLength(), start);
     }
 
     const auto sendTimestamp = utils::Time::getAbsoluteTime();
@@ -437,7 +455,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         }
         else
         {
-            logger::debug("cannot find listener for STUN", _name.c_str());
+            logger::debug("no listener for STUN", _name.c_str());
         }
     }
     else if (transport::isDtlsPacket(packet->get()))
@@ -451,7 +469,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
         }
         else
         {
-            logger::debug("cannot find listener for DTLS source %s", _name.c_str(), srcAddress.toString().c_str());
+            logger::debug("no listener for DTLS source %s", _name.c_str(), srcAddress.toString().c_str());
         }
     }
     else if (rtp::isRtcpPacket(packet->get(), packet->getLength()))
@@ -468,7 +486,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
             }
             else
             {
-                logger::debug("cannot find listener for RTCP", _name.c_str());
+                logger::debug("no listener for RTCP", _name.c_str());
             }
         }
     }
@@ -486,7 +504,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
             }
             else
             {
-                logger::debug("cannot find listener for RTP", _name.c_str());
+                logger::debug("no listener for RTP", _name.c_str());
             }
         }
     }
