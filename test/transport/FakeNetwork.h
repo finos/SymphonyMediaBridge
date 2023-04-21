@@ -139,7 +139,7 @@ public:
     transport::SocketAddress getPublicIpv6() const { return _publicIpv6; }
     void process(uint64_t timestamp) override;
 
-    bool addPortMapping(const transport::SocketAddress& source, int publicPort);
+    bool addPortMapping(Protocol protocol, const transport::SocketAddress& source, int publicPort);
 
     std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
     std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
@@ -150,11 +150,13 @@ private:
     void dispatchNAT(const Packet& packet, const uint64_t timestamp);
     bool dispatchLocally(const Packet& packet, const uint64_t timestamp);
 
-    transport::SocketAddress acquirePortMapping(const transport::SocketAddress& source);
+    transport::SocketAddress acquirePortMapping(Protocol protocol, const transport::SocketAddress& source);
 
     transport::SocketAddress _publicIpv4;
     transport::SocketAddress _publicIpv6;
-    std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>> _portMappings;
+    using PortMapping = std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>>;
+    PortMapping _portMappingsUdp;
+    PortMapping _portMappingsTcp;
     std::vector<NetworkNode*> _endpoints;
     std::vector<NetworkNode*> _publicEndpoints;
     Gateway& _internet;

@@ -14,7 +14,7 @@
 namespace fakenet
 {
 
-bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp, bool tcpData )
+bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp, bool tcpData)
 {
     const std::lock_guard<std::mutex> lock(_pushMutex);
 
@@ -89,7 +89,6 @@ memory::UniquePacket NetworkLink::pop(uint64_t timestamp)
                 _releaseTime + (IPOVERHEAD + _queue.front()->getLength()) * 8 * utils::Time::ms / _bandwidthKbps;
         }
         _bitRate.update(packet->getLength() * 8, timestamp);
-        NETWORK_LOG("popping packet %zu, adding delay %" PRIu64, _name.c_str(), packet->getLength(), _staticDelay);
         _delayQueue.push({std::move(packet), timestamp + _staticDelay});
     }
     return popDelayQueue(timestamp);

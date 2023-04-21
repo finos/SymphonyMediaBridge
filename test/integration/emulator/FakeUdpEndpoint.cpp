@@ -335,7 +335,8 @@ void FakeUdpEndpoint::onReceive(fakenet::Protocol protocol,
     uint64_t timestamp)
 {
     assert(hasIp(target));
-    //assert(protocol == fakenet::Protocol::UDP);
+    assert(protocol == fakenet::Protocol::UDP);
+
     if (!_networkLink->push(serializeInbound(_networkLinkAllocator, protocol, source, data, length), timestamp))
     {
         logger::warn("receive link full", _name.c_str());

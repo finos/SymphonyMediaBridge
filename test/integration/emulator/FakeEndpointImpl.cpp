@@ -38,7 +38,6 @@ bool isWeirdPacket(memory::Packet& packet)
     if (!ice::isStunMessage(packet.get(), packet.getLength()) && !rtp::isRtpPacket(packet) &&
         !rtp::isRtcpPacket(packet) && !transport::isDtlsPacket(packet.get()) && packet.getLength() > 0)
     {
-        logger::error("!!!weird packet", "fakenet");
         return true;
     }
     return false;

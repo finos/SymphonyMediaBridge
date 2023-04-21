@@ -1106,7 +1106,7 @@ TEST_F(IceTest, fixedportmap)
     FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.2.20", 3000), firewall2);
 
     // static port map to firewall public interface
-    firewall2.addPortMapping(endpoint2._address, endpoint2._address.getPort());
+    firewall2.addPortMapping(fakenet::Protocol::UDP, endpoint2._address, endpoint2._address.getPort());
 
     ice::IceConfig config;
     IceSessions sessions;
@@ -1156,7 +1156,7 @@ TEST_F(IceTest, noroute)
     FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.2.20", 3000), firewall2);
 
     // static port map to firewall public interface
-    firewall2.addPortMapping(endpoint2._address, endpoint2._address.getPort());
+    firewall2.addPortMapping(fakenet::Protocol::UDP, endpoint2._address, endpoint2._address.getPort());
 
     ice::IceConfig config;
     IceSessions sessions;
@@ -1189,7 +1189,7 @@ TEST_F(IceTest, fixedportmapNogathering)
     FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.2.20", 3000), firewall2);
 
     // static port map to firewall public interface
-    firewall2.addPortMapping(endpoint2._address, endpoint2._address.getPort());
+    firewall2.addPortMapping(fakenet::Protocol::UDP, endpoint2._address, endpoint2._address.getPort());
 
     ice::IceConfig config;
     IceSessions sessions;

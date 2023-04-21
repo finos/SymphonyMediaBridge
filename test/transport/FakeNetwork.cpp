@@ -4,7 +4,7 @@
 #include "utils/Time.h"
 #include <algorithm>
 
-#define TRACE_FAKENETWORK 1
+#define TRACE_FAKENETWORK 0
 
 #if TRACE_FAKENETWORK
 #define NETWORK_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
@@ -47,13 +47,6 @@ void Gateway::onReceive(Protocol protocol,
     uint64_t timestamp)
 {
     assert(source.getFamily() == target.getFamily());
-
-    NETWORK_LOG("rcv %s: %s -> %s bytes: %lu",
-        "Gateway",
-        toString(protocol),
-        source.toString().c_str(),
-        target.toString().c_str(),
-        len);
 
     const bool pushed = _packets.push(std::make_unique<Packet>(protocol, data, len, source, target));
     if (!pushed)
@@ -251,7 +244,8 @@ void Firewall::processEndpoints(const uint64_t timestamp)
 
 void Firewall::dispatchNAT(const Packet& packet, const uint64_t timestamp)
 {
-    for (auto mapping : _portMappings)
+    auto& portMappings = (packet.protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    for (auto mapping : portMappings)
     {
         if (mapping.second == packet.target)
         {
@@ -259,11 +253,12 @@ void Firewall::dispatchNAT(const Packet& packet, const uint64_t timestamp)
             {
                 if (endpoint->hasIp(mapping.first))
                 {
-                    NETWORK_LOG("NAT %s, %s -> %s",
+                    NETWORK_LOG("NAT %s, %s -> %s -> %s",
                         "Firewall",
                         toString(packet.protocol),
                         packet.source.toString().c_str(),
-                        packet.target.toString().c_str());
+                        packet.target.toString().c_str(),
+                        mapping.first.toString().c_str());
                     endpoint->onReceive(packet.protocol,
                         packet.source,
                         mapping.first,
@@ -324,7 +319,7 @@ void Firewall::process(const uint64_t timestamp)
             continue;
         }
 
-        packet->source = acquirePortMapping(packet->source);
+        packet->source = acquirePortMapping(packet->protocol, packet->source);
         dispatchPublicly(*packet, timestamp);
     }
 }
@@ -345,9 +340,10 @@ void Firewall::dispatchPublicly(const Packet& packet, const uint64_t timestamp)
     _internet.onReceive(packet.protocol, packet.source, packet.target, packet.data, packet.length, timestamp);
 }
 
-transport::SocketAddress Firewall::acquirePortMapping(const transport::SocketAddress& source)
+transport::SocketAddress Firewall::acquirePortMapping(const Protocol protocol, const transport::SocketAddress& source)
 {
-    for (auto mapping : _portMappings)
+    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    for (auto mapping : portMappings)
     {
         if (mapping.first == source)
         {
@@ -355,17 +351,18 @@ transport::SocketAddress Firewall::acquirePortMapping(const transport::SocketAdd
         }
     }
 
-    while (!addPortMapping(source, _portCount++)) {}
+    while (!addPortMapping(protocol, source, _portCount++)) {}
 
-    return _portMappings.back().second;
+    return portMappings.back().second;
 }
 
-bool Firewall::addPortMapping(const transport::SocketAddress& source, int publicPort)
+bool Firewall::addPortMapping(const Protocol protocol, const transport::SocketAddress& source, int publicPort)
 {
+    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
     assert(!source.empty());
-    if (_portMappings.cend() !=
-        std::find_if(_portMappings.cbegin(),
-            _portMappings.cend(),
+    if (portMappings.cend() !=
+        std::find_if(portMappings.cbegin(),
+            portMappings.cend(),
             [publicPort](const std::pair<const transport::SocketAddress&, const transport::SocketAddress&>& p) {
                 return p.second.getPort() == publicPort;
             }))
@@ -375,7 +372,8 @@ bool Firewall::addPortMapping(const transport::SocketAddress& source, int public
     auto publicAddress = (source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4);
 
     publicAddress.setPort(publicPort);
-    _portMappings.push_back(std::make_pair(source, publicAddress));
+    portMappings.push_back(std::make_pair(source, publicAddress));
+    logger::info("added NAT %s -> %s", "Firewall", source.toString().c_str(), publicAddress.toString().c_str());
     return true;
 }
 
