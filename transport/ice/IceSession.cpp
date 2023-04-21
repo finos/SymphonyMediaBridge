@@ -195,7 +195,8 @@ void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
 void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate)
 {
     const auto endpointAddress = endpoint.endpoint->getLocalPort();
-    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily())
+    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily() ||
+        endpoint.endpoint->getTransportType() != remoteCandidate.transportType)
     {
         return;
     }
@@ -249,11 +250,12 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
             _component,
             remoteCandidate.transportType))));
 
-    logger::debug("added candidate pair %s-%s HOST-%s",
+    logger::debug("added candidate pair %s-%s HOST-%s %s",
         _logId.c_str(),
         endpointAddress.toString().c_str(),
         remoteCandidate.address.toString().c_str(),
-        ice::toString(remoteCandidate.type).c_str());
+        ice::toString(remoteCandidate.type).c_str(),
+        ice::toString(remoteCandidate.transportType).c_str());
 }
 
 void IceSession::addLocalCandidate(const IceCandidate& candidate)
@@ -325,10 +327,11 @@ const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate
     }
 
     _remoteCandidates.push_back(candidate);
-    logger::debug("added remote candidate %s %s",
+    logger::debug("added remote candidate %s %s %s",
         _logId.c_str(),
         candidate.address.toString().c_str(),
-        ice::toString(candidate.type).c_str());
+        ice::toString(candidate.type).c_str(),
+        ice::toString(candidate.transportType).c_str());
     return _remoteCandidates.back();
 }
 
@@ -341,6 +344,11 @@ void IceSession::addRemoteCandidate(const IceCandidate& candidate, IceEndpoint* 
     }
 
     _remoteCandidates.push_back(candidate);
+    logger::debug("added remote TCP candidate %s %s %s",
+        _logId.c_str(),
+        candidate.address.toString().c_str(),
+        ice::toString(candidate.type).c_str(),
+        ice::toString(candidate.transportType).c_str());
 
     EndpointInfo endpointInfo(tcpEndpoint, 128 - _tcpProbeCount++);
     _endpoints.push_back(endpointInfo);
@@ -455,7 +463,11 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         }
     }
 
-    logger::debug("probe from %s", _logId.c_str(), sender.toString().c_str());
+    logger::debug("probe from %s %s",
+        _logId.c_str(),
+        sender.toString().c_str(),
+        ice::toString(endpoint->getTransportType()).c_str());
+
     sendResponse(endpoint, sender, 0, msg, now);
     if (_eventSink)
     {
