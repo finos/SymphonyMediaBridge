@@ -34,7 +34,7 @@ public:
     {
     }
 
-    bool push(memory::UniquePacket packet, uint64_t timestamp);
+    bool push(memory::UniquePacket packet, uint64_t timestamp, bool tcpData = false);
     memory::UniquePacket pop(uint64_t timestamp);
     memory::UniquePacket pop();
     size_t count() const { return _queue.size() + _delayQueue.size(); }

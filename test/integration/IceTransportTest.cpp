@@ -15,6 +15,8 @@ TEST_F(IceTransportEmuTest, plainNewApi)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(_defaultSmbConfig);
+        _config.ice.tcp.enable = true;
+        _clientConfig.ice.tcp.enable = true;
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
@@ -26,6 +28,14 @@ TEST_F(IceTransportEmuTest, plainNewApi)
             *_clientTransportFactory,
             *_sslDtls,
             3);
+
+        for (auto pairIt : this->_endpointNetworkLinkMap)
+        {
+            if (utils::startsWith("FakeUdp", pairIt.first))
+            {
+                pairIt.second.ptrLink->setStaticDelay(0);
+            }
+        }
 
         Conference conf(_httpd);
 

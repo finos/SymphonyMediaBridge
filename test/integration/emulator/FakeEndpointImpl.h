@@ -7,30 +7,23 @@
 namespace emulator
 {
 
-enum ProtocolIndicator : uint8_t
-{
-    UDP = 0,
-    SYN,
-    FIN,
-    ACK,
-    TCPDATA
-};
-
 struct InboundPacket
 {
-    ProtocolIndicator protocol;
-    transport::SocketAddress address;
+    fakenet::Protocol protocol;
+    transport::SocketAddress source;
     memory::UniquePacket packet;
 };
 
 struct OutboundPacket
 {
+    fakenet::Protocol protocol;
     transport::SocketAddress sourceAddress;
     transport::SocketAddress targetAddress;
     memory::UniquePacket packet;
 };
 
 memory::UniquePacket serializeInbound(memory::PacketPoolAllocator& allocator,
+    fakenet::Protocol protocol,
     const transport::SocketAddress& source,
     const void* data,
     size_t length);
@@ -54,4 +47,6 @@ protected:
         }
     } _rateMetrics;
 };
+
+bool isWeirdPacket(memory::Packet& packet);
 } // namespace emulator

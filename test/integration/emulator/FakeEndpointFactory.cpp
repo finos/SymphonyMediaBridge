@@ -30,10 +30,10 @@ transport::UdpEndpoint* FakeEndpointFactory::createUdpEndpoint(jobmanager::JobMa
 
 transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
-    const transport::SocketAddress& localPort,
+    const transport::SocketAddress& nic,
     transport::RtcePoll& epoll)
 {
-    auto endpoint = new FakeTcpEndpoint(jobManager, allocator, localPort, _network);
+    auto endpoint = new FakeTcpEndpoint(jobManager, allocator, nic, _network);
     return endpoint;
 }
 
@@ -44,6 +44,7 @@ transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobMa
     const transport::SocketAddress& localPort,
     const transport::SocketAddress& peerPort)
 {
+    assert(false);
     return nullptr;
 }
 
@@ -55,10 +56,17 @@ transport::ServerEndpoint* FakeEndpointFactory::createTcpServerEndpoint(jobmanag
     const transport::SocketAddress& localPort,
     const config::Config& config)
 {
-    auto serverEndpoint =
-        new FakeTcpServerEndpoint(jobManager, allocator, acceptBacklog, transportFactory, localPort, config, _network);
+    auto serverEndpoint = new FakeTcpServerEndpoint(jobManager,
+        allocator,
+        acceptBacklog,
+        transportFactory,
+        localPort,
+        config,
+        _network,
+        *this,
+        epoll);
 
-    _callback(serverEndpoint->getDownlink(), localPort, serverEndpoint->getName());
+    _callback(nullptr, localPort, serverEndpoint->getName());
 
     return serverEndpoint;
 }

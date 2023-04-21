@@ -252,6 +252,7 @@ protected:
     };
 
     std::map<std::string, NetworkLinkInfo> _endpointNetworkLinkMap;
+    std::map<std::string, NetworkLinkInfo> _clientNetworkLinkMap;
     const uint32_t _clientsConnectionTimeout;
 
 private:

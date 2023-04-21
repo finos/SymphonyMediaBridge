@@ -465,7 +465,11 @@ public:
                 transport::RawSockAddress remoteAddress;
 
                 auto count = recvfrom(s->_socket.fd(), data, 1600, MSG_DONTWAIT, &remoteAddress.gen, &addressSize);
-                fakenet::Packet packet(data, count, transport::SocketAddress(&remoteAddress.gen), s->_ip);
+                fakenet::Packet packet(fakenet::Protocol::UDP,
+                    data,
+                    count,
+                    transport::SocketAddress(&remoteAddress.gen),
+                    s->_ip);
                 _inboundPackets.push(packet);
                 //
                 return;
@@ -559,7 +563,8 @@ public:
         fakenet::Gateway& gateway,
         ice::TransportType transporType = ice::TransportType::UDP);
 
-    void onReceive(const transport::SocketAddress& source,
+    void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& sender,
         const void* data,
         size_t length,
@@ -615,7 +620,8 @@ FakeEndpoint::FakeEndpoint(const transport::SocketAddress& port,
     gateway.addLocal(this);
 }
 
-void FakeEndpoint::onReceive(const transport::SocketAddress& source,
+void FakeEndpoint::onReceive(fakenet::Protocol protocol,
+    const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
@@ -639,7 +645,7 @@ void FakeEndpoint::onReceive(const transport::SocketAddress& source,
             source.toString().c_str(),
             target.toString().c_str(),
             _transportType == ice::TransportType::UDP ? "udp" : "tcp");
-        _gateway->onReceive(source, target, data, length, timestamp);
+        _gateway->onReceive(protocol, source, target, data, length, timestamp);
     }
 }
 
@@ -656,7 +662,7 @@ void FakeEndpoint::sendStunTo(const transport::SocketAddress& target,
             _address.toString().c_str(),
             target.toString().c_str(),
             _transportType == ice::TransportType::UDP ? "udp" : "tcp");
-        _gateway->onReceive(_address, target, data, length, timestamp);
+        _gateway->onReceive(fakenet::Protocol::UDP, _address, target, data, length, timestamp);
     }
 };
 
@@ -670,7 +676,8 @@ public:
         assert(!port.empty());
         internet.addPublic(this);
     }
-    void onReceive(const transport::SocketAddress& source,
+    void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -688,7 +695,7 @@ public:
                 response.add(ice::StunXorMappedAddress(source, response.header));
                 response.add(ice::StunGenericAttribute(ice::StunAttribute::SOFTWARE, "stunny.org"));
 
-                _internet.onReceive(_address, source, &response, response.size(), timestamp);
+                _internet.onReceive(protocol, _address, source, &response, response.size(), timestamp);
             }
         }
     }

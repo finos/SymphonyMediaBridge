@@ -50,7 +50,8 @@ public:
     bool isGood() const override;
 
     // NetworkNode
-    void onReceive(const transport::SocketAddress& source,
+    void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,

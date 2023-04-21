@@ -118,7 +118,10 @@ void FakeUdpEndpoint::sendTo(const transport::SocketAddress& target, memory::Uni
     }
 
     assert(!memory::PacketPoolAllocator::isCorrupt(uniquePacket.get()));
-    if (!_sendQueue.push({_localPort, target, memory::makeUniquePacket(_networkLinkAllocator, *uniquePacket)}))
+    if (!_sendQueue.push({fakenet::Protocol::UDP,
+            _localPort,
+            target,
+            memory::makeUniquePacket(_networkLinkAllocator, *uniquePacket)}))
     {
         logger::error("Can't send: send queue is full!", _name.c_str());
     }
@@ -324,14 +327,16 @@ void FakeUdpEndpoint::internalUnregisterSourceListener(const transport::SocketAd
     }
 }
 
-void FakeUdpEndpoint::onReceive(const transport::SocketAddress& source,
+void FakeUdpEndpoint::onReceive(fakenet::Protocol protocol,
+    const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
     uint64_t timestamp)
 {
     assert(hasIp(target));
-    if (!_networkLink->push(serializeInbound(_networkLinkAllocator, source, data, length), timestamp))
+    //assert(protocol == fakenet::Protocol::UDP);
+    if (!_networkLink->push(serializeInbound(_networkLinkAllocator, protocol, source, data, length), timestamp))
     {
         logger::warn("receive link full", _name.c_str());
     }
@@ -380,7 +385,12 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 
-        _network->onReceive(_localPort, packetInfo.targetAddress, packet->get(), packet->getLength(), start);
+        _network->onReceive(packetInfo.protocol,
+            _localPort,
+            packetInfo.targetAddress,
+            packet->get(),
+            packet->getLength(),
+            start);
     }
 
     const auto sendTimestamp = utils::Time::getAbsoluteTime();
@@ -402,7 +412,7 @@ void FakeUdpEndpoint::internalReceive()
         if (_receiveQueue.pop(packetInfo) && packetInfo.packet)
         {
             _rateMetrics.receiveTracker.update(packetInfo.packet->getLength(), receiveTime);
-            dispatchReceivedPacket(packetInfo.address,
+            dispatchReceivedPacket(packetInfo.source,
                 memory::makeUniquePacket(_allocator, *packetInfo.packet),
                 receiveTime);
         }

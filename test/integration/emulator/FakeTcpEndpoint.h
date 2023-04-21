@@ -19,6 +19,12 @@ public:
         const transport::SocketAddress& localPort,
         std::shared_ptr<fakenet::Gateway> gateway);
 
+    FakeTcpEndpoint(jobmanager::JobManager& jobManager,
+        memory::PacketPoolAllocator& allocator,
+        const transport::SocketAddress& localPort,
+        const transport::SocketAddress& peerPort,
+        std::shared_ptr<fakenet::Gateway> gateway);
+
     virtual ~FakeTcpEndpoint();
 
     // ice::IceEndpoint
@@ -61,7 +67,8 @@ public:
     }
 
     // NetworkNode
-    void onReceive(const transport::SocketAddress& source,
+    void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -73,9 +80,21 @@ public:
 
     // called on receiveJobs threads
     void internalReceive();
-    void dispatchReceivedPacket(const transport::SocketAddress& srcAddress,
+    void dispatchReceivedPacket(fakenet::Protocol protocol,
+        const transport::SocketAddress& srcAddress,
         memory::UniquePacket packet,
         uint64_t timestamp);
+
+    void onFirstStun()
+    {
+        if (_state == State::CONNECTING)
+        {
+            _state = State::CONNECTED;
+        }
+    }
+
+    // fake network methods
+    void sendSynAck(const transport::SocketAddress& target);
 
 private:
     void connect(const transport::SocketAddress& target);
@@ -85,6 +104,7 @@ private:
     logger::LoggableId _name;
     std::atomic<Endpoint::State> _state;
     transport::SocketAddress _localPort;
+    transport::SocketAddress _peerPort;
 
     std::atomic<IEvents*> _defaultListener;
     memory::PacketPoolAllocator& _allocator;
@@ -96,7 +116,11 @@ private:
     jobmanager::JobQueue _receiveJobs;
     jobmanager::JobQueue _sendJobs;
 
+    memory::UniquePacket _pendingStun;
+
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
+
+    static uint16_t _portCounter;
 };
 
 } // namespace emulator

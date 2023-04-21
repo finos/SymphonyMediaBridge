@@ -83,7 +83,8 @@ void BaseChannel::setRemoteIce(transport::RtcTransport& transport,
             c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
             c["priority"].template get<uint32_t>(),
             transport::SocketAddress::parse(c["ip"], c["port"]),
-            ice::IceCandidate::Type::HOST));
+            ice::IceCandidate::Type::HOST,
+            ice::TcpType::PASSIVE));
     }
 
     std::pair<std::string, std::string> credentials;

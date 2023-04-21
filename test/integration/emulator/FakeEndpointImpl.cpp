@@ -1,15 +1,19 @@
 #include "FakeEndpointImpl.h"
+#include "rtp/RtcpHeader.h"
+#include "rtp/RtpHeader.h"
+#include "transport/dtls/SslDtls.h"
+#include "transport/ice/Stun.h"
 #include "utils/SocketAddress.h"
 
 namespace emulator
 {
 memory::UniquePacket serializeInbound(memory::PacketPoolAllocator& allocator,
+    fakenet::Protocol protocol,
     const transport::SocketAddress& source,
     const void* data,
     size_t length)
 {
     memory::FixedPacket<2000> packet;
-    auto protocol = ProtocolIndicator::UDP;
     packet.append(&protocol, 1);
     packet.append(source.getSockAddr(), source.getSockAddrSize());
     packet.append(data, length);
@@ -19,21 +23,25 @@ memory::UniquePacket serializeInbound(memory::PacketPoolAllocator& allocator,
 
 InboundPacket deserializeInbound(memory::PacketPoolAllocator& allocator, memory::UniquePacket packet)
 {
-    const auto* packetBuf = reinterpret_cast<const uint8_t*>(packet->get());
-    const ProtocolIndicator protocol = static_cast<ProtocolIndicator>(*packetBuf);
+    const uint8_t* packetBuf = reinterpret_cast<const uint8_t*>(packet->get());
+    auto protocol = static_cast<fakenet::Protocol>(packetBuf[0]);
     const transport::SocketAddress source(reinterpret_cast<const sockaddr*>(&packetBuf[1]));
     const size_t prefixLength = 1 + source.getSockAddrSize();
 
-    if (protocol == ProtocolIndicator::UDP || protocol == ProtocolIndicator::TCPDATA)
+    return {protocol,
+        source,
+        memory::makeUniquePacket(allocator, packetBuf + prefixLength, packet->getLength() - prefixLength)};
+}
+
+bool isWeirdPacket(memory::Packet& packet)
+{
+    if (!ice::isStunMessage(packet.get(), packet.getLength()) && !rtp::isRtpPacket(packet) &&
+        !rtp::isRtcpPacket(packet) && !transport::isDtlsPacket(packet.get()) && packet.getLength() > 0)
     {
-        return {protocol,
-            source,
-            memory::makeUniquePacket(allocator, packetBuf + prefixLength, packet->getLength() - prefixLength)};
+        logger::error("!!!weird packet", "fakenet");
+        return true;
     }
-    else
-    {
-        return {protocol, source, memory::makeUniquePacket(allocator, packetBuf + prefixLength, 0)};
-    }
+    return false;
 }
 
 } // namespace emulator

@@ -7,6 +7,7 @@
 #include "test/integration/emulator/FakeTcpEndpoint.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/Endpoint.h"
+#include "transport/EndpointFactory.h"
 #include "utils/SocketAddress.h"
 
 namespace emulator
@@ -20,7 +21,9 @@ public:
         transport::TcpEndpointFactory* transportFactory,
         const transport::SocketAddress& localPort,
         const config::Config& config,
-        std::shared_ptr<fakenet::Gateway> gateway);
+        std::shared_ptr<fakenet::Gateway> gateway,
+        transport::EndpointFactory& endpointFactory,
+        transport::RtcePoll& epoll);
 
     virtual const transport::SocketAddress getLocalPort() const override { return _localPort; };
     virtual void registerListener(const std::string& stunUserName, IEvents* listener) override;
@@ -32,11 +35,12 @@ public:
     virtual transport::Endpoint::State getState() const override { return _state; }
     virtual void maintenance(uint64_t timestamp) override;
 
-    virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return _networkLink; }
+    virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return nullptr; }
 
 private:
     // networkNode
-    virtual void onReceive(const transport::SocketAddress& source,
+    virtual void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -66,9 +70,8 @@ private:
 
     std::atomic<IEvents*> _defaultListener;
     std::shared_ptr<fakenet::Gateway> _network;
-    std::shared_ptr<fakenet::NetworkLink> _networkLink;
 
-    std::unordered_map<transport::SocketAddress, FakeTcpEndpoint*> _endpoints;
+    std::unordered_map<transport::SocketAddress, std::shared_ptr<FakeTcpEndpoint>> _endpoints;
 
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 };

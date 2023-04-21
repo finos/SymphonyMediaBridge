@@ -3,14 +3,22 @@
 #include "memory/Packet.h"
 #include "utils/Time.h"
 
+#define TRACE_FAKENETWORK 1
+
+#if TRACE_FAKENETWORK
+#define NETWORK_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define NETWORK_LOG(fmt, ...)
+#endif
+
 namespace fakenet
 {
 
-bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp)
+bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp, bool tcpData )
 {
     const std::lock_guard<std::mutex> lock(_pushMutex);
 
-    if (_lossRate > 0 && rand() % 1000 < _lossRate * 1000)
+    if (!tcpData && _lossRate > 0 && rand() % 1000 < _lossRate * 1000)
     {
         logger::debug("dropping packet", "");
         return false;
@@ -81,6 +89,7 @@ memory::UniquePacket NetworkLink::pop(uint64_t timestamp)
                 _releaseTime + (IPOVERHEAD + _queue.front()->getLength()) * 8 * utils::Time::ms / _bandwidthKbps;
         }
         _bitRate.update(packet->getLength() * 8, timestamp);
+        NETWORK_LOG("popping packet %zu, adding delay %" PRIu64, _name.c_str(), packet->getLength(), _staticDelay);
         _delayQueue.push({std::move(packet), timestamp + _staticDelay});
     }
     return popDelayQueue(timestamp);
@@ -119,6 +128,7 @@ void NetworkLink::injectDelaySpike(uint32_t ms)
 
 void NetworkLink::setStaticDelay(uint32_t ms)
 {
+    NETWORK_LOG("setting static delay to %ums", _name.c_str(), ms);
     _staticDelay = ms * utils::Time::ms;
 }
 

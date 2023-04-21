@@ -10,7 +10,9 @@ FakeTcpServerEndpoint::FakeTcpServerEndpoint(jobmanager::JobManager& jobManager,
     transport::TcpEndpointFactory* transportFactory,
     const transport::SocketAddress& localPort,
     const config::Config& config,
-    std::shared_ptr<fakenet::Gateway> gateway)
+    std::shared_ptr<fakenet::Gateway> gateway,
+    transport::EndpointFactory& endpointFactory,
+    transport::RtcePoll& epoll)
     : _name("FakeTcpServerEndpoint"),
       _state(transport::Endpoint::State::CREATED),
       _localPort(localPort),
@@ -21,8 +23,7 @@ FakeTcpServerEndpoint::FakeTcpServerEndpoint(jobmanager::JobManager& jobManager,
       _networkLinkAllocator(8092, "networkLinkTcp"),
       _sendQueue(1024 * 256),
       _receiveQueue(1024 * 256),
-      _network(gateway),
-      _networkLink(std::make_shared<fakenet::NetworkLink>(_name.c_str(), 1500000, 1950 * 1024, 3000))
+      _network(gateway)
 {
     if (!_network->isLocalPortFree(_localPort))
     {
@@ -34,14 +35,26 @@ FakeTcpServerEndpoint::FakeTcpServerEndpoint(jobmanager::JobManager& jobManager,
     }
 }
 
-void FakeTcpServerEndpoint::onReceive(const transport::SocketAddress& source,
+void FakeTcpServerEndpoint::onReceive(fakenet::Protocol protocol,
+    const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
     uint64_t timestamp)
 {
     assert(hasIp(target));
-    _networkLink->push(serializeInbound(_networkLinkAllocator, source, data, length), timestamp);
+    // assert(protocol != fakenet::Protocol::UDP);
+
+    auto packet = memory::makeUniquePacket(_networkLinkAllocator, data, length);
+    assert(!isWeirdPacket(*packet));
+    _receiveQueue.push(InboundPacket{protocol, source, std::move(packet)});
+    if (!_pendingRead.test_and_set())
+    {
+        if (!_receiveJobs.post(utils::bind(&FakeTcpServerEndpoint::internalReceive, this)))
+        {
+            logger::warn("receive queue full", _name.c_str());
+        }
+    }
 }
 
 bool FakeTcpServerEndpoint::hasIp(const transport::SocketAddress& target)
@@ -54,20 +67,6 @@ void FakeTcpServerEndpoint::process(uint64_t timestamp)
     const auto start = utils::Time::getAbsoluteTime();
     uint32_t packetCounter = 0;
 
-    // Retrieve those packets that are due to releasing after delay.
-    for (auto packet = _networkLink->pop(timestamp); packet; packet = _networkLink->pop(timestamp))
-    {
-        _receiveQueue.push(deserializeInbound(_networkLinkAllocator, std::move(packet)));
-
-        if (!_pendingRead.test_and_set())
-        {
-            if (!_receiveJobs.post(utils::bind(&FakeTcpServerEndpoint::internalReceive, this)))
-            {
-                logger::warn("receive queue full", _name.c_str());
-            }
-        }
-    }
-
     size_t byteCount = 0;
     for (OutboundPacket packetInfo; _sendQueue.pop(packetInfo);)
     {
@@ -75,7 +74,8 @@ void FakeTcpServerEndpoint::process(uint64_t timestamp)
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 
-        _network->onReceive(packetInfo.sourceAddress,
+        _network->onReceive(packetInfo.protocol,
+            packetInfo.sourceAddress,
             packetInfo.targetAddress,
             packet->get(),
             packet->getLength(),
@@ -101,16 +101,62 @@ void FakeTcpServerEndpoint::internalReceive()
         if (_receiveQueue.pop(packetInfo) && packetInfo.packet)
         {
             _rateMetrics.receiveTracker.update(packetInfo.packet->getLength(), receiveTime);
-            if (packetInfo.protocol == ProtocolIndicator::SYN)
+            if (packetInfo.protocol == fakenet::Protocol::SYN)
             {
                 // create new TcpEndpoint if it is also on a registered stunName
+                auto tcpEndpoint = std::make_shared<FakeTcpEndpoint>(_receiveJobs.getJobManager(),
+                    _allocator,
+                    _localPort,
+                    packetInfo.source,
+                    _network);
+
+                _endpoints[packetInfo.source] = tcpEndpoint;
+                _network->addLocal(tcpEndpoint.get());
+                tcpEndpoint->sendSynAck(packetInfo.source);
             }
-            else if (packetInfo.protocol == ProtocolIndicator::TCPDATA)
+            else if (packetInfo.protocol == fakenet::Protocol::TCPDATA)
             {
-                // find tcp endpoint and dispatch on it
-                /*dispatchReceivedPacket(packetInfo.address,
-                    memory::makeUniquePacket(_allocator, *packetInfo.packet),
-                    receiveTime);*/
+                auto it = _endpoints.find(packetInfo.source);
+                if (it != _endpoints.end())
+                {
+                    auto& tcpEndpoint = *it->second;
+                    if (tcpEndpoint.getState() == transport::Endpoint::State::CONNECTING)
+                    {
+                        if (ice::isStunMessage(packetInfo.packet->get(), packetInfo.packet->getLength()))
+                        {
+                            auto msg = ice::StunMessage::fromPtr(packetInfo.packet->get());
+                            if (msg->header.isRequest())
+                            {
+                                auto users = msg->getAttribute<ice::StunUserName>(ice::StunAttribute::USERNAME);
+                                if (users)
+                                {
+                                    const auto names = users->getNames();
+                                    auto listenIt = _iceListeners.find(names.first);
+                                    if (listenIt != _iceListeners.end())
+                                    {
+                                        tcpEndpoint.onFirstStun();
+                                        listenIt->second->onIceTcpConnect(it->second,
+                                            packetInfo.source,
+                                            _localPort,
+                                            std::move(packetInfo.packet),
+                                            receiveTime);
+                                        return;
+                                    }
+                                }
+                            }
+                        }
+                        _endpoints.erase(packetInfo.source);
+                    }
+                    else
+                    {
+                        it->second->onReceive(packetInfo.protocol,
+                            packetInfo.source,
+                            _localPort,
+                            packetInfo.packet->get(),
+                            packetInfo.packet->getLength(),
+                            receiveTime);
+                    }
+                }
             }
         }
     }

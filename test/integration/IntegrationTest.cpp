@@ -62,9 +62,9 @@ void IntegrationTest::SetUp()
     utils::Time::initialize(_timeSource);
     _httpd = new emulator::HttpdFactory();
     _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
-    _firewall =
-        std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse(_ipv4.firewall), *_internet->getNetwork());
-    _firewall->addPublicIp(transport::SocketAddress::parse(_ipv6.firewall));
+    _firewall = std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse(_ipv4.firewall),
+        transport::SocketAddress::parse(_ipv6.firewall),
+        *_internet->getNetwork());
 
     _timers = std::make_unique<jobmanager::TimerQueue>(4096);
     _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
@@ -114,11 +114,17 @@ size_t IntegrationTest::getNumWorkerThreads()
 void IntegrationTest::initBridge(config::Config& config)
 {
     _clientsEndpointFactory = std::shared_ptr<transport::EndpointFactory>(new emulator::FakeEndpointFactory(_firewall,
-        [](std::shared_ptr<fakenet::NetworkLink>, const transport::SocketAddress& addr, const std::string& name) {
+        [this](std::shared_ptr<fakenet::NetworkLink> netlink,
+            const transport::SocketAddress& addr,
+            const std::string& name) {
             logger::info("Client %s endpoint uses address %s",
                 "IntegrationTest",
                 name.c_str(),
                 addr.toString().c_str());
+            if (netlink)
+            {
+                this->_clientNetworkLinkMap.emplace(name, NetworkLinkInfo{netlink.get(), addr});
+            }
         }));
 
     _bridge = std::make_unique<bridge::Bridge>(config);
@@ -131,7 +137,10 @@ void IntegrationTest::initBridge(config::Config& config)
                     "IntegrationTest",
                     name.c_str(),
                     addr.toString().c_str());
-                this->_endpointNetworkLinkMap.emplace(name, NetworkLinkInfo{netLink.get(), addr});
+                if (netLink)
+                {
+                    this->_endpointNetworkLinkMap.emplace(name, NetworkLinkInfo{netLink.get(), addr});
+                }
             }));
 
     _bridge->initialize(_bridgeEndpointFactory, *_httpd, _smbInterfaces);
