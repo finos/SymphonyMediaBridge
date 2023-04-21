@@ -1972,12 +1972,14 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
         while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
             _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
         {
+            logger::info("discarding %s", _loggableId.c_str(), _rtpEndpoints.back()->getName());
             _rtpEndpoints.back()->unregisterListener(this);
             _rtpEndpoints.pop_back();
         }
         while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
             _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
         {
+            logger::info("discarding %s", _loggableId.c_str(), _rtpEndpoints.front()->getName());
             _rtpEndpoints.front()->unregisterListener(this);
             _rtpEndpoints.erase(_rtpEndpoints.begin());
         }
