@@ -48,8 +48,10 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
 {
 }
 
-
-FakeTcpEndpoint::~FakeTcpEndpoint() {}
+FakeTcpEndpoint::~FakeTcpEndpoint()
+{
+    logger::debug("deleting", _name.c_str());
+}
 
 void FakeTcpEndpoint::sendStunTo(const transport::SocketAddress& target,
     __uint128_t transactionId,

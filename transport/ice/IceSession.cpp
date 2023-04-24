@@ -195,8 +195,8 @@ void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
 void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate)
 {
     const auto endpointAddress = endpoint.endpoint->getLocalPort();
-    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily() ||
-        endpoint.endpoint->getTransportType() != remoteCandidate.transportType)
+    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily())
+    // ||        endpoint.endpoint->getTransportType() != remoteCandidate.transportType)
     {
         return;
     }
@@ -1241,10 +1241,11 @@ void IceSession::CandidatePair::send(const uint64_t now)
 
     for (uint32_t i = 0; i < (state != Succeeded ? _config.probeReplicates : 1); ++i)
     {
-        logger::debug("%s probing %s",
+        logger::debug("%s probing %s %s",
             _name.c_str(),
-            localEndpoint.endpoint->getLocalPort().toString().c_str(),
-            remoteCandidate.address.toString().c_str());
+            remoteCandidate.address.toString().c_str(),
+            toString(localEndpoint.endpoint->getTransportType()).c_str(),
+            localEndpoint.endpoint->getLocalPort().toString().c_str());
 
         localEndpoint.endpoint->sendStunTo(remoteCandidate.address,
             transaction.id.get(),

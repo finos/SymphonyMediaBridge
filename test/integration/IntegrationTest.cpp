@@ -55,7 +55,7 @@ void IntegrationTest::SetUp()
         "ip":"127.0.0.1",
         "ice.publicIpv4":"%s",
         "ice.tcp.enable":false,
-        "ice.enableIpv6:true"
+        "ice.enableIpv6":true
         })",
         _ipv4.smb.c_str());
 

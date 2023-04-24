@@ -33,7 +33,7 @@ TEST_F(IceTransportEmuTest, plainNewApi)
         {
             if (utils::startsWith("FakeUdp", pairIt.first))
             {
-                pairIt.second.ptrLink->setStaticDelay(pairIt.second.address.getFamily() == AF_INET6 ? 120 : 15);
+                pairIt.second.ptrLink->setStaticDelay(pairIt.second.address.getFamily() == AF_INET6 ? 1220 : 15);
             }
         }
 
