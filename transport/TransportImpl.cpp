@@ -1994,10 +1994,11 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
             while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
                 _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
             {
-                logger::info("!!!discarding %s, ref %ld",
+                logger::info("discarding %s, ref %ld",
                     _loggableId.c_str(),
                     _rtpEndpoints.back()->getName(),
                     _rtpEndpoints.back().use_count());
+                _rtpIceSession->onTcpRemoved(_rtpEndpoints.back().get());
                 _rtpEndpoints.back()->unregisterListener(this);
 
                 _rtpEndpoints.pop_back();
@@ -2005,7 +2006,8 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
             while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
                 _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
             {
-                logger::info("!!!discarding %s", _loggableId.c_str(), _rtpEndpoints.front()->getName());
+                logger::info("discarding %s", _loggableId.c_str(), _rtpEndpoints.front()->getName());
+                _rtpIceSession->onTcpRemoved(_rtpEndpoints.front().get());
                 _rtpEndpoints.front()->unregisterListener(this);
                 _rtpEndpoints.erase(_rtpEndpoints.begin());
             }

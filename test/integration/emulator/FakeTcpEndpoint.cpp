@@ -54,7 +54,7 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
 FakeTcpEndpoint::~FakeTcpEndpoint()
 {
     _network->removeNode(this);
-    logger::debug("!!!deleting %s - %s", _name.c_str(), _localPort.toString().c_str(), _peerPort.toString().c_str());
+    logger::debug("deleting %s - %s", _name.c_str(), _localPort.toString().c_str(), _peerPort.toString().c_str());
     _localPort = transport::SocketAddress();
 }
 
@@ -157,7 +157,7 @@ void FakeTcpEndpoint::stop(Endpoint::IStopEvents* listener)
 {
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
-        logger::info("!!!stopping ", _name.c_str());
+        logger::info("stopping", _name.c_str());
         _state = State::STOPPING;
         _network->removeNode(this);
         // could await the queues to drain

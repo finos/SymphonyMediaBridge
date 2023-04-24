@@ -158,6 +158,7 @@ public:
         uint64_t timestamp);
 
     void onTcpDisconnect(IceEndpoint* endpoint);
+    void onTcpRemoved(const IceEndpoint* endpoint);
 
     bool isRequestAuthentic(const void* data, size_t len) const;
     bool isResponseAuthentic(const void* data, size_t len) const;
@@ -185,9 +186,10 @@ private:
     struct EndpointInfo
     {
         EndpointInfo(IceEndpoint* endpoint_, int preference_) : endpoint(endpoint_), preference(preference_) {}
+        EndpointInfo(const EndpointInfo&) = default;
 
-        IceEndpoint* const endpoint;
-        const int preference;
+        IceEndpoint* endpoint;
+        int preference;
     };
     EndpointInfo* findEndpoint(IceEndpoint* endpoint);
 

@@ -106,7 +106,7 @@ void BaseChannel::addIpv6RemoteCandidates(transport::RtcTransport& transport)
 {
     for (auto candidate : _ipv6RemoteCandidates)
     {
-        logger::info("!!!adding ipv6 candidate %s to %s",
+        logger::info("adding ipv6 candidate %s to %s",
             "ApiChannel",
             candidate.address.toString().c_str(),
             transport.getLoggableId().c_str());

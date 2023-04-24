@@ -204,9 +204,8 @@ IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(EndpointInfo& 
     const IceCandidate& remoteCandidate)
 {
     const auto endpointAddress = endpoint.endpoint->getLocalPort();
-    logger::info("ep address from %s", _logId.c_str(), endpoint.endpoint->getLocalPort().toString().c_str());
-    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily())
-    // ||        endpoint.endpoint->getTransportType() != remoteCandidate.transportType)
+    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily() ||
+        endpoint.endpoint->getTransportType() != remoteCandidate.transportType)
     {
         return nullptr;
     }
@@ -549,9 +548,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         {
             for (auto& localEndpoint : _endpoints)
             {
-                logger::info("!!!adding probe for PRFLX %s",
-                    _logId.c_str(),
-                    remoteCandidate.address.toString().c_str());
+                logger::info("adding probe for PRFLX %s", _logId.c_str(), remoteCandidate.address.toString().c_str());
                 auto* candidatePair = addProbeForRemoteCandidate(localEndpoint, remoteCandidate);
                 if (candidatePair)
                 {
@@ -738,6 +735,26 @@ void IceSession::onTcpDisconnect(IceEndpoint* endpoint)
     if (candidatePairIt != _candidatePairs.end())
     {
         candidatePairIt->get()->onDisconnect();
+    }
+}
+
+void IceSession::onTcpRemoved(const IceEndpoint* endpoint)
+{
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
+    auto candidatePairIt = std::find_if(_candidatePairs.begin(),
+        _candidatePairs.end(),
+        [endpoint](const std::unique_ptr<CandidatePair>& probe) { return probe->localEndpoint.endpoint == endpoint; });
+    if (candidatePairIt != _candidatePairs.end())
+    {
+        _candidatePairs.erase(candidatePairIt);
+    }
+
+    auto endpointIt = std::find_if(_endpoints.begin(), _endpoints.end(), [endpoint](const EndpointInfo& iceEndpoint) {
+        return iceEndpoint.endpoint == endpoint;
+    });
+    if (endpointIt != _endpoints.end())
+    {
+        _endpoints.erase(endpointIt);
     }
 }
 
