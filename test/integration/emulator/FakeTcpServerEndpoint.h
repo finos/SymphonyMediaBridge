@@ -12,6 +12,7 @@
 
 namespace emulator
 {
+class FakeEndpointFactory;
 class FakeTcpServerEndpoint : public transport::ServerEndpoint, public FakeEndpointImpl
 {
 public:
@@ -22,7 +23,7 @@ public:
         const transport::SocketAddress& localPort,
         const config::Config& config,
         std::shared_ptr<fakenet::Gateway> gateway,
-        transport::EndpointFactory& endpointFactory,
+        FakeEndpointFactory& endpointFactory,
         transport::RtcePoll& epoll);
 
     virtual const transport::SocketAddress getLocalPort() const override { return _localPort; };
@@ -52,6 +53,13 @@ private:
 
     void internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener);
 
+    struct TcpEndpointItem
+    {
+        std::shared_ptr<transport::Endpoint> strongEndpoint;
+        std::weak_ptr<transport::Endpoint> endpoint;
+        FakeTcpEndpoint* tcpEndpoint;
+    };
+
 private:
     // map of FakeTcpEndpoints mapped on srcip:port
     // this allows us to route incoming packets onto the right endpint if it exists.
@@ -71,9 +79,9 @@ private:
     std::atomic<IEvents*> _defaultListener;
     std::shared_ptr<fakenet::Gateway> _network;
 
-    std::unordered_map<transport::SocketAddress, std::shared_ptr<FakeTcpEndpoint>> _pendingTcpConnections;
-    std::unordered_map<transport::SocketAddress, std::weak_ptr<FakeTcpEndpoint>> _endpoints;
+    std::unordered_map<transport::SocketAddress, TcpEndpointItem> _endpoints;
     transport::TcpEndpointFactory* _transportFactory;
+    FakeEndpointFactory& _endpointFactory;
 
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 };

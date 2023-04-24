@@ -1,5 +1,7 @@
 #include "test/integration/emulator/FakeTcpServerEndpoint.h"
+#include "test/integration/emulator/FakeEndpointFactory.h"
 #include "utils/Function.h"
+#include <memory>
 
 namespace emulator
 {
@@ -11,7 +13,7 @@ FakeTcpServerEndpoint::FakeTcpServerEndpoint(jobmanager::JobManager& jobManager,
     const transport::SocketAddress& localPort,
     const config::Config& config,
     std::shared_ptr<fakenet::Gateway> gateway,
-    transport::EndpointFactory& endpointFactory,
+    FakeEndpointFactory& endpointFactory,
     transport::RtcePoll& epoll)
     : _name("FakeTcpServerEndpoint"),
       _state(transport::Endpoint::State::CREATED),
@@ -24,7 +26,8 @@ FakeTcpServerEndpoint::FakeTcpServerEndpoint(jobmanager::JobManager& jobManager,
       _sendQueue(1024 * 256),
       _receiveQueue(1024 * 256),
       _network(gateway),
-      _transportFactory(transportFactory)
+      _transportFactory(transportFactory),
+      _endpointFactory(endpointFactory)
 {
     if (!_network->isLocalPortFree(_localPort))
     {
@@ -105,28 +108,32 @@ void FakeTcpServerEndpoint::internalReceive()
             if (packetInfo.protocol == fakenet::Protocol::SYN)
             {
                 // create new TcpEndpoint if it is also on a registered stunName
-                auto tcpEndpoint = std::shared_ptr<FakeTcpEndpoint>(new FakeTcpEndpoint(_receiveJobs.getJobManager(),
+
+                auto tcpEndpoint = new FakeTcpEndpoint(_receiveJobs.getJobManager(),
                     _allocator,
                     _localPort,
                     packetInfo.source,
-                    _network));
-                // TODO must pass  Deleter here otherwise this cannot work. Since TransportFactoryImpl is not within our
-                // scope we should refactor so EndpointFactory has the deleter and TransportFactory can wait for
-                // endpoint factory to empty its garbage queue at termination
+                    _network);
+                _endpointFactory.addEndpoint(tcpEndpoint->getFd(), tcpEndpoint);
 
-                _pendingTcpConnections[packetInfo.source] = tcpEndpoint;
-                _network->addLocal(tcpEndpoint.get());
+                auto shareEndpoint = _transportFactory->createTcpEndpoint(tcpEndpoint->getFd(),
+                    transport::SocketAddress(),
+                    transport::SocketAddress());
+
+                _network->addLocal(tcpEndpoint);
                 tcpEndpoint->sendSynAck(packetInfo.source);
+                _endpoints.emplace(packetInfo.source,
+                    TcpEndpointItem{shareEndpoint, std::weak_ptr<transport::Endpoint>(shareEndpoint), tcpEndpoint});
             }
             else if (packetInfo.protocol == fakenet::Protocol::TCPDATA)
             {
                 auto it = _endpoints.find(packetInfo.source);
-                if (it != _endpoints.end())
+                if (it != _endpoints.end() && !it->second.strongEndpoint)
                 {
-                    auto endpoint = it->second.lock();
+                    auto endpoint = it->second.endpoint.lock();
                     if (endpoint)
                     {
-                        endpoint->onReceive(packetInfo.protocol,
+                        it->second.tcpEndpoint->onReceive(packetInfo.protocol,
                             packetInfo.source,
                             _localPort,
                             packetInfo.packet->get(),
@@ -139,11 +146,10 @@ void FakeTcpServerEndpoint::internalReceive()
                     }
                     continue;
                 }
-
-                auto pendingIt = _pendingTcpConnections.find(packetInfo.source);
-                if (pendingIt != _pendingTcpConnections.end())
+                else if (it != _endpoints.end())
                 {
-                    auto tcpEndpoint = pendingIt->second;
+                    auto tcpEndpoint = it->second.strongEndpoint;
+                    it->second.strongEndpoint.reset();
                     if (tcpEndpoint->getState() == transport::Endpoint::State::CONNECTING)
                     {
                         if (ice::isStunMessage(packetInfo.packet->get(), packetInfo.packet->getLength()))
@@ -158,9 +164,7 @@ void FakeTcpServerEndpoint::internalReceive()
                                     auto listenIt = _iceListeners.find(names.first);
                                     if (listenIt != _iceListeners.end())
                                     {
-                                        tcpEndpoint->onFirstStun();
-                                        _endpoints.emplace(pendingIt->first, tcpEndpoint);
-                                        _pendingTcpConnections.erase(pendingIt);
+                                        it->second.tcpEndpoint->onFirstStun();
                                         listenIt->second->onIceTcpConnect(tcpEndpoint,
                                             packetInfo.source,
                                             _localPort,

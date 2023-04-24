@@ -4,6 +4,7 @@
 #include "transport/EndpointFactory.h"
 #include <functional>
 #include <memory>
+#include <unordered_map>
 
 namespace jobmanager
 {
@@ -22,6 +23,7 @@ class RtcePoll;
 
 namespace emulator
 {
+class FakeTcpEndpoint;
 
 class FakeEndpointFactory : public transport::EndpointFactory
 {
@@ -65,8 +67,11 @@ public:
         transport::RtcePoll& epoll,
         bool isShared) override;
 
+    void addEndpoint(int fd, FakeTcpEndpoint* endpoint);
+
 private:
     std::shared_ptr<fakenet::Gateway> _network;
     EndpointCallback _callback;
+    std::unordered_map<int, FakeTcpEndpoint*> _endpoints;
 };
 } // namespace emulator

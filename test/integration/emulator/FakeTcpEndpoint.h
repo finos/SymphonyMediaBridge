@@ -26,11 +26,6 @@ public:
         std::shared_ptr<fakenet::Gateway> gateway);
 
     virtual ~FakeTcpEndpoint();
-    static void operator delete(void* ptr, std::size_t sz)
-    {
-        logger::debug(" custom delete for size %zu ", "FakeTcpEndpoint", sz);
-        // memset(ptr, 0, sizeof(FakeTcpEndpoint));
-    }
 
     // ice::IceEndpoint
     void sendStunTo(const transport::SocketAddress& target,
@@ -101,6 +96,8 @@ public:
     // fake network methods
     void sendSynAck(const transport::SocketAddress& target);
 
+    int getFd() const { return _fakeFd; }
+
 private:
     void connect(const transport::SocketAddress& target);
     void internalUnregisterListener(IEvents* listener);
@@ -123,9 +120,11 @@ private:
 
     memory::UniquePacket _pendingStun;
 
+    int _fakeFd;
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 
     static uint16_t _portCounter;
+    static int _fdGenerator;
 };
 
 } // namespace emulator

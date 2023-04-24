@@ -7,6 +7,7 @@
 namespace emulator
 {
 uint16_t FakeTcpEndpoint::_portCounter = 1000;
+int FakeTcpEndpoint::_fdGenerator = 1;
 
 FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
@@ -23,7 +24,8 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
       _sendQueue(256 * 1024),
       _receiveQueue(256 * 1024),
       _receiveJobs(jobManager, 256 * 1024),
-      _sendJobs(jobManager, 256 * 1024)
+      _sendJobs(jobManager, 256 * 1024),
+      _fakeFd(++_fdGenerator)
 {
     while (!_network->isLocalPortFree(_localPort.setPort(_portCounter++))) {}
 }

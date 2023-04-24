@@ -45,6 +45,14 @@ transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobMa
     const transport::SocketAddress& localPort,
     const transport::SocketAddress& peerPort)
 {
+    auto it = _endpoints.find(fd);
+    if (it != _endpoints.end())
+    {
+        auto p = it->second;
+        _endpoints.erase(it);
+        return p;
+    }
+
     assert(false);
     return nullptr;
 }
@@ -80,6 +88,11 @@ transport::RecordingEndpoint* FakeEndpointFactory::createRecordingEndpoint(jobma
     bool isShared)
 {
     return new FakeRecordingEndpoint();
+}
+
+void FakeEndpointFactory::addEndpoint(int fd, FakeTcpEndpoint* endpoint)
+{
+    _endpoints.emplace(fd, endpoint);
 }
 
 } // namespace emulator
