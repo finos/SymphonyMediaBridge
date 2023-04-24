@@ -524,7 +524,7 @@ public:
             return;
         }
 
-        logger::debug("closing %s", _name, endpoint->getName());
+        logger::debug("!!!closing %s", _name, endpoint->getName());
         ++_pendingTasks;
         endpoint->stop(this);
     }
@@ -536,7 +536,7 @@ public:
             return;
         }
 
-        logger::debug("closing %s", _name, endpoint->getName());
+        logger::debug("!!!closing %s", _name, endpoint->getName());
         ++_pendingTasks;
         endpoint->stop(this);
     }
@@ -603,7 +603,7 @@ private:
 
     void onEndpointStopped(Endpoint* endpoint) override
     {
-        logger::info("%s stopped. %u", _name, endpoint->getName(), _pendingTasks.load());
+        logger::info("!!!%s stopped. %u", _name, endpoint->getName(), _pendingTasks.load());
         _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }

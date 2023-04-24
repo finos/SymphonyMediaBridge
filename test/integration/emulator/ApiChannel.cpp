@@ -78,13 +78,21 @@ void BaseChannel::setRemoteIce(transport::RtcTransport& transport,
 
     for (auto& c : bundle[candidatesGroupName]["candidates"])
     {
-        candidates.push_back(ice::IceCandidate(c["foundation"].template get<std::string>().c_str(),
+        ice::IceCandidate candidate(c["foundation"].template get<std::string>().c_str(),
             ice::IceComponent::RTP,
             c["protocol"] == "udp" ? ice::TransportType::UDP : ice::TransportType::TCP,
             c["priority"].template get<uint32_t>(),
             transport::SocketAddress::parse(c["ip"], c["port"]),
             ice::IceCandidate::Type::HOST,
-            ice::TcpType::PASSIVE));
+            ice::TcpType::PASSIVE);
+
+        if (skipIpv6 && candidate.address.getFamily() == AF_INET6)
+        {
+            _ipv6RemoteCandidates.push_back(candidate);
+            continue;
+        }
+
+        candidates.push_back(candidate);
     }
 
     std::pair<std::string, std::string> credentials;
@@ -92,6 +100,18 @@ void BaseChannel::setRemoteIce(transport::RtcTransport& transport,
     credentials.second = bundle[candidatesGroupName]["pwd"];
 
     transport.setRemoteIce(credentials, candidates, allocator);
+}
+
+void BaseChannel::addIpv6RemoteCandidates(transport::RtcTransport& transport)
+{
+    for (auto candidate : _ipv6RemoteCandidates)
+    {
+        logger::info("!!!adding ipv6 candidate %s to %s",
+            "ApiChannel",
+            candidate.address.toString().c_str(),
+            transport.getLoggableId().c_str());
+        transport.addRemoteIceCandidate(candidate);
+    }
 }
 
 void Channel::create(const std::string& baseUrl,
@@ -168,6 +188,11 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     for (auto& c : candidates)
     {
+        if (skipIpv6 && c.address.getFamily() == AF_INET6)
+        {
+            continue;
+        }
+
         auto jsonCandidate = json::object({{"foundation", c.getFoundation()},
             {"component", c.component},
             {"protocol", c.transportType == ice::TransportType::UDP ? "udp" : "tcp"},

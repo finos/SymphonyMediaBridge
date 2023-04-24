@@ -33,7 +33,8 @@ transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobMa
     const transport::SocketAddress& nic,
     transport::RtcePoll& epoll)
 {
-    auto endpoint = new FakeTcpEndpoint(jobManager, allocator, nic, _network);
+    transport::SocketAddress local(nic.getSockAddr(), "localtcp");
+    auto endpoint = new FakeTcpEndpoint(jobManager, allocator, local, _network);
     return endpoint;
 }
 

@@ -1821,6 +1821,21 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
     }
 }
 
+void TransportImpl::addRemoteIceCandidate(const ice::IceCandidate& candidate)
+{
+    if (_rtpIceSession)
+    {
+        auto* iceSession = _rtpIceSession.get();
+        _jobQueue.post(_jobCounter, [iceSession, candidate]() {
+            iceSession->addRemoteCandidate(candidate);
+            if (iceSession->getState() >= ice::IceSession::State::CONNECTING)
+            {
+                iceSession->probeRemoteCandidates(iceSession->getRole(), utils::Time::getAbsoluteTime());
+            }
+        });
+    }
+}
+
 void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
     const memory::AudioPacket& candidatesPacket)
 {
@@ -1857,6 +1872,11 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
             }
         }
     }
+}
+
+void TransportImpl::doAddRemoteCandidate(const ice::IceCandidate& candidate)
+{
+    _rtpIceSession->addRemoteCandidate(candidate);
 }
 
 void TransportImpl::setRemoteDtlsFingerprint(const std::string& fingerprintType,
@@ -1969,19 +1989,26 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
             }
         }
 
-        while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
-            _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+        if (_rtpIceSession->getRole() == ice::IceRole::CONTROLLING)
         {
-            logger::info("discarding %s", _loggableId.c_str(), _rtpEndpoints.back()->getName());
-            _rtpEndpoints.back()->unregisterListener(this);
-            _rtpEndpoints.pop_back();
-        }
-        while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
-            _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
-        {
-            logger::info("discarding %s", _loggableId.c_str(), _rtpEndpoints.front()->getName());
-            _rtpEndpoints.front()->unregisterListener(this);
-            _rtpEndpoints.erase(_rtpEndpoints.begin());
+            while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
+                _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+            {
+                logger::info("!!!discarding %s, ref %ld",
+                    _loggableId.c_str(),
+                    _rtpEndpoints.back()->getName(),
+                    _rtpEndpoints.back().use_count());
+                _rtpEndpoints.back()->unregisterListener(this);
+
+                _rtpEndpoints.pop_back();
+            }
+            while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
+                _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
+            {
+                logger::info("!!!discarding %s", _loggableId.c_str(), _rtpEndpoints.front()->getName());
+                _rtpEndpoints.front()->unregisterListener(this);
+                _rtpEndpoints.erase(_rtpEndpoints.begin());
+            }
         }
 
         if (isConnected())

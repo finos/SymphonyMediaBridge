@@ -118,6 +118,7 @@ public: // Transport
     void setRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
         memory::AudioPacketPoolAllocator& allocator) override;
+    void addRemoteIceCandidate(const ice::IceCandidate& candidate) override;
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) override;
@@ -308,6 +309,7 @@ private:
         std::__1::chrono::system_clock::time_point wallClock);
 
     void doSetRemoteIce(const memory::AudioPacket& credentials, const memory::AudioPacket& candidates);
+    void doAddRemoteCandidate(const ice::IceCandidate& candidate);
 
     void doSetRemoteDtls(const std::string& fingerprintType,
         const std::string& fingerprintHash,

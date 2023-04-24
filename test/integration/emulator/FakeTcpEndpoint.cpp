@@ -36,6 +36,7 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
     : _name("FakeTcpEndpoint"),
       _state(State::CONNECTING),
       _localPort(localPort),
+      _peerPort(peerPort),
       _defaultListener(nullptr),
       _allocator(allocator),
       _networkLinkAllocator(8092, "networkLink"),
@@ -50,7 +51,9 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
 
 FakeTcpEndpoint::~FakeTcpEndpoint()
 {
-    logger::debug("deleting", _name.c_str());
+    _network->removeNode(this);
+    logger::debug("!!!deleting %s - %s", _name.c_str(), _localPort.toString().c_str(), _peerPort.toString().c_str());
+    _localPort = transport::SocketAddress();
 }
 
 void FakeTcpEndpoint::sendStunTo(const transport::SocketAddress& target,
@@ -152,19 +155,20 @@ void FakeTcpEndpoint::stop(Endpoint::IStopEvents* listener)
 {
     if (_state == State::CONNECTING || _state == State::CONNECTED)
     {
+        logger::info("!!!stopping ", _name.c_str());
         _state = State::STOPPING;
         _network->removeNode(this);
         // could await the queues to drain
         if (listener)
         {
-            listener->onEndpointStopped(this);
+            _receiveJobs.post([this, listener]() { listener->onEndpointStopped(this); });
         }
     }
     else if (_state == State::CREATED)
     {
         if (listener)
         {
-            listener->onEndpointStopped(this);
+            _receiveJobs.post([this, listener]() { listener->onEndpointStopped(this); });
         }
     }
 }

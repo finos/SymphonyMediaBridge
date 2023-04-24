@@ -71,7 +71,9 @@ private:
     std::atomic<IEvents*> _defaultListener;
     std::shared_ptr<fakenet::Gateway> _network;
 
-    std::unordered_map<transport::SocketAddress, std::shared_ptr<FakeTcpEndpoint>> _endpoints;
+    std::unordered_map<transport::SocketAddress, std::shared_ptr<FakeTcpEndpoint>> _pendingTcpConnections;
+    std::unordered_map<transport::SocketAddress, std::weak_ptr<FakeTcpEndpoint>> _endpoints;
+    transport::TcpEndpointFactory* _transportFactory;
 
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 };

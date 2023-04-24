@@ -26,6 +26,11 @@ public:
         std::shared_ptr<fakenet::Gateway> gateway);
 
     virtual ~FakeTcpEndpoint();
+    static void operator delete(void* ptr, std::size_t sz)
+    {
+        logger::debug(" custom delete for size %zu ", "FakeTcpEndpoint", sz);
+        // memset(ptr, 0, sizeof(FakeTcpEndpoint));
+    }
 
     // ice::IceEndpoint
     void sendStunTo(const transport::SocketAddress& target,

@@ -147,8 +147,11 @@ void IceSession::sortCheckList()
 void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
-    _credentials.role = role;
-    _sessionStart = timestamp;
+    if (_candidatePairs.empty())
+    {
+        _credentials.role = role;
+        _sessionStart = timestamp;
+    }
     if (_credentials.remote.second.empty())
     {
         return;
@@ -173,6 +176,11 @@ void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
     auto transmitTime = timestamp;
     for (auto* probe : _checklist)
     {
+        if (probe->state != CandidatePair::State::Waiting)
+        {
+            continue;
+        }
+
         if (probe->localEndpoint.endpoint->getTransportType() == TransportType::TCP && probe != _checklist.front())
         {
             transmitTime += _config.probeReleasePace * utils::Time::ms;
@@ -192,13 +200,29 @@ void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
     processTimeout(timestamp);
 }
 
-void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate)
+IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint,
+    const IceCandidate& remoteCandidate)
 {
     const auto endpointAddress = endpoint.endpoint->getLocalPort();
+    logger::info("ep address from %s", _logId.c_str(), endpoint.endpoint->getLocalPort().toString().c_str());
     if (endpointAddress.getFamily() != remoteCandidate.address.getFamily())
     // ||        endpoint.endpoint->getTransportType() != remoteCandidate.transportType)
     {
-        return;
+        return nullptr;
+    }
+
+    for (auto& probe : _candidatePairs)
+    {
+        if (&endpoint.endpoint == &probe->localEndpoint.endpoint &&
+            probe->remoteCandidate.address == remoteCandidate.address &&
+            probe->remoteCandidate.transportType == remoteCandidate.transportType)
+        {
+            logger::debug("probe already created %s %s",
+                _logId.c_str(),
+                remoteCandidate.address.toString().c_str(),
+                ice::toString(remoteCandidate.transportType).c_str());
+            return nullptr; // there is already a probe
+        }
     }
 
     if (remoteCandidate.transportType == TransportType::UDP)
@@ -256,6 +280,8 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
         remoteCandidate.address.toString().c_str(),
         ice::toString(remoteCandidate.type).c_str(),
         ice::toString(remoteCandidate.transportType).c_str());
+
+    return candidatePair.get();
 }
 
 void IceSession::addLocalCandidate(const IceCandidate& candidate)
@@ -463,10 +489,11 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         }
     }
 
-    logger::debug("probe from %s %s",
+    logger::debug("%s probe from %s -> %s",
         _logId.c_str(),
+        ice::toString(endpoint->getTransportType()).c_str(),
         sender.toString().c_str(),
-        ice::toString(endpoint->getTransportType()).c_str());
+        endpoint->getLocalPort().toString().c_str());
 
     sendResponse(endpoint, sender, 0, msg, now);
     if (_eventSink)
@@ -522,8 +549,14 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         {
             for (auto& localEndpoint : _endpoints)
             {
-                addProbeForRemoteCandidate(localEndpoint, remoteCandidate);
-                _candidatePairs.back()->nextTransmission = now;
+                logger::info("!!!adding probe for PRFLX %s",
+                    _logId.c_str(),
+                    remoteCandidate.address.toString().c_str());
+                auto* candidatePair = addProbeForRemoteCandidate(localEndpoint, remoteCandidate);
+                if (candidatePair)
+                {
+                    candidatePair->nextTransmission = now;
+                }
             }
             sortCheckList();
             processTimeout(now);
@@ -1241,11 +1274,11 @@ void IceSession::CandidatePair::send(const uint64_t now)
 
     for (uint32_t i = 0; i < (state != Succeeded ? _config.probeReplicates : 1); ++i)
     {
-        logger::debug("%s probing %s %s",
+        logger::debug("%s probing %s -> %s",
             _name.c_str(),
-            remoteCandidate.address.toString().c_str(),
             toString(localEndpoint.endpoint->getTransportType()).c_str(),
-            localEndpoint.endpoint->getLocalPort().toString().c_str());
+            localEndpoint.endpoint->getLocalPort().toString().c_str(),
+            remoteCandidate.address.toString().c_str());
 
         localEndpoint.endpoint->sendStunTo(remoteCandidate.address,
             transaction.id.get(),

@@ -33,7 +33,7 @@ TEST_F(IceTransportEmuTest, plainNewApi)
         {
             if (utils::startsWith("FakeUdp", pairIt.first))
             {
-                pairIt.second.ptrLink->setStaticDelay(pairIt.second.address.getFamily() == AF_INET6 ? 1220 : 15);
+                pairIt.second.ptrLink->setStaticDelay(pairIt.second.address.getFamily() == AF_INET6 ? 325 : 15);
             }
         }
 
@@ -44,7 +44,8 @@ TEST_F(IceTransportEmuTest, plainNewApi)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
+        group.clients[0]
+            ->initiateCall3(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true, utils::Time::ms * 2500);
         group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
         group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
 

@@ -274,7 +274,7 @@ private:
         crypto::HMAC& _hmacComputer;
     };
 
-    void addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate);
+    CandidatePair* addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate);
     void sortCheckList();
 
     CandidatePair* findCandidatePair(const IceEndpoint* endpoint,
