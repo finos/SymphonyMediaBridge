@@ -450,7 +450,7 @@ void TcpEndpointImpl::internalReceive(int fd)
             listener->onIceReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet), receiveTime);
             continue;
         }
-        else if (transport::isDtlsPacket(packet->get()))
+        else if (transport::isDtlsPacket(packet->get(), packet->getLength()))
         {
             listener->onDtlsReceived(*this, _peerPort, _socket.getBoundPort(), std::move(packet), receiveTime);
             continue;

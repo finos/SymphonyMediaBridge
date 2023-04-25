@@ -469,7 +469,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
             logger::debug("no listener for STUN", _name.c_str());
         }
     }
-    else if (transport::isDtlsPacket(packet->get()))
+    else if (transport::isDtlsPacket(packet->get(), packet->getLength()))
     {
         listener = _dtlsListeners.getItem(srcAddress);
         listener = listener ? listener : _defaultListener.load();

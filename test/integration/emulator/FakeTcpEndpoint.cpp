@@ -257,7 +257,7 @@ void FakeTcpEndpoint::dispatchReceivedPacket(fakenet::Protocol protocol,
     {
         listener->onIceReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
     }
-    else if (transport::isDtlsPacket(packet->get()))
+    else if (transport::isDtlsPacket(packet->get(), packet->getLength()))
     {
         listener->onDtlsReceived(*this, srcAddress, _localPort, std::move(packet), timestamp);
     }

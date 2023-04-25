@@ -36,7 +36,8 @@ InboundPacket deserializeInbound(memory::PacketPoolAllocator& allocator, memory:
 bool isWeirdPacket(memory::Packet& packet)
 {
     if (!ice::isStunMessage(packet.get(), packet.getLength()) && !rtp::isRtpPacket(packet) &&
-        !rtp::isRtcpPacket(packet) && !transport::isDtlsPacket(packet.get()) && packet.getLength() > 0)
+        !rtp::isRtcpPacket(packet) && !transport::isDtlsPacket(packet.get(), packet.getLength()) &&
+        packet.getLength() > 0)
     {
         return true;
     }

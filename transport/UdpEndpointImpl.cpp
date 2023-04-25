@@ -42,12 +42,21 @@ UdpEndpointImpl::UdpEndpointImpl(jobmanager::JobManager& jobManager,
           this),
       _iceListeners(maxSessionCount * 2),
       _dtlsListeners(maxSessionCount * 5),
-      _iceResponseListeners(maxSessionCount * 16)
+      _iceResponseListeners(maxSessionCount * 16),
+      _defaultListener(nullptr)
 {
 }
 
 UdpEndpointImpl::~UdpEndpointImpl()
 {
+    if (_baseUdpEndpoint._receiveJobs.getCount() > 0)
+    {
+        logger::error("receive job queue not empty", _name.c_str());
+    }
+    if (_baseUdpEndpoint._sendJobs.getCount() > 0)
+    {
+        logger::error("send job queue not empty", _name.c_str());
+    }
     logger::debug("removed", _name.c_str());
 }
 
@@ -166,7 +175,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
             {
                 auto userName = users->getNames().first;
                 listener = _iceListeners.getItem(userName);
-                LOG("ICE request for %s src %s, %c",
+                LOG("ICE request for %s src %s, %s",
                     _name.c_str(),
                     users->getNames().first.c_str(),
                     srcAddress.toString().c_str(),
@@ -208,7 +217,7 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
             LOG("cannot find listener for STUN", _name.c_str());
         }
     }
-    else if (transport::isDtlsPacket(packet->get()))
+    else if (transport::isDtlsPacket(packet->get(), packet->getLength()))
     {
         listener = _dtlsListeners.getItem(srcAddress);
         listener = listener ? listener : _defaultListener.load();
@@ -341,10 +350,7 @@ void UdpEndpointImpl::unregisterListener(const SocketAddress& remotePort, IEvent
 
         if (it->second == listener)
         {
-            LOG("remove listener on %s, unlisten %s",
-                _name.c_str(),
-                remotePort.toString().c_str(),
-                item.first.toString().c_str());
+            LOG("remove listener on %s", _name.c_str(), remotePort.toString().c_str());
             _dtlsListeners.erase(it->first);
             listener->onUnregistered(*this);
         }
