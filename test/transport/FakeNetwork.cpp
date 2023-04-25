@@ -232,6 +232,7 @@ bool Firewall::isPublicPortFree(const transport::SocketAddress& ipPort) const
 
 void Firewall::processEndpoints(const uint64_t timestamp)
 {
+    std::lock_guard<std::mutex> lock(_nodesMutex);
     for (auto* node : _endpoints)
     {
         node->process(timestamp);
