@@ -147,7 +147,7 @@ void IceSession::sortCheckList()
 void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
-    if (_candidatePairs.empty())
+    if (_sessionStart == 0)
     {
         _credentials.role = role;
         _sessionStart = timestamp;
