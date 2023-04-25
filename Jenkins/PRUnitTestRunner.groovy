@@ -10,13 +10,13 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
             env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
             sh "docker/$platform/buildscript.sh $cmakeBuildType"
+            sh "objdump -d $platform/smb/smb > $platform/smbobj.txt"
             sh "docker/$platform/runtests.sh"
         }
     }
 
     stage("artifacts") {
-        sh "objdump -d smb > smbobj.txt"
-        archiveArtifacts artifacts: smb, smbobj.txt
+        archiveArtifacts artifacts: "$platform/smb/smb", "$platform/smbobj.txt"
     }
 }
 
