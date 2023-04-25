@@ -13,6 +13,11 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
             sh "docker/$platform/runtests.sh"
         }
     }
+
+    stage("artifacts") {
+        sh "objdump -d smb > smbobj.txt"
+        archiveArtifacts artifacts: smb, smbobj.txt
+    }
 }
 
 abortPreviousRunningBuilds()
@@ -40,6 +45,7 @@ parallel "Release el7": {
 }, "DCheck": {
     node('be-integration') {
         prRunner("DCheck", "el8", "latest")
+        archiveArtifacts artifacts: smb
     }
 }, "LCov": {
     node('be-integration') {
