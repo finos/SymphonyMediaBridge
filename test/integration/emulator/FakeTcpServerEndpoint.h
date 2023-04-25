@@ -76,7 +76,6 @@ private:
     concurrency::MpmcQueue<OutboundPacket> _sendQueue;
     concurrency::MpmcQueue<InboundPacket> _receiveQueue;
 
-    std::atomic<IEvents*> _defaultListener;
     std::shared_ptr<fakenet::Gateway> _network;
 
     std::unordered_map<transport::SocketAddress, TcpEndpointItem> _endpoints;
