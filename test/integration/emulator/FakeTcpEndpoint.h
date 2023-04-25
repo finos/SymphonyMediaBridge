@@ -123,7 +123,7 @@ private:
     int _fakeFd;
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 
-    static uint16_t _portCounter;
+    static std::atomic_uint16_t _portCounter;
     static std::atomic_int _fdGenerator;
 };
 
