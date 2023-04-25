@@ -18,14 +18,6 @@
 #endif
 namespace transport
 {
-/*logger::LoggableId& name,
-    jobmanager::JobManager& jobManager,
-    size_t maxSessionCount,
-    memory::PacketPoolAllocator& allocator,
-    const SocketAddress& localPort,
-    RtcePoll& epoll,
-    DispatchMethod dispatchMethod,
-    Endpoint* endpoint*/
 
 // When this endpoint is shared the number of registration jobs and packets in queue will be plenty
 // and the data structures are therefore larger
