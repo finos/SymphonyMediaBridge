@@ -73,5 +73,6 @@ private:
     std::shared_ptr<fakenet::Gateway> _network;
     EndpointCallback _callback;
     std::unordered_map<int, FakeTcpEndpoint*> _endpoints;
+    mutable std::mutex _endpointsMutex;
 };
 } // namespace emulator

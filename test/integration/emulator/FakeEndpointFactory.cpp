@@ -45,6 +45,8 @@ transport::TcpEndpoint* FakeEndpointFactory::createTcpEndpoint(jobmanager::JobMa
     const transport::SocketAddress& localPort,
     const transport::SocketAddress& peerPort)
 {
+    std::lock_guard<std::mutex> lock(_endpointsMutex);
+
     auto it = _endpoints.find(fd);
     if (it != _endpoints.end())
     {
@@ -92,6 +94,7 @@ transport::RecordingEndpoint* FakeEndpointFactory::createRecordingEndpoint(jobma
 
 void FakeEndpointFactory::addEndpoint(int fd, FakeTcpEndpoint* endpoint)
 {
+    std::lock_guard<std::mutex> lock(_endpointsMutex);
     _endpoints.emplace(fd, endpoint);
 }
 
