@@ -226,7 +226,7 @@ IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(EndpointInfo& 
     if (remoteCandidate.transportType == TransportType::UDP)
     {
         auto localCandidateIt =
-            *std::find_if(_localCandidates.begin(), _localCandidates.end(), [endpointAddress](const IceCandidate& c) {
+            std::find_if(_localCandidates.begin(), _localCandidates.end(), [endpointAddress](const IceCandidate& c) {
                 return endpointAddress == c.baseAddress && c.type == IceCandidate::Type::HOST;
             });
 
