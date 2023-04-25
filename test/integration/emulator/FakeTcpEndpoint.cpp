@@ -7,7 +7,7 @@
 namespace emulator
 {
 uint16_t FakeTcpEndpoint::_portCounter = 1000;
-int FakeTcpEndpoint::_fdGenerator = 1;
+std::atomic_int FakeTcpEndpoint::_fdGenerator(1);
 
 FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
     memory::PacketPoolAllocator& allocator,
