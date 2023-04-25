@@ -124,7 +124,7 @@ private:
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 
     static uint16_t _portCounter;
-    static int _fdGenerator;
+    static std::atomic_int _fdGenerator;
 };
 
 } // namespace emulator
