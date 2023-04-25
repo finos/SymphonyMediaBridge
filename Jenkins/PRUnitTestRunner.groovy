@@ -5,18 +5,25 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
         checkout scm
     }
 
-    stage("Build and test\n[$cmakeBuildType $platform]") {
+    stage("Build\n[$cmakeBuildType $platform]") {
         docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:$dockerTag").inside {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
             env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
             sh "docker/$platform/buildscript.sh $cmakeBuildType"
-            sh "objdump -d $platform/smb/smb > $platform/smbobj.txt"
-            sh "docker/$platform/runtests.sh"
+            sh "mkdir $platform/$cmakeBuildType"
+            sh "objdump -d $platform/smb/smb > $platform/$cmakeBuildType/smbobj.txt"
+            sh "cp $platform/smb/smb $platform/$cmakeBuildType"
         }
     }
-
-    stage("artifacts") {
-        archiveArtifacts artifacts: "$platform/smb/smb", "$platform/smbobj.txt"
+    stage("store artifacts") {
+        archiveArtifacts artifacts: "$platform/$cmakeBuildType/smb, $platform/$cmakeBuildType/smbobj.txt", allowEmptyArchive: true
+    }
+    stage("Test\n[$cmakeBuildType $platform]") {
+        docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:$dockerTag").inside {
+            env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+            env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
+            sh "docker/$platform/runtests.sh"
+        }
     }
 }
 
@@ -45,7 +52,6 @@ parallel "Release el7": {
 }, "DCheck": {
     node('be-integration') {
         prRunner("DCheck", "el8", "latest")
-        archiveArtifacts artifacts: smb
     }
 }, "LCov": {
     node('be-integration') {
