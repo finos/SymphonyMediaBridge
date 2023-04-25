@@ -309,7 +309,6 @@ private:
         std::__1::chrono::system_clock::time_point wallClock);
 
     void doSetRemoteIce(const memory::AudioPacket& credentials, const memory::AudioPacket& candidates);
-    void doAddRemoteCandidate(const ice::IceCandidate& candidate);
 
     void doSetRemoteDtls(const std::string& fingerprintType,
         const std::string& fingerprintHash,

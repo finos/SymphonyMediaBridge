@@ -1874,11 +1874,6 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
     }
 }
 
-void TransportImpl::doAddRemoteCandidate(const ice::IceCandidate& candidate)
-{
-    _rtpIceSession->addRemoteCandidate(candidate);
-}
-
 void TransportImpl::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     const std::string& fingerprintHash,
     const bool dtlsClientSide)

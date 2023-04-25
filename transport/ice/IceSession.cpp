@@ -213,8 +213,7 @@ IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(EndpointInfo& 
     for (auto& probe : _candidatePairs)
     {
         if (&endpoint.endpoint == &probe->localEndpoint.endpoint &&
-            probe->remoteCandidate.address == remoteCandidate.address &&
-            probe->remoteCandidate.transportType == remoteCandidate.transportType)
+            probe->remoteCandidate.address == remoteCandidate.address)
         {
             logger::debug("probe already created %s %s",
                 _logId.c_str(),
@@ -273,7 +272,7 @@ IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(EndpointInfo& 
             _component,
             remoteCandidate.transportType))));
 
-    logger::debug("added candidate pair %s-%s HOST-%s %s",
+    logger::info("added candidate pair %s-%s HOST-%s %s",
         _logId.c_str(),
         endpointAddress.toString().c_str(),
         remoteCandidate.address.toString().c_str(),
@@ -548,7 +547,6 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         {
             for (auto& localEndpoint : _endpoints)
             {
-                logger::info("adding probe for PRFLX %s", _logId.c_str(), remoteCandidate.address.toString().c_str());
                 auto* candidatePair = addProbeForRemoteCandidate(localEndpoint, remoteCandidate);
                 if (candidatePair)
                 {
