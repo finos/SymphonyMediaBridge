@@ -52,6 +52,7 @@ bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp, bool tcp
 
 memory::UniquePacket NetworkLink::pop()
 {
+    const std::lock_guard<std::mutex> lock(_pushMutex);
     if (!_delayQueue.empty())
     {
         memory::UniquePacket packet(std::move(_delayQueue.front().packet));
@@ -71,6 +72,7 @@ memory::UniquePacket NetworkLink::pop()
 
 memory::UniquePacket NetworkLink::pop(uint64_t timestamp)
 {
+    const std::lock_guard<std::mutex> lock(_pushMutex);
     if (!_queue.empty() && static_cast<int64_t>(timestamp - _releaseTime) >= 0)
     {
         if (_bandwidthKbps == 0)
