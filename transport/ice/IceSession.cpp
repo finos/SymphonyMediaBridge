@@ -225,14 +225,22 @@ IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(EndpointInfo& 
 
     if (remoteCandidate.transportType == TransportType::UDP)
     {
-        IceCandidate& localCandidate =
+        auto localCandidateIt =
             *std::find_if(_localCandidates.begin(), _localCandidates.end(), [endpointAddress](const IceCandidate& c) {
                 return endpointAddress == c.baseAddress && c.type == IceCandidate::Type::HOST;
             });
 
+        if (localCandidateIt == _localCandidates.end())
+        {
+            logger::error("Failed to add probe. Endpoint address %s is not in local candidates list",
+                _logId.c_str(),
+                endpointAddress.toString().c_str());
+            return nullptr;
+        }
+
         _candidatePairs.emplace_back(std::make_unique<CandidatePair>(_config,
             endpoint,
-            localCandidate,
+            *localCandidateIt,
             remoteCandidate,
             _idGenerator,
             _credentials,
