@@ -109,7 +109,7 @@ void TimeTurner::runFor(uint64_t durationNs)
             }
 
             // release worker threads to unlock the wait in case it is a sempahore they are waiting for
-            advance(64); // 64ns is minimum wiat for WorkerThreads
+            advance(16);
         }
 
         if (_sleeperCountdown.getCount() > 0)
