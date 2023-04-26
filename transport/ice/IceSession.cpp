@@ -502,10 +502,6 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         endpoint->getLocalPort().toString().c_str());
 
     sendResponse(endpoint, sender, 0, msg, now);
-    if (_eventSink)
-    {
-        _eventSink->onIcePreliminary(this, endpoint, sender);
-    }
 
     int remoteCandidatePriority = 0;
     const auto prioAttribute = msg.getAttribute<StunPriority>(StunAttribute::PRIORITY);
