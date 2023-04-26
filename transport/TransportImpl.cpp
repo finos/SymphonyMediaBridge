@@ -870,6 +870,11 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     }
     else
     {
+        if (!_selectedRtp)
+        {
+            onIcePreliminary(_rtpIceSession.get(), &endpoint, source);
+        }
+
         logger::debug("received DTLS protocol message from %s, %zu",
             _loggableId.c_str(),
             source.toString().c_str(),
