@@ -1973,7 +1973,6 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
             if (endpoint->getState() == Endpoint::State::CONNECTED &&
                 endpoint->getLocalPort() == candidatePair.first.baseAddress)
             {
-                const bool preliminarySelected = (_selectedRtp != nullptr);
                 _selectedRtp = endpoint.get();
                 _selectedRtcp = endpoint.get();
                 _peerRtpPort = candidatePair.second.address;
@@ -1987,13 +1986,9 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                     ice::toString(endpoint->getTransportType()).c_str(),
                     ice::toString(candidatePair.second.type).c_str());
 
-                if (!preliminarySelected)
+                if (_srtpClient->getState() == SrtpClient::State::READY)
                 {
-                    logger::debug("starting DTLS on nominated candidate", _loggableId.c_str());
-                    if (_srtpClient->getState() == SrtpClient::State::READY)
-                    {
-                        DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
-                    }
+                    DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
                 }
             }
         }
