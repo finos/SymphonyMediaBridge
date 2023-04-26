@@ -1945,8 +1945,7 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = (!_rtpIceSession || _iceState == ice::IceSession::State::CONNECTED) &&
-        (_dtlsState == SrtpClient::State::CONNECTED);
+    _isConnected = (_iceState == ice::IceSession::State::CONNECTED) && (_dtlsState == SrtpClient::State::CONNECTED);
 
     switch (state)
     {
