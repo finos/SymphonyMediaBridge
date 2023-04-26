@@ -1275,22 +1275,26 @@ TEST_F(IntegrationTest, endpointMessage)
             client->_audioSource->setVolume(0.6);
         }
 
-        group.run(utils::Time::sec * 2);
         group.clients[1]->setDataListener(&listenerMock);
         int endpointMessageCount = 0;
         ON_CALL(listenerMock, onWebRtcDataString).WillByDefault([&endpointMessageCount](const char* m, size_t len) {
             auto json = utils::SimpleJson::create(m, len);
             char typeName[100];
+            logger::debug("recv data channel message %s", "Test", m);
             if (json["colibriClass"].getString(typeName) && std::strcmp(typeName, "EndpointMessage") == 0)
             {
                 ++endpointMessageCount;
             }
         });
-
+        // Dom speaker + UserMap + endpont message
         EXPECT_CALL(listenerMock, onWebRtcDataString(_, _)).Times(AtLeast(3));
+        group.run(utils::Time::sec * 2);
+
+        logger::info("sending endpoint message", "Test");
         group.clients[0]->sendEndpointMessage(group.clients[1]->getEndpointId(), message);
 
         group.run(utils::Time::sec * 2);
+        logger::flushLog();
         EXPECT_EQ(endpointMessageCount, 1);
 
         group.clients[0]->_transport->stop();
