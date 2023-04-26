@@ -20,7 +20,7 @@ bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp, bool tcp
 
     if (!tcpData && _lossRate > 0 && rand() % 1000 < _lossRate * 1000)
     {
-        logger::debug("dropping packet", "");
+        logger::debug("emulated loss of packet", _name.c_str());
         return false;
     }
 
@@ -43,6 +43,7 @@ bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp, bool tcp
 
     if (packet->getLength() > _mtu || packet->getLength() + _queuedBytes > _bufferCapacity)
     {
+        logger::warn("network link full", _name.c_str());
         return false;
     }
     _queuedBytes += packet->getLength();

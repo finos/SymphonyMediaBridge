@@ -126,7 +126,6 @@ struct IntegrationTest : public ::testing::Test
     std::shared_ptr<transport::EndpointFactory> _bridgeEndpointFactory;
     std::shared_ptr<transport::EndpointFactory> _clientsEndpointFactory;
     std::shared_ptr<fakenet::Firewall> _firewall;
-    std::shared_ptr<fakenet::Firewall> _firewallV6;
 
     uint32_t _instanceCounter;
     const size_t _numWorkerThreads;

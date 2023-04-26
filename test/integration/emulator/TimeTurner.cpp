@@ -100,9 +100,22 @@ void TimeTurner::runFor(uint64_t durationNs)
          timestamp = getAbsoluteTime())
     {
         logger::awaitLogDrained(0.75);
-        if (!_sleeperCountdown.wait(1000))
+        // wait up to 1s for threads to go into nanoSleep
+        for (int i = 0; i < 200; ++i)
+        {
+            if (_sleeperCountdown.wait(5))
+            {
+                break;
+            }
+
+            // release worker threads to unlock the wait in case it is a sempahore they are waiting for
+            advance(64); // 64ns is minimum wiat for WorkerThreads
+        }
+
+        if (_sleeperCountdown.getCount() > 0)
         {
             logger::warn("Timeout waiting for threads to sleep %u", "TimeTurner", _sleeperCountdown.getCount());
+
             if (!_running)
             {
                 _abortSemaphore.post();
