@@ -147,8 +147,11 @@ void IceSession::sortCheckList()
 void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
-    _credentials.role = role;
-    _sessionStart = timestamp;
+    if (_sessionStart == 0)
+    {
+        _credentials.role = role;
+        _sessionStart = timestamp;
+    }
     if (_credentials.remote.second.empty())
     {
         return;
@@ -173,6 +176,11 @@ void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
     auto transmitTime = timestamp;
     for (auto* probe : _checklist)
     {
+        if (probe->state != CandidatePair::State::Waiting)
+        {
+            continue;
+        }
+
         if (probe->localEndpoint.endpoint->getTransportType() == TransportType::TCP && probe != _checklist.front())
         {
             transmitTime += _config.probeReleasePace * utils::Time::ms;
@@ -192,24 +200,47 @@ void IceSession::probeRemoteCandidates(const IceRole role, uint64_t timestamp)
     processTimeout(timestamp);
 }
 
-void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate)
+IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint,
+    const IceCandidate& remoteCandidate)
 {
     const auto endpointAddress = endpoint.endpoint->getLocalPort();
-    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily())
+    if (endpointAddress.getFamily() != remoteCandidate.address.getFamily() ||
+        endpoint.endpoint->getTransportType() != remoteCandidate.transportType)
     {
-        return;
+        return nullptr;
+    }
+
+    for (auto& probe : _candidatePairs)
+    {
+        if (&endpoint.endpoint == &probe->localEndpoint.endpoint &&
+            probe->remoteCandidate.address == remoteCandidate.address)
+        {
+            logger::debug("probe already created %s %s",
+                _logId.c_str(),
+                remoteCandidate.address.toString().c_str(),
+                ice::toString(remoteCandidate.transportType).c_str());
+            return nullptr; // there is already a probe
+        }
     }
 
     if (remoteCandidate.transportType == TransportType::UDP)
     {
-        IceCandidate& localCandidate =
-            *std::find_if(_localCandidates.begin(), _localCandidates.end(), [endpointAddress](const IceCandidate& c) {
+        auto localCandidateIt =
+            std::find_if(_localCandidates.begin(), _localCandidates.end(), [endpointAddress](const IceCandidate& c) {
                 return endpointAddress == c.baseAddress && c.type == IceCandidate::Type::HOST;
             });
 
+        if (localCandidateIt == _localCandidates.end())
+        {
+            logger::error("Failed to add probe. Endpoint address %s is not in local candidates list",
+                _logId.c_str(),
+                endpointAddress.toString().c_str());
+            return nullptr;
+        }
+
         _candidatePairs.emplace_back(std::make_unique<CandidatePair>(_config,
             endpoint,
-            localCandidate,
+            *localCandidateIt,
             remoteCandidate,
             _idGenerator,
             _credentials,
@@ -249,11 +280,14 @@ void IceSession::addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCan
             _component,
             remoteCandidate.transportType))));
 
-    logger::debug("added candidate pair %s-%s HOST-%s",
+    logger::info("added candidate pair %s-%s HOST-%s %s",
         _logId.c_str(),
         endpointAddress.toString().c_str(),
         remoteCandidate.address.toString().c_str(),
-        ice::toString(remoteCandidate.type).c_str());
+        ice::toString(remoteCandidate.type).c_str(),
+        ice::toString(remoteCandidate.transportType).c_str());
+
+    return candidatePair.get();
 }
 
 void IceSession::addLocalCandidate(const IceCandidate& candidate)
@@ -325,10 +359,11 @@ const IceCandidate& IceSession::addRemoteCandidate(const IceCandidate& candidate
     }
 
     _remoteCandidates.push_back(candidate);
-    logger::debug("added remote candidate %s %s",
+    logger::debug("added remote candidate %s %s %s",
         _logId.c_str(),
         candidate.address.toString().c_str(),
-        ice::toString(candidate.type).c_str());
+        ice::toString(candidate.type).c_str(),
+        ice::toString(candidate.transportType).c_str());
     return _remoteCandidates.back();
 }
 
@@ -341,6 +376,11 @@ void IceSession::addRemoteCandidate(const IceCandidate& candidate, IceEndpoint* 
     }
 
     _remoteCandidates.push_back(candidate);
+    logger::debug("added remote TCP candidate %s %s %s",
+        _logId.c_str(),
+        candidate.address.toString().c_str(),
+        ice::toString(candidate.type).c_str(),
+        ice::toString(candidate.transportType).c_str());
 
     EndpointInfo endpointInfo(tcpEndpoint, 128 - _tcpProbeCount++);
     _endpoints.push_back(endpointInfo);
@@ -455,12 +495,13 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         }
     }
 
-    logger::debug("probe from %s", _logId.c_str(), sender.toString().c_str());
+    logger::debug("%s probe from %s -> %s",
+        _logId.c_str(),
+        ice::toString(endpoint->getTransportType()).c_str(),
+        sender.toString().c_str(),
+        endpoint->getLocalPort().toString().c_str());
+
     sendResponse(endpoint, sender, 0, msg, now);
-    if (_eventSink)
-    {
-        _eventSink->onIcePreliminary(this, endpoint, sender);
-    }
 
     int remoteCandidatePriority = 0;
     const auto prioAttribute = msg.getAttribute<StunPriority>(StunAttribute::PRIORITY);
@@ -510,8 +551,11 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         {
             for (auto& localEndpoint : _endpoints)
             {
-                addProbeForRemoteCandidate(localEndpoint, remoteCandidate);
-                _candidatePairs.back()->nextTransmission = now;
+                auto* candidatePair = addProbeForRemoteCandidate(localEndpoint, remoteCandidate);
+                if (candidatePair)
+                {
+                    candidatePair->nextTransmission = now;
+                }
             }
             sortCheckList();
             processTimeout(now);
@@ -693,6 +737,26 @@ void IceSession::onTcpDisconnect(IceEndpoint* endpoint)
     if (candidatePairIt != _candidatePairs.end())
     {
         candidatePairIt->get()->onDisconnect();
+    }
+}
+
+void IceSession::onTcpRemoved(const IceEndpoint* endpoint)
+{
+    DBGCHECK_SINGLETHREADED(_mutexGuard);
+    auto candidatePairIt = std::find_if(_candidatePairs.begin(),
+        _candidatePairs.end(),
+        [endpoint](const std::unique_ptr<CandidatePair>& probe) { return probe->localEndpoint.endpoint == endpoint; });
+    if (candidatePairIt != _candidatePairs.end())
+    {
+        _candidatePairs.erase(candidatePairIt);
+    }
+
+    auto endpointIt = std::find_if(_endpoints.begin(), _endpoints.end(), [endpoint](const EndpointInfo& iceEndpoint) {
+        return iceEndpoint.endpoint == endpoint;
+    });
+    if (endpointIt != _endpoints.end())
+    {
+        _endpoints.erase(endpointIt);
     }
 }
 
@@ -1229,8 +1293,9 @@ void IceSession::CandidatePair::send(const uint64_t now)
 
     for (uint32_t i = 0; i < (state != Succeeded ? _config.probeReplicates : 1); ++i)
     {
-        logger::debug("%s probing %s",
+        logger::debug("%s probing %s -> %s",
             _name.c_str(),
+            toString(localEndpoint.endpoint->getTransportType()).c_str(),
             localEndpoint.endpoint->getLocalPort().toString().c_str(),
             remoteCandidate.address.toString().c_str());
 

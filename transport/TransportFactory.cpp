@@ -111,8 +111,13 @@ public:
             for (SocketAddress portAddress : interfaces)
             {
                 portAddress.setPort(config.ice.tcp.port);
-                auto endPoint = std::shared_ptr<TcpServerEndpoint>(
-                    new TcpServerEndpoint(_jobManager, _mainAllocator, _rtcePoll, 1024, *this, portAddress, config),
+                auto endPoint = std::shared_ptr<ServerEndpoint>(_endpointFactory->createTcpServerEndpoint(_jobManager,
+                                                                    _mainAllocator,
+                                                                    _rtcePoll,
+                                                                    1024,
+                                                                    this,
+                                                                    portAddress,
+                                                                    config),
                     getDeleter());
 
                 if (endPoint->isGood())
@@ -138,8 +143,16 @@ public:
                 {
                     portAddress.setPort(config.recording.singlePort + portOffset);
                     auto endPoint = std::shared_ptr<RecordingEndpoint>(
-                        new RecordingEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
+                        _endpointFactory
+                            ->createRecordingEndpoint(jobManager, 1024, _mainAllocator, portAddress, _rtcePoll, true),
                         getDeleter());
+                    if (!endPoint)
+                    {
+                        logger::warn("failed to create recording endpoint for interface %s",
+                            _name,
+                            portAddress.toString().c_str());
+                        continue;
+                    }
 
                     if (endPoint->isGood())
                     {
@@ -292,7 +305,8 @@ public:
 
     std::shared_ptr<Endpoint> createTcpEndpoint(const transport::SocketAddress& baseAddress) override
     {
-        return std::shared_ptr<TcpEndpoint>(new TcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll),
+        return std::shared_ptr<TcpEndpoint>(
+            _endpointFactory->createTcpEndpoint(_jobManager, _mainAllocator, baseAddress, _rtcePoll),
             getDeleter());
     }
 
@@ -301,12 +315,9 @@ public:
         const transport::SocketAddress& peerPort) override
     {
         auto endpoint = std::shared_ptr<TcpEndpoint>(
-            new TcpEndpoint(_jobManager, _mainAllocator, _rtcePoll, fd, localPort, peerPort),
+            _endpointFactory->createTcpEndpoint(_jobManager, _mainAllocator, _rtcePoll, fd, localPort, peerPort),
             getDeleter());
 
-        // if read event is fired now we may miss it and it is edge triggered.
-        // everything relies on that the ice session will want to respond to the request
-        _rtcePoll.add(fd, endpoint.get());
         return endpoint;
     }
 
@@ -340,7 +351,12 @@ public:
         const size_t endpointId) override
     {
         Endpoints rtpPorts;
-        if (openPorts(_interfaces.front(), rtpPorts, 8))
+        for (auto& interface : _interfaces)
+        {
+            openPorts(interface, rtpPorts, 8);
+        }
+
+        if (!rtpPorts.empty())
         {
             return transport::createTransport(_jobManager,
                 _srtpClientFactory,
@@ -360,7 +376,6 @@ public:
                 false,
                 false);
         }
-
         return nullptr;
     }
 
@@ -504,6 +519,11 @@ public:
 
     void shutdownEndpoint(Endpoint* endpoint)
     {
+        if (!endpoint)
+        {
+            return;
+        }
+
         logger::debug("closing %s", _name, endpoint->getName());
         ++_pendingTasks;
         endpoint->stop(this);
@@ -511,6 +531,11 @@ public:
 
     void shutdownEndpoint(ServerEndpoint* endpoint)
     {
+        if (!endpoint)
+        {
+            return;
+        }
+
         logger::debug("closing %s", _name, endpoint->getName());
         ++_pendingTasks;
         endpoint->stop(this);
@@ -578,7 +603,7 @@ private:
 
     void onEndpointStopped(Endpoint* endpoint) override
     {
-        logger::info("%s stopped.", _name, endpoint->getName());
+        logger::info("%s stopped. %u", _name, endpoint->getName(), _pendingTasks.load());
         _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }

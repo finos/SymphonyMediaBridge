@@ -872,6 +872,11 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     }
     else
     {
+        if (!_selectedRtp)
+        {
+            onIcePreliminary(_rtpIceSession.get(), &endpoint, source);
+        }
+
         logger::debug("received DTLS protocol message from %s, %zu",
             _loggableId.c_str(),
             source.toString().c_str(),
@@ -1833,6 +1838,21 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
     }
 }
 
+void TransportImpl::addRemoteIceCandidate(const ice::IceCandidate& candidate)
+{
+    if (_rtpIceSession)
+    {
+        auto* iceSession = _rtpIceSession.get();
+        _jobQueue.post(_jobCounter, [iceSession, candidate]() {
+            iceSession->addRemoteCandidate(candidate);
+            if (iceSession->getState() >= ice::IceSession::State::CONNECTING)
+            {
+                iceSession->probeRemoteCandidates(iceSession->getRole(), utils::Time::getAbsoluteTime());
+            }
+        });
+    }
+}
+
 void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
     const memory::AudioPacket& candidatesPacket)
 {
@@ -1942,8 +1962,7 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = (!_rtpIceSession || _iceState == ice::IceSession::State::CONNECTED) &&
-        (_dtlsState == SrtpClient::State::CONNECTED);
+    _isConnected = (_iceState == ice::IceSession::State::CONNECTED) && (_dtlsState == SrtpClient::State::CONNECTED);
 
     switch (state)
     {
@@ -1978,20 +1997,36 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
                     _peerRtpPort.getFamilyString().c_str(),
                     ice::toString(endpoint->getTransportType()).c_str(),
                     ice::toString(candidatePair.second.type).c_str());
+
+                if (_srtpClient->getState() == SrtpClient::State::READY)
+                {
+                    DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
+                }
             }
         }
 
-        while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
-            _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+        if (_rtpIceSession->getRole() == ice::IceRole::CONTROLLING)
         {
-            _rtpEndpoints.back()->unregisterListener(this);
-            _rtpEndpoints.pop_back();
-        }
-        while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
-            _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
-        {
-            _rtpEndpoints.front()->unregisterListener(this);
-            _rtpEndpoints.erase(_rtpEndpoints.begin());
+            while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
+                _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+            {
+                logger::info("discarding %s, ref %ld",
+                    _loggableId.c_str(),
+                    _rtpEndpoints.back()->getName(),
+                    _rtpEndpoints.back().use_count());
+                _rtpIceSession->onTcpRemoved(_rtpEndpoints.back().get());
+                _rtpEndpoints.back()->unregisterListener(this);
+
+                _rtpEndpoints.pop_back();
+            }
+            while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
+                _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
+            {
+                logger::info("discarding %s", _loggableId.c_str(), _rtpEndpoints.front()->getName());
+                _rtpIceSession->onTcpRemoved(_rtpEndpoints.front().get());
+                _rtpEndpoints.front()->unregisterListener(this);
+                _rtpEndpoints.erase(_rtpEndpoints.begin());
+            }
         }
 
         if (isConnected())

@@ -86,6 +86,10 @@ public:
     virtual utils::Optional<uint32_t> getOfferedScreensharingSsrc() const = 0;
     virtual utils::Optional<uint32_t> getOfferedLocalSsrc() const = 0;
 
+    bool skipIpv6 = false;
+
+    void addIpv6RemoteCandidates(transport::RtcTransport& transport);
+
 public:
     bool isSuccess() const { return !_offer.empty(); }
     bool isVideoEnabled() const { return _videoEnabled; }
@@ -120,6 +124,7 @@ protected:
     bool _videoEnabled;
 
     AnswerOptions _answerOptions;
+    ice::IceCandidates _ipv6RemoteCandidates;
 };
 
 class Channel : public BaseChannel

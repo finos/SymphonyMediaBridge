@@ -60,8 +60,12 @@ void analyzeRecording(const std::vector<int16_t>& recording,
     }
 
     auto start = std::chrono::high_resolution_clock::now();
-
+#ifdef LCHECK_BUILD
+    size_t const numThreads = 2;
+#else
     auto const numThreads = std::max(std::thread::hardware_concurrency(), 4U);
+#endif
+
     std::vector<std::thread> workers;
     std::vector<std::vector<double>> frequencies;
     frequencies.reserve(numThreads);

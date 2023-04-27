@@ -5,7 +5,7 @@
 
 namespace transport
 {
-class UdpEndpoint : public Endpoint, public RtcePoll::IEventListener
+class UdpEndpoint : public Endpoint
 {
 public:
     virtual ~UdpEndpoint() {}

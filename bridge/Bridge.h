@@ -53,7 +53,8 @@ public:
 
     void initialize();
     void initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory,
-        httpd::HttpDaemonFactory& httpdFactory);
+        httpd::HttpDaemonFactory& httpdFactory,
+        const std::vector<transport::SocketAddress>& interfaces = std::vector<transport::SocketAddress>());
     bool isInitialized() const { return _initialized; }
 
     transport::SslDtls& getSslDtls() { return *_sslDtls; }

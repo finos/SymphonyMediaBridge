@@ -31,6 +31,8 @@ public:
         memory::AudioPacketPoolAllocator&) override
     {
     }
+    void addRemoteIceCandidate(const ice::IceCandidate& candidate) override {}
+
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) override

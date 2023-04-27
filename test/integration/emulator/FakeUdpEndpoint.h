@@ -1,13 +1,13 @@
 #pragma once
 #include "concurrency/MpmcHashmap.h"
-#include "test/transport/FakeNetwork.h"
+#include "test/integration/emulator/FakeEndpointImpl.h"
 #include "test/transport/NetworkLink.h"
 #include "transport/BaseUdpEndpoint.h"
 #include "utils/SocketAddress.h"
 
 namespace emulator
 {
-class FakeUdpEndpoint : public transport::UdpEndpoint, public fakenet::NetworkNode
+class FakeUdpEndpoint : public transport::UdpEndpoint, public FakeEndpointImpl
 {
 public:
     FakeUdpEndpoint(jobmanager::JobManager& jobManager,
@@ -41,24 +41,17 @@ public:
     void start() override;
     void stop(IStopEvents* listener) override;
     bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
-    bool isShared() const override;
+
     const char* getName() const override;
     State getState() const override;
-
-    // transport::RtcePoll::IEventListener
-    void onSocketPollStarted(int fd) override;
-    void onSocketPollStopped(int fd) override;
-    void onSocketReadable(int fd) override;
-    void onSocketWriteable(int fd) override;
-    void onSocketShutdown(int fd) override;
 
     // UdpEndpoint
     bool openPort(uint16_t port) override;
     bool isGood() const override;
-    EndpointMetrics getMetrics(uint64_t timestamp) const override final;
 
     // NetworkNode
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -77,29 +70,17 @@ public:
         memory::UniquePacket packet,
         uint64_t timestamp);
 
+    EndpointMetrics getMetrics(uint64_t timestamp) const override
+    {
+        return _rateMetrics.toEndpointMetrics(_sendQueue.size());
+    }
+
 private:
     void internalUnregisterSourceListener(const transport::SocketAddress& remotePort, IEvents* listener);
 
-    struct InboundPacket
-    {
-        transport::SocketAddress address;
-        memory::UniquePacket packet;
-    };
-
-    struct OutboundPacket
-    {
-        transport::SocketAddress address;
-        memory::UniquePacket packet;
-    };
-
 private:
-    memory::UniquePacket serializeInbound(const transport::SocketAddress& source, const void* data, size_t length);
-    InboundPacket deserializeInbound(memory::UniquePacket packet);
-
-private:
-    std::atomic<Endpoint::State> _state;
     logger::LoggableId _name;
-    const bool _isShared;
+    std::atomic<Endpoint::State> _state;
     transport::SocketAddress _localPort;
     concurrency::MpmcHashmap32<std::string, IEvents*> _iceListeners;
     concurrency::MpmcHashmap32<transport::SocketAddress, IEvents*> _dtlsListeners;
@@ -115,19 +96,6 @@ private:
     std::atomic<IEvents*> _defaultListener;
     std::shared_ptr<fakenet::Gateway> _network;
     std::shared_ptr<fakenet::NetworkLink> _networkLink;
-
-    struct RateMetrics
-    {
-        utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> receiveTracker;
-        utils::TrackerWithSnapshot<10, utils::Time::ms * 100, utils::Time::sec> sendTracker;
-        EndpointMetrics toEndpointMetrics(size_t queueSize) const
-        {
-            return EndpointMetrics(queueSize,
-                receiveTracker.snapshot.load() * 8 * utils::Time::ms,
-                sendTracker.snapshot.load() * 8 * utils::Time::ms,
-                0);
-        }
-    } _rateMetrics;
 
     std::atomic_flag _pendingRead = ATOMIC_FLAG_INIT;
 };

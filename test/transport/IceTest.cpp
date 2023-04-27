@@ -465,7 +465,11 @@ public:
                 transport::RawSockAddress remoteAddress;
 
                 auto count = recvfrom(s->_socket.fd(), data, 1600, MSG_DONTWAIT, &remoteAddress.gen, &addressSize);
-                fakenet::Packet packet(data, count, transport::SocketAddress(&remoteAddress.gen), s->_ip);
+                fakenet::Packet packet(fakenet::Protocol::UDP,
+                    data,
+                    count,
+                    transport::SocketAddress(&remoteAddress.gen),
+                    s->_ip);
                 _inboundPackets.push(packet);
                 //
                 return;
@@ -559,7 +563,8 @@ public:
         fakenet::Gateway& gateway,
         ice::TransportType transporType = ice::TransportType::UDP);
 
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& sender,
         const void* data,
         size_t length,
@@ -615,7 +620,8 @@ FakeEndpoint::FakeEndpoint(const transport::SocketAddress& port,
     gateway.addLocal(this);
 }
 
-void FakeEndpoint::sendTo(const transport::SocketAddress& source,
+void FakeEndpoint::onReceive(fakenet::Protocol protocol,
+    const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t length,
@@ -639,17 +645,25 @@ void FakeEndpoint::sendTo(const transport::SocketAddress& source,
             source.toString().c_str(),
             target.toString().c_str(),
             _transportType == ice::TransportType::UDP ? "udp" : "tcp");
-        _gateway->sendTo(source, target, data, length, timestamp);
+        _gateway->onReceive(protocol, source, target, data, length, timestamp);
     }
 }
 
 void FakeEndpoint::sendStunTo(const transport::SocketAddress& target,
     __uint128_t transactionId,
     const void* data,
-    size_t len,
+    size_t length,
     const uint64_t timestamp)
 {
-    sendTo(_address, target, data, len, timestamp);
+    if (_gateway)
+    {
+        logger::debug("sent %s -> %s, %s",
+            "FakeEndpoint",
+            _address.toString().c_str(),
+            target.toString().c_str(),
+            _transportType == ice::TransportType::UDP ? "udp" : "tcp");
+        _gateway->onReceive(fakenet::Protocol::UDP, _address, target, data, length, timestamp);
+    }
 };
 
 class FakeStunServer : public fakenet::NetworkNode
@@ -662,7 +676,8 @@ public:
         assert(!port.empty());
         internet.addPublic(this);
     }
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(fakenet::Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -680,7 +695,7 @@ public:
                 response.add(ice::StunXorMappedAddress(source, response.header));
                 response.add(ice::StunGenericAttribute(ice::StunAttribute::SOFTWARE, "stunny.org"));
 
-                _internet.sendTo(_address, source, &response, response.size(), timestamp);
+                _internet.onReceive(protocol, _address, source, &response, response.size(), timestamp);
             }
         }
     }
@@ -1091,7 +1106,7 @@ TEST_F(IceTest, fixedportmap)
     FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.2.20", 3000), firewall2);
 
     // static port map to firewall public interface
-    firewall2.addPortMapping(endpoint2._address, endpoint2._address.getPort());
+    firewall2.addPortMapping(fakenet::Protocol::UDP, endpoint2._address, endpoint2._address.getPort());
 
     ice::IceConfig config;
     IceSessions sessions;
@@ -1141,7 +1156,7 @@ TEST_F(IceTest, noroute)
     FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.2.20", 3000), firewall2);
 
     // static port map to firewall public interface
-    firewall2.addPortMapping(endpoint2._address, endpoint2._address.getPort());
+    firewall2.addPortMapping(fakenet::Protocol::UDP, endpoint2._address, endpoint2._address.getPort());
 
     ice::IceConfig config;
     IceSessions sessions;
@@ -1174,7 +1189,7 @@ TEST_F(IceTest, fixedportmapNogathering)
     FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.2.20", 3000), firewall2);
 
     // static port map to firewall public interface
-    firewall2.addPortMapping(endpoint2._address, endpoint2._address.getPort());
+    firewall2.addPortMapping(fakenet::Protocol::UDP, endpoint2._address, endpoint2._address.getPort());
 
     ice::IceConfig config;
     IceSessions sessions;

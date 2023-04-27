@@ -162,7 +162,7 @@ TEST_F(RecordingTransportTest, protectAndSend)
     udpEndpoint->start();
 
     auto recordingEndpoint =
-        std::make_shared<RecordingEndpoint>(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
+        std::make_shared<RecordingEndpointImpl>(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
     recordingEndpoint->start();
 
     auto transport = make_unique<RecordingTransport>(*_jobManager,
@@ -263,7 +263,7 @@ TEST_F(RecordingTransportTest, protectAndSendTriggerRtcpSending)
     udpEndpoint->start();
 
     auto recordingEndpoint =
-        std::make_shared<RecordingEndpoint>(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
+        std::make_shared<RecordingEndpointImpl>(*_jobManager, 64, *_mainPoolAllocator, sourceAddress, *_rtcePoll, true);
     recordingEndpoint->start();
 
     auto transport = make_unique<RecordingTransport>(*_jobManager,

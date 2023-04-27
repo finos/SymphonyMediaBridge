@@ -4,14 +4,16 @@
 namespace transport
 {
 
-BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
+BaseUdpEndpoint::BaseUdpEndpoint(logger::LoggableId& name,
     jobmanager::JobManager& jobManager,
     size_t maxSessionCount,
     memory::PacketPoolAllocator& allocator,
     const SocketAddress& localPort,
     RtcePoll& epoll,
-    bool isShared)
-    : _state(Endpoint::CLOSED),
+    DispatchMethod dispatchMethod,
+    Endpoint* endpoint)
+    : _dispatchMethod(dispatchMethod),
+      _state(Endpoint::CLOSED),
       _name(name),
       _localPort(localPort),
       _receiveJobs(jobManager, maxSessionCount),
@@ -21,12 +23,10 @@ BaseUdpEndpoint::BaseUdpEndpoint(const char* name,
       _epoll(epoll),
       _epollCountdown(2),
       _stopListener(nullptr),
-      _isShared(isShared),
-      _defaultListener(nullptr)
+      _parentEndpoint(endpoint)
 {
     _pendingRead.clear();
     _pendingSend.clear();
-    _isFull.clear();
     auto result = _socket.open(localPort, localPort.getPort());
     if (result == 0)
     {
@@ -42,11 +42,11 @@ void BaseUdpEndpoint::internalStopped()
     auto value = --_epollCountdown;
     if (value == 0)
     {
-        _state = State::CREATED;
+        _state = Endpoint::State::CREATED;
 
         if (_stopListener)
         {
-            _stopListener->onEndpointStopped(this);
+            _stopListener->onEndpointStopped(_parentEndpoint);
         }
     }
 }
@@ -101,7 +101,6 @@ void BaseUdpEndpoint::internalSend()
         packetCounter += count;
         if (count == 0)
         {
-            _isFull.clear();
             break;
         }
 
@@ -303,7 +302,7 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
             }
 
             receiveMessage[0].packet->setLength(byteCount);
-            dispatchReceivedPacket(SocketAddress(&receiveMessage[0].src_addr.gen, nullptr),
+            _dispatchMethod(SocketAddress(&receiveMessage[0].src_addr.gen, nullptr),
                 std::move(receiveMessage[0].packet),
                 receiveTime);
             packetCount = 0;
@@ -334,7 +333,7 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
                 {
                     receiveMessage[i].packet->setLength(0); // Attack with Jumbo frame. Discard.
                 }
-                dispatchReceivedPacket(SocketAddress(&receiveMessage[i].src_addr.gen, nullptr),
+                _dispatchMethod(SocketAddress(&receiveMessage[i].src_addr.gen, nullptr),
                     std::move(receiveMessage[i].packet),
                     receiveTime);
             }
@@ -354,12 +353,6 @@ void BaseUdpEndpoint::internalReceive(const int fd, const uint32_t batchSize)
             packetCount -= count;
         }
     }
-}
-
-// used when routing is not possible and there is a single owner of the endpoint
-void BaseUdpEndpoint::registerDefaultListener(IEvents* defaultListener)
-{
-    _defaultListener = defaultListener;
 }
 
 // enables packet reception

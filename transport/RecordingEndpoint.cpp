@@ -1,5 +1,6 @@
 #include "transport/RecordingEndpoint.h"
 #include "transport/recp/RecControlHeader.h"
+#include <functional>
 
 namespace transport
 {
@@ -9,7 +10,7 @@ using namespace transport;
 class UnRegisterRecordingListenerJob : public jobmanager::Job
 {
 public:
-    UnRegisterRecordingListenerJob(RecordingEndpoint& endpoint, RecordingEndpoint::IRecordingEvents* listener)
+    UnRegisterRecordingListenerJob(RecordingEndpointImpl& endpoint, RecordingEndpointImpl::IRecordingEvents* listener)
         : _endpoint(endpoint),
           _listener(listener)
     {
@@ -18,28 +19,40 @@ public:
     void run() override { _endpoint.internalUnregisterListener(_listener); }
 
 private:
-    RecordingEndpoint& _endpoint;
-    RecordingEndpoint::IRecordingEvents* _listener;
+    RecordingEndpointImpl& _endpoint;
+    RecordingEndpointImpl::IRecordingEvents* _listener;
 };
 } // namespace
 
-RecordingEndpoint::RecordingEndpoint(jobmanager::JobManager& jobManager,
+RecordingEndpointImpl::RecordingEndpointImpl(jobmanager::JobManager& jobManager,
     size_t maxSessionCount,
     memory::PacketPoolAllocator& allocator,
     const SocketAddress& localPort,
     RtcePoll& epoll,
     bool isShared)
-    : BaseUdpEndpoint("RecordingEndpoint", jobManager, maxSessionCount, allocator, localPort, epoll, isShared),
+    : _name("RecordingEndpointImpl"),
+      _udpEndpoint(_name,
+          jobManager,
+          maxSessionCount,
+          allocator,
+          localPort,
+          epoll,
+          std::bind(&RecordingEndpointImpl::dispatchReceivedPacket,
+              this,
+              std::placeholders::_1,
+              std::placeholders::_2,
+              std::placeholders::_3),
+          this),
       _listeners(maxSessionCount)
 {
 }
 
-RecordingEndpoint::~RecordingEndpoint()
+RecordingEndpointImpl::~RecordingEndpointImpl()
 {
     logger::debug("removed", _name.c_str());
 }
 
-void RecordingEndpoint::internalUnregisterListener(IRecordingEvents* listener)
+void RecordingEndpointImpl::internalUnregisterListener(IRecordingEvents* listener)
 {
     // Hashmap allows erasing elements while iterating.
     logger::debug("unregister %p", _name.c_str(), listener);
@@ -57,8 +70,8 @@ void RecordingEndpoint::internalUnregisterListener(IRecordingEvents* listener)
 namespace
 {
 template <typename KeyType>
-RecordingEndpoint::IRecordingEvents* findListener(
-    concurrency::MpmcHashmap32<KeyType, RecordingEndpoint::IRecordingEvents*>& map,
+RecordingEndpointImpl::IRecordingEvents* findListener(
+    concurrency::MpmcHashmap32<KeyType, RecordingEndpointImpl::IRecordingEvents*>& map,
     const KeyType& key)
 {
     auto it = map.find(key);
@@ -70,7 +83,7 @@ RecordingEndpoint::IRecordingEvents* findListener(
 }
 } // namespace
 
-void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress,
+void RecordingEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
     memory::UniquePacket packet,
     const uint64_t timestamp)
 {
@@ -82,7 +95,10 @@ void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress,
             auto listener = findListener(_listeners, srcAddress);
             if (listener)
             {
-                listener->onRecControlReceived(*this, srcAddress, _socket.getBoundPort(), std::move(packet));
+                listener->onRecControlReceived(*this,
+                    srcAddress,
+                    _udpEndpoint._socket.getBoundPort(),
+                    std::move(packet));
                 return;
             }
         }
@@ -92,7 +108,7 @@ void RecordingEndpoint::dispatchReceivedPacket(const SocketAddress& srcAddress,
     // unexpected packet that can come from anywhere. We do not log as it facilitates DoS
 }
 
-void RecordingEndpoint::registerRecordingListener(const SocketAddress& srcAddress, IRecordingEvents* listener)
+void RecordingEndpointImpl::registerRecordingListener(const SocketAddress& srcAddress, IRecordingEvents* listener)
 {
     auto listenerIt = _listeners.find(srcAddress);
     if (listenerIt != _listeners.end())
@@ -106,9 +122,9 @@ void RecordingEndpoint::registerRecordingListener(const SocketAddress& srcAddres
     }
 }
 
-void RecordingEndpoint::unregisterRecordingListener(IRecordingEvents* listener)
+void RecordingEndpointImpl::unregisterRecordingListener(IRecordingEvents* listener)
 {
-    if (!_receiveJobs.addJob<UnRegisterRecordingListenerJob>(*this, listener))
+    if (!_udpEndpoint._receiveJobs.addJob<UnRegisterRecordingListenerJob>(*this, listener))
     {
         logger::error("failed to post unregister job", _name.c_str());
     }

@@ -45,10 +45,10 @@ private:
     static uint32_t _instanceCounter;
 };
 
-inline bool isDtlsPacket(const void* data)
+inline bool isDtlsPacket(const void* data, size_t length)
 {
     auto msg = reinterpret_cast<const uint8_t*>(data);
-    return msg[0] >= 20 && msg[0] < 63;
+    return length >= 13 && msg[0] >= 20 && msg[0] < 63;
 }
 
 inline std::string makeFingerprintString(const unsigned char* fingerprint, const uint32_t size)

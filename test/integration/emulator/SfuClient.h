@@ -3,21 +3,27 @@
 #include "AudioSource.h"
 #include "FakeVideoDecoder.h"
 #include "api/SimulcastGroup.h"
+#include "bridge/RtpMap.h"
 #include "bridge/engine/PacketCache.h"
+#include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
+#include "codec/Opus.h"
 #include "codec/Vp8Header.h"
 #include "legacyapi/DataChannelMessage.h"
+#include "logger/PruneSpam.h"
 #include "memory/Array.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtcpHeader.h"
+#include "test/integration/emulator/ApiChannel.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
 #include "transport/TransportFactory.h"
 #include "transport/dtls/SslDtls.h"
 #include "utils/IdGenerator.h"
+#include "utils/Pacer.h"
 #include "utils/Span.h"
 #include "utils/StringBuilder.h"
 #include "webrtc/WebRtcDataStream.h"
@@ -117,7 +123,9 @@ public:
           _recordingActive(true),
           _ptime(ptime),
           _sendAudioType(Audio::None),
-          _expectedReceiveAudioType(Audio::None)
+          _expectedReceiveAudioType(Audio::None),
+          _ipv6CandidateDelay(0),
+          _startTime(0)
     {
     }
 
@@ -187,6 +195,31 @@ public:
             forwardMedia,
             idleTimeout,
             neighbours);
+        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+    }
+
+    void initiateCall3(const std::string& baseUrl,
+        std::string conferenceId,
+        bool initiator,
+        Audio audio,
+        bool video,
+        bool forwardMedia,
+        uint64_t ipv6CandidateDelay,
+        uint32_t idleTimeout = 0)
+    {
+        _startTime = utils::Time::getAbsoluteTime();
+        utils::Span<std::string> noNeighbours;
+        _sendAudioType = audio;
+        _channel.skipIpv6 = true;
+        _channel.create(baseUrl,
+            conferenceId,
+            initiator,
+            audio != Audio::None,
+            video,
+            forwardMedia,
+            idleTimeout,
+            noNeighbours);
+        _ipv6CandidateDelay = ipv6CandidateDelay;
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
@@ -340,6 +373,13 @@ public:
 
     void process(uint64_t timestamp, bool sendVideo)
     {
+        if (_ipv6CandidateDelay != 0 &&
+            utils::Time::diffGE(_startTime, utils::Time::getAbsoluteTime(), _ipv6CandidateDelay))
+        {
+            _ipv6CandidateDelay = 0;
+            _channel.addIpv6RemoteCandidates(*_transport);
+        }
+
         auto packet = _audioSource->getPacket(timestamp);
         if (packet)
         {
@@ -1005,6 +1045,8 @@ private:
     RtxStats _rtxStats;
     Audio _sendAudioType;
     Audio _expectedReceiveAudioType;
+    uint64_t _ipv6CandidateDelay;
+    uint64_t _startTime;
 };
 
 template <typename TClient>
@@ -1065,6 +1107,7 @@ public:
             client->connect();
         }
 
+        logger::PruneSpam logPrune(1, 10);
         auto currTime = utils::Time::getAbsoluteTime();
         while (currTime - start < timeout)
         {
@@ -1078,7 +1121,10 @@ public:
             }
 
             utils::Time::nanoSleep(10 * utils::Time::ms);
-            logger::debug("waiting for connect...", "test");
+            if (logPrune.canLog())
+            {
+                logger::debug("waiting for connect...", "test");
+            }
             currTime = utils::Time::getAbsoluteTime();
         }
 
@@ -1175,6 +1221,7 @@ public:
                 return true;
             }
         }
+        logger::warn("pending jobs not completed", "GroupCall");
         return false;
     }
 

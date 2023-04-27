@@ -25,6 +25,8 @@ class RtcTransportMock : public TransportMock<transport::RtcTransport>
             memory::AudioPacketPoolAllocator& allocator),
         (override));
 
+    MOCK_METHOD(void, addRemoteIceCandidate, (const ice::IceCandidate& candidate), (override));
+
     MOCK_METHOD(void,
         setRemoteDtlsFingerprint,
         (const std::string& fingerprintType, const std::string& fingerprintHash, const bool dtlsClientSide),

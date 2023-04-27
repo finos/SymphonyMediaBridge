@@ -119,14 +119,25 @@ Bridge::~Bridge()
 void Bridge::initialize()
 {
     httpd::HttpdFactory httpdFactory;
-    initialize(std::make_shared<transport::EndpointFactoryImpl>(), httpdFactory);
+    initialize(std::make_shared<transport::EndpointFactoryImpl>(),
+        httpdFactory,
+        std::vector<transport::SocketAddress>());
 }
 
 void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFactory,
-    httpd::HttpDaemonFactory& httpdFactory)
+    httpd::HttpDaemonFactory& httpdFactory,
+    const std::vector<transport::SocketAddress>& interfaces)
 {
-    _localInterfaces = gatherInterfaces(_config);
-    if (_localInterfaces.size() == 0)
+    if (interfaces.empty())
+    {
+        _localInterfaces = gatherInterfaces(_config);
+    }
+    else
+    {
+        _localInterfaces = interfaces;
+    }
+
+    if (_localInterfaces.empty())
     {
         return;
     }

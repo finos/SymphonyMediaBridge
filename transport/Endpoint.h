@@ -77,8 +77,6 @@ public:
 
     virtual bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) = 0;
 
-    virtual bool isShared() const = 0;
-
     virtual const char* getName() const = 0;
     virtual State getState() const = 0;
 
@@ -111,6 +109,8 @@ public:
     virtual const SocketAddress getLocalPort() const = 0;
     virtual void registerListener(const std::string& stunUserName, IEvents* listener) = 0;
     virtual void unregisterListener(const std::string& stunUserName, IEvents* listener) = 0;
+    virtual bool isGood() const = 0;
+    virtual void start() = 0;
     virtual void stop(IStopEvents* event) = 0;
     virtual const char* getName() const = 0;
     virtual Endpoint::State getState() const = 0;

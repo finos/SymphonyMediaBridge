@@ -3,16 +3,24 @@
 #include "memory/Packet.h"
 #include "utils/Time.h"
 
+#define TRACE_FAKENETWORK 1
+
+#if TRACE_FAKENETWORK
+#define NETWORK_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define NETWORK_LOG(fmt, ...)
+#endif
+
 namespace fakenet
 {
 
-bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp)
+bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp, bool tcpData)
 {
     const std::lock_guard<std::mutex> lock(_pushMutex);
 
-    if (_lossRate > 0 && rand() % 1000 < _lossRate * 1000)
+    if (!tcpData && _lossRate > 0 && rand() % 1000 < _lossRate * 1000)
     {
-        logger::debug("dropping packet", "");
+        logger::debug("emulated loss of packet", _name.c_str());
         return false;
     }
 
@@ -35,6 +43,7 @@ bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp)
 
     if (packet->getLength() > _mtu || packet->getLength() + _queuedBytes > _bufferCapacity)
     {
+        logger::warn("network link full", _name.c_str());
         return false;
     }
     _queuedBytes += packet->getLength();
@@ -44,6 +53,7 @@ bool NetworkLink::push(memory::UniquePacket packet, uint64_t timestamp)
 
 memory::UniquePacket NetworkLink::pop()
 {
+    const std::lock_guard<std::mutex> lock(_pushMutex);
     if (!_delayQueue.empty())
     {
         memory::UniquePacket packet(std::move(_delayQueue.front().packet));
@@ -63,6 +73,7 @@ memory::UniquePacket NetworkLink::pop()
 
 memory::UniquePacket NetworkLink::pop(uint64_t timestamp)
 {
+    const std::lock_guard<std::mutex> lock(_pushMutex);
     if (!_queue.empty() && static_cast<int64_t>(timestamp - _releaseTime) >= 0)
     {
         if (_bandwidthKbps == 0)
@@ -119,6 +130,7 @@ void NetworkLink::injectDelaySpike(uint32_t ms)
 
 void NetworkLink::setStaticDelay(uint32_t ms)
 {
+    NETWORK_LOG("setting static delay to %ums", _name.c_str(), ms);
     _staticDelay = ms * utils::Time::ms;
 }
 

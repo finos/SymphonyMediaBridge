@@ -14,12 +14,33 @@
 
 namespace fakenet
 {
+const char* toString(Protocol p)
+{
+    switch (p)
+    {
+    case Protocol::UDP:
+        return "UDP";
+    case Protocol::SYN:
+        return "SYN";
+    case Protocol::SYN_ACK:
+        return "SYN_ACK";
+    case Protocol::TCPDATA:
+        return "TCP";
+    case Protocol::FIN:
+        return "FIN";
+    case Protocol::ACK:
+        return "ACK";
+    }
 
-Gateway::Gateway() : _packets(2048) {}
+    return "any";
+}
+
+Gateway::Gateway() : _packets(4096 * 4) {}
 
 Gateway::~Gateway() {}
 
-void Gateway::sendTo(const transport::SocketAddress& source,
+void Gateway::onReceive(Protocol protocol,
+    const transport::SocketAddress& source,
     const transport::SocketAddress& target,
     const void* data,
     size_t len,
@@ -27,13 +48,19 @@ void Gateway::sendTo(const transport::SocketAddress& source,
 {
     assert(source.getFamily() == target.getFamily());
 
-    NETWORK_LOG("sendTo from: %s  to: %s bytes: %lu",
-        "Fakenetwork",
-        source.toString().c_str(),
-        target.toString().c_str(),
-        len);
+    const bool pushed = _packets.push(std::make_unique<Packet>(protocol, data, len, source, target));
+    if (!pushed)
+    {
+        logger::warn("gateway queue full", "Fakenetwork");
+    }
+}
 
-    _packets.push(std::make_unique<Packet>(data, len, source, target));
+Internet::~Internet()
+{
+    if (!_packets.empty())
+    {
+        logger::warn("%zu packets pending in internet", "Internet", _packets.size());
+    }
 }
 
 void Internet::addLocal(NetworkNode* node)
@@ -45,6 +72,19 @@ void Internet::addLocal(NetworkNode* node)
 void Internet::addPublic(NetworkNode* node)
 {
     return addLocal(node);
+}
+
+void Internet::removeNode(NetworkNode* node)
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    for (auto it = _nodes.begin(); it != _nodes.end(); ++it)
+    {
+        if (*it == node)
+        {
+            _nodes.erase(it);
+            return;
+        }
+    }
 }
 
 bool Internet::isPublicPortFree(const transport::SocketAddress& ipPort) const
@@ -76,13 +116,19 @@ void Internet::process(const uint64_t timestamp)
         {
             if (node->hasIp(packet->target))
             {
-                NETWORK_LOG("process from: %s  to: %s bytes: %lu",
-                    "Fakenetwork",
+                NETWORK_LOG("forward %s %s -> %s bytes: %lu ",
+                    "Internet",
+                    toString(packet->protocol),
                     packet->source.toString().c_str(),
                     packet->target.toString().c_str(),
                     packet->length);
 
-                node->sendTo(packet->source, packet->target, packet->data, packet->length, timestamp);
+                node->onReceive(packet->protocol,
+                    packet->source,
+                    packet->target,
+                    packet->data,
+                    packet->length,
+                    timestamp);
                 break;
             }
         }
@@ -97,12 +143,32 @@ void Internet::process(const uint64_t timestamp)
     }
 }
 
-Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet)
-    : _publicInterface(publicIp),
-      _internet(internet)
+Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet) : _internet(internet)
 {
-    assert(!publicIp.empty());
+    addPublicIp(publicIp);
     internet.addLocal(this);
+}
+
+Firewall::Firewall(const transport::SocketAddress& publicIpv4,
+    const transport::SocketAddress& publicIpv6,
+    Gateway& internet)
+    : _internet(internet)
+{
+    addPublicIp(publicIpv4);
+    addPublicIp(publicIpv6);
+    internet.addLocal(this);
+}
+
+Firewall::~Firewall()
+{
+    if (!_packets.empty())
+    {
+        logger::warn("%zu packets pending in firewall %s, %s",
+            "Firewall",
+            _packets.size(),
+            _publicIpv4.toString().c_str(),
+            _publicIpv6.toString().c_str());
+    }
 }
 
 void Firewall::addLocal(NetworkNode* endpoint)
@@ -115,6 +181,27 @@ void Firewall::addPublic(NetworkNode* endpoint)
 {
     std::lock_guard<std::mutex> lock(_nodesMutex);
     _publicEndpoints.push_back(endpoint);
+}
+
+void Firewall::removeNode(NetworkNode* node)
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    for (auto it = _endpoints.begin(); it != _endpoints.end(); ++it)
+    {
+        if (*it == node)
+        {
+            _endpoints.erase(it);
+            return;
+        }
+    }
+    for (auto it = _publicEndpoints.begin(); it != _publicEndpoints.end(); ++it)
+    {
+        if (*it == node)
+        {
+            _publicEndpoints.erase(it);
+            return;
+        }
+    }
 }
 
 bool Firewall::isLocalPortFree(const transport::SocketAddress& ipPort) const
@@ -143,50 +230,86 @@ bool Firewall::isPublicPortFree(const transport::SocketAddress& ipPort) const
     return true;
 }
 
+void Firewall::processEndpoints(const uint64_t timestamp)
+{
+    for (auto* node : _endpoints)
+    {
+        node->process(timestamp);
+    }
+    for (auto* node : _publicEndpoints)
+    {
+        node->process(timestamp);
+    }
+}
+
+void Firewall::dispatchNAT(const Packet& packet, const uint64_t timestamp)
+{
+    auto& portMappings = (packet.protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    for (auto mapping : portMappings)
+    {
+        if (mapping.second == packet.target)
+        {
+            for (auto endpoint : _endpoints)
+            {
+                if (endpoint->hasIp(mapping.first))
+                {
+                    NETWORK_LOG("NAT %s, %s -> %s -> %s",
+                        "Firewall",
+                        toString(packet.protocol),
+                        packet.source.toString().c_str(),
+                        packet.target.toString().c_str(),
+                        mapping.first.toString().c_str());
+                    endpoint->onReceive(packet.protocol,
+                        packet.source,
+                        mapping.first,
+                        packet.data,
+                        packet.length,
+                        timestamp);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+bool Firewall::dispatchLocally(const Packet& packet, const uint64_t timestamp)
+{
+    for (auto ep : _endpoints)
+    {
+        if (ep->hasIp(packet.target))
+        {
+            NETWORK_LOG("local %s -> %s",
+                "Firewall",
+                packet.source.toString().c_str(),
+                packet.target.toString().c_str());
+            ep->onReceive(packet.protocol, packet.source, packet.target, packet.data, packet.length, timestamp);
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void Firewall::process(const uint64_t timestamp)
 {
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    processEndpoints(timestamp);
     for (std::unique_ptr<Packet> packet; _packets.pop(packet);)
     {
         assert(!packet->source.empty());
         assert(!packet->target.empty());
-        assert(packet->source.getFamily() == _publicInterface.getFamily());
 
-        if (_publicInterface.equalsIp(packet->target))
+        if (hasIp(packet->target))
         {
-            for (auto mapping : _portMappings)
-            {
-                if (mapping.second == packet->target)
-                {
-                    for (auto endpoint : _endpoints)
-                    {
-                        if (endpoint->hasIp(mapping.first))
-                        {
-                            logger::info("inbound %s -> %s",
-                                "firewall",
-                                packet->source.toString().c_str(),
-                                packet->target.toString().c_str());
-                            endpoint->sendTo(packet->source, mapping.first, packet->data, packet->length, timestamp);
-                            return;
-                        }
-                    }
-                    return;
-                }
-            }
-            return;
+            dispatchNAT(*packet, timestamp);
+            continue;
         }
 
-        for (auto ep : _endpoints)
+        if (dispatchLocally(*packet, timestamp))
         {
-            if (ep->hasIp(packet->target))
-            {
-                logger::info("local %s -> %s",
-                    "firewall",
-                    packet->source.toString().c_str(),
-                    packet->target.toString().c_str());
-                ep->sendTo(packet->source, packet->target, packet->data, packet->length, timestamp);
-                return;
-            }
+            continue;
         }
+
         if (packet->target.getFamily() == AF_INET && (ntohl(packet->target.getIpv4()->sin_addr.s_addr) >> 24 == 172))
         {
             continue;
@@ -197,58 +320,74 @@ void Firewall::process(const uint64_t timestamp)
             continue;
         }
 
-        for (auto mapping : _portMappings)
-        {
-            if (mapping.first == packet->source)
-            {
-                sendToPublic(mapping.second, packet->target, packet->data, packet->length, timestamp);
-                return;
-            }
-        }
-
-        while (!addPortMapping(packet->source, _portCount++)) {}
-
-        sendToPublic(_portMappings.back().second, packet->target, packet->data, packet->length, timestamp);
+        packet->source = acquirePortMapping(packet->protocol, packet->source);
+        dispatchPublicly(*packet, timestamp);
     }
 }
 
-void Firewall::sendToPublic(const transport::SocketAddress& source,
-    const transport::SocketAddress& target,
-    const void* data,
-    size_t len,
-    const uint64_t timestamp)
+void Firewall::dispatchPublicly(const Packet& packet, const uint64_t timestamp)
 {
-    assert(source.getFamily() == target.getFamily());
+    assert(packet.source.getFamily() == packet.target.getFamily());
     for (auto publicEp : _publicEndpoints)
     {
-        if (publicEp->hasIp(target))
+        if (publicEp->hasIp(packet.target))
         {
-            logger::info("dmz %s -> %s", "firewall", source.toString().c_str(), target.toString().c_str());
-            publicEp->sendTo(source, target, data, len, timestamp);
+            NETWORK_LOG("dmz %s -> %s", "firewall", packet.source.toString().c_str(), packet.target.toString().c_str());
+            publicEp->onReceive(packet.protocol, packet.source, packet.target, packet.data, packet.length, timestamp);
             return;
         }
     }
 
-    _internet.sendTo(source, target, data, len, timestamp);
+    _internet.onReceive(packet.protocol, packet.source, packet.target, packet.data, packet.length, timestamp);
 }
 
-bool Firewall::addPortMapping(const transport::SocketAddress& source, int publicPort)
+transport::SocketAddress Firewall::acquirePortMapping(const Protocol protocol, const transport::SocketAddress& source)
 {
+    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    for (auto mapping : portMappings)
+    {
+        if (mapping.first == source)
+        {
+            return mapping.second;
+        }
+    }
+
+    while (!addPortMapping(protocol, source, _portCount++)) {}
+
+    return portMappings.back().second;
+}
+
+bool Firewall::addPortMapping(const Protocol protocol, const transport::SocketAddress& source, int publicPort)
+{
+    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
     assert(!source.empty());
-    if (_portMappings.cend() !=
-        std::find_if(_portMappings.cbegin(),
-            _portMappings.cend(),
+    if (portMappings.cend() !=
+        std::find_if(portMappings.cbegin(),
+            portMappings.cend(),
             [publicPort](const std::pair<const transport::SocketAddress&, const transport::SocketAddress&>& p) {
                 return p.second.getPort() == publicPort;
             }))
     {
         return false;
     }
-    auto publicAddress = _publicInterface;
-    assert(source.getFamily() == publicAddress.getFamily());
+    auto publicAddress = (source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4);
+
     publicAddress.setPort(publicPort);
-    _portMappings.push_back(std::make_pair(source, publicAddress));
+    portMappings.push_back(std::make_pair(source, publicAddress));
+    logger::info("added NAT %s -> %s", "Firewall", source.toString().c_str(), publicAddress.toString().c_str());
     return true;
+}
+
+void Firewall::addPublicIp(const transport::SocketAddress& addr)
+{
+    if (addr.getFamily() == AF_INET6)
+    {
+        _publicIpv6 = addr;
+    }
+    else
+    {
+        _publicIpv4 = addr;
+    }
 }
 
 InternetRunner::InternetRunner(const uint64_t interval)

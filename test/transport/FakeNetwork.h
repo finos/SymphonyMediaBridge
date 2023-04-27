@@ -13,12 +13,25 @@
 namespace fakenet
 {
 
+enum Protocol : uint8_t
+{
+    UDP = 0,
+    SYN,
+    SYN_ACK,
+    FIN,
+    ACK,
+    TCPDATA
+};
+
+const char* toString(Protocol p);
+
 class NetworkNode
 {
 public:
     virtual ~NetworkNode() {}
 
-    virtual void sendTo(const transport::SocketAddress& source,
+    virtual void onReceive(Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -31,13 +44,15 @@ public:
 struct Packet
 {
     Packet() : length(0) {}
-    Packet(const void* data_,
+    Packet(Protocol proto,
+        const void* data_,
         int length_,
         const transport::SocketAddress& source_,
         const transport::SocketAddress& target_)
         : length(length_),
           source(source_),
-          target(target_)
+          target(target_),
+          protocol(proto)
     {
         std::memcpy(data, data_, length);
     }
@@ -46,6 +61,7 @@ struct Packet
     size_t length = 0;
     transport::SocketAddress source;
     transport::SocketAddress target;
+    Protocol protocol;
 };
 
 class Gateway : public NetworkNode
@@ -59,10 +75,13 @@ public:
     virtual std::vector<NetworkNode*>& getLocalNodes() = 0;
     virtual std::vector<NetworkNode*>& getPublicNodes() = 0;
 
+    virtual void removeNode(NetworkNode* node) = 0;
+
     virtual bool isLocalPortFree(const transport::SocketAddress&) const = 0;
     virtual bool isPublicPortFree(const transport::SocketAddress&) const = 0;
 
-    void sendTo(const transport::SocketAddress& source,
+    void onReceive(Protocol protocol,
+        const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
@@ -75,10 +94,12 @@ protected:
 class Internet : public Gateway
 {
 public:
+    ~Internet();
     bool hasIp(const transport::SocketAddress& target) override { return true; }
 
     void addLocal(NetworkNode* node) override;
     void addPublic(NetworkNode* node) override;
+    void removeNode(NetworkNode* node) override;
 
     bool isLocalPortFree(const transport::SocketAddress& ipPort) const override { return isPublicPortFree(ipPort); }
     bool isPublicPortFree(const transport::SocketAddress& ipPort) const override;
@@ -97,33 +118,45 @@ class Firewall : public Gateway
 {
 public:
     Firewall(const transport::SocketAddress& publicIp, Gateway& internet);
-    virtual ~Firewall() = default;
+    Firewall(const transport::SocketAddress& publicIpv4, const transport::SocketAddress& publicIpv6, Gateway& internet);
+    virtual ~Firewall();
 
     void addLocal(NetworkNode* endpoint) override;
     void addPublic(NetworkNode* endpoint) override;
+    void removeNode(NetworkNode* node) override;
+
+    void addPublicIp(const transport::SocketAddress& addr);
 
     bool isLocalPortFree(const transport::SocketAddress& ipPort) const override;
     bool isPublicPortFree(const transport::SocketAddress& ipPort) const override;
 
-    bool hasIp(const transport::SocketAddress& port) override { return _publicInterface.equalsIp(port); }
+    bool hasIp(const transport::SocketAddress& port) override
+    {
+        return _publicIpv4.equalsIp(port) || _publicIpv6.equalsIp(port);
+    }
 
-    transport::SocketAddress getPublicIp() const { return _publicInterface; }
+    transport::SocketAddress getPublicIp() const { return _publicIpv4; }
+    transport::SocketAddress getPublicIpv6() const { return _publicIpv6; }
     void process(uint64_t timestamp) override;
 
-    bool addPortMapping(const transport::SocketAddress& source, int publicPort);
+    bool addPortMapping(Protocol protocol, const transport::SocketAddress& source, int publicPort);
 
     std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
     std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
 
 private:
-    void sendToPublic(const transport::SocketAddress& source,
-        const transport::SocketAddress& target,
-        const void* data,
-        size_t len,
-        uint64_t timestamp);
+    void dispatchPublicly(const Packet& packet, uint64_t timestamp);
+    void processEndpoints(const uint64_t timestamp);
+    void dispatchNAT(const Packet& packet, const uint64_t timestamp);
+    bool dispatchLocally(const Packet& packet, const uint64_t timestamp);
 
-    const transport::SocketAddress _publicInterface;
-    std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>> _portMappings;
+    transport::SocketAddress acquirePortMapping(Protocol protocol, const transport::SocketAddress& source);
+
+    transport::SocketAddress _publicIpv4;
+    transport::SocketAddress _publicIpv6;
+    using PortMapping = std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>>;
+    PortMapping _portMappingsUdp;
+    PortMapping _portMappingsTcp;
     std::vector<NetworkNode*> _endpoints;
     std::vector<NetworkNode*> _publicEndpoints;
     Gateway& _internet;
