@@ -53,6 +53,11 @@ inline UniquePacket makeUniquePacket(PacketPoolAllocator& allocator, const void*
         return UniquePacket();
     }
 
+    if (!data)
+    {
+        return packet;
+    }
+
     std::memcpy(packet->get(), data, length);
     packet->setLength(length);
 
