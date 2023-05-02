@@ -164,4 +164,6 @@ void addAudioLevel(PacketT& packet, uint8_t extensionId, uint8_t level)
     rtpHeader->setExtensions(extensionHeader, payloadLength);
     packet.setLength(rtpHeader->headerLength() + payloadLength);
 }
+
+bool getAudioLevel(const memory::Packet& packet, uint8_t extensionId, int& level);
 } // namespace rtp

@@ -222,6 +222,7 @@ set(FILES
         bridge/engine/DiscardReceivedVideoPacketJob.cpp
         bridge/engine/SetMaxMediaBitrateJob.h
         bridge/engine/SetMaxMediaBitrateJob.cpp
+        rtp/SpscAudioBuffer.h
         bridge/MixerJobs.h
         bridge/MixerJobs.cpp
         bridge/MixerManagerAsync.h
@@ -241,6 +242,9 @@ set(FILES
         codec/OpusEncoder.cpp
         codec/OpusEncoder.h
         codec/Vp8Header.h
+        codec/AudioTools.h
+        codec/AudioTools.cpp
+        codec/NoiseFloor.cpp
         concurrency/EventSemaphore.cpp
         concurrency/EventSemaphore.h
         concurrency/LockFreeList.cpp
@@ -338,6 +342,14 @@ set(FILES
         rtp/SendTimeDial.h
         rtp/JitterTracker.h
         rtp/JitterTracker.cpp
+        rtp/JitterEstimator.h
+        rtp/JitterEstimator.cpp
+        rtp/RtpDelayTracker.h
+        rtp/RtpDelayTracker.cpp
+        rtp/JitterBuffer.cpp
+        rtp/JitterBuffer.h
+        rtp/AudioReceivePipeline.h
+        rtp/AudioReceivePipeline.cpp
         test/macros.h
         transport/UdpEndpoint.h
         transport/BaseUdpEndpoint.cpp
@@ -579,6 +591,7 @@ set(TEST_FILES
     test/transport/SrtpTest.cpp
     test/transport/Ipv6Test.cpp
     test/transport/JitterTest.cpp
+    test/transport/AdaptiveJitterTest.cpp
     test/integration/TimeTurnerTest.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
@@ -625,7 +638,8 @@ set(TEST_FILES
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp
-    test/bridge/RtpAudioRewriterTest.cpp)
+    test/bridge/RtpAudioRewriterTest.cpp
+    test/transport/JitterTest.cpp)
 
 
 set(TEST_FILES2

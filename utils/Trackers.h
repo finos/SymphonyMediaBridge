@@ -36,6 +36,21 @@ private:
     const double _decay;
 };
 
+// Single threaded max tracker
+class MaxTrackerPlain
+{
+public:
+    explicit MaxTrackerPlain(double decay, double startValue = 0) : _value(startValue), _decay(decay) {}
+
+    void update(double value);
+    void reset(double value) { _value = value; }
+    double get() const { return _value; }
+
+private:
+    double _value;
+    const double _decay;
+};
+
 class AvgRateTracker
 {
 public:

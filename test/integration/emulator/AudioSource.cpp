@@ -1,5 +1,6 @@
 #include "test/integration/emulator/AudioSource.h"
 #include "codec/AudioLevel.h"
+#include "codec/AudioTools.h"
 #include "codec/Opus.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
@@ -21,8 +22,17 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, 
       _ptime(ptime),
       _isPtt(PttState::NotSpecified),
       _useAudioLevel(true),
-      _emulatedAudioType(fakeAudio)
+      _emulatedAudioType(fakeAudio),
+      _pcm16File(nullptr)
 {
+}
+
+AudioSource::~AudioSource()
+{
+    if (_pcm16File)
+    {
+        ::fclose(_pcm16File);
+    }
 }
 
 memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
@@ -55,12 +65,25 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     int16_t audio[codec::Opus::channelsPerFrame * samplesPerPacket];
     _rtpTimestamp += samplesPerPacket;
 
-    for (uint64_t x = 0; _emulatedAudioType == Audio::Opus && x < samplesPerPacket; ++x)
+    if (_emulatedAudioType == Audio::Opus && !_pcm16File)
     {
-        audio[x * 2] = _amplitude * sin(_phase + x * 2 * M_PI * _frequency / codec::Opus::sampleRate);
-        audio[x * 2 + 1] = 0;
+        for (uint64_t x = 0; x < samplesPerPacket; ++x)
+        {
+            audio[x * 2] = _amplitude * sin(_phase + x * 2 * M_PI * _frequency / codec::Opus::sampleRate);
+            audio[x * 2 + 1] = 0;
+        }
+        _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
     }
-    _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
+    else if (_emulatedAudioType == Audio::Opus && _pcm16File)
+    {
+        auto readSamples = ::fread(audio, sizeof(int16_t), samplesPerPacket, _pcm16File);
+        if (readSamples < samplesPerPacket)
+        {
+            ::rewind(_pcm16File);
+            readSamples = ::fread(audio, sizeof(int16_t), samplesPerPacket, _pcm16File);
+        }
+        codec::makeStereo(audio, samplesPerPacket);
+    }
 
     rtp::RtpHeaderExtension extensionHead;
     auto cursor = extensionHead.extensions().begin();
@@ -148,6 +171,18 @@ void AudioSource::setPtt(const PttState isPtt)
 void AudioSource::setUseAudioLevel(const bool useAudioLevel)
 {
     _useAudioLevel = useAudioLevel;
+}
+
+bool AudioSource::openPcm16File(const char* filename)
+{
+    if (_pcm16File)
+    {
+        ::fclose(_pcm16File);
+        _pcm16File = nullptr;
+    }
+
+    _pcm16File = ::fopen(filename, "r");
+    return _pcm16File != nullptr;
 }
 
 } // namespace emulator
