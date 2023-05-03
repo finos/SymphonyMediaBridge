@@ -529,7 +529,6 @@ set(TEST_LIB_FILES
     test/bwe/FakeMedia.cpp
     test/bwe/FakeCrossTraffic.h
     test/bwe/FakeCrossTraffic.cpp
-    test/bwe/EstimatorReRun.cpp
     test/bwe/BwBurstTracker.h
     test/bwe/BwBurstTracker.cpp
     test/utils/ApiUtils.cpp
@@ -602,6 +601,8 @@ set(TEST_FILES
     test/rtp/SendTimeTest.cpp
     test/bridge/VideoMissingPacketsTrackerTest.cpp
     test/bwe/BandwidthUtilsTest.cpp
+    test/bwe/EstimatorTestEasy.cpp
+    test/bwe/EstimatorReRun.cpp
     test/crypto/AESTest.cpp
     test/utils/Base64Test.cpp
     test/crypto/AesIvGeneratorTest.cpp
