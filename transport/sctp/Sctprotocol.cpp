@@ -1,5 +1,6 @@
 #include "Sctprotocol.h"
 #include "crypto/SslHelper.h"
+#include "logger/Logger.h"
 
 namespace sctp
 {
@@ -235,6 +236,7 @@ bool SctpPacket::isValid() const
 {
     if (_packetSize < sizeof(CommonHeader) || (_packetSize % sizeof(uint32_t)) != 0)
     {
+        logger::debug("packet too small %zu", "sctp", _packetSize);
         return false;
     }
 

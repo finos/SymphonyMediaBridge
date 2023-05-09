@@ -137,7 +137,7 @@ bool SctpEndpoint::onSctpInitReceived(sctp::SctpServerPort* serverPort,
     uint16_t& inboundStreams,
     uint16_t& outboundStreams)
 {
-    if (!!_session)
+    if (_session)
     {
         _session->onPacketReceived(sctpPacket, timestamp);
         return false;
@@ -154,7 +154,7 @@ void SctpEndpoint::onSctpCookieEchoReceived(sctp::SctpServerPort* serverPort,
     const sctp::SctpPacket& packet,
     uint64_t timestamp)
 {
-    if (!!_session)
+    if (_session)
     {
         _session->onPacketReceived(packet, timestamp);
     }
@@ -170,9 +170,13 @@ void SctpEndpoint::onSctpReceived(sctp::SctpServerPort* serverPort,
     const sctp::SctpPacket& sctpPacket,
     uint64_t timestamp)
 {
-    if (!!_session)
+    if (_session)
     {
         _session->onPacketReceived(sctpPacket, timestamp);
+    }
+    else
+    {
+        logger::warn("no SctpAssociation for incoming message", _loggableId.c_str());
     }
 }
 
