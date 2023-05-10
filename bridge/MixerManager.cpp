@@ -484,7 +484,6 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
     {
         std::string body(reinterpret_cast<const char*>(sctpHeader.data()), msgPacket->getLength() - sizeof(sctpHeader));
-
         try
         {
             auto json = utils::SimpleJson::create(reinterpret_cast<const char*>(sctpHeader.data()),
@@ -520,13 +519,18 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
 
                 const auto toJson = api::DataChannelMessageParser::getEndpointMessageTo(json);
                 const auto payloadJson = api::DataChannelMessageParser::getEndpointMessagePayload(json);
-                if (toJson.isNone() || payloadJson.isNone())
+                if (payloadJson.isNone())
                 {
+                    logger::debug("endpoint message lacks content", "MixerManager");
                     return;
                 }
 
                 auto toEndpoint = toJson.getString();
                 mixerIt->second->sendEndpointMessage(toEndpoint, endpointIdHash, payloadJson);
+            }
+            else
+            {
+                logger::debug("no handler for data channel message.", "MixerManager");
             }
         }
         catch (nlohmann::detail::parse_error e)
@@ -541,6 +545,13 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
         {
             logger::error("Unknown exception while parsing DataChannel message.", "MixerManager");
         }
+    }
+    else
+    {
+        logger::warn("received unexpected DataChannel payload protocol, %u, len %zu",
+            "MixerManager",
+            sctpHeader.payloadProtocol,
+            msgPacket->getLength());
     }
 }
 

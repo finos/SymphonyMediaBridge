@@ -560,6 +560,10 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     }
     else
     {
+        logger::debug("Broadcast Endpoint message from %lu %s",
+            _loggableId.c_str(),
+            fromEndpointIdHash,
+            endpointMessage.get());
         for (auto& dataStreamEntry : _engineDataStreams)
         {
             if (dataStreamEntry.first == fromEndpointIdHash || !dataStreamEntry.second->stream.isOpen())
@@ -574,11 +578,6 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
                 message);
 
             dataStreamEntry.second->stream.sendString(endpointMessage.get(), endpointMessage.getLength());
-            logger::debug("Endpoint message %lu -> %lu %s",
-                _loggableId.c_str(),
-                fromEndpointIdHash,
-                toEndpointIdHash,
-                endpointMessage.get());
         }
     }
 }
