@@ -171,7 +171,7 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
         {
             if (inboundStreams == 0 && outboundStreams == 0)
             {
-                logger::warn("SCTP INIT rejected. Stream count 0,0", "scp");
+                logger::warn("SCTP INIT rejected. Stream count 0,0", "sctp");
                 return; // no streams to add
             }
 

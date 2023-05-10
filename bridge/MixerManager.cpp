@@ -548,7 +548,7 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
     }
     else
     {
-        logger::warn("received unexpected DataChannel payload protocol, %u, len %zu",
+        logger::debug("received unexpected DataChannel payload protocol, %u, len %zu",
             "MixerManager",
             sctpHeader.payloadProtocol,
             msgPacket->getLength());
