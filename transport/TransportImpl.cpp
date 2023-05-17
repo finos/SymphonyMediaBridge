@@ -2226,6 +2226,7 @@ bool TransportImpl::onSctpInitReceived(sctp::SctpServerPort* serverPort,
 {
     if (!_remoteSctpPort.isSet() || srcPort != _remoteSctpPort.get())
     {
+        logger::warn("remote SCTP port mismatch %u -> %u", _loggableId.c_str(), srcPort, _remoteSctpPort.valueOr(0));
         return false;
     }
 

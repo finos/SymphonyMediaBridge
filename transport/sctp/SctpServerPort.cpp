@@ -113,6 +113,7 @@ void SctpServerPort::onPacketReceived(const void* data, size_t length, uint64_t 
     auto& header = sctpPacket.getHeader();
     if (header.destinationPort != _localPort)
     {
+        logger::warn("SCTP destination port invalid %u", "sctp", header.destinationPort.get());
         return;
     }
     if (sctpPacket.getChunk(ChunkType::INIT))
@@ -170,6 +171,7 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
         {
             if (inboundStreams == 0 && outboundStreams == 0)
             {
+                logger::warn("SCTP INIT rejected. Stream count 0,0", "sctp");
                 return; // no streams to add
             }
 
@@ -194,7 +196,12 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
             initAck.commitAppendedParameter();
             packet.commitAppendedChunk();
 
+            logger::debug("sending INIT_ACK", "sctp");
             send(packet);
+        }
+        else
+        {
+            logger::warn("SCTP not accepted %u...", "sctp", header.sourcePort.get());
         }
     }
 }
@@ -218,6 +225,7 @@ void SctpServerPort::onCookieEchoReceived(const SctpPacket& packet, uint64_t tim
             (!cookie.verifySignature(_key1, sizeof(_key1), header.sourcePort) &&
                 !cookie.verifySignature(_key2, sizeof(_key2), header.sourcePort)))
         {
+            logger::error("cookie echo did not pass validation", "sctp");
             return;
         }
         _listener->onSctpCookieEchoReceived(this, header.sourcePort.get(), packet, timestamp);
