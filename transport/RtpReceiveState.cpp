@@ -53,6 +53,8 @@ void RtpReceiveState::onRtpReceived(const memory::Packet& packet, uint64_t times
         _receiveCounters.initialSequenceNumber = rtpHeader->sequenceNumber;
     }
 
+    _jitterTracker.update(timestamp, rtpHeader->timestamp.get());
+
     _activeAt = timestamp;
     ++_receiveCounters.packets;
     _receiveCounters.octets += packet.getLength() - rtpHeader->headerLength();
@@ -98,7 +100,7 @@ void RtpReceiveState::onRtcpReceived(const rtp::RtcpHeader& report, uint64_t tim
 void RtpReceiveState::fillInReportBlock(uint64_t timestamp, rtp::ReportBlock& reportBlock, uint64_t ntpNow)
 {
     reportBlock.extendedSeqNoReceived = _receiveCounters.extendedSequenceNumber;
-    reportBlock.interarrivalJitter = 0; // TODO measure jitter
+    reportBlock.interarrivalJitter = _jitterTracker.get();
 
     if (!_lastReceivedSenderReport.empty())
     {
@@ -176,6 +178,21 @@ void RtpReceiveState::stop()
         counters.period = delta.timestamp;
         _counters.write(counters);
     }
+}
+
+void RtpReceiveState::setRtpFrequency(uint32_t frequency)
+{
+    _jitterTracker.setRtpFrequency(frequency);
+}
+
+uint32_t RtpReceiveState::getJitter() const
+{
+    return _jitterTracker.get();
+}
+
+uint32_t RtpReceiveState::getRtpFrequency() const
+{
+    return _jitterTracker.getRtpFrequency();
 }
 
 } // namespace transport

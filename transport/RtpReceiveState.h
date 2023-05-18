@@ -1,6 +1,7 @@
 #pragma once
 
 #include "concurrency/MpmcPublish.h"
+#include "rtp/JitterTracker.h"
 #include "transport/PacketCounters.h"
 #include "utils/SocketAddress.h"
 #include <algorithm>
@@ -27,10 +28,11 @@ namespace transport
 class RtpReceiveState
 {
 public:
-    explicit RtpReceiveState(const config::Config& config)
+    explicit RtpReceiveState(const config::Config& config, uint32_t rtpFrequency)
         : payloadType(0xFF),
           _config(config),
-          _scheduledReceiveReport(0)
+          _scheduledReceiveReport(0),
+          _jitterTracker(rtpFrequency > 0 ? rtpFrequency : 90000)
     {
     }
 
@@ -46,6 +48,9 @@ public:
     uint64_t getSenderReportReceiveTimeNtp() const { return _lastReceivedSenderReport._receiveTimeNtp; }
 
     int64_t timeToReceiveReport(uint64_t timestamp) const;
+    void setRtpFrequency(uint32_t frequency);
+    uint32_t getJitter() const;
+    uint32_t getRtpFrequency() const;
 
     std::atomic_uint8_t payloadType;
     SocketAddress currentRtpSource;
@@ -75,7 +80,6 @@ public:
         uint32_t lostPackets;
         uint64_t timestamp;
         uint32_t initialSequenceNumber;
-        // TODO jitter avg
     };
 
     // only for Transport thread context
@@ -100,6 +104,7 @@ private:
     SenderReportAggr _lastReceivedSenderReport;
     uint64_t _scheduledReceiveReport;
     std::atomic_uint64_t _activeAt;
+    rtp::JitterTracker _jitterTracker;
 
     concurrency::MpmcPublish<PacketCounters, 4> _counters;
     concurrency::MpmcPublish<ReceiveCounters, 4> _cumulativeReport;

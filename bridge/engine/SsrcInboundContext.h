@@ -6,7 +6,6 @@
 #include "codec/OpusDecoder.h"
 #include "jobmanager/JobQueue.h"
 #include "transport/RtcTransport.h"
-#include "transport/RtpReceiveState.h"
 #include "utils/Optional.h"
 #include <cstdint>
 #include <memory>

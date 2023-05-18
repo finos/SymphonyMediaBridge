@@ -379,7 +379,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendReceiveReportsWithinSenderReport)
 
     for (uint32_t i = 0; i < receiveSsrcCount; ++i)
     {
-        _inboundSsrcCounters.emplace(firstReceiverSSrc + i, _config);
+        _inboundSsrcCounters.emplace(firstReceiverSSrc + i, _config, 48000);
         inboundSsrcPacketGenerators.push_back(createPacketGenerator(firstReceiverSSrc + i, 48000));
     }
 
@@ -452,7 +452,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendSendReportsAndReceive)
 
     for (uint32_t i = 0; i < receiveSsrcCount; ++i)
     {
-        _inboundSsrcCounters.emplace(firstReceiverSSrc + i, _config);
+        _inboundSsrcCounters.emplace(firstReceiverSSrc + i, _config, 48000);
         inboundSsrcPacketGenerators.push_back(createPacketGenerator(firstReceiverSSrc + i, 48000));
     }
 
@@ -573,7 +573,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendRembOnThe1stPacket)
 
     for (uint32_t i = 0; i < receiveSsrcCount; ++i)
     {
-        _inboundSsrcCounters.emplace(firstReceiverSSrc + i, _config);
+        _inboundSsrcCounters.emplace(firstReceiverSSrc + i, _config, 48000);
         inboundSsrcPacketGenerators.push_back(createPacketGenerator(firstReceiverSSrc + i, 48000));
     }
 
