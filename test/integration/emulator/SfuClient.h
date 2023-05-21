@@ -159,6 +159,7 @@ public:
     void initiateCall(const CallConfig& callConfig)
     {
         _sendAudioType = callConfig.audio;
+        _ipv6CandidateDelay = callConfig.ipv6CandidateDelay;
         _channel.create(true, callConfig);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
@@ -166,6 +167,7 @@ public:
     void joinCall(const CallConfig& callConfig)
     {
         _sendAudioType = callConfig.audio;
+        _ipv6CandidateDelay = callConfig.ipv6CandidateDelay;
         _channel.create(false, callConfig);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
@@ -189,54 +191,6 @@ public:
             idleTimeout,
             noNeighbours,
             api::SrtpMode::DTLS);
-        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
-    }
-
-    void initiateCall2(const std::string& baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        Audio audio,
-        bool video,
-        bool forwardMedia,
-        const utils::Span<std::string>& neighbours,
-        uint32_t idleTimeout = 0)
-    {
-        _sendAudioType = audio;
-        _channel.create(baseUrl,
-            conferenceId,
-            initiator,
-            audio != Audio::None,
-            video,
-            forwardMedia,
-            idleTimeout,
-            neighbours,
-            api::SrtpMode::DTLS);
-        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
-    }
-
-    void initiateCall3(const std::string& baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        Audio audio,
-        bool video,
-        bool forwardMedia,
-        uint64_t ipv6CandidateDelay,
-        uint32_t idleTimeout = 0)
-    {
-        _startTime = utils::Time::getAbsoluteTime();
-        utils::Span<std::string> noNeighbours;
-        _sendAudioType = audio;
-        _channel.skipIpv6 = true;
-        _channel.create(baseUrl,
-            conferenceId,
-            initiator,
-            audio != Audio::None,
-            video,
-            forwardMedia,
-            idleTimeout,
-            noNeighbours,
-            api::SrtpMode::DTLS);
-        _ipv6CandidateDelay = ipv6CandidateDelay;
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 

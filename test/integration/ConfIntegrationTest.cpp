@@ -1161,12 +1161,17 @@ TEST_F(IntegrationTest, neighbours)
         group.startConference(conf, baseUrl);
 
         std::string neighbours[] = {"gid1"};
-        utils::Span<std::string> span(neighbours);
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
-        group.clients[2]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
 
-        group.clients[3]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false, span);
+        CallConfigBuilder cfgBuilder(conf.getId());
+        cfgBuilder.url(baseUrl).withOpus().withVideo();
+
+        CallConfigBuilder cfgNeighbours(cfgBuilder);
+        cfgNeighbours.neighbours(utils::Span<std::string>(neighbours));
+
+        group.clients[0]->initiateCall(cfgBuilder.build());
+        group.clients[1]->joinCall(cfgNeighbours.build());
+        group.clients[2]->joinCall(cfgNeighbours.build());
+        group.clients[3]->joinCall(cfgNeighbours.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 

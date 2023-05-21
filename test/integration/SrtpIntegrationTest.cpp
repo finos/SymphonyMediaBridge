@@ -36,10 +36,12 @@ TEST_F(SrtpTransportEmuTest, plainNewApi)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]
-            ->initiateCall3(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true, utils::Time::ms * 2500);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
+        CallConfigBuilder cfgBuilder(conf.getId());
+        cfgBuilder.url(baseUrl).withOpus().withVideo();
+
+        group.clients[0]->initiateCall(cfgBuilder.build());
+        group.clients[1]->joinCall(cfgBuilder.build());
+        group.clients[2]->joinCall(cfgBuilder.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 

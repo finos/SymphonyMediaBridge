@@ -2,6 +2,7 @@
 #include "api/RtcDescriptors.h"
 #include "test/integration/emulator/AudioSource.h"
 #include "utils/Span.h"
+#include "utils/Time.h"
 #include <vector>
 
 namespace emulator
@@ -17,6 +18,7 @@ struct CallConfig
     std::string relayType = "ssrc-rewrite";
     bool rtx = true;
     uint32_t idleTimeout = 0;
+    uint64_t ipv6CandidateDelay = 0;
 
     bool hasAudio() const { return audio != Audio::None; }
 };
@@ -26,13 +28,19 @@ class CallConfigBuilder
 public:
     CallConfigBuilder(std::string conferenceId) { _config.conferenceId = conferenceId; }
 
+    CallConfigBuilder& conf(const std::string id)
+    {
+        _config.conferenceId = id;
+        return *this;
+    }
+
     CallConfigBuilder& url(const std::string url)
     {
         _config.baseUrl = url;
         return *this;
     }
 
-    CallConfigBuilder& url(api::SrtpMode mode)
+    CallConfigBuilder& srtp(api::SrtpMode mode)
     {
         _config.srtpMode = mode;
         return *this;
@@ -40,9 +48,20 @@ public:
 
     CallConfigBuilder& neighbours(const std::vector<std::string>& n)
     {
+        _config.neighbours.clear();
         _config.neighbours = n;
         return *this;
-    };
+    }
+
+    CallConfigBuilder& neighbours(const utils::Span<std::string>& groups)
+    {
+        _config.neighbours.clear();
+        for (auto n : groups)
+        {
+            _config.neighbours.push_back(n);
+        }
+        return *this;
+    }
 
     CallConfigBuilder& withAudio()
     {
@@ -89,6 +108,12 @@ public:
     CallConfigBuilder& idleTimeout(uint32_t idleTimeoutMs)
     {
         _config.idleTimeout = idleTimeoutMs;
+        return *this;
+    }
+
+    CallConfigBuilder& delayIpv6(uint32_t ms)
+    {
+        _config.ipv6CandidateDelay = ms * utils::Time::ms;
         return *this;
     }
 

@@ -548,10 +548,16 @@ TEST_F(BarbellTest, barbellNeighbours)
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
         std::string neighbours[] = {"gid1"};
-        utils::Span<std::string> span(neighbours);
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall2(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, span);
-        group.clients[2]->initiateCall2(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true, span);
+
+        CallConfigBuilder cfgBuilder(conf.getId());
+        cfgBuilder.url(baseUrl).withOpus().withVideo();
+
+        CallConfigBuilder cfgNeighbours(cfgBuilder);
+        cfgNeighbours.neighbours(utils::Span<std::string>(neighbours));
+
+        group.clients[0]->initiateCall(cfgBuilder.build());
+        group.clients[1]->joinCall(cfgNeighbours.build());
+        group.clients[2]->joinCall(cfgNeighbours.url(baseUrl2).conf(conf2.getId()).build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
