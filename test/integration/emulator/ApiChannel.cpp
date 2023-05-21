@@ -114,51 +114,35 @@ void BaseChannel::addIpv6RemoteCandidates(transport::RtcTransport& transport)
     }
 }
 
-void Channel::create(const std::string& baseUrl,
-    const std::string& conferenceId,
-    const bool initiator,
-    const bool audio,
-    const bool video,
-    const bool forwardMedia,
-    const uint32_t idleTimeout,
-    const utils::Span<std::string> neighbours)
+void Channel::create(const bool initiator, const CallConfig& config)
 {
-    assert(!conferenceId.empty());
-    _conferenceId = conferenceId;
-    _relayType = forwardMedia ? "ssrc-rewrite" : "mixed";
-    _baseUrl = baseUrl;
-    _videoEnabled = video;
-
-    for (auto& n : neighbours)
-    {
-        _answerOptions.neighbours.push_back(n);
-    }
+    _callConfig = config;
 
     using namespace nlohmann;
     json body = {{"action", "allocate"},
         {"bundle-transport", {{"ice-controlling", true}, {"ice", true}, {"dtls", true}, {"rtcp-mux", true}}}};
 
-    if (audio)
+    if (_callConfig.audio)
     {
-        body["audio"] = {{"relay-type", _relayType.c_str()}};
+        body["audio"] = {{"relay-type", _callConfig.relayType.c_str()}};
     }
-    if (video)
+    if (_callConfig.video)
     {
         body["video"] = {{"relay-type", "ssrc-rewrite"}};
     }
-    if (audio || video)
+    if (_callConfig.audio || _callConfig.video)
     {
         body["data"] = json::object();
     }
-    if (idleTimeout)
+    if (_callConfig.idleTimeout)
     {
-        body["idleTimeout"] = idleTimeout;
+        body["idleTimeout"] = _callConfig.idleTimeout;
     }
 
     logger::debug("allocate ch with %s", "ApiChannel", body.dump().c_str());
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPostRequest>(_httpd,
-        std::string(baseUrl) + "/conferences/" + conferenceId + "/" + _id,
+        std::string(_callConfig.baseUrl) + "/conferences/" + _callConfig.conferenceId + "/" + _id,
         body.dump(),
         9 * utils::Time::sec,
         responseBody);
@@ -174,11 +158,47 @@ void Channel::create(const std::string& baseUrl,
     }
 }
 
+void Channel::create(const std::string& baseUrl,
+    const std::string& conferenceId,
+    const bool initiator,
+    const bool audio,
+    const bool video,
+    const bool forwardMedia,
+    const uint32_t idleTimeout,
+    const utils::Span<std::string> neighbours,
+    api::SrtpMode srtpMode)
+{
+    CallConfigBuilder cfg(conferenceId);
+    cfg.url(baseUrl).idleTimeout(idleTimeout);
+    if (audio)
+    {
+        cfg.withAudio();
+    }
+    if (video)
+    {
+        cfg.withVideo();
+    }
+    if (!forwardMedia)
+    {
+        cfg.mixed();
+    }
+
+    std::vector<std::string> nb;
+    for (auto& n : neighbours)
+    {
+        nb.push_back(n);
+    }
+    cfg.neighbours(nb);
+
+    create(initiator, cfg.build());
+}
+
 void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredentials,
     const ice::IceCandidates& candidates,
     const std::string& fingerprint,
     uint32_t audioSsrc,
-    uint32_t* videoSsrcs)
+    uint32_t* videoSsrcs,
+    std::vector<srtp::AesKey>& srtpKeys)
 {
     using namespace nlohmann;
     json body = {{"action", "configure"}};
@@ -240,7 +260,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
                     {{"type", "nack"}},
                     {{"type", "nack"}, {"subtype", "pli"}}})}}));
 
-        if (!_answerOptions.rtxDisabled)
+        if (_callConfig.rtx)
         {
             payloadTypes.push_back(json::object({{"id", 96},
                 {"name", "rtx"},
@@ -273,12 +293,12 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     body["data"] = json::object({{"port", 5000}});
 
-    if (!_answerOptions.neighbours.empty())
+    if (!_callConfig.neighbours.empty())
     {
         auto neighbours = json::object();
         auto groups = json::array();
         neighbours["action"] = "mute";
-        for (auto& id : _answerOptions.neighbours)
+        for (auto& id : _callConfig.neighbours)
         {
             groups.push_back(id);
         }
@@ -291,7 +311,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPostRequest>(_httpd,
-        _baseUrl + "/conferences/" + _conferenceId + "/" + _id,
+        _callConfig.baseUrl + "/conferences/" + _callConfig.conferenceId + "/" + _id,
         body.dump(),
         3 * utils::Time::sec,
         responseBody);
@@ -310,7 +330,7 @@ void Channel::disconnect()
 {
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpDeleteRequest>(_httpd,
-        _baseUrl + "/conferences/" + _conferenceId + "/" + _id,
+        _callConfig.baseUrl + "/conferences/" + _callConfig.conferenceId + "/" + _id,
         3 * utils::Time::sec,
         responseBody);
 
@@ -448,30 +468,54 @@ void ColibriChannel::create(const std::string& baseUrl,
     const bool video,
     const bool forwardMedia,
     const uint32_t idleTimeout,
-    const utils::Span<std::string> neighbours)
+    const utils::Span<std::string> neighbours,
+    api::SrtpMode srtpMode)
 {
-    // Colibri endpoints do not support idle timeouts.
-    assert(0 == idleTimeout);
-
-    _conferenceId = conferenceId;
-    _relayType = forwardMedia ? "ssrc-rewrite" : "mixer";
-    _baseUrl = baseUrl;
-    _videoEnabled = video;
-
-    using namespace nlohmann;
-    json body = {{"id", conferenceId}, {"contents", json::array()}};
-
+    CallConfigBuilder cfg(conferenceId);
+    cfg.url(baseUrl).idleTimeout(idleTimeout);
     if (audio)
     {
-        body["contents"].push_back(newContent(_id, "audio", _relayType.c_str(), initiator));
+        cfg.withAudio();
     }
     if (video)
+    {
+        cfg.withVideo();
+    }
+    if (!forwardMedia)
+    {
+        cfg.mixed();
+    }
+
+    std::vector<std::string> nb;
+    for (auto& n : neighbours)
+    {
+        nb.push_back(n);
+    }
+    cfg.neighbours(nb);
+
+    create(initiator, cfg.buildColibri());
+}
+
+void ColibriChannel::create(bool initiator, const CallConfig& config)
+{
+    _callConfig = config;
+    // Colibri endpoints do not support idle timeouts.
+    assert(0 == _callConfig.idleTimeout);
+
+    using namespace nlohmann;
+    json body = {{"id", _callConfig.conferenceId}, {"contents", json::array()}};
+
+    if (_callConfig.audio)
+    {
+        body["contents"].push_back(newContent(_id, "audio", _callConfig.relayType.c_str(), initiator));
+    }
+    if (_callConfig.video)
     {
         auto videoContent = newContent(_id, "video", "ssrc-rewrite", initiator);
         videoContent["channels"][0]["last-n"] = 5;
         body["contents"].push_back(videoContent);
     }
-    if (audio || video)
+    if (_callConfig.audio || _callConfig.video)
     {
         // data must be last or request handler cannot decide if bundling is used
         body["contents"].push_back(json::object({{"name", "data"},
@@ -483,7 +527,7 @@ void ColibriChannel::create(const std::string& baseUrl,
     logger::debug("allocate ch with %s", "ApiChannel", body.dump().c_str());
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPatchRequest>(_httpd,
-        std::string(baseUrl) + "/colibri/conferences/" + conferenceId,
+        std::string(_callConfig.baseUrl) + "/colibri/conferences/" + _callConfig.conferenceId,
         body.dump(),
         90 * utils::Time::sec,
         responseBody);
@@ -502,10 +546,11 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
     const ice::IceCandidates& candidates,
     const std::string& fingerprint,
     uint32_t audioSsrc,
-    uint32_t* videoSsrcs)
+    uint32_t* videoSsrcs,
+    std::vector<srtp::AesKey>& srtpKeys)
 {
     using namespace nlohmann;
-    json body = {{"id", _conferenceId},
+    json body = {{"id", _callConfig.conferenceId},
         {"contents", json::array()},
         {"channel-bundles", json::array({json::object({{"id", _id}})})}};
 
@@ -541,7 +586,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
                     {"expire", 180},
                     {"id", _audioId},
                     {"channel-bundle-id", _id},
-                    {"rtp-level-relay-type", _relayType},
+                    {"rtp-level-relay-type", _callConfig.relayType},
                     {"direction", "sendrecv"},
                     {"rtp-hdrexts",
                         json::array({{{"id", 1}, {"uri", "urn:ietf:params:rtp-hdrext:ssrc-audio-level"}},
@@ -583,7 +628,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
             {"expire", 180},
             {"id", _videoId},
             {"channel-bundle-id", _id},
-            {"rtp-level-relay-type", _relayType},
+            {"rtp-level-relay-type", _callConfig.relayType},
             {"direction", "sendrecv"},
             {"rtp-hdrexts",
                 json::array({{{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}},
@@ -599,7 +644,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
                     {{"type", "nack"}},
                     {{"type", "nack"}, {"subtype", "pli"}}})}}));
 
-        if (!_answerOptions.rtxDisabled)
+        if (_callConfig.rtx)
         {
             payloadTypes.push_back(json::object({{"id", 96},
                 {"name", "rtx"},
@@ -644,7 +689,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPatchRequest>(_httpd,
-        _baseUrl + "/colibri/conferences/" + _conferenceId,
+        _callConfig.baseUrl + "/colibri/conferences/" + _callConfig.conferenceId,
         body.dump(),
         3 * utils::Time::sec,
         responseBody);
@@ -662,7 +707,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
 void ColibriChannel::disconnect()
 {
     using namespace nlohmann;
-    json body = {{"id", _conferenceId},
+    json body = {{"id", _callConfig.conferenceId},
         {"contents", json::array()},
         {"channel-bundles", json::array({json::object({{"id", _id}, {"transport", json::object()}})})}};
 
@@ -679,7 +724,7 @@ void ColibriChannel::disconnect()
 
     nlohmann::json responseBody;
     auto success = awaitResponse<HttpPatchRequest>(_httpd,
-        _baseUrl + "/colibri/conferences/" + _conferenceId,
+        _callConfig.baseUrl + "/colibri/conferences/" + _callConfig.conferenceId,
         body.dump(),
         3 * utils::Time::sec,
         responseBody);

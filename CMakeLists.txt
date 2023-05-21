@@ -558,6 +558,7 @@ set(TEST_FILES
     test/integration/BarbellTest.h
     test/integration/ConfIntegrationTest.cpp
     test/integration/IceTransportTest.cpp
+    test/integration/SrtpIntegrationTest.cpp
     
 #    test/integration/MixerTimeoutTest.cpp
 #    test/integration/StatsTest.cpp

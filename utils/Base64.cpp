@@ -26,6 +26,7 @@ std::string Base64::encode(const uint8_t* input, const uint32_t length)
     if (length > 0)
     {
         auto outputLength = encodeLength(length);
+        encodedText.reserve(outputLength);
 
         uint32_t bitsCollected = 0;
         uint32_t accumulator = 0;

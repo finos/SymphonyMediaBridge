@@ -233,10 +233,14 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         group.startConference(conf, baseUrl + "/colibri");
 
         printf("T%" PRIu64 " calling\n", (utils::Time::rawAbsoluteTime() / utils::Time::ms) & 0xFFFF);
+
+        CallConfigBuilder callConfig(conf.getId());
+        callConfig.withOpus().mixed().url(baseUrl);
+
         // Audio only for all three participants.
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, false);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, false);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, false);
+        group.clients[0]->initiateCall(callConfig.build());
+        group.clients[1]->joinCall(callConfig.build());
+        group.clients[2]->joinCall(callConfig.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -291,16 +295,13 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
         using RtpVideoReceiver = typename SfuClient<ColibriChannel>::RtpVideoReceiver;
 
-        AnswerOptions answerOptionNoRtx;
-        answerOptionNoRtx.rtxDisabled = true;
-
-        group.clients[0]->_channel.setAnswerOptions(answerOptionNoRtx);
-        group.clients[1]->_channel.setAnswerOptions(answerOptionNoRtx);
+        emulator::CallConfigBuilder config(conf.getId());
+        config.withOpus().withVideo().disableRtx().url(baseUrl);
 
         // Audio only for all three participants.
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[0]->initiateCall(config.build());
+        group.clients[1]->joinCall(config.build());
+        group.clients[2]->joinCall(config.enableRtx().build());
 
         auto connectResult = group.connectAll(utils::Time::sec * _clientsConnectionTimeout);
         EXPECT_TRUE(connectResult);

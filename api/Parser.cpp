@@ -123,7 +123,7 @@ void setIfExists(utils::Optional<std::string>& target, const nlohmann::json& dat
     }
 }
 
-api::utils::EnumRef<api::SrtpMode> srtpModes[] = {{"", api::SrtpMode::Disabled},
+api::utils::EnumRef<api::SrtpMode> srtpModes[] = {{"DISABLED", api::SrtpMode::Disabled},
     {"SDES", api::SrtpMode::SDES},
     {"DTLS", api::SrtpMode::DTLS}};
 
@@ -140,6 +140,7 @@ api::SrtpMode parseSrtpMode(const nlohmann::json& data)
     {
         return api::utils::fromString(data["srtp"].get<std::string>(), srtpModes);
     }
+    return api::SrtpMode::Disabled;
 }
 
 api::AllocateEndpoint::Transport parseAllocateEndpointTransport(const nlohmann::json& data)

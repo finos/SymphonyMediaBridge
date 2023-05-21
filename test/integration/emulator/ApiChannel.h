@@ -1,7 +1,9 @@
 #pragma once
+#include "api/RtcDescriptors.h"
 #include "api/SimulcastGroup.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
+#include "test/integration/emulator/CallConfigBuilder.h"
 #include "test/integration/emulator/Httpd.h"
 #include "transport/RtcTransport.h"
 #include "utils/Span.h"
@@ -67,13 +69,17 @@ public:
         const bool video,
         const bool forwardMedia,
         const uint32_t idleTimeout,
-        const utils::Span<std::string> neighbours) = 0;
+        const utils::Span<std::string> neighbours,
+        api::SrtpMode srtpMode = api::SrtpMode::DTLS) = 0;
+
+    virtual void create(const bool initiator, const CallConfig& config) = 0;
 
     virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
         const std::string& fingerprint,
         uint32_t audioSsrc,
-        uint32_t* videoSsrcs) = 0;
+        uint32_t* videoSsrcs,
+        std::vector<srtp::AesKey>& srtpKeys) = 0;
 
     virtual void configureTransport(transport::RtcTransport& transport,
         memory::AudioPacketPoolAllocator& allocator) = 0;
@@ -92,9 +98,7 @@ public:
 
 public:
     bool isSuccess() const { return !_offer.empty(); }
-    bool isVideoEnabled() const { return _videoEnabled; }
-
-    void setAnswerOptions(const AnswerOptions& answerOptions) { _answerOptions = answerOptions; }
+    bool isVideoEnabled() const { return _callConfig.video; }
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
@@ -110,20 +114,16 @@ protected:
         const char* candidatesGroupName,
         memory::AudioPacketPoolAllocator& allocator);
 
-protected:
+    CallConfig _callConfig;
     emulator::HttpdFactory* _httpd;
     std::string _id;
-    std::string _conferenceId;
 
     std::string _audioId;
     std::string _dataId;
     std::string _videoId;
-    std::string _relayType;
-    nlohmann::json _offer;
-    std::string _baseUrl;
-    bool _videoEnabled;
 
-    AnswerOptions _answerOptions;
+    nlohmann::json _offer;
+
     ice::IceCandidates _ipv6RemoteCandidates;
 };
 
@@ -139,13 +139,17 @@ public:
         const bool video,
         const bool forwardMedia,
         const uint32_t idleTimeout,
-        const utils::Span<std::string> neighbours) override;
+        const utils::Span<std::string> neighbours,
+        api::SrtpMode srtpMode) override;
+
+    void create(const bool initiator, const CallConfig& config) override;
 
     void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
         const std::string& fingerprint,
         uint32_t audioSsrc,
-        uint32_t* videoSsrcs) override;
+        uint32_t* videoSsrcs,
+        std::vector<srtp::AesKey>& srtpKeys) override;
 
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
 
@@ -170,13 +174,17 @@ public:
         const bool video,
         const bool forwardMedia,
         const uint32_t idleTimeout,
-        const utils::Span<std::string> neighbours) override;
+        const utils::Span<std::string> neighbours,
+        api::SrtpMode srtpMode) override;
+
+    void create(const bool initiator, const CallConfig& config) override;
 
     void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
         const ice::IceCandidates& candidates,
         const std::string& fingerprint,
         uint32_t audioSsrc,
-        uint32_t* videoSsrcs) override;
+        uint32_t* videoSsrcs,
+        std::vector<srtp::AesKey>& srtpKeys) override;
 
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
 

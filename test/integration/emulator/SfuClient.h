@@ -156,6 +156,20 @@ public:
         return stats;
     }
 
+    void initiateCall(const CallConfig& callConfig)
+    {
+        _sendAudioType = callConfig.audio;
+        _channel.create(true, callConfig);
+        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+    }
+
+    void joinCall(const CallConfig& callConfig)
+    {
+        _sendAudioType = callConfig.audio;
+        _channel.create(false, callConfig);
+        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+    }
+
     void initiateCall(const std::string& baseUrl,
         std::string conferenceId,
         bool initiator,
@@ -173,7 +187,8 @@ public:
             video,
             forwardMedia,
             idleTimeout,
-            noNeighbours);
+            noNeighbours,
+            api::SrtpMode::DTLS);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
@@ -194,7 +209,8 @@ public:
             video,
             forwardMedia,
             idleTimeout,
-            neighbours);
+            neighbours,
+            api::SrtpMode::DTLS);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
@@ -218,7 +234,8 @@ public:
             video,
             forwardMedia,
             idleTimeout,
-            noNeighbours);
+            noNeighbours,
+            api::SrtpMode::DTLS);
         _ipv6CandidateDelay = ipv6CandidateDelay;
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
@@ -355,12 +372,13 @@ public:
         }
 
         assert(_audioSource);
-
+        std::vector<srtp::AesKey> noKeys;
         _channel.sendResponse(_transport->getLocalCredentials(),
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),
-            _channel.isVideoEnabled() ? _videoSsrcs : nullptr);
+            _channel.isVideoEnabled() ? _videoSsrcs : nullptr,
+            noKeys);
 
         _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();
