@@ -950,9 +950,12 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         Conference conf(_httpd);
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true, 0);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, 10);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true, 10);
+        CallConfigBuilder cfgBuilder(conf.getId());
+        cfgBuilder.url(baseUrl).withOpus().withVideo();
+
+        group.clients[0]->initiateCall(cfgBuilder.build());
+        group.clients[1]->joinCall(cfgBuilder.idleTimeout(10).build());
+        group.clients[2]->joinCall(cfgBuilder.idleTimeout(10).build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 

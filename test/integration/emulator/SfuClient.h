@@ -177,8 +177,7 @@ public:
         bool initiator,
         Audio audio,
         bool video,
-        bool forwardMedia,
-        uint32_t idleTimeout = 0)
+        bool forwardMedia)
     {
         utils::Span<std::string> noNeighbours;
         _sendAudioType = audio;
@@ -188,7 +187,7 @@ public:
             audio != Audio::None,
             video,
             forwardMedia,
-            idleTimeout,
+            0,
             noNeighbours,
             api::SrtpMode::DTLS);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
