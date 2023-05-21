@@ -148,10 +148,15 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         }
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
+        CallConfigBuilder cfg1(conf.getId());
+        cfg1.url(baseUrl).av();
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
+        CallConfigBuilder cfg2(cfg1);
+        cfg2.room(conf2.getId()).url(baseUrl2);
+
+        group.clients[0]->initiateCall(cfg1.build());
+        group.clients[1]->joinCall(cfg2.build());
+        group.clients[2]->joinCall(cfg2.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -291,10 +296,15 @@ TEST_F(BarbellTest, simpleBarbell)
         bb2.configure(sdp1);
 
         utils::Time::nanoSleep(2 * utils::Time::sec);
+        CallConfigBuilder cfg1(conf.getId());
+        cfg1.av().url(baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
+        CallConfigBuilder cfg2(cfg1);
+        cfg2.room(conf2.getId()).url(baseUrl2);
+
+        group.clients[0]->initiateCall(cfg1.build());
+        group.clients[1]->joinCall(cfg2.build());
+        group.clients[2]->joinCall(cfg2.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -403,8 +413,14 @@ TEST_F(BarbellTest, barbellAfterClients)
         group.startConference(conf, baseUrl);
         group.startConference(conf2, baseUrl2);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl2, conf2.getId(), false, emulator::Audio::Opus, true, true);
+        CallConfigBuilder cfg1(conf.getId());
+        cfg1.av().url(baseUrl);
+
+        CallConfigBuilder cfg2(conf2.getId());
+        cfg2.av().url(baseUrl2);
+
+        group.clients[0]->initiateCall(cfg1.build());
+        group.clients[1]->joinCall(cfg2.build());
 
         if (!group.connectAll(utils::Time::sec * _clientsConnectionTimeout))
         {
@@ -557,7 +573,7 @@ TEST_F(BarbellTest, barbellNeighbours)
 
         group.clients[0]->initiateCall(cfgBuilder.build());
         group.clients[1]->joinCall(cfgNeighbours.build());
-        group.clients[2]->joinCall(cfgNeighbours.url(baseUrl2).conf(conf2.getId()).build());
+        group.clients[2]->joinCall(cfgNeighbours.url(baseUrl2).room(conf2.getId()).build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 

@@ -28,7 +28,7 @@ class CallConfigBuilder
 public:
     CallConfigBuilder(std::string conferenceId) { _config.conferenceId = conferenceId; }
 
-    CallConfigBuilder& conf(const std::string id)
+    CallConfigBuilder& room(const std::string id)
     {
         _config.conferenceId = id;
         return *this;
@@ -63,6 +63,13 @@ public:
         return *this;
     }
 
+    CallConfigBuilder& av()
+    {
+        _config.audio = Audio::Opus;
+        _config.video = true;
+        return *this;
+    }
+
     CallConfigBuilder& withAudio()
     {
         _config.audio = Audio::Fake;
@@ -84,6 +91,12 @@ public:
     CallConfigBuilder& withVideo()
     {
         _config.video = true;
+        return *this;
+    }
+
+    CallConfigBuilder& noVideo()
+    {
+        _config.video = false;
         return *this;
     }
 

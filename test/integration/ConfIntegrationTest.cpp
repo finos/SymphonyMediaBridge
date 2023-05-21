@@ -61,10 +61,12 @@ TEST_F(IntegrationTest, plain)
         startSimulation();
 
         group.startConference(conf, baseUrl + "/colibri");
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -157,8 +159,11 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
 
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).withOpus();
+
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -408,9 +413,12 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
 
         group.startConference(conf, baseUrl + "/colibri");
 
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
+
         // Audio only for all three participants.
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
         // Client 3 will join after client 2, which produce video, will leave.
 
         if (!group.connectAll(utils::Time::sec * _clientsConnectionTimeout))
@@ -450,7 +458,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         }
 
         group.add(_httpd);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        group.clients[2]->joinCall(cfg.build());
         ASSERT_TRUE(group.connectSingle(2, utils::Time::sec * 4));
 
         group.clients[2]->_audioSource->setFrequency(2100);
@@ -508,9 +516,12 @@ TEST_F(IntegrationTest, plainNewApi)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
+
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -599,10 +610,12 @@ TEST_F(IntegrationTest, ptime10)
         startSimulation();
 
         group.startConference(conf, baseUrl);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -685,9 +698,12 @@ TEST_F(IntegrationTest, detectIsPtt)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
+
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.build());
 
         auto connectResult = group.connectAll(utils::Time::sec * _clientsConnectionTimeout);
         ASSERT_TRUE(connectResult);
@@ -861,8 +877,11 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
         group.startConference(conf, baseUrl + "/colibri");
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
+
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -1069,9 +1088,12 @@ TEST_F(IntegrationTest, conferencePort)
 
         group.startConference(conf, baseUrl, false);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
+
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -1268,8 +1290,11 @@ TEST_F(IntegrationTest, endpointMessage)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
+
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -1339,9 +1364,12 @@ TEST_F(IntegrationTest, noAudioLevelExt)
 
         group.startConference(conf, baseUrl);
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).withOpus();
+
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
         group.clients[2]->_audioSource->setUseAudioLevel(false);
@@ -1411,10 +1439,12 @@ TEST_F(IntegrationTest, confList)
         startSimulation();
 
         group.startConference(conf, baseUrl);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av();
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, true, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, true, false);
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -1540,10 +1570,12 @@ TEST_F(IntegrationTest, opusDecodeRate)
         startSimulation();
 
         group.startConference(conf, baseUrl);
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).withOpus();
 
-        group.clients[0]->initiateCall(baseUrl, conf.getId(), true, emulator::Audio::Opus, false, true);
-        group.clients[1]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
-        group.clients[2]->initiateCall(baseUrl, conf.getId(), false, emulator::Audio::Opus, false, true);
+        group.clients[0]->initiateCall(cfg.build());
+        group.clients[1]->joinCall(cfg.build());
+        group.clients[2]->joinCall(cfg.build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
         group.clients[0]->_audioSource->setUseAudioLevel(false);

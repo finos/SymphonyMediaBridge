@@ -172,48 +172,6 @@ public:
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
-    void initiateCall(const std::string& baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        Audio audio,
-        bool video,
-        bool forwardMedia)
-    {
-        CallConfigBuilder cfgBuilder(conferenceId);
-        cfgBuilder.url(baseUrl);
-        if (!forwardMedia)
-        {
-            cfgBuilder.mixed();
-        }
-        if (video)
-        {
-            cfgBuilder.withVideo();
-        }
-        switch (audio)
-        {
-        case Audio::Fake:
-            cfgBuilder.withAudio();
-            break;
-        case Audio::Opus:
-            cfgBuilder.withOpus();
-            break;
-        case Audio::Muted:
-            cfgBuilder.muted();
-            break;
-        default:
-            break;
-        }
-
-        if (initiator)
-        {
-            initiateCall(cfgBuilder.build());
-        }
-        else
-        {
-            joinCall(cfgBuilder.build());
-        }
-    }
-
     void setExpectedAudioType(Audio audio) { _expectedReceiveAudioType = audio; }
 
     size_t getEndpointIdHash() const { return _channel.getEndpointIdHash(); }
