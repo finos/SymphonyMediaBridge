@@ -158,41 +158,6 @@ void Channel::create(const bool initiator, const CallConfig& config)
     }
 }
 
-void Channel::create(const std::string& baseUrl,
-    const std::string& conferenceId,
-    const bool initiator,
-    const bool audio,
-    const bool video,
-    const bool forwardMedia,
-    const uint32_t idleTimeout,
-    const utils::Span<std::string> neighbours,
-    api::SrtpMode srtpMode)
-{
-    CallConfigBuilder cfg(conferenceId);
-    cfg.url(baseUrl).idleTimeout(idleTimeout);
-    if (audio)
-    {
-        cfg.withAudio();
-    }
-    if (video)
-    {
-        cfg.withVideo();
-    }
-    if (!forwardMedia)
-    {
-        cfg.mixed();
-    }
-
-    std::vector<std::string> nb;
-    for (auto& n : neighbours)
-    {
-        nb.push_back(n);
-    }
-    cfg.neighbours(nb);
-
-    create(initiator, cfg.build());
-}
-
 void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredentials,
     const ice::IceCandidates& candidates,
     const std::string& fingerprint,
@@ -459,41 +424,6 @@ nlohmann::json newContent(const std::string& endpointId, const char* type, const
                 {"rtp-level-relay-type", relayType}})})}});
 
     return contentItem;
-}
-
-void ColibriChannel::create(const std::string& baseUrl,
-    const std::string& conferenceId,
-    const bool initiator,
-    const bool audio,
-    const bool video,
-    const bool forwardMedia,
-    const uint32_t idleTimeout,
-    const utils::Span<std::string> neighbours,
-    api::SrtpMode srtpMode)
-{
-    CallConfigBuilder cfg(conferenceId);
-    cfg.url(baseUrl).idleTimeout(idleTimeout);
-    if (audio)
-    {
-        cfg.withAudio();
-    }
-    if (video)
-    {
-        cfg.withVideo();
-    }
-    if (!forwardMedia)
-    {
-        cfg.mixed();
-    }
-
-    std::vector<std::string> nb;
-    for (auto& n : neighbours)
-    {
-        nb.push_back(n);
-    }
-    cfg.neighbours(nb);
-
-    create(initiator, cfg.build());
 }
 
 void ColibriChannel::create(bool initiator, const CallConfig& config)

@@ -179,18 +179,39 @@ public:
         bool video,
         bool forwardMedia)
     {
-        utils::Span<std::string> noNeighbours;
-        _sendAudioType = audio;
-        _channel.create(baseUrl,
-            conferenceId,
-            initiator,
-            audio != Audio::None,
-            video,
-            forwardMedia,
-            0,
-            noNeighbours,
-            api::SrtpMode::DTLS);
-        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+        CallConfigBuilder cfgBuilder(conferenceId);
+        cfgBuilder.url(baseUrl);
+        if (!forwardMedia)
+        {
+            cfgBuilder.mixed();
+        }
+        if (video)
+        {
+            cfgBuilder.withVideo();
+        }
+        switch (audio)
+        {
+        case Audio::Fake:
+            cfgBuilder.withAudio();
+            break;
+        case Audio::Opus:
+            cfgBuilder.withOpus();
+            break;
+        case Audio::Muted:
+            cfgBuilder.muted();
+            break;
+        default:
+            break;
+        }
+
+        if (initiator)
+        {
+            initiateCall(cfgBuilder.build());
+        }
+        else
+        {
+            joinCall(cfgBuilder.build());
+        }
     }
 
     void setExpectedAudioType(Audio audio) { _expectedReceiveAudioType = audio; }

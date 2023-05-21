@@ -62,16 +62,6 @@ class BaseChannel
 public:
     BaseChannel(emulator::HttpdFactory* httpd);
 
-    virtual void create(const std::string& baseUrl,
-        const std::string& conferenceId,
-        const bool initiator,
-        const bool audio,
-        const bool video,
-        const bool forwardMedia,
-        const uint32_t idleTimeout,
-        const utils::Span<std::string> neighbours,
-        api::SrtpMode srtpMode = api::SrtpMode::DTLS) = 0;
-
     virtual void create(const bool initiator, const CallConfig& config) = 0;
 
     virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
@@ -132,16 +122,6 @@ class Channel : public BaseChannel
 public:
     Channel(emulator::HttpdFactory* httpd) : BaseChannel(httpd) {}
 
-    void create(const std::string& baseUrl,
-        const std::string& conferenceId,
-        const bool initiator,
-        const bool audio,
-        const bool video,
-        const bool forwardMedia,
-        const uint32_t idleTimeout,
-        const utils::Span<std::string> neighbours,
-        api::SrtpMode srtpMode) override;
-
     void create(const bool initiator, const CallConfig& config) override;
 
     void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
@@ -166,16 +146,6 @@ class ColibriChannel : public BaseChannel
 {
 public:
     ColibriChannel(emulator::HttpdFactory* httpd) : BaseChannel(httpd) {}
-
-    void create(const std::string& baseUrl,
-        const std::string& conferenceId,
-        const bool initiator,
-        const bool audio,
-        const bool video,
-        const bool forwardMedia,
-        const uint32_t idleTimeout,
-        const utils::Span<std::string> neighbours,
-        api::SrtpMode srtpMode) override;
 
     void create(const bool initiator, const CallConfig& config) override;
 
