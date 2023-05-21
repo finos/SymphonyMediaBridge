@@ -6,6 +6,7 @@
 #include "logger/PruneSpam.h"
 #include "memory/PacketPoolAllocator.h"
 #include "transport/dtls/DtlsMessageListener.h"
+#include "transport/dtls/SrtpProfiles.h"
 #include <openssl/ssl.h>
 #include <srtp2/srtp.h>
 
@@ -30,6 +31,8 @@ public:
         LAST
     };
 
+    static const uint32_t MAX_KEY_LENGTH = 46;
+
     class IEvents
     {
     public:
@@ -46,7 +49,9 @@ public:
     void setRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool isDtlsClient);
-    void setCryptoKeys(srtp_profile_t cryptoSuite, unsigned char* localKey, unsigned char* remoteKey);
+
+    void getLocalKey(srtp::Profile profile, srtp::AesKey& keyOut);
+    void setRemoteKey(const srtp::AesKey& key);
 
     bool unprotect(memory::Packet& packet);
     bool protect(memory::Packet& packet);
@@ -86,6 +91,8 @@ private:
 
     bool _nullCipher;
 
+    srtp::AesKey _localKey;
+
     IEvents* _eventSink;
     logger::PruneSpam _rtpAntiSpam;
     logger::PruneSpam _rtcpAntiSpam;
@@ -97,7 +104,7 @@ private:
     void sslRead();
     bool compareFingerprint();
     bool createSrtp();
-    bool createSrtp(srtp_profile_t protectionProfile, unsigned char* localKey, unsigned char* remoteKey);
+    bool createSrtp(const srtp::AesKey& key);
     static const char* getErrorMessage(int sslErrorCode);
 };
 } // namespace transport

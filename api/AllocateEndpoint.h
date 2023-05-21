@@ -1,5 +1,7 @@
 #pragma once
 
+#include "api/RtcDescriptors.h"
+#include "transport/dtls/SrtpProfiles.h"
 #include "utils/Optional.h"
 #include <cstdint>
 #include <string>
@@ -11,12 +13,12 @@ struct AllocateEndpoint
 {
     struct Transport
     {
-        Transport() : ice(false), dtls(false) {}
+        Transport() : ice(false), srtpMode(SrtpMode::Disabled) {}
 
         bool ice;
         utils::Optional<bool> iceControlling;
 
-        bool dtls;
+        api::SrtpMode srtpMode;
     };
 
     struct Audio

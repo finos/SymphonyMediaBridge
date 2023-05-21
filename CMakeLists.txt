@@ -386,6 +386,8 @@ set(FILES
         transport/dtls/SslDtls.cpp
         transport/dtls/SslDtls.h
         transport/dtls/SslWriteBioListener.h
+        transport/dtls/SrtpProfiles.h
+        transport/dtls/SrtpProfiles.cpp
         transport/ice/IceCandidate.cpp
         transport/ice/IceCandidate.h
         transport/ice/IceComponent.h

@@ -8,6 +8,7 @@
 #include "utils/CheckedCast.h"
 #include "utils/Time.h"
 #include <openssl/err.h>
+#include <openssl/rand.h>
 #include <srtp2/srtp.h>
 
 namespace
@@ -37,6 +38,7 @@ constexpr size_t keyingMaterialSize = srtpMasterKeyLength * 2 + srtpSaltLength *
 
 namespace transport
 {
+
 
 SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     : _isInitialized(false),
@@ -77,6 +79,9 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
         return;
     }
     SSL_set_bio(_ssl, _readBio, _writeBio);
+
+    RAND_bytes(_localKey.keySalt, sizeof(_localKey.keySalt));
+
     _isInitialized = true;
 }
 
@@ -583,33 +588,57 @@ bool SrtpClient::createSrtp()
 }
 
 /**
- * @param protectionProfile is either SRTP_AES128_CM_SHA1_80 or SRTP_AES128_CM_SHA1_32
- * @param keyMaterial 16B aes key and 14B salt
+ * @param keyMaterial key and salt
  */
-bool SrtpClient::createSrtp(srtp_profile_t protectionProfile, unsigned char* localKey, unsigned char* remoteKey)
+bool SrtpClient::createSrtp(const srtp::AesKey& remoteKey)
 {
     srtp_policy_t srtpPolicy;
     memset(&srtpPolicy, 0, sizeof(srtpPolicy));
 
-    switch (protectionProfile)
+    _localKey.profile = remoteKey.profile;
+    switch (remoteKey.profile)
     {
-    case srtp_profile_aes128_cm_sha1_80:
+    case srtp::Profile::AES128_CM_SHA1_32:
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_32(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_32(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES128_CM_SHA1_80:
         srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtp);
         srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtcp);
         break;
-    case srtp_profile_aes128_cm_sha1_32:
-        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_32(&srtpPolicy.rtp);
-        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtcp);
+    case srtp::Profile::AES_192_CM_SHA1_32:
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_32(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_32(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES_192_CM_SHA1_80:
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_80(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES_256_CM_SHA1_32:
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_32(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_32(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES_256_CM_SHA1_80:
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_80(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AEAD_AES_128_GCM:
+        srtp_crypto_policy_set_aes_gcm_128_16_auth(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_gcm_128_16_auth(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AEAD_AES_256_GCM:
+        srtp_crypto_policy_set_aes_gcm_256_16_auth(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_gcm_256_16_auth(&srtpPolicy.rtcp);
         break;
     default:
         assert(false);
-        break;
+        return false;
     }
 
     srtpPolicy.ssrc.value = 0;
     srtpPolicy.next = nullptr;
     srtpPolicy.ssrc.type = ssrc_any_outbound;
-    srtpPolicy.key = localKey;
+    srtpPolicy.key = _localKey.keySalt;
 
     auto createResult = srtp_create(&_localSrtp, &srtpPolicy);
     if (createResult != srtp_err_status_ok)
@@ -619,7 +648,7 @@ bool SrtpClient::createSrtp(srtp_profile_t protectionProfile, unsigned char* loc
     }
 
     srtpPolicy.ssrc.type = ssrc_any_inbound;
-    srtpPolicy.key = remoteKey;
+    srtpPolicy.key = const_cast<unsigned char*>(remoteKey.keySalt);
 
     createResult = srtp_create(&_remoteSrtp, &srtpPolicy);
     if (createResult != srtp_err_status_ok)
@@ -631,20 +660,6 @@ bool SrtpClient::createSrtp(srtp_profile_t protectionProfile, unsigned char* loc
     _nullCipher = false;
 
     return true;
-}
-
-void SrtpClient::setCryptoKeys(srtp_profile_t cryptoSuite, unsigned char* localKey, unsigned char* remoteKey)
-{
-    if (cryptoSuite != SRTP_AES128_CM_SHA1_80 || cryptoSuite != SRTP_AES128_CM_SHA1_32)
-    {
-        logger::error("unsupported crypto suite %u", _loggableId.c_str(), cryptoSuite);
-        return;
-    }
-
-    if (!createSrtp(cryptoSuite, localKey, remoteKey))
-    {
-        logger::error("failed to create srtp context", _loggableId.c_str());
-    }
 }
 
 void SrtpClient::onMessageReceived(memory::UniquePacket packet)
@@ -793,6 +808,25 @@ const char* SrtpClient::getErrorMessage(int sslErrorCode)
     }
 
     return "unkown";
+}
+
+void SrtpClient::getLocalKey(srtp::Profile profile, srtp::AesKey& keyOut)
+{
+    keyOut.profile = profile;
+    if (keyOut.getKeyLength() == 0)
+    {
+        return;
+    }
+
+    std::memcpy(keyOut.keySalt, _localKey.keySalt, keyOut.getLength());
+}
+
+void SrtpClient::setRemoteKey(const srtp::AesKey& key)
+{
+    if (!createSrtp(key))
+    {
+        logger::error("failed to create srtp context", _loggableId.c_str());
+    }
 }
 
 } // namespace transport

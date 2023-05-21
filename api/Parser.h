@@ -7,6 +7,7 @@
 #include "api/EndpointDescription.h"
 #include "api/Recording.h"
 #include "nlohmann/json.hpp"
+#include "transport/dtls/SrtpProfiles.h"
 
 namespace api
 {

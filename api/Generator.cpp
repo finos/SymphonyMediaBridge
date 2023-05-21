@@ -3,6 +3,7 @@
 #include "api/ConferenceEndpoint.h"
 #include "api/EndpointDescription.h"
 #include "api/utils.h"
+#include "utils/Base64.h"
 
 namespace
 {
@@ -57,6 +58,17 @@ nlohmann::json generateTransport(const api::Transport& transport)
         dtlsJson["hash"] = dtls.hash;
         dtlsJson["setup"] = dtls.setup;
         transportJson["dtls"] = dtlsJson;
+    }
+    else if (!transport.sdesKeys.empty())
+    {
+        transportJson["sdes"] = nlohmann::json::array();
+        for (auto sdesKey : transport.sdesKeys)
+        {
+            nlohmann::json sdesJson;
+            sdesJson["key"] = utils::Base64::encode(sdesKey.keySalt, sdesKey.getLength());
+            sdesJson["profile"] = api::utils::toString(sdesKey.profile);
+            transportJson["sdes"].push_back(sdesJson);
+        }
     }
 
     if (transport.connection.isSet())

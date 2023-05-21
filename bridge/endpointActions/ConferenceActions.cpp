@@ -46,7 +46,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 "Fail to get bundled description");
         }
 
-        if (!bundleTransport.ice || !bundleTransport.dtls)
+        if (!bundleTransport.ice)
         {
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                 utils::format("Bundling without ice is not supported, conference %s", conferenceId.c_str()));
@@ -288,7 +288,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
     if (allocateChannel.bundleTransport.isSet())
     {
         const auto& bundleTransport = allocateChannel.bundleTransport.get();
-        if (!bundleTransport.ice || !bundleTransport.dtls)
+        if (!bundleTransport.ice)
         {
             throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
                 "Bundle transports requires both ICE and DTLS");
@@ -368,7 +368,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         : ice::IceRole::CONTROLLING);
             }
             const auto mixed = audio.relayType.compare("mixed") == 0;
-            const auto isDtlsEnabled = transport.dtls;
+            const auto isDtlsEnabled = transport.srtpMode == api::SrtpMode::DTLS;
 
             std::string outChannelId;
             if (!mixer->addAudioStream(outChannelId,
@@ -403,7 +403,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         : ice::IceRole::CONTROLLING);
             }
 
-            const auto isDtlsEnabled = transport.dtls;
+            const auto isDtlsEnabled = transport.srtpMode == api::SrtpMode::DTLS;
 
             std::string outChannelId;
             if (!mixer->addVideoStream(outChannelId,

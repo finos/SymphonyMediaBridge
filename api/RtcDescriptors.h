@@ -1,6 +1,7 @@
 #pragma once
 
 #include "api/SimulcastGroup.h"
+#include "transport/dtls/SrtpProfiles.h"
 #include "utils/Optional.h"
 #include <cstdint>
 #include <string>
@@ -8,6 +9,13 @@
 
 namespace api
 {
+
+enum SrtpMode
+{
+    Disabled = 0,
+    DTLS,
+    SDES
+};
 
 struct Candidate
 {
@@ -52,6 +60,7 @@ struct Transport
     utils::Optional<Ice> ice;
     utils::Optional<Dtls> dtls;
     utils::Optional<Connection> connection;
+    std::vector<srtp::AesKey> sdesKeys;
 };
 
 struct VideoStream
