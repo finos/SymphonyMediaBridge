@@ -493,12 +493,16 @@ void ColibriChannel::create(const std::string& baseUrl,
     }
     cfg.neighbours(nb);
 
-    create(initiator, cfg.buildColibri());
+    create(initiator, cfg.build());
 }
 
 void ColibriChannel::create(bool initiator, const CallConfig& config)
 {
     _callConfig = config;
+    if (_callConfig.relayType == "mixed")
+    {
+        _callConfig.relayType = "mixer";
+    }
     // Colibri endpoints do not support idle timeouts.
     assert(0 == _callConfig.idleTimeout);
 

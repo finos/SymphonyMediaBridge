@@ -93,15 +93,6 @@ public:
     }
 
     CallConfig build() const { return _config; }
-    CallConfig buildColibri() const
-    {
-        auto colibriConfig = _config;
-        if (colibriConfig.relayType == "mixed")
-        {
-            colibriConfig.relayType = "mixer";
-        }
-        return colibriConfig;
-    }
 
 private:
     CallConfig _config;
