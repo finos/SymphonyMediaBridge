@@ -37,7 +37,8 @@ POST /conferences/{conferenceId}/{endpointId}
     "bundle-transport": {
         "ice-controlling": Boolean,
         "ice": Boolean,
-        "dtls": Boolean
+        "dtls": boolean, // DEPRECATED
+        "srtp": "DTLS | SDES | DISABLED"
         },
     "audio": {
         "relay-type": ["forwarder | mixed | ssrc-rewrite"]
@@ -59,6 +60,15 @@ POST /conferences/{conferenceId}/{endpointId}
             "type": "sha-256",
             "hash": String
         },
+        "sdes":[ // omitted if dtls is used
+            {
+                "profile": "AES_128_CM_HMAC_SHA1_80",
+                "key": "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
+            },
+            {
+                "profile": "AES_256_CM_HMAC_SHA1_80",
+                "key" : "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
+            }],
         "ice": {
             "ufrag": String,
             "pwd": String,
@@ -160,6 +170,19 @@ POST /conferences/{conferenceId}/{endpointId}
 }
 ```
 
+_SRTP profiles_
+
+```
+AES_128_CM_HMAC_SHA1_80
+AES_128_CM_HMAC_SHA1_32
+AES_192_CM_HMAC_SHA1_80
+AES_192_CM_HMAC_SHA1_32
+AES_256_CM_HMAC_SHA1_80
+AES_256_CM_HMAC_SHA1_32
+AEAD_AES_128_GCM
+AEAD_AES_256_GCM
+```
+
 ##Configure endpoint
 Configure endpoint id {endpointId} in the conference {conferenceId} based on information from the initial SDP answer from the endpoint.
 
@@ -175,6 +198,15 @@ POST /conferences/{conferenceId}/{endpointId}
             "type": String,
             "hash": String
         },
+        "sdes":[ // omit if dtls is used
+            {
+                "profile": "AES_128_CM_HMAC_SHA1_80",
+                "key": "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
+            },
+            {
+                "profile": "AES_256_CM_HMAC_SHA1_80",
+                "key" : "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
+            }],
         "ice": {
             "ufrag": String,
             "pwd": String,
@@ -205,9 +237,7 @@ POST /conferences/{conferenceId}/{endpointId}
             "clockrate": 48000,
             "channels": 2
         },
-        "ssrcs": [
-    Integer
-        ],
+        "ssrcs": [Integer, ...],
         "rtp-hdrexts": [
             {
                 "id": 1,
@@ -297,9 +327,7 @@ POST /conferences/{conferenceId}/{endpointId}
 {
     "action": "reconfigure",
     "audio": {
-        "ssrcs": [
-    String
-        ]
+        "ssrcs": [Integer...]
     },
     "video": {
         "streams": [
@@ -335,7 +363,7 @@ DELETE /conferences/{conferenceId}/{endpointId}
 200 OK
 ```
 
-Deprecated API
+_Deprecated API_
 
 ```json
 POST /conferences/{conferenceId}/{endpointId}
@@ -350,6 +378,8 @@ POST /conferences/{conferenceId}/{endpointId}
 
 ##Allocate barbell leg
 A 2-way barbell leg can be setup between two SMBs. This can be used to create larger conference or multi location conference to facilitate lower delay on average. There is an allocation step, and a configuration step in the same manner as for channels. There is a small difference between endpoint allocation when it comes to video. An endpoint will only receive a selected video stream per participant and an rtc feedback stream in addition to that. The barbell endpoint can receive multicast and RTX for the participants. The dominant speaker may send low, medium and high res video streams. The others may send medium and low resolution to allow the receiving SMB to select lower resolution in case the clients' downlinks are limited.
+
+**Barbells do not support SDES SRTP**
 
 Allocate a {barbell port} in the conference {conferenceId}.
 
@@ -402,9 +432,7 @@ POST /barbell/{conferenceId}/{barbellId}
             "clockrate": 48000,
             "channels": 2
         },
-        "ssrcs": [
-    Integer
-        ],
+        "ssrcs": [Integer, ...],
         "rtp-hdrexts": [
             {
                 "id": 1,
@@ -496,9 +524,7 @@ POST /barbell/{conferenceId}/{barbellId}
     "action": "configure",
     "bundle-transport": {
         "dtls": {
-            "setup": [
-                "active | passive"
-            ],
+            "setup": "active | passive",
             "type": String,
             "hash": String
         },
@@ -532,9 +558,7 @@ POST /barbell/{conferenceId}/{barbellId}
             "clockrate": 48000,
             "channels": 2
         },
-        "ssrcs": [
-    Integer
-        ],
+        "ssrcs": [Integer,...],
         "rtp-hdrexts": [
             {
                 "id": 1,
@@ -645,7 +669,7 @@ GET /conferences?brief
 ```
 
 ###Get Detailed info
-Retrieves the list of participants' endpoints in the conference {conferenceId}. Responds with basic information for each endpoint, such as: presense of audio and video streams, "Active Speaker" flag, use of recording, whether bundled transport is in use, ICE and DTLS status.
+Retrieves the list of participants' endpoints in the conference {conferenceId}. Responds with basic information for each endpoint, such as: presence of audio and video streams, "Active Speaker" flag, use of recording, whether bundled transport is in use, ICE and DTLS status.
 
 ```json
 GET /conferences/{conferenceId}
