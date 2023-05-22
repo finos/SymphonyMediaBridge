@@ -1562,6 +1562,19 @@ bool Mixer::configureBundleTransportDtls(const std::string& endpointId,
     return true;
 }
 
+bool Mixer::configureBundleTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto transportItr = _bundleTransports.find(endpointId);
+    if (transportItr == _bundleTransports.end())
+    {
+        return false;
+    }
+
+    transportItr->second._transport->setRemoteSdesKey(remoteKey);
+    return true;
+}
+
 bool Mixer::startBundleTransport(const std::string& endpointId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);

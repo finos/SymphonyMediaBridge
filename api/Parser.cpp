@@ -2,6 +2,7 @@
 #include "api/ConferenceEndpoint.h"
 #include "api/utils.h"
 #include "utils/Base64.h"
+#include "utils/Format.h"
 
 namespace
 {
@@ -183,13 +184,17 @@ api::Transport parsePatchEndpointTransport(const nlohmann::json& data)
     }
     else if (data.find("sdes") != data.end())
     {
-        for (const auto& sdesJson : data["sdes"])
-        {
-            srtp::AesKey aesKey;
+        const auto& sdesJson = data["sdes"];
+        srtp::AesKey aesKey;
+        const size_t decodedLength =
             utils::Base64::decode(sdesJson["key"].get<std::string>().c_str(), aesKey.keySalt, sizeof(aesKey.keySalt));
-            aesKey.profile = api::utils::stringToSrtpProfile(sdesJson["profile"].get<std::string>());
-            transport.sdesKeys.push_back(aesKey);
+        aesKey.profile = api::utils::stringToSrtpProfile(sdesJson["profile"].get<std::string>());
+        if (decodedLength != aesKey.getLength())
+        {
+            throw nlohmann::detail::other_error::create(-1,
+                utils::format("SDES key invalid length. EndpointConfigure"));
         }
+        transport.sdesKeys.push_back(aesKey);
     }
 
     if (data.find("connection") != data.end())

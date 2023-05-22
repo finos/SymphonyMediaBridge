@@ -69,7 +69,7 @@ public:
         const std::string& fingerprint,
         uint32_t audioSsrc,
         uint32_t* videoSsrcs,
-        std::vector<srtp::AesKey>& srtpKeys) = 0;
+        srtp::AesKey& remoteSdesKey) = 0;
 
     virtual void configureTransport(transport::RtcTransport& transport,
         memory::AudioPacketPoolAllocator& allocator) = 0;
@@ -131,7 +131,7 @@ public:
         const std::string& fingerprint,
         uint32_t audioSsrc,
         uint32_t* videoSsrcs,
-        std::vector<srtp::AesKey>& srtpKeys) override;
+        srtp::AesKey& remoteSdesKey) override;
 
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
 
@@ -158,7 +158,7 @@ public:
         const std::string& fingerprint,
         uint32_t audioSsrc,
         uint32_t* videoSsrcs,
-        std::vector<srtp::AesKey>& srtpKeys) override;
+        srtp::AesKey& remoteSdesKey) override;
 
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
 

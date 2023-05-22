@@ -587,7 +587,7 @@ bool SrtpClient::createSrtp()
 }
 
 /**
- * @param keyMaterial key and salt
+ * @param remoteKey key and salt
  */
 bool SrtpClient::createSrtp(const srtp::AesKey& remoteKey)
 {
@@ -599,7 +599,7 @@ bool SrtpClient::createSrtp(const srtp::AesKey& remoteKey)
     {
     case srtp::Profile::AES128_CM_SHA1_32:
         srtp_crypto_policy_set_aes_cm_128_hmac_sha1_32(&srtpPolicy.rtp);
-        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_32(&srtpPolicy.rtcp);
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtcp);
         break;
     case srtp::Profile::AES128_CM_SHA1_80:
         srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtp);
@@ -607,7 +607,7 @@ bool SrtpClient::createSrtp(const srtp::AesKey& remoteKey)
         break;
     case srtp::Profile::AES_192_CM_SHA1_32:
         srtp_crypto_policy_set_aes_cm_192_hmac_sha1_32(&srtpPolicy.rtp);
-        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_32(&srtpPolicy.rtcp);
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_80(&srtpPolicy.rtcp);
         break;
     case srtp::Profile::AES_192_CM_SHA1_80:
         srtp_crypto_policy_set_aes_cm_192_hmac_sha1_80(&srtpPolicy.rtp);
@@ -615,7 +615,7 @@ bool SrtpClient::createSrtp(const srtp::AesKey& remoteKey)
         break;
     case srtp::Profile::AES_256_CM_SHA1_32:
         srtp_crypto_policy_set_aes_cm_256_hmac_sha1_32(&srtpPolicy.rtp);
-        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_32(&srtpPolicy.rtcp);
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_80(&srtpPolicy.rtcp);
         break;
     case srtp::Profile::AES_256_CM_SHA1_80:
         srtp_crypto_policy_set_aes_cm_256_hmac_sha1_80(&srtpPolicy.rtp);
@@ -822,11 +822,19 @@ void SrtpClient::getLocalKey(srtp::Profile profile, srtp::AesKey& keyOut)
 
 void SrtpClient::setRemoteKey(const srtp::AesKey& key)
 {
+    if (_state != State::IDLE)
+    {
+        assert(false);
+        logger::warn("cannot set remote SDES key once SrtpClient has been initiated", _loggableId.c_str());
+        return;
+    }
+
     if (!createSrtp(key))
     {
         logger::error("failed to create srtp context", _loggableId.c_str());
     }
     _state = State::CONNECTED;
+    logger::debug("SRTP connected with SDES", _loggableId.c_str());
 }
 
 } // namespace transport

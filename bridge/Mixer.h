@@ -200,6 +200,8 @@ public:
         const std::string& fingerprintHash,
         const bool isDtlsClient);
 
+    bool configureBundleTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey);
+
     bool configureBarbellTransport(const std::string& barbellId,
         const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,

@@ -168,7 +168,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     const std::string& fingerprint,
     uint32_t audioSsrc,
     uint32_t* videoSsrcs,
-    std::vector<srtp::AesKey>& srtpKeys)
+    srtp::AesKey& remoteSdesKey)
 {
     using namespace nlohmann;
     json body = {{"action", "configure"}};
@@ -180,11 +180,10 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     {
         transportSpec["dtls"] = json::object({{"setup", "active"}, {"type", "sha-256"}, {"hash", fingerprint}});
     }
-    if (_callConfig.sdes && !srtpKeys.empty())
+    if (_callConfig.sdes)
     {
-        const auto& selectKey = srtpKeys.front();
-        transportSpec["sdes"] = json::object({{"profile", api::utils::toString(selectKey.profile)},
-            {"key", utils::Base64::encode(selectKey.keySalt, selectKey.getLength())}});
+        transportSpec["sdes"] = json::object({{"profile", api::utils::toString(remoteSdesKey.profile)},
+            {"key", utils::Base64::encode(remoteSdesKey.keySalt, remoteSdesKey.getLength())}});
     }
 
     for (auto& c : candidates)
@@ -444,8 +443,17 @@ utils::Optional<uint32_t> Channel::getOfferedLocalSsrc() const
 
 DtlsInfo Channel::getOfferedDtls() const
 {
-    if (_offer.find("bundle-transport") != _offer.end() && _offer["bundle-transport"].find("dtls") != _offer.end()) {}
+    DtlsInfo info;
+    if (_offer.find("bundle-transport") != _offer.end() && _offer["bundle-transport"].find("dtls") != _offer.end())
+    {
+        auto& dtlsJson = _offer["bundle-transport"]["dtls"];
+
+        info.fingerPrint = dtlsJson["fingerprint"].get<std::string>();
+        info.hashType = dtlsJson["hash"].get<std::string>();
+    }
+    return info;
 }
+
 void Channel::getOfferedSdesKeys(std::vector<srtp::AesKey>& keys) const {}
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
@@ -518,7 +526,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
     const std::string& fingerprint,
     uint32_t audioSsrc,
     uint32_t* videoSsrcs,
-    std::vector<srtp::AesKey>& srtpKeys)
+    srtp::AesKey& remoteSdesKey)
 {
     using namespace nlohmann;
     json body = {{"id", _callConfig.conferenceId},
@@ -819,6 +827,18 @@ utils::Optional<uint32_t> ColibriChannel::getOfferedLocalSsrc() const
     }
 
     return utils::Optional<uint32_t>();
+}
+
+DtlsInfo ColibriChannel::getOfferedDtls() const
+{
+    DtlsInfo info;
+    for (auto& bundle : _offer["channel-bundles"])
+    {
+        info.fingerPrint = bundle["transport"]["fingerprints"][0]["fingerprint"].get<std::string>();
+        info.hashType = bundle["transport"]["fingerprints"][0]["hash"].get<std::string>();
+    }
+
+    return info;
 }
 
 Barbell::Barbell(emulator::HttpdFactory* httpd) : _httpd(httpd), _id(newIdString()) {}

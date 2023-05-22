@@ -300,13 +300,19 @@ public:
         }
 
         assert(_audioSource);
-        std::vector<srtp::AesKey> noKeys;
+        std::vector<srtp::AesKey> sdesKeys;
+
+        if (_callConfig.sdes && !_callConfig.dtls)
+        {
+            _transport->getSdesKeys(sdesKeys);
+        }
+
         _channel.sendResponse(_transport->getLocalCredentials(),
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),
             _channel.isVideoEnabled() ? _videoSsrcs : nullptr,
-            noKeys);
+            sdesKeys.front());
 
         _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();

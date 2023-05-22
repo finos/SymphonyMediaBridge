@@ -3,6 +3,7 @@
 #include "rtp/RtpHeader.h"
 #include "transport/dtls/DtlsMessageListener.h"
 #include "transport/dtls/SrtpClientFactory.h"
+#include "transport/dtls/SrtpProfiles.h"
 #include "transport/dtls/SslDtls.h"
 #include "transport/dtls/SslWriteBioListener.h"
 #include "utils/Time.h"
@@ -69,15 +70,28 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
         _ep1 = std::make_unique<FakeSrtpEndpoint>(*_srtp1, *_srtp2, _allocator);
         _ep2 = std::make_unique<FakeSrtpEndpoint>(*_srtp2, *_srtp1, _allocator);
 
-        _srtp1->setRemoteDtlsFingerprint("sha-256", _dtls->getLocalFingerprint(), true);
-        _srtp2->setRemoteDtlsFingerprint("sha-256", _dtls->getLocalFingerprint(), false);
-
         auto header = rtp::RtpHeader::create(_audioPacket);
         auto payload = header->getPayload();
         for (size_t i = 0; i < _audioPacket.getLength() - header->headerLength(); ++i)
         {
             payload[i] = i;
         }
+    }
+
+    void setupDtls()
+    {
+        _srtp1->setRemoteDtlsFingerprint("sha-256", _dtls->getLocalFingerprint(), true);
+        _srtp2->setRemoteDtlsFingerprint("sha-256", _dtls->getLocalFingerprint(), false);
+    }
+
+    void setupSdes(srtp::Profile profile)
+    {
+        srtp::AesKey key1;
+        srtp::AesKey key2;
+        _srtp1->getLocalKey(profile, key1);
+        _srtp2->getLocalKey(profile, key2);
+        _srtp1->setRemoteKey(key2);
+        _srtp2->setRemoteKey(key1);
     }
 
     void connect()
@@ -110,6 +124,22 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
         return true;
     }
 
+    bool isAudioPayloadValid(memory::Packet& newPacket) const
+    {
+        auto header = rtp::RtpHeader::fromPacket(_audioPacket);
+        auto payload = header->getPayload();
+
+        auto newPayload = rtp::RtpHeader::fromPacket(newPacket)->getPayload();
+        for (size_t i = 0; i < _audioPacket.getLength() - header->headerLength(); ++i)
+        {
+            if (payload[i] != newPayload[i])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
     std::unique_ptr<transport::SrtpClientFactory> _factory;
     std::unique_ptr<transport::SslDtls> _dtls;
     memory::PacketPoolAllocator _allocator;
@@ -122,6 +152,7 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
 
 TEST_F(SrtpTest, seqSkip)
 {
+    setupDtls();
     connect();
 
     uint16_t seqStart = 65530;
@@ -165,6 +196,7 @@ TEST_F(SrtpTest, seqSkip)
 
 TEST_F(SrtpTest, seqDuplicate)
 {
+    setupDtls();
     connect();
 
     auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
@@ -183,6 +215,7 @@ TEST_F(SrtpTest, seqDuplicate)
 
 TEST_F(SrtpTest, sendOutOfOrder)
 {
+    setupDtls();
     connect();
 
     for (int i = 0; i < 50; ++i)
@@ -222,4 +255,25 @@ TEST_F(SrtpTest, sendOutOfOrder)
 
         EXPECT_TRUE(_srtp2->unprotect(*packet));
     }
+}
+
+TEST_F(SrtpTest, sdesSimple)
+{
+    setupSdes(srtp::Profile::AES128_CM_SHA1_80);
+
+    EXPECT_TRUE(_srtp1->isConnected());
+    EXPECT_TRUE(_srtp2->isConnected());
+    auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+    auto header = rtp::RtpHeader::fromPacket(*packet);
+    header->ssrc = 4321;
+    header->timestamp = 1234;
+    header->sequenceNumber = 5678;
+
+    size_t dataLen = packet->getLength();
+    EXPECT_TRUE(_srtp1->protect(*packet));
+    EXPECT_FALSE(isAudioPayloadValid(*packet));
+    EXPECT_GT(packet->getLength(), dataLen);
+    EXPECT_TRUE(_srtp2->unprotect(*packet));
+    EXPECT_EQ(dataLen, packet->getLength());
+    EXPECT_TRUE(isAudioPayloadValid(*packet));
 }

@@ -779,6 +779,10 @@ httpd::Response configureEndpoint(ActionContext* context,
                     "Bundled transport DTLS configuration has failed");
             }
         }
+        else if (!transport.sdesKeys.empty())
+        {
+            mixer->configureBundleTransportSdes(endpointId, transport.sdesKeys[0]);
+        }
 
         if (!mixer->startBundleTransport(endpointId))
         {
