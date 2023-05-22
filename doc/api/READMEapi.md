@@ -202,15 +202,10 @@ POST /conferences/{conferenceId}/{endpointId}
             "type": String,
             "hash": String
         },
-        "sdes":[ // omit if dtls is used
-            {
-                "profile": "AES_128_CM_HMAC_SHA1_80",
-                "key": "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
-            },
-            {
-                "profile": "AES_256_CM_HMAC_SHA1_80",
-                "key" : "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
-            }],
+        "sdes":{ // omit if dtls is used
+            "profile": "AES_128_CM_HMAC_SHA1_80",
+            "key": "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
+        },
         "ice": {
             "ufrag": String,
             "pwd": String,
