@@ -23,7 +23,7 @@ POST /conferences/
 }
 ```
 
-## Allocate endpoint
+## Allocate endpoint with bundled transport
 
 Allocate a new endpoint with endpoint id {endpointId} in the conference {conferenceId}. Responds with information used to construct an SDP offer.
 
@@ -31,7 +31,8 @@ The idleTimeout is optional timeout in seconds. If no packets have been received
 
 Relay-type is how SMB will relay the incoming packets. For audio it may be mixed into 1 ssrc. It may be forwarded from the sender by preserving the original ssrc (forwarder). The preferred mode is ssrc-rewrite. SMB will then relay the packets by mapping the ssrcs to a fixed set of outbound ssrcs. This allows fewer ssrcs to be negotiated and will cause fewer streams to be forwarded. It also prevents re-negotiations that would otherwise happen when people join and leave the conference as ssrcs would be added and removed at that time. Clients are also likely to be limited in how many audio sinks and video sinks they can handle. With ssrc-rewrite the conference can be very large.
 
-**Note** that both dtls and sdes can be enabled in the allocate request. DTLS and SDES will be prepared and put in offer. The configure request will decide which SRTP mode will be used. DTLS is a requirement for data channel as SCTP is enveloped in DTLS messages.
+**Note** that both DTLS and SDES can be enabled in the allocate request. DTLS and SDES will be prepared and put in offer. The configure request will decide which SRTP mode will be used. DTLS is a requirement for data channel as SCTP is enveloped in DTLS messages.
+**Note** that ICE is mandatory for bundled transport.
 
 ```json
 POST /conferences/{conferenceId}/{endpointId}
@@ -39,7 +40,7 @@ POST /conferences/{conferenceId}/{endpointId}
     "action": "allocate",
     "bundle-transport": {
         "ice-controlling": Boolean,
-        "ice": Boolean,
+        "ice": true,
         "dtls": boolean,
         "sdes": boolean
         },
@@ -184,6 +185,78 @@ AES_256_CM_HMAC_SHA1_80
 AES_256_CM_HMAC_SHA1_32
 AEAD_AES_128_GCM
 AEAD_AES_256_GCM
+```
+
+### Allocate endpoint without bundle transport
+
+You can allocate and endpoint with separate transport for audio and video. This means there will be multiple ports used and any ICE and DTLS will be established independently.
+ICE is optional and if disabled, a fixed port will be allocated and configured public IP will be presented.
+DTLS and SDES are also optional and thus the encryption can be disabled altogether
+
+```json
+POST /conferences/{conferenceId}/{endpointId}
+{
+    "action": "allocate",
+    "audio": {
+        "relay-type": [
+            "forwarder | mixed | ssrc-rewrite"
+        ],
+        "transport": {
+            "ice": false,
+            "dtls": false,
+            "sdes": true
+        },
+    },
+    "data": {},
+    "idleTimeout": <90> // seconds
+}
+```
+
+```json
+200 OK
+{
+    "audio": {
+        "payload-type": {
+            "id": 111,
+            "parameters": {
+                "minptime": "10",
+                "useinbandfec": "1"
+            },
+            "rtcp-fbs": [],
+            "name": "opus",
+            "clockrate": 48000,
+            "channels": 2
+        },
+        "ssrcs": [int, int
+        ],
+        "rtp-hdrexts": [
+            {
+                "id": 1,
+                "uri": "urn:ietf:params:rtp-hdrext:ssrc-audio-level"
+            },
+            {
+                "id": 3,
+                "uri": "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"
+            }
+        ]
+        "transport": {
+            "sdes": [
+                {
+                    "profile": "AES_128_CM_HMAC_SHA1_80",
+                    "key": "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
+                },
+                {
+                    "profile": "AES_256_CM_HMAC_SHA1_80",
+                    "key": "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
+                }
+            ],
+            "connection":{
+                "port":32467,
+                "ip":"203.14.54.111"
+            }
+        },
+    }
+}
 ```
 
 ## Configure endpoint
