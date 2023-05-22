@@ -1,7 +1,8 @@
-#API description
+# API description
+
 This document lists SMB supported requests and responses in a pseudo request example form. Types are either specified in the document or implicit from the example value.
 
-##Allocate conference
+## Allocate conference
 
 Allocate a new conference resource, responds with conference id for the allocated resource.
 
@@ -22,13 +23,15 @@ POST /conferences/
 }
 ```
 
-##Allocate endpoint
+## Allocate endpoint
 
 Allocate a new endpoint with endpoint id {endpointId} in the conference {conferenceId}. Responds with information used to construct an SDP offer.
 
 The idleTimeout is optional timeout in seconds. If no packets have been received during this period, the endpoint will be removed.
 
 Relay-type is how SMB will relay the incoming packets. For audio it may be mixed into 1 ssrc. It may be forwarded from the sender by preserving the original ssrc (forwarder). The preferred mode is ssrc-rewrite. SMB will then relay the packets by mapping the ssrcs to a fixed set of outbound ssrcs. This allows fewer ssrcs to be negotiated and will cause fewer streams to be forwarded. It also prevents re-negotiations that would otherwise happen when people join and leave the conference as ssrcs would be added and removed at that time. Clients are also likely to be limited in how many audio sinks and video sinks they can handle. With ssrc-rewrite the conference can be very large.
+
+**Note** that both dtls and sdes can be enabled in the allocate request. DTLS and SDES will be prepared and put in offer. The configure request will decide which SRTP mode will be used. DTLS is a requirement for data channel as SCTP is enveloped in DTLS messages.
 
 ```json
 POST /conferences/{conferenceId}/{endpointId}
@@ -37,8 +40,8 @@ POST /conferences/{conferenceId}/{endpointId}
     "bundle-transport": {
         "ice-controlling": Boolean,
         "ice": Boolean,
-        "dtls": boolean, // DEPRECATED
-        "srtp": "DTLS | SDES | DISABLED"
+        "dtls": boolean,
+        "sdes": boolean
         },
     "audio": {
         "relay-type": ["forwarder | mixed | ssrc-rewrite"]
@@ -47,7 +50,7 @@ POST /conferences/{conferenceId}/{endpointId}
         "relay-type": "forwarder | ssrc-rewrite"
         },
     "data": {},
-    "idleTimeout": <90>
+    "idleTimeout": <90> // seconds
 }
 ```
 
@@ -183,7 +186,8 @@ AEAD_AES_128_GCM
 AEAD_AES_256_GCM
 ```
 
-##Configure endpoint
+## Configure endpoint
+
 Configure endpoint id {endpointId} in the conference {conferenceId} based on information from the initial SDP answer from the endpoint.
 
 ```json
@@ -318,7 +322,7 @@ POST /conferences/{conferenceId}/{endpointId}
 200 OK
 ```
 
-##Reconfigure endpoint
+## Reconfigure endpoint
 
 Reconfigure endpoint id {endpointId} in the conference {conferenceId} adding or removing ssrcs sent from that endpoint.
 
@@ -350,8 +354,7 @@ POST /conferences/{conferenceId}/{endpointId}
 200 OK
 ```
 
-##Expire endpoint
-Preferably, post a DELETE request for the end point id.
+## Remove endpoint
 
 Delete an endpoint id {endpointId} in the conference {conferenceId}.
 
@@ -376,10 +379,11 @@ POST /conferences/{conferenceId}/{endpointId}
 200 OK
 ```
 
-##Allocate barbell leg
+## Allocate barbell leg
+
 A 2-way barbell leg can be setup between two SMBs. This can be used to create larger conference or multi location conference to facilitate lower delay on average. There is an allocation step, and a configuration step in the same manner as for channels. There is a small difference between endpoint allocation when it comes to video. An endpoint will only receive a selected video stream per participant and an rtc feedback stream in addition to that. The barbell endpoint can receive multicast and RTX for the participants. The dominant speaker may send low, medium and high res video streams. The others may send medium and low resolution to allow the receiving SMB to select lower resolution in case the clients' downlinks are limited.
 
-**Barbells do not support SDES SRTP**
+**Barbells have mandatory DTLS based SRTP**
 
 Allocate a {barbell port} in the conference {conferenceId}.
 
@@ -503,7 +507,8 @@ POST /barbell/{conferenceId}/{barbellId}
 }
 ```
 
-##Remove Barbell
+## Remove Barbell
+
 Remove {barbellId} from the conference {conferenceId}.
 
 ```json
@@ -514,7 +519,7 @@ DELETE /barbell/{conferenceId}/{barbellId}
 200 OK
 ```
 
-##Configure barbell
+## Configure barbell
 
 Configure barbell {barbellId} in the conference {conferenceId} based on information from the initial SDP answer from the barbell allocation.
 
@@ -633,8 +638,10 @@ POST /barbell/{conferenceId}/{barbellId}
 200 OK
 ```
 
-##Get Conference Info
-###Get Conference List
+## Monitor Conferences
+
+### Get Conference List
+
 You can use the following url to get a json array of currently instantiated conferenceIds.
 
 ```json
@@ -646,7 +653,8 @@ GET /conferences
 ["9465082961911005170","9465082961917344970"]
 ```
 
-###Get Users List
+### Get Users List
+
 Use this URL to retrieve a full list of conference ids and user ids in all conferences.
 
 ```json
@@ -668,7 +676,8 @@ GET /conferences?brief
 ]
 ```
 
-###Get Detailed info
+### Get Detailed info
+
 Retrieves the list of participants' endpoints in the conference {conferenceId}. Responds with basic information for each endpoint, such as: presence of audio and video streams, "Active Speaker" flag, use of recording, whether bundled transport is in use, ICE and DTLS status.
 
 ```json
@@ -715,8 +724,76 @@ _ICE States_
 -   "CONNECTED"
 -   "FAILED"
 
-##ICE probe endpoint
-ICE can be used to assess RTT to a mediabridge. For this purpose, there is a static ICE endpoint that can be used to measure RTT but cannot be used to establish media session. Use the following endpoint to get the info needed to setup such an ICE connection.
+### Retrieve Metrics
+
+SMB produces useful metrics about the CPU and network load. Bit rates are in kbps. Below is a list of a few selected metrics that need more detailed description.
+
+-   **inbound_audio_streams** is number of streams with apparent RTP activity.
+-   **inbound_video_streams** is number of streams with apparent activity. Note that clients may send 3 streams each to SMB.
+-   **bwe_download_hist** is histogram of number of calls that falls into estimated bandwidth buckets for the clients´ bandwidth when sending to SMB. The buckets are: [125, 250, 500, 1000, 2000, 4000, 8000, 16000, 32000, >32000] kbps.
+-   **loss_download_hist** is histogram for number of calls with certain average loss rate when sending to SMB. The buckets are [0,1,2,4,8, 100] percent.
+-   **loss_upload_hist** histogram works the same but is based on loss reports from the clients.
+-   **rtt_download_hist** is a histogram for number of calls with specific RTT. The buckets are: [0.1, 0.2, 0.4, 0.8, 1.6, >1.6] seconds.
+-   **pacing_queue** is a queue used to pace video packets to adapt rate to the client`s receive bandwidth. This avoids choking the network and packets can be dropped in SMB instead of causing high latency towards client. If this runs high it means clients have network trouble and video will not be of good quality.
+-   **rtx_pacing_queue** is a parallell pacing queue that allows video RTX requests to be prioritized.
+
+```json
+GET /stats
+```
+
+```json
+{
+    "audiochannels": 0,
+    "bit_rate_download": 0,
+    "bit_rate_upload": 0,
+    "bwe_download_hist": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "conferences": 0,
+    "cpu_engine": 0.0,
+    "cpu_manager": 0.0,
+    "cpu_rtce": 0.0,
+    "cpu_usage": 0.006067961165048544,
+    "cpu_workers": 0.0027739251040221915,
+    "current_timestamp": 66218305,
+    "engine_slips": 1,
+    "http_tcp_connections": 1,
+    "inbound_audio_ext_streams": 0,
+    "inbound_audio_streams": 0,
+    "inbound_video_streams": 0,
+    "job_queue": 0,
+    "largestConference": 0,
+    "loss_download": 0.0,
+    "loss_download_hist": [0, 0, 0, 0, 0, 0],
+    "loss_upload": 0.0,
+    "loss_upload_hist": [0, 0, 0, 0, 0, 0],
+    "opus_decode_packet_rate": 0.0,
+    "outbound_audio_streams": 0,
+    "outbound_video_streams": 0,
+    "pacing_queue": 0,
+    "packet_rate_download": 0,
+    "packet_rate_upload": 0,
+    "participants": 0,
+    "receive_pool": 32768,
+    "rtc_tcp4_connections": 0,
+    "rtc_tcp6_connections": 0,
+    "rtt_download_hist": [0, 0, 0, 0, 0, 0],
+    "rtx_pacing_queue": 0,
+    "send_pool": 131072,
+    "shared_udp_end_drops": 0,
+    "shared_udp_receive_rate": 0,
+    "shared_udp_send_queue": 0,
+    "shared_udp_send_rate": 0,
+    "threads": 20,
+    "total_memory": 1622616,
+    "total_tcp_connections": 1,
+    "total_udp_connections": 4,
+    "used_memory": 336120,
+    "videochannels": 0
+}
+```
+
+## ICE probe endpoint
+
+ICE can be used to assess RTT to a mediabridge. For this purpose, there is a static ICE endpoint that can be used to measure RTT but cannot be used to establish media sessions. Use the following endpoint to get the info needed to setup such an ICE connection.
 
 ```json
 GET /ice-candidates
