@@ -31,8 +31,6 @@ public:
         LAST
     };
 
-    static const uint32_t MAX_KEY_LENGTH = 46;
-
     class IEvents
     {
     public:
@@ -59,7 +57,7 @@ public:
     bool setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
     bool setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
 
-    bool isDtlsConnected() const { return (_state == State::CONNECTED); }
+    bool isConnected() const { return (_state == State::CONNECTED); }
     bool isDtlsClient() const { return _isDtlsClient; }
 
     void onMessageReceived(memory::UniquePacket packet) override;

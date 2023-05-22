@@ -1,6 +1,8 @@
 #include "ApiChannel.h"
 #include "HttpRequests.h"
+#include "api/utils.h"
 #include "test/integration/emulator/Httpd.h"
+#include "utils/Base64.h"
 #include "utils/Format.h"
 #include "utils/IdGenerator.h"
 #include "utils/StringBuilder.h"
@@ -120,7 +122,10 @@ void Channel::create(const bool initiator, const CallConfig& config)
 
     using namespace nlohmann;
     json body = {{"action", "allocate"},
-        {"bundle-transport", {{"ice-controlling", true}, {"ice", true}, {"dtls", true}, {"rtcp-mux", true}}}};
+        {"bundle-transport", {{"ice-controlling", true}, {"ice", true}, {"rtcp-mux", true}}}};
+
+    body["bundle-transport"]["dtls"] = _callConfig.dtls;
+    body["bundle-transport"]["sdes"] = _callConfig.sdes;
 
     if (_callConfig.audio)
     {
@@ -168,8 +173,19 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     using namespace nlohmann;
     json body = {{"action", "configure"}};
 
-    auto transportSpec = json::object({{"dtls", {{"setup", "active"}, {"type", "sha-256"}, {"hash", fingerprint}}},
-        {"ice", {{"ufrag", iceCredentials.first}, {"pwd", iceCredentials.second}, {"candidates", json::array()}}}});
+    auto transportSpec = json::object(
+        {{"ice", {{"ufrag", iceCredentials.first}, {"pwd", iceCredentials.second}, {"candidates", json::array()}}}});
+
+    if (_callConfig.dtls)
+    {
+        transportSpec["dtls"] = json::object({{"setup", "active"}, {"type", "sha-256"}, {"hash", fingerprint}});
+    }
+    if (_callConfig.sdes && !srtpKeys.empty())
+    {
+        const auto& selectKey = srtpKeys.front();
+        transportSpec["sdes"] = json::object({{"profile", api::utils::toString(selectKey.profile)},
+            {"key", utils::Base64::encode(selectKey.keySalt, selectKey.getLength())}});
+    }
 
     for (auto& c : candidates)
     {
@@ -310,8 +326,23 @@ void Channel::configureTransport(transport::RtcTransport& transport, memory::Aud
     auto bundle = _offer["bundle-transport"];
     setRemoteIce(transport, bundle, ICE_GROUP, allocator);
 
-    std::string fingerPrint = bundle["dtls"]["hash"];
-    transport.setRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
+    if (bundle.find("dtls") != bundle.end())
+    {
+        std::string fingerPrint = bundle["dtls"]["hash"];
+        transport.setRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
+    }
+    else if (bundle.find("sdes") != bundle.end())
+    {
+        for (auto sdesSpec : bundle["sdes"])
+        {
+            srtp::AesKey key;
+            key.profile = api::utils::stringToSrtpProfile(sdesSpec["profile"]);
+            auto keyLen = utils::Base64::decode(sdesSpec["key"], key.keySalt, sizeof(key.keySalt));
+            assert(keyLen == key.getLength());
+            transport.setRemoteSdesKey(key);
+            break;
+        }
+    }
 }
 
 std::unordered_set<uint32_t> Channel::getOfferedVideoSsrcs() const
@@ -410,6 +441,12 @@ utils::Optional<uint32_t> Channel::getOfferedLocalSsrc() const
 
     return utils::Optional<uint32_t>();
 }
+
+DtlsInfo Channel::getOfferedDtls() const
+{
+    if (_offer.find("bundle-transport") != _offer.end() && _offer["bundle-transport"].find("dtls") != _offer.end()) {}
+}
+void Channel::getOfferedSdesKeys(std::vector<srtp::AesKey>& keys) const {}
 
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
 {

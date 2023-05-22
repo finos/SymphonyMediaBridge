@@ -11,7 +11,8 @@ struct CallConfig
 {
     std::string conferenceId;
     std::string baseUrl;
-    api::SrtpMode srtpMode = api::SrtpMode::DTLS;
+    bool dtls = true;
+    bool sdes = false;
     std::vector<std::string> neighbours;
     Audio audio = Audio::None;
     bool video = false;
@@ -40,9 +41,15 @@ public:
         return *this;
     }
 
-    CallConfigBuilder& srtp(api::SrtpMode mode)
+    CallConfigBuilder& disableDtls()
     {
-        _config.srtpMode = mode;
+        _config.dtls = false;
+        return *this;
+    }
+
+    CallConfigBuilder& sdes()
+    {
+        _config.sdes = true;
         return *this;
     }
 
@@ -118,9 +125,9 @@ public:
         return *this;
     }
 
-    CallConfigBuilder& idleTimeout(uint32_t idleTimeoutMs)
+    CallConfigBuilder& idleTimeout(uint32_t seconds)
     {
-        _config.idleTimeout = idleTimeoutMs;
+        _config.idleTimeout = seconds;
         return *this;
     }
 

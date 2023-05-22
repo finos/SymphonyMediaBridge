@@ -17,6 +17,9 @@ enum SrtpMode
     SDES
 };
 
+SrtpMode stringToSrtpMode(const std::string& s);
+std::string toString(SrtpMode mode);
+
 struct Candidate
 {
     uint32_t generation;

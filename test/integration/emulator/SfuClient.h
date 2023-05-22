@@ -122,9 +122,7 @@ public:
           _loggableId("client", id),
           _recordingActive(true),
           _ptime(ptime),
-          _sendAudioType(Audio::None),
           _expectedReceiveAudioType(Audio::None),
-          _ipv6CandidateDelay(0),
           _startTime(0)
     {
     }
@@ -158,16 +156,14 @@ public:
 
     void initiateCall(const CallConfig& callConfig)
     {
-        _sendAudioType = callConfig.audio;
-        _ipv6CandidateDelay = callConfig.ipv6CandidateDelay;
+        _callConfig = callConfig;
         _channel.create(true, callConfig);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
     void joinCall(const CallConfig& callConfig)
     {
-        _sendAudioType = callConfig.audio;
-        _ipv6CandidateDelay = callConfig.ipv6CandidateDelay;
+        _callConfig = callConfig;
         _channel.create(false, callConfig);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
@@ -190,7 +186,7 @@ public:
 
         if (_channel.isAudioOffered())
         {
-            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _sendAudioType);
+            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _callConfig.audio);
             _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
         }
 
@@ -323,10 +319,10 @@ public:
 
     void process(uint64_t timestamp, bool sendVideo)
     {
-        if (_ipv6CandidateDelay != 0 &&
-            utils::Time::diffGE(_startTime, utils::Time::getAbsoluteTime(), _ipv6CandidateDelay))
+        if (_callConfig.ipv6CandidateDelay != 0 &&
+            utils::Time::diffGE(_startTime, utils::Time::getAbsoluteTime(), _callConfig.ipv6CandidateDelay))
         {
-            _ipv6CandidateDelay = 0;
+            _callConfig.ipv6CandidateDelay = 0;
             _channel.addIpv6RemoteCandidates(*_transport);
         }
 
@@ -695,7 +691,7 @@ public:
                         rtpHeader->ssrc.get(),
                         rtpMap,
                         sender,
-                        _expectedReceiveAudioType == Audio::None ? _sendAudioType : _expectedReceiveAudioType,
+                        _expectedReceiveAudioType == Audio::None ? _callConfig.audio : _expectedReceiveAudioType,
                         timestamp));
                 it = _audioReceivers.find(rtpHeader->ssrc.get());
             }
@@ -993,10 +989,9 @@ private:
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
     size_t _instanceId;
     RtxStats _rtxStats;
-    Audio _sendAudioType;
     Audio _expectedReceiveAudioType;
-    uint64_t _ipv6CandidateDelay;
     uint64_t _startTime;
+    CallConfig _callConfig;
 };
 
 template <typename TClient>

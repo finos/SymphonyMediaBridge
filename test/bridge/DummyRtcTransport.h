@@ -106,6 +106,8 @@ public:
     const char* getTag() const override { return nullptr; };
 
     uint64_t getLastReceivedPacketTimestamp() const override { return 0; }
+    void getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const override {}
+    void setRemoteSdesKey(const srtp::AesKey& key) override {}
 
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;

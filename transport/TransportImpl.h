@@ -187,6 +187,9 @@ public: // Transport
 
     uint64_t getLastReceivedPacketTimestamp() const override { return _lastReceivedPacketTimestamp; }
 
+    void getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const override;
+    void setRemoteSdesKey(const srtp::AesKey& key) override;
+
 private: // SslWriteBioListener
     // Called from Transport serial thread
     int32_t sendDtls(const char* buffer, uint32_t length) override;

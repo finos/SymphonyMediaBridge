@@ -65,11 +65,18 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         }
         responseBundleTransport.ice.set(responseIce);
 
-        api::Dtls responseDtls;
-        responseDtls.type = "sha-256";
-        responseDtls.hash = context->sslDtls.getLocalFingerprint();
-        responseDtls.setup = "actpass";
-        responseBundleTransport.dtls.set(responseDtls);
+        if (bundleTransport.dtls && transportDescription.dtls.isSet())
+        {
+            api::Dtls responseDtls;
+            responseDtls.type = "sha-256";
+            responseDtls.hash = context->sslDtls.getLocalFingerprint();
+            responseDtls.setup = "actpass";
+            responseBundleTransport.dtls.set(responseDtls);
+        }
+        if (bundleTransport.sdes)
+        {
+            responseBundleTransport.sdesKeys = transportDescription.sdesKeys;
+        }
 
         responseBundleTransport.rtcpMux = true;
         channelsDescription.bundleTransport.set(responseBundleTransport);
@@ -127,13 +134,17 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseTransport.rtcpMux = false;
             }
 
-            if (transportDescription.dtls.isSet())
+            if (allocateChannel.audio.get().transport.get().dtls && transportDescription.dtls.isSet())
             {
                 api::Dtls responseDtls;
                 responseDtls.setup = "active";
                 responseDtls.type = "sha-256";
                 responseDtls.hash = context->sslDtls.getLocalFingerprint();
                 responseTransport.dtls.set(responseDtls);
+            }
+            if (allocateChannel.audio.get().transport.get().sdes)
+            {
+                responseTransport.sdesKeys = transportDescription.sdesKeys;
             }
 
             responseAudio.transport.set(responseTransport);
@@ -216,13 +227,17 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseTransport.rtcpMux = false;
             }
 
-            if (transportDescription.dtls.isSet())
+            if (allocateChannel.video.get().transport.get().dtls && transportDescription.dtls.isSet())
             {
                 api::Dtls responseDtls;
                 responseDtls.setup = "active";
                 responseDtls.type = "sha-256";
                 responseDtls.hash = context->sslDtls.getLocalFingerprint();
                 responseTransport.dtls.set(responseDtls);
+            }
+            if (allocateChannel.video.get().transport.get().sdes)
+            {
+                responseTransport.sdesKeys = transportDescription.sdesKeys;
             }
 
             responseVideo.transport.set(responseTransport);
@@ -290,8 +305,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         const auto& bundleTransport = allocateChannel.bundleTransport.get();
         if (!bundleTransport.ice)
         {
-            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-                "Bundle transports requires both ICE and DTLS");
+            throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Bundle transports requires ICE");
         }
 
         const auto iceRole = bundleTransport.iceControlling.isSet() && !bundleTransport.iceControlling.get()
@@ -368,7 +382,6 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         : ice::IceRole::CONTROLLING);
             }
             const auto mixed = audio.relayType.compare("mixed") == 0;
-            const auto isDtlsEnabled = transport.srtpMode == api::SrtpMode::DTLS;
 
             std::string outChannelId;
             if (!mixer->addAudioStream(outChannelId,
@@ -376,7 +389,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                     iceRole,
                     mixed,
                     false,
-                    isDtlsEnabled,
+                    transport.dtls,
                     allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -403,14 +416,12 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         : ice::IceRole::CONTROLLING);
             }
 
-            const auto isDtlsEnabled = transport.srtpMode == api::SrtpMode::DTLS;
-
             std::string outChannelId;
             if (!mixer->addVideoStream(outChannelId,
                     endpointId,
                     iceRole,
                     false,
-                    isDtlsEnabled,
+                    transport.dtls,
                     allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,

@@ -123,33 +123,14 @@ void setIfExists(utils::Optional<std::string>& target, const nlohmann::json& dat
     }
 }
 
-api::utils::EnumRef<api::SrtpMode> srtpModes[] = {{"DISABLED", api::SrtpMode::Disabled},
-    {"SDES", api::SrtpMode::SDES},
-    {"DTLS", api::SrtpMode::DTLS}};
-
-api::SrtpMode parseSrtpMode(const nlohmann::json& data)
-{
-    utils::Optional<bool> useDtls;
-    setIfExists(useDtls, data, "dtls");
-    if (useDtls.isSet() && useDtls.get())
-    {
-        return api::SrtpMode::DTLS;
-    }
-
-    if (data.find("srtp") != data.end())
-    {
-        return api::utils::fromString(data["srtp"].get<std::string>(), srtpModes);
-    }
-    return api::SrtpMode::Disabled;
-}
-
 api::AllocateEndpoint::Transport parseAllocateEndpointTransport(const nlohmann::json& data)
 {
     api::AllocateEndpoint::Transport transport;
     setIfExists(transport.ice, data, "ice");
     setIfExists(transport.iceControlling, data, "ice-controlling");
 
-    transport.srtpMode = parseSrtpMode(data);
+    setIfExists(transport.dtls, data, "dtls");
+    setIfExists(transport.sdes, data, "sdes");
 
     return transport;
 }

@@ -760,7 +760,7 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
 
-    if (!_srtpClient->isDtlsConnected())
+    if (!_srtpClient->isConnected())
     {
         logger::debug("RTP received, dtls not connected yet", _loggableId.c_str());
         return;
@@ -911,7 +911,7 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     _lastReceivedPacketTimestamp = timestamp;
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
-    if (!_srtpClient->isDtlsConnected())
+    if (!_srtpClient->isConnected())
     {
         logger::debug("RTCP received, dtls not connected yet", _loggableId.c_str());
         return;
@@ -1962,7 +1962,8 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = (_iceState == ice::IceSession::State::CONNECTED) && (_dtlsState == SrtpClient::State::CONNECTED);
+    _isConnected = (_iceState == ice::IceSession::State::CONNECTED) &&
+        (_dtlsState == SrtpClient::State::CONNECTED || !_dtlsEnabled);
 
     switch (state)
     {
@@ -2404,4 +2405,28 @@ void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
     }
 }
 
+void TransportImpl::getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const
+{
+    if (_srtpClient)
+    {
+        srtp::AesKey key;
+        for (uint32_t profile = 1; profile < srtp::PROFILE_LAST; ++profile)
+        {
+            _srtpClient->getLocalKey(static_cast<srtp::Profile>(profile), key);
+            if (key.getLength() > 0)
+            {
+                sdesKeys.push_back(key);
+            }
+        }
+    }
+}
+
+void TransportImpl::setRemoteSdesKey(const srtp::AesKey& key)
+{
+    if (_srtpClient)
+    {
+        _dtlsEnabled = false;
+        _jobQueue.post(_jobCounter, [this, key]() { _srtpClient->setRemoteKey(key); });
+    }
+}
 } // namespace transport

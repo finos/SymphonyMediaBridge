@@ -89,6 +89,9 @@ class RtcTransportMock : public TransportMock<transport::RtcTransport>
         (override));
 
     MOCK_METHOD(uint16_t, allocateOutboundSctpStream, (), (override));
+
+    MOCK_METHOD(void, getSdesKeys, (std::vector<srtp::AesKey> & sdesKeys), (const override));
+    MOCK_METHOD(void, setRemoteSdesKey, (const srtp::AesKey& key), (override));
 };
 
 } // namespace test

@@ -1033,9 +1033,13 @@ bool Mixer::getTransportBundleDescription(const std::string& endpointId, Transpo
     auto bundleTransport = bundleTransportItr->second._transport.get();
     assert(bundleTransport);
 
+    std::vector<srtp::AesKey> sdesKeys;
+    bundleTransport->getSdesKeys(sdesKeys);
+
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
         bundleTransport->getLocalCredentials(),
-        bundleTransport->isDtlsClient());
+        bundleTransport->isDtlsClient(),
+        sdesKeys);
 
     return true;
 }
@@ -1055,7 +1059,8 @@ bool Mixer::getBarbellTransportDescription(const std::string& barbellId, Transpo
 
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
         bundleTransport->getLocalCredentials(),
-        bundleTransport->isDtlsClient());
+        bundleTransport->isDtlsClient(),
+        std::vector<srtp::AesKey>());
 
     return true;
 }
@@ -1080,11 +1085,15 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
     const bool isDtlsEnabled =
         (isAudioConfigured ? transport->isDtlsEnabled() : audioStreamItr->second->isDtlsLocalEnabled);
 
+    std::vector<srtp::AesKey> sdesKeys;
+    transport->getSdesKeys(sdesKeys);
+
     if (transport->isIceEnabled() && isDtlsEnabled)
     {
         outTransportDescription = TransportDescription(transport->getLocalCandidates(),
             transport->getLocalCredentials(),
-            transport->isDtlsClient());
+            transport->isDtlsClient(),
+            sdesKeys);
     }
     else if (!transport->isIceEnabled() && isDtlsEnabled)
     {
@@ -1092,11 +1101,12 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
         {
             auto publicPort = transport::SocketAddress::parse(_config.ice.publicIpv4);
             publicPort.setPort(transport->getLocalRtpPort().getPort());
-            outTransportDescription = TransportDescription(publicPort, transport->isDtlsClient());
+            outTransportDescription = TransportDescription(publicPort, transport->isDtlsClient(), sdesKeys);
         }
         else
         {
-            outTransportDescription = TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient());
+            outTransportDescription =
+                TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient(), sdesKeys);
         }
     }
     else if (!transport->isIceEnabled() && !isDtlsEnabled)
@@ -1105,11 +1115,11 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
         {
             auto publicPort = transport::SocketAddress::parse(_config.ice.publicIpv4);
             publicPort.setPort(transport->getLocalRtpPort().getPort());
-            outTransportDescription = TransportDescription(publicPort);
+            outTransportDescription = TransportDescription(publicPort, sdesKeys);
         }
         else
         {
-            outTransportDescription = TransportDescription(transport->getLocalRtpPort());
+            outTransportDescription = TransportDescription(transport->getLocalRtpPort(), sdesKeys);
         }
     }
 
@@ -1132,6 +1142,9 @@ bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
         return false;
     }
 
+    std::vector<srtp::AesKey> sdesKeys;
+    transport->getSdesKeys(sdesKeys);
+
     const bool isVideoConfigured = videoStreamItr->second->isConfigured;
     const bool isDtlsEnabled =
         (isVideoConfigured ? transport->isDtlsEnabled() : videoStreamItr->second->isDtlsLocalEnabled);
@@ -1140,15 +1153,17 @@ bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
     {
         outTransportDescription = TransportDescription(transport->getLocalCandidates(),
             transport->getLocalCredentials(),
-            transport->isDtlsClient());
+            transport->isDtlsClient(),
+            sdesKeys);
     }
     else if (!transport->isIceEnabled() && isDtlsEnabled)
     {
-        outTransportDescription = TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient());
+        outTransportDescription =
+            TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient(), sdesKeys);
     }
     else if (!transport->isIceEnabled() && !isDtlsEnabled)
     {
-        outTransportDescription = TransportDescription(transport->getLocalRtpPort());
+        outTransportDescription = TransportDescription(transport->getLocalRtpPort(), sdesKeys);
     }
 
     return true;

@@ -39,7 +39,6 @@ constexpr size_t keyingMaterialSize = srtpMasterKeyLength * 2 + srtpSaltLength *
 namespace transport
 {
 
-
 SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     : _isInitialized(false),
       _state(State::IDLE),
@@ -827,6 +826,7 @@ void SrtpClient::setRemoteKey(const srtp::AesKey& key)
     {
         logger::error("failed to create srtp context", _loggableId.c_str());
     }
+    _state = State::CONNECTED;
 }
 
 } // namespace transport

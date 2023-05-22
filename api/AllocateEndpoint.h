@@ -13,12 +13,13 @@ struct AllocateEndpoint
 {
     struct Transport
     {
-        Transport() : ice(false), srtpMode(SrtpMode::Disabled) {}
+        Transport() : ice(false), dtls(false), sdes(false) {}
 
         bool ice;
         utils::Optional<bool> iceControlling;
 
-        api::SrtpMode srtpMode;
+        bool dtls = false;
+        bool sdes = false;
     };
 
     struct Audio

@@ -82,7 +82,7 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
 
     void connect()
     {
-        for (int i = 0; i < 500 && !(_srtp1->isDtlsConnected() && _srtp2->isDtlsConnected()); ++i)
+        for (int i = 0; i < 500 && !(_srtp1->isConnected() && _srtp2->isConnected()); ++i)
         {
             _srtp1->processTimeout();
             _srtp2->processTimeout();

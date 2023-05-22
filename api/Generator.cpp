@@ -59,7 +59,7 @@ nlohmann::json generateTransport(const api::Transport& transport)
         dtlsJson["setup"] = dtls.setup;
         transportJson["dtls"] = dtlsJson;
     }
-    else if (!transport.sdesKeys.empty())
+    if (!transport.sdesKeys.empty())
     {
         transportJson["sdes"] = nlohmann::json::array();
         for (auto sdesKey : transport.sdesKeys)

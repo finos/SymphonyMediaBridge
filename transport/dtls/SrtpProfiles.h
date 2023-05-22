@@ -3,19 +3,17 @@
 
 namespace srtp
 {
-enum Profile
+enum Profile // ordered after preference
 {
-    // first 5 is aligned with open ssl
     NULL_CIPHER = 0,
-    AES128_CM_SHA1_80 = 1,
-    AES128_CM_SHA1_32 = 3,
-    AEAD_AES_128_GCM = 7,
-    AEAD_AES_256_GCM = 8,
-
-    AES_256_CM_SHA1_80 = 32,
+    AES128_CM_SHA1_80,
+    AES128_CM_SHA1_32,
+    AES_256_CM_SHA1_80,
     AES_256_CM_SHA1_32,
     AES_192_CM_SHA1_80,
     AES_192_CM_SHA1_32,
+    AEAD_AES_128_GCM,
+    AEAD_AES_256_GCM,
     PROFILE_LAST
 };
 

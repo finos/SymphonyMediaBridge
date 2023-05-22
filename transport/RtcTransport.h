@@ -109,6 +109,8 @@ public:
     virtual const char* getTag() const = 0;
 
     virtual uint64_t getLastReceivedPacketTimestamp() const = 0;
+    virtual void getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const = 0;
+    virtual void setRemoteSdesKey(const srtp::AesKey& key) = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,

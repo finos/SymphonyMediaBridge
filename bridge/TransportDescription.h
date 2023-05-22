@@ -25,23 +25,33 @@ struct TransportDescription
 
     TransportDescription(const std::vector<ice::IceCandidate>& iceCandidates,
         const std::pair<std::string, std::string>& iceCredentials,
-        const bool isDtlsClient)
+        const bool isDtlsClient,
+        const std::vector<srtp::AesKey>& sdesKeys)
         : ice(Ice{iceCandidates, iceCredentials}),
-          dtls(Dtls{isDtlsClient})
+          dtls(Dtls{isDtlsClient}),
+          sdesKeys(sdesKeys)
     {
     }
 
-    TransportDescription(const transport::SocketAddress& localPeer, const bool isDtlsClient)
+    TransportDescription(const transport::SocketAddress& localPeer,
+        const bool isDtlsClient,
+        const std::vector<srtp::AesKey>& sdesKeys)
         : localPeer(localPeer),
-          dtls(Dtls{isDtlsClient})
+          dtls(Dtls{isDtlsClient}),
+          sdesKeys(sdesKeys)
     {
     }
 
-    TransportDescription(const transport::SocketAddress& localPeer) : localPeer(localPeer) {}
+    TransportDescription(const transport::SocketAddress& localPeer, const std::vector<srtp::AesKey>& sdesKeys)
+        : localPeer(localPeer),
+          sdesKeys(sdesKeys)
+    {
+    }
 
     utils::Optional<Ice> ice;
     utils::Optional<transport::SocketAddress> localPeer;
     utils::Optional<Dtls> dtls;
+    std::vector<srtp::AesKey> sdesKeys;
 };
 
 } // namespace bridge
