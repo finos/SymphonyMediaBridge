@@ -53,6 +53,7 @@ private:
         const std::string& conferenceId,
         const bool useBundling,
         RequestLogger& requestLogger,
+        bool enableDtls,
         Mixer& mixer);
 
     bool allocateChannel(const std::string& contentName,
