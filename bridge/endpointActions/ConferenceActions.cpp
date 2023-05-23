@@ -381,13 +381,14 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         : ice::IceRole::CONTROLLING);
             }
             const auto mixed = audio.relayType.compare("mixed") == 0;
+            const auto ssrcRewrite = audio.relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
             if (!mixer->addAudioStream(outChannelId,
                     endpointId,
                     iceRole,
                     mixed,
-                    false, // !!! why is this fixed
+                    ssrcRewrite,
                     allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -415,9 +416,13 @@ httpd::Response allocateEndpoint(ActionContext* context,
             }
 
             std::string outChannelId;
-            // !!! why is ssrwrewrite always OFF
+            const auto ssrcRewrite = video.relayType.compare("ssrc-rewrite") == 0;
 
-            if (!mixer->addVideoStream(outChannelId, endpointId, iceRole, false, allocateChannel.idleTimeoutSeconds))
+            if (!mixer->addVideoStream(outChannelId,
+                    endpointId,
+                    iceRole,
+                    ssrcRewrite,
+                    allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding video stream has failed");
