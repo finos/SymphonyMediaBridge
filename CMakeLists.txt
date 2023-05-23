@@ -78,6 +78,7 @@ find_package(OpenSSL REQUIRED)
 find_package(Srtp2 REQUIRED)
 find_package(Opus REQUIRED)
 find_package(LibMicrohttpd REQUIRED)
+link_directories(/usr/local/lib)
 
 include_directories(.)
 include_directories(external)
