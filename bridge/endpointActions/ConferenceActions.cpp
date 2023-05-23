@@ -85,7 +85,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
     // Describe audio, video and data streams
     if (allocateChannel.audio.isSet())
     {
-        const auto& audio = allocateChannel.audio.get();
+        const auto& allocAudio = allocateChannel.audio.get();
         api::Audio responseAudio;
 
         AudioStreamDescription streamDescription;
@@ -100,12 +100,11 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
 
         responseAudio.ssrcs = streamDescription.ssrcs;
 
-        if (audio.transport.isSet())
+        if (allocAudio.transport.isSet())
         {
-            const auto& transport = audio.transport.get();
             api::Transport responseTransport;
 
-            if (transport.ice)
+            if (allocAudio.transport.get().ice)
             {
                 api::Ice responseIce;
                 const auto& transportDescriptionIce = transportDescription.ice.get();
@@ -134,7 +133,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseTransport.rtcpMux = false;
             }
 
-            if (audio.transport.get().dtls)
+            if (allocAudio.transport.get().dtls)
             {
                 api::Dtls responseDtls;
                 responseDtls.setup = "active";
@@ -142,7 +141,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseDtls.hash = context->sslDtls.getLocalFingerprint();
                 responseTransport.dtls.set(responseDtls);
             }
-            if (audio.transport.get().sdes)
+            if (allocAudio.transport.get().sdes)
             {
                 responseTransport.sdesKeys = transportDescription.sdesKeys;
             }
@@ -156,7 +155,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
 
     if (allocateChannel.video.isSet())
     {
-        const auto& video = allocateChannel.video.get();
+        const auto& allocVideo = allocateChannel.video.get();
         api::Video responseVideo;
 
         VideoStreamDescription streamDescription;
@@ -193,9 +192,9 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             responseVideo.streams.push_back(videoStream);
         }
 
-        if (video.transport.isSet())
+        if (allocVideo.transport.isSet())
         {
-            const auto& transport = video.transport.get();
+            const auto& transport = allocVideo.transport.get();
             api::Transport responseTransport;
 
             if (transport.ice)
@@ -227,7 +226,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseTransport.rtcpMux = false;
             }
 
-            if (video.transport.get().dtls)
+            if (allocVideo.transport.get().dtls)
             {
                 api::Dtls responseDtls;
                 responseDtls.setup = "active";
@@ -235,7 +234,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseDtls.hash = context->sslDtls.getLocalFingerprint();
                 responseTransport.dtls.set(responseDtls);
             }
-            if (allocateChannel.video.get().transport.get().sdes)
+            if (allocVideo.transport.get().sdes)
             {
                 responseTransport.sdesKeys = transportDescription.sdesKeys;
             }
@@ -536,7 +535,6 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
     }
 
     auto neighbours = convertGroupIds(endpointDescription.neighbours);
-
     if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, neighbours))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,

@@ -441,21 +441,6 @@ utils::Optional<uint32_t> Channel::getOfferedLocalSsrc() const
     return utils::Optional<uint32_t>();
 }
 
-DtlsInfo Channel::getOfferedDtls() const
-{
-    DtlsInfo info;
-    if (_offer.find("bundle-transport") != _offer.end() && _offer["bundle-transport"].find("dtls") != _offer.end())
-    {
-        auto& dtlsJson = _offer["bundle-transport"]["dtls"];
-
-        info.fingerPrint = dtlsJson["fingerprint"].get<std::string>();
-        info.hashType = dtlsJson["hash"].get<std::string>();
-    }
-    return info;
-}
-
-void Channel::getOfferedSdesKeys(std::vector<srtp::AesKey>& keys) const {}
-
 nlohmann::json newContent(const std::string& endpointId, const char* type, const char* relayType, bool initiator)
 {
     using namespace nlohmann;
@@ -827,18 +812,6 @@ utils::Optional<uint32_t> ColibriChannel::getOfferedLocalSsrc() const
     }
 
     return utils::Optional<uint32_t>();
-}
-
-DtlsInfo ColibriChannel::getOfferedDtls() const
-{
-    DtlsInfo info;
-    for (auto& bundle : _offer["channel-bundles"])
-    {
-        info.fingerPrint = bundle["transport"]["fingerprints"][0]["fingerprint"].get<std::string>();
-        info.hashType = bundle["transport"]["fingerprints"][0]["hash"].get<std::string>();
-    }
-
-    return info;
 }
 
 Barbell::Barbell(emulator::HttpdFactory* httpd) : _httpd(httpd), _id(newIdString()) {}

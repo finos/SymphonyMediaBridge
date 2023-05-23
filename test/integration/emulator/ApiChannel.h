@@ -81,8 +81,6 @@ public:
     virtual std::vector<api::SimulcastGroup> getOfferedVideoStreams() const = 0;
     virtual utils::Optional<uint32_t> getOfferedScreensharingSsrc() const = 0;
     virtual utils::Optional<uint32_t> getOfferedLocalSsrc() const = 0;
-    virtual DtlsInfo getOfferedDtls() const = 0;
-    virtual void getOfferedSdesKeys(std::vector<srtp::AesKey>& keys) const = 0;
 
     bool skipIpv6 = false;
 
@@ -142,8 +140,6 @@ public:
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
     utils::Optional<uint32_t> getOfferedScreensharingSsrc() const override;
     utils::Optional<uint32_t> getOfferedLocalSsrc() const override;
-    DtlsInfo getOfferedDtls() const override;
-    void getOfferedSdesKeys(std::vector<srtp::AesKey>& keys) const override;
 };
 
 class ColibriChannel : public BaseChannel
@@ -169,8 +165,6 @@ public:
     std::vector<api::SimulcastGroup> getOfferedVideoStreams() const override;
     utils::Optional<uint32_t> getOfferedScreensharingSsrc() const override;
     utils::Optional<uint32_t> getOfferedLocalSsrc() const override;
-    DtlsInfo getOfferedDtls() const override;
-    void getOfferedSdesKeys(std::vector<srtp::AesKey>& keys) const override{};
 };
 
 class Barbell
