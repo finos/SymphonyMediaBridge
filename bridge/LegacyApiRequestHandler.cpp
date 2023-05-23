@@ -711,7 +711,12 @@ httpd::Response LegacyApiRequestHandler::patchConference(const httpd::Request& r
         }
 
         assert(patchConferenceType != legacyapi::PatchConferenceType::Undefined);
-        return generatePatchConferenceResponse(conference, conferenceId, useBundling, requestLogger, *mixer);
+        return generatePatchConferenceResponse(conference,
+            conferenceId,
+            useBundling,
+            requestLogger,
+            useBundling,
+            *mixer);
     }
     catch (nlohmann::detail::parse_error parseError)
     {
@@ -733,6 +738,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
     const std::string& conferenceId,
     const bool useBundling,
     RequestLogger& requestLogger,
+    const bool enableDtls,
     Mixer& mixer)
 {
     legacyapi::Conference responseData(conference);
@@ -762,7 +768,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
             return response;
         }
 
-        if (transportDescription.ice.isSet() && transportDescription.srtpMode == srtp::Mode::DTLS)
+        if (transportDescription.ice.isSet())
         {
             const auto& transportDescriptionIce = transportDescription.ice.get();
             channelBundle._transport._ufrag.set(transportDescriptionIce.iceCredentials.first);
