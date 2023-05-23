@@ -5,6 +5,10 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
         checkout scm
     }
 
+    stage('Configure Docker') {
+        sh "gcloud auth configure-docker gcr.io --quiet"
+    }
+
     stage("Build\n[$cmakeBuildType $platform]") {
         docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:$dockerTag").inside {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
