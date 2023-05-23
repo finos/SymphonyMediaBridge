@@ -65,14 +65,12 @@ TEST_F(SrtpTransportEmuTest, oneOnOneSDES)
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
-        const double expectedFrequencies[2][2] = {{1300.0}, {600.0}};
-        size_t freqId = 0;
+        const double expectedFrequencies[2][1] = {{1300.0}, {600.0}};
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
-            EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
+            EXPECT_EQ(data.dominantFrequencies.size(), 1);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[id][0], 25.0);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);

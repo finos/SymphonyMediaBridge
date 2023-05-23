@@ -377,7 +377,6 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _endpointIdHash(endpointIdHash),
       _config(config),
       _srtpClient(srtpClientFactory.create(this)),
-      _dtlsEnabled(false),
       _tcpEndpointFactory(nullptr),
       _jobCounter(0),
       _selectedRtp(nullptr),
@@ -481,7 +480,6 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _endpointIdHash(endpointIdHash),
       _config(config),
       _srtpClient(srtpClientFactory.create(this)),
-      _dtlsEnabled(false),
       _tcpEndpointFactory(tcpEndpointFactory),
       _jobCounter(0),
       _selectedRtp(nullptr),
@@ -1709,12 +1707,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
 
 bool TransportImpl::unprotect(memory::Packet& packet)
 {
-    if (!_dtlsEnabled)
-    {
-        return true;
-    }
-
-    if (_srtpClient && _srtpClient->isInitialized())
+    if (_srtpClient && _srtpClient->isConnected())
     {
         return _srtpClient->unprotect(packet);
     }
@@ -1731,12 +1724,7 @@ void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 
 bool TransportImpl::setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
-    if (!_dtlsEnabled)
-    {
-        return true;
-    }
-
-    if (_srtpClient && _srtpClient->isInitialized())
+    if (_srtpClient && _srtpClient->isConnected())
     {
         return _srtpClient->setRemoteRolloverCounter(ssrc, rolloverCounter);
     }
@@ -1891,11 +1879,10 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
     }
 }
 
-void TransportImpl::setRemoteDtlsFingerprint(const std::string& fingerprintType,
+void TransportImpl::asyncSetRemoteDtlsFingerprint(const std::string& fingerprintType,
     const std::string& fingerprintHash,
     const bool dtlsClientSide)
 {
-    _dtlsEnabled = true;
     if (_srtpClient->getState() == SrtpClient::State::IDLE)
     {
         _jobQueue.addJob<DtlsSetRemoteJob>(*this,
@@ -1907,7 +1894,7 @@ void TransportImpl::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     }
 }
 
-void TransportImpl::disableDtls()
+void TransportImpl::asyncDisableSrtp()
 {
     _jobQueue.addJob<DtlsSetRemoteJob>(*this, *_srtpClient, "", "", false, _mainAllocator);
 }
@@ -1962,8 +1949,7 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = (_iceState == ice::IceSession::State::CONNECTED) &&
-        (_dtlsState == SrtpClient::State::CONNECTED || !_dtlsEnabled);
+    _isConnected = (_iceState == ice::IceSession::State::CONNECTED) && (!_srtpClient || _srtpClient->isConnected());
 
     switch (state)
     {
@@ -2194,6 +2180,11 @@ void TransportImpl::connectSctp()
 
 void TransportImpl::doConnectSctp()
 {
+    if (_srtpClient && _srtpClient->getMode() != srtp::Mode::DTLS)
+    {
+        return;
+    }
+
     if (_sctpAssociation)
     {
         logger::info("SCTP association already created", _loggableId.c_str());
@@ -2421,11 +2412,10 @@ void TransportImpl::getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const
     }
 }
 
-void TransportImpl::setRemoteSdesKey(const srtp::AesKey& key)
+void TransportImpl::asyncSetRemoteSdesKey(const srtp::AesKey& key)
 {
     if (_srtpClient)
     {
-        _dtlsEnabled = false;
         _jobQueue.post(_jobCounter, [this, key]() { _srtpClient->setRemoteKey(key); });
     }
 }

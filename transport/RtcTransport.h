@@ -1,5 +1,6 @@
 #pragma once
 
+#include "dtls/SrtpProfiles.h"
 #include "jobmanager/JobManager.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
@@ -63,10 +64,10 @@ public:
         const ice::IceCandidates& candidates,
         memory::AudioPacketPoolAllocator& allocator) = 0;
     virtual void addRemoteIceCandidate(const ice::IceCandidate& candidate) = 0;
-    virtual void setRemoteDtlsFingerprint(const std::string& fingerprintType,
+    virtual void asyncSetRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) = 0;
-    virtual void disableDtls() = 0;
+    virtual void asyncDisableSrtp() = 0;
     virtual SocketAddress getLocalRtpPort() const = 0;
     virtual void setSctp(uint16_t localPort, uint16_t remotePort) = 0;
     virtual void connectSctp() = 0;
@@ -77,7 +78,6 @@ public:
     virtual void setAbsSendTimeExtensionId(uint8_t extensionId) = 0;
 
     virtual bool isIceEnabled() const = 0;
-    virtual bool isDtlsEnabled() const = 0;
 
     virtual uint32_t getSenderLossCount() const = 0;
     virtual uint32_t getUplinkEstimateKbps() const = 0;
@@ -110,7 +110,7 @@ public:
 
     virtual uint64_t getLastReceivedPacketTimestamp() const = 0;
     virtual void getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const = 0;
-    virtual void setRemoteSdesKey(const srtp::AesKey& key) = 0;
+    virtual void asyncSetRemoteSdesKey(const srtp::AesKey& key) = 0;
 };
 
 std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager,

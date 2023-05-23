@@ -328,7 +328,7 @@ void Channel::configureTransport(transport::RtcTransport& transport, memory::Aud
     if (bundle.find("dtls") != bundle.end())
     {
         std::string fingerPrint = bundle["dtls"]["hash"];
-        transport.setRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
+        transport.asyncSetRemoteDtlsFingerprint(bundle["dtls"]["type"], fingerPrint, true);
     }
     else if (bundle.find("sdes") != bundle.end())
     {
@@ -338,7 +338,7 @@ void Channel::configureTransport(transport::RtcTransport& transport, memory::Aud
             key.profile = api::utils::stringToSrtpProfile(sdesSpec["profile"]);
             auto keyLen = utils::Base64::decode(sdesSpec["key"], key.keySalt, sizeof(key.keySalt));
             assert(keyLen == key.getLength());
-            transport.setRemoteSdesKey(key);
+            transport.asyncSetRemoteSdesKey(key);
             break;
         }
     }
@@ -721,7 +721,7 @@ void ColibriChannel::configureTransport(transport::RtcTransport& transport, memo
         setRemoteIce(transport, bundle, TRANSPORT_GROUP, allocator);
 
         std::string fingerPrint = bundle["transport"]["fingerprints"][0]["fingerprint"];
-        transport.setRemoteDtlsFingerprint(bundle["transport"]["fingerprints"][0]["hash"], fingerPrint, true);
+        transport.asyncSetRemoteDtlsFingerprint(bundle["transport"]["fingerprints"][0]["hash"], fingerPrint, true);
     }
 }
 

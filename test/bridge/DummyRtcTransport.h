@@ -33,12 +33,12 @@ public:
     }
     void addRemoteIceCandidate(const ice::IceCandidate& candidate) override {}
 
-    void setRemoteDtlsFingerprint(const std::string& fingerprintType,
+    void asyncSetRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) override
     {
     }
-    void disableDtls() override{};
+    void asyncDisableSrtp() override{};
     transport::SocketAddress getLocalRtpPort() const override { return transport::SocketAddress(); }
     void setSctp(uint16_t localPort, uint16_t remotePort) override {}
     void connectSctp() override {}
@@ -49,7 +49,7 @@ public:
     void setAbsSendTimeExtensionId(uint8_t extensionId) override {}
     bool start() override { return true; }
     bool isIceEnabled() const override { return true; }
-    bool isDtlsEnabled() const override { return true; }
+
     void connect() override {}
     void runTick(uint64_t timestamp) override {}
     jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
@@ -107,7 +107,7 @@ public:
 
     uint64_t getLastReceivedPacketTimestamp() const override { return 0; }
     void getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const override {}
-    void setRemoteSdesKey(const srtp::AesKey& key) override {}
+    void asyncSetRemoteSdesKey(const srtp::AesKey& key) override {}
 
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;

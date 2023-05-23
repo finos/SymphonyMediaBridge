@@ -264,7 +264,7 @@ POST /conferences/{conferenceId}/{endpointId}
 Configure endpoint id {endpointId} in the conference {conferenceId} based on information from the initial SDP answer from the endpoint.
 
 ```json
-POST /conferences/{conferenceId}/{endpointId}
+PUT /conferences/{conferenceId}/{endpointId}
 {
     "action": "configure",
     "bundle-transport": {
@@ -388,6 +388,9 @@ POST /conferences/{conferenceId}/{endpointId}
 
 ```json
 200 OK
+{
+    // same body as for allocate
+}
 ```
 
 ## Reconfigure endpoint
@@ -395,7 +398,7 @@ POST /conferences/{conferenceId}/{endpointId}
 Reconfigure endpoint id {endpointId} in the conference {conferenceId} adding or removing ssrcs sent from that endpoint.
 
 ```json
-POST /conferences/{conferenceId}/{endpointId}
+PUT /conferences/{conferenceId}/{endpointId}
 {
     "action": "reconfigure",
     "audio": {
@@ -592,7 +595,7 @@ DELETE /barbell/{conferenceId}/{barbellId}
 Configure barbell {barbellId} in the conference {conferenceId} based on information from the initial SDP answer from the barbell allocation.
 
 ```json
-POST /barbell/{conferenceId}/{barbellId}
+PUT /barbell/{conferenceId}/{barbellId}
 {
     "action": "configure",
     "bundle-transport": {

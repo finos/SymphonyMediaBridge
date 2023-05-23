@@ -70,10 +70,12 @@ public:
     bool unprotectApplicationData(memory::Packet& packet);
     void sendApplicationData(const void* data, size_t length);
 
+    srtp::Mode getMode() const { return _mode; }
+
 private:
     void dtlsHandShake();
     void logSslError(const char* msg, int sslCode);
-    bool isDtlsAvailable() const { return !_remoteDtlsFingerprintHash.empty(); }
+
     bool _isInitialized;
     std::atomic<State> _state;
     logger::LoggableId _loggableId;
@@ -87,7 +89,7 @@ private:
     srtp_t _remoteSrtp;
     srtp_t _localSrtp;
 
-    bool _nullCipher;
+    srtp::Mode _mode;
 
     srtp::AesKey _localKey;
 

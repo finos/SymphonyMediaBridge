@@ -24,6 +24,12 @@ httpd::Response processEndpointPostRequest(ActionContext* context,
     const std::string& conferenceId,
     const std::string& endpointId);
 
+httpd::Response processEndpointPutRequest(ActionContext* context,
+    RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const std::string& conferenceId,
+    const std::string& endpointId);
+
 httpd::Response getConferenceInfo(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
@@ -41,6 +47,12 @@ httpd::Response handleAbout(ActionContext*,
 httpd::Response processBarbellAction(ActionContext*,
     RequestLogger&,
     const httpd::Request&,
+    const std::string& conferenceId,
+    const std::string& barbellId);
+
+httpd::Response processBarbellPutAction(ActionContext* context,
+    RequestLogger& requestLogger,
+    const httpd::Request& request,
     const std::string& conferenceId,
     const std::string& barbellId);
 

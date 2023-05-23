@@ -65,7 +65,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         }
         responseBundleTransport.ice.set(responseIce);
 
-        if (bundleTransport.dtls && transportDescription.dtls.isSet())
+        if (bundleTransport.dtls)
         {
             api::Dtls responseDtls;
             responseDtls.type = "sha-256";
@@ -134,7 +134,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseTransport.rtcpMux = false;
             }
 
-            if (allocateChannel.audio.get().transport.get().dtls && transportDescription.dtls.isSet())
+            if (audio.transport.get().dtls)
             {
                 api::Dtls responseDtls;
                 responseDtls.setup = "active";
@@ -142,7 +142,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseDtls.hash = context->sslDtls.getLocalFingerprint();
                 responseTransport.dtls.set(responseDtls);
             }
-            if (allocateChannel.audio.get().transport.get().sdes)
+            if (audio.transport.get().sdes)
             {
                 responseTransport.sdesKeys = transportDescription.sdesKeys;
             }
@@ -227,7 +227,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
                 responseTransport.rtcpMux = false;
             }
 
-            if (allocateChannel.video.get().transport.get().dtls && transportDescription.dtls.isSet())
+            if (video.transport.get().dtls)
             {
                 api::Dtls responseDtls;
                 responseDtls.setup = "active";
@@ -388,8 +388,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                     endpointId,
                     iceRole,
                     mixed,
-                    false,
-                    transport.dtls,
+                    false, // !!! why is this fixed
                     allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -417,12 +416,9 @@ httpd::Response allocateEndpoint(ActionContext* context,
             }
 
             std::string outChannelId;
-            if (!mixer->addVideoStream(outChannelId,
-                    endpointId,
-                    iceRole,
-                    false,
-                    transport.dtls,
-                    allocateChannel.idleTimeoutSeconds))
+            // !!! why is ssrwrewrite always OFF
+
+            if (!mixer->addVideoStream(outChannelId, endpointId, iceRole, false, allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding video stream has failed");
@@ -540,6 +536,7 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
     }
 
     auto neighbours = convertGroupIds(endpointDescription.neighbours);
+
     if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, neighbours))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
@@ -582,9 +579,17 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
                     "DTLS configuration for audio stream has failed");
             }
         }
+        else if (!transport.sdesKeys.empty())
+        {
+            if (!mixer.configureAudioStreamTransportSdes(endpointId, transport.sdesKeys.front()))
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
+                    "DTLS configuration for audio stream has failed");
+            }
+        }
         else
         {
-            if (!mixer.configureAudioStreamTransportDisableDtls(endpointId))
+            if (!mixer.configureAudioStreamTransportDisableSrtp(endpointId))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Disabling DTLS for audio stream has failed");
@@ -694,9 +699,17 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
                     "Disabling DTLS for video stream has failed");
             }
         }
+        else if (!transport.sdesKeys.empty())
+        {
+            if (!mixer.configureVideoStreamTransportSdes(endpointId, transport.sdesKeys.front()))
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
+                    "DTLS configuration for video stream has failed");
+            }
+        }
         else
         {
-            if (!mixer.configureVideoStreamTransportDisableDtls(endpointId))
+            if (!mixer.configureVideoStreamTransportDisableSrtp(endpointId))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Disabling DTLS for video stream has failed");
@@ -944,6 +957,40 @@ httpd::Response expireEndpoint(ActionContext* context,
     return response;
 }
 
+httpd::Response processEndpointPutRequest(ActionContext* context,
+    RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const std::string& conferenceId,
+    const std::string& endpointId)
+{
+    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
+    const auto actionJsonItr = requestBodyJson.find("action");
+    if (actionJsonItr == requestBodyJson.end())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Missing required json property: action");
+    }
+    const auto& action = actionJsonItr->get<std::string>();
+
+    if (action.compare("configure") == 0)
+    {
+        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
+        return configureEndpoint(context, requestLogger, endpointDescription, conferenceId, endpointId);
+    }
+    else if (action.compare("reconfigure") == 0)
+    {
+        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
+        return reconfigureEndpoint(context, requestLogger, endpointDescription, conferenceId, endpointId);
+    }
+    else if (action.compare("record") == 0)
+    {
+        const auto recording = api::Parser::parseRecording(requestBodyJson);
+        return recordEndpoint(context, requestLogger, recording, conferenceId);
+    }
+
+    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+        utils::format("Action '%s' is not supported", action.c_str()));
+}
+
 httpd::Response processEndpointPostRequest(ActionContext* context,
     RequestLogger& requestLogger,
     const httpd::Request& request,
@@ -963,27 +1010,14 @@ httpd::Response processEndpointPostRequest(ActionContext* context,
         const auto allocateChannel = api::Parser::parseAllocateEndpoint(requestBodyJson);
         return allocateEndpoint(context, requestLogger, allocateChannel, conferenceId, endpointId);
     }
-    else if (action.compare("configure") == 0)
-    {
-        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
-        return configureEndpoint(context, requestLogger, endpointDescription, conferenceId, endpointId);
-    }
-    else if (action.compare("reconfigure") == 0)
-    {
-        const auto endpointDescription = api::Parser::parsePatchEndpoint(requestBodyJson, endpointId);
-        return reconfigureEndpoint(context, requestLogger, endpointDescription, conferenceId, endpointId);
-    }
-    else if (action.compare("record") == 0)
-    {
-        const auto recording = api::Parser::parseRecording(requestBodyJson);
-        return recordEndpoint(context, requestLogger, recording, conferenceId);
-    }
     else if (action.compare("expire") == 0)
     {
         return expireEndpoint(context, requestLogger, conferenceId, endpointId);
     }
-
-    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-        utils::format("Action '%s' is not supported", action.c_str()));
+    else
+    {
+        return processEndpointPutRequest(context, requestLogger, request, conferenceId, endpointId);
+    }
 }
+
 } // namespace bridge

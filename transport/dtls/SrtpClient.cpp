@@ -49,7 +49,7 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
       _isDtlsClient(true),
       _remoteSrtp(nullptr),
       _localSrtp(nullptr),
-      _nullCipher(true),
+      _mode(srtp::Mode::UNDEFINED),
       _eventSink(eventListener),
       _rtpAntiSpam(10, 100),
       _rtcpAntiSpam(10, 100),
@@ -104,10 +104,15 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     const bool isDtlsClient)
 {
     assert(_isInitialized);
+    if (_state != State::IDLE)
+    {
+        logger::warn("SrtpClient already in progress. Cannot set DTLS fingerprints", _loggableId.c_str());
+        return;
+    }
 
     if (fingerprintType.empty())
     {
-        _nullCipher = true;
+        _mode = srtp::Mode::NULL_CIPHER;
         _state = State::CONNECTED;
         logger::info("Setting empty fingerprint. Disabling DTLS.", _loggableId.c_str());
         if (_eventSink)
@@ -121,7 +126,7 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     _remoteDtlsFingerprintHash = fingerprintHash;
     _isDtlsClient = isDtlsClient;
 
-    _nullCipher = false;
+    _mode = srtp::Mode::DTLS;
     if (_isDtlsClient)
     {
         logger::info("DTLS ready as client", _loggableId.c_str());
@@ -157,7 +162,7 @@ void SrtpClient::dtlsHandShake()
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     assert(_isInitialized);
-    if (_nullCipher)
+    if (_mode != srtp::Mode::DTLS)
     {
         logger::debug("null cipher. no handshake", _loggableId.c_str());
         return;
@@ -262,7 +267,7 @@ bool SrtpClient::unprotect(memory::Packet& packet)
 {
     assert(_isInitialized);
 
-    if (_nullCipher)
+    if (_mode == srtp::Mode::NULL_CIPHER)
     {
         return true;
     }
@@ -332,7 +337,7 @@ bool SrtpClient::protect(memory::Packet& packet)
 {
     assert(_isInitialized);
 
-    if (_nullCipher)
+    if (_mode == srtp::Mode::NULL_CIPHER)
     {
         return true;
     }
@@ -406,6 +411,11 @@ void SrtpClient::removeLocalSsrc(const uint32_t ssrc)
 bool SrtpClient::setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    if (_mode <= srtp::Mode::NULL_CIPHER)
+    {
+        return true;
+    }
+
     const auto result = srtp_set_stream_roc(_remoteSrtp, ssrc, rolloverCounter);
     if (result != srtp_err_status_ok)
     {
@@ -423,6 +433,11 @@ bool SrtpClient::setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t ro
 bool SrtpClient::setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    if (_mode <= srtp::Mode::NULL_CIPHER)
+    {
+        return true;
+    }
+
     const auto result = srtp_set_stream_roc(_localSrtp, ssrc, rolloverCounter);
     if (result != srtp_err_status_ok)
     {
@@ -656,7 +671,7 @@ bool SrtpClient::createSrtp(const srtp::AesKey& remoteKey)
         return false;
     }
 
-    _nullCipher = false;
+    _mode = srtp::Mode::SDES;
 
     return true;
 }
@@ -673,7 +688,7 @@ void SrtpClient::onMessageReceived(memory::UniquePacket packet)
         return;
     }
 
-    if (_nullCipher)
+    if (_mode == srtp::Mode::NULL_CIPHER)
     {
         logger::debug("null cipher postponing message", _loggableId.c_str());
         return;
@@ -724,12 +739,11 @@ bool SrtpClient::unprotectApplicationData(memory::Packet& packet)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     assert(*packet.get() == transport::DTLSContentType::applicationData);
-    if (_nullCipher)
+    if (_mode != srtp::Mode::DTLS)
     {
-        logger::debug("null cipher ignoring message", _loggableId.c_str());
         return false;
     }
-    if (_state != State::CONNECTED || !isDtlsAvailable())
+    if (_state != State::CONNECTED)
     {
         return false;
     }
@@ -761,7 +775,7 @@ bool SrtpClient::unprotectApplicationData(memory::Packet& packet)
 void SrtpClient::sendApplicationData(const void* data, size_t length)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
-    if (!isDtlsAvailable())
+    if (_mode != srtp::Mode::DTLS)
     {
         return;
     }
@@ -827,6 +841,12 @@ void SrtpClient::setRemoteKey(const srtp::AesKey& key)
         assert(false);
         logger::warn("cannot set remote SDES key once SrtpClient has been initiated", _loggableId.c_str());
         return;
+    }
+
+    if (key.profile == srtp::Profile::NULL_CIPHER)
+    {
+        _state = State::CONNECTED;
+        _mode = srtp::Mode::NULL_CIPHER;
     }
 
     if (!createSrtp(key))

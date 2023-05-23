@@ -321,7 +321,6 @@ bool Mixer::addAudioStream(std::string& outId,
     const utils::Optional<ice::IceRole>& iceRole,
     const bool audioMixed,
     bool rewriteSsrcs,
-    bool isDtlsEnabled,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -351,7 +350,6 @@ bool Mixer::addAudioStream(std::string& outId,
             transport,
             audioMixed,
             rewriteSsrcs,
-            isDtlsEnabled,
             idleTimeoutSeconds));
 
     if (!streamItr.second)
@@ -390,7 +388,6 @@ bool Mixer::addVideoStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
     bool rewriteSsrcs,
-    bool isDtlsEnabled,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -419,7 +416,6 @@ bool Mixer::addVideoStream(std::string& outId,
             _ssrcGenerator.next(),
             transport,
             rewriteSsrcs,
-            isDtlsEnabled,
             idleTimeoutSeconds));
 
     if (!emplaceResult.second)
@@ -468,7 +464,6 @@ bool Mixer::addBundledAudioStream(std::string& outId,
             transportItr->second._transport,
             audioMixed,
             ssrcRewrite,
-            true,
             idleTimeoutSeconds));
 
     if (!streamItr.second)
@@ -515,7 +510,6 @@ bool Mixer::addBundledVideoStream(std::string& outId,
             _ssrcGenerator.next(),
             transportItr->second._transport,
             ssrcRewrite,
-            true,
             idleTimeoutSeconds));
 
     if (!streamItr.second)
@@ -1039,7 +1033,8 @@ bool Mixer::getTransportBundleDescription(const std::string& endpointId, Transpo
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
         bundleTransport->getLocalCredentials(),
         bundleTransport->isDtlsClient(),
-        sdesKeys);
+        sdesKeys,
+        bundleTransportItr->second.srtpMode);
 
     return true;
 }
@@ -1060,7 +1055,8 @@ bool Mixer::getBarbellTransportDescription(const std::string& barbellId, Transpo
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
         bundleTransport->getLocalCredentials(),
         bundleTransport->isDtlsClient(),
-        std::vector<srtp::AesKey>());
+        std::vector<srtp::AesKey>(),
+        srtp::Mode::DTLS);
 
     return true;
 }
@@ -1081,45 +1077,32 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
         return false;
     }
 
-    const bool isAudioConfigured = audioStreamItr->second->isConfigured;
-    const bool isDtlsEnabled =
-        (isAudioConfigured ? transport->isDtlsEnabled() : audioStreamItr->second->isDtlsLocalEnabled);
-
     std::vector<srtp::AesKey> sdesKeys;
     transport->getSdesKeys(sdesKeys);
 
-    if (transport->isIceEnabled() && isDtlsEnabled)
+    if (transport->isIceEnabled())
     {
         outTransportDescription = TransportDescription(transport->getLocalCandidates(),
             transport->getLocalCredentials(),
             transport->isDtlsClient(),
-            sdesKeys);
+            sdesKeys,
+            audioStreamItr->second->srtpMode);
     }
-    else if (!transport->isIceEnabled() && isDtlsEnabled)
+    else if (!transport->isIceEnabled())
     {
         if (!_config.ice.publicIpv4.get().empty())
         {
             auto publicPort = transport::SocketAddress::parse(_config.ice.publicIpv4);
             publicPort.setPort(transport->getLocalRtpPort().getPort());
-            outTransportDescription = TransportDescription(publicPort, transport->isDtlsClient(), sdesKeys);
-        }
-        else
-        {
             outTransportDescription =
-                TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient(), sdesKeys);
-        }
-    }
-    else if (!transport->isIceEnabled() && !isDtlsEnabled)
-    {
-        if (!_config.ice.publicIpv4.get().empty())
-        {
-            auto publicPort = transport::SocketAddress::parse(_config.ice.publicIpv4);
-            publicPort.setPort(transport->getLocalRtpPort().getPort());
-            outTransportDescription = TransportDescription(publicPort, sdesKeys);
+                TransportDescription(publicPort, transport->isDtlsClient(), sdesKeys, audioStreamItr->second->srtpMode);
         }
         else
         {
-            outTransportDescription = TransportDescription(transport->getLocalRtpPort(), sdesKeys);
+            outTransportDescription = TransportDescription(transport->getLocalRtpPort(),
+                transport->isDtlsClient(),
+                sdesKeys,
+                audioStreamItr->second->srtpMode);
         }
     }
 
@@ -1136,34 +1119,29 @@ bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
         return false;
     }
 
-    auto transport = videoStreamItr->second->transport.get();
-    if (!transport)
+    auto& videoStream = *videoStreamItr->second;
+    if (!videoStream.transport)
     {
         return false;
     }
 
     std::vector<srtp::AesKey> sdesKeys;
-    transport->getSdesKeys(sdesKeys);
+    videoStream.transport->getSdesKeys(sdesKeys);
 
-    const bool isVideoConfigured = videoStreamItr->second->isConfigured;
-    const bool isDtlsEnabled =
-        (isVideoConfigured ? transport->isDtlsEnabled() : videoStreamItr->second->isDtlsLocalEnabled);
-
-    if (transport->isIceEnabled() && isDtlsEnabled)
+    if (videoStream.transport->isIceEnabled())
     {
-        outTransportDescription = TransportDescription(transport->getLocalCandidates(),
-            transport->getLocalCredentials(),
-            transport->isDtlsClient(),
-            sdesKeys);
+        outTransportDescription = TransportDescription(videoStream.transport->getLocalCandidates(),
+            videoStream.transport->getLocalCredentials(),
+            videoStream.transport->isDtlsClient(),
+            sdesKeys,
+            videoStream.srtpMode);
     }
-    else if (!transport->isIceEnabled() && isDtlsEnabled)
+    else
     {
-        outTransportDescription =
-            TransportDescription(transport->getLocalRtpPort(), transport->isDtlsClient(), sdesKeys);
-    }
-    else if (!transport->isIceEnabled() && !isDtlsEnabled)
-    {
-        outTransportDescription = TransportDescription(transport->getLocalRtpPort(), sdesKeys);
+        outTransportDescription = TransportDescription(videoStream.transport->getLocalRtpPort(),
+            videoStream.transport->isDtlsClient(),
+            sdesKeys,
+            videoStream.srtpMode);
     }
 
     return true;
@@ -1488,7 +1466,21 @@ bool Mixer::configureAudioStreamTransportDtls(const std::string& endpointId,
     {
         return false;
     }
-    audioStreamItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    audioStreamItr->second->srtpMode = srtp::Mode::DTLS;
+    audioStreamItr->second->transport->asyncSetRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    return true;
+}
+
+bool Mixer::configureAudioStreamTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto audioStreamIt = _audioStreams.find(endpointId);
+    if (audioStreamIt == _audioStreams.end())
+    {
+        return false;
+    }
+    audioStreamIt->second->srtpMode = srtp::Mode::SDES;
+    audioStreamIt->second->transport->asyncSetRemoteSdesKey(remoteKey);
     return true;
 }
 
@@ -1503,11 +1495,25 @@ bool Mixer::configureVideoStreamTransportDtls(const std::string& endpointId,
     {
         return false;
     }
-    videoStreamItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    videoStreamItr->second->srtpMode = srtp::Mode::DTLS;
+    videoStreamItr->second->transport->asyncSetRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     return true;
 }
 
-bool Mixer::configureAudioStreamTransportDisableDtls(const std::string& endpointId)
+bool Mixer::configureVideoStreamTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto videoStreamIt = _videoStreams.find(endpointId);
+    if (videoStreamIt == _videoStreams.end())
+    {
+        return false;
+    }
+    videoStreamIt->second->srtpMode = srtp::Mode::SDES;
+    videoStreamIt->second->transport->asyncSetRemoteSdesKey(remoteKey);
+    return true;
+}
+
+bool Mixer::configureAudioStreamTransportDisableSrtp(const std::string& endpointId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1515,11 +1521,12 @@ bool Mixer::configureAudioStreamTransportDisableDtls(const std::string& endpoint
     {
         return false;
     }
-    audioStreamItr->second->transport->disableDtls();
+    audioStreamItr->second->transport->asyncDisableSrtp();
+    audioStreamItr->second->srtpMode = srtp::Mode::NULL_CIPHER;
     return true;
 }
 
-bool Mixer::configureVideoStreamTransportDisableDtls(const std::string& endpointId)
+bool Mixer::configureVideoStreamTransportDisableSrtp(const std::string& endpointId)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto videoStreamItr = _videoStreams.find(endpointId);
@@ -1527,7 +1534,7 @@ bool Mixer::configureVideoStreamTransportDisableDtls(const std::string& endpoint
     {
         return false;
     }
-    videoStreamItr->second->transport->disableDtls();
+    videoStreamItr->second->transport->asyncDisableSrtp();
     return true;
 }
 
@@ -1552,26 +1559,28 @@ bool Mixer::configureBundleTransportDtls(const std::string& endpointId,
     const bool isDtlsClient)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
-    auto transportItr = _bundleTransports.find(endpointId);
-    if (transportItr == _bundleTransports.end())
+    auto transportIt = _bundleTransports.find(endpointId);
+    if (transportIt == _bundleTransports.end())
     {
         return false;
     }
 
-    transportItr->second._transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    transportIt->second.srtpMode = srtp::Mode::DTLS;
+    transportIt->second._transport->asyncSetRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     return true;
 }
 
 bool Mixer::configureBundleTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
-    auto transportItr = _bundleTransports.find(endpointId);
-    if (transportItr == _bundleTransports.end())
+    auto bundleIt = _bundleTransports.find(endpointId);
+    if (bundleIt == _bundleTransports.end())
     {
         return false;
     }
 
-    transportItr->second._transport->setRemoteSdesKey(remoteKey);
+    bundleIt->second.srtpMode = srtp::Mode::SDES;
+    bundleIt->second._transport->asyncSetRemoteSdesKey(remoteKey);
     return true;
 }
 
@@ -2317,7 +2326,7 @@ bool Mixer::configureBarbellTransport(const std::string& barbellId,
     }
 
     barbellItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
-    barbellItr->second->transport->setRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    barbellItr->second->transport->asyncSetRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     barbellItr->second->transport->setSctp(5000, 5000);
     return true;
 }

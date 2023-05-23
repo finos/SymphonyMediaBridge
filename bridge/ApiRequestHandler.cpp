@@ -78,6 +78,10 @@ httpd::Response ApiRequestHandler::handleEndpointRequest(RequestLogger& requestL
     {
         return processEndpointPostRequest(this, requestLogger, request, conferenceId, endpointId);
     }
+    else if (request._method == httpd::Method::PUT)
+    {
+        return processEndpointPutRequest(this, requestLogger, request, conferenceId, endpointId);
+    }
     else if (request._method == httpd::Method::DELETE)
     {
         return expireEndpoint(this, requestLogger, conferenceId, endpointId);

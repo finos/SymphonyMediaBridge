@@ -28,11 +28,11 @@ class RtcTransportMock : public TransportMock<transport::RtcTransport>
     MOCK_METHOD(void, addRemoteIceCandidate, (const ice::IceCandidate& candidate), (override));
 
     MOCK_METHOD(void,
-        setRemoteDtlsFingerprint,
+        asyncSetRemoteDtlsFingerprint,
         (const std::string& fingerprintType, const std::string& fingerprintHash, const bool dtlsClientSide),
         (override));
 
-    MOCK_METHOD(void, disableDtls, (), (override));
+    MOCK_METHOD(void, asyncDisableSrtp, (), (override));
     MOCK_METHOD(transport::SocketAddress, getLocalRtpPort, (), (const override));
     MOCK_METHOD(void, setSctp, (uint16_t localPort, uint16_t remotePort), (override));
     MOCK_METHOD(void, connectSctp, (), (override));
@@ -91,7 +91,7 @@ class RtcTransportMock : public TransportMock<transport::RtcTransport>
     MOCK_METHOD(uint16_t, allocateOutboundSctpStream, (), (override));
 
     MOCK_METHOD(void, getSdesKeys, (std::vector<srtp::AesKey> & sdesKeys), (const override));
-    MOCK_METHOD(void, setRemoteSdesKey, (const srtp::AesKey& key), (override));
+    MOCK_METHOD(void, asyncSetRemoteSdesKey, (const srtp::AesKey& key), (override));
 };
 
 } // namespace test

@@ -26,32 +26,40 @@ struct TransportDescription
     TransportDescription(const std::vector<ice::IceCandidate>& iceCandidates,
         const std::pair<std::string, std::string>& iceCredentials,
         const bool isDtlsClient,
-        const std::vector<srtp::AesKey>& sdesKeys)
+        const std::vector<srtp::AesKey>& sdesKeys,
+        srtp::Mode srtpMode)
         : ice(Ice{iceCandidates, iceCredentials}),
           dtls(Dtls{isDtlsClient}),
-          sdesKeys(sdesKeys)
+          sdesKeys(sdesKeys),
+          srtpMode(srtpMode)
     {
     }
 
     TransportDescription(const transport::SocketAddress& localPeer,
         const bool isDtlsClient,
-        const std::vector<srtp::AesKey>& sdesKeys)
+        const std::vector<srtp::AesKey>& sdesKeys,
+        srtp::Mode srtpMode)
         : localPeer(localPeer),
           dtls(Dtls{isDtlsClient}),
-          sdesKeys(sdesKeys)
+          sdesKeys(sdesKeys),
+          srtpMode(srtpMode)
     {
     }
 
-    TransportDescription(const transport::SocketAddress& localPeer, const std::vector<srtp::AesKey>& sdesKeys)
+    TransportDescription(const transport::SocketAddress& localPeer,
+        const std::vector<srtp::AesKey>& sdesKeys,
+        srtp::Mode srtpMode)
         : localPeer(localPeer),
-          sdesKeys(sdesKeys)
+          sdesKeys(sdesKeys),
+          srtpMode(srtpMode)
     {
     }
 
     utils::Optional<Ice> ice;
     utils::Optional<transport::SocketAddress> localPeer;
-    utils::Optional<Dtls> dtls;
+    Dtls dtls;
     std::vector<srtp::AesKey> sdesKeys;
+    srtp::Mode srtpMode;
 };
 
 } // namespace bridge

@@ -107,13 +107,11 @@ public:
         const utils::Optional<ice::IceRole>& iceRole,
         const bool audioMixed,
         bool rewriteSsrcs,
-        bool isDtlsEnabled,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
     bool addVideoStream(std::string& outId,
         const std::string& endpointId,
         const utils::Optional<ice::IceRole>& iceRole,
         bool rewriteSsrcs,
-        bool isDtlsEnabled,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
     void allocateAudioBuffer(uint32_t ssrc);
 
@@ -182,14 +180,15 @@ public:
         const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool isDtlsClient);
+    bool configureAudioStreamTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey);
+    bool configureAudioStreamTransportDisableSrtp(const std::string& endpointId);
 
     bool configureVideoStreamTransportDtls(const std::string& endpointId,
         const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool isDtlsClient);
-
-    bool configureAudioStreamTransportDisableDtls(const std::string& endpointId);
-    bool configureVideoStreamTransportDisableDtls(const std::string& endpointId);
+    bool configureVideoStreamTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey);
+    bool configureVideoStreamTransportDisableSrtp(const std::string& endpointId);
 
     bool configureBundleTransportIce(const std::string& endpointId,
         const std::pair<std::string, std::string>& credentials,
@@ -199,7 +198,6 @@ public:
         const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool isDtlsClient);
-
     bool configureBundleTransportSdes(const std::string& endpointId, const srtp::AesKey& remoteKey);
 
     bool configureBarbellTransport(const std::string& barbellId,
@@ -301,6 +299,7 @@ private:
     {
         explicit BundleTransport(const std::shared_ptr<transport::RtcTransport>& transport) : _transport(transport) {}
         std::shared_ptr<transport::RtcTransport> _transport;
+        srtp::Mode srtpMode;
     };
 
     const config::Config& _config;

@@ -42,3 +42,18 @@ TEST(Base64, decodeSaltExample)
     }
     EXPECT_STREQ(strResult.c_str(), "Quid pro quo");
 }
+
+TEST(Base64, transcodeTest)
+{
+    uint8_t data[4096];
+    for (size_t i = 0; i < sizeof(data); ++i)
+    {
+        data[i] = i;
+    }
+
+    std::string encoded = utils::Base64::encode(data, 4096);
+    uint8_t decoded[4096];
+    utils::Base64::decode(encoded, decoded, sizeof(decoded));
+
+    EXPECT_EQ(0, std::memcmp(data, decoded, sizeof(decoded)));
+}

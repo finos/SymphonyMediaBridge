@@ -84,8 +84,8 @@ struct ClientPair : public transport::DataReceiver
         _transport1->setRemotePeer(_transport2->getLocalRtpPort());
         _transport2->setRemotePeer(_transport1->getLocalRtpPort());
 
-        _transport1->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), true);
-        _transport2->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
+        _transport1->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), true);
+        _transport2->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
 
         _transport1->setSctp(5000, 5001);
         _transport2->setSctp(5001, 5000);

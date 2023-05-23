@@ -64,6 +64,22 @@ struct Transport
     utils::Optional<Dtls> dtls;
     utils::Optional<Connection> connection;
     std::vector<srtp::AesKey> sdesKeys;
+
+    srtp::Mode getSrtpMode() const
+    {
+        if (dtls.isSet())
+        {
+            return srtp::Mode::DTLS;
+        }
+        else if (!sdesKeys.empty())
+        {
+            return srtp::Mode::SDES;
+        }
+        else
+        {
+            return srtp::Mode::NULL_CIPHER;
+        }
+    }
 };
 
 struct VideoStream

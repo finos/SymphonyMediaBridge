@@ -27,4 +27,12 @@ struct AesKey
     uint32_t getSaltLength() const;
 };
 
+enum class Mode
+{
+    UNDEFINED = 0,
+    NULL_CIPHER,
+    DTLS,
+    SDES
+};
+
 } // namespace srtp
