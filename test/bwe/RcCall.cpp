@@ -172,7 +172,7 @@ void RcCall::processReceiverSide()
             {
                 auto addedPair = _recvStates.emplace(std::piecewise_construct,
                     std::forward_as_tuple(ssrc),
-                    std::forward_as_tuple(_globalConfig));
+                    std::forward_as_tuple(_globalConfig, rtpHeader->payloadType == 111 ? 48000u : 90000u));
                 itPair = addedPair.first;
             }
             if (itPair != _recvStates.end())

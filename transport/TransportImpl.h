@@ -330,7 +330,7 @@ private:
 
     void onSendingRtcp(const memory::Packet& rtcpPacket, uint64_t timestamp);
 
-    RtpReceiveState& getInboundSsrc(uint32_t ssrc);
+    RtpReceiveState& getInboundSsrc(uint32_t ssrc, uint32_t rtpFrequency);
     RtpSenderState& getOutboundSsrc(uint32_t ssrc, uint32_t rtpFrequency);
 
     void onTransportConnected();

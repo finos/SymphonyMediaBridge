@@ -800,7 +800,9 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     }
 
     const uint32_t ssrc = rtpHeader->ssrc;
-    auto& ssrcState = getInboundSsrc(ssrc);
+    const auto rtpFrequency = rtpHeader->payloadType == _audio.payloadType ? _audio.rtpFrequency : 90000;
+    auto& ssrcState = getInboundSsrc(ssrc, rtpFrequency);
+
     ssrcState.onRtpReceived(*packet, timestamp);
     if (ssrcState.getCumulativeSnapshot().packets == 1 && !_downlinkEstimationEnabled)
     {
@@ -1147,7 +1149,7 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
             _outboundMetrics.estimatedKbps = _rateController.getTargetRate();
         }
 
-        auto& ssrcState = getInboundSsrc(senderReport->ssrc);
+        auto& ssrcState = getInboundSsrc(senderReport->ssrc, 0);
         ssrcState.onRtcpReceived(header, timestamp, utils::Time::toNtp(wallClock));
     }
     else if (header.packetType == rtp::RtcpPacketType::RECEIVER_REPORT)
@@ -1185,11 +1187,15 @@ void TransportImpl::processRtcpReport(const rtp::RtcpHeader& header,
 /** Adds ssrc tracker if it does not exist
  *
  */
-RtpReceiveState& TransportImpl::getInboundSsrc(const uint32_t ssrc)
+RtpReceiveState& TransportImpl::getInboundSsrc(const uint32_t ssrc, uint32_t rtpFrequency)
 {
     auto ssrcIt = _inboundSsrcCounters.find(ssrc);
     if (ssrcIt != _inboundSsrcCounters.cend())
     {
+        if (rtpFrequency != 0)
+        {
+            ssrcIt->second.setRtpFrequency(rtpFrequency);
+        }
         return ssrcIt->second;
     }
 
@@ -1206,12 +1212,12 @@ RtpReceiveState& TransportImpl::getInboundSsrc(const uint32_t ssrc)
         logger::warn("unexpected number of inbound streams. Discarding %u", _loggableId.c_str(), nominee->first);
         _inboundSsrcCounters.erase(nominee->first);
 
-        auto pairIt = _inboundSsrcCounters.emplace(ssrc, _config);
+        auto pairIt = _inboundSsrcCounters.emplace(ssrc, _config, rtpFrequency);
         return pairIt.first->second;
     }
     else
     {
-        auto pairIt = _inboundSsrcCounters.emplace(ssrc, _config);
+        auto pairIt = _inboundSsrcCounters.emplace(ssrc, _config, rtpFrequency);
         return pairIt.first->second;
     }
 }
@@ -1557,8 +1563,16 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
         const auto oldMin = _inboundMetrics.estimatedKbpsMin.load();
         const auto oldMax = _inboundMetrics.estimatedKbpsMax.load();
 
+        double maxJitter = 0;
+        for (auto& inboundSsrc : _inboundSsrcCounters)
+        {
+            maxJitter = std::max(static_cast<double>(inboundSsrc.second.getJitter()) /
+                    static_cast<double>(inboundSsrc.second.getRtpFrequency()),
+                maxJitter);
+        }
+
         logger::info("Estimates 5s, Downlink %u - %ukbps, rate %.1fkbps, Uplink rctl %.0fkbps, rate %.1fkbps, remb "
-                     "%ukbps, rtt %.1fms, pacingQ %zu , rtpProbingEnabled %s",
+                     "%ukbps, rtt %.1fms, pacingQ %zu, rtpProbingEnabled %s, maxjitter %.2f",
             _loggableId.c_str(),
             oldMin,
             oldMax,
@@ -1568,7 +1582,8 @@ void TransportImpl::sendReports(uint64_t timestamp, bool rembReady)
             _outboundRembEstimateKbps,
             _rttNtp * 1000.0 / 0x10000,
             _pacingQueue.size() + _rtxPacingQueue.size(),
-            _rateController.isRtpProbingEnabled() ? "t" : "f");
+            _rateController.isRtpProbingEnabled() ? "t" : "f",
+            maxJitter * 1000.0);
 
         if (_downlinkEstimationEnabled)
         {

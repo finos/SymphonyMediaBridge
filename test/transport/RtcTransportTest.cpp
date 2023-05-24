@@ -411,7 +411,7 @@ INSTANTIATE_TEST_SUITE_P(RecPerformance,
 TEST(TransportStats, packetLoss)
 {
     config::Config config;
-    transport::RtpReceiveState state(config);
+    transport::RtpReceiveState state(config, 8000);
 
     auto timestamp = utils::Time::getAbsoluteTime();
     for (int i = 0; i < 200; ++i)

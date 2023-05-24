@@ -208,6 +208,7 @@ std::vector<api::ConferenceEndpoint> IntegrationTest::getConferenceEndpointsInfo
     EXPECT_TRUE(httpSuccess);
     EXPECT_TRUE(endpointRequestBody.is_array());
 
+    logger::debug("conference endpoint json %s", "IntegrationTest", endpointRequestBody.dump().c_str());
     return api::Parser::parseConferenceEndpoints(endpointRequestBody);
 }
 
