@@ -25,7 +25,35 @@ public:
             return false;
         }
 
-        return std::memcmp(_expectedPacket.get(), packet->get(), _expectedPacket.getLength()) == 0;
+        if (!rtp::CompoundRtcpPacket::isValid(packet->get(), packet->getLength()))
+        {
+            return false;
+        }
+
+        memory::Packet packetCopy(*packet);
+
+        auto compRtcp = rtp::CompoundRtcpPacket(packetCopy.get(), packetCopy.getLength());
+        for (auto& report : compRtcp)
+        {
+            if (report.packetType == rtp::RtcpPacketType::SENDER_REPORT)
+            {
+                auto sendReport = rtp::RtcpSenderReport::fromPtr(&report, report.size());
+                for (uint32_t i = 0; i < sendReport->header.fmtCount; ++i)
+                {
+                    sendReport->reportBlocks[i].interarrivalJitter = 0;
+                }
+            }
+            else if (report.packetType == rtp::RtcpPacketType::RECEIVER_REPORT)
+            {
+                auto rcvReport = rtp::RtcpReceiverReport::fromPtr(&report, report.size());
+                for (uint32_t i = 0; i < rcvReport->header.fmtCount; ++i)
+                {
+                    rcvReport->reportBlocks[i].interarrivalJitter = 0;
+                }
+            }
+        }
+
+        return (0 == std::memcmp(packetCopy.get(), _expectedPacket.get(), packetCopy.getLength()));
     }
 
     void DescribeTo(std::ostream* os) const override
@@ -54,23 +82,20 @@ struct PacketGenerator
         : packetPoolAllocator(packetPoolAllocator),
           ssrc(ssrc),
           frequency(frequency),
-          currentFrequency(0),
+          timestamp(0),
           seq(0)
     {
     }
 
-    void incrementTime(uint64_t time)
-    {
-        currentFrequency = currentFrequency + static_cast<uint32_t>(time * frequency) / 1000;
-    }
+    void incrementTime(uint64_t time) { timestamp = timestamp + static_cast<uint32_t>(time * frequency) / 1000; }
 
     memory::UniquePacket generatePacket(size_t payloadSize, uint64_t timeIncrement)
     {
-        currentFrequency = currentFrequency + static_cast<uint32_t>(timeIncrement * frequency) / 1000;
+        timestamp = timestamp + static_cast<uint32_t>(timeIncrement * frequency) / 1000;
 
         auto packet = memory::makeUniquePacket(packetPoolAllocator);
         auto rtpHeader = rtp::RtpHeader::create(*packet);
-        rtpHeader->timestamp = currentFrequency;
+        rtpHeader->timestamp = timestamp;
 
         packet->setLength(rtpHeader->headerLength() + payloadSize);
         return packet;
@@ -115,7 +140,7 @@ struct PacketGenerator
     memory::PacketPoolAllocator& packetPoolAllocator;
     uint32_t ssrc;
     uint32_t frequency;
-    uint32_t currentFrequency;
+    uint32_t timestamp;
     uint16_t seq;
     struct
     {
@@ -319,7 +344,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendAfterIntervalWhen5PacketsSent)
     const auto lastPacketTimestamp = packetGenerator.stats.lastTimestamp;
     const auto timestamp = initialTimestamp + getConfiguredInterval();
 
-    const auto rtpTimestamp = packetGenerator.currentFrequency +
+    const auto rtpTimestamp = packetGenerator.timestamp +
         static_cast<uint32_t>(((timestamp - lastPacketTimestamp) / utils::Time::ms) * 48000 / 1000);
 
     memory::Packet expectedPacket;
@@ -405,7 +430,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendReceiveReportsWithinSenderReport)
     const auto heightReceiveTimestamp = inboundSsrcPacketGenerators.front().stats.lastTimestamp;
     const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + getConfiguredInterval());
 
-    const auto rtpTimestamp = senderPacketGenerator.currentFrequency +
+    const auto rtpTimestamp = senderPacketGenerator.timestamp +
         static_cast<uint32_t>(
             ((timestamp - senderPacketGenerator.stats.lastTimestamp) / utils::Time::ms) * 48000 / 1000);
 
@@ -478,7 +503,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendSendReportsAndReceive)
     const auto heightReceiveTimestamp = inboundSsrcPacketGenerators.front().stats.lastTimestamp;
     const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + getConfiguredInterval());
 
-    const auto rtpTimestamp = senderPacketGenerator.currentFrequency +
+    const auto rtpTimestamp = senderPacketGenerator.timestamp +
         static_cast<uint32_t>(
             ((timestamp - senderPacketGenerator.stats.lastTimestamp) / utils::Time::ms) * 48000 / 1000);
 
@@ -599,7 +624,7 @@ TEST_F(RtcpReportsProducerTest, shouldSendRembOnThe1stPacket)
     const auto heightReceiveTimestamp = inboundSsrcPacketGenerators.front().stats.lastTimestamp;
     const auto timestamp = std::max(heightReceiveTimestamp + timeIncrement, initialTimestamp + getConfiguredInterval());
 
-    const auto rtpTimestamp = senderPacketGenerator.currentFrequency +
+    const auto rtpTimestamp = senderPacketGenerator.timestamp +
         static_cast<uint32_t>(
             ((timestamp - senderPacketGenerator.stats.lastTimestamp) / utils::Time::ms) * 48000 / 1000);
 
