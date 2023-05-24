@@ -297,8 +297,8 @@ public:
 private:
     struct BundleTransport
     {
-        explicit BundleTransport(const std::shared_ptr<transport::RtcTransport>& transport) : _transport(transport) {}
-        std::shared_ptr<transport::RtcTransport> _transport;
+        explicit BundleTransport(const std::shared_ptr<transport::RtcTransport>& transport) : transport(transport) {}
+        std::shared_ptr<transport::RtcTransport> transport;
         srtp::Mode srtpMode;
     };
 
