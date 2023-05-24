@@ -20,28 +20,25 @@ static const char REVERSE_TABLE[128] = {
 };
 // clang-format on
 
-void Base64::encode(const std::string& input, uint8_t* output, uint32_t outputLength)
+std::string Base64::encode(const uint8_t* input, const uint32_t length)
 {
-    if (!input.empty())
+    std::string encodedText;
+    if (length > 0)
     {
-        assert(outputLength == encodeLength(input));
-        if (input.size() > (std::numeric_limits<std::string::size_type>::max() / 4u) * 3u)
-        {
-            throw std::length_error("Converting too large a string to Base64.");
-        }
+        auto outputLength = encodeLength(length);
+        encodedText.reserve(outputLength);
 
-        uint32_t index = 0;
         uint32_t bitsCollected = 0;
         uint32_t accumulator = 0;
 
-        for (auto i : input)
+        for (const uint8_t* p = input; p != input + length; ++p)
         {
-            accumulator = (accumulator << 8) | (i & 0xffu);
+            accumulator = (accumulator << 8) | (*p & 0xffu);
             bitsCollected += 8;
             while (bitsCollected >= 6)
             {
                 bitsCollected -= 6;
-                output[index++] = BASE64_TABLE[(accumulator >> bitsCollected) & 0x3fu];
+                encodedText += BASE64_TABLE[(accumulator >> bitsCollected) & 0x3fu];
             }
         }
         // Any trailing bits that are missing.
@@ -49,27 +46,28 @@ void Base64::encode(const std::string& input, uint8_t* output, uint32_t outputLe
         {
             assert(bitsCollected < 6);
             accumulator <<= 6 - bitsCollected;
-            output[index++] = BASE64_TABLE[accumulator & 0x3fu];
+            encodedText += BASE64_TABLE[accumulator & 0x3fu];
         }
         // Use = signs so the end is properly padded.
-        while (index < outputLength)
+        while (encodedText.size() < outputLength)
         {
-            output[index++] = '=';
+            encodedText += '=';
         }
     }
+
+    return encodedText;
 }
 
-void Base64::decode(const std::string& input, uint8_t* output, uint32_t outputLength)
+size_t Base64::decode(const std::string& input, uint8_t* output, const uint32_t outputLength)
 {
     if (!input.empty())
     {
-        assert(outputLength <= decodeLength(input));
         const auto last = input.end();
         uint32_t bitsCollected = 0;
         uint32_t accumulator = 0;
         uint32_t index = 0;
 
-        for (auto i = input.begin(); i != last; ++i)
+        for (auto i = input.begin(); i != last && index < outputLength; ++i)
         {
             const auto ch = (unsigned char)*i;
             if (std::isspace(ch) || ch == '=')
@@ -79,7 +77,7 @@ void Base64::decode(const std::string& input, uint8_t* output, uint32_t outputLe
             }
             if ((ch > 127) || (ch < 0) || (REVERSE_TABLE[ch] > 63))
             {
-                throw std::invalid_argument("This contains characters not legal in a Base64 encoded string.");
+                return 0;
             }
             accumulator = (accumulator << 6) | REVERSE_TABLE[ch];
             bitsCollected += 6;
@@ -89,12 +87,15 @@ void Base64::decode(const std::string& input, uint8_t* output, uint32_t outputLe
                 output[index++] = static_cast<char>((accumulator >> bitsCollected) & 0xffu);
             }
         }
+
+        return index;
     }
+    return 0;
 }
 
 uint32_t Base64::encodeLength(const std::string& input)
 {
-    return 4 * (input.length() + 2) / 3;
+    return encodeLength(input.length());
 }
 
 uint32_t Base64::decodeLength(const std::string& input)
@@ -102,4 +103,10 @@ uint32_t Base64::decodeLength(const std::string& input)
     auto paddings = std::count(input.begin(), input.end(), '=');
     return (3 * (input.length() / 4)) - paddings;
 }
+
+uint32_t Base64::encodeLength(uint32_t inputLength)
+{
+    return 4 * (inputLength + 2) / 3;
+}
+
 } // namespace utils

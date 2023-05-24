@@ -8,6 +8,7 @@
 #include "utils/CheckedCast.h"
 #include "utils/Time.h"
 #include <openssl/err.h>
+#include <openssl/rand.h>
 #include <srtp2/srtp.h>
 
 namespace
@@ -42,14 +43,13 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     : _isInitialized(false),
       _state(State::IDLE),
       _loggableId("SrtpClient"),
-      _sslDtls(sslDtls),
-      _ssl(SSL_new(_sslDtls.getSslContext())),
+      _ssl(SSL_new(sslDtls.getSslContext())),
       _readBio(nullptr),
       _writeBio(nullptr),
       _isDtlsClient(true),
       _remoteSrtp(nullptr),
       _localSrtp(nullptr),
-      _nullCipher(true),
+      _mode(srtp::Mode::UNDEFINED),
       _eventSink(eventListener),
       _rtpAntiSpam(10, 100),
       _rtcpAntiSpam(10, 100),
@@ -71,13 +71,16 @@ SrtpClient::SrtpClient(SslDtls& sslDtls, IEvents* eventListener)
     }
     BIO_set_mem_eof_return(_readBio, -1);
 
-    _writeBio = BIO_new(_sslDtls.getWriteBioMethods());
+    _writeBio = BIO_new(sslDtls.getWriteBioMethods());
     assert(_writeBio);
     if (!_writeBio)
     {
         return;
     }
     SSL_set_bio(_ssl, _readBio, _writeBio);
+
+    RAND_bytes(_localKey.keySalt, sizeof(_localKey.keySalt));
+
     _isInitialized = true;
 }
 
@@ -101,10 +104,15 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     const bool isDtlsClient)
 {
     assert(_isInitialized);
+    if (_state != State::IDLE)
+    {
+        logger::warn("SrtpClient already in progress. Cannot set DTLS fingerprints", _loggableId.c_str());
+        return;
+    }
 
     if (fingerprintType.empty())
     {
-        _nullCipher = true;
+        _mode = srtp::Mode::NULL_CIPHER;
         _state = State::CONNECTED;
         logger::info("Setting empty fingerprint. Disabling DTLS.", _loggableId.c_str());
         if (_eventSink)
@@ -118,7 +126,7 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
     _remoteDtlsFingerprintHash = fingerprintHash;
     _isDtlsClient = isDtlsClient;
 
-    _nullCipher = false;
+    _mode = srtp::Mode::DTLS;
     if (_isDtlsClient)
     {
         logger::info("DTLS ready as client", _loggableId.c_str());
@@ -154,7 +162,7 @@ void SrtpClient::dtlsHandShake()
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     assert(_isInitialized);
-    if (_nullCipher)
+    if (_mode != srtp::Mode::DTLS)
     {
         logger::debug("null cipher. no handshake", _loggableId.c_str());
         return;
@@ -259,7 +267,7 @@ bool SrtpClient::unprotect(memory::Packet& packet)
 {
     assert(_isInitialized);
 
-    if (_nullCipher)
+    if (_mode == srtp::Mode::NULL_CIPHER)
     {
         return true;
     }
@@ -329,7 +337,7 @@ bool SrtpClient::protect(memory::Packet& packet)
 {
     assert(_isInitialized);
 
-    if (_nullCipher)
+    if (_mode == srtp::Mode::NULL_CIPHER)
     {
         return true;
     }
@@ -403,6 +411,11 @@ void SrtpClient::removeLocalSsrc(const uint32_t ssrc)
 bool SrtpClient::setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    if (_mode <= srtp::Mode::NULL_CIPHER)
+    {
+        return true;
+    }
+
     const auto result = srtp_set_stream_roc(_remoteSrtp, ssrc, rolloverCounter);
     if (result != srtp_err_status_ok)
     {
@@ -420,6 +433,11 @@ bool SrtpClient::setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t ro
 bool SrtpClient::setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    if (_mode <= srtp::Mode::NULL_CIPHER)
+    {
+        return true;
+    }
+
     const auto result = srtp_set_stream_roc(_localSrtp, ssrc, rolloverCounter);
     if (result != srtp_err_status_ok)
     {
@@ -583,6 +601,81 @@ bool SrtpClient::createSrtp()
     return true;
 }
 
+/**
+ * @param remoteKey key and salt
+ */
+bool SrtpClient::createSrtp(const srtp::AesKey& remoteKey)
+{
+    srtp_policy_t srtpPolicy;
+    memset(&srtpPolicy, 0, sizeof(srtpPolicy));
+
+    _localKey.profile = remoteKey.profile;
+    switch (remoteKey.profile)
+    {
+    case srtp::Profile::AES128_CM_SHA1_32:
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_32(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES128_CM_SHA1_80:
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_128_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES_192_CM_SHA1_32:
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_32(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES_192_CM_SHA1_80:
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_80(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_192_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES_256_CM_SHA1_32:
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_32(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AES_256_CM_SHA1_80:
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_80(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_cm_256_hmac_sha1_80(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AEAD_AES_128_GCM:
+        srtp_crypto_policy_set_aes_gcm_128_16_auth(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_gcm_128_16_auth(&srtpPolicy.rtcp);
+        break;
+    case srtp::Profile::AEAD_AES_256_GCM:
+        srtp_crypto_policy_set_aes_gcm_256_16_auth(&srtpPolicy.rtp);
+        srtp_crypto_policy_set_aes_gcm_256_16_auth(&srtpPolicy.rtcp);
+        break;
+    default:
+        assert(false);
+        return false;
+    }
+
+    srtpPolicy.ssrc.value = 0;
+    srtpPolicy.next = nullptr;
+    srtpPolicy.ssrc.type = ssrc_any_outbound;
+    srtpPolicy.key = _localKey.keySalt;
+
+    auto createResult = srtp_create(&_localSrtp, &srtpPolicy);
+    if (createResult != srtp_err_status_ok)
+    {
+        logger::error("Failed to create localSrtp: %d", _loggableId.c_str(), createResult);
+        return false;
+    }
+
+    srtpPolicy.ssrc.type = ssrc_any_inbound;
+    srtpPolicy.key = const_cast<unsigned char*>(remoteKey.keySalt);
+
+    createResult = srtp_create(&_remoteSrtp, &srtpPolicy);
+    if (createResult != srtp_err_status_ok)
+    {
+        logger::error("Failed to create localSrtp: %d", _loggableId.c_str(), createResult);
+        return false;
+    }
+
+    _mode = srtp::Mode::SDES;
+
+    return true;
+}
+
 void SrtpClient::onMessageReceived(memory::UniquePacket packet)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
@@ -595,7 +688,7 @@ void SrtpClient::onMessageReceived(memory::UniquePacket packet)
         return;
     }
 
-    if (!!_nullCipher)
+    if (_mode == srtp::Mode::NULL_CIPHER)
     {
         logger::debug("null cipher postponing message", _loggableId.c_str());
         return;
@@ -646,15 +739,15 @@ bool SrtpClient::unprotectApplicationData(memory::Packet& packet)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     assert(*packet.get() == transport::DTLSContentType::applicationData);
-    if (_nullCipher)
+    if (_mode != srtp::Mode::DTLS)
     {
-        logger::debug("null cipher ignoring message", _loggableId.c_str());
         return false;
     }
     if (_state != State::CONNECTED)
     {
         return false;
     }
+
     BIO_write(_readBio, packet.get(), utils::checkedCast<int32_t>(packet.getLength()));
     ERR_clear_error();
     auto bytesRead = SSL_read(_ssl, packet.get(), packet.size);
@@ -682,6 +775,10 @@ bool SrtpClient::unprotectApplicationData(memory::Packet& packet)
 void SrtpClient::sendApplicationData(const void* data, size_t length)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    if (_mode != srtp::Mode::DTLS)
+    {
+        return;
+    }
 
     auto bytesWritten = SSL_write(_ssl, data, length);
     if (bytesWritten < 0)
@@ -724,6 +821,40 @@ const char* SrtpClient::getErrorMessage(int sslErrorCode)
     }
 
     return "unkown";
+}
+
+void SrtpClient::getLocalKey(srtp::Profile profile, srtp::AesKey& keyOut)
+{
+    keyOut.profile = profile;
+    if (keyOut.getKeyLength() == 0)
+    {
+        return;
+    }
+
+    std::memcpy(keyOut.keySalt, _localKey.keySalt, keyOut.getLength());
+}
+
+void SrtpClient::setRemoteKey(const srtp::AesKey& key)
+{
+    if (_state != State::IDLE)
+    {
+        assert(false);
+        logger::warn("cannot set remote SDES key once SrtpClient has been initiated", _loggableId.c_str());
+        return;
+    }
+
+    if (key.profile == srtp::Profile::NULL_CIPHER)
+    {
+        _state = State::CONNECTED;
+        _mode = srtp::Mode::NULL_CIPHER;
+    }
+
+    if (!createSrtp(key))
+    {
+        logger::error("failed to create srtp context", _loggableId.c_str());
+    }
+    _state = State::CONNECTED;
+    logger::debug("SRTP connected with SDES", _loggableId.c_str());
 }
 
 } // namespace transport

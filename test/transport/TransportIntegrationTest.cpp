@@ -140,7 +140,7 @@ TransportClientPair::TransportClientPair(transport::TransportFactory& transportF
     }
 
     _transport1->setRemoteIce(_transport2->getLocalCredentials(), candidates2, _audioAllocator);
-    _transport1->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), true);
+    _transport1->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), true);
 }
 
 void TransportClientPair::stop()
@@ -188,7 +188,7 @@ int64_t TransportClientPair::tryConnect(const uint64_t timestamp, const transpor
     }
 
     _transport2->setRemoteIce(_transport1->getLocalCredentials(), _candidates1, _audioAllocator);
-    _transport2->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
+    _transport2->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
     _transport2->connect();
     _connectStart = 0;
     return utils::Time::sec;
@@ -209,7 +209,7 @@ int64_t TransportClientPair::tryConnect(const uint64_t timestamp,
     }
 
     _transport2->setRemoteIce(transport1IceCredentials, _candidates1, _audioAllocator);
-    _transport2->setRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
+    _transport2->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
     _transport2->connect();
     _connectStart = 0;
     return utils::Time::sec;

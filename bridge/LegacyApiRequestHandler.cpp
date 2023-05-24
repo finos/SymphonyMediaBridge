@@ -711,7 +711,12 @@ httpd::Response LegacyApiRequestHandler::patchConference(const httpd::Request& r
         }
 
         assert(patchConferenceType != legacyapi::PatchConferenceType::Undefined);
-        return generatePatchConferenceResponse(conference, conferenceId, useBundling, requestLogger, *mixer);
+        return generatePatchConferenceResponse(conference,
+            conferenceId,
+            useBundling,
+            requestLogger,
+            useBundling,
+            *mixer);
     }
     catch (nlohmann::detail::parse_error parseError)
     {
@@ -733,6 +738,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
     const std::string& conferenceId,
     const bool useBundling,
     RequestLogger& requestLogger,
+    const bool enableDtls,
     Mixer& mixer)
 {
     legacyapi::Conference responseData(conference);
@@ -762,7 +768,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
             return response;
         }
 
-        if (transportDescription.ice.isSet() && transportDescription.dtls.isSet())
+        if (transportDescription.ice.isSet())
         {
             const auto& transportDescriptionIce = transportDescription.ice.get();
             channelBundle._transport._ufrag.set(transportDescriptionIce.iceCredentials.first);
@@ -887,7 +893,7 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
                     channelTransport._xmlns.set("urn:xmpp:jingle:transports:raw-udp:1");
                 }
 
-                if (transportDescription.dtls.isSet())
+                if (transportDescription.srtpMode == srtp::Mode::DTLS)
                 {
                     channelTransport._fingerprints.clear();
                     legacyapi::Fingerprint fingerprint;
@@ -984,7 +990,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
     {
         if (contentType == ContentType::Audio)
         {
-            if (!mixer.addAudioStream(channelId, endpointId, iceRole, mixed, channel.isRelayTypeRewrite(), true))
+            if (!mixer.addAudioStream(channelId, endpointId, iceRole, mixed, channel.isRelayTypeRewrite()))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
@@ -992,7 +998,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
         }
         else if (contentType == ContentType::Video)
         {
-            if (!mixer.addVideoStream(channelId, endpointId, iceRole, channel.isRelayTypeRewrite(), true))
+            if (!mixer.addVideoStream(channelId, endpointId, iceRole, channel.isRelayTypeRewrite()))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
@@ -1236,8 +1242,8 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
             else
             {
                 if ((contentType == ContentType::Audio &&
-                        !mixer.configureAudioStreamTransportDisableDtls(endpointId)) ||
-                    (contentType == ContentType::Video && !mixer.configureVideoStreamTransportDisableDtls(endpointId)))
+                        !mixer.configureAudioStreamTransportDisableSrtp(endpointId)) ||
+                    (contentType == ContentType::Video && !mixer.configureVideoStreamTransportDisableSrtp(endpointId)))
                 {
                     outStatus = httpd::StatusCode::INTERNAL_SERVER_ERROR;
                     return false;

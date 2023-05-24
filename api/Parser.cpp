@@ -2,6 +2,7 @@
 #include "api/ConferenceEndpoint.h"
 #include "api/utils.h"
 #include "utils/Base64.h"
+#include "utils/Format.h"
 
 namespace
 {
@@ -123,12 +124,43 @@ void setIfExists(utils::Optional<std::string>& target, const nlohmann::json& dat
     }
 }
 
+bool exists(const nlohmann::json& json, const char* keyName)
+{
+    return json.find(keyName) != json.end();
+}
+
+template <typename... Args>
+bool exists(const nlohmann::json& json, const char* key1, Args&&... keys)
+{
+    auto it = json.find(key1);
+    if (it != json.end())
+    {
+        return exists(*it, keys...);
+    }
+
+    return false;
+}
+
+template <typename... Args>
+void throwIfNotExists(const nlohmann::json& json, Args&&... keys)
+{
+    if (!exists(json, keys...))
+    {
+        const char* vec[sizeof...(keys)] = {keys...};
+        const auto sb = std::string().append("Missing required under property: ").append(vec[0]);
+        throw nlohmann::detail::other_error::create(-1, sb);
+    }
+}
+
 api::AllocateEndpoint::Transport parseAllocateEndpointTransport(const nlohmann::json& data)
 {
     api::AllocateEndpoint::Transport transport;
     setIfExists(transport.ice, data, "ice");
     setIfExists(transport.iceControlling, data, "ice-controlling");
+
     setIfExists(transport.dtls, data, "dtls");
+    setIfExists(transport.sdes, data, "sdes");
+
     return transport;
 }
 
@@ -169,7 +201,7 @@ api::Transport parsePatchEndpointTransport(const nlohmann::json& data)
         transport.ice.set(ice);
     }
 
-    if (data.find("dtls") != data.end())
+    if (exists(data, "dtls", "type") && exists(data, "dtls", "hash") && exists(data, "dtls", "setup"))
     {
         api::Dtls dtls;
         const auto& dtlsJson = data["dtls"];
@@ -178,9 +210,29 @@ api::Transport parsePatchEndpointTransport(const nlohmann::json& data)
         dtls.setup = dtlsJson["setup"].get<std::string>();
         transport.dtls.set(dtls);
     }
-
-    if (data.find("connection") != data.end())
+    else if (exists(data, "sdes"))
     {
+        throwIfNotExists(data, "sdes", "key");
+        throwIfNotExists(data, "sdes", "profile");
+
+        const auto& sdesJson = data["sdes"];
+        srtp::AesKey aesKey;
+        const size_t decodedLength =
+            utils::Base64::decode(sdesJson["key"].get<std::string>().c_str(), aesKey.keySalt, sizeof(aesKey.keySalt));
+        aesKey.profile = api::utils::stringToSrtpProfile(sdesJson["profile"].get<std::string>());
+        if (decodedLength != aesKey.getLength())
+        {
+            throw nlohmann::detail::other_error::create(-1,
+                utils::format("SDES key invalid length. EndpointConfigure"));
+        }
+        transport.sdesKeys.push_back(aesKey);
+    }
+
+    if (exists(data, "connection"))
+    {
+        throwIfNotExists(data, "connection", "port");
+        throwIfNotExists(data, "connection", "ip");
+
         const auto& connectionJson = data["connection"];
         api::Connection connection;
         connection.port = connectionJson["port"].get<uint32_t>();

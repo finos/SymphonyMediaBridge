@@ -5,13 +5,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-class IceTransportEmuTest : public IntegrationTest
+class SrtpTransportEmuTest : public IntegrationTest
 {
 };
 
 using namespace emulator;
 
-TEST_F(IceTransportEmuTest, plainNewApi)
+TEST_F(SrtpTransportEmuTest, oneOnOneSDES)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(_defaultSmbConfig);
@@ -27,15 +27,7 @@ TEST_F(IceTransportEmuTest, plainNewApi)
             _audioAllocator,
             *_clientTransportFactory,
             *_sslDtls,
-            3);
-
-        for (auto pairIt : this->_endpointNetworkLinkMap)
-        {
-            if (utils::startsWith("FakeUdp", pairIt.first))
-            {
-                pairIt.second.ptrLink->setStaticDelay(pairIt.second.address.getFamily() == AF_INET6 ? 325 : 15);
-            }
-        }
+            2);
 
         Conference conf(_httpd);
 
@@ -45,14 +37,10 @@ TEST_F(IceTransportEmuTest, plainNewApi)
         group.startConference(conf, baseUrl);
 
         CallConfigBuilder cfgBuilder(conf.getId());
-        cfgBuilder.url(baseUrl).withOpus().withVideo();
+        cfgBuilder.url(baseUrl).withOpus().withVideo().sdes().disableDtls();
 
-        auto cfgInitiator(cfgBuilder);
-        cfgInitiator.delayIpv6(2500);
-
-        group.clients[0]->initiateCall(cfgInitiator.build());
+        group.clients[0]->initiateCall(cfgBuilder.build());
         group.clients[1]->joinCall(cfgBuilder.build());
-        group.clients[2]->initiateCall(cfgBuilder.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -73,39 +61,16 @@ TEST_F(IceTransportEmuTest, plainNewApi)
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
-        const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
-        size_t freqId = 0;
-        for (auto id : {0, 1, 2})
+        const double expectedFrequencies[2][1] = {{1300.0}, {600.0}};
+        for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
-            EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
-
-            if (2 == id)
-            {
-                EXPECT_GE(data.amplitudeProfile.size(), 2);
-                for (auto& item : data.amplitudeProfile)
-                {
-                    logger::debug("%.3fs, %.3f", "", item.first / 48000.0, item.second);
-                }
-                // We expect a ramp-up of volume like this:
-                // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
-                if (data.amplitudeProfile.size() >= 2)
-                {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
-
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                }
-
-                EXPECT_EQ(data.audioSsrcCount, 1);
-            }
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
+            EXPECT_EQ(data.dominantFrequencies.size(), 1);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[id][0], 25.0);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);

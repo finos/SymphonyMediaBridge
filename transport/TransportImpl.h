@@ -119,10 +119,10 @@ public: // Transport
         const ice::IceCandidates& candidates,
         memory::AudioPacketPoolAllocator& allocator) override;
     void addRemoteIceCandidate(const ice::IceCandidate& candidate) override;
-    void setRemoteDtlsFingerprint(const std::string& fingerprintType,
+    void asyncSetRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) override;
-    void disableDtls() override;
+    void asyncDisableSrtp() override;
     SocketAddress getLocalRtpPort() const override;
     /**
      * Called from engine thread.
@@ -148,7 +148,6 @@ public: // Transport
     bool start() override;
 
     bool isIceEnabled() const override { return !!_rtpIceSession; }
-    bool isDtlsEnabled() const override { return _dtlsEnabled; }
 
     void connect() override;
 
@@ -186,6 +185,9 @@ public: // Transport
     const char* getTag() const override { return _tag; };
 
     uint64_t getLastReceivedPacketTimestamp() const override { return _lastReceivedPacketTimestamp; }
+
+    void getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const override;
+    void asyncSetRemoteSdesKey(const srtp::AesKey& key) override;
 
 private: // SslWriteBioListener
     // Called from Transport serial thread
@@ -343,7 +345,6 @@ private:
     const config::Config& _config;
 
     std::unique_ptr<SrtpClient> _srtpClient;
-    bool _dtlsEnabled;
     std::unique_ptr<ice::IceSession> _rtpIceSession;
 
     Endpoints _rtpEndpoints;

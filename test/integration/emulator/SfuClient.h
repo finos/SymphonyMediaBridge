@@ -122,9 +122,7 @@ public:
           _loggableId("client", id),
           _recordingActive(true),
           _ptime(ptime),
-          _sendAudioType(Audio::None),
           _expectedReceiveAudioType(Audio::None),
-          _ipv6CandidateDelay(0),
           _startTime(0)
     {
     }
@@ -156,70 +154,17 @@ public:
         return stats;
     }
 
-    void initiateCall(const std::string& baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        Audio audio,
-        bool video,
-        bool forwardMedia,
-        uint32_t idleTimeout = 0)
+    void initiateCall(const CallConfig& callConfig)
     {
-        utils::Span<std::string> noNeighbours;
-        _sendAudioType = audio;
-        _channel.create(baseUrl,
-            conferenceId,
-            initiator,
-            audio != Audio::None,
-            video,
-            forwardMedia,
-            idleTimeout,
-            noNeighbours);
+        _callConfig = callConfig;
+        _channel.create(true, callConfig);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
-    void initiateCall2(const std::string& baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        Audio audio,
-        bool video,
-        bool forwardMedia,
-        const utils::Span<std::string>& neighbours,
-        uint32_t idleTimeout = 0)
+    void joinCall(const CallConfig& callConfig)
     {
-        _sendAudioType = audio;
-        _channel.create(baseUrl,
-            conferenceId,
-            initiator,
-            audio != Audio::None,
-            video,
-            forwardMedia,
-            idleTimeout,
-            neighbours);
-        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
-    }
-
-    void initiateCall3(const std::string& baseUrl,
-        std::string conferenceId,
-        bool initiator,
-        Audio audio,
-        bool video,
-        bool forwardMedia,
-        uint64_t ipv6CandidateDelay,
-        uint32_t idleTimeout = 0)
-    {
-        _startTime = utils::Time::getAbsoluteTime();
-        utils::Span<std::string> noNeighbours;
-        _sendAudioType = audio;
-        _channel.skipIpv6 = true;
-        _channel.create(baseUrl,
-            conferenceId,
-            initiator,
-            audio != Audio::None,
-            video,
-            forwardMedia,
-            idleTimeout,
-            noNeighbours);
-        _ipv6CandidateDelay = ipv6CandidateDelay;
+        _callConfig = callConfig;
+        _channel.create(false, callConfig);
         logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
     }
 
@@ -241,7 +186,7 @@ public:
 
         if (_channel.isAudioOffered())
         {
-            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _sendAudioType);
+            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _callConfig.audio);
             _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
         }
 
@@ -355,12 +300,19 @@ public:
         }
 
         assert(_audioSource);
+        std::vector<srtp::AesKey> sdesKeys;
+
+        if (_callConfig.sdes && !_callConfig.dtls)
+        {
+            _transport->getSdesKeys(sdesKeys);
+        }
 
         _channel.sendResponse(_transport->getLocalCredentials(),
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),
-            _channel.isVideoEnabled() ? _videoSsrcs : nullptr);
+            _channel.isVideoEnabled() ? _videoSsrcs : nullptr,
+            sdesKeys.front());
 
         _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();
@@ -373,10 +325,10 @@ public:
 
     void process(uint64_t timestamp, bool sendVideo)
     {
-        if (_ipv6CandidateDelay != 0 &&
-            utils::Time::diffGE(_startTime, utils::Time::getAbsoluteTime(), _ipv6CandidateDelay))
+        if (_callConfig.ipv6CandidateDelay != 0 &&
+            utils::Time::diffGE(_startTime, utils::Time::getAbsoluteTime(), _callConfig.ipv6CandidateDelay))
         {
-            _ipv6CandidateDelay = 0;
+            _callConfig.ipv6CandidateDelay = 0;
             _channel.addIpv6RemoteCandidates(*_transport);
         }
 
@@ -745,7 +697,7 @@ public:
                         rtpHeader->ssrc.get(),
                         rtpMap,
                         sender,
-                        _expectedReceiveAudioType == Audio::None ? _sendAudioType : _expectedReceiveAudioType,
+                        _expectedReceiveAudioType == Audio::None ? _callConfig.audio : _expectedReceiveAudioType,
                         timestamp));
                 it = _audioReceivers.find(rtpHeader->ssrc.get());
             }
@@ -1043,10 +995,9 @@ private:
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
     size_t _instanceId;
     RtxStats _rtxStats;
-    Audio _sendAudioType;
     Audio _expectedReceiveAudioType;
-    uint64_t _ipv6CandidateDelay;
     uint64_t _startTime;
+    CallConfig _callConfig;
 };
 
 template <typename TClient>

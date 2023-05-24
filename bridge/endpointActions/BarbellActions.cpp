@@ -226,6 +226,30 @@ httpd::Response deleteBarbell(ActionContext* context,
     return response;
 }
 
+httpd::Response processBarbellPutAction(ActionContext* context,
+    RequestLogger& requestLogger,
+    const httpd::Request& request,
+    const std::string& conferenceId,
+    const std::string& barbellId)
+{
+    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
+    const auto actionJsonItr = requestBodyJson.find("action");
+    if (actionJsonItr == requestBodyJson.end())
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Missing required json property: action");
+    }
+    const auto& action = actionJsonItr->get<std::string>();
+
+    if (action.compare("configure") == 0)
+    {
+        const auto barbellDescription = api::Parser::parsePatchBarbell(requestBodyJson, barbellId);
+        return configureBarbell(context, requestLogger, conferenceId, barbellId, barbellDescription);
+    }
+
+    throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+        utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
+}
+
 httpd::Response processBarbellAction(ActionContext* context,
     RequestLogger& requestLogger,
     const httpd::Request& request,
@@ -252,14 +276,17 @@ httpd::Response processBarbellAction(ActionContext* context,
             bool iceControlling = requestBodyJson["bundle-transport"]["ice-controlling"];
             return allocateBarbell(context, requestLogger, iceControlling, conferenceId, barbellId);
         }
-        else if (action.compare("configure") == 0)
+        else
         {
-            const auto barbellDescription = api::Parser::parsePatchBarbell(requestBodyJson, barbellId);
-            return configureBarbell(context, requestLogger, conferenceId, barbellId, barbellDescription);
+            return processBarbellPutAction(context, requestLogger, request, conferenceId, barbellId);
         }
 
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
+    }
+    else if (request._method == httpd::Method::PUT)
+    {
+        return processBarbellPutAction(context, requestLogger, request, conferenceId, barbellId);
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
