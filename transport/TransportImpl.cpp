@@ -1831,7 +1831,7 @@ bool TransportImpl::setRemotePeer(const SocketAddress& target)
 }
 
 // Only support for RTP component, no rtcp component
-void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& credentials,
+void TransportImpl::asyncSetRemoteIce(const std::pair<std::string, std::string>& credentials,
     const ice::IceCandidates& candidates,
     memory::AudioPacketPoolAllocator& allocator)
 {
@@ -1841,7 +1841,7 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
     }
 }
 
-void TransportImpl::addRemoteIceCandidate(const ice::IceCandidate& candidate)
+void TransportImpl::asyncAddRemoteIceCandidate(const ice::IceCandidate& candidate)
 {
     if (_rtpIceSession)
     {

@@ -26,12 +26,12 @@ public:
         return std::pair<std::string, std::string>();
     };
     bool setRemotePeer(const transport::SocketAddress& target) override { return true; }
-    void setRemoteIce(const std::pair<std::string, std::string>& credentials,
+    void asyncSetRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
         memory::AudioPacketPoolAllocator&) override
     {
     }
-    void addRemoteIceCandidate(const ice::IceCandidate& candidate) override {}
+    void asyncAddRemoteIceCandidate(const ice::IceCandidate& candidate) override {}
 
     void asyncSetRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,

@@ -139,7 +139,7 @@ TransportClientPair::TransportClientPair(transport::TransportFactory& transportF
         }
     }
 
-    _transport1->setRemoteIce(_transport2->getLocalCredentials(), candidates2, _audioAllocator);
+    _transport1->asyncSetRemoteIce(_transport2->getLocalCredentials(), candidates2, _audioAllocator);
     _transport1->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), true);
 }
 
@@ -187,7 +187,7 @@ int64_t TransportClientPair::tryConnect(const uint64_t timestamp, const transpor
         return utils::Time::diff(_connectStart + _signalDelay, timestamp);
     }
 
-    _transport2->setRemoteIce(_transport1->getLocalCredentials(), _candidates1, _audioAllocator);
+    _transport2->asyncSetRemoteIce(_transport1->getLocalCredentials(), _candidates1, _audioAllocator);
     _transport2->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
     _transport2->connect();
     _connectStart = 0;
@@ -208,7 +208,7 @@ int64_t TransportClientPair::tryConnect(const uint64_t timestamp,
         return utils::Time::diff(_connectStart + _signalDelay, timestamp);
     }
 
-    _transport2->setRemoteIce(transport1IceCredentials, _candidates1, _audioAllocator);
+    _transport2->asyncSetRemoteIce(transport1IceCredentials, _candidates1, _audioAllocator);
     _transport2->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
     _transport2->connect();
     _connectStart = 0;

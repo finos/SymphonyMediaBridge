@@ -90,10 +90,10 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
 
         if (enableIce)
         {
-            _transport1->setRemoteIce(_transport2->getLocalCredentials(),
+            _transport1->asyncSetRemoteIce(_transport2->getLocalCredentials(),
                 _transport2->getLocalCandidates(),
                 _audioAllocator);
-            _transport2->setRemoteIce(_transport1->getLocalCredentials(),
+            _transport2->asyncSetRemoteIce(_transport1->getLocalCredentials(),
                 _transport1->getLocalCandidates(),
                 _audioAllocator);
         }

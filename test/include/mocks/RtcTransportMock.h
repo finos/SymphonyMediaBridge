@@ -19,13 +19,13 @@ class RtcTransportMock : public TransportMock<transport::RtcTransport>
     MOCK_METHOD(bool, setRemotePeer, (const transport::SocketAddress& target), (override));
     MOCK_METHOD(transport::SocketAddress&, getRemotePeer, (), (const override));
     MOCK_METHOD(void,
-        setRemoteIce,
+        asyncSetRemoteIce,
         ((const std::pair<std::string, std::string>& credentials),
             const ice::IceCandidates& candidates,
             memory::AudioPacketPoolAllocator& allocator),
         (override));
 
-    MOCK_METHOD(void, addRemoteIceCandidate, (const ice::IceCandidate& candidate), (override));
+    MOCK_METHOD(void, asyncAddRemoteIceCandidate, (const ice::IceCandidate& candidate), (override));
 
     MOCK_METHOD(void,
         asyncSetRemoteDtlsFingerprint,

@@ -1040,7 +1040,7 @@ TEST_F(IntegrationTest, probing)
         // Note: use CONTROLLING role
         auto transport = _clientTransportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 256 * 1024, 1);
 
-        transport->setRemoteIce(candidatesAndCredentials.second, candidatesAndCredentials.first, _audioAllocator);
+        transport->asyncSetRemoteIce(candidatesAndCredentials.second, candidatesAndCredentials.first, _audioAllocator);
         transport->start();
 
         ASSERT_EQ(transport->getRtt(), 0);

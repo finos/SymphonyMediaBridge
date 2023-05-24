@@ -115,10 +115,10 @@ public: // Transport
     /** Called from httpd threads. Must be set before DtlsFingerprint otherwise DTLS handshake will fail */
     bool setRemotePeer(const SocketAddress& target) override;
     const SocketAddress& getRemotePeer() const override { return _peerRtpPort; }
-    void setRemoteIce(const std::pair<std::string, std::string>& credentials,
+    void asyncSetRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
         memory::AudioPacketPoolAllocator& allocator) override;
-    void addRemoteIceCandidate(const ice::IceCandidate& candidate) override;
+    void asyncAddRemoteIceCandidate(const ice::IceCandidate& candidate) override;
     void asyncSetRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) override;

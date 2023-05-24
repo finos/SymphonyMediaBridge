@@ -101,7 +101,7 @@ void BaseChannel::setRemoteIce(transport::RtcTransport& transport,
     credentials.first = bundle[candidatesGroupName]["ufrag"];
     credentials.second = bundle[candidatesGroupName]["pwd"];
 
-    transport.setRemoteIce(credentials, candidates, allocator);
+    transport.asyncSetRemoteIce(credentials, candidates, allocator);
 }
 
 void BaseChannel::addIpv6RemoteCandidates(transport::RtcTransport& transport)
@@ -112,7 +112,7 @@ void BaseChannel::addIpv6RemoteCandidates(transport::RtcTransport& transport)
             "ApiChannel",
             candidate.address.toString().c_str(),
             transport.getLoggableId().c_str());
-        transport.addRemoteIceCandidate(candidate);
+        transport.asyncAddRemoteIceCandidate(candidate);
     }
 }
 

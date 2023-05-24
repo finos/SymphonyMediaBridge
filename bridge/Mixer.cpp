@@ -1414,7 +1414,7 @@ bool Mixer::configureAudioStreamTransportIce(const std::string& endpointId,
         return false;
     }
 
-    audioStreamItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
+    audioStreamItr->second->transport->asyncSetRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
     return true;
 }
 
@@ -1428,7 +1428,7 @@ bool Mixer::configureVideoStreamTransportIce(const std::string& endpointId,
     {
         return false;
     }
-    videoStreamItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
+    videoStreamItr->second->transport->asyncSetRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
     return true;
 }
 
@@ -1549,7 +1549,7 @@ bool Mixer::configureBundleTransportIce(const std::string& endpointId,
         return false;
     }
 
-    transportItr->second._transport->setRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
+    transportItr->second._transport->asyncSetRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
     return true;
 }
 
@@ -2325,7 +2325,7 @@ bool Mixer::configureBarbellTransport(const std::string& barbellId,
         return false;
     }
 
-    barbellItr->second->transport->setRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
+    barbellItr->second->transport->asyncSetRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
     barbellItr->second->transport->asyncSetRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     barbellItr->second->transport->setSctp(5000, 5000);
     return true;

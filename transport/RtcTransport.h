@@ -60,10 +60,10 @@ public:
 
     virtual bool setRemotePeer(const SocketAddress& target) = 0;
     virtual const SocketAddress& getRemotePeer() const = 0;
-    virtual void setRemoteIce(const std::pair<std::string, std::string>& credentials,
+    virtual void asyncSetRemoteIce(const std::pair<std::string, std::string>& credentials,
         const ice::IceCandidates& candidates,
         memory::AudioPacketPoolAllocator& allocator) = 0;
-    virtual void addRemoteIceCandidate(const ice::IceCandidate& candidate) = 0;
+    virtual void asyncAddRemoteIceCandidate(const ice::IceCandidate& candidate) = 0;
     virtual void asyncSetRemoteDtlsFingerprint(const std::string& fingerprintType,
         const std::string& fingerprintHash,
         const bool dtlsClientSide) = 0;
