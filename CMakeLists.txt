@@ -501,6 +501,10 @@ set(TEST_LIB_FILES
     test/integration/emulator/AudioSource.h
     test/integration/emulator/ApiChannel.h
     test/integration/emulator/ApiChannel.cpp
+    test/integration/emulator/BaseChannel.h
+    test/integration/emulator/BaseChannel.cpp
+    test/integration/emulator/ColibriChannel.h
+    test/integration/emulator/ColibriChannel.cpp
     test/integration/emulator/FakeVideoDecoder.h
     test/integration/emulator/FakeVideoDecoder.cpp
     test/integration/emulator/SfuClient.h

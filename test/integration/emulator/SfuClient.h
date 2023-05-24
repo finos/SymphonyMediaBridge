@@ -17,6 +17,7 @@
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtcpHeader.h"
 #include "test/integration/emulator/ApiChannel.h"
+#include "test/integration/emulator/CallConfigBuilder.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
