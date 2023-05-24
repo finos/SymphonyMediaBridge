@@ -964,8 +964,6 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
         iceRole.set(ice::IceRole::CONTROLLING);
     }
 
-    const bool mixed = (contentType == ContentType::Audio && channel.isRelayTypeMixer());
-
     if (useBundling)
     {
         mixer.addBundleTransportIfNeeded(endpointId, iceRole.get());

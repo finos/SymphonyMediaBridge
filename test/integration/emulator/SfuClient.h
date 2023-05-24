@@ -308,7 +308,7 @@ public:
             _transport->getSdesKeys(sdesKeys);
         }
 
-        _channel.sendResponse(_transport->getLocalCredentials(),
+        _channel.sendResponse(_transport->getLocalIceCredentials(),
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),

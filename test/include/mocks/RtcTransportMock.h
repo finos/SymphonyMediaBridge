@@ -14,7 +14,7 @@ class RtcTransportMock : public TransportMock<transport::RtcTransport>
 
     MOCK_METHOD(bool, isGatheringComplete, (), (const override));
     MOCK_METHOD(ice::IceCandidates, getLocalCandidates, (), (override));
-    MOCK_METHOD((std::pair<std::string, std::string>), getLocalCredentials, (), (override));
+    MOCK_METHOD((std::pair<std::string, std::string>), getLocalIceCredentials, (), (override));
 
     MOCK_METHOD(bool, setRemotePeer, (const transport::SocketAddress& target), (override));
     MOCK_METHOD(transport::SocketAddress&, getRemotePeer, (), (const override));

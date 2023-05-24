@@ -1027,7 +1027,7 @@ bool Mixer::getTransportBundleDescription(const std::string& endpointId, Transpo
     bundleTransport->getSdesKeys(sdesKeys);
 
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
-        bundleTransport->getLocalCredentials(),
+        bundleTransport->getLocalIceCredentials(),
         bundleTransport->isDtlsClient(),
         sdesKeys,
         bundleTransportItr->second.srtpMode);
@@ -1049,7 +1049,7 @@ bool Mixer::getBarbellTransportDescription(const std::string& barbellId, Transpo
     auto& bundleTransport = barbellIt->second->transport;
 
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
-        bundleTransport->getLocalCredentials(),
+        bundleTransport->getLocalIceCredentials(),
         bundleTransport->isDtlsClient(),
         std::vector<srtp::AesKey>(),
         srtp::Mode::DTLS);
@@ -1079,7 +1079,7 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
     if (transport->isIceEnabled())
     {
         outTransportDescription = TransportDescription(transport->getLocalCandidates(),
-            transport->getLocalCredentials(),
+            transport->getLocalIceCredentials(),
             transport->isDtlsClient(),
             sdesKeys,
             audioStreamItr->second->srtpMode);
@@ -1127,7 +1127,7 @@ bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
     if (videoStream.transport->isIceEnabled())
     {
         outTransportDescription = TransportDescription(videoStream.transport->getLocalCandidates(),
-            videoStream.transport->getLocalCredentials(),
+            videoStream.transport->getLocalIceCredentials(),
             videoStream.transport->isDtlsClient(),
             sdesKeys,
             videoStream.srtpMode);

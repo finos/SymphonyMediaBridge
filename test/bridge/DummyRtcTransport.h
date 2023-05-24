@@ -21,7 +21,7 @@ public:
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override { return true; }
     bool isGatheringComplete() const override { return true; }
     ice::IceCandidates getLocalCandidates() override { return ice::IceCandidates(); }
-    std::pair<std::string, std::string> getLocalCredentials() override
+    std::pair<std::string, std::string> getLocalIceCredentials() override
     {
         return std::pair<std::string, std::string>();
     };
