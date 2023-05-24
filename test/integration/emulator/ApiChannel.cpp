@@ -24,7 +24,7 @@ void Channel::create(const bool initiator, const CallConfig& config)
         {"bundle-transport", {{"ice-controlling", true}, {"ice", true}, {"rtcp-mux", true}}}};
 
     body["bundle-transport"]["dtls"] = _callConfig.dtls;
-    body["bundle-transport"]["sdes"] = _callConfig.sdes;
+    body["bundle-transport"]["sdes"] = _callConfig.sdes != srtp::Profile::NULL_CIPHER;
 
     if (_callConfig.audio)
     {
@@ -67,7 +67,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     const std::string& fingerprint,
     uint32_t audioSsrc,
     uint32_t* videoSsrcs,
-    srtp::AesKey& remoteSdesKey)
+    const srtp::AesKey& remoteSdesKey)
 {
     using namespace nlohmann;
     json body = {{"action", "configure"}};
@@ -79,7 +79,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     {
         transportSpec["dtls"] = json::object({{"setup", "active"}, {"type", "sha-256"}, {"hash", fingerprint}});
     }
-    if (_callConfig.sdes)
+    if (_callConfig.sdes != srtp::Profile::NULL_CIPHER)
     {
         transportSpec["sdes"] = json::object({{"profile", api::utils::toString(remoteSdesKey.profile)},
             {"key", utils::Base64::encode(remoteSdesKey.keySalt, remoteSdesKey.getLength())}});
@@ -235,6 +235,10 @@ void Channel::configureTransport(transport::RtcTransport& transport, memory::Aud
         {
             srtp::AesKey key;
             key.profile = api::utils::stringToSrtpProfile(sdesSpec["profile"]);
+            if (_callConfig.sdes != key.profile)
+            {
+                continue;
+            }
             auto keyLen = utils::Base64::decode(sdesSpec["key"], key.keySalt, sizeof(key.keySalt));
             assert(keyLen == key.getLength());
             transport.asyncSetRemoteSdesKey(key);

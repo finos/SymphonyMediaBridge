@@ -5,15 +5,16 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-class SrtpTransportEmuTest : public IntegrationTest
+class IntegrationSrtpTest : public IntegrationTest, public ::testing::WithParamInterface<srtp::Profile>
 {
 };
 
 using namespace emulator;
 
-TEST_F(SrtpTransportEmuTest, oneOnOneSDES)
+TEST_P(IntegrationSrtpTest, oneOnOneSDES)
 {
-    runTestInThread(expectedTestThreadCount(1), [this]() {
+    auto srtpProfile = GetParam();
+    runTestInThread(expectedTestThreadCount(1), [this, srtpProfile]() {
         _config.readFromString(_defaultSmbConfig);
         _config.ice.tcp.enable = true;
         _clientConfig.ice.tcp.enable = true;
@@ -37,7 +38,7 @@ TEST_F(SrtpTransportEmuTest, oneOnOneSDES)
         group.startConference(conf, baseUrl);
 
         CallConfigBuilder cfgBuilder(conf.getId());
-        cfgBuilder.url(baseUrl).withOpus().withVideo().sdes().disableDtls();
+        cfgBuilder.url(baseUrl).withOpus().withVideo().sdes(srtpProfile).disableDtls();
 
         group.clients[0]->initiateCall(cfgBuilder.build());
         group.clients[1]->joinCall(cfgBuilder.build());
@@ -82,3 +83,14 @@ TEST_F(SrtpTransportEmuTest, oneOnOneSDES)
         }
     });
 }
+
+INSTANTIATE_TEST_SUITE_P(IntegrationSrtpTest,
+    IntegrationSrtpTest,
+    testing::Values(srtp::Profile::AES128_CM_SHA1_32,
+        srtp::Profile::AES128_CM_SHA1_80,
+        srtp::Profile::AES_256_CM_SHA1_80,
+        srtp::Profile::AES_256_CM_SHA1_32,
+        srtp::Profile::AES_192_CM_SHA1_80,
+        srtp::Profile::AES_192_CM_SHA1_32,
+        srtp::Profile::AEAD_AES_128_GCM,
+        srtp::Profile::AEAD_AES_256_GCM));

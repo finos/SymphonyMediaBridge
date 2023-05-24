@@ -47,7 +47,7 @@ public:
         const std::string& fingerprint,
         uint32_t audioSsrc,
         uint32_t* videoSsrcs,
-        srtp::AesKey& remoteSdesKey) = 0;
+        const srtp::AesKey& remoteSdesKey) = 0;
 
     virtual void configureTransport(transport::RtcTransport& transport,
         memory::AudioPacketPoolAllocator& allocator) = 0;

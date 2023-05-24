@@ -12,7 +12,7 @@ struct CallConfig
     std::string conferenceId;
     std::string baseUrl;
     bool dtls = true;
-    bool sdes = false;
+    srtp::Profile sdes = srtp::Profile::NULL_CIPHER;
     std::vector<std::string> neighbours;
     Audio audio = Audio::None;
     bool video = false;
@@ -47,9 +47,9 @@ public:
         return *this;
     }
 
-    CallConfigBuilder& sdes()
+    CallConfigBuilder& sdes(srtp::Profile sdesProfile = srtp::Profile::AES128_CM_SHA1_80)
     {
-        _config.sdes = true;
+        _config.sdes = sdesProfile;
         return *this;
     }
 

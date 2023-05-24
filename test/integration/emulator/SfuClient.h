@@ -303,17 +303,32 @@ public:
         assert(_audioSource);
         std::vector<srtp::AesKey> sdesKeys;
 
-        if (_callConfig.sdes && !_callConfig.dtls)
+        if (_callConfig.sdes != srtp::Profile::NULL_CIPHER && !_callConfig.dtls)
         {
             _transport->getSdesKeys(sdesKeys);
-        }
 
-        _channel.sendResponse(_transport->getLocalIceCredentials(),
-            _transport->getLocalCandidates(),
-            _sslDtls.getLocalFingerprint(),
-            _audioSource->getSsrc(),
-            _channel.isVideoEnabled() ? _videoSsrcs : nullptr,
-            sdesKeys.front());
+            for (auto& key : sdesKeys)
+            {
+                if (key.profile == _callConfig.sdes)
+                {
+                    _channel.sendResponse(_transport->getLocalIceCredentials(),
+                        _transport->getLocalCandidates(),
+                        _sslDtls.getLocalFingerprint(),
+                        _audioSource->getSsrc(),
+                        _channel.isVideoEnabled() ? _videoSsrcs : nullptr,
+                        key);
+                }
+            }
+        }
+        else
+        {
+            _channel.sendResponse(_transport->getLocalIceCredentials(),
+                _transport->getLocalCandidates(),
+                _sslDtls.getLocalFingerprint(),
+                _audioSource->getSsrc(),
+                _channel.isVideoEnabled() ? _videoSsrcs : nullptr,
+                srtp::AesKey());
+        }
 
         _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
         _transport->start();

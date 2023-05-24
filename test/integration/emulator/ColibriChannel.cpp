@@ -74,7 +74,7 @@ void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& ice
     const std::string& fingerprint,
     uint32_t audioSsrc,
     uint32_t* videoSsrcs,
-    srtp::AesKey& remoteSdesKey)
+    const srtp::AesKey& remoteSdesKey)
 {
     using namespace nlohmann;
     json body = {{"id", _callConfig.conferenceId},

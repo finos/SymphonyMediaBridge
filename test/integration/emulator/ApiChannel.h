@@ -17,7 +17,7 @@ public:
         const std::string& fingerprint,
         uint32_t audioSsrc,
         uint32_t* videoSsrcs,
-        srtp::AesKey& remoteSdesKey) override;
+        const srtp::AesKey& remoteSdesKey) override;
 
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
 
