@@ -189,7 +189,7 @@ void Channel::sendResponse(const std::pair<std::string, std::string>& iceCredent
     logger::info("patch channel with %s", "ApiChannel", body.dump().c_str());
 
     nlohmann::json responseBody;
-    auto success = awaitResponse<HttpPostRequest>(_httpd,
+    auto success = awaitResponse<HttpPutRequest>(_httpd,
         _callConfig.baseUrl + "/conferences/" + _callConfig.conferenceId + "/" + _id,
         body.dump(),
         3 * utils::Time::sec,
