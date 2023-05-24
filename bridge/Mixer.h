@@ -5,6 +5,7 @@
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/SimulcastLevel.h"
+#include "bridge/engine/SsrcRewrite.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
 #include "transport/dtls/SrtpClient.h"
@@ -105,8 +106,7 @@ public:
     bool addAudioStream(std::string& outId,
         const std::string& endpointId,
         const utils::Optional<ice::IceRole>& iceRole,
-        const bool audioMixed,
-        bool rewriteSsrcs,
+        MediaMode mediaMode,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
     bool addVideoStream(std::string& outId,
         const std::string& endpointId,
@@ -117,8 +117,7 @@ public:
 
     bool addBundledAudioStream(std::string& outId,
         const std::string& endpointId,
-        const bool audioMixed,
-        const bool ssrcRewrite,
+        MediaMode mediaMode,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
     bool addBundledVideoStream(std::string& outId,
         const std::string& endpointId,

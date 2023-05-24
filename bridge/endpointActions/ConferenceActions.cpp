@@ -316,14 +316,11 @@ httpd::Response allocateEndpoint(ActionContext* context,
         if (allocateChannel.audio.isSet())
         {
             const auto& audio = allocateChannel.audio.get();
-            const auto mixed = audio.relayType.compare("mixed") == 0;
-            const auto ssrcRewrite = audio.relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
             if (!mixer->addBundledAudioStream(outChannelId,
                     endpointId,
-                    mixed,
-                    ssrcRewrite,
+                    audio.getMediaMode(),
                     allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
@@ -380,15 +377,12 @@ httpd::Response allocateEndpoint(ActionContext* context,
                         ? ice::IceRole::CONTROLLED
                         : ice::IceRole::CONTROLLING);
             }
-            const auto mixed = audio.relayType.compare("mixed") == 0;
-            const auto ssrcRewrite = audio.relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
             if (!mixer->addAudioStream(outChannelId,
                     endpointId,
                     iceRole,
-                    mixed,
-                    ssrcRewrite,
+                    audio.getMediaMode(),
                     allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,

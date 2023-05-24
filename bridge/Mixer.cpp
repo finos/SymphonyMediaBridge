@@ -319,8 +319,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
 bool Mixer::addAudioStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
-    const bool audioMixed,
-    bool rewriteSsrcs,
+    const MediaMode mediaMode,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -348,8 +347,7 @@ bool Mixer::addAudioStream(std::string& outId,
             endpointId,
             _ssrcGenerator.next(),
             transport,
-            audioMixed,
-            rewriteSsrcs,
+            mediaMode,
             idleTimeoutSeconds));
 
     if (!streamItr.second)
@@ -435,8 +433,7 @@ bool Mixer::addVideoStream(std::string& outId,
 
 bool Mixer::addBundledAudioStream(std::string& outId,
     const std::string& endpointId,
-    const bool audioMixed,
-    const bool ssrcRewrite,
+    MediaMode mediaMode,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -462,8 +459,7 @@ bool Mixer::addBundledAudioStream(std::string& outId,
             endpointId,
             _ssrcGenerator.next(),
             transportItr->second.transport,
-            audioMixed,
-            ssrcRewrite,
+            mediaMode,
             idleTimeoutSeconds));
 
     if (!streamItr.second)
@@ -911,7 +907,7 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStream
     }
 
     outDescription = AudioStreamDescription(*streamItr->second);
-    if (streamItr->second->ssrcRewrite)
+    if (streamItr->second->mediaMode == MediaMode::SSRC_REWRITE)
     {
         for (auto ssrc : _audioSsrcs)
         {
@@ -1642,9 +1638,8 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
             audioStream->localSsrc,
             audioStream->remoteSsrc,
             *audioStream->transport,
-            audioStream->audioMixed,
+            audioStream->mediaMode,
             audioStream->rtpMap,
-            audioStream->ssrcRewrite,
             audioStream->idleTimeoutSeconds,
             audioStream->neighbours));
 
