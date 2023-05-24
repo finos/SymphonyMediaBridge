@@ -58,7 +58,7 @@ elseif(UNIX)
 
     set(CMAKE_INSTALL_RPATH "./libs")
     set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
-    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fuse-ld=lld -lc++abi -lrt")
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lc++abi -lrt")
 
 # std::filesystem requires c++fs library before CLANG 9.1
 if (CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9_1)
