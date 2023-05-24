@@ -18,8 +18,8 @@ struct AllocateEndpoint
         bool ice;
         utils::Optional<bool> iceControlling;
 
-        bool dtls = false;
-        bool sdes = false;
+        bool dtls;
+        bool sdes;
     };
 
     struct Audio

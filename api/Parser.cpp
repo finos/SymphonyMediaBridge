@@ -124,6 +124,34 @@ void setIfExists(utils::Optional<std::string>& target, const nlohmann::json& dat
     }
 }
 
+bool exists(const nlohmann::json& json, const char* keyName)
+{
+    return json.find(keyName) != json.end();
+}
+
+template <typename... Args>
+bool exists(const nlohmann::json& json, const char* key1, Args&&... keys)
+{
+    auto it = json.find(key1);
+    if (it != json.end())
+    {
+        return exists(*it, keys...);
+    }
+
+    return false;
+}
+
+template <typename... Args>
+void throwIfNotExists(const nlohmann::json& json, Args&&... keys)
+{
+    if (!exists(json, keys...))
+    {
+        const char* vec[sizeof...(keys)] = {keys...};
+        const auto sb = std::string().append("Missing required under property: ").append(vec[0]);
+        throw nlohmann::detail::other_error::create(-1, sb);
+    }
+}
+
 api::AllocateEndpoint::Transport parseAllocateEndpointTransport(const nlohmann::json& data)
 {
     api::AllocateEndpoint::Transport transport;
@@ -173,7 +201,7 @@ api::Transport parsePatchEndpointTransport(const nlohmann::json& data)
         transport.ice.set(ice);
     }
 
-    if (data.find("dtls") != data.end())
+    if (exists(data, "dtls", "type") && exists(data, "dtls", "hash") && exists(data, "dtls", "setup"))
     {
         api::Dtls dtls;
         const auto& dtlsJson = data["dtls"];
@@ -182,8 +210,11 @@ api::Transport parsePatchEndpointTransport(const nlohmann::json& data)
         dtls.setup = dtlsJson["setup"].get<std::string>();
         transport.dtls.set(dtls);
     }
-    else if (data.find("sdes") != data.end())
+    else if (exists(data, "sdes"))
     {
+        throwIfNotExists(data, "sdes", "key");
+        throwIfNotExists(data, "sdes", "profile");
+
         const auto& sdesJson = data["sdes"];
         srtp::AesKey aesKey;
         const size_t decodedLength =
@@ -197,8 +228,11 @@ api::Transport parsePatchEndpointTransport(const nlohmann::json& data)
         transport.sdesKeys.push_back(aesKey);
     }
 
-    if (data.find("connection") != data.end())
+    if (exists(data, "connection"))
     {
+        throwIfNotExists(data, "connection", "port");
+        throwIfNotExists(data, "connection", "ip");
+
         const auto& connectionJson = data["connection"];
         api::Connection connection;
         connection.port = connectionJson["port"].get<uint32_t>();
