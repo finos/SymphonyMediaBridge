@@ -84,11 +84,23 @@ TEST_F(IntegrationTest, plain)
             responseBody);
         EXPECT_TRUE(confRequest);
 
-        auto aboutSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/about",
+        auto aboutVersionSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/about/version",
             1500 * utils::Time::ms,
             responseBody);
-        EXPECT_TRUE(aboutSuccess);
+        EXPECT_TRUE(aboutVersionSuccess);
+
+        auto aboutHealthSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/about/health",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(aboutHealthSuccess);
+
+        auto aboutCapabilitiesSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/about/capabilities",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(aboutCapabilitiesSuccess);
 
         group.clients[0]->_transport->stop();
         group.clients[1]->_transport->stop();
