@@ -230,7 +230,7 @@ RealTimeTest::AudioAnalysisData RealTimeTest::analyzeRecordingSimple(TClient* cl
     double expectedDurationSeconds,
     size_t expectedLossInPackets)
 {
-    auto audioCounters = client->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+    auto audioCounters = client->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
     EXPECT_LE(audioCounters.lostPackets, expectedLossInPackets);
 
     const auto& data = client->getAudioReceiveStats();
@@ -288,6 +288,7 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
         _instanceCounter,
         *_mainPoolAllocator,
         _audioAllocator,
+        *_clientTransportFactory,
         *_clientTransportFactory,
         *_sslDtls,
         numClients);
@@ -362,8 +363,8 @@ void RealTimeTest::smbMegaHootTest(const size_t numSpeakers)
 
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
         std::string clientName = "client_" + std::to_string(id);
-        group.clients[id]->_transport->getReportSummary(transportSummary);
-        logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+        group.clients[id]->getReportSummary(transportSummary);
+        logTransportSummary(clientName.c_str(), transportSummary);
     }
 
     for (size_t id = 0; id < numClients; ++id)
@@ -403,8 +404,14 @@ TEST_F(RealTimeTest, DISABLED_localMiniHoot)
 
     const auto baseUrl = "http://127.0.0.1:8080";
 
-    GroupCall<SfuClient<Channel>>
-        group(nullptr, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_clientTransportFactory, *_sslDtls, 50);
+    GroupCall<SfuClient<Channel>> group(nullptr,
+        _instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_clientTransportFactory,
+        *_clientTransportFactory,
+        *_sslDtls,
+        50);
 
     Conference conf(nullptr);
 
@@ -433,7 +440,7 @@ TEST_F(RealTimeTest, DISABLED_localMiniHoot)
 
     for (auto& client : group.clients)
     {
-        client->_transport->stop();
+        client->stopTransports();
     }
 
     group.awaitPendingJobs(utils::Time::sec * 4);
@@ -452,8 +459,14 @@ TEST_F(RealTimeTest, localVideoMeeting)
 
     const auto baseUrl = "http://127.0.0.1:8080";
 
-    GroupCall<SfuClient<Channel>>
-        group(nullptr, _instanceCounter, *_mainPoolAllocator, _audioAllocator, *_clientTransportFactory, *_sslDtls, 3);
+    GroupCall<SfuClient<Channel>> group(nullptr,
+        _instanceCounter,
+        *_mainPoolAllocator,
+        _audioAllocator,
+        *_clientTransportFactory,
+        *_clientTransportFactory,
+        *_sslDtls,
+        3);
 
     Conference conf(nullptr);
 
@@ -506,7 +519,7 @@ TEST_F(RealTimeTest, localVideoMeeting)
 
     for (auto& client : group.clients)
     {
-        client->_transport->stop();
+        client->stopTransports();
     }
 
     group.awaitPendingJobs(utils::Time::sec * 4);

@@ -7,6 +7,13 @@
 
 namespace emulator
 {
+
+enum class TransportMode
+{
+    BundledIce = 1,
+    StreamTransportIce,
+    StreamTransportNoIce
+};
 struct CallConfig
 {
     std::string conferenceId;
@@ -20,6 +27,8 @@ struct CallConfig
     bool rtx = true;
     uint32_t idleTimeout = 0;
     uint64_t ipv6CandidateDelay = 0;
+    TransportMode transportMode = TransportMode::BundledIce;
+    bool enableIpv6 = true;
 
     bool hasAudio() const { return audio != Audio::None; }
 };
@@ -38,6 +47,17 @@ public:
     CallConfigBuilder& url(const std::string url)
     {
         _config.baseUrl = url;
+        return *this;
+    }
+
+    CallConfigBuilder& streamTransportIce()
+    {
+        _config.transportMode = TransportMode::StreamTransportIce;
+        return *this;
+    }
+    CallConfigBuilder& streamTransportNoIce()
+    {
+        _config.transportMode = TransportMode::StreamTransportNoIce;
         return *this;
     }
 
@@ -125,6 +145,12 @@ public:
         return *this;
     }
 
+    CallConfigBuilder& forward()
+    {
+        _config.relayType = "forwarded";
+        return *this;
+    }
+
     CallConfigBuilder& idleTimeout(uint32_t seconds)
     {
         _config.idleTimeout = seconds;
@@ -134,6 +160,12 @@ public:
     CallConfigBuilder& delayIpv6(uint32_t ms)
     {
         _config.ipv6CandidateDelay = ms * utils::Time::ms;
+        return *this;
+    }
+
+    CallConfigBuilder& disableIpv6()
+    {
+        _config.enableIpv6 = false;
         return *this;
     }
 

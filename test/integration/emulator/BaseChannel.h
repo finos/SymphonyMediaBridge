@@ -12,44 +12,29 @@ namespace emulator
 std::string newGuuid();
 std::string newIdString();
 
-class Conference
-{
-public:
-    explicit Conference(emulator::HttpdFactory* httpd) : _httpd(httpd), _success(false) {}
-
-    void create(const std::string& baseUrl, bool useGlobalPort = true);
-    void createFromExternal(const std::string& conferenceId)
-    {
-        assert(_success == false);
-        _success = true;
-        _id = conferenceId;
-    }
-
-    const std::string& getId() const { return _id; }
-
-    bool isSuccess() const { return _success; }
-
-private:
-    emulator::HttpdFactory* _httpd;
-    std::string _id;
-    bool _success;
-};
-
 class BaseChannel
 {
 public:
     BaseChannel(emulator::HttpdFactory* httpd);
 
-    virtual void create(const bool initiator, const CallConfig& config) = 0;
+    virtual bool create(const bool initiator, const CallConfig& config) = 0;
 
-    virtual void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
-        const ice::IceCandidates& candidates,
+    virtual void sendResponse(transport::RtcTransport& bundleTransport,
         const std::string& fingerprint,
         uint32_t audioSsrc,
-        uint32_t* videoSsrcs,
-        const srtp::AesKey& remoteSdesKey) = 0;
+        uint32_t* videoSsrcs) = 0;
+
+    virtual void sendResponse(transport::RtcTransport* audioTransport,
+        transport::RtcTransport* videoTransport,
+        const std::string& fingerprint,
+        uint32_t audioSsrc,
+        uint32_t* videoSsrcs) = 0;
 
     virtual void configureTransport(transport::RtcTransport& transport,
+        memory::AudioPacketPoolAllocator& allocator) = 0;
+    virtual void configureAudioTransport(transport::RtcTransport& transport,
+        memory::AudioPacketPoolAllocator& allocator) = 0;
+    virtual void configureVideoTransport(transport::RtcTransport& transport,
         memory::AudioPacketPoolAllocator& allocator) = 0;
 
     virtual bool isAudioOffered() const = 0;
@@ -60,13 +45,10 @@ public:
     virtual utils::Optional<uint32_t> getOfferedScreensharingSsrc() const = 0;
     virtual utils::Optional<uint32_t> getOfferedLocalSsrc() const = 0;
 
-    bool skipIpv6 = false;
-
     void addIpv6RemoteCandidates(transport::RtcTransport& transport);
 
 public:
     bool isSuccess() const { return !_offer.empty(); }
-    bool isVideoEnabled() const { return _callConfig.video; }
 
     nlohmann::json getOffer() const { return _offer; }
     std::string getEndpointId() const { return _id; }
@@ -94,66 +76,5 @@ protected:
 
     ice::IceCandidates _ipv6RemoteCandidates;
 };
-
-template <typename RequestT>
-bool awaitResponse(HttpdFactory* httpd,
-    const std::string& url,
-    const std::string& body,
-    const uint64_t timeout,
-    nlohmann::json& outBody)
-{
-    if (httpd)
-    {
-        auto response = httpd->sendRequest(RequestT::method, url.c_str(), body.c_str());
-        outBody = nlohmann::json::parse(response._body);
-        return true;
-    }
-    else
-    {
-        RequestT request(url.c_str(), body.c_str());
-        request.awaitResponse(timeout);
-
-        if (request.isSuccess())
-        {
-            outBody = request.getJsonBody();
-            return true;
-        }
-        else
-        {
-            logger::warn("request failed %d", "awaitResponse", request.getCode());
-        }
-        return false;
-    }
-}
-
-template <typename RequestT>
-bool awaitResponse(HttpdFactory* httpd, const std::string& url, const uint64_t timeout, nlohmann::json& outBody)
-{
-    if (httpd)
-    {
-        auto response = httpd->sendRequest(RequestT::method, url.c_str(), "");
-        if (!response._body.empty())
-        {
-            outBody = nlohmann::json::parse(response._body);
-        }
-        return true;
-    }
-    else
-    {
-        RequestT request(url.c_str());
-        request.awaitResponse(timeout);
-
-        if (request.isSuccess())
-        {
-            outBody = request.getJsonBody();
-            return true;
-        }
-        else
-        {
-            logger::warn("request failed %d", "awaitResponse", request.getCode());
-        }
-        return false;
-    }
-}
 
 } // namespace emulator

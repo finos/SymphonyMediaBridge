@@ -19,7 +19,7 @@ nlohmann::json newContent(const std::string& endpointId, const char* type, const
     return contentItem;
 }
 
-void ColibriChannel::create(bool initiator, const CallConfig& config)
+bool ColibriChannel::create(bool initiator, const CallConfig& config)
 {
     _callConfig = config;
     if (_callConfig.relayType == "mixed")
@@ -62,21 +62,24 @@ void ColibriChannel::create(bool initiator, const CallConfig& config)
     if (success)
     {
         _offer = responseBody;
+        return true;
     }
     else
     {
         logger::error("failed to allocate channel", "ApiChannel");
+        return false;
     }
 }
-
-void ColibriChannel::sendResponse(const std::pair<std::string, std::string>& iceCredentials,
-    const ice::IceCandidates& candidates,
+void ColibriChannel::sendResponse(transport::RtcTransport& bundleTransport,
     const std::string& fingerprint,
     uint32_t audioSsrc,
-    uint32_t* videoSsrcs,
-    const srtp::AesKey& remoteSdesKey)
+    uint32_t* videoSsrcs)
 {
     using namespace nlohmann;
+
+    auto iceCredentials = bundleTransport.getLocalIceCredentials();
+    auto candidates = bundleTransport.getLocalCandidates();
+
     json body = {{"id", _callConfig.conferenceId},
         {"contents", json::array()},
         {"channel-bundles", json::array({json::object({{"id", _id}})})}};

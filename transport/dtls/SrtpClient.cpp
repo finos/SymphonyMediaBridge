@@ -847,6 +847,12 @@ void SrtpClient::setRemoteKey(const srtp::AesKey& key)
     {
         _state = State::CONNECTED;
         _mode = srtp::Mode::NULL_CIPHER;
+        logger::debug("SRTP connected with null cipher", _loggableId.c_str());
+        if (_eventSink)
+        {
+            _eventSink->onDtlsStateChange(this, _state);
+        }
+        return;
     }
 
     if (!createSrtp(key))
@@ -855,6 +861,10 @@ void SrtpClient::setRemoteKey(const srtp::AesKey& key)
     }
     _state = State::CONNECTED;
     logger::debug("SRTP connected with SDES", _loggableId.c_str());
+    if (_eventSink)
+    {
+        _eventSink->onDtlsStateChange(this, _state);
+    }
 }
 
 } // namespace transport

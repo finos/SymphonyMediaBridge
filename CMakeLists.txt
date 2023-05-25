@@ -508,6 +508,10 @@ set(TEST_LIB_FILES
     test/integration/emulator/FakeVideoDecoder.h
     test/integration/emulator/FakeVideoDecoder.cpp
     test/integration/emulator/SfuClient.h
+    test/integration/emulator/SfuClientReceivers.h
+    test/integration/emulator/SfuGroupCall.h
+    test/integration/emulator/Conference.cpp
+    test/integration/emulator/Barbell.cpp
     test/integration/emulator/HttpRequests.h
     test/integration/emulator/HttpRequests.cpp
     test/integration/emulator/TimeTurner.h
@@ -631,6 +635,7 @@ set(TEST_FILES2
     test/integration/IntegrationLegApiTest.cpp
     test/integration/IceTransportTest.cpp
     test/integration/SrtpIntegrationTest.cpp
+    test/integration/IntegrationCallTypes.cpp
 )
 
 set(LOAD_TEST_FILES

@@ -1103,6 +1103,11 @@ void IceSession::setRemoteCredentials(const std::pair<std::string, std::string>&
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     _credentials.remote = credentials;
+    if (credentials.second.empty())
+    {
+        return;
+    }
+
     _hmacComputer.remote.init(credentials.second.c_str(), credentials.second.size());
 };
 

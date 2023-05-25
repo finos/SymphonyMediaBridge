@@ -27,6 +27,7 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -45,7 +46,7 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-        make5secCallWithDefaultAudioProfile(group);
+        makeShortCallWithDefaultAudioProfile(group, utils::Time::sec * 2);
 
         nlohmann::json responseBody;
         auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
@@ -60,8 +61,8 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
             responseBody);
         EXPECT_TRUE(confRequest);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -69,14 +70,14 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
         const double expectedFrequencies[2][1] = {{1300.0}, {600.0}};
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 2, true, 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[id][0], 25.0);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
-            group.clients[id]->_transport->getReportSummary(transportSummary);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);

@@ -224,11 +224,10 @@ void FakeUdpEndpoint::stop(IStopEvents* listener)
 
         // Would be closing epoll subscription in a job and call a stop callback...
         _state = CREATED;
-
-        if (listener)
-        {
-            listener->onEndpointStopped(this);
-        }
+    }
+    if (listener)
+    {
+        listener->onEndpointStopped(this);
     }
 }
 
@@ -512,7 +511,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
             }
             else
             {
-                logger::debug("no listener for RTP", _name.c_str());
+                logger::debug("no listener for RTP from %s", _name.c_str(), srcAddress.toString().c_str());
             }
         }
     }

@@ -10,16 +10,34 @@ class ColibriChannel : public BaseChannel
 public:
     ColibriChannel(emulator::HttpdFactory* httpd) : BaseChannel(httpd) {}
 
-    void create(const bool initiator, const CallConfig& config) override;
+    bool create(const bool initiator, const CallConfig& config) override;
 
-    void sendResponse(const std::pair<std::string, std::string>& iceCredentials,
-        const ice::IceCandidates& candidates,
+    void sendResponse(transport::RtcTransport& bundleTransport,
         const std::string& fingerprint,
         uint32_t audioSsrc,
-        uint32_t* videoSsrcs,
-        const srtp::AesKey& remoteSdesKey) override;
+        uint32_t* videoSsrcs) override;
+
+    virtual void sendResponse(transport::RtcTransport* audioTransport,
+        transport::RtcTransport* videoTransport,
+        const std::string& fingerprint,
+        uint32_t audioSsrc,
+        uint32_t* videoSsrcs) override
+    {
+        assert(false);
+    }
 
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
+    void configureAudioTransport(transport::RtcTransport& transport,
+        memory::AudioPacketPoolAllocator& allocator) override
+    {
+        assert(false);
+    }
+
+    void configureVideoTransport(transport::RtcTransport& transport,
+        memory::AudioPacketPoolAllocator& allocator) override
+    {
+        assert(false);
+    }
 
     bool isAudioOffered() const override;
     void disconnect() override;

@@ -688,7 +688,7 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
         if (transport.dtls.isSet())
         {
             const auto& dtls = transport.dtls.get();
-            const bool isRemoteSideDtlsClient = dtls.isClient() == 0;
+            const bool isRemoteSideDtlsClient = dtls.isClient();
 
             if (!mixer.configureVideoStreamTransportDtls(endpointId, dtls.type, dtls.hash, !isRemoteSideDtlsClient))
             {
@@ -792,6 +792,10 @@ httpd::Response configureEndpoint(ActionContext* context,
         else if (!transport.sdesKeys.empty())
         {
             mixer->configureBundleTransportSdes(endpointId, transport.sdesKeys[0]);
+        }
+        else
+        {
+            mixer->configureBundleTransportSdes(endpointId, srtp::AesKey());
         }
 
         if (!mixer->startBundleTransport(endpointId))

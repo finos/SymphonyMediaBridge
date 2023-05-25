@@ -55,6 +55,7 @@ TEST_F(IntegrationLegApi, plain)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -96,9 +97,9 @@ TEST_F(IntegrationLegApi, plain)
         }
         EXPECT_EQ(1, dominantSpeakerCount);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
 
@@ -152,6 +153,7 @@ TEST_F(IntegrationLegApi, twoClientsAudioOnly)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -193,8 +195,8 @@ TEST_F(IntegrationLegApi, twoClientsAudioOnly)
         }
         EXPECT_EQ(1, dominantSpeakerCount);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
@@ -229,7 +231,7 @@ TEST_F(IntegrationLegApi, audioOnlyNoPadding)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,
+            *_clientTransportFactory,*_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -260,9 +262,9 @@ TEST_F(IntegrationLegApi, audioOnlyNoPadding)
         group.clients[1]->stopRecording();
         group.clients[0]->stopRecording();
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -290,7 +292,7 @@ TEST_F(IntegrationLegApi, paddingOffWhenRtxNotProvided)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,
+            *_clientTransportFactory,*_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -301,7 +303,7 @@ TEST_F(IntegrationLegApi, paddingOffWhenRtxNotProvided)
 
         group.startConference(conf, baseUrl + "/colibri");
 
-        using RtpVideoReceiver = typename SfuClient<ColibriChannel>::RtpVideoReceiver;
+        using RtpVideoReceiver = typename emulator::RtpVideoReceiver;
 
         emulator::CallConfigBuilder config(conf.getId());
         config.withOpus().withVideo().disableRtx().url(baseUrl);
@@ -320,9 +322,9 @@ TEST_F(IntegrationLegApi, paddingOffWhenRtxNotProvided)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -405,7 +407,7 @@ TEST_F(IntegrationLegApi, videoOffPaddingOff)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,
+            *_clientTransportFactory,*_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -448,7 +450,7 @@ TEST_F(IntegrationLegApi, videoOffPaddingOff)
         }
 
         group.clients[1]->stopRecording();
-        group.clients[1]->_transport->stop();
+        group.clients[1]->stopTransports();
 
         // Video producer (client2) stopped, waiting 1.5s for rctl.cooldownInterval timeout to take effect
         // (configured for 1 s for this test).
@@ -479,8 +481,8 @@ TEST_F(IntegrationLegApi, videoOffPaddingOff)
         group.clients[0]->stopRecording();
         group.clients[2]->stopRecording();
 
-        group.clients[0]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -526,7 +528,7 @@ TEST_F(IntegrationLegApi, packetLossVideoRecoveredViaNack)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,
+            *_clientTransportFactory,*_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -547,8 +549,8 @@ TEST_F(IntegrationLegApi, packetLossVideoRecoveredViaNack)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -560,7 +562,7 @@ TEST_F(IntegrationLegApi, packetLossVideoRecoveredViaNack)
             // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
             // video streams only. So let's check SfuClient NACK-related stats instead:
             const auto stats = group.clients[id]->getCumulativeRtxStats();
-            auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            auto videoCounters = group.clients[id]->getCumulativeVideoReceiveCounters();
             cumulativeStats += stats;
 
             // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
@@ -571,7 +573,7 @@ TEST_F(IntegrationLegApi, packetLossVideoRecoveredViaNack)
                 // video streams only. So let's check SfuClient NACK-related stats instead:
 
                 const auto stats = group.clients[id]->getCumulativeRtxStats();
-                auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+                auto videoCounters = group.clients[id]->getCumulativeVideoReceiveCounters();
 
                 // Could happen that a key frame was sent after the packet that would be lost, in this case NACK
                 // would have been ignored. So we might expect small number of videoCounters.lostPackets.

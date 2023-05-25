@@ -85,6 +85,7 @@ void IntegrationTest::TearDown()
 
     _bridge.reset();
     _clientTransportFactory.reset();
+    _publicTransportFactory.reset();
     _timers->stop();
     _jobManager->stop();
     for (auto& worker : _workerThreads)
@@ -175,6 +176,21 @@ void IntegrationTest::initLocalTransports(config::Config& bridgeConfig)
         *_network,
         *_mainPoolAllocator,
         _clientsEndpointFactory);
+
+    std::vector<transport::SocketAddress> publicInterfaces;
+    publicInterfaces.push_back(transport::SocketAddress::parse("205.55.61.10", 0));
+
+    _publicTransportFactory = transport::createTransportFactory(*_jobManager,
+        *_srtpClientFactory,
+        _clientConfig,
+        _sctpConfig,
+        _iceConfig,
+        _bweConfig,
+        _rateControlConfig,
+        publicInterfaces,
+        *_network,
+        *_mainPoolAllocator,
+        _bridgeEndpointFactory);
 
     for (const auto& linkInfo : _endpointNetworkLinkMap)
     {
