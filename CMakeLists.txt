@@ -559,17 +559,7 @@ set(TEST_FILES
     test/jobmanager/JobTest.cpp
     test/codec/OpusCodecTest.cpp
     test/concurrency/ProcessIntervalTest.cpp
-    test/integration/RealTimeTest.cpp
-    test/integration/RealTimeTest.h
-    test/integration/BarbellTest.cpp
-    test/integration/BarbellTest.h
-    test/integration/ConfIntegrationTest.cpp
-    test/integration/IntegrationLegApiTest.cpp
-    test/integration/IceTransportTest.cpp
-    test/integration/SrtpIntegrationTest.cpp
 
-#    test/integration/MixerTimeoutTest.cpp
-#    test/integration/StatsTest.cpp
     test/sctp/SctpBasicsTests.cpp
     test/sctp/SctpTransferTests.cpp
     test/transport/ice/IceCandidateTest.cpp
@@ -631,6 +621,18 @@ set(TEST_FILES
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp)
 
+
+set(TEST_FILES2
+    test/integration/RealTimeTest.cpp
+    test/integration/RealTimeTest.h
+    test/integration/BarbellTest.cpp
+    test/integration/BarbellTest.h
+    test/integration/ConfIntegrationTest.cpp
+    test/integration/IntegrationLegApiTest.cpp
+    test/integration/IceTransportTest.cpp
+    test/integration/SrtpIntegrationTest.cpp
+)
+
 set(LOAD_TEST_FILES
     test/integration/IntegrationTest.cpp
     test/integration/IntegrationTest.h
@@ -658,7 +660,19 @@ file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTO
 
 target_link_libraries(UnitTest testlib gtest gmock)
 
+add_executable(UnitTest2
+    ${TEST_FILES2} test/gtest_main2.cpp)
+
+target_include_directories(UnitTest2 PRIVATE ${CMAKE_TEST_INCLUDE} "test/include")
+
+# Copy test Data
+file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")
+
+target_link_libraries(UnitTest2 testlib gtest gmock)
+
+
 add_test(AllUnitTests UnitTest)
+add_test(AllUnitTests UnitTest2)
 
 add_executable(LoadTest ${LOAD_TEST_FILES}
     test/load_test_main.cpp)
@@ -666,7 +680,7 @@ add_executable(LoadTest ${LOAD_TEST_FILES}
 target_link_libraries(LoadTest testlib gtest gmock)
 
 if(APPLE)
-    source_group(TREE ${PROJECT_SOURCE_DIR} FILES ${FILES} ${TEST_FILES})
+    source_group(TREE ${PROJECT_SOURCE_DIR} FILES ${FILES} ${TEST_FILES} ${TEST_FILES2})
 endif()
 
 install(TARGETS smb CONFIGURATIONS Release DESTINATION bin)
