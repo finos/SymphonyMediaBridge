@@ -374,7 +374,7 @@ public:
                 return;
             }*/
             auto* transport = _bundleTransport ? _bundleTransport.get() : _audioTransport.get();
-            transport->getJobQueue().addJob<MediaSendJob>(*transport, std::move(packet), timestamp);
+            transport->getJobQueue().template addJob<MediaSendJob>(*transport, std::move(packet), timestamp);
         }
 
         if (sendVideo)
@@ -394,7 +394,9 @@ public:
                     }
                     _rtxStats.sender.packetsSent++;
                     auto* transport = _bundleTransport ? _bundleTransport.get() : _videoTransport.get();
-                    if (!transport->getJobQueue().addJob<MediaSendJob>(*transport, std::move(packet), timestamp))
+                    if (!transport->getJobQueue().template addJob<MediaSendJob>(*transport,
+                            std::move(packet),
+                            timestamp))
                     {
                         logger::warn("failed to add SendMediaJob", "SfuClient");
                     }
