@@ -32,7 +32,7 @@ if [ $? != 0 ]; then
 fi
 
 pr "Running tests2"
-../../el7/smb/UnitTest2 --gtest_filter="*.*" --gtest_output=xml:../../ubuntu-focal-deb/smb/test-results2.xml
+../../el7/smb/UnitTest2 --gtest_filter="*.*" --gtest_output=xml:../../el7/smb/test-results2.xml
 if [ $? != 0 ]; then
     pr "Testing failed"; exit 1
 fi
