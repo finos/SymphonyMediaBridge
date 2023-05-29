@@ -276,6 +276,16 @@ void MixerManager::stop()
             break;
     }
 
+    bool jobsDone = false;
+    _backgroundJobQueue.post([&jobsDone]() { jobsDone = true; });
+    for (;; usleep(10000))
+    {
+        if (jobsDone)
+        {
+            break;
+        }
+    }
+
     _running = false;
     logger::info("MixerManager thread stopped", "MixerManager");
 }
