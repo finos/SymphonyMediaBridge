@@ -17,7 +17,7 @@ Written as a high performance native application with efficient resource managem
 
 -   [Wiki](https://github.com/finos/SymphonyMediaBridge/wiki)
 -   [Usage example](https://github.com/finos/SymphonyMediaBridge/tree/master/examples)
--   [HTTP API documentation](https://github.com/finos/SymphonyMediaBridge/tree/master/doc/READMEapi.md)
+-   [HTTP API documentation](https://github.com/finos/SymphonyMediaBridge/tree/master/doc/api/READMEapi.md)
 
 ## Installing
 
