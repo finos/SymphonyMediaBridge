@@ -70,7 +70,8 @@ bool ColibriChannel::create(bool initiator, const CallConfig& config)
         return false;
     }
 }
-void ColibriChannel::sendResponse(transport::RtcTransport& bundleTransport,
+
+bool ColibriChannel::sendResponse(transport::RtcTransport& bundleTransport,
     const std::string& fingerprint,
     uint32_t audioSsrc,
     uint32_t* videoSsrcs)
@@ -232,6 +233,8 @@ void ColibriChannel::sendResponse(transport::RtcTransport& bundleTransport,
     {
         logger::error("failed to patch channel", "ColibriChannel");
     }
+
+    return success;
 }
 
 void ColibriChannel::disconnect()

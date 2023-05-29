@@ -2,6 +2,7 @@
 #include "httpd/HttpDaemon.h"
 #include "httpd/Httpd.h"
 #include "httpd/Request.h"
+#include "httpd/RequestErrorException.h"
 #include "httpd/Response.h"
 #include "nlohmann/json.hpp"
 #include "test/transport/FakeNetwork.h"
@@ -38,7 +39,7 @@ bool awaitResponse(HttpdFactory* httpd,
     {
         auto response = httpd->sendRequest(RequestT::method, url.c_str(), body.c_str());
         outBody = nlohmann::json::parse(response._body);
-        return true;
+        return response._statusCode <= httpd::StatusCode::NO_CONTENT;
     }
     else
     {

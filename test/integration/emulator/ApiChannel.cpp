@@ -234,7 +234,7 @@ nlohmann::json Channel::buildNeighbours() const
     return json();
 }
 
-void Channel::sendResponse(transport::RtcTransport& bundleTransport,
+bool Channel::sendResponse(transport::RtcTransport& bundleTransport,
     const std::string& fingerprint,
     uint32_t audioSsrc,
     uint32_t* videoSsrcs)
@@ -275,14 +275,16 @@ void Channel::sendResponse(transport::RtcTransport& bundleTransport,
     if (success)
     {
         raw = responseBody.dump();
+        return true;
     }
     else
     {
         logger::error("failed to patch channel ", "ApiChannel");
+        return false;
     }
 }
 
-void Channel::sendResponse(transport::RtcTransport* audioTransport,
+bool Channel::sendResponse(transport::RtcTransport* audioTransport,
     transport::RtcTransport* videoTransport,
     const std::string& fingerprint,
     uint32_t audioSsrc,
@@ -324,6 +326,7 @@ void Channel::sendResponse(transport::RtcTransport* audioTransport,
     {
         logger::error("failed to patch channel ", "ApiChannel");
     }
+    return success;
 }
 
 void Channel::disconnect()

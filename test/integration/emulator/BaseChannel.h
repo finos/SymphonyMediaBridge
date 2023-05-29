@@ -19,12 +19,12 @@ public:
 
     virtual bool create(const bool initiator, const CallConfig& config) = 0;
 
-    virtual void sendResponse(transport::RtcTransport& bundleTransport,
+    virtual bool sendResponse(transport::RtcTransport& bundleTransport,
         const std::string& fingerprint,
         uint32_t audioSsrc,
         uint32_t* videoSsrcs) = 0;
 
-    virtual void sendResponse(transport::RtcTransport* audioTransport,
+    virtual bool sendResponse(transport::RtcTransport* audioTransport,
         transport::RtcTransport* videoTransport,
         const std::string& fingerprint,
         uint32_t audioSsrc,

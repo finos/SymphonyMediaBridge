@@ -274,7 +274,7 @@ public:
         return result;
     }
 
-    void connect()
+    bool connect()
     {
         if (_callConfig.video)
         {
@@ -305,18 +305,23 @@ public:
 
         if (_bundleTransport)
         {
-            _channel.sendResponse(*_bundleTransport,
+            _configured = _channel.sendResponse(*_bundleTransport,
                 _sslDtls.getLocalFingerprint(),
                 _audioSource->getSsrc(),
                 _callConfig.video ? _videoSsrcs : nullptr);
         }
         else
         {
-            _channel.sendResponse(_audioTransport.get(),
+            _configured = _channel.sendResponse(_audioTransport.get(),
                 _videoTransport.get(),
                 _sslDtls.getLocalFingerprint(),
                 _audioSource->getSsrc(),
                 _callConfig.video ? _videoSsrcs : nullptr);
+        }
+
+        if (!_configured)
+        {
+            return false;
         }
 
         _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(),
@@ -336,6 +341,8 @@ public:
             _videoTransport->start();
             _videoTransport->connect();
         }
+
+        return true;
     }
 
     void disconnect() { _channel.disconnect(); }
@@ -751,8 +758,15 @@ public:
 
     bool hasTransport() const { return _bundleTransport || _audioTransport || _videoTransport; }
 
+    bool isEndpointConfigured() const { return _configured; }
+
     bool isConnected() const
     {
+        if (!_configured)
+        {
+            return false;
+        }
+
         bool connected = true;
         if (_bundleTransport)
         {
@@ -837,6 +851,7 @@ private:
     Audio _expectedReceiveAudioType;
     uint64_t _startTime;
     CallConfig _callConfig;
+    bool _configured = false;
 };
 
 } // namespace emulator

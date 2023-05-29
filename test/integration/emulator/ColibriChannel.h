@@ -12,12 +12,12 @@ public:
 
     bool create(const bool initiator, const CallConfig& config) override;
 
-    void sendResponse(transport::RtcTransport& bundleTransport,
+    bool sendResponse(transport::RtcTransport& bundleTransport,
         const std::string& fingerprint,
         uint32_t audioSsrc,
         uint32_t* videoSsrcs) override;
 
-    virtual void sendResponse(transport::RtcTransport* audioTransport,
+    virtual bool sendResponse(transport::RtcTransport* audioTransport,
         transport::RtcTransport* videoTransport,
         const std::string& fingerprint,
         uint32_t audioSsrc,

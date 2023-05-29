@@ -57,6 +57,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
     logger::info("test transportmode %u, encryption %u", "party3AllModes", transportMode, encryptionMode);
     auto testBody = [this, transportMode, encryptionMode]() {
         _config.readFromString(_defaultSmbConfig);
+        _config.enableSrtpNullCipher = true;
 
         initBridge(_config);
         const auto baseUrl = "http://127.0.0.1:8080";
@@ -197,3 +198,4 @@ INSTANTIATE_TEST_SUITE_P(IntegrationCallTypesTest,
                          TransportMode::StreamTransportIce,
                          TransportMode::StreamTransportNoIce),
         testing::Values(EncryptionMode::DTLS, EncryptionMode::SDES, EncryptionMode::NullCipher)));
+

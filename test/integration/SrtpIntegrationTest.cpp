@@ -95,3 +95,38 @@ INSTANTIATE_TEST_SUITE_P(IntegrationSrtpTest,
         srtp::Profile::AES_192_CM_SHA1_32,
         srtp::Profile::AEAD_AES_128_GCM,
         srtp::Profile::AEAD_AES_256_GCM));
+
+TEST_F(IntegrationTest, nullCipherNotAllowed)
+{
+    runTestInThread(expectedTestThreadCount(1), [this]() {
+        _config.readFromString(_defaultSmbConfig);
+
+        initBridge(_config);
+        const auto baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_publicTransportFactory,
+            *_sslDtls,
+            1);
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        CallConfigBuilder cfg(conf.getId());
+        cfg.url(baseUrl).av().disableDtls();
+
+        group.clients[0]->initiateCall(cfg.build());
+
+        ASSERT_FALSE(group.connectAll(utils::Time::sec * 1));
+
+        EXPECT_FALSE(group.clients[0]->isEndpointConfigured());
+    });
+}
