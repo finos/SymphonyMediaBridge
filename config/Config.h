@@ -14,6 +14,7 @@ public:
     CFG_PROP(std::string, address, "127.0.0.1");
     CFG_PROP(bool, logStdOut, true);
     CFG_PROP(std::string, logLevel, "INFO");
+    CFG_PROP(bool, enableSrtpNullCipher, false);
 
     // If mixer does not receive any packets during this timeout, it's considered abandoned and is garbage collected.
     CFG_PROP(int, mixerInactivityTimeoutMs, 2 * 60 * 1000);
