@@ -276,7 +276,7 @@ void MixerManager::stop()
             break;
     }
 
-    bool jobsDone = false;
+    std::atomic_bool jobsDone(false);
     _backgroundJobQueue.post([&jobsDone]() { jobsDone = true; });
     for (;; usleep(10000))
     {
