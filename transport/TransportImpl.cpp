@@ -2081,7 +2081,7 @@ void TransportImpl::setDataReceiver(DataReceiver* dataReceiver)
     _dataReceiver.store(dataReceiver);
 }
 
-void TransportImpl::onDtlsStateChange(SrtpClient*, const SrtpClient::State state)
+void TransportImpl::onSrtpStateChange(SrtpClient*, const SrtpClient::State state)
 {
     _dtlsState = state;
     _isConnected = (!_rtpIceSession || _iceState == ice::IceSession::State::CONNECTED) &&

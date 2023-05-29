@@ -34,7 +34,7 @@ public:
     class IEvents
     {
     public:
-        virtual void onDtlsStateChange(SrtpClient* srtpClient, State state) = 0;
+        virtual void onSrtpStateChange(SrtpClient* srtpClient, State state) = 0;
     };
 
     SrtpClient(SslDtls& sslDtls, IEvents* eventListener);
