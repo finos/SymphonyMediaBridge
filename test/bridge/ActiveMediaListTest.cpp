@@ -167,9 +167,8 @@ protected:
             id,
             utils::Optional<uint32_t>(id),
             *_transport,
-            false,
+            bridge::MediaMode::SSRC_REWRITE,
             bridge::RtpMap(),
-            true,
             0,
             neighbours);
 

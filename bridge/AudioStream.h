@@ -1,5 +1,6 @@
 #pragma once
 #include "bridge/RtpMap.h"
+#include "bridge/engine/SsrcRewrite.h"
 #include "transport/RtcTransport.h"
 #include "utils/Optional.h"
 #include "utils/StdExtensions.h"
@@ -17,17 +18,15 @@ struct AudioStream
         const std::string& endpointId,
         const uint32_t localSsrc,
         std::shared_ptr<transport::RtcTransport>& transport,
-        const bool audioMixed,
-        bool ssrcRewrite,
+        bridge::MediaMode mediaMode,
         utils::Optional<uint32_t> idleTimeout)
         : id(id),
           endpointId(endpointId),
           endpointIdHash(utils::hash<std::string>{}(endpointId)),
           localSsrc(localSsrc),
           transport(transport),
-          audioMixed(audioMixed),
+          mediaMode(mediaMode),
           markedForDeletion(false),
-          ssrcRewrite(ssrcRewrite),
           isConfigured(false),
           idleTimeoutSeconds(idleTimeout.isSet() ? idleTimeout.get() : 0),
           srtpMode(srtp::Mode::UNDEFINED)
@@ -41,12 +40,11 @@ struct AudioStream
     utils::Optional<uint32_t> remoteSsrc;
 
     std::shared_ptr<transport::RtcTransport> transport;
-    bool audioMixed;
+    MediaMode mediaMode;
 
     bridge::RtpMap rtpMap;
 
     bool markedForDeletion;
-    bool ssrcRewrite;
     bool isConfigured;
     const uint32_t idleTimeoutSeconds;
     std::vector<uint32_t> neighbours;

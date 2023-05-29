@@ -110,7 +110,7 @@ public: // Transport
     /** Called from httpd threads */
     ice::IceCandidates getLocalCandidates() override;
     /** Called from httpd threads */
-    std::pair<std::string, std::string> getLocalCredentials() override;
+    std::pair<std::string, std::string> getLocalIceCredentials() override;
 
     /** Called from httpd threads. Must be set before DtlsFingerprint otherwise DTLS handshake will fail */
     bool setRemotePeer(const SocketAddress& target) override;

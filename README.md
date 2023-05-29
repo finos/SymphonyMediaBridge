@@ -92,7 +92,13 @@ The Symphony Media Bridge is a cmake based project that can be built and run for
 
 ### Running the local test suite
 
-`./UnitTest`
+```
+./UnitTest
+./UnitTest2
+```
+
+UnitTest2 contains integration tests that run in emulated network environment and emulated time.
+It is very close to end to end tests without adding external RTC agents.
 
 ## Contributing
 

@@ -30,6 +30,13 @@ export LD_LIBRARY_PATH=../../el7/smb/libs
 if [ $? != 0 ]; then
     pr "Testing failed"; exit 1
 fi
+
+pr "Running tests2"
+../../el7/smb/UnitTest2 --gtest_filter="*.*" --gtest_output=xml:../../el7/smb/test-results2.xml
+if [ $? != 0 ]; then
+    pr "Testing failed"; exit 1
+fi
+
 popd || exit 1
 
 pushd el7/smb || exit 1

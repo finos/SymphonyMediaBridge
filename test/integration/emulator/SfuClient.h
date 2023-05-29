@@ -17,6 +17,7 @@
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtcpHeader.h"
 #include "test/integration/emulator/ApiChannel.h"
+#include "test/integration/emulator/CallConfigBuilder.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
@@ -307,7 +308,7 @@ public:
             _transport->getSdesKeys(sdesKeys);
         }
 
-        _channel.sendResponse(_transport->getLocalCredentials(),
+        _channel.sendResponse(_transport->getLocalIceCredentials(),
             _transport->getLocalCandidates(),
             _sslDtls.getLocalFingerprint(),
             _audioSource->getSsrc(),

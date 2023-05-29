@@ -56,4 +56,10 @@ nlohmann::json HttpRequest::getJsonBody() const
     return nlohmann::json();
 }
 
+HttpPutRequest::HttpPutRequest(const char* url, const char* body)
+{
+    _request = http_post(url, body, body ? std::strlen(body) : 0, nullptr);
+    assert(_request);
+}
+
 } // namespace emulator

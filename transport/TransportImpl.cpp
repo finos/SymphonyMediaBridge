@@ -1795,7 +1795,7 @@ ice::IceCandidates TransportImpl::getLocalCandidates()
     return std::vector<ice::IceCandidate>();
 }
 
-std::pair<std::string, std::string> TransportImpl::getLocalCredentials()
+std::pair<std::string, std::string> TransportImpl::getLocalIceCredentials()
 {
     if (!_rtpIceSession)
     {

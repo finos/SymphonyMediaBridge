@@ -73,4 +73,12 @@ public:
     }
 };
 
+class HttpPutRequest : public HttpRequest
+{
+public:
+    static const httpd::Method method = httpd::Method::PUT;
+
+    HttpPutRequest(const char* url, const char* body);
+};
+
 } // namespace emulator

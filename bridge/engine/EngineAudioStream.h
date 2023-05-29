@@ -1,6 +1,7 @@
 #pragma once
 #include "bridge/RtpMap.h"
 #include "bridge/engine/SsrcOutboundContext.h"
+#include "bridge/engine/SsrcRewrite.h"
 #include "concurrency/MpmcHashmap.h"
 #include "memory/Map.h"
 #include "utils/StdExtensions.h"
@@ -23,9 +24,8 @@ struct EngineAudioStream
         const uint32_t localSsrc,
         const utils::Optional<uint32_t>& remoteSsrc,
         transport::RtcTransport& transport,
-        const bool audioMixed,
+        MediaMode mediaMode,
         const bridge::RtpMap& rtpMap,
-        bool ssrcRewrite,
         const uint32_t idleTimeoutSeconds,
         const std::vector<uint32_t>& neighbourList)
         : endpointId(endpointId),
@@ -34,9 +34,8 @@ struct EngineAudioStream
           remoteSsrc(remoteSsrc),
           ssrcOutboundContexts(256),
           transport(transport),
-          audioMixed(audioMixed),
+          mediaMode(mediaMode),
           rtpMap(rtpMap),
-          ssrcRewrite(ssrcRewrite),
           idleTimeoutSeconds(idleTimeoutSeconds),
           createdAt(utils::Time::getAbsoluteTime())
     {
@@ -46,6 +45,8 @@ struct EngineAudioStream
         }
     }
 
+    bool isMixed() const { return mediaMode == MediaMode::MIXED; }
+
     const std::string endpointId;
     const size_t endpointIdHash;
     const uint32_t localSsrc;
@@ -53,10 +54,9 @@ struct EngineAudioStream
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext> ssrcOutboundContexts;
 
     transport::RtcTransport& transport;
-    const bool audioMixed;
+    MediaMode mediaMode;
 
     bridge::RtpMap rtpMap;
-    const bool ssrcRewrite;
     const uint32_t idleTimeoutSeconds;
     const uint64_t createdAt;
 

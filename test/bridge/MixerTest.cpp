@@ -234,7 +234,7 @@ protected:
     {
         std::string outId;
         CHECK(mixer.addBundleTransportIfNeeded(endpointId, ice::IceRole::CONTROLLING));
-        CHECK(mixer.addBundledAudioStream(outId, endpointId, false, true));
+        CHECK(mixer.addBundledAudioStream(outId, endpointId, MediaMode::SSRC_REWRITE));
         CHECK(mixer.addBundledVideoStream(outId, endpointId, true));
         CHECK(mixer.addBundledDataStream(outId, endpointId));
         CHECK(mixer.configureAudioStream(endpointId, AUDIO_RTP_MAP, utils::Optional<uint32_t>(), {}));

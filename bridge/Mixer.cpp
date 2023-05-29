@@ -190,9 +190,9 @@ void Mixer::stopTransports()
 
     for (auto& bundleTransportEntry : _bundleTransports)
     {
-        assert(bundleTransportEntry.second._transport.get());
-        logTransportPacketLoss("", *bundleTransportEntry.second._transport, _loggableId.c_str());
-        bundleTransportEntry.second._transport->stop();
+        assert(bundleTransportEntry.second.transport.get());
+        logTransportPacketLoss("", *bundleTransportEntry.second.transport, _loggableId.c_str());
+        bundleTransportEntry.second.transport->stop();
     }
 
     for (auto& audioStreamEntry : _audioStreams)
@@ -233,7 +233,7 @@ bool Mixer::hasPendingTransportJobs()
 {
     for (auto& bundle : _bundleTransports)
     {
-        if (bundle.second._transport->hasPendingJobs())
+        if (bundle.second.transport->hasPendingJobs())
         {
             return true;
         }
@@ -309,8 +309,8 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         _loggableId.c_str(),
         endpointId.c_str(),
         endpointIdHash,
-        emplaceResult.first->second._transport->getLoggableId().c_str(),
-        emplaceResult.first->second._transport.get(),
+        emplaceResult.first->second.transport->getLoggableId().c_str(),
+        emplaceResult.first->second.transport.get(),
         iceRole == ice::IceRole::CONTROLLING ? 't' : 'f');
 
     return true;
@@ -319,8 +319,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
 bool Mixer::addAudioStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
-    const bool audioMixed,
-    bool rewriteSsrcs,
+    const MediaMode mediaMode,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -348,8 +347,7 @@ bool Mixer::addAudioStream(std::string& outId,
             endpointId,
             _ssrcGenerator.next(),
             transport,
-            audioMixed,
-            rewriteSsrcs,
+            mediaMode,
             idleTimeoutSeconds));
 
     if (!streamItr.second)
@@ -435,8 +433,7 @@ bool Mixer::addVideoStream(std::string& outId,
 
 bool Mixer::addBundledAudioStream(std::string& outId,
     const std::string& endpointId,
-    const bool audioMixed,
-    const bool ssrcRewrite,
+    MediaMode mediaMode,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -461,9 +458,8 @@ bool Mixer::addBundledAudioStream(std::string& outId,
         std::make_unique<AudioStream>(outId,
             endpointId,
             _ssrcGenerator.next(),
-            transportItr->second._transport,
-            audioMixed,
-            ssrcRewrite,
+            transportItr->second.transport,
+            mediaMode,
             idleTimeoutSeconds));
 
     if (!streamItr.second)
@@ -508,7 +504,7 @@ bool Mixer::addBundledVideoStream(std::string& outId,
         std::make_unique<VideoStream>(outId,
             endpointId,
             _ssrcGenerator.next(),
-            transportItr->second._transport,
+            transportItr->second.transport,
             ssrcRewrite,
             idleTimeoutSeconds));
 
@@ -550,7 +546,7 @@ bool Mixer::addBundledDataStream(std::string& outId,
     }
 
     const auto streamItr = _dataStreams.emplace(endpointId,
-        std::make_unique<DataStream>(outId, endpointId, transportItr->second._transport, idleTimeoutSeconds));
+        std::make_unique<DataStream>(outId, endpointId, transportItr->second.transport, idleTimeoutSeconds));
     if (!streamItr.second)
     {
         return false;
@@ -911,7 +907,7 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStream
     }
 
     outDescription = AudioStreamDescription(*streamItr->second);
-    if (streamItr->second->ssrcRewrite)
+    if (streamItr->second->mediaMode == MediaMode::SSRC_REWRITE)
     {
         for (auto ssrc : _audioSsrcs)
         {
@@ -1024,14 +1020,14 @@ bool Mixer::getTransportBundleDescription(const std::string& endpointId, Transpo
     {
         return false;
     }
-    auto bundleTransport = bundleTransportItr->second._transport.get();
+    auto bundleTransport = bundleTransportItr->second.transport.get();
     assert(bundleTransport);
 
     std::vector<srtp::AesKey> sdesKeys;
     bundleTransport->getSdesKeys(sdesKeys);
 
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
-        bundleTransport->getLocalCredentials(),
+        bundleTransport->getLocalIceCredentials(),
         bundleTransport->isDtlsClient(),
         sdesKeys,
         bundleTransportItr->second.srtpMode);
@@ -1053,7 +1049,7 @@ bool Mixer::getBarbellTransportDescription(const std::string& barbellId, Transpo
     auto& bundleTransport = barbellIt->second->transport;
 
     outTransportDescription = TransportDescription(bundleTransport->getLocalCandidates(),
-        bundleTransport->getLocalCredentials(),
+        bundleTransport->getLocalIceCredentials(),
         bundleTransport->isDtlsClient(),
         std::vector<srtp::AesKey>(),
         srtp::Mode::DTLS);
@@ -1083,7 +1079,7 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
     if (transport->isIceEnabled())
     {
         outTransportDescription = TransportDescription(transport->getLocalCandidates(),
-            transport->getLocalCredentials(),
+            transport->getLocalIceCredentials(),
             transport->isDtlsClient(),
             sdesKeys,
             audioStreamItr->second->srtpMode);
@@ -1131,7 +1127,7 @@ bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
     if (videoStream.transport->isIceEnabled())
     {
         outTransportDescription = TransportDescription(videoStream.transport->getLocalCandidates(),
-            videoStream.transport->getLocalCredentials(),
+            videoStream.transport->getLocalIceCredentials(),
             videoStream.transport->isDtlsClient(),
             sdesKeys,
             videoStream.srtpMode);
@@ -1549,7 +1545,7 @@ bool Mixer::configureBundleTransportIce(const std::string& endpointId,
         return false;
     }
 
-    transportItr->second._transport->setRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
+    transportItr->second.transport->setRemoteIce(credentials, candidates, _engineMixer->getAudioAllocator());
     return true;
 }
 
@@ -1566,7 +1562,7 @@ bool Mixer::configureBundleTransportDtls(const std::string& endpointId,
     }
 
     transportIt->second.srtpMode = srtp::Mode::DTLS;
-    transportIt->second._transport->asyncSetRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
+    transportIt->second.transport->asyncSetRemoteDtlsFingerprint(fingerprintType, fingerprintHash, isDtlsClient);
     return true;
 }
 
@@ -1580,7 +1576,7 @@ bool Mixer::configureBundleTransportSdes(const std::string& endpointId, const sr
     }
 
     bundleIt->second.srtpMode = srtp::Mode::SDES;
-    bundleIt->second._transport->asyncSetRemoteSdesKey(remoteKey);
+    bundleIt->second.transport->asyncSetRemoteSdesKey(remoteKey);
     return true;
 }
 
@@ -1593,7 +1589,7 @@ bool Mixer::startBundleTransport(const std::string& endpointId)
         return false;
     }
 
-    return _engineMixer->asyncStartTransport(*transportItr->second._transport);
+    return _engineMixer->asyncStartTransport(*transportItr->second.transport);
 }
 
 bool Mixer::startAudioStreamTransport(const std::string& endpointId)
@@ -1642,9 +1638,8 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
             audioStream->localSsrc,
             audioStream->remoteSsrc,
             *audioStream->transport,
-            audioStream->audioMixed,
+            audioStream->mediaMode,
             audioStream->rtpMap,
-            audioStream->ssrcRewrite,
             audioStream->idleTimeoutSeconds,
             audioStream->neighbours));
 
@@ -1818,9 +1813,9 @@ void Mixer::stopTransportIfNeeded(const std::shared_ptr<transport::RtcTransport>
             logger::info("EngineStream removed, endpointId %s. Has bundle transport %s but no other related streams.",
                 _loggableId.c_str(),
                 endpointId.c_str(),
-                bundleTransportItr->second._transport->getLoggableId().c_str());
+                bundleTransportItr->second.transport->getLoggableId().c_str());
 
-            transportToBeFinalized = bundleTransportItr->second._transport;
+            transportToBeFinalized = bundleTransportItr->second.transport;
             _bundleTransports.erase(bundleTransportItr);
         }
     }

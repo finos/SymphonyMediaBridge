@@ -64,7 +64,7 @@ parallel "Release el7": {
         } finally {
             stage("Post Actions") {
                 dir ("el8/smb") {
-                    junit testResults: "test-results.xml"
+                    junit testResults: "test-results*.xml"
                     publishHTML(target: [
                             allowMissing         : false,
                             alwaysLinkToLastBuild: false,

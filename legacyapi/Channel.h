@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/engine/SsrcRewrite.h"
 #include "legacyapi/PayloadType.h"
 #include "legacyapi/SsrcAttribute.h"
 #include "legacyapi/SsrcGroup.h"
@@ -44,6 +45,22 @@ struct Channel
     bool isRelayTypeRewrite() const
     {
         return _rtpLevelRelayType.isSet() && _rtpLevelRelayType.get().compare("ssrc-rewrite") == 0;
+    }
+
+    bridge::MediaMode getMediaMode() const
+    {
+        if (_rtpLevelRelayType.isSet())
+        {
+            if (0 == _rtpLevelRelayType.get().compare("mixer"))
+            {
+                return bridge::MediaMode::MIXED;
+            }
+            else if (_rtpLevelRelayType.get().compare("ssrc-rewrite") == 0)
+            {
+                return bridge::MediaMode::SSRC_REWRITE;
+            }
+        }
+        return bridge::MediaMode::FORWARD;
     }
 };
 

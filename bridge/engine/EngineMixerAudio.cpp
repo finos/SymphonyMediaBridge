@@ -30,10 +30,10 @@ void EngineMixer::addAudioStream(EngineAudioStream* engineAudioStream)
         _loggableId.c_str(),
         engineAudioStream->transport.getLoggableId().c_str(),
         endpointIdHash,
-        engineAudioStream->audioMixed ? 't' : 'f');
+        engineAudioStream->isMixed() ? 't' : 'f');
 
     _engineAudioStreams.emplace(endpointIdHash, engineAudioStream);
-    if (engineAudioStream->audioMixed)
+    if (engineAudioStream->isMixed())
     {
         _numMixedAudioStreams++;
     }
@@ -94,7 +94,7 @@ void EngineMixer::removeStream(const EngineAudioStream* engineAudioStream)
         }
     }
 
-    if (engineAudioStream->audioMixed)
+    if (engineAudioStream->isMixed())
     {
         _numMixedAudioStreams--;
     }
@@ -266,11 +266,11 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
             }
             audioStream->detectedAudioSsrc.set(originalSsrc);
         }
-        if (!audioStream || &audioStream->transport == packetInfo.transport() || audioStream->audioMixed)
+        if (!audioStream || &audioStream->transport == packetInfo.transport() || audioStream->isMixed())
         {
             continue;
         }
-        if (audioStream->ssrcRewrite && !sourceMapped)
+        if (audioStream->mediaMode == MediaMode::SSRC_REWRITE && !sourceMapped)
         {
             continue;
         }
@@ -290,7 +290,7 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         }
 
         SsrcOutboundContext* ssrcOutboundContext = nullptr;
-        if (audioStream->ssrcRewrite)
+        if (audioStream->mediaMode == MediaMode::SSRC_REWRITE)
         {
             ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
@@ -420,7 +420,7 @@ void EngineMixer::processAudioStreams()
             audioBuffer = _mixerSsrcAudioBuffers.getItem(audioStream->remoteSsrc.get());
             isContributingToMix = audioBuffer && !audioBuffer->isPreBuffering();
 
-            if (!audioStream->audioMixed || !audioStream->transport.isConnected())
+            if (!audioStream->isMixed() || !audioStream->transport.isConnected())
             {
                 if (isContributingToMix)
                 {
@@ -430,7 +430,7 @@ void EngineMixer::processAudioStreams()
             }
         }
 
-        if (!audioStream->audioMixed)
+        if (!audioStream->isMixed())
         {
             continue;
         }
@@ -502,7 +502,7 @@ void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(const EngineAud
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
         auto* audioStream = audioStreamEntry.second;
-        if (audioStream == senderAudioStream || audioStream->ssrcRewrite)
+        if (audioStream == senderAudioStream || audioStream->mediaMode == MediaMode::SSRC_REWRITE)
         {
             // If we use ssrc rewrite there is no need to remove the outbound context as it is not there
             continue;

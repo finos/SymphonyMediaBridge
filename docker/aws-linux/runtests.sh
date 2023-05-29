@@ -25,6 +25,13 @@ export LD_LIBRARY_PATH=../../aws-linux/smb/libs
 if [ $? != 0 ]; then
     pr "Testing failed"; exit 1
 fi
+
+pr "Running tests2"
+../../aws-linux/smb/UnitTest2 --gtest_filter="*.*" --gtest_output=xml:../../aws-linux/smb/test-results2.xml
+if [ $? != 0 ]; then
+    pr "Testing failed"; exit 1
+fi
+
 popd || exit 1
 
 pushd aws-linux/smb || exit 1

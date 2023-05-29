@@ -56,7 +56,7 @@ public:
 
     virtual bool isGatheringComplete() const = 0;
     virtual ice::IceCandidates getLocalCandidates() = 0;
-    virtual std::pair<std::string, std::string> getLocalCredentials() = 0;
+    virtual std::pair<std::string, std::string> getLocalIceCredentials() = 0;
 
     virtual bool setRemotePeer(const SocketAddress& target) = 0;
     virtual const SocketAddress& getRemotePeer() const = 0;

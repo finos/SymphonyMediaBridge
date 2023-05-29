@@ -27,6 +27,13 @@ pr "Running tests"
 if [ $? != 0 ]; then
     pr "Testing failed"; exit 1
 fi
+
+pr "Running tests2"
+../../ubuntu-focal-deb/smb/UnitTest2 --gtest_filter="*.*" --gtest_output=xml:../../ubuntu-focal-deb/smb/test-results2.xml
+if [ $? != 0 ]; then
+    pr "Testing failed"; exit 1
+fi
+
 popd || exit 1
 
 pushd ubuntu-focal-deb/smb || exit 1

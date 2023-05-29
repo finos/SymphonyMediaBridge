@@ -51,7 +51,7 @@ POST /conferences/{conferenceId}/{endpointId}
         "relay-type": "forwarder | ssrc-rewrite"
         },
     "data": {},
-    "idleTimeout": <90> // seconds
+    "idleTimeout": 90 // seconds
 }
 ```
 
@@ -62,7 +62,7 @@ POST /conferences/{conferenceId}/{endpointId}
         "dtls": {
             "setup": "actpass",
             "type": "sha-256",
-            "hash": String
+            "hash": "8F:C2:B8:3F:07:53:0C:F5:07:EF:EC:EB:93:DF:4E:7A:1B:E1:11:A8:A9:7B:9F:EE:86:EE:BD:05:77:83:CD:D2"
         },
         "sdes":[ // omitted if dtls is used
             {
@@ -74,19 +74,19 @@ POST /conferences/{conferenceId}/{endpointId}
                 "key" : "SGVsbG8gYmFzZTY0IHdvcmxkIQ=="
             }],
         "ice": {
-            "ufrag": String,
-            "pwd": String,
+            "ufrag": "wX4aN8AyMUVadg",
+            "pwd": "4cLWhgmLHtYZgncvuopUh+3r",
             "candidates": [
                 {
-                    "foundation": String,
-                    "component": Integer,
-                    "protocol": String,
-                    "priority": Long,
-                    "ip": String,
-                    "port": Integer,
-                    "type": String,
-                    "generation": Integer,
-                    "network": Integer
+                    "foundation": "716080445600",
+                    "component": 1,
+                    "protocol": "udp",
+                    "priority": 142541055,
+                    "ip": "35.240.205.93",
+                    "port": 10000,
+                    "type": "host",
+                    "generation": 0,
+                    "network": 1
                 }
             ]
         }
@@ -103,7 +103,7 @@ POST /conferences/{conferenceId}/{endpointId}
             "clockrate": 48000,
             "channels": 2
         },
-        "ssrcs": [int, int],
+        "ssrcs": [1234, 355667],
         "rtp-hdrexts": [
             {
                 "id": 1,
@@ -146,15 +146,22 @@ POST /conferences/{conferenceId}/{endpointId}
             }
         ],
         "streams": [
-            {
+             {
+                "content": "local",
                 "sources": [
                     {
-                        "main": Integer,
-                        "feedback": Integer
+                        "main": 4279327125
                     }
-                ],
-                "id": "Nuxr31v1qPvNIGkNDBvEar2FX298cQHO6jmi",
-                "content": "video|slides|local"
+                ]
+            },
+            {
+                "content": "video|slides",
+                "sources": [
+                    {
+                        "feedback": 1908157291,
+                        "main": 827879182
+                    }
+                ]
             }
         ],
         "rtp-hdrexts": [
@@ -227,8 +234,7 @@ POST /conferences/{conferenceId}/{endpointId}
             "clockrate": 48000,
             "channels": 2
         },
-        "ssrcs": [int, int
-        ],
+        "ssrcs": [122312, 44634783],
         "rtp-hdrexts": [
             {
                 "id": 1,
@@ -272,8 +278,8 @@ PUT /conferences/{conferenceId}/{endpointId}
             "setup": [
                 "active | passive"
             ],
-            "type": String,
-            "hash": String
+            "type": "sha-256 | sha1",
+            "hash": "8F:C2:B8:3F:07:53:0C:F5:07:EF:EC:EB:93:DF:4E:7A:1B:E1:11:A8:A9:7B:9F:EE:86:EE:BD:05:77:83:CD:D2"
         },
         "sdes":{ // omit if dtls is used
             "profile": "AES_128_CM_HMAC_SHA1_80",
@@ -359,7 +365,6 @@ PUT /conferences/{conferenceId}/{endpointId}
                         "feedback": 4321
                     }
                 ],
-                "id": "Nuxr31v1qPvNIGkNDBvEar2FX298cQHO6jmi",
                 "content": "video|slides|local"
             }
         ],
