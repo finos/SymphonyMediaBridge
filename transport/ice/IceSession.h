@@ -234,7 +234,9 @@ private:
         void onDisconnect();
         void nominate(uint64_t now);
         void freeze();
-        void failCandidate();
+        void failCandidate(IceError reason);
+
+        IceError getReason() const { return _errorCode; }
 
         // ns
         uint64_t getRtt() const { return _minRtt; }

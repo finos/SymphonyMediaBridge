@@ -108,7 +108,7 @@ void TimeTurner::runFor(uint64_t durationNs)
                 break;
             }
 
-            // release worker threads to unlock the wait in case it is a sempahore they are waiting for
+            // release worker threads to unlock the wait in case it is a semaphore they are waiting for
             advance(16);
         }
 

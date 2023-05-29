@@ -832,13 +832,13 @@ bool IceSession::isGatherComplete(uint64_t now)
 
 uint64_t IceSession::getMaxStunServerCandidateAge(uint64_t now) const
 {
-    uint64_t oldestSrflxCandidate = 0;
+    int64_t oldestSrflxCandidate = 0;
     for (auto& candidatePair : _candidatePairs)
     {
         if (candidatePair->gatheringProbe && candidatePair->state == CandidatePair::Succeeded &&
             candidatePair->remoteCandidate.type == IceCandidate::Type::RELAY)
         {
-            oldestSrflxCandidate = std::max(oldestSrflxCandidate, now - candidatePair->startTime);
+            oldestSrflxCandidate = std::max(oldestSrflxCandidate, utils::Time::diff(candidatePair->startTime, now));
         }
     }
     return oldestSrflxCandidate;
@@ -873,13 +873,17 @@ bool IceSession::isIceComplete(const uint64_t now)
     {
         return false;
     }
-    if (now - _sessionStart > _config.connectTimeout * utils::Time::ms)
+    if (utils::Time::diffGT(_sessionStart, now, _config.connectTimeout * utils::Time::ms))
     {
         return true;
     }
 
-    if (failCount > 0 && failCount == _checklist.size())
+    // if all candidates failed, it could be that we just had unreachable HOST candidates. Give it some time for a PRFLX
+    // to show up.
+    if (failCount > 0 && failCount == _checklist.size() &&
+        probeAge > static_cast<int64_t>(_config.additionalCandidateTimeout * utils::Time::ms))
     {
+        logger::debug("all candidates failed", _logId.c_str());
         return true;
     }
     return false;
@@ -926,7 +930,7 @@ void IceSession::nominate(const uint64_t now)
             {
                 nominee = ct;
             }
-            else if (now - ct->startTime > _config.additionalCandidateTimeout * utils::Time::ms)
+            else if (utils::Time::diffGT(ct->startTime, now, _config.additionalCandidateTimeout * utils::Time::ms))
             {
                 nominee = ct;
             }
@@ -1051,7 +1055,7 @@ int64_t IceSession::processTimeout(const uint64_t now)
                     now,
                     _config.keepAliveInterval * 2 * utils::Time::ms))
             {
-                candidatePair->failCandidate();
+                candidatePair->failCandidate(IceError::ConnectionTimeoutOrFailure);
                 if (_eventSink)
                 {
                     _eventSink->onIceDiscardCandidate(this,
@@ -1192,15 +1196,7 @@ int64_t IceSession::CandidatePair::nextTimeout(uint64_t now) const
         return -1;
     }
 
-    int64_t timeout = nextTransmission - now;
-    if (timeout > 0)
-    {
-        return timeout;
-    }
-    else
-    {
-        return 0;
-    }
+    return std::max(int64_t(0), utils::Time::diff(now, nextTransmission));
 }
 
 void IceSession::CandidatePair::restartProbe(const uint64_t now)
@@ -1333,7 +1329,7 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
         }
     }
 
-    transaction->rtt = now - transaction->time;
+    transaction->rtt = std::max(int64_t(0), utils::Time::diff(transaction->time, now));
     _minRtt = std::min(transaction->rtt, _minRtt);
 
     auto errorAttribute = response.getAttribute<StunError>(StunAttribute::ERROR_CODE);
@@ -1348,9 +1344,8 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
         }
         else
         {
-            failCandidate();
+            failCandidate(static_cast<IceError>(errorAttribute->getCode()));
             state = CandidatePair::Failed;
-            _errorCode = static_cast<IceError>(errorAttribute->getCode());
             ++_replies;
         }
         return;
@@ -1369,8 +1364,7 @@ void IceSession::CandidatePair::onRequest(uint64_t timestamp, const StunMessage&
 
 void IceSession::CandidatePair::onDisconnect()
 {
-    failCandidate();
-    _errorCode = IceError::ConnectionTimeoutOrFailure;
+    failCandidate(IceError::ConnectionTimeoutOrFailure);
     return;
 }
 
@@ -1387,13 +1381,15 @@ void IceSession::CandidatePair::freeze()
     cancelPendingTransactions();
 }
 
-void IceSession::CandidatePair::failCandidate()
+void IceSession::CandidatePair::failCandidate(IceError reason)
 {
-    logger::debug("candidate failed %s-%s",
+    logger::debug("candidate failed %s-%s, reason %u",
         _name.c_str(),
         localCandidate.address.toString().c_str(),
-        remoteCandidate.address.toString().c_str());
+        remoteCandidate.address.toString().c_str(),
+        reason);
     state = State::Failed;
+    _errorCode = reason;
     cancelPendingTransactions();
 }
 
@@ -1442,10 +1438,10 @@ void IceSession::CandidatePair::processTimeout(const uint64_t now)
     {
         return;
     }
-    if (gatheringProbe && state == InProgress && now - startTime > _config.gather.probeTimeout * utils::Time::ms)
+    if (gatheringProbe && state == InProgress &&
+        utils::Time::diffGT(startTime, now, _config.gather.probeTimeout * utils::Time::ms))
     {
-        failCandidate();
-        _errorCode = IceError::RequestTimeout;
+        failCandidate(IceError::RequestTimeout);
         return;
     }
 
@@ -1461,13 +1457,13 @@ void IceSession::CandidatePair::processTimeout(const uint64_t now)
     if (state == InProgress)
     {
         if (remoteCandidate.type == IceCandidate::Type::HOST &&
-            now - startTime > _config.hostProbeTimeout * utils::Time::ms)
+            utils::Time::diffGT(startTime, now, _config.hostProbeTimeout * utils::Time::ms))
         {
-            failCandidate();
+            failCandidate(IceError::RequestTimeout);
         }
-        else if (now - startTime > _config.reflexiveProbeTimeout * utils::Time::ms)
+        else if (utils::Time::diffGT(startTime, now, _config.reflexiveProbeTimeout * utils::Time::ms))
         {
-            failCandidate();
+            failCandidate(IceError::RequestTimeout);
         }
     }
 }
