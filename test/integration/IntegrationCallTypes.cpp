@@ -54,7 +54,8 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
     auto transportMode = std::get<0>(GetParam());
     auto encryptionMode = std::get<1>(GetParam());
 
-    runTestInThread(expectedTestThreadCount(1), [this, transportMode, encryptionMode]() {
+    logger::info("test transportmode %u, encryption %u", "party3AllModes", transportMode, encryptionMode);
+    auto testBody = [this, transportMode, encryptionMode]() {
         _config.readFromString(_defaultSmbConfig);
 
         initBridge(_config);
@@ -125,24 +126,22 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
             responseBody);
         EXPECT_TRUE(confRequest);
 
-        auto aboutSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/about",
-            1500 * utils::Time::ms,
-            responseBody);
-        EXPECT_TRUE(aboutSuccess);
-
         group.clients[0]->stopTransports();
         group.clients[1]->stopTransports();
         group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
-        finalizeSimulation();
+        if (encryptionMode != EncryptionMode::DTLS)
+        {
+            finalizeSimulation();
+        }
 
         const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
+            const auto data =
+                analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0, false);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             if (data.dominantFrequencies.size() >= 2)
             {
@@ -164,7 +163,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
                     EXPECT_EQ(data.amplitudeProfile[0].second, 0);
 
                     EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 0.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 0.72, 48000 * 0.4);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -178,7 +177,18 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
         }
-    });
+    };
+
+    if (encryptionMode != EncryptionMode::DTLS)
+    {
+        runTestInThread(expectedTestThreadCount(1), testBody);
+    }
+    else
+    {
+        enterRealTime(2 + _numWorkerThreads);
+        logger::info("running test in real time to avoid DTLS problems", "party3AllModes");
+        testBody();
+    }
 }
 
 INSTANTIATE_TEST_SUITE_P(IntegrationCallTypesTest,

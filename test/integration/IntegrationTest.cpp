@@ -323,3 +323,12 @@ void IntegrationTest::finalizeSimulation()
 {
     finalizeSimulationWithTimeout(0);
 }
+
+void IntegrationTest::enterRealTime(size_t expectedThreadCount, const uint64_t timeout)
+{
+    _timeSource.waitForThreadsToSleep(expectedThreadCount, timeout);
+    utils::Time::initialize();
+
+    // release all sleeping threads into real time to finish the test
+    _timeSource.shutdown();
+}

@@ -154,6 +154,8 @@ struct IntegrationTest : public ::testing::Test
         return (1 + smbCount) * (_numWorkerThreads + 3) + smbCount;
     }
 
+    void enterRealTime(size_t expectedThreadCount, uint64_t timeout = 4 * utils::Time::sec);
+
 public:
     static bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint);
     static std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(emulator::HttpdFactory* httpd,

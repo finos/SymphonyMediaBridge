@@ -448,7 +448,8 @@ public:
             auto it = _videoSsrcMap.find(rtpHeader->ssrc.get());
             if (it == _videoSsrcMap.end())
             {
-                if (_remoteVideoSsrc.find(rtpHeader->ssrc.get()) == _remoteVideoSsrc.end())
+                if (_remoteVideoSsrc.find(rtpHeader->ssrc.get()) == _remoteVideoSsrc.end() &&
+                    _callConfig.relayType != "forwarded")
                 {
                     logger::warn("unexpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
                 }
