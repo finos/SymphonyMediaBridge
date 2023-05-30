@@ -39,10 +39,14 @@ namespace bridge
 class MixerManagerMainJob : public jobmanager::MultiStepJob
 {
 public:
-    MixerManagerMainJob(MixerManager& mixerManager, std::atomic_bool& running, utils::Pacer& statsRefreshPacer)
+    MixerManagerMainJob(MixerManager& mixerManager,
+        std::atomic_bool& running,
+        utils::Pacer& statsRefreshPacer,
+        std::atomic_bool& maintenanceRunning)
         : _mixerManager(mixerManager),
           _running(running),
-          _statsPacer(statsRefreshPacer)
+          _statsPacer(statsRefreshPacer),
+          _maintenanceRunning(maintenanceRunning)
     {
         _statsPacer.tick(utils::Time::getAbsoluteTime());
     }
@@ -69,10 +73,13 @@ public:
         return _running.load();
     }
 
+    ~MixerManagerMainJob() { _maintenanceRunning = false; }
+
 private:
     MixerManager& _mixerManager;
     std::atomic_bool& _running;
     utils::Pacer& _statsPacer;
+    std::atomic_bool& _maintenanceRunning;
 };
 
 MixerManager::MixerManager(utils::IdGenerator& idGenerator,
@@ -100,7 +107,8 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
 {
     _mixers.reserve(512);
     _engine.setMessageListener(this);
-    _backgroundJobQueue.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer);
+    _maintenanceRunning = true;
+    _backgroundJobQueue.addJob<MixerManagerMainJob>(*this, _running, _statsRefreshPacer, _maintenanceRunning);
 }
 
 MixerManager::~MixerManager()
@@ -276,17 +284,18 @@ void MixerManager::stop()
             break;
     }
 
+    _running = false; // signal to pending jobs we are not running anymore
+
     std::atomic_bool jobsDone(false);
     _backgroundJobQueue.post([&jobsDone]() { jobsDone = true; });
     for (;; usleep(10000))
     {
-        if (jobsDone)
+        if (jobsDone && !_maintenanceRunning.load())
         {
             break;
         }
     }
 
-    _running = false;
     logger::info("MixerManager thread stopped", "MixerManager");
 }
 
@@ -294,6 +303,10 @@ void MixerManager::maintenance(uint64_t timestamp)
 {
     try
     {
+        if (!_running)
+        {
+            return;
+        }
         _transportFactory.maintenance(timestamp);
         updateStats();
     }

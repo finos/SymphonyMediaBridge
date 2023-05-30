@@ -72,7 +72,7 @@ private:
     std::unique_ptr<jobmanager::TimerQueue> _timers;
     const std::unique_ptr<jobmanager::JobManager> _rtJobManager;
     const std::unique_ptr<jobmanager::JobManager> _backgroundJobQueue;
-    std::unique_ptr<jobmanager::WorkerThread> backgroundWorker;
+    std::unique_ptr<jobmanager::WorkerThread> _backgroundWorker;
 
     std::vector<transport::SocketAddress> _localInterfaces;
     const std::unique_ptr<transport::SslDtls> _sslDtls;
