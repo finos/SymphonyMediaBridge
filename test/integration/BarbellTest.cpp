@@ -19,6 +19,7 @@
 #include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/ApiChannel.h"
 #include "test/integration/emulator/AudioSource.h"
+#include "test/integration/emulator/Barbell.h"
 #include "test/integration/emulator/HttpRequests.h"
 #include "test/integration/emulator/Httpd.h"
 #include "test/integration/emulator/SfuClient.h"
@@ -112,6 +113,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             0);
         group.add(_httpd);
@@ -179,9 +181,9 @@ TEST_F(BarbellTest, packetLossViaBarbell)
 
         utils::Time::nanoSleep(utils::Time::ms * 1000); // let pending packets be sent and received)
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.disconnectClients();
 
@@ -196,7 +198,7 @@ TEST_F(BarbellTest, packetLossViaBarbell)
         // video streams only. So let's check SfuClient NACK-related stats instead:
 
         const auto stats = group.clients[0]->getCumulativeRtxStats();
-        auto videoCounters = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
+        auto videoCounters = group.clients[0]->getCumulativeVideoReceiveCounters();
 
         // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
         // have been ignored. So we might expect small number of videoCounters.lostPackets.
@@ -217,12 +219,12 @@ TEST_F(BarbellTest, packetLossViaBarbell)
             std::string clientName = "Client-" + std::to_string(id + 1);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
-            const auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
-            group.clients[id]->_transport->getReportSummary(transportSummary);
+            const auto videoReceiveStats = group.clients[id]->getCumulativeVideoReceiveCounters();
+            group.clients[id]->getReportSummary(transportSummary);
 
             logger::debug("%s received video pkts %" PRIu64, "bbTest", clientName.c_str(), videoReceiveStats.packets);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             auto allStreamsVideoStats = group.clients[id]->getActiveVideoDecoderStats();
             EXPECT_EQ(allStreamsVideoStats.size(), 2);
@@ -272,6 +274,7 @@ TEST_F(BarbellTest, simpleBarbell)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             1);
         group.add(&httpd2);
@@ -327,9 +330,9 @@ TEST_F(BarbellTest, simpleBarbell)
 
         utils::Time::nanoSleep(utils::Time::ms * 1000); // let pending packets be sent and received)
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -350,14 +353,14 @@ TEST_F(BarbellTest, simpleBarbell)
 
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
-        auto videoReceiveStats = group.clients[0]->_transport->getCumulativeVideoReceiveCounters();
-        group.clients[1]->_transport->getReportSummary(transportSummary1);
-        group.clients[2]->_transport->getReportSummary(transportSummary2);
+        auto videoReceiveStats = group.clients[0]->getCumulativeVideoReceiveCounters();
+        group.clients[1]->getReportSummary(transportSummary1);
+        group.clients[2]->getReportSummary(transportSummary2);
 
         logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
         logVideoReceive("client1", *group.clients[0]);
-        logTransportSummary("client2", group.clients[1]->_transport.get(), transportSummary1);
-        logTransportSummary("client3", group.clients[2]->_transport.get(), transportSummary2);
+        logTransportSummary("client2", transportSummary1);
+        logTransportSummary("client3", transportSummary2);
 
         auto allStreamsVideoStats = group.clients[0]->getActiveVideoDecoderStats();
         EXPECT_EQ(allStreamsVideoStats.size(), 2);
@@ -400,6 +403,7 @@ TEST_F(BarbellTest, barbellAfterClients)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             1);
         group.add(&httpd2);
@@ -466,8 +470,8 @@ TEST_F(BarbellTest, barbellAfterClients)
         EXPECT_TRUE(confRequest);
 
         utils::Time::nanoSleep(utils::Time::ms * 200); // let pending packets be sent and received
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
 
@@ -493,12 +497,12 @@ TEST_F(BarbellTest, barbellAfterClients)
             std::string clientName = "Client-" + std::to_string(id + 1);
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
-            auto videoReceiveStats = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
-            group.clients[id]->_transport->getReportSummary(transportSummary);
+            auto videoReceiveStats = group.clients[id]->getCumulativeVideoReceiveCounters();
+            group.clients[id]->getReportSummary(transportSummary);
 
             logger::debug("%s received video pkts %" PRIu64, "bbTest", clientName.c_str(), videoReceiveStats.packets);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             auto allStreamsVideoStats = group.clients[id]->getActiveVideoDecoderStats();
             EXPECT_EQ(allStreamsVideoStats.size(), 1);
@@ -540,6 +544,7 @@ TEST_F(BarbellTest, barbellNeighbours)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
         group.add(&httpd2);
@@ -596,9 +601,9 @@ TEST_F(BarbellTest, barbellNeighbours)
 
         utils::Time::nanoSleep(utils::Time::ms * 1000); // let pending packets be sent and received)
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -611,8 +616,8 @@ TEST_F(BarbellTest, barbellNeighbours)
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
-            group.clients[id]->_transport->getReportSummary(transportSummary);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);

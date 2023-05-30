@@ -95,6 +95,7 @@ private:
 
     std::unordered_map<std::string, std::shared_ptr<Mixer>> _mixers;
 
+    std::atomic_bool _maintenanceRunning;
     std::atomic<bool> _running;
     utils::Pacer _statsRefreshPacer;
     std::mutex _configurationLock;

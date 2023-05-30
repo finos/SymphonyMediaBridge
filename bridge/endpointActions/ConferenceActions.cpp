@@ -565,7 +565,7 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
             }
         }
 
-        if (transport.dtls.isSet())
+        if (transport.dtls.isSet() && !transport.dtls.get().hash.empty())
         {
             const auto& dtls = transport.dtls.get();
             const bool isRemoteSideDtlsClient = dtls.isClient();
@@ -586,6 +586,10 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         }
         else
         {
+            if (!mixer.getConfig().enableSrtpNullCipher)
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Null cipher not allowed");
+            }
             if (!mixer.configureAudioStreamTransportDisableSrtp(endpointId))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -685,10 +689,10 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
             }
         }
 
-        if (transport.dtls.isSet())
+        if (transport.dtls.isSet() && !transport.dtls.get().hash.empty())
         {
             const auto& dtls = transport.dtls.get();
-            const bool isRemoteSideDtlsClient = dtls.isClient() == 0;
+            const bool isRemoteSideDtlsClient = dtls.isClient();
 
             if (!mixer.configureVideoStreamTransportDtls(endpointId, dtls.type, dtls.hash, !isRemoteSideDtlsClient))
             {
@@ -706,6 +710,11 @@ void configureVideoEndpoint(const api::EndpointDescription& endpointDescription,
         }
         else
         {
+            if (!mixer.getConfig().enableSrtpNullCipher)
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Null cipher not allowed");
+            }
+
             if (!mixer.configureVideoStreamTransportDisableSrtp(endpointId))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -778,7 +787,7 @@ httpd::Response configureEndpoint(ActionContext* context,
             }
         }
 
-        if (transport.dtls.isSet())
+        if (transport.dtls.isSet() && !transport.dtls.get().hash.empty())
         {
             const auto& dtls = transport.dtls.get();
             const bool isRemoteSideDtlsClient = dtls.isClient();
@@ -792,6 +801,14 @@ httpd::Response configureEndpoint(ActionContext* context,
         else if (!transport.sdesKeys.empty())
         {
             mixer->configureBundleTransportSdes(endpointId, transport.sdesKeys[0]);
+        }
+        else
+        {
+            if (!mixer->getConfig().enableSrtpNullCipher)
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Null cipher not allowed");
+            }
+            mixer->configureBundleTransportSdes(endpointId, srtp::AesKey());
         }
 
         if (!mixer->startBundleTransport(endpointId))

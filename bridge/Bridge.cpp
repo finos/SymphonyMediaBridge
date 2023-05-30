@@ -110,9 +110,9 @@ Bridge::~Bridge()
         logger::info("stopped workerThread %d", "main", n++);
     }
 
-    if (backgroundWorker)
+    if (_backgroundWorker)
     {
-        backgroundWorker->stop();
+        _backgroundWorker->stop();
     }
 }
 
@@ -167,7 +167,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
     // Disabling yield because we don't want to yield jobs that holds mixer and MixerManager locks, otherwise it can
     // create deadlocks
     const bool yieldEnabled = false;
-    backgroundWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, yieldEnabled, "MMWorker");
+    _backgroundWorker = std::make_unique<jobmanager::WorkerThread>(*_backgroundJobQueue, yieldEnabled, "MMWorker");
 
     if (!_sslDtls->isInitialized())
     {

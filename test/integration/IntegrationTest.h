@@ -7,6 +7,7 @@
 #include "test/integration/FFTanalysis.h"
 #include "test/integration/emulator/Httpd.h"
 #include "test/integration/emulator/SfuClient.h"
+#include "test/integration/emulator/SfuGroupCall.h"
 #include "transport/EndpointFactory.h"
 #include "transport/RtcTransport.h"
 #include "utils/Pacer.h"
@@ -67,7 +68,7 @@ void logVideoReceive(const char* clientName, T& client)
 }
 
 template <typename T>
-void logTransportSummary(const char* clientName, transport::RtcTransport* transport, T& summary)
+void logTransportSummary(const char* clientName, T& summary)
 {
     for (auto& report : summary)
     {
@@ -75,10 +76,9 @@ void logTransportSummary(const char* clientName, transport::RtcTransport* transp
             (125 * (report.second.rtpTimestamp - report.second.initialRtpTimestamp));
 
         const char* modality = (report.second.rtpFrequency == 90000 ? "video" : "audio");
-        logger::debug("%s %s ssrc %u sent %s pkts %u, %" PRIu64 " kbps",
+        logger::debug("%s ssrc %u sent %s pkts %u, %" PRIu64 " kbps",
             "Test",
             clientName,
-            transport->getLoggableId().c_str(),
             report.first,
             modality,
             report.second.packetsSent,
@@ -122,6 +122,7 @@ struct IntegrationTest : public ::testing::Test
 
     std::vector<transport::SocketAddress> _smbInterfaces;
     std::unique_ptr<transport::TransportFactory> _clientTransportFactory;
+    std::unique_ptr<transport::TransportFactory> _publicTransportFactory;
     std::shared_ptr<fakenet::InternetRunner> _internet;
     std::shared_ptr<transport::EndpointFactory> _bridgeEndpointFactory;
     std::shared_ptr<transport::EndpointFactory> _clientsEndpointFactory;
@@ -153,6 +154,8 @@ struct IntegrationTest : public ::testing::Test
         return (1 + smbCount) * (_numWorkerThreads + 3) + smbCount;
     }
 
+    void enterRealTime(size_t expectedThreadCount, uint64_t timeout = 4 * utils::Time::sec);
+
 public:
     static bool isActiveTalker(const std::vector<api::ConferenceEndpoint>& endpoints, const std::string& endpoint);
     static std::vector<api::ConferenceEndpoint> getConferenceEndpointsInfo(emulator::HttpdFactory* httpd,
@@ -169,7 +172,7 @@ public:
         bool dumpPcmData = false)
     {
         constexpr auto AUDIO_PACKET_SAMPLE_COUNT = codec::Opus::sampleRate / codec::Opus::packetsPerSecond;
-        auto audioCounters = client->_transport->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        auto audioCounters = client->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
         EXPECT_EQ(audioCounters.lostPackets, 0);
 
         const auto& data = client->getAudioReceiveStats();
@@ -285,6 +288,30 @@ void make5secCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClient
     }
 
     groupCall.run(utils::Time::sec * 5);
+    utils::Time::nanoSleep(utils::Time::sec * 1);
+
+    for (auto& client : groupCall.clients)
+    {
+        client->stopRecording();
+    }
+}
+
+template <typename TChannel>
+void makeShortCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClient<TChannel>>& groupCall,
+    uint64_t duration)
+{
+    static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
+    for (size_t i = 0; i < groupCall.clients.size(); ++i)
+    {
+        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
+    }
+
+    for (auto& client : groupCall.clients)
+    {
+        client->_audioSource->setVolume(0.6);
+    }
+
+    groupCall.run(duration);
     utils::Time::nanoSleep(utils::Time::sec * 1);
 
     for (auto& client : groupCall.clients)

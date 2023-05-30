@@ -34,25 +34,6 @@ std::string newIdString()
     return uuid;
 }
 
-void Conference::create(const std::string& baseUrl, bool useGlobalPort)
-{
-    assert(_success == false);
-
-    nlohmann::json responseBody;
-    nlohmann::json requestBody = {{"last-n", 9}, {"global-port", useGlobalPort}};
-
-    _success = awaitResponse<HttpPostRequest>(_httpd,
-        baseUrl + "/conferences",
-        requestBody.dump().c_str(),
-        3 * utils::Time::sec,
-        responseBody);
-
-    if (_success)
-    {
-        _id = responseBody["id"].get<std::string>();
-    }
-}
-
 BaseChannel::BaseChannel(emulator::HttpdFactory* httpd)
     : _httpd(httpd),
       _id(newGuuid()),
@@ -79,7 +60,7 @@ void BaseChannel::setRemoteIce(transport::RtcTransport& transport,
             ice::IceCandidate::Type::HOST,
             ice::TcpType::PASSIVE);
 
-        if (skipIpv6 && candidate.address.getFamily() == AF_INET6)
+        if (!_callConfig.enableIpv6 && candidate.address.getFamily() == AF_INET6)
         {
             _ipv6RemoteCandidates.push_back(candidate);
             continue;
@@ -91,6 +72,12 @@ void BaseChannel::setRemoteIce(transport::RtcTransport& transport,
     std::pair<std::string, std::string> credentials;
     credentials.first = bundle[candidatesGroupName]["ufrag"];
     credentials.second = bundle[candidatesGroupName]["pwd"];
+
+    logger::info("client %s remote ICE for %s, %s",
+        "Channel",
+        transport.getLoggableId().c_str(),
+        credentials.first.c_str(),
+        credentials.second.c_str());
 
     transport.setRemoteIce(credentials, candidates, allocator);
 }

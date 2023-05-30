@@ -192,7 +192,7 @@ public: // Transport
 private: // SslWriteBioListener
     // Called from Transport serial thread
     int32_t sendDtls(const char* buffer, uint32_t length) override;
-    void onDtlsStateChange(SrtpClient* srtpClient, SrtpClient::State state) override;
+    void onSrtpStateChange(SrtpClient* srtpClient, SrtpClient::State state) override;
 
     /** Called from transport's serial jobmanager */
     void onIceStateChanged(ice::IceSession* session, ice::IceSession::State state) override;

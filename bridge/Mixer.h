@@ -293,6 +293,8 @@ public:
 
     EngineMixer* getEngineMixer() { return _engineMixer.get(); }
 
+    const config::Config& getConfig() const { return _config; }
+
 private:
     struct BundleTransport
     {

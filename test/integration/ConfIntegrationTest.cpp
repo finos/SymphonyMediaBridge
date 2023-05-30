@@ -50,6 +50,7 @@ TEST_F(IntegrationTest, plain)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -102,9 +103,9 @@ TEST_F(IntegrationTest, plain)
             responseBody);
         EXPECT_TRUE(aboutCapabilitiesSuccess);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -141,8 +142,8 @@ TEST_F(IntegrationTest, plain)
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
-            group.clients[id]->_transport->getReportSummary(transportSummary);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
@@ -163,6 +164,7 @@ TEST_F(IntegrationTest, ptime10)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -196,9 +198,9 @@ TEST_F(IntegrationTest, ptime10)
             responseBody);
         EXPECT_TRUE(confRequest);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -250,6 +252,7 @@ TEST_F(IntegrationTest, detectIsPtt)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -388,9 +391,9 @@ TEST_F(IntegrationTest, detectIsPtt)
         group.clients[1]->stopRecording();
         group.clients[0]->stopRecording();
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
 
@@ -415,6 +418,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -442,17 +446,17 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(3, endpoints.size());
 
-        group.clients[2]->_transport->stop();
+        group.clients[2]->stopTransports();
         group.run(utils::Time::sec * 11);
         endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(2, endpoints.size());
 
-        group.clients[1]->_transport->stop();
+        group.clients[1]->stopTransports();
         group.run(utils::Time::sec * 11);
         endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(1, endpoints.size());
 
-        group.clients[0]->_transport->stop();
+        group.clients[0]->stopTransports();
         group.run(utils::Time::sec * 11);
         endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(1, endpoints.size());
@@ -530,6 +534,7 @@ TEST_F(IntegrationTest, conferencePort)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -549,7 +554,7 @@ TEST_F(IntegrationTest, conferencePort)
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-        const auto smbPort = group.clients[0]->_transport->getRemotePeer();
+        const auto smbPort = group.clients[0]->_bundleTransport->getRemotePeer();
         EXPECT_NE(smbPort.getPort(), 10000);
         make5secCallWithDefaultAudioProfile(group);
 
@@ -566,9 +571,9 @@ TEST_F(IntegrationTest, conferencePort)
             responseBody);
         EXPECT_TRUE(confRequest);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -605,8 +610,8 @@ TEST_F(IntegrationTest, conferencePort)
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
-            group.clients[id]->_transport->getReportSummary(transportSummary);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
@@ -627,6 +632,7 @@ TEST_F(IntegrationTest, neighbours)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             4);
 
@@ -680,8 +686,8 @@ TEST_F(IntegrationTest, neighbours)
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
-            group.clients[id]->_transport->getReportSummary(transportSummary);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
@@ -732,6 +738,7 @@ TEST_F(IntegrationTest, endpointMessage)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -783,8 +790,8 @@ TEST_F(IntegrationTest, endpointMessage)
         logger::flushLog();
         EXPECT_EQ(endpointMessageCount, 1);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -806,6 +813,7 @@ TEST_F(IntegrationTest, noAudioLevelExt)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -882,6 +890,7 @@ TEST_F(IntegrationTest, confList)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -949,9 +958,9 @@ TEST_F(IntegrationTest, confList)
         EXPECT_TRUE(briefConfRequest);
         EXPECT_TRUE(responseBody.size() == 1);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -988,8 +997,8 @@ TEST_F(IntegrationTest, confList)
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
-            group.clients[id]->_transport->getReportSummary(transportSummary);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);
@@ -1013,6 +1022,7 @@ TEST_F(IntegrationTest, opusDecodeRate)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -1089,6 +1099,7 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -1130,8 +1141,8 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
         }
         EXPECT_EQ(1, dominantSpeakerCount);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
 
@@ -1167,6 +1178,7 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -1197,9 +1209,9 @@ TEST_F(IntegrationTest, audioOnlyNoPadding)
         group.clients[1]->stopRecording();
         group.clients[0]->stopRecording();
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -1228,6 +1240,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -1238,7 +1251,7 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
         group.startConference(conf, baseUrl);
 
-        using RtpVideoReceiver = typename SfuClient<Channel>::RtpVideoReceiver;
+        using RtpVideoReceiver = typename emulator::RtpVideoReceiver;
 
         emulator::CallConfigBuilder config(conf.getId());
         config.withOpus().withVideo().disableRtx().url(baseUrl);
@@ -1257,9 +1270,9 @@ TEST_F(IntegrationTest, paddingOffWhenRtxNotProvided)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -1343,6 +1356,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -1385,7 +1399,7 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         }
 
         group.clients[1]->stopRecording();
-        group.clients[1]->_transport->stop();
+        group.clients[1]->stopTransports();
 
         // Video producer (client2) stopped, waiting 1.5s for rctl.cooldownInterval timeout to take effect
         // (configured for 1 s for this test).
@@ -1416,8 +1430,8 @@ TEST_F(IntegrationTest, videoOffPaddingOff)
         group.clients[0]->stopRecording();
         group.clients[2]->stopRecording();
 
-        group.clients[0]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -1464,6 +1478,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -1484,8 +1499,8 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -1497,7 +1512,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
             // Can't rely on cumulative audio stats, since it might happen that all the losses were happening to
             // video streams only. So let's check SfuClient NACK-related stats instead:
             const auto stats = group.clients[id]->getCumulativeRtxStats();
-            auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+            auto videoCounters = group.clients[id]->getCumulativeVideoReceiveCounters();
             cumulativeStats += stats;
 
             // Could happen that a key frame was sent after the packet that would be lost, in this case NACK would
@@ -1508,7 +1523,7 @@ TEST_F(IntegrationTest, packetLossVideoRecoveredViaNack)
                 // video streams only. So let's check SfuClient NACK-related stats instead:
 
                 const auto stats = group.clients[id]->getCumulativeRtxStats();
-                auto videoCounters = group.clients[id]->_transport->getCumulativeVideoReceiveCounters();
+                auto videoCounters = group.clients[id]->getCumulativeVideoReceiveCounters();
 
                 // Could happen that a key frame was sent after the packet that would be lost, in this case NACK
                 // would have been ignored. So we might expect small number of videoCounters.lostPackets.

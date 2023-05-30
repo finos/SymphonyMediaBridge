@@ -117,7 +117,7 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
         logger::info("Setting empty fingerprint. Disabling DTLS.", _loggableId.c_str());
         if (_eventSink)
         {
-            _eventSink->onDtlsStateChange(this, _state);
+            _eventSink->onSrtpStateChange(this, _state);
         }
         return;
     }
@@ -142,7 +142,7 @@ void SrtpClient::setRemoteDtlsFingerprint(const std::string& fingerprintType,
 
     if (_eventSink)
     {
-        _eventSink->onDtlsStateChange(this, _state);
+        _eventSink->onSrtpStateChange(this, _state);
     }
 
     for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
@@ -191,7 +191,7 @@ void SrtpClient::dtlsHandShake()
 
     if (_eventSink)
     {
-        _eventSink->onDtlsStateChange(this, _state);
+        _eventSink->onSrtpStateChange(this, _state);
     }
 
     for (memory::UniquePacket packet; _state == State::CONNECTING && _pendingPackets.pop(packet);)
@@ -254,7 +254,7 @@ int64_t SrtpClient::processTimeout()
             _state = State::FAILED;
             if (_eventSink)
             {
-                _eventSink->onDtlsStateChange(this, _state);
+                _eventSink->onSrtpStateChange(this, _state);
             }
 
             return -1;
@@ -477,7 +477,7 @@ void SrtpClient::sslRead()
 
             if (_eventSink)
             {
-                _eventSink->onDtlsStateChange(this, _state);
+                _eventSink->onSrtpStateChange(this, _state);
             }
         }
     }
@@ -731,7 +731,7 @@ void SrtpClient::onMessageReceived(memory::UniquePacket packet)
     if (_eventSink)
     {
         logger::info("negotiated version %s", _loggableId.c_str(), SSL_get_version(_ssl));
-        _eventSink->onDtlsStateChange(this, _state);
+        _eventSink->onSrtpStateChange(this, _state);
     }
 }
 
@@ -847,6 +847,12 @@ void SrtpClient::setRemoteKey(const srtp::AesKey& key)
     {
         _state = State::CONNECTED;
         _mode = srtp::Mode::NULL_CIPHER;
+        logger::debug("SRTP connected with null cipher", _loggableId.c_str());
+        if (_eventSink)
+        {
+            _eventSink->onSrtpStateChange(this, _state);
+        }
+        return;
     }
 
     if (!createSrtp(key))
@@ -855,6 +861,10 @@ void SrtpClient::setRemoteKey(const srtp::AesKey& key)
     }
     _state = State::CONNECTED;
     logger::debug("SRTP connected with SDES", _loggableId.c_str());
+    if (_eventSink)
+    {
+        _eventSink->onSrtpStateChange(this, _state);
+    }
 }
 
 } // namespace transport

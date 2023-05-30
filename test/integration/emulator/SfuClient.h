@@ -18,6 +18,7 @@
 #include "rtp/RtcpHeader.h"
 #include "test/integration/emulator/ApiChannel.h"
 #include "test/integration/emulator/CallConfigBuilder.h"
+#include "test/integration/emulator/SfuClientReceivers.h"
 #include "test/transport/FakeNetwork.h"
 #include "transport/DataReceiver.h"
 #include "transport/RtcTransport.h"
@@ -35,72 +36,6 @@
 namespace emulator
 {
 
-class MediaSendJob : public jobmanager::Job
-{
-public:
-    MediaSendJob(transport::Transport& transport, memory::UniquePacket packet, uint64_t timestamp)
-        : _transport(transport),
-          _packet(std::move(packet))
-    {
-    }
-
-    void run() override { _transport.protectAndSend(std::move(_packet)); }
-
-private:
-    transport::Transport& _transport;
-    memory::UniquePacket _packet;
-};
-
-struct RtxStats
-{
-    struct Receiver
-    {
-        size_t packetsMissing = 0;
-        size_t packetsRecovered = 0;
-        size_t nackRequests = 0; // Not implemented: SfuClient does not sent NACK yet.
-
-        Receiver& operator+=(const Receiver& other)
-        {
-            packetsMissing += other.packetsMissing;
-            packetsRecovered += other.packetsRecovered;
-            nackRequests += other.nackRequests;
-            return *this;
-        }
-    } receiver;
-
-    struct Sender
-    {
-        size_t nacksReceived = 0;
-        size_t retransmissionRequests = 0;
-        size_t retransmissions = 0;
-        size_t packetsSent = 0;
-
-        Sender& operator+=(const Sender& other)
-        {
-            nacksReceived += other.nacksReceived;
-            retransmissionRequests += other.retransmissionRequests;
-            retransmissions += other.retransmissions;
-            packetsSent += other.packetsSent;
-            return *this;
-        }
-    } sender;
-
-    RtxStats& operator+=(const RtxStats& other)
-    {
-        receiver += other.receiver;
-        sender += other.sender;
-
-        return *this;
-    }
-
-    RtxStats operator+(const RtxStats& other)
-    {
-        RtxStats sum = *this;
-        sum += other;
-        return sum;
-    }
-};
-
 template <typename ChannelType>
 class SfuClient : public transport::DataReceiver
 {
@@ -110,6 +45,7 @@ public:
         memory::PacketPoolAllocator& allocator,
         memory::AudioPacketPoolAllocator& audioAllocator,
         transport::TransportFactory& transportFactory,
+        transport::TransportFactory& publicTransportFactory,
         transport::SslDtls& sslDtls,
         uint32_t ptime = 20)
         : _channel(httpd),
@@ -117,6 +53,7 @@ public:
           _allocator(allocator),
           _audioAllocator(audioAllocator),
           _transportFactory(transportFactory),
+          _publicTransportFactory(publicTransportFactory),
           _sslDtls(sslDtls),
           _audioReceivers(256),
           _videoSsrcMap(128),
@@ -130,11 +67,11 @@ public:
 
     ~SfuClient()
     {
-        if (_transport && _transport->isRunning())
-        {
-            _transport->stop();
-        }
-        while (_transport && _transport->hasPendingJobs())
+        stopTransports();
+
+        while ((_audioTransport && _audioTransport->hasPendingJobs()) ||
+            (_videoTransport && _videoTransport->hasPendingJobs()) ||
+            (_bundleTransport && _bundleTransport->hasPendingJobs()))
         {
             utils::Time::rawNanoSleep(utils::Time::ms * 20);
         }
@@ -165,8 +102,14 @@ public:
     void joinCall(const CallConfig& callConfig)
     {
         _callConfig = callConfig;
-        _channel.create(false, callConfig);
-        logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+        if (_channel.create(false, callConfig))
+        {
+            logger::info("client started %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+        }
+        else
+        {
+            logger::error("client failed %s", _loggableId.c_str(), _channel.getEndpointId().c_str());
+        }
     }
 
     void setExpectedAudioType(Audio audio) { _expectedReceiveAudioType = audio; }
@@ -178,20 +121,77 @@ public:
     {
         auto offer = _channel.getOffer();
 
-        _transport =
-            _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, 256 * 1024, _channel.getEndpointIdHash());
-        _transport->setDataReceiver(this);
-        _transport->setAbsSendTimeExtensionId(3);
+        if (_callConfig.transportMode == TransportMode::BundledIce)
+        {
+            _bundleTransport = _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED,
+                256 * 1024,
+                _channel.getEndpointIdHash());
+            _bundleTransport->setDataReceiver(this);
+            _bundleTransport->setAbsSendTimeExtensionId(3);
+            _channel.configureTransport(*_bundleTransport, _audioAllocator);
+            logger::info("created transport %s", _loggableId.c_str(), _bundleTransport->getLoggableId().c_str());
+        }
+        else
+        {
+            if (_callConfig.audio != Audio::None)
+            {
+                if (_callConfig.transportMode == TransportMode::StreamTransportIce)
+                {
+                    _audioTransport = _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED,
+                        256 * 1024,
+                        _channel.getEndpointIdHash());
+                }
+                else
+                {
+                    _audioTransport = _publicTransportFactory.create(256 * 1024, _channel.getEndpointIdHash());
+                }
+                _audioTransport->setDataReceiver(this);
+                _audioTransport->setAbsSendTimeExtensionId(3);
+                _channel.configureAudioTransport(*_audioTransport, _audioAllocator);
+                logger::info("created audio transport %s, %s",
+                    _loggableId.c_str(),
+                    _audioTransport->getLoggableId().c_str(),
+                    _audioTransport->getLocalRtpPort().toString().c_str());
+            }
 
-        _channel.configureTransport(*_transport, _audioAllocator);
+            if (_callConfig.video)
+            {
+                if (_callConfig.transportMode == TransportMode::StreamTransportIce)
+                {
+                    _videoTransport = _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED,
+                        256 * 1024,
+                        _channel.getEndpointIdHash());
+                }
+                else
+                {
+                    _videoTransport = _publicTransportFactory.create(256 * 1024, _channel.getEndpointIdHash());
+                }
+                _videoTransport->setDataReceiver(this);
+                _videoTransport->setAbsSendTimeExtensionId(3);
+                _channel.configureVideoTransport(*_videoTransport, _audioAllocator);
+                logger::info("created video transport %s",
+                    _loggableId.c_str(),
+                    _videoTransport->getLoggableId().c_str());
+            }
+        }
 
         if (_channel.isAudioOffered())
         {
             _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _callConfig.audio);
-            _transport->setAudioPayloadType(111, codec::Opus::sampleRate);
+            if (_bundleTransport)
+            {
+                _bundleTransport->setAudioPayloadType(111, codec::Opus::sampleRate);
+            }
+            else if (_audioTransport)
+            {
+                _audioTransport->setAudioPayloadType(111, codec::Opus::sampleRate);
+            }
         }
 
-        logger::info("client using %s", _loggableId.c_str(), _transport->getLoggableId().c_str());
+        if (_bundleTransport)
+        {
+            logger::info("client using %s", _loggableId.c_str(), _bundleTransport->getLoggableId().c_str());
+        }
 
         _remoteVideoSsrc = _channel.getOfferedVideoSsrcs();
         _remoteVideoStreams = _channel.getOfferedVideoStreams();
@@ -218,7 +218,7 @@ public:
                 stream,
                 videoRtpMap,
                 feedbackRtpMap,
-                _transport.get(),
+                _bundleTransport ? _bundleTransport.get() : _videoTransport.get(),
                 videoContent,
                 utils::Time::getAbsoluteTime()));
 
@@ -245,7 +245,7 @@ public:
                 stream,
                 videoRtpMap,
                 feedbackRtpMap,
-                _transport.get(),
+                _bundleTransport ? _bundleTransport.get() : _videoTransport.get(),
                 RtpVideoReceiver::VideoContent::LOCAL,
                 utils::Time::getAbsoluteTime()));
 
@@ -274,9 +274,9 @@ public:
         return result;
     }
 
-    void connect()
+    bool connect()
     {
-        if (_channel.isVideoEnabled())
+        if (_callConfig.video)
         {
             _videoSsrcs[6] = 0;
             const size_t bitrates[] = {100, 500, 2500};
@@ -303,21 +303,46 @@ public:
         assert(_audioSource);
         std::vector<srtp::AesKey> sdesKeys;
 
-        if (_callConfig.sdes && !_callConfig.dtls)
+        if (_bundleTransport)
         {
-            _transport->getSdesKeys(sdesKeys);
+            _configured = _channel.sendResponse(*_bundleTransport,
+                _sslDtls.getLocalFingerprint(),
+                _audioSource->getSsrc(),
+                _callConfig.video ? _videoSsrcs : nullptr);
+        }
+        else
+        {
+            _configured = _channel.sendResponse(_audioTransport.get(),
+                _videoTransport.get(),
+                _sslDtls.getLocalFingerprint(),
+                _audioSource->getSsrc(),
+                _callConfig.video ? _videoSsrcs : nullptr);
         }
 
-        _channel.sendResponse(_transport->getLocalIceCredentials(),
-            _transport->getLocalCandidates(),
-            _sslDtls.getLocalFingerprint(),
-            _audioSource->getSsrc(),
-            _channel.isVideoEnabled() ? _videoSsrcs : nullptr,
-            sdesKeys.front());
+        if (!_configured)
+        {
+            return false;
+        }
 
-        _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(), *_transport);
-        _transport->start();
-        _transport->connect();
+        _dataStream = std::make_unique<webrtc::WebRtcDataStream>(_loggableId.getInstanceId(),
+            (_bundleTransport ? *_bundleTransport : (_audioTransport ? *_audioTransport : *_videoTransport)));
+        if (_bundleTransport)
+        {
+            _bundleTransport->start();
+            _bundleTransport->connect();
+        }
+        if (_audioTransport)
+        {
+            _audioTransport->start();
+            _audioTransport->connect();
+        }
+        if (_videoTransport)
+        {
+            _videoTransport->start();
+            _videoTransport->connect();
+        }
+
+        return true;
     }
 
     void disconnect() { _channel.disconnect(); }
@@ -330,7 +355,18 @@ public:
             utils::Time::diffGE(_startTime, utils::Time::getAbsoluteTime(), _callConfig.ipv6CandidateDelay))
         {
             _callConfig.ipv6CandidateDelay = 0;
-            _channel.addIpv6RemoteCandidates(*_transport);
+            if (_bundleTransport)
+            {
+                _channel.addIpv6RemoteCandidates(*_bundleTransport);
+            }
+            if (_audioTransport)
+            {
+                _channel.addIpv6RemoteCandidates(*_audioTransport);
+            }
+            if (_videoTransport)
+            {
+                _channel.addIpv6RemoteCandidates(*_videoTransport);
+            }
         }
 
         auto packet = _audioSource->getPacket(timestamp);
@@ -344,7 +380,8 @@ public:
                 _allocator.free(packet);
                 return;
             }*/
-            _transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp);
+            auto* transport = _bundleTransport ? _bundleTransport.get() : _audioTransport.get();
+            transport->getJobQueue().template addJob<MediaSendJob>(*transport, std::move(packet), timestamp);
         }
 
         if (sendVideo)
@@ -363,7 +400,10 @@ public:
                         cache->second->add(*packet, rtpHeader->sequenceNumber);
                     }
                     _rtxStats.sender.packetsSent++;
-                    if (!_transport->getJobQueue().addJob<MediaSendJob>(*_transport, std::move(packet), timestamp))
+                    auto* transport = _bundleTransport ? _bundleTransport.get() : _videoTransport.get();
+                    if (!transport->getJobQueue().template addJob<MediaSendJob>(*transport,
+                            std::move(packet),
+                            timestamp))
                     {
                         logger::warn("failed to add SendMediaJob", "SfuClient");
                     }
@@ -373,309 +413,6 @@ public:
     }
 
     ChannelType _channel;
-
-    class RtpAudioReceiver
-    {
-    public:
-        RtpAudioReceiver(size_t instanceId,
-            uint32_t ssrc,
-            const bridge::RtpMap& rtpMap,
-            transport::RtcTransport* transport,
-            emulator::Audio emulatedAudioType,
-            uint64_t timestamp)
-            : _rtpMap(rtpMap),
-              _context(ssrc, _rtpMap, transport, timestamp),
-              _loggableId("rtprcv", instanceId),
-              _emulatedAudioType(emulatedAudioType)
-        {
-            _recording.reserve(256 * 1024);
-        }
-
-        void onRtpPacketReceived(transport::RtcTransport* sender,
-            memory::Packet& packet,
-            uint32_t extendedSequenceNumber,
-            uint64_t timestamp)
-        {
-            _context.onRtpPacketReceived(timestamp);
-            if (!sender->unprotect(packet))
-            {
-                return;
-            }
-
-            auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-            if (_emulatedAudioType == Audio::Opus)
-            {
-                addOpus(reinterpret_cast<unsigned char*>(rtpHeader->getPayload()),
-                    packet.getLength() - rtpHeader->headerLength(),
-                    extendedSequenceNumber);
-            }
-        }
-
-        void addOpus(const unsigned char* opusData, int32_t payloadLength, uint32_t extendedSequenceNumber)
-        {
-            int16_t decodedData[memory::AudioPacket::size];
-
-            auto count = _decoder.decode(extendedSequenceNumber,
-                opusData,
-                payloadLength,
-                reinterpret_cast<unsigned char*>(decodedData),
-                memory::AudioPacket::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample);
-
-            for (int32_t i = 0; i < count; ++i)
-            {
-                _recording.push_back(decodedData[i * 2]);
-            }
-        }
-
-        void dumpPcmData()
-        {
-            utils::StringBuilder<512> fileName;
-            fileName.append(_loggableId.c_str()).append("-").append(_context.ssrc);
-
-            FILE* logFile = ::fopen(fileName.get(), "wr");
-            ::fwrite(_recording.data(), _recording.size(), 2, logFile);
-            ::fclose(logFile);
-        }
-
-        const std::vector<int16_t>& getRecording() const { return _recording; }
-        const logger::LoggableId& getLoggableId() const { return _loggableId; }
-
-    private:
-        bridge::RtpMap _rtpMap;
-        bridge::SsrcInboundContext _context;
-        codec::OpusDecoder _decoder;
-        logger::LoggableId _loggableId;
-        std::vector<int16_t> _recording;
-        const Audio _emulatedAudioType;
-    };
-
-    class RtpVideoReceiver
-    {
-    public:
-        enum class VideoContent
-        {
-            LOCAL,
-            VIDEO,
-            SLIDES
-        };
-
-        RtpVideoReceiver(size_t instanceId,
-            size_t endpointIdHash,
-            api::SimulcastGroup ssrcs,
-            const bridge::RtpMap& rtpMap,
-            const bridge::RtpMap& rtxRtpMap,
-            transport::RtcTransport* transport,
-            VideoContent content,
-            uint64_t timestamp)
-            : contexts(256),
-              _rtpMap(rtpMap),
-              _rtxRtpMap(rtxRtpMap),
-              _loggableId("rtprcv", instanceId),
-              _ssrcs(ssrcs),
-              _videoContent(content),
-              _videoDecoder(endpointIdHash, instanceId)
-        {
-            _recording.reserve(256 * 1024);
-            logger::info("video offered ssrc %u, payload %u", _loggableId.c_str(), _ssrcs[0].main, _rtpMap.payloadType);
-        }
-
-        RtxStats getRtxStats() const { return _rtxStats; }
-
-        const FakeVideoDecoder::Stats getVideoStats() const { return _videoDecoder.getStats(); }
-
-        void onRtpPacketReceived(transport::RtcTransport* sender,
-            memory::Packet& packet,
-            uint32_t extendedSequenceNumber,
-            uint64_t timestamp)
-        {
-            auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-
-            bool found = false;
-            api::SsrcPair ssrcLevel;
-            for (const auto& ssrc : _ssrcs)
-            {
-                if (ssrc.feedback == rtpHeader->ssrc || ssrc.main == rtpHeader->ssrc)
-                {
-                    ssrcLevel = ssrc;
-                    found = true;
-                    break;
-                }
-            }
-            assert(found);
-            if (rtpHeader->ssrc == ssrcLevel.main)
-            {
-                if (ssrcLevel.feedback != 0)
-                {
-                    assert(rtpHeader->payloadType == _rtpMap.payloadType);
-                }
-            }
-            else
-            {
-                assert(rtpHeader->payloadType == _rtxRtpMap.payloadType);
-            }
-
-            auto it = contexts.find(rtpHeader->ssrc.get());
-            if (it == contexts.end())
-            {
-                // we should perhaps figure out which simulcastLevel this is among the 3
-                auto result =
-                    contexts.emplace(rtpHeader->ssrc.get(), rtpHeader->ssrc.get(), _rtpMap, sender, timestamp);
-                it = result.first;
-            }
-
-            auto& inboundContext = it->second;
-            ++inboundContext.packetsProcessed;
-
-            if (inboundContext.packetsProcessed == 1)
-            {
-                inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
-                inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>();
-            }
-
-            inboundContext.onRtpPacketReceived(timestamp);
-#if 0
-            logger::debug("%s received ssrc %u, seq %u, extseq %u",
-                _loggableId.c_str(),
-                sender->getLoggableId().c_str(),
-                inboundContext.ssrc,
-                rtpHeader->sequenceNumber.get(),
-                inboundContext.lastReceivedExtendedSequenceNumber);
-#endif
-
-            if (!sender->unprotect(packet))
-            {
-                return;
-            }
-
-            if (rtpHeader->payloadType == _rtpMap.payloadType)
-            {
-                ++videoPacketCount;
-            }
-            else if (!_rtxRtpMap.isEmpty() && rtpHeader->payloadType == _rtxRtpMap.payloadType)
-            {
-                ++rtxPacketCount;
-            }
-            else
-            {
-                ++unknownPayloadPacketCount;
-
-                logger::warn("%u unexpected payload type %u",
-                    _loggableId.c_str(),
-                    rtpHeader->ssrc.get(),
-                    rtpHeader->payloadType);
-            }
-
-            const auto payload = rtpHeader->getPayload();
-            const auto payloadSize = packet.getLength() - rtpHeader->headerLength();
-            const auto payloadDescriptorSize = codec::Vp8Header::getPayloadDescriptorSize(payload, payloadSize);
-            const bool isKeyframe = codec::Vp8Header::isKeyFrame(payload, payloadDescriptorSize);
-            const auto sequenceNumber = rtpHeader->sequenceNumber.get();
-            bool missingPacketsTrackerReset = false;
-
-            if (isKeyframe)
-            {
-                inboundContext.videoMissingPacketsTracker->reset(timestamp);
-                missingPacketsTrackerReset = true;
-                _videoDecoder.resetPacketCache();
-            }
-
-            if (extendedSequenceNumber > inboundContext.lastReceivedExtendedSequenceNumber)
-            {
-                if (extendedSequenceNumber - inboundContext.lastReceivedExtendedSequenceNumber >=
-                    bridge::VideoMissingPacketsTracker::maxMissingPackets)
-                {
-                    logger::info("Resetting full missing packet tracker for %s, ssrc %u",
-                        "SfuClient",
-                        sender->getLoggableId().c_str(),
-                        inboundContext.ssrc);
-
-                    inboundContext.videoMissingPacketsTracker->reset(timestamp);
-                    _videoDecoder.resetPacketCache();
-                }
-                else if (!missingPacketsTrackerReset)
-                {
-                    for (uint32_t missingSequenceNumber = inboundContext.lastReceivedExtendedSequenceNumber + 1;
-                         missingSequenceNumber != extendedSequenceNumber;
-                         ++missingSequenceNumber)
-                    {
-                        _rtxStats.receiver.packetsMissing++;
-                        inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestamp);
-                    }
-                }
-
-                inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
-            }
-            else if (extendedSequenceNumber != inboundContext.lastReceivedExtendedSequenceNumber)
-            {
-                uint32_t esn = 0;
-                if (!inboundContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, esn) ||
-                    esn != extendedSequenceNumber)
-                {
-                    logger::debug("%s Unexpected re-transmission of packet seq %u ssrc %u, dropping",
-                        "SfuClient",
-                        sender->getLoggableId().c_str(),
-                        sequenceNumber,
-                        inboundContext.ssrc);
-                    return;
-                }
-                else
-                {
-                    _rtxStats.receiver.packetsRecovered++;
-                }
-            }
-
-            if (inboundContext.videoMissingPacketsTracker)
-            {
-                std::array<uint16_t, bridge::VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
-                const auto numMissingSequenceNumbers =
-                    inboundContext.videoMissingPacketsTracker->process(utils::Time::getAbsoluteTime(),
-                        inboundContext.sender->getRtt(),
-                        missingSequenceNumbers);
-
-                if (numMissingSequenceNumbers)
-                {
-                    logger::debug("Video missing packet tracker: %zu packets missing",
-                        sender->getLoggableId().c_str(),
-                        numMissingSequenceNumbers);
-                    for (size_t i = 0; i < numMissingSequenceNumbers; i++)
-                    {
-                        logger::debug("\n missing sequence number: %u", "SfuClient", missingSequenceNumbers[i]);
-                    }
-                }
-            }
-
-            if (rtpHeader->padding == 1)
-            {
-                assert(rtpHeader->payloadType == _rtxRtpMap.payloadType);
-                return;
-            }
-            _videoDecoder.process(payload, payloadSize, timestamp);
-        }
-
-        const logger::LoggableId& getLoggableId() const { return _loggableId; }
-
-        bool hasPackets() const { return (videoPacketCount | rtxPacketCount | unknownPayloadPacketCount) != 0; }
-        VideoContent getContent() const { return _videoContent; }
-        bool isLocalContent() const { return _videoContent == VideoContent::LOCAL; }
-        bool isSlidesContent() const { return _videoContent == VideoContent::SLIDES; }
-
-        size_t videoPacketCount = 0;
-        size_t rtxPacketCount = 0;
-        size_t unknownPayloadPacketCount = 0;
-
-        concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext> contexts;
-
-    private:
-        bridge::RtpMap _rtpMap;
-        bridge::RtpMap _rtxRtpMap;
-        codec::OpusDecoder _decoder;
-        logger::LoggableId _loggableId;
-        std::vector<int16_t> _recording;
-        api::SimulcastGroup _ssrcs;
-        VideoContent _videoContent;
-        RtxStats _rtxStats;
-        FakeVideoDecoder _videoDecoder;
-    };
 
 public:
     void onRtpPacketReceived(transport::RtcTransport* sender,
@@ -718,7 +455,8 @@ public:
             auto it = _videoSsrcMap.find(rtpHeader->ssrc.get());
             if (it == _videoSsrcMap.end())
             {
-                if (_remoteVideoSsrc.find(rtpHeader->ssrc.get()) == _remoteVideoSsrc.end())
+                if (_remoteVideoSsrc.find(rtpHeader->ssrc.get()) == _remoteVideoSsrc.end() &&
+                    _callConfig.relayType != "forwarded")
                 {
                     logger::warn("unexpected video ssrc %u", _loggableId.c_str(), rtpHeader->ssrc.get());
                 }
@@ -888,14 +626,19 @@ public:
 
         _rtxStats.sender.retransmissions++;
 
-        _transport->protectAndSend(std::move(packet));
+        auto* transport = _bundleTransport ? _bundleTransport.get() : _videoTransport.get();
+        transport->protectAndSend(std::move(packet));
     }
 
     void onConnected(transport::RtcTransport* sender) override
     {
-        logger::debug("client connected", _loggableId.c_str());
-        _transport->setSctp(5000, 5000);
-        _transport->connectSctp();
+        logger::debug("client connected %s", _loggableId.c_str(), sender->getLoggableId().c_str());
+        if (_callConfig.dtls && _callConfig.transportMode == TransportMode::BundledIce)
+        {
+            logger::debug("connecting SCTP", _loggableId.c_str());
+            sender->setSctp(5000, 5000);
+            sender->connectSctp();
+        }
     }
 
     bool onSctpConnectionRequest(transport::RtcTransport* sender, uint16_t remotePort) override { return false; }
@@ -925,7 +668,9 @@ public:
 
     void stopRecording() { _recordingActive = false; }
 
-    std::shared_ptr<transport::RtcTransport> _transport;
+    std::shared_ptr<transport::RtcTransport> _bundleTransport;
+    std::shared_ptr<transport::RtcTransport> _audioTransport;
+    std::shared_ptr<transport::RtcTransport> _videoTransport;
 
     std::unique_ptr<emulator::AudioSource> _audioSource;
     // Video source that produces fake VP8
@@ -977,6 +722,112 @@ public:
 
     void setDataListener(webrtc::WebRtcDataStream::Listener* listener) { _dataStream->setListener(listener); }
 
+    void stopTransports()
+    {
+        if (_bundleTransport)
+        {
+            _bundleTransport->stop();
+        }
+        if (_audioTransport)
+        {
+            _audioTransport->stop();
+        }
+        if (_videoTransport)
+        {
+            _videoTransport->stop();
+        }
+    }
+
+    bool hasPendingJobs() const
+    {
+        bool pending = false;
+        if (_bundleTransport)
+        {
+            pending |= _bundleTransport->hasPendingJobs();
+        }
+        if (_audioTransport)
+        {
+            pending |= _audioTransport->hasPendingJobs();
+        }
+        if (_videoTransport)
+        {
+            pending |= _videoTransport->hasPendingJobs();
+        }
+        return pending;
+    }
+
+    bool hasTransport() const { return _bundleTransport || _audioTransport || _videoTransport; }
+
+    bool isEndpointConfigured() const { return _configured; }
+
+    bool isConnected() const
+    {
+        if (!_configured)
+        {
+            return false;
+        }
+
+        bool connected = true;
+        if (_bundleTransport)
+        {
+            connected &= _bundleTransport->isConnected();
+        }
+        if (_audioTransport)
+        {
+            connected &= _audioTransport->isConnected();
+        }
+        if (_videoTransport)
+        {
+            connected &= _videoTransport->isConnected();
+        }
+        return connected;
+    }
+
+    bool hasProcessedOffer() const { return ((_bundleTransport || _audioTransport) && _audioSource); }
+    void getReportSummary(std::unordered_map<uint32_t, transport::ReportSummary>& outReportSummary) const
+    {
+        if (_bundleTransport)
+        {
+            _bundleTransport->getReportSummary(outReportSummary);
+        }
+        if (_audioTransport)
+        {
+            _audioTransport->getReportSummary(outReportSummary);
+        }
+        if (_videoTransport)
+        {
+            _videoTransport->getReportSummary(outReportSummary);
+        }
+    }
+
+    transport::PacketCounters getAudioReceiveCounters(uint64_t timestamp)
+    {
+        if (_bundleTransport)
+        {
+            return _bundleTransport->getAudioReceiveCounters(timestamp);
+        }
+        if (_audioTransport)
+        {
+            return _audioTransport->getAudioReceiveCounters(timestamp);
+        }
+
+        return transport::PacketCounters();
+    }
+
+    transport::PacketCounters getCumulativeVideoReceiveCounters() const
+    {
+        if (_bundleTransport)
+        {
+            return _bundleTransport->getCumulativeVideoReceiveCounters();
+        }
+        if (_audioTransport)
+        {
+            return _videoTransport->getCumulativeVideoReceiveCounters();
+        }
+
+        return transport::PacketCounters();
+    }
+
 private:
     utils::IdGenerator _idGenerator;
     uint32_t _videoSsrcs[7];
@@ -984,6 +835,7 @@ private:
     memory::PacketPoolAllocator& _allocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
     transport::TransportFactory& _transportFactory;
+    transport::TransportFactory& _publicTransportFactory;
     transport::SslDtls& _sslDtls;
     concurrency::MpmcHashmap32<uint32_t, RtpAudioReceiver*> _audioReceivers;
     std::vector<std::unique_ptr<RtpVideoReceiver>> _videoReceivers;
@@ -999,223 +851,7 @@ private:
     Audio _expectedReceiveAudioType;
     uint64_t _startTime;
     CallConfig _callConfig;
-};
-
-template <typename TClient>
-class GroupCall
-{
-public:
-    GroupCall(emulator::HttpdFactory* httpd,
-        uint32_t& idCounter,
-        memory::PacketPoolAllocator& allocator,
-        memory::AudioPacketPoolAllocator& audioAllocator,
-        transport::TransportFactory& transportFactory,
-        transport::SslDtls& sslDtls,
-        uint32_t callCount)
-        : _idCounter(idCounter),
-          _allocator(allocator),
-          _audioAllocator(audioAllocator),
-          _transportFactory(transportFactory),
-          _sslDtls(sslDtls)
-    {
-        for (uint32_t i = 0; i < callCount; ++i)
-        {
-            add(httpd);
-        }
-    }
-
-    bool connectAll(uint64_t timeout)
-    {
-        auto start = utils::Time::getAbsoluteTime();
-        for (auto& client : clients)
-        {
-            if (!client->_channel.isSuccess())
-            {
-                logger::warn("client has not received offer yet", client->getLoggableId().c_str());
-                return false;
-            }
-        }
-
-        for (auto& client : clients)
-        {
-            if (client->_transport)
-            {
-                continue; // already connected
-            }
-
-            client->processOffer();
-            if (!client->_transport || !client->_audioSource)
-            {
-                logger::warn("client did not parse offer successfully transport %s, audio source %s",
-                    client->getLoggableId().c_str(),
-                    client->_transport ? "ok" : "bad",
-                    client->_audioSource ? "ok" : "bad");
-                return false;
-            }
-        }
-
-        for (auto& client : clients)
-        {
-            client->connect();
-        }
-
-        logger::PruneSpam logPrune(1, 10);
-        auto currTime = utils::Time::getAbsoluteTime();
-        while (currTime - start < timeout)
-        {
-            auto it =
-                std::find_if_not(clients.begin(), clients.end(), [](auto& c) { return c->_transport->isConnected(); });
-
-            if (it == clients.end())
-            {
-                logger::info("all clients connected", "test");
-                return true;
-            }
-
-            utils::Time::nanoSleep(10 * utils::Time::ms);
-            if (logPrune.canLog())
-            {
-                logger::debug("waiting for connect...", "test");
-            }
-            currTime = utils::Time::getAbsoluteTime();
-        }
-
-        logger::warn("client transports failed to connect", "GroupCall.connectAll");
-        return false;
-    }
-
-    bool connectSingle(uint32_t clientIndex, uint64_t timeout)
-    {
-        auto start = utils::Time::getAbsoluteTime();
-        auto& client = clients[clientIndex];
-        if (!client->_channel.isSuccess())
-        {
-            return false;
-        }
-
-        if (client->_transport)
-        {
-            return client->_transport->isConnected();
-        }
-
-        client->processOffer();
-        if (!client->_transport || !client->_audioSource)
-        {
-            return false;
-        }
-
-        for (auto& client : clients)
-        {
-            client->connect();
-        }
-
-        auto currTime = utils::Time::getAbsoluteTime();
-        while (currTime - start < timeout)
-        {
-            if (client->_transport->isConnected())
-            {
-                return true;
-            }
-
-            utils::Time::nanoSleep(10 * utils::Time::ms);
-            logger::debug("waiting for connect...", "test");
-            currTime = utils::Time::getAbsoluteTime();
-        }
-
-        return false;
-    }
-
-    void run(uint64_t period, const size_t modulateVolumeForNSpeakers = 0)
-    {
-        const auto start = utils::Time::getAbsoluteTime();
-        const size_t modulateFirstNSpeakers = std::min(modulateVolumeForNSpeakers, clients.size());
-        utils::Pacer pacer(10 * utils::Time::ms);
-        for (auto timestamp = utils::Time::getAbsoluteTime(); timestamp - start < period;)
-        {
-            for (auto& client : clients)
-            {
-                client->process(timestamp);
-            }
-            pacer.tick(utils::Time::getAbsoluteTime());
-            utils::Time::nanoSleep(pacer.timeToNextTick(utils::Time::getAbsoluteTime()));
-            timestamp = utils::Time::getAbsoluteTime();
-
-            if (modulateVolumeForNSpeakers > 0)
-            {
-                const size_t inveer_volume_window = 2;
-                auto window = (utils::Time::diff(start, timestamp) / utils::Time::sec) % 10;
-                for (size_t i = 0; i < modulateFirstNSpeakers; i++)
-                {
-                    auto volume = window < inveer_volume_window ? 0.4 : 0.6;
-                    clients[i]->_audioSource->setVolume(volume);
-                }
-            }
-        }
-        logger::debug("exit run period", "SfuClient");
-    }
-
-    bool awaitPendingJobs(uint64_t timeout)
-    {
-        auto start = utils::Time::getAbsoluteTime();
-        for (size_t runCount = 1; utils::Time::getAbsoluteTime() - start < timeout;)
-        {
-            runCount = 0;
-            utils::Time::nanoSleep(utils::Time::ms * 100);
-            for (auto& client : clients)
-            {
-                if (client->_transport->hasPendingJobs())
-                {
-                    ++runCount;
-                }
-            }
-            if (runCount == 0)
-            {
-                return true;
-            }
-        }
-        logger::warn("pending jobs not completed", "GroupCall");
-        return false;
-    }
-
-    static bool startConference(Conference& conf, std::string url, bool useGlobalPort = true)
-    {
-        conf.create(url, useGlobalPort);
-        auto result = conf.isSuccess();
-        utils::Time::nanoSleep(1 * utils::Time::sec);
-        return result;
-    }
-
-    void add(emulator::HttpdFactory* httpd)
-    {
-        clients.emplace_back(
-            std::make_unique<TClient>(httpd, ++_idCounter, _allocator, _audioAllocator, _transportFactory, _sslDtls));
-    }
-
-    void disconnectClients()
-    {
-        for (auto& client : clients)
-        {
-            client->disconnect();
-        }
-    }
-
-    void stopTransports()
-    {
-        for (auto& client : clients)
-        {
-            client->_transport->stop();
-        }
-    }
-
-    std::vector<std::unique_ptr<TClient>> clients;
-
-private:
-    uint32_t& _idCounter;
-    memory::PacketPoolAllocator& _allocator;
-    memory::AudioPacketPoolAllocator& _audioAllocator;
-    transport::TransportFactory& _transportFactory;
-    transport::SslDtls& _sslDtls;
-    std::string _baseUrl;
+    bool _configured = false;
 };
 
 } // namespace emulator

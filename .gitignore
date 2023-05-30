@@ -35,3 +35,5 @@ coverage/*
 git_version.*
 */smb/test/include/TestConfig.h
 versioninfo.txt
+rtprcv-*
+_bwelogs*

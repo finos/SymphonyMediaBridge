@@ -26,6 +26,7 @@ TEST_F(IceTransportEmuTest, plainNewApi)
             *_mainPoolAllocator,
             _audioAllocator,
             *_clientTransportFactory,
+            *_clientTransportFactory,
             *_sslDtls,
             3);
 
@@ -71,9 +72,9 @@ TEST_F(IceTransportEmuTest, plainNewApi)
             responseBody);
         EXPECT_TRUE(confRequest);
 
-        group.clients[0]->_transport->stop();
-        group.clients[1]->_transport->stop();
-        group.clients[2]->_transport->stop();
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
         finalizeSimulation();
@@ -109,8 +110,8 @@ TEST_F(IceTransportEmuTest, plainNewApi)
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
-            group.clients[id]->_transport->getReportSummary(transportSummary);
-            logTransportSummary(clientName.c_str(), group.clients[id]->_transport.get(), transportSummary);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
 
             logVideoSent(clientName.c_str(), *group.clients[id]);
             logVideoReceive(clientName.c_str(), *group.clients[id]);

@@ -1837,6 +1837,7 @@ void TransportImpl::setRemoteIce(const std::pair<std::string, std::string>& cred
 {
     if (_rtpIceSession)
     {
+        assert(!credentials.second.empty());
         _jobQueue.addJob<IceSetRemoteJob>(*this, credentials, candidates, allocator);
     }
 }
@@ -1964,13 +1965,13 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = (_iceState == ice::IceSession::State::CONNECTED) && (!_srtpClient || _srtpClient->isConnected());
+    _isConnected = (state == ice::IceSession::State::CONNECTED) && (!_srtpClient || _srtpClient->isConnected());
 
     switch (state)
     {
     case ice::IceSession::State::CONNECTED:
     {
-        logger::info("ICE CONNECTED", _loggableId.c_str());
+        logger::info("ICE CONNECTED %s", _loggableId.c_str(), _isConnected ? "complete" : "");
 
         const auto candidatePair = _rtpIceSession->getSelectedPair();
         const auto rtt = _rtpIceSession->getSelectedPairRtt();
@@ -2080,13 +2081,13 @@ void TransportImpl::setDataReceiver(DataReceiver* dataReceiver)
     _dataReceiver.store(dataReceiver);
 }
 
-void TransportImpl::onDtlsStateChange(SrtpClient*, const SrtpClient::State state)
+void TransportImpl::onSrtpStateChange(SrtpClient*, const SrtpClient::State state)
 {
     _dtlsState = state;
     _isConnected = (!_rtpIceSession || _iceState == ice::IceSession::State::CONNECTED) &&
         (_dtlsState == SrtpClient::State::CONNECTED);
 
-    logger::info("DTLS %s", getLoggableId().c_str(), api::utils::toString(state));
+    logger::info("SRTP %s", getLoggableId().c_str(), api::utils::toString(state));
     if (state == SrtpClient::State::CONNECTED && isConnected())
     {
         onTransportConnected();

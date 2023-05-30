@@ -39,6 +39,11 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
 
 FakeUdpEndpoint::~FakeUdpEndpoint()
 {
+    if (_network)
+    {
+        _network->removeNode(this);
+    }
+
     if (!_networkLink->empty())
     {
         logger::warn("~FakeUdpEndpoint, pending packets in the network link %zu", _name.c_str(), _networkLink->count());
@@ -224,11 +229,10 @@ void FakeUdpEndpoint::stop(IStopEvents* listener)
 
         // Would be closing epoll subscription in a job and call a stop callback...
         _state = CREATED;
-
-        if (listener)
-        {
-            listener->onEndpointStopped(this);
-        }
+    }
+    if (listener)
+    {
+        listener->onEndpointStopped(this);
     }
 }
 
@@ -512,7 +516,7 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
             }
             else
             {
-                logger::debug("no listener for RTP", _name.c_str());
+                logger::debug("no listener for RTP from %s", _name.c_str(), srcAddress.toString().c_str());
             }
         }
     }

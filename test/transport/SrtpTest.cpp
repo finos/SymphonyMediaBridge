@@ -105,9 +105,9 @@ struct SrtpTest : public ::testing::Test, public transport::SrtpClient::IEvents
             utils::Time::nanoSleep(10 * utils::Time::ms);
         }
     }
-    void onDtlsStateChange(transport::SrtpClient* srtpClient, transport::SrtpClient::State state) override
+    void onSrtpStateChange(transport::SrtpClient* srtpClient, transport::SrtpClient::State state) override
     {
-        logger::info("DTLS state change %s", srtpClient->getLoggableId().c_str(), api::utils::toString(state));
+        logger::info("SRTP state change %s", srtpClient->getLoggableId().c_str(), api::utils::toString(state));
     }
 
     bool isDataValid(uint8_t* data) const

@@ -1,5 +1,6 @@
 #include "api/Parser.h"
 #include "api/ConferenceEndpoint.h"
+#include "api/JsonUtils.h"
 #include "api/utils.h"
 #include "utils/Base64.h"
 #include "utils/Format.h"
@@ -122,23 +123,6 @@ void setIfExists(utils::Optional<std::string>& target, const nlohmann::json& dat
             }
         }
     }
-}
-
-bool exists(const nlohmann::json& json, const char* keyName)
-{
-    return json.find(keyName) != json.end();
-}
-
-template <typename... Args>
-bool exists(const nlohmann::json& json, const char* key1, Args&&... keys)
-{
-    auto it = json.find(key1);
-    if (it != json.end())
-    {
-        return exists(*it, keys...);
-    }
-
-    return false;
 }
 
 template <typename... Args>
