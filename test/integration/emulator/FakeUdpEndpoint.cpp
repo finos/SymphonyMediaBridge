@@ -39,6 +39,11 @@ FakeUdpEndpoint::FakeUdpEndpoint(jobmanager::JobManager& jobManager,
 
 FakeUdpEndpoint::~FakeUdpEndpoint()
 {
+    if (_network)
+    {
+        _network->removeNode(this);
+    }
+
     if (!_networkLink->empty())
     {
         logger::warn("~FakeUdpEndpoint, pending packets in the network link %zu", _name.c_str(), _networkLink->count());
