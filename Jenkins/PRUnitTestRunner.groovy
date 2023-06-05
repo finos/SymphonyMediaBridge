@@ -28,33 +28,32 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
 }
 
 abortPreviousRunningBuilds()
-// TODO: "Change back to be-integration before merge"
 parallel "Release el7": {
-    node('rtc-14160-test')
+    node('be-integration') {
         prRunner("Release", "el7", "1f7ef85")
     }
 }, "Release AWS-linux": {
-    node('rtc-14160-test')
+    node('be-integration') {
         prRunner("Release", "aws-linux", "latest")
     }
 }, "Release el8": {
-    node('rtc-14160-test')
+    node('be-integration') {
         prRunner("Release", "el8", "latest")
     }
 }, "LCheck": {
-    node('rtc-14160-test')
+    node('be-integration') {
         prRunner("LCheck", "el8", "latest")
     }
 }, "TCheck": {
-    node('rtc-14160-test')
+    node('be-integration') {
         prRunner("TCheck", "el8", "latest")
     }
 }, "DCheck": {
-    node('rtc-14160-test')
+    node('be-integration') {
         prRunner("DCheck", "el8", "latest")
     }
 }, "LCov": {
-    node('rtc-14160-test')
+    node('be-integration') {
         try {
             prRunner("LCov", "el8", "latest")
         } finally {
@@ -74,7 +73,7 @@ parallel "Release el7": {
         }
     }
 }, "Release Ubuntu public": {
-    node('rtc-14160-test')
+    node('be-integration') {
         prRunner("Release", "ubuntu-focal-deb", "latest")
     }
 }
