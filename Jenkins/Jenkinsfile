@@ -11,7 +11,7 @@ node('be-integration') {
     def artifactoryServer = Artifactory.server 'Symphony-Production-Artifactory'
     def baseName = "rtc-smb"
     def version = "0.0.2-${currentBuild.number}"
-    def masterVersion = "2.3.0-${currentBuild.number}"
+    def masterVersion = "2.4.0-${currentBuild.number}"
     def promotion = true
     def buildInfo
     def scmVars
