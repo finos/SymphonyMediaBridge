@@ -553,7 +553,7 @@ void ActiveMediaList::process(const uint64_t timestamp,
     }
     _activeTalkerSnapshot.write(activeTalkersSnapshot);
 
-    if (outAudioMapChanged && logger::_logLevel >= logger::Level::DBG)
+    if (true && logger::_logLevel >= logger::Level::DBG)
     {
         logAudioList();
     }
