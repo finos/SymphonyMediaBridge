@@ -322,6 +322,7 @@ set(FILES
         memory/MemoryFile.cpp
         memory/Map.h
         memory/Array.h
+        memory/MemMap.cpp
         rtp/RtcpFeedback.cpp
         rtp/RtcpFeedback.h
         rtp/RtcpHeader.cpp
