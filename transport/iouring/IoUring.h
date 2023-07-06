@@ -1,8 +1,13 @@
 #pragma once
 #include "memory/MemMap.h"
+#include <concurrency/WaitFreeStack.h>
 #include <cstddef>
 #include <cstdint>
 
+namespace transport
+{
+class SocketAddress;
+}
 namespace iouring
 {
 
@@ -34,14 +39,16 @@ public:
 
     bool createForUdp(size_t queueDepth);
 
-    void send(void* buffer, size_t length, uint64_t cookie);
+    void send(int fd, const void* buffer, size_t length, const transport::SocketAddress& target, uint64_t cookie);
     void receive(void* buffer, size_t length, uint64_t cookie);
 
     bool registerCompletionEvent(int eventFd);
     bool unRegisterCompletionEvent(int eventFd);
 
     bool getCompletedItem(CompletionInfo& item);
-    bool hasCompletedItem() const;
+    bool hasCompletedItems() const;
+
+    bool registerBuffers(void* buffer, size_t count, size_t itemSize, size_t itemPadding = 0);
 
 private:
     struct IoSubmitRing;
@@ -55,5 +62,8 @@ private:
     memory::MemMap _completionQueueMemory;
     memory::MemMap _submitItems;
     memory::MemMap _messageHeadersMemory;
+
+    concurrency::WaitFreeStack _messageHeaders;
+    concurrency::WaitFreeStack _sqeItems;
 };
 } // namespace iouring

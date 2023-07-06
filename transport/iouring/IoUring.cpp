@@ -1,9 +1,12 @@
 #include "transport/iouring/IoUring.h"
+#include "utils/SocketAddress.h"
 #include <algorithm>
 #include <cassert>
 #include <cstring>
 #include <linux/io_uring.h>
+#include <stdatomic.h>
 #include <sys/mman.h>
+#include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <unistd.h>
@@ -60,24 +63,85 @@ int unRegisterCompletionEvent(int ring_fd, int event_fd)
     return (int)syscall(__NR_io_uring_register, ring_fd, IORING_UNREGISTER_EVENTFD, event_fd, 1, NULL, 0);
 }
 
+class MessageHeader : public concurrency::StackItem
+{
+public:
+    void init()
+    {
+        std::memset(&header, 0, sizeof(header));
+        header.msg_iov = vec;
+        header.msg_iovlen = 0;
+        std::memset(&target, 0, sizeof(target));
+    }
+
+    void addBuffer(const void* data, size_t s)
+    {
+        if (header.msg_iovlen >= 3)
+        {
+            return;
+        }
+        const auto i = header.msg_iovlen;
+        header.msg_iov[i].iov_base = const_cast<void*>(data);
+        header.msg_iov[i].iov_len = s;
+        ++header.msg_iovlen;
+    }
+
+    void setTarget(const transport::SocketAddress& addr)
+    {
+        std::memcpy(&target, addr.getSockAddr(), addr.getSockAddrSize());
+        header.msg_name = &target;
+        header.msg_namelen = addr.getSockAddrSize();
+    }
+
+    msghdr header;
+    iovec vec[3];
+    transport::RawSockAddress target;
+};
+
+struct SqeItem : public concurrency::StackItem
+{
+    io_uring_sqe* sqe;
+};
+
 struct IoUring::IoSubmitRing
 {
-    unsigned* head;
-    unsigned* tail;
-    unsigned* ring_mask;
-    unsigned* ring_entries;
-    unsigned* flags;
-    unsigned* array;
+    __u32* head;
+    _Atomic(__u32)* tail;
+    __u32* ring_mask;
+    __u32* ring_entries;
+    _Atomic(__u32)* flags;
+    __u32* array;
     io_uring_sqe* items;
+
+    IoSubmitRing(io_uring_params& ring, memory::MemMap& m, memory::MemMap& itemsMemory)
+    {
+        head = m.get<__u32>(ring.sq_off.head);
+        tail = m.get<_Atomic(__u32)>(ring.sq_off.tail);
+        ring_mask = m.get<__u32>(ring.sq_off.ring_mask);
+        ring_entries = m.get<__u32>(ring.sq_off.ring_entries);
+        flags = m.get<_Atomic(__u32)>(ring.sq_off.flags);
+        array = m.get<__u32>(ring.sq_off.array);
+        items = itemsMemory.get<io_uring_sqe>();
+    }
 };
 
 struct IoUring::IoCompletionRing
 {
-    unsigned* head;
-    unsigned* tail;
-    unsigned* ring_mask;
-    unsigned* ring_entries;
+    _Atomic(__u32)* head;
+    _Atomic(__u32)* tail;
+    __u32* ring_mask;
+    __u32* ring_entries;
+    __u32* overflow;
     io_uring_cqe* items;
+
+    IoCompletionRing(io_uring_params& ring, memory::MemMap& m)
+    {
+        head = m.get<_Atomic(__u32)>(ring.cq_off.head);
+        tail = m.get<_Atomic(__u32)>(ring.cq_off.tail);
+        ring_mask = m.get<__u32>(ring.cq_off.ring_mask);
+        ring_entries = m.get<__u32>(ring.cq_off.ring_entries);
+        items = m.get<io_uring_cqe>(ring.cq_off.cqes);
+    }
 };
 
 IoUring::IoUring() : _ringFd(-1), _submitRing(nullptr), _completionRing(nullptr) {}
@@ -94,7 +158,7 @@ IoUring::~IoUring()
     delete _completionRing;
 }
 
-bool IoUring::createForUdp(size_t queueDepth)
+bool IoUring::createForUdp(const size_t queueDepth)
 {
     if (_ringFd != -1)
     {
@@ -113,47 +177,46 @@ bool IoUring::createForUdp(size_t queueDepth)
         return false;
     }
 
-    int submitRingSize = ring.sq_off.array + ring.sq_entries * sizeof(unsigned);
-    int completionRingSize = ring.cq_off.cqes + ring.cq_entries * sizeof(io_uring_cqe);
+    const int submitRingSize = ring.sq_off.array + ring.sq_entries * sizeof(unsigned);
+    const int completionRingSize = ring.cq_off.cqes + ring.cq_entries * sizeof(io_uring_cqe);
 
-    unsigned int* completionQueue = nullptr;
-    if (ring.features & IORING_FEAT_SINGLE_MMAP)
-    {
-        submitRingSize = std::max(submitRingSize, completionRingSize);
-        completionRingSize = submitRingSize;
-    }
-
-    _submitQueueMemory.allocate(submitRingSize,
-        PROT_READ | PROT_WRITE,
-        MAP_SHARED | MAP_POPULATE,
-        _ringFd,
-        IORING_OFF_SQ_RING);
-
-    _submitItems.allocate(ring.sq_entries * sizeof(io_uring_sqe),
-        PROT_READ | PROT_WRITE,
-        MAP_SHARED | MAP_POPULATE,
-        _ringFd,
-        IORING_OFF_SQES);
-
-    if (!_submitQueueMemory.isGood() || !_submitItems.isGood())
+    if (!_submitItems.allocateAtLeast(ring.sq_entries * sizeof(io_uring_sqe),
+            PROT_READ | PROT_WRITE,
+            MAP_SHARED | MAP_POPULATE,
+            _ringFd,
+            IORING_OFF_SQES))
     {
         return false;
     }
 
-    _submitRing->head = _submitQueueMemory.get<unsigned int>() + ring.sq_off.head;
-    _submitRing->tail = _submitQueueMemory.get<unsigned int>() + ring.sq_off.tail;
-    _submitRing->ring_mask = _submitQueueMemory.get<unsigned int>() + ring.sq_off.ring_mask;
-    _submitRing->ring_entries = _submitQueueMemory.get<unsigned int>() + ring.sq_off.ring_entries;
-    _submitRing->flags = _submitQueueMemory.get<unsigned int>() + ring.sq_off.flags;
-    _submitRing->array = _submitQueueMemory.get<unsigned int>() + ring.sq_off.array;
-
     if (ring.features & IORING_FEAT_SINGLE_MMAP)
     {
-        completionQueue = _submitQueueMemory.get<unsigned int>();
+        // kernel will associate these memory areas with the ring fd
+        if (!_submitQueueMemory.allocateAtLeast(std::max(submitRingSize, completionRingSize),
+                PROT_READ | PROT_WRITE,
+                MAP_SHARED | MAP_POPULATE,
+                _ringFd,
+                IORING_OFF_SQ_RING))
+        {
+            return false;
+        }
+        _submitRing = new IoSubmitRing(ring, _submitQueueMemory, _submitItems);
+        _completionRing = new IoCompletionRing(ring, _submitQueueMemory);
     }
     else
     {
-        if (!_completionQueueMemory.allocate(completionRingSize,
+        if (!_submitQueueMemory.allocateAtLeast(submitRingSize,
+                PROT_READ | PROT_WRITE,
+                MAP_SHARED | MAP_POPULATE,
+                _ringFd,
+                IORING_OFF_SQ_RING))
+        {
+            return false;
+        }
+        _submitRing = new IoSubmitRing(ring, _submitQueueMemory, _submitItems);
+
+        // kernel will associate this area with the ring fd as CQ
+        if (!_completionQueueMemory.allocateAtLeast(completionRingSize,
                 PROT_READ | PROT_WRITE,
                 MAP_SHARED | MAP_POPULATE,
                 _ringFd,
@@ -161,21 +224,60 @@ bool IoUring::createForUdp(size_t queueDepth)
         {
             return false;
         }
-        completionQueue = _completionQueueMemory.get<unsigned int>();
+
+        _completionRing = new IoCompletionRing(ring, _completionQueueMemory);
     }
 
-    _completionRing->head = completionQueue + ring.cq_off.head;
-    _completionRing->tail = completionQueue + ring.cq_off.tail;
-    _completionRing->ring_mask = completionQueue + ring.cq_off.ring_mask;
-    _completionRing->ring_entries = completionQueue + ring.cq_off.ring_entries;
-    _completionRing->items = reinterpret_cast<io_uring_cqe*>(completionQueue + ring.cq_off.cqes);
+    const size_t hdrAreaSize = memory::roundUpToPage(queueDepth * sizeof(MessageHeader));
+    _messageHeadersMemory.allocate(hdrAreaSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
+    auto* h = _messageHeadersMemory.get<MessageHeader>();
+    for (size_t i = 0; i < queueDepth; ++i)
+    {
+        _messageHeaders.push(h);
+        ++h;
+    }
+
+    // could be that we need to register _messageHeadersMemory with the ring fd
+
     return true;
 }
 
-// single threaded. Must post jobs on serial queue here. Good perhaps as we want packets to be sent in order most of the
-// time. buffer should be in a mmap memory with properties: MAP_ANONYMOUS
+// single threaded. Must post jobs on serial queue here. Good perhaps as we want packets to be sent in order most of
+// the time. buffer should be in a mmap memory with properties: MAP_ANONYMOUS
 // https://manpages.ubuntu.com/manpages/kinetic/en/man2/sendmsg.2.html
-void IoUring::send(void* buffer, size_t length, uint64_t cookie) {}
+void IoUring::send(int fd, const void* buffer, size_t length, const transport::SocketAddress& target, uint64_t cookie)
+{
+    MessageHeader* msgHeader;
+    concurrency::StackItem* item;
+    if (!_messageHeaders.pop(item))
+    {
+        return;
+    }
+    msgHeader = reinterpret_cast<MessageHeader*>(item);
+
+    msgHeader->init();
+
+    msgHeader->addBuffer(buffer, length);
+    msgHeader->setTarget(target);
+
+    // auto sqe = allocSqe();
+    io_uring_sqe* sqe;
+    const auto tail = *_submitRing->tail;
+    const auto index = tail & (*_submitRing->ring_mask);
+    sqe = &_submitRing->items[index];
+    std::memset(sqe, 0, sizeof(*sqe));
+    sqe->addr = reinterpret_cast<unsigned long long>(msgHeader);
+    sqe->fd = fd;
+    sqe->user_data = cookie;
+
+    // TODO fill sqe
+    _submitRing->array[index] = index;
+    ::atomic_store_explicit(_submitRing->tail, tail + 1, std::memory_order_release);
+
+    const unsigned flags = ::atomic_load_explicit(_submitRing->flags, std::memory_order_relaxed);
+    if (flags & IORING_SQ_NEED_WAKEUP)
+        iouring::enter(_ringFd, 0, 0, IORING_ENTER_SQ_WAKEUP);
+}
 
 void IoUring::receive(void* buffer, size_t length, uint64_t cookie) {}
 
@@ -194,9 +296,17 @@ bool IoUring::getCompletedItem(CompletionInfo& item)
     return false;
 }
 
-bool IoUring::hasCompletedItem() const
+bool IoUring::hasCompletedItems() const
 {
-    return false;
+    const auto head = ::atomic_load_explicit(_completionRing->head, memory_order_relaxed);
+    const auto tail = atomic_load_explicit(_completionRing->tail, memory_order_relaxed);
+    return head != tail;
+}
+
+// must be allocated with mmap, MAP_ANONYMOUS
+bool IoUring::registerBuffers(void* buffer, size_t count, size_t itemSize, size_t itemPadding)
+{
+    return 0 == iouring::registerBuffers(_ringFd, buffer, count, itemSize, itemPadding);
 }
 
 } // namespace iouring

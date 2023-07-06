@@ -335,7 +335,6 @@ set(FILES
         rtp/RtpHeader.h
         rtp/SendTimeDial.cpp
         rtp/SendTimeDial.h
-        test/macros.h
         transport/UdpEndpoint.h
         transport/BaseUdpEndpoint.cpp
         transport/BaseUdpEndpoint.h
@@ -575,6 +574,7 @@ set(TEST_FILES
     test/transport/TransportIntegrationTest.h
     test/transport/SrtpTest.cpp
     test/transport/Ipv6Test.cpp
+    test/transport/IoUringTest.cpp
     test/integration/TimeTurnerTest.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp

@@ -1,5 +1,6 @@
 #include "MemMap.h"
 #include <cassert>
+#include <errno.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -18,13 +19,26 @@ inline size_t getPageSize()
 bool MemMap::allocate(size_t size, int prot, int flags, int fd, off_t offset)
 {
     assert((size & ~(getPageSize() - 1)) == size);
-    _data = mmap(0, size, prot, flags, fd, offset);
-    if (_data = MAP_FAILED)
+    assert(!_data);
+    if (_data)
     {
-        _data = nullptr;
+        return false;
     }
 
-    return _data != nullptr;
+    _data = mmap(nullptr, size, prot, flags, fd, offset);
+    if (_data == MAP_FAILED)
+    {
+        _data = nullptr;
+        return false;
+    }
+
+    _size = size;
+    return true;
+}
+
+bool MemMap::allocateAtLeast(size_t size, int prot, int flags, int fd, off_t offset)
+{
+    return allocate(memory::roundUpToPage(size), prot, flags, fd, offset);
 }
 
 void MemMap::free()
@@ -40,6 +54,16 @@ void MemMap::free()
 MemMap::~MemMap()
 {
     free();
+}
+
+size_t roundUpToPage(size_t s)
+{
+    size_t remainder = s & (getPageSize() - 1);
+    if (remainder > 0)
+    {
+        return s + getPageSize() - remainder;
+    }
+    return s;
 }
 
 } // namespace memory
