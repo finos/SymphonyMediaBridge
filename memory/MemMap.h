@@ -19,15 +19,15 @@ public:
     bool isGood() const { return _data; }
 
     template <typename T>
-    T* get(size_t offset = 0)
+    T* get(size_t byteOffset = 0)
     {
-        return reinterpret_cast<T*>(reinterpret_cast<char*>(_data) + offset);
+        return reinterpret_cast<T*>(reinterpret_cast<char*>(_data) + byteOffset);
     }
 
     template <typename T>
-    const T* get(size_t offset) const
+    const T* get(size_t byteOffset) const
     {
-        return reinterpret_cast<const T*>(reinterpret_cast<const char*>(_data) + offset);
+        return reinterpret_cast<const T*>(reinterpret_cast<const char*>(_data) + byteOffset);
     }
 
     size_t size() const { return _size; }

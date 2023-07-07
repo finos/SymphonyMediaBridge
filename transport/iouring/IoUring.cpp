@@ -11,6 +11,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 
+#include "logger/Logger.h"
+
 namespace iouring
 {
 // https://unixism.net/loti/low_level.html
@@ -63,9 +65,8 @@ int unRegisterCompletionEvent(int ring_fd, int event_fd)
     return (int)syscall(__NR_io_uring_register, ring_fd, IORING_UNREGISTER_EVENTFD, event_fd, 1, NULL, 0);
 }
 
-class MessageHeader : public concurrency::StackItem
+struct IoUring::Request : public concurrency::StackItem
 {
-public:
     void init()
     {
         std::memset(&header, 0, sizeof(header));
@@ -74,15 +75,17 @@ public:
         std::memset(&target, 0, sizeof(target));
     }
 
-    void addBuffer(const void* data, size_t s)
+    void setBuffer(const void* buf, size_t size)
     {
-        if (header.msg_iovlen >= 3)
+        if (header.msg_iovlen != 0)
         {
             return;
         }
+
+        std::memcpy(data, buf, size);
         const auto i = header.msg_iovlen;
-        header.msg_iov[i].iov_base = const_cast<void*>(data);
-        header.msg_iov[i].iov_len = s;
+        header.msg_iov[i].iov_base = data;
+        header.msg_iov[i].iov_len = size;
         ++header.msg_iovlen;
     }
 
@@ -93,10 +96,52 @@ public:
         header.msg_namelen = addr.getSockAddrSize();
     }
 
+    size_t getMessageSize() const
+    {
+        size_t a = 0;
+        for (size_t i = 0; i < header.msg_iovlen; ++i)
+        {
+            a += header.msg_iov[i].iov_len;
+        }
+        return a;
+    }
+
+    enum
+    {
+        RECEIVE = 1,
+        SEND
+    } operation;
+
     msghdr header;
     iovec vec[3];
+    uint32_t index;
     transport::RawSockAddress target;
+    uint64_t clientCookie;
+    uint8_t data[1500];
 };
+
+bool IoUring::Requests::init(size_t count)
+{
+    if (!_sharedMem.allocateAtLeast(count * sizeof(Request), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS))
+    {
+        return false;
+    }
+    const auto actualCount = allocatedCount();
+    requests = _sharedMem.get<Request>();
+    for (size_t i = 0; i < actualCount; ++i)
+    {
+        requests[i].init();
+        requests[i].index = i;
+        freeItems.push(&requests[i]);
+    }
+
+    return true;
+}
+
+size_t IoUring::Requests::allocatedCount() const
+{
+    return _sharedMem.size() / sizeof(Request);
+}
 
 struct SqeItem : public concurrency::StackItem
 {
@@ -107,21 +152,23 @@ struct IoUring::IoSubmitRing
 {
     __u32* head;
     _Atomic(__u32)* tail;
-    __u32* ring_mask;
-    __u32* ring_entries;
+    const __u32 ring_mask;
+    const __u32 ring_entries;
     _Atomic(__u32)* flags;
     __u32* array;
     io_uring_sqe* items;
+    uint32_t freeSqeEntries;
 
     IoSubmitRing(io_uring_params& ring, memory::MemMap& m, memory::MemMap& itemsMemory)
+        : ring_mask(*m.get<__u32>(ring.sq_off.ring_mask)),
+          ring_entries(*m.get<__u32>(ring.sq_off.ring_entries))
     {
         head = m.get<__u32>(ring.sq_off.head);
         tail = m.get<_Atomic(__u32)>(ring.sq_off.tail);
-        ring_mask = m.get<__u32>(ring.sq_off.ring_mask);
-        ring_entries = m.get<__u32>(ring.sq_off.ring_entries);
         flags = m.get<_Atomic(__u32)>(ring.sq_off.flags);
         array = m.get<__u32>(ring.sq_off.array);
         items = itemsMemory.get<io_uring_sqe>();
+        freeSqeEntries = *m.get<__u32>(ring.sq_off.ring_entries);
     }
 };
 
@@ -129,17 +176,17 @@ struct IoUring::IoCompletionRing
 {
     _Atomic(__u32)* head;
     _Atomic(__u32)* tail;
-    __u32* ring_mask;
-    __u32* ring_entries;
+    const __u32 ring_mask;
+    const __u32 ring_entries;
     __u32* overflow;
     io_uring_cqe* items;
 
     IoCompletionRing(io_uring_params& ring, memory::MemMap& m)
+        : ring_mask(*m.get<__u32>(ring.cq_off.ring_mask)),
+          ring_entries(*m.get<__u32>(ring.cq_off.ring_entries))
     {
         head = m.get<_Atomic(__u32)>(ring.cq_off.head);
         tail = m.get<_Atomic(__u32)>(ring.cq_off.tail);
-        ring_mask = m.get<__u32>(ring.cq_off.ring_mask);
-        ring_entries = m.get<__u32>(ring.cq_off.ring_entries);
         items = m.get<io_uring_cqe>(ring.cq_off.cqes);
     }
 };
@@ -192,6 +239,7 @@ bool IoUring::createForUdp(const size_t queueDepth)
     if (ring.features & IORING_FEAT_SINGLE_MMAP)
     {
         // kernel will associate these memory areas with the ring fd
+        // !!! worst case of used sqe items should be full sqe queue and full cqe which has not been processed yet
         if (!_submitQueueMemory.allocateAtLeast(std::max(submitRingSize, completionRingSize),
                 PROT_READ | PROT_WRITE,
                 MAP_SHARED | MAP_POPULATE,
@@ -228,16 +276,15 @@ bool IoUring::createForUdp(const size_t queueDepth)
         _completionRing = new IoCompletionRing(ring, _completionQueueMemory);
     }
 
-    const size_t hdrAreaSize = memory::roundUpToPage(queueDepth * sizeof(MessageHeader));
-    _messageHeadersMemory.allocate(hdrAreaSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
-    auto* h = _messageHeadersMemory.get<MessageHeader>();
-    for (size_t i = 0; i < queueDepth; ++i)
+    if (!_requests.init(ring.sq_entries + ring.cq_entries))
     {
-        _messageHeaders.push(h);
-        ++h;
+        return false;
     }
 
-    // could be that we need to register _messageHeadersMemory with the ring fd
+    if (!registerBuffers(_requests.requests, _requests.allocatedCount(), sizeof(Request)))
+    {
+        return false;
+    }
 
     return true;
 }
@@ -245,41 +292,59 @@ bool IoUring::createForUdp(const size_t queueDepth)
 // single threaded. Must post jobs on serial queue here. Good perhaps as we want packets to be sent in order most of
 // the time. buffer should be in a mmap memory with properties: MAP_ANONYMOUS
 // https://manpages.ubuntu.com/manpages/kinetic/en/man2/sendmsg.2.html
-void IoUring::send(int fd, const void* buffer, size_t length, const transport::SocketAddress& target, uint64_t cookie)
+bool IoUring::send(int fd,
+    const void* buffer,
+    size_t length,
+    const transport::SocketAddress& target,
+    uint64_t clientCookie)
 {
-    MessageHeader* msgHeader;
-    concurrency::StackItem* item;
-    if (!_messageHeaders.pop(item))
+    if (_submitRing->freeSqeEntries == 0)
     {
-        return;
+        return false;
     }
-    msgHeader = reinterpret_cast<MessageHeader*>(item);
 
-    msgHeader->init();
+    concurrency::StackItem* item;
+    if (!_requests.freeItems.pop(item))
+    {
+        return false; // we also have no free sqe
+    }
 
-    msgHeader->addBuffer(buffer, length);
-    msgHeader->setTarget(target);
-
-    // auto sqe = allocSqe();
-    io_uring_sqe* sqe;
+    --_submitRing->freeSqeEntries;
+    auto sendRequest = reinterpret_cast<Request*>(item);
+    sendRequest->init();
+    sendRequest->setBuffer(buffer, length);
+    sendRequest->setTarget(target);
+    sendRequest->operation = Request::SEND;
+    // !!! I do not see how this allocation of sqe can work if they complete in arbitrary order. The tail just continues
+    // and will wrap on the sqe vector but we cannot be sure that first item in the array has been returned. It could be
+    // another one further up the array.
     const auto tail = *_submitRing->tail;
-    const auto index = tail & (*_submitRing->ring_mask);
-    sqe = &_submitRing->items[index];
+    const auto index = tail & _submitRing->ring_mask;
+    io_uring_sqe* sqe = &_submitRing->items[index];
     std::memset(sqe, 0, sizeof(*sqe));
-    sqe->addr = reinterpret_cast<unsigned long long>(msgHeader);
+    sqe->addr = reinterpret_cast<__u64>(&sendRequest->header);
     sqe->fd = fd;
-    sqe->user_data = cookie;
+    sqe->user_data = sendRequest->index;
+    sqe->opcode = IORING_OP_SENDMSG;
+    sqe->msg_flags = MSG_DONTWAIT;
 
-    // TODO fill sqe
     _submitRing->array[index] = index;
     ::atomic_store_explicit(_submitRing->tail, tail + 1, std::memory_order_release);
 
     const unsigned flags = ::atomic_load_explicit(_submitRing->flags, std::memory_order_relaxed);
     if (flags & IORING_SQ_NEED_WAKEUP)
+    {
         iouring::enter(_ringFd, 0, 0, IORING_ENTER_SQ_WAKEUP);
+        ++_wakeUps;
+    }
+
+    return true;
 }
 
-void IoUring::receive(void* buffer, size_t length, uint64_t cookie) {}
+bool IoUring::receive(void* buffer, size_t length, uint64_t cookie)
+{
+    return false;
+}
 
 bool IoUring::registerCompletionEvent(int eventFd)
 {
@@ -291,15 +356,48 @@ bool IoUring::unRegisterCompletionEvent(int eventFd)
     return 0 == iouring::unRegisterCompletionEvent(_ringFd, eventFd);
 }
 
-bool IoUring::getCompletedItem(CompletionInfo& item)
+// will use callbacks
+bool IoUring::processCompletedItems()
 {
-    return false;
+    auto head = ::atomic_load_explicit(_completionRing->head, memory_order_relaxed);
+    for (;;)
+    {
+        const auto tail = ::atomic_load_explicit(_completionRing->tail, memory_order_relaxed);
+        if (head == tail)
+        {
+            return false;
+        }
+
+        const auto cqeIndex = head & _completionRing->ring_mask;
+        const auto cqe = &_completionRing->items[cqeIndex];
+        const auto errCode = cqe->res;
+        const auto requestIndex = cqe->user_data;
+
+        auto& request = _requests.requests[requestIndex];
+        if (errCode != request.getMessageSize())
+        {
+            logger::warn("not all was sent %d %s", "IoUring", errCode, strerror(errCode));
+        }
+
+        // check operation
+        ++_submitRing->freeSqeEntries;
+        // callback with data
+        ++_completionCounter;
+        _requests.freeItems.push(&request);
+
+        ::atomic_store_explicit(_completionRing->head, ++head, memory_order_release);
+        if (head == tail)
+        {
+            return true;
+        }
+    }
+    return true;
 }
 
 bool IoUring::hasCompletedItems() const
 {
     const auto head = ::atomic_load_explicit(_completionRing->head, memory_order_relaxed);
-    const auto tail = atomic_load_explicit(_completionRing->tail, memory_order_relaxed);
+    const auto tail = ::atomic_load_explicit(_completionRing->tail, memory_order_relaxed);
     return head != tail;
 }
 

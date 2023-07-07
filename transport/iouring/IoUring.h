@@ -39,20 +39,36 @@ public:
 
     bool createForUdp(size_t queueDepth);
 
-    void send(int fd, const void* buffer, size_t length, const transport::SocketAddress& target, uint64_t cookie);
-    void receive(void* buffer, size_t length, uint64_t cookie);
+    bool send(int fd, const void* buffer, size_t length, const transport::SocketAddress& target, uint64_t cookie);
+    bool receive(void* buffer, size_t length, uint64_t cookie);
 
     bool registerCompletionEvent(int eventFd);
     bool unRegisterCompletionEvent(int eventFd);
 
-    bool getCompletedItem(CompletionInfo& item);
+    bool processCompletedItems();
     bool hasCompletedItems() const;
 
     bool registerBuffers(void* buffer, size_t count, size_t itemSize, size_t itemPadding = 0);
 
+    size_t getWakeUps() const { return _wakeUps; }
+
 private:
     struct IoSubmitRing;
     struct IoCompletionRing;
+
+    struct Request;
+
+    struct Requests
+    {
+        concurrency::WaitFreeStack freeItems;
+        Request* requests;
+
+        bool init(size_t count);
+        size_t allocatedCount() const;
+
+    private:
+        memory::MemMap _sharedMem;
+    };
 
     int _ringFd;
     IoSubmitRing* _submitRing;
@@ -61,9 +77,11 @@ private:
     memory::MemMap _submitQueueMemory;
     memory::MemMap _completionQueueMemory;
     memory::MemMap _submitItems;
-    memory::MemMap _messageHeadersMemory;
 
-    concurrency::WaitFreeStack _messageHeaders;
-    concurrency::WaitFreeStack _sqeItems;
+    Requests _requests;
+
+private:
+    size_t _completionCounter = 0;
+    size_t _wakeUps = 0;
 };
 } // namespace iouring

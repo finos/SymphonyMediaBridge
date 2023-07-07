@@ -6,31 +6,85 @@
 #include <array>
 #include <errno.h>
 #include <gtest/gtest.h>
+#include <linux/io_uring.h>
+#include <thread>
+
+struct PacketItem : concurrency::StackItem
+{
+    PacketItem(void* p) : packet(p) {}
+
+    void* packet;
+};
 
 TEST(IoUringTest, Send)
 {
     using namespace transport;
     RtcSocket socket;
-    socket.open(SocketAddress::parse("172.18.190.101", 6767), 6767);
+
+    std::string msg = "test message is simple but also complicated";
+
+    auto target = SocketAddress::parse("127.0.0.1", 6768);
+
+    socket.open(SocketAddress::parse("127.0.0.1", 6767), 6767);
+
+    const int iterations = 500000;
+    size_t pauses = 0;
+    auto start = utils::Time::getAbsoluteTime();
+    for (int i = 0; i < iterations;)
+    {
+        if (0 == socket.sendTo(msg.c_str(), msg.size(), target))
+        {
+            ++i;
+        }
+        else
+        {
+            std::this_thread::yield();
+        }
+    }
+    auto end = utils::Time::getAbsoluteTime();
+
+    logger::info("plain sendto %" PRIu64 "us pauses %zu", "", utils::Time::diff(start, end) / utils::Time::us, pauses);
 
     iouring::IoUring ring;
 
-    auto ringRc = ring.createForUdp(12);
+    auto ringRc = ring.createForUdp(1024);
 
-    // assert(ringRc);
-    memory::MemMap mem;
-    auto memSize = memory::roundUpToPage(1500 * 2500);
-    auto count = memSize / 1500;
-    mem.allocate(memSize, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS);
-    assert(mem.isGood());
-    auto bufOK = ring.registerBuffers(mem.get<void*>(), count, 1500);
-    assert(bufOK);
-    std::string msg = "test message is simple but also complicated";
+    assert(ringRc);
 
-    std::memcpy(mem.get<char>(), msg.c_str(), msg.size());
-    auto target = SocketAddress::parse("172.18.190.101", 6768);
-    uint64_t cookie = 0;
-    ring.send(socket.fd(), mem.get<void>(), msg.size(), target, cookie++);
+    pauses = 0;
+    start = utils::Time::getAbsoluteTime();
+    for (int i = 0; i < iterations;)
+    {
+        if (i % 500 == 0)
+        {
+            ring.processCompletedItems();
+        }
 
-    utils::Time::rawNanoSleep(4 * utils::Time::sec);
+        if (ring.send(socket.fd(), msg.c_str(), msg.size(), target, 0))
+        {
+            ++i;
+        }
+        else
+        {
+            if (!ring.processCompletedItems())
+            {
+                ++pauses;
+                std::this_thread::yield();
+            }
+        }
+    }
+    end = utils::Time::getAbsoluteTime();
+    while (ring.processCompletedItems())
+    {
+        utils::Time::rawNanoSleep(1 * utils::Time::us);
+    }
+
+    logger::info("ioring sendto %" PRIu64 "us wakeups %zu, pauses %zu",
+        "",
+        utils::Time::diff(start, end) / utils::Time::us,
+        ring.getWakeUps(),
+        pauses);
+
+    utils::Time::rawNanoSleep(2 * utils::Time::sec);
+    ring.processCompletedItems();
 }
