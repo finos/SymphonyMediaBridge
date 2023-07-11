@@ -27,14 +27,25 @@ TEST(IoUringTest, Send)
 
     socket.open(SocketAddress::parse("127.0.0.1", 6767), 6767);
 
+    uint8_t rawData[1250];
+
     const int iterations = 500000;
     size_t pauses = 0;
+    const int batchCount = 1;
+    RtcSocket::Message messages[batchCount];
+    for (int i = 0; i < batchCount; ++i)
+    {
+        auto& m = messages[i];
+        m.add(rawData, 1250);
+        m.target = &target;
+    }
+
     auto start = utils::Time::getAbsoluteTime();
     for (int i = 0; i < iterations;)
     {
-        if (0 == socket.sendTo(msg.c_str(), msg.size(), target))
+        if (0 == socket.sendMultiple(messages, batchCount))
         {
-            ++i;
+            i += batchCount;
         }
         else
         {
@@ -47,7 +58,7 @@ TEST(IoUringTest, Send)
 
     iouring::IoUring ring;
 
-    auto ringRc = ring.createForUdp(1024);
+    auto ringRc = ring.createForUdp(8096);
 
     assert(ringRc);
 
@@ -55,12 +66,12 @@ TEST(IoUringTest, Send)
     start = utils::Time::getAbsoluteTime();
     for (int i = 0; i < iterations;)
     {
-        if (i % 500 == 0)
+        if (i % 50 == 0)
         {
             ring.processCompletedItems();
         }
 
-        if (ring.send(socket.fd(), msg.c_str(), msg.size(), target, 0))
+        if (ring.send(socket.fd(), rawData, 1250, target, 0))
         {
             ++i;
         }
@@ -69,7 +80,8 @@ TEST(IoUringTest, Send)
             if (!ring.processCompletedItems())
             {
                 ++pauses;
-                std::this_thread::yield();
+                utils::Time::rawNanoSleep(1 * utils::Time::us);
+                // std::this_thread::yield();
             }
         }
     }

@@ -215,6 +215,7 @@ bool IoUring::createForUdp(const size_t queueDepth)
     io_uring_params ring;
     memset(&ring, 0, sizeof(ring));
     ring.flags = IORING_SETUP_SQPOLL;
+    ring.sq_thread_idle = 250;
     // sq_thread_cpu,  sq_thread_idle may be configured too. It could be that it is beneficial to use same cpu for
     // recv and send as is used by SQ kernel thread
     _ringFd = iouring::setup(queueDepth, &ring);
