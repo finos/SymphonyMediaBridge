@@ -96,6 +96,13 @@ struct IoUring::Request : public concurrency::StackItem
         header.msg_namelen = addr.getSockAddrSize();
     }
 
+    void setTarget(const transport::RawSockAddress& addr)
+    {
+        std::memcpy(&target, &addr, sizeof(addr));
+        header.msg_name = &target;
+        header.msg_namelen = transport::size(addr);
+    }
+
     size_t getMessageSize() const
     {
         size_t a = 0;
@@ -340,6 +347,55 @@ bool IoUring::send(int fd,
     }
 
     return true;
+}
+
+size_t IoUring::sendBatch(Message* messages, size_t count)
+{
+    if (_submitRing->freeSqeEntries < count)
+    {
+        return 0;
+    }
+
+    auto tail = *_submitRing->tail;
+    size_t i = 0;
+    for (i = 0; i < count && _submitRing->freeSqeEntries > 0; ++i)
+    {
+        concurrency::StackItem* item;
+        if (!_requests.freeItems.pop(item))
+        {
+            break; // we also have no free sqe
+        }
+
+        --_submitRing->freeSqeEntries;
+        auto sendRequest = reinterpret_cast<Request*>(item);
+        Message& msg = messages[i];
+        sendRequest->init();
+        sendRequest->setBuffer(msg.buffer, msg.length);
+        sendRequest->setTarget(msg.target);
+        sendRequest->operation = Request::SEND;
+
+        const auto index = tail & _submitRing->ring_mask;
+        io_uring_sqe* sqe = &_submitRing->items[index];
+        std::memset(sqe, 0, sizeof(*sqe));
+        sqe->addr = reinterpret_cast<__u64>(&sendRequest->header);
+        sqe->fd = msg.socketFd;
+        sqe->user_data = sendRequest->index;
+        sqe->opcode = IORING_OP_SENDMSG;
+        sqe->msg_flags = MSG_DONTWAIT;
+
+        _submitRing->array[index] = index;
+        ++tail;
+    }
+    ::atomic_store_explicit(_submitRing->tail, tail, std::memory_order_release);
+
+    const unsigned flags = ::atomic_load_explicit(_submitRing->flags, std::memory_order_relaxed);
+    if (flags & IORING_SQ_NEED_WAKEUP)
+    {
+        iouring::enter(_ringFd, 0, 0, IORING_ENTER_SQ_WAKEUP);
+        ++_wakeUps;
+    }
+
+    return i;
 }
 
 bool IoUring::receive(void* buffer, size_t length, uint64_t cookie)

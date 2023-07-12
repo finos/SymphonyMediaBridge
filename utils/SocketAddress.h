@@ -15,7 +15,17 @@ typedef union
     sockaddr gen;
     sockaddr_in v4;
     sockaddr_in6 v6;
+
 } RawSockAddress;
+
+inline size_t size(const RawSockAddress& a)
+{
+    if (a.gen.sa_family == AF_INET)
+    {
+        return sizeof(sockaddr_in);
+    }
+    return sizeof(sockaddr_in6);
+}
 
 class SocketAddress
 {

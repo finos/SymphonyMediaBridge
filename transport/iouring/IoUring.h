@@ -1,5 +1,6 @@
 #pragma once
 #include "memory/MemMap.h"
+#include "utils/SocketAddress.h"
 #include <concurrency/WaitFreeStack.h>
 #include <cstddef>
 #include <cstdint>
@@ -34,12 +35,34 @@ struct CompletionInfo
 class IoUring
 {
 public:
+    struct Message
+    {
+        int socketFd;
+        transport::RawSockAddress target;
+        void* buffer;
+        size_t length;
+        uint64_t cookie;
+        int error;
+
+        void add(void* buf, size_t byteCount)
+        {
+            buffer = buf;
+            length = byteCount;
+        }
+
+        void setTarget(transport::SocketAddress& addr)
+        {
+            std::memcpy(&target, addr.getSockAddr(), addr.getSockAddrSize());
+        }
+    };
+
     IoUring();
     ~IoUring();
 
     bool createForUdp(size_t queueDepth);
 
     bool send(int fd, const void* buffer, size_t length, const transport::SocketAddress& target, uint64_t cookie);
+    size_t sendBatch(Message* messages, size_t count);
     bool receive(void* buffer, size_t length, uint64_t cookie);
 
     bool registerCompletionEvent(int eventFd);
