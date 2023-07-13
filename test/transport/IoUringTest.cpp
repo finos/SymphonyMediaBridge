@@ -17,8 +17,8 @@ struct PacketItem : concurrency::StackItem
 };
 
 /**
- * This test has been run on Debian in GCE kernel 5.10
- AWS EC2 Amazon Linux kernel  5.10.184-175.731.amzn2.x86_64
+This test has been run on Debian in GCE kernel 5.10
+AWS EC2 Amazon Linux kernel  5.10.184-175.731.amzn2.x86_64
 GCE  e2-standard-4  5.10.0-23-cloud-amd64
 WSL2 Ubuntu 22.04 5.15.90.1-microsoft-standard-WSL2
 
