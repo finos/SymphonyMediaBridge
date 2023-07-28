@@ -478,6 +478,36 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
     return stats;
 }
 
+Stats::BarbellPayloadStats EngineMixer::fromPacketCounter(const transport::PacketCounters& counters)
+{
+    Stats::BarbellPayloadStats result;
+    result.activeStreamCount = counters.activeStreamCount;
+    result.bitrateKbps = counters.bitrateKbps;
+    result.lostPackets = counters.lostPackets;
+    result.octets = counters.octets;
+    result.packets = counters.packets;
+    result.packetsPerSecond = counters.packetsPerSecond;
+    result.period = counters.period;
+    return result;
+}
+
+Stats::MixerBarbellStats EngineMixer::gatherBarbellStats(const uint64_t iterationStartTime)
+{
+    Stats::MixerBarbellStats stats;
+    uint64_t idleTimestamp = iterationStartTime - utils::Time::sec * 2;
+
+    for (const auto& itBb : _engineBarbells) {
+        Stats::BarbellStats barbellStats;
+        barbellStats._stats[Stats::BarbellStats::PayloadType::AUDIO_RECV] = fromPacketCounter(itBb.second->transport.getAudioReceiveCounters(idleTimestamp));
+        barbellStats._stats[Stats::BarbellStats::PayloadType::AUDIO_SEND] = fromPacketCounter(itBb.second->transport.getAudioSendCounters(idleTimestamp));
+        barbellStats._stats[Stats::BarbellStats::PayloadType::VIDEO_RECV] = fromPacketCounter(itBb.second->transport.getVideoReceiveCounters(idleTimestamp));
+        barbellStats._stats[Stats::BarbellStats::PayloadType::VIDEO_SEND] = fromPacketCounter(itBb.second->transport.getVideoSendCounters(idleTimestamp));
+        stats._stats.emplace(itBb.second->id, barbellStats);
+    }
+
+    return stats;
+}
+
 void EngineMixer::onConnected(transport::RtcTransport* sender)
 {
     logger::debug("transport connected", sender->getLoggableId().c_str());

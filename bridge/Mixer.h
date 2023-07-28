@@ -6,6 +6,7 @@
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SsrcRewrite.h"
+#include "bridge/Stats.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
 #include "transport/dtls/SrtpClient.h"

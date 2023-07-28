@@ -71,6 +71,7 @@ public:
 
     Stats::MixerManagerStats getStats();
 
+    Stats::AggregatedBarbellStats getBarbellStats();
     void finalizeEngineMixerRemoval(const std::string& mixerId);
 
 private:
@@ -101,6 +102,7 @@ private:
     std::mutex _configurationLock;
 
     MixerStats _stats;
+    Stats::AggregatedBarbellStats _barbellStats;
     Stats::SystemStatsCollector _systemStatCollector;
     memory::PacketPoolAllocator& _mainAllocator;
     memory::PacketPoolAllocator& _sendAllocator;

@@ -3,7 +3,7 @@
 #include "api/SimulcastGroup.h"
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
-#include "bridge/engine/EngineStats.h"
+#include "bridge/Stats.h"
 #include "bridge/engine/NeighbourMembership.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"
@@ -105,6 +105,7 @@ public:
     void forwardPackets(const uint64_t engineTimestamp);
     void clear();
     EngineStats::MixerStats gatherStats(const uint64_t engineIterationStartTimestamp);
+    Stats::MixerBarbellStats gatherBarbellStats(const uint64_t engineIterationStartTimestamp);
 
     void run(const uint64_t engineIterationStartTimestamp);
     // --
@@ -549,6 +550,7 @@ private:
 
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
     utils::Optional<uint32_t> findBarbellMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);
+    Stats::BarbellPayloadStats fromPacketCounter(const transport::PacketCounters& counters);
     // --
 };
 

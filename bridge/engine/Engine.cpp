@@ -25,6 +25,7 @@ namespace bridge
 Engine::Engine(jobmanager::JobManager& backgroundJobQueue)
     : _messageListener(nullptr),
       _running(true),
+      _barbellStatsWritingSnapshotIdx(0),
       _tickCounter(0),
       _tasks(1024),
       _thread([this] { this->run(); })
@@ -137,14 +138,21 @@ void Engine::updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& curr
 {
     uint64_t pollTime = utils::Time::getAbsoluteTime();
     currentStatSample.activeMixers = EngineStats::MixerStats();
+    int bbStatsWriteIndex = barbellStatsWritingIdx();
+
     for (auto mixerEntry = _mixers.head(); mixerEntry; mixerEntry = mixerEntry->_next)
     {
         currentStatSample.activeMixers += mixerEntry->_data->gatherStats(timestamp);
+        _barbellStats[bbStatsWriteIndex]._stats.emplace(mixerEntry->_data->getId(), mixerEntry->_data->gatherBarbellStats(timestamp));
     }
 
     currentStatSample.pollPeriodMs =
         static_cast<uint32_t>(std::max(uint64_t(1), (pollTime - statsPollTime) / uint64_t(1000000)));
     _stats.write(currentStatSample);
+
+
+   switchBarbellStatsIndice();
+
     statsPollTime = pollTime;
 }
 
@@ -185,6 +193,14 @@ EngineStats::EngineStats Engine::getStats()
     EngineStats::EngineStats stats;
     _stats.read(stats);
     return stats;
+}
+
+Stats::AggregatedBarbellStats Engine::getBarbellStats()
+{
+    Stats::AggregatedBarbellStats barbellStats;
+    int readIdx = barbellStatsReadingIdx();
+    barbellStats = _barbellStats[readIdx];
+    return barbellStats;
 }
 
 } // namespace bridge

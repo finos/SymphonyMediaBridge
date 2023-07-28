@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bridge/engine/EngineStats.h"
+#include "bridge/Stats.h"
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
 #include "concurrency/SynchronizationContext.h"
@@ -40,6 +40,7 @@ public:
     }
 
     EngineStats::EngineStats getStats();
+    Stats::AggregatedBarbellStats getBarbellStats();
 
 private:
     static const size_t maxMixers = 4096;
@@ -51,6 +52,18 @@ private:
     memory::List<EngineMixer*, maxMixers> _mixers;
 
     concurrency::MpmcPublish<EngineStats::EngineStats, 4> _stats;
+    Stats::AggregatedBarbellStats _barbellStats[2]; // Variable-length snapshot, so can't use MpmcPublish.
+    std::atomic<int> _barbellStatsWritingSnapshotIdx;
+    inline int barbellStatsWritingIdx() {
+        return _barbellStatsWritingSnapshotIdx.load();
+    }
+    inline int barbellStatsReadingIdx() {
+        return 1 - _barbellStatsWritingSnapshotIdx.load();
+    }
+    inline void switchBarbellStatsIndice() {
+        int cur =  _barbellStatsWritingSnapshotIdx.load();
+        _barbellStatsWritingSnapshotIdx.store(1 - cur);
+    }
     uint32_t _tickCounter;
 
     concurrency::MpmcQueue<utils::Function> _tasks;

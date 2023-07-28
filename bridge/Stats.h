@@ -4,6 +4,7 @@
 #include "concurrency/MpmcPublish.h"
 #include <array>
 #include <inttypes.h>
+#include <unordered_map>
 
 namespace bridge
 {
@@ -70,6 +71,41 @@ struct MixerManagerStats
     uint64_t udpSharedEndpointsSendDrops = 0;
 
     std::string describe();
+};
+
+struct BarbellPayloadStats
+{
+    int64_t octets = 0;
+    int64_t packets = 0;
+    int64_t lostPackets = 0;
+    int64_t bitrateKbps = 0;
+    int64_t packetsPerSecond = 0;
+    int64_t period;
+    int64_t activeStreamCount;
+};
+
+struct BarbellStats
+{
+    enum PayloadType {
+        AUDIO_SEND,
+        AUDIO_RECV,
+        VIDEO_SEND,
+        VIDEO_RECV
+    };
+    BarbellPayloadStats _stats[4];
+};
+
+struct MixerBarbellStats
+{
+    // barbellId -> BarbellStats
+    std::unordered_map<std::string, Stats::BarbellStats> _stats;
+};
+
+struct AggregatedBarbellStats
+{
+    // confId -> BarbellStats[]
+    std::unordered_map<std::string, Stats::MixerBarbellStats> _stats;
+    std::string describe() const;
 };
 
 // Maintains state for collecting cpu and network statistics on demand.

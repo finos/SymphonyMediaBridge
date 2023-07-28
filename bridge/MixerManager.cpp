@@ -701,11 +701,24 @@ void MixerManager::updateStats()
     }
 
     _stats.engine = _engine.getStats();
+    _barbellStats = _engine.getBarbellStats();
 
     if (_mainAllocator.size() < 512)
     {
         logger::warn("stats main pool %zu, mixers %zu", "MixerManager", _mainAllocator.size(), _mixers.size());
     }
+}
+
+Stats::AggregatedBarbellStats MixerManager::getBarbellStats()
+{
+    Stats::AggregatedBarbellStats result;
+
+    {
+        std::lock_guard<std::mutex> locker(_configurationLock);
+        result = _barbellStats;
+    }
+
+    return result;
 }
 
 } // namespace bridge
