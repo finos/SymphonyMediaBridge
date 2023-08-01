@@ -624,3 +624,162 @@ TEST_F(BarbellTest, barbellNeighbours)
         }
     });
 }
+
+TEST_F(BarbellTest, barbellStats)
+{
+    runTestInThread(expectedTestThreadCount(2), [this]() {
+        _config.readFromString(_smbConfig1);
+
+        initBridge(_config);
+
+        config::Config config2;
+        config2.readFromString(_smbConfig2);
+
+        emulator::HttpdFactory httpd2;
+        auto bridge2 = std::make_unique<bridge::Bridge>(config2);
+        bridge2->initialize(_bridgeEndpointFactory, httpd2, _smb2interfaces);
+
+        for (const auto& linkInfo : _endpointNetworkLinkMap)
+        {
+            // SFU's default downlinks is good (1 Gbps).
+            linkInfo.second.ptrLink->setBandwidthKbps(1000000);
+        }
+
+        const auto baseUrl = "http://127.0.0.1:8080";
+        const auto baseUrl2 = "http://127.0.0.1:8090";
+
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_publicTransportFactory,
+            *_sslDtls,
+            1);
+        group.add(&httpd2);
+        group.add(&httpd2);
+
+        Conference conf(_httpd);
+        Conference conf2(&httpd2);
+
+        Barbell bb1(_httpd);
+        Barbell bb2(&httpd2);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+        group.startConference(conf2, baseUrl2);
+
+        auto sdp1 = bb1.allocate(baseUrl, conf.getId(), true);
+        auto sdp2 = bb2.allocate(baseUrl2, conf2.getId(), false);
+
+        bb1.configure(sdp2);
+        bb2.configure(sdp1);
+
+        utils::Time::nanoSleep(2 * utils::Time::sec);
+        CallConfigBuilder cfg1(conf.getId());
+        cfg1.av().url(baseUrl);
+
+        CallConfigBuilder cfg2(cfg1);
+        cfg2.room(conf2.getId()).url(baseUrl2);
+
+        group.clients[0]->initiateCall(cfg1.build());
+        group.clients[1]->joinCall(cfg2.build());
+        group.clients[2]->joinCall(cfg2.build());
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        //make5secCallWithDefaultAudioProfile(group);
+        const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
+        for (size_t i = 0; i < group.clients.size(); ++i)
+        {
+            group.clients[i]->_audioSource->setFrequency(frequencies[i]);
+        }
+
+        for (auto& client : group.clients)
+        {
+            client->_audioSource->setVolume(0.6);
+        }
+
+        //for (int i = 0; i < 5; i++) {
+            group.run(utils::Time::sec * 5);
+
+            nlohmann::json statsResponseBody;
+            auto barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/barbellStats",
+            1500 * utils::Time::ms,
+            statsResponseBody);
+            EXPECT_TRUE(barbellStatsRequest);
+
+            logger::debug("/barbellStats %s", "bbTest", statsResponseBody.dump(4).c_str());
+        //}
+        //group.run(utils::Time::sec * 5);
+
+
+        utils::Time::nanoSleep(utils::Time::sec * 1);
+
+        for (auto& client : group.clients)
+        {
+            client->stopRecording();
+        }
+
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/colibri/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
+
+        bb1.remove(baseUrl);
+
+        utils::Time::nanoSleep(utils::Time::ms * 1000); // let pending packets be sent and received)
+
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        logVideoSent("client1", *group.clients[0]);
+        logVideoSent("client2", *group.clients[1]);
+        logVideoSent("client3", *group.clients[2]);
+
+        const double expectedFrequencies[2][2] = {{1300.0, 2100.0}, {600.0, 2100.0}};
+        size_t freqId = 0;
+        for (auto id : {0, 1})
+        {
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
+            EXPECT_EQ(data.dominantFrequencies.size(), 2);
+            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+        }
+
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
+        std::unordered_map<uint32_t, transport::ReportSummary> transportSummary2;
+        auto videoReceiveStats = group.clients[0]->getCumulativeVideoReceiveCounters();
+        group.clients[1]->getReportSummary(transportSummary1);
+        group.clients[2]->getReportSummary(transportSummary2);
+
+        logger::debug("client1 received video pkts %" PRIu64, "bbTest", videoReceiveStats.packets);
+        logVideoReceive("client1", *group.clients[0]);
+        logTransportSummary("client2", transportSummary1);
+        logTransportSummary("client3", transportSummary2);
+
+        auto allStreamsVideoStats = group.clients[0]->getActiveVideoDecoderStats();
+        EXPECT_EQ(allStreamsVideoStats.size(), 2);
+        for (const auto& videoStats : allStreamsVideoStats)
+        {
+            const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
+            EXPECT_NEAR(fps, 30.0, 1.0);
+            EXPECT_NEAR(videoStats.numDecodedFrames, 150, 7);
+        }
+    });
+}
