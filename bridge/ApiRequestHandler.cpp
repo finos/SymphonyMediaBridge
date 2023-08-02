@@ -118,7 +118,23 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
             }
             else if (utils::StringTokenizer::isEqual(token, "stats") && request._method == httpd::Method::GET)
             {
-                return handleStats(this, requestLogger, request);
+                if (token.next)
+                {
+                    token = utils::StringTokenizer::tokenize(token, '/');
+                    if (utils::StringTokenizer::isEqual(token, "barbell")) {
+                        if (token.next)
+                        {
+                            token = utils::StringTokenizer::tokenize(token, '/');
+                            const auto conferenceId = token.str();
+                            return handleBarbellStats(this, requestLogger, request, conferenceId);
+                        } else {
+                            return handleBarbellStats(this, requestLogger, request);
+                        }
+                    }
+                } else
+                {
+                    return handleStats(this, requestLogger, request);
+                }
             }
             else if (utils::StringTokenizer::isEqual(token, "barbellStats") && request._method == httpd::Method::GET)
             {

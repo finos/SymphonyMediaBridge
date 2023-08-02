@@ -694,21 +694,27 @@ TEST_F(BarbellTest, barbellStats)
 
         make5secCallWithDefaultAudioProfile(group);
 
-        // Gather barbell stats from BB 1:
+        // Let's check both form of getting barbell stats:
+        // - specifc conference: /stats/barbell/<conference ID>
+        // - full (all conferences): /stats/barbell
+        // Since both sides of the barbell have only one conference, we can get SPECIFIC stats from one side,
+        // all (one) conference's stats from another and compare for symmetry.
+
+        // Gather SPECIFIC conference's barbell stats from BB 1 (there is only one conference):
         nlohmann::json statsResponseBody1;
-        auto barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
-        std::string(baseUrl) + "/barbellStats", 1500 * utils::Time::ms, statsResponseBody1);
+        std::string statsRequestUrl = std::string(baseUrl) + "/stats/barbell/" + conf.getId();
+        auto barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(_httpd, statsRequestUrl, 1500 * utils::Time::ms, statsResponseBody1);
         EXPECT_TRUE(barbellStatsRequest);
 
-        logger::debug("%s/barbellStats %s", "bbTest", baseUrl, statsResponseBody1.dump(4).c_str());
+        logger::debug("%s %s", "bbTest", statsRequestUrl.c_str(), statsResponseBody1.dump(4).c_str());
 
-        // Gather barbell stats from BB 2:
+        // Gather ALL barbell stats from BB 2:
         nlohmann::json statsResponseBody2;
-        barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(&httpd2,
-        std::string(baseUrl2) + "/barbellStats", 1500 * utils::Time::ms, statsResponseBody2);
+        statsRequestUrl = std::string(baseUrl2) + "/stats/barbell";
+        barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(&httpd2, statsRequestUrl, 1500 * utils::Time::ms, statsResponseBody2);
         EXPECT_TRUE(barbellStatsRequest);
 
-        logger::debug("%s/barbellStats %s", "bbTest", baseUrl2, statsResponseBody2.dump(4).c_str());
+        logger::debug("%s %s", "bbTest", statsRequestUrl.c_str(), statsResponseBody1.dump(4).c_str());
 
         // Main checks:
         // - symmetry of bitrates/packets/active streams for BB's inbound/outbound.
