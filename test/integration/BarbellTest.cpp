@@ -714,7 +714,7 @@ TEST_F(BarbellTest, barbellStats)
         barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(&httpd2, statsRequestUrl, 1500 * utils::Time::ms, statsResponseBody2);
         EXPECT_TRUE(barbellStatsRequest);
 
-        logger::debug("%s %s", "bbTest", statsRequestUrl.c_str(), statsResponseBody1.dump(4).c_str());
+        logger::debug("%s %s", "bbTest", statsRequestUrl.c_str(), statsResponseBody2.dump(4).c_str());
 
         // Main checks:
         // - symmetry of bitrates/packets/active streams for BB's inbound/outbound.
@@ -722,6 +722,12 @@ TEST_F(BarbellTest, barbellStats)
         // and for video bitrate of about 1 Mbps per active stream.
 
         {
+            EXPECT_TRUE(statsResponseBody1.begin() != statsResponseBody1.end());
+            EXPECT_EQ(statsResponseBody1.begin().key(), conf.getId());
+
+            EXPECT_TRUE(statsResponseBody2.begin() != statsResponseBody2.end());
+            EXPECT_EQ(statsResponseBody2.begin().key(), conf2.getId());
+
             auto bb1Stats = statsResponseBody1[cfg1.build().conferenceId];
             auto bb2Stats = statsResponseBody2[cfg2.build().conferenceId];
             ASSERT_TRUE(bb1Stats != nullptr);
