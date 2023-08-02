@@ -102,13 +102,12 @@ private:
     std::mutex _configurationLock;
 
     MixerStats _stats;
-    Stats::AggregatedBarbellStats _barbellStats;
     Stats::SystemStatsCollector _systemStatCollector;
     memory::PacketPoolAllocator& _mainAllocator;
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
-    void updateStats(uint64_t timestamp);
+    void updateStats();
 
     // Async interface
     bool post(utils::Function&& task) override { return _backgroundJobQueue.post(std::move(task)); }

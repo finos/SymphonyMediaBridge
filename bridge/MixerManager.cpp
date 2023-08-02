@@ -308,7 +308,7 @@ void MixerManager::maintenance(uint64_t timestamp)
             return;
         }
         _transportFactory.maintenance(timestamp);
-        updateStats(timestamp);
+        updateStats();
     }
     catch (std::exception e)
     {
@@ -681,7 +681,7 @@ Stats::MixerManagerStats MixerManager::getStats()
     return result;
 }
 
-void MixerManager::updateStats(uint64_t timestamp)
+void MixerManager::updateStats()
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -691,8 +691,6 @@ void MixerManager::updateStats(uint64_t timestamp)
     _stats.dataStreams = 0;
     _stats.largestConference = 0;
 
-    _barbellStats._stats.clear();
-
     for (const auto& mixer : _mixers)
     {
         const auto stats = mixer.second->getStats();
@@ -700,8 +698,6 @@ void MixerManager::updateStats(uint64_t timestamp)
         _stats.audioStreams += stats.audioStreams;
         _stats.dataStreams += stats.videoStreams;
         _stats.largestConference = std::max(stats.transports, _stats.largestConference);
-
-        _barbellStats._stats.emplace(mixer.second->getId(), mixer.second->gatherBarbellStats(timestamp));
     }
 
     _stats.engine = _engine.getStats();
@@ -718,7 +714,12 @@ Stats::AggregatedBarbellStats MixerManager::getBarbellStats()
 
     {
         std::lock_guard<std::mutex> locker(_configurationLock);
-        result = _barbellStats;
+        auto now = utils::Time::getAbsoluteTime();
+
+        for (const auto& mixer : _mixers)
+        {
+            result._stats.emplace(mixer.second->getId(), mixer.second->gatherBarbellStats(now));
+        }
     }
 
     return result;
