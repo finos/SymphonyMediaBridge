@@ -37,6 +37,7 @@
 #include <memory>
 #include <sstream>
 #include <unordered_set>
+#include "math.h"
 
 BarbellTest::BarbellTest() {}
 
@@ -662,8 +663,9 @@ TEST_F(BarbellTest, barbellStats)
         Conference conf(_httpd);
         Conference conf2(&httpd2);
 
-        Barbell bb1(_httpd);
-        Barbell bb2(&httpd2);
+        const std::string barbellId = "test_barbell";
+        Barbell bb1(_httpd, barbellId);
+        Barbell bb2(&httpd2, barbellId);
 
         ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
         startSimulation();
@@ -690,52 +692,115 @@ TEST_F(BarbellTest, barbellStats)
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-        //make5secCallWithDefaultAudioProfile(group);
-        const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
-        for (size_t i = 0; i < group.clients.size(); ++i)
+        make5secCallWithDefaultAudioProfile(group);
+
+        // Gather barbell stats from BB 1:
+        nlohmann::json statsResponseBody1;
+        auto barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+        std::string(baseUrl) + "/barbellStats", 1500 * utils::Time::ms, statsResponseBody1);
+        EXPECT_TRUE(barbellStatsRequest);
+
+        logger::debug("%s/barbellStats %s", "bbTest", baseUrl, statsResponseBody1.dump(4).c_str());
+
+        // Gather barbell stats from BB 2:
+        nlohmann::json statsResponseBody2;
+        barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(&httpd2,
+        std::string(baseUrl2) + "/barbellStats", 1500 * utils::Time::ms, statsResponseBody2);
+        EXPECT_TRUE(barbellStatsRequest);
+
+        logger::debug("%s/barbellStats %s", "bbTest", baseUrl2, statsResponseBody2.dump(4).c_str());
+
+        // Main checks:
+        // - symmetry of bitrates/packets/active streams for BB's inbound/outbound.
+        // - matching payload characteristics, e.g. for audio, Opus packet rate (20ms --> 50 packets per second)
+        // and for video bitrate of about 1 Mbps per active stream.
+
         {
-            group.clients[i]->_audioSource->setFrequency(frequencies[i]);
+            auto bb1Stats = statsResponseBody1[cfg1.build().conferenceId];
+            auto bb2Stats = statsResponseBody2[cfg2.build().conferenceId];
+            ASSERT_TRUE(bb1Stats != nullptr);
+            ASSERT_TRUE(bb2Stats != nullptr);
+            auto s1 = bb1Stats[barbellId];
+            auto s2 = bb2Stats[barbellId];
+            ASSERT_TRUE(s1 != nullptr);
+            ASSERT_TRUE(s2 != nullptr);
+
+            // AUDIO:
+
+            //  Active stream count symmetry (hardcoded expectations due to how we set up the test:
+            // 2 users on one side of the barbell, and 1 on another).
+            EXPECT_EQ(s1["audio"]["inbound"]["activeStreamCount"], 2);
+            EXPECT_EQ(s2["audio"]["outbound"]["activeStreamCount"], 2);
+
+            EXPECT_EQ(s1["audio"]["outbound"]["activeStreamCount"], 1);
+            EXPECT_EQ(s2["audio"]["inbound"]["activeStreamCount"], 1);
+
+            // Packates per second for audio (expectations for values per second we can hardcode):
+            EXPECT_NEAR(s1["audio"]["inbound"]["packetsPerSecond"], 100, 5.0);
+            EXPECT_NEAR(s2["audio"]["outbound"]["packetsPerSecond"], 100, 5.0);
+
+            EXPECT_NEAR(s1["audio"]["outbound"]["packetsPerSecond"], 50, 3.0);
+            EXPECT_NEAR(s2["audio"]["inbound"]["packetsPerSecond"], 50, 3.0);
+
+            // Audio bitrate symmetry (expectations for values per second we can hardcode):
+            EXPECT_NEAR(s1["audio"]["inbound"]["bitrateKbps"], 220, 10.0);
+            EXPECT_NEAR(s2["audio"]["outbound"]["bitrateKbps"], 220, 10.0);
+
+            EXPECT_NEAR(s1["audio"]["outbound"]["bitrateKbps"], 110, 5.0);
+            EXPECT_NEAR(s2["audio"]["inbound"]["bitrateKbps"], 110, 5.0);
+
+            // Packets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
+            EXPECT_NE(s1["audio"]["inbound"]["packets"], 0);
+            EXPECT_NE(s1["audio"]["outbound"]["packets"], 0);
+
+            double packetsCompareInPercent = 100.0 * fabs((float)s1["audio"]["inbound"]["packets"] - (float)s2["audio"]["outbound"]["packets"])/(float)s1["audio"]["inbound"]["packets"];
+            EXPECT_NEAR(packetsCompareInPercent, 0.0, 5.0);
+
+            // Octets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
+            EXPECT_NE(s1["audio"]["inbound"]["octets"], 0);
+            EXPECT_NE(s1["audio"]["outbound"]["octets"], 0);
+
+            double octetsCompareInPercent = 100.0 * fabs((float)s1["audio"]["inbound"]["octets"] - (float)s2["audio"]["outbound"]["octets"])/(float)s1["audio"]["inbound"]["octets"];
+            EXPECT_NEAR(octetsCompareInPercent, 0.0, 5.0);
+
+            // VIDEO:
+
+            //  Active stream count symmetry (hardcoded expectations due to how we set up the test:
+            // 2 users on one side of the barbell, and 1 on another).
+            EXPECT_EQ(s1["video"]["inbound"]["activeStreamCount"], 6);
+            EXPECT_EQ(s2["video"]["outbound"]["activeStreamCount"], 6);
+
+            EXPECT_EQ(s1["video"]["outbound"]["activeStreamCount"], 3);
+            EXPECT_EQ(s2["video"]["inbound"]["activeStreamCount"], 3);
+
+            // Packates per second for audio (expectations for values per second we can hardcode):
+            EXPECT_NEAR(s1["video"]["inbound"]["packetsPerSecond"], 646, 10.0);
+            EXPECT_NEAR(s2["video"]["outbound"]["packetsPerSecond"], 646, 10.0);
+
+            EXPECT_NEAR(s1["video"]["outbound"]["packetsPerSecond"], 323, 5.0);
+            EXPECT_NEAR(s2["video"]["inbound"]["packetsPerSecond"], 323, 5.0);
+
+            // Audio bitrate symmetry (expectations for values per second we can hardcode):
+            EXPECT_NEAR(s1["video"]["inbound"]["bitrateKbps"], 6222, 200.0);
+            EXPECT_NEAR(s2["video"]["outbound"]["bitrateKbps"], 6220, 200.0);
+
+            EXPECT_NEAR(s1["video"]["outbound"]["bitrateKbps"], 3100, 100.0);
+            EXPECT_NEAR(s2["video"]["inbound"]["bitrateKbps"], 3100, 100.0);
+
+            // Packets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
+            EXPECT_NE(s1["video"]["inbound"]["packets"], 0);
+            EXPECT_NE(s1["video"]["outbound"]["packets"], 0);
+
+            packetsCompareInPercent = 100.0 * fabs((float)s1["video"]["inbound"]["packets"] - (float)s2["video"]["outbound"]["packets"])/(float)s1["video"]["inbound"]["packets"];
+            EXPECT_NEAR(packetsCompareInPercent, 0.0, 5.0);
+
+            // Octets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
+            EXPECT_NE(s1["video"]["inbound"]["octets"], 0);
+            EXPECT_NE(s1["video"]["outbound"]["octets"], 0);
+
+            octetsCompareInPercent = 100.0 * fabs((float)s1["video"]["inbound"]["octets"] - (float)s2["video"]["outbound"]["octets"])/(float)s1["video"]["inbound"]["octets"];
+            EXPECT_NEAR(octetsCompareInPercent, 0.0, 5.0);
         }
-
-        for (auto& client : group.clients)
-        {
-            client->_audioSource->setVolume(0.6);
-        }
-
-        //for (int i = 0; i < 5; i++) {
-            group.run(utils::Time::sec * 5);
-
-            nlohmann::json statsResponseBody;
-            auto barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/barbellStats",
-            1500 * utils::Time::ms,
-            statsResponseBody);
-            EXPECT_TRUE(barbellStatsRequest);
-
-            logger::debug("/barbellStats %s", "bbTest", statsResponseBody.dump(4).c_str());
-        //}
-        //group.run(utils::Time::sec * 5);
-
-
-        utils::Time::nanoSleep(utils::Time::sec * 1);
-
-        for (auto& client : group.clients)
-        {
-            client->stopRecording();
-        }
-
-        nlohmann::json responseBody;
-        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/colibri/stats",
-            1500 * utils::Time::ms,
-            responseBody);
-        EXPECT_TRUE(statsSuccess);
-
-        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
-            std::string(baseUrl) + "/conferences",
-            1500 * utils::Time::ms,
-            responseBody);
-        EXPECT_TRUE(confRequest);
 
         bb1.remove(baseUrl);
 

@@ -476,7 +476,6 @@ nlohmann::json BarbellPayloadStatsToJson(const BarbellPayloadStats& thiz)
     result["lostPackets"] = thiz.lostPackets;
     result["bitrateKbps"] = thiz.bitrateKbps;
     result["packetsPerSecond"] = thiz.packetsPerSecond;
-    result["period"] = thiz.period;
     result["activeStreamCount"] = thiz.activeStreamCount;
     return result;
 }
@@ -486,10 +485,10 @@ nlohmann::json BarbellStatsToJson(const BarbellStats& thiz)
     nlohmann::json result;
     nlohmann::json audio;
     nlohmann::json video;
-    audio["inbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_RECV]);
     audio["outbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_SEND]);
-    video["inbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_RECV]);
+    audio["inbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_RECV]);
     video["outbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_SEND]);
+    video["inbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_RECV]);
     result["audio"] = audio;
     result["video"] = video;
     return result;

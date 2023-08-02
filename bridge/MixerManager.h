@@ -108,7 +108,7 @@ private:
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
-    void updateStats();
+    void updateStats(uint64_t timestamp);
 
     // Async interface
     bool post(utils::Function&& task) override { return _backgroundJobQueue.post(std::move(task)); }

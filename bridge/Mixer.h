@@ -295,6 +295,7 @@ public:
     EngineMixer* getEngineMixer() { return _engineMixer.get(); }
 
     const config::Config& getConfig() const { return _config; }
+    bridge::Stats::MixerBarbellStats gatherBarbellStats(const uint64_t engineIterationStartTimestamp);
 
 private:
     struct BundleTransport
@@ -346,6 +347,7 @@ private:
 
     void stopTransportIfNeeded(const std::shared_ptr<transport::RtcTransport>& streamTransport,
         const std::string& endpointId);
+    bridge::Stats::BarbellPayloadStats fromPacketCounter(const transport::PacketCounters& counters);
 };
 
 } // namespace bridge

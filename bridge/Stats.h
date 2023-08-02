@@ -80,7 +80,6 @@ struct BarbellPayloadStats
     int64_t lostPackets = 0;
     int64_t bitrateKbps = 0;
     int64_t packetsPerSecond = 0;
-    int64_t period;
     int64_t activeStreamCount;
 };
 
