@@ -3,6 +3,5 @@
 
 const std::vector<std::string> bridge::RequestLogger::_logFilter = {
     "/about",
-    "/stats",
-    "/barbellStats"
+    "/stats"
 };

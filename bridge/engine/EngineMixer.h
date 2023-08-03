@@ -3,7 +3,7 @@
 #include "api/SimulcastGroup.h"
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/BarbellEndpointMap.h"
-#include "bridge/Stats.h"
+#include "bridge/engine/EngineStats.h"
 #include "bridge/engine/NeighbourMembership.h"
 #include "bridge/engine/SimulcastStream.h"
 #include "bridge/engine/SsrcInboundContext.h"

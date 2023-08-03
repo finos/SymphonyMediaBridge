@@ -136,10 +136,6 @@ httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)
                     return handleStats(this, requestLogger, request);
                 }
             }
-            else if (utils::StringTokenizer::isEqual(token, "barbellStats") && request._method == httpd::Method::GET)
-            {
-                return handleBarbellStats(this, requestLogger, request);
-            }
             else if (utils::StringTokenizer::isEqual(token, "conferences") && !token.next)
             {
                 if (request._params.empty())

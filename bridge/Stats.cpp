@@ -468,7 +468,7 @@ ConnectionsStats SystemStatsCollector::collectLinuxNetStat(uint16_t httpPort, ui
 
 // Serialization helpers defined as free functions, to avoid adding include into Stats.h
 // since forward declaration of nohlann::json is not possible.
-nlohmann::json BarbellPayloadStatsToJson(const BarbellPayloadStats& thiz)
+nlohmann::json barbellPayloadStatsToJson(const BarbellPayloadStats& thiz)
 {
     nlohmann::json result;
     result["octets"] = thiz.octets;
@@ -485,10 +485,10 @@ nlohmann::json BarbellStatsToJson(const BarbellStats& thiz)
     nlohmann::json result;
     nlohmann::json audio;
     nlohmann::json video;
-    audio["outbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_SEND]);
-    audio["inbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_RECV]);
-    video["outbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_SEND]);
-    video["inbound"] = BarbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_RECV]);
+    audio["outbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_SEND]);
+    audio["inbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_RECV]);
+    video["outbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_SEND]);
+    video["inbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_RECV]);
     result["audio"] = audio;
     result["video"] = video;
     return result;

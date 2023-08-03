@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bridge/Stats.h"
+#include "bridge/engine/EngineStats.h"
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
 #include "concurrency/SynchronizationContext.h"
