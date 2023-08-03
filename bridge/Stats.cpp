@@ -480,7 +480,7 @@ nlohmann::json barbellPayloadStatsToJson(const BarbellPayloadStats& thiz)
     return result;
 }
 
-nlohmann::json BarbellStatsToJson(const BarbellStats& thiz)
+nlohmann::json barbellStatsToJson(const BarbellStats& thiz)
 {
     nlohmann::json result;
     nlohmann::json audio;
@@ -494,11 +494,11 @@ nlohmann::json BarbellStatsToJson(const BarbellStats& thiz)
     return result;
 }
 
-nlohmann::json MixerBarbellStatsToJson(const MixerBarbellStats& thiz)
+nlohmann::json mixerBarbellStatsToJson(const MixerBarbellStats& thiz)
 {
     nlohmann::json result;
     for (const auto& stats: thiz._stats) {
-        result[stats.first] = BarbellStatsToJson(stats.second);
+        result[stats.first] = barbellStatsToJson(stats.second);
     }
     return result;
 }
@@ -507,7 +507,7 @@ std::string AggregatedBarbellStats::describe() const
 {
     nlohmann::json result;
     for (const auto& stats: _stats) {
-        result[stats.first] = MixerBarbellStatsToJson(stats.second);
+        result[stats.first] = mixerBarbellStatsToJson(stats.second);
     }
     return result.dump(4);
 }
