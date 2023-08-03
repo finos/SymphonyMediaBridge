@@ -466,6 +466,52 @@ ConnectionsStats SystemStatsCollector::collectLinuxNetStat(uint16_t httpPort, ui
     return result;
 }
 
+// Serialization helpers defined as free functions, to avoid adding include into Stats.h
+// since forward declaration of nohlann::json is not possible.
+nlohmann::json barbellPayloadStatsToJson(const BarbellPayloadStats& thiz)
+{
+    nlohmann::json result;
+    result["octets"] = thiz.octets;
+    result["packets"] = thiz.packets;
+    result["lostPackets"] = thiz.lostPackets;
+    result["bitrateKbps"] = thiz.bitrateKbps;
+    result["packetsPerSecond"] = thiz.packetsPerSecond;
+    result["activeStreamCount"] = thiz.activeStreamCount;
+    return result;
+}
+
+nlohmann::json barbellStatsToJson(const BarbellStats& thiz)
+{
+    nlohmann::json result;
+    nlohmann::json audio;
+    nlohmann::json video;
+    audio["outbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_SEND]);
+    audio["inbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::AUDIO_RECV]);
+    video["outbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_SEND]);
+    video["inbound"] = barbellPayloadStatsToJson(thiz._stats[BarbellStats::VIDEO_RECV]);
+    result["audio"] = audio;
+    result["video"] = video;
+    return result;
+}
+
+nlohmann::json mixerBarbellStatsToJson(const MixerBarbellStats& thiz)
+{
+    nlohmann::json result;
+    for (const auto& stats: thiz._stats) {
+        result[stats.first] = barbellStatsToJson(stats.second);
+    }
+    return result;
+}
+
+std::string AggregatedBarbellStats::describe() const
+{
+    nlohmann::json result;
+    for (const auto& stats: _stats) {
+        result[stats.first] = mixerBarbellStatsToJson(stats.second);
+    }
+    return result.dump(4);
+}
+
 } // namespace Stats
 
 } // namespace bridge

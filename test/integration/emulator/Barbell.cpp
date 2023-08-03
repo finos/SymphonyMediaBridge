@@ -5,6 +5,7 @@ namespace emulator
 {
 
 Barbell::Barbell(emulator::HttpdFactory* httpd) : _httpd(httpd), _id(newIdString()) {}
+Barbell::Barbell(emulator::HttpdFactory* httpd, const std::string& barbellId) : _httpd(httpd), _id(barbellId) {}
 
 std::string Barbell::allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling)
 {

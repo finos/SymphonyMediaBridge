@@ -1,6 +1,7 @@
 #pragma once
 #include "nlohmann/json.hpp"
 #include "test/integration/emulator/Httpd.h"
+#include <string>
 
 namespace emulator
 {
@@ -10,6 +11,7 @@ class Barbell
 {
 public:
     Barbell(emulator::HttpdFactory* httpd);
+    Barbell(emulator::HttpdFactory* httpd, const std::string& barbellId);
 
     std::string allocate(const std::string& baseUrl, const std::string& conferenceId, bool controlling);
     void remove(const std::string& baseUrl);

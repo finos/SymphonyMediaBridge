@@ -867,6 +867,121 @@ GET /stats
 }
 ```
 
+## Detailed Barbell Metrics
+
+Barbell Metrics allows live monitoring and troubleshooing of barbell connections.
+
+Detailed barbell Metrics are:
+
+-   gathered on-demand when the request is being made, so should **not** be used frequently.
+-   non-cumulative, but momentary - it reflects the last known metrics for the active streams collected in the last second or so.
+-   approximate window of stats collecting in seconds can be estimated using `125 * bitrateKbps * / octets` formula.
+
+### Get detailed Barbell Metrics for all conferences on the SMB
+
+```json
+GET /stats/barbell
+```
+
+Returns:
+
+-   see [Barbell Metrics Response](#Barbell-Metrics-Response);
+-   empty JSON, if there are no conferences;
+
+### Get detailed Barbell Metrics for specific conference
+
+```json
+GET /stats/barbell/<conference ID>
+```
+
+Returns:
+
+-   see [Barbell Metrics Response](#Barbell-Metrics-Response);
+-   HTTP 404 if the confernce is not found.
+
+### Barbell Metrics Response
+
+```
+{
+    <Conference ID 1>: {
+        <Barbell ID 1>: {
+            "audio": {
+                "inbound": {
+                    "activeStreamCount": <number>,
+                    "bitrateKbps": <number>,
+                    "lostPackets": <number>,
+                    "octets": <number>,
+                    "packets": <number>,
+                    "packetsPerSecond": <number>
+                },
+                "outbound": {
+                    ...
+                }
+            }
+            "video": {
+                ...
+            }
+        },
+        <Barbell ID 2> : {
+            ...
+        }
+    },
+    <Conference ID 2>: {
+        ...
+    }
+    ...
+}
+```
+
+### Example of Barbell Metrics Response
+
+Here `13066525621269710799` is the `Conference ID`, and `test_barbell` is `Barbell ID`.
+
+```json
+{
+    "13066525621269710799": {
+        "test_barbell": {
+            "audio": {
+                "inbound": {
+                    "activeStreamCount": 2,
+                    "bitrateKbps": 224,
+                    "lostPackets": 0,
+                    "octets": 28200,
+                    "packets": 100,
+                    "packetsPerSecond": 100
+                },
+                "outbound": {
+                    "activeStreamCount": 1,
+                    "bitrateKbps": 109,
+                    "lostPackets": 0,
+                    "octets": 13732,
+                    "packets": 51,
+                    "packetsPerSecond": 50
+                }
+            },
+            "video": {
+                "inbound": {
+                    "activeStreamCount": 6,
+                    "bitrateKbps": 6217,
+                    "lostPackets": 0,
+                    "octets": 777515,
+                    "packets": 649,
+                    "packetsPerSecond": 649
+                },
+                "outbound": {
+                    "activeStreamCount": 3,
+                    "bitrateKbps": 3068,
+                    "lostPackets": 0,
+                    "octets": 385783,
+                    "packets": 330,
+                    "packetsPerSecond": 323
+                }
+            }
+        }
+    }
+}
+```
+
 ## ICE probe endpoint
 
 ICE can be used to assess RTT to a mediabridge. For this purpose, there is a static ICE endpoint that can be used to measure RTT but cannot be used to establish media sessions. Use the following endpoint to get the info needed to setup such an ICE connection.

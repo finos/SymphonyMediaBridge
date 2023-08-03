@@ -549,7 +549,6 @@ private:
 
     bool setPacketSourceEndpointIdHash(memory::Packet& packet, size_t barbellIdHash, uint32_t ssrc, bool isAudio);
     utils::Optional<uint32_t> findBarbellMainSsrc(size_t barbellIdHash, uint32_t feedbackSsrc);
-    // --
 };
 
 } // namespace bridge

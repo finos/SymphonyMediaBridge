@@ -40,6 +40,8 @@ httpd::Response getEndpointInfo(ActionContext*,
     const std::string& conferenceId,
     const std::string& endpointId);
 httpd::Response handleStats(ActionContext*, RequestLogger&, const httpd::Request&);
+httpd::Response handleBarbellStats(ActionContext*, RequestLogger&, const httpd::Request&);
+httpd::Response handleBarbellStats(ActionContext*, RequestLogger&, const httpd::Request&, const std::string&);
 httpd::Response handleAbout(ActionContext*,
     RequestLogger&,
     const httpd::Request&,

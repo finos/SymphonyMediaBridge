@@ -708,4 +708,21 @@ void MixerManager::updateStats()
     }
 }
 
+Stats::AggregatedBarbellStats MixerManager::getBarbellStats()
+{
+    Stats::AggregatedBarbellStats result;
+
+    {
+        std::lock_guard<std::mutex> locker(_configurationLock);
+        auto now = utils::Time::getAbsoluteTime();
+
+        for (const auto& mixer : _mixers)
+        {
+            result._stats.emplace(mixer.second->getId(), mixer.second->gatherBarbellStats(now));
+        }
+    }
+
+    return result;
+}
+
 } // namespace bridge

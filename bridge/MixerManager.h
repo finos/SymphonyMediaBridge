@@ -71,6 +71,7 @@ public:
 
     Stats::MixerManagerStats getStats();
 
+    Stats::AggregatedBarbellStats getBarbellStats();
     void finalizeEngineMixerRemoval(const std::string& mixerId);
 
 private:

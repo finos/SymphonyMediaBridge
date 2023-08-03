@@ -137,6 +137,7 @@ void Engine::updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& curr
 {
     uint64_t pollTime = utils::Time::getAbsoluteTime();
     currentStatSample.activeMixers = EngineStats::MixerStats();
+
     for (auto mixerEntry = _mixers.head(); mixerEntry; mixerEntry = mixerEntry->_next)
     {
         currentStatSample.activeMixers += mixerEntry->_data->gatherStats(timestamp);
@@ -145,6 +146,7 @@ void Engine::updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& curr
     currentStatSample.pollPeriodMs =
         static_cast<uint32_t>(std::max(uint64_t(1), (pollTime - statsPollTime) / uint64_t(1000000)));
     _stats.write(currentStatSample);
+
     statsPollTime = pollTime;
 }
 

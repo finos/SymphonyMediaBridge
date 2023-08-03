@@ -825,6 +825,35 @@ EngineDataStream* Mixer::getEngineDataStream(const std::string& endpointId)
     return it == _dataEngineStreams.end() ? nullptr : it->second.get();
 }
 
+Stats::BarbellPayloadStats Mixer::fromPacketCounter(const transport::PacketCounters& counters)
+{
+    bridge::Stats::BarbellPayloadStats result;
+    result.activeStreamCount = counters.activeStreamCount;
+    result.bitrateKbps = counters.bitrateKbps;
+    result.lostPackets = counters.lostPackets;
+    result.octets = counters.octets;
+    result.packets = counters.packets;
+    result.packetsPerSecond = counters.packetsPerSecond;
+    return result;
+}
+
+bridge::Stats::MixerBarbellStats Mixer::gatherBarbellStats(const uint64_t iterationStartTime)
+{
+    bridge::Stats::MixerBarbellStats stats;
+    uint64_t idleTimestamp = iterationStartTime - utils::Time::sec * 2;
+
+    for (const auto& itBb : _engineBarbells) {
+        bridge::Stats::BarbellStats barbellStats;
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::AUDIO_SEND] = fromPacketCounter(itBb.second->transport.getAudioSendCounters(idleTimestamp));
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::AUDIO_RECV] = fromPacketCounter(itBb.second->transport.getAudioReceiveCounters(idleTimestamp));
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::VIDEO_SEND] = fromPacketCounter(itBb.second->transport.getVideoSendCounters(idleTimestamp));
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::VIDEO_RECV] = fromPacketCounter(itBb.second->transport.getVideoReceiveCounters(idleTimestamp));
+        stats._stats.emplace(itBb.second->id, barbellStats);
+    }
+
+    return stats;
+}
+
 std::map<size_t, ActiveTalker> Mixer::getActiveTalkers()
 {
     return _engineMixer->getActiveTalkers();
@@ -2345,6 +2374,8 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     barbell->videoSsrcs = videoSsrcs;
 
     barbell->audioRtpMap = audioRtpMap;
+    barbell->transport->setAudioPayloadType(audioRtpMap.payloadType, audioRtpMap.sampleRate);
+
     barbell->videoRtpMap = videoRtpMap;
     barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;
     return true;
