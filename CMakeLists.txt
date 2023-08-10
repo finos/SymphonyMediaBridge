@@ -623,7 +623,8 @@ set(TEST_FILES
     test/bridge/MixerTest.cpp
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
-    test/utils/FunctionTest.cpp)
+    test/utils/FunctionTest.cpp
+    test/bridge/RtpAudioRewriterTest.cpp)
 
 
 set(TEST_FILES2
