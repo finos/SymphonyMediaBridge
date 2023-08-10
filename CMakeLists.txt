@@ -636,6 +636,7 @@ set(TEST_FILES2
     test/integration/IceTransportTest.cpp
     test/integration/SrtpIntegrationTest.cpp
     test/integration/IntegrationCallTypes.cpp
+    test/integration/IntegrationAudioTest.cpp
 )
 
 set(LOAD_TEST_FILES

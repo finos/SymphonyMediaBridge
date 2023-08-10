@@ -27,7 +27,8 @@ IntegrationTest::IntegrationTest()
       _ipv6({"fc00:1208:1208:1208:1208:1208:1208:1100",
           "2600:1900:4080:1627:0:22:0:0",
           "fc00:1808:1808:1808:1808:1808:1808:1100"}),
-      _clientsConnectionTimeout(15)
+      _clientsConnectionTimeout(15),
+      _networkTickInterval(100 * utils::Time::us)
 {
 }
 
@@ -61,7 +62,7 @@ void IntegrationTest::SetUp()
 
     utils::Time::initialize(_timeSource);
     _httpd = new emulator::HttpdFactory();
-    _internet = std::make_unique<fakenet::InternetRunner>(100 * utils::Time::us);
+    _internet = std::make_unique<fakenet::InternetRunner>(_networkTickInterval);
     _firewall = std::make_shared<fakenet::Firewall>(transport::SocketAddress::parse(_ipv4.firewall),
         transport::SocketAddress::parse(_ipv6.firewall),
         *_internet->getNetwork());
@@ -263,7 +264,9 @@ bool IntegrationTest::isActiveTalker(const std::vector<api::ConferenceEndpoint>&
     return it->isActiveTalker;
 }
 
-void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::function<void()> test)
+void IntegrationTest::runTestInThread(const size_t expectedNumThreads,
+    std::function<void()> test,
+    uint32_t maxTestDurationSec)
 {
     // allow internet thread to forward packets next time it wakes up.
     if (_internet)
@@ -279,7 +282,7 @@ void IntegrationTest::runTestInThread(const size_t expectedNumThreads, std::func
     if (_internet)
     {
         // run for 80s or until test runner thread stops the time run
-        _timeSource.runFor(80 * utils::Time::sec);
+        _timeSource.runFor(maxTestDurationSec * utils::Time::sec);
 
         // wait for all to sleep before switching time source
         _timeSource.waitForThreadsToSleep(expectedNumThreads, 10 * utils::Time::sec);

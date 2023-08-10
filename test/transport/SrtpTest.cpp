@@ -277,3 +277,48 @@ TEST_F(SrtpTest, sdesSimple)
     EXPECT_EQ(dataLen, packet->getLength());
     EXPECT_TRUE(isAudioPayloadValid(*packet));
 }
+
+TEST_F(SrtpTest, sendReplayWindow)
+{
+    setupDtls();
+    connect();
+
+    int seq = 5678;
+    logger::debug("encrypt %u", "", seq);
+    // fill lib SRTP seqno cache
+    for (int i = 0; i < 32 * 1024; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = seq++;
+
+        EXPECT_TRUE(_srtp1->protect(*packet));
+
+        EXPECT_TRUE(_srtp2->unprotect(*packet));
+    }
+    logger::debug("encrypted %u", "", seq - 1);
+
+    // right before the replay window
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = seq + 1024 * 31;
+        logger::debug("encrypt %u", "", header->sequenceNumber.get());
+        EXPECT_TRUE(_srtp1->protect(*packet));
+    }
+
+    // wrap into the replay window
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = seq + 1024 * 31;
+        logger::debug("encrypt %u", "", header->sequenceNumber.get());
+        EXPECT_FALSE(_srtp1->protect(*packet));
+    }
+}

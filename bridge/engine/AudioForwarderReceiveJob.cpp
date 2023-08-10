@@ -328,6 +328,10 @@ void AudioForwarderReceiveJob::run()
             }
             // Let first silent packet through to clients and barbells
             _ssrcContext.markNextPacket = true;
+            logger::info("%zu ssrc %u went silent",
+                "AudioForwarderReceiveJob",
+                _packet->endpointIdHash,
+                rtpHeader->ssrc.get());
         }
     }
     else if (!_ssrcContext.opusDecoder)
@@ -385,6 +389,10 @@ void AudioForwarderReceiveJob::run()
             {
                 return;
             }
+            logger::info("%zu ssrc %u went silent",
+                "AudioForwarderReceiveJob",
+                _packet->endpointIdHash,
+                rtpHeader->ssrc.get());
             // Let first silent packet through to clients and barbells
             _ssrcContext.markNextPacket = true;
         }
@@ -394,6 +402,7 @@ void AudioForwarderReceiveJob::run()
     {
         rtpHeader->marker = 1;
         _ssrcContext.markNextPacket = false;
+        logger::info("%zu ssrc %u unmuted", "AudioForwarderReceiveJob", _packet->endpointIdHash, rtpHeader->ssrc.get());
     }
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap.payloadType));
