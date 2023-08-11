@@ -32,7 +32,11 @@ void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, cons
         return;
     }
 
-    logger::error("Unable to decode opus packet, error code %d", "AudioForwarderReceiveJob", decodedFrames);
+    logger::error("Unable to decode opus packet, error code %d, ssrc %u, %s",
+        "AudioForwarderReceiveJob",
+        decodedFrames,
+        _ssrcContext.ssrc,
+        _sender->getLoggableId().c_str());
 }
 
 memory::UniqueAudioPacket AudioForwarderReceiveJob::makePcmPacket(const memory::Packet& opusPacket,
@@ -116,23 +120,40 @@ bool AudioForwarderReceiveJob::unprotect(memory::Packet& opusPacket)
     const auto newRolloverCounter = _extendedSequenceNumber >> 16;
     if (newRolloverCounter > oldRolloverCounter)
     {
-        logger::debug("Setting new rollover counter for ssrc %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
+        logger::info("Setting new rollover counter for ssrc %u, extseqno %u->%u, seqno %u->%u, roc %u->%u, %s",
+            "AudioForwarderReceiveJob",
+            _ssrcContext.ssrc,
+            _ssrcContext.lastUnprotectedExtendedSequenceNumber,
+            _extendedSequenceNumber,
+            _ssrcContext.lastUnprotectedExtendedSequenceNumber & 0xFFFFu,
+            _extendedSequenceNumber & 0xFFFFu,
+            oldRolloverCounter,
+            newRolloverCounter,
+            _sender->getLoggableId().c_str());
         if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
         {
-            logger::error("Failed to set rollover counter srtp %u, mixer %s",
+            logger::error("Failed to set rollover counter srtp %u, seqno %u->%u, roc %u->%u, %s, %s",
                 "AudioForwarderReceiveJob",
                 _ssrcContext.ssrc,
-                _engineMixer.getLoggableId().c_str());
+                _ssrcContext.lastUnprotectedExtendedSequenceNumber & 0xFFFFu,
+                _extendedSequenceNumber & 0xFFFFu,
+                oldRolloverCounter,
+                newRolloverCounter,
+                _engineMixer.getLoggableId().c_str(),
+                _sender->getLoggableId().c_str());
             return false;
         }
     }
 
     if (!_sender->unprotect(opusPacket))
     {
-        logger::error("Failed to unprotect srtp %u, mixer %s",
+        logger::error("Failed to unprotect srtp %u, extseqno %u->%u, %s, %s",
             "AudioForwarderReceiveJob",
             _ssrcContext.ssrc,
-            _engineMixer.getLoggableId().c_str());
+            _ssrcContext.lastUnprotectedExtendedSequenceNumber,
+            _extendedSequenceNumber,
+            _engineMixer.getLoggableId().c_str(),
+            _sender->getLoggableId().c_str());
         return false;
     }
     _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
@@ -145,10 +166,11 @@ int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool 
 {
     if (!_ssrcContext.opusDecoder)
     {
-        logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
+        logger::debug("Creating new opus decoder for ssrc %u in mixer %s, %s",
             "AudioForwarderReceiveJob",
             _ssrcContext.ssrc,
-            _engineMixer.getLoggableId().c_str());
+            _engineMixer.getLoggableId().c_str(),
+            _sender->getLoggableId().c_str());
         _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
         _ssrcContext.opusPacketRate.reset(new utils::AvgRateTracker(0.1));
     }
@@ -231,10 +253,11 @@ int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPa
 {
     if (!_ssrcContext.opusDecoder)
     {
-        logger::debug("Creating new opus decoder for ssrc %u in mixer %s",
+        logger::debug("Creating new opus decoder for ssrc %u in mixer %s. %s",
             "AudioForwarderReceiveJob",
             _ssrcContext.ssrc,
-            _engineMixer.getLoggableId().c_str());
+            _engineMixer.getLoggableId().c_str(),
+            _sender->getLoggableId().c_str());
         _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
         _ssrcContext.opusPacketRate.reset(new utils::AvgRateTracker(0.1));
     }
@@ -328,10 +351,11 @@ void AudioForwarderReceiveJob::run()
             }
             // Let first silent packet through to clients and barbells
             _ssrcContext.markNextPacket = true;
-            logger::info("%zu ssrc %u went silent",
+            logger::info("%zu ssrc %u went silent. %s",
                 "AudioForwarderReceiveJob",
                 _packet->endpointIdHash,
-                rtpHeader->ssrc.get());
+                rtpHeader->ssrc.get(),
+                _sender->getLoggableId().c_str());
         }
     }
     else if (!_ssrcContext.opusDecoder)
@@ -339,10 +363,11 @@ void AudioForwarderReceiveJob::run()
         // will touch the atomic only once. Reduces contention
         if (_ssrcContext.hasAudioLevelExtension.load())
         {
-            logger::info("endpoint %zu does not send audio level RTP header extension. ssrc %u ",
+            logger::info("endpoint %zu does not send audio level RTP header extension. ssrc %u, %s ",
                 "AudioForwarderReceiveJob",
                 _sender->getEndpointIdHash(),
-                _ssrcContext.ssrc);
+                _ssrcContext.ssrc,
+                _sender->getLoggableId().c_str());
         }
         _ssrcContext.hasAudioLevelExtension = false;
     }
@@ -365,7 +390,10 @@ void AudioForwarderReceiveJob::run()
         }
         else if (_ssrcContext.opusPacketRate && _ssrcContext.opusPacketRate->get() != 0)
         {
-            logger::debug("stop decoding opus audio level for %u", "AudioForwarderReceiveJob", _ssrcContext.ssrc);
+            logger::debug("stop decoding opus audio level for %u. %s",
+                "AudioForwarderReceiveJob",
+                _ssrcContext.ssrc,
+                _sender->getLoggableId().c_str());
             _ssrcContext.opusPacketRate->set(0, 0);
         }
     }
@@ -389,10 +417,11 @@ void AudioForwarderReceiveJob::run()
             {
                 return;
             }
-            logger::info("%zu ssrc %u went silent",
+            logger::info("%zu ssrc %u went silent. %s",
                 "AudioForwarderReceiveJob",
                 _packet->endpointIdHash,
-                rtpHeader->ssrc.get());
+                rtpHeader->ssrc.get(),
+                _sender->getLoggableId().c_str());
             // Let first silent packet through to clients and barbells
             _ssrcContext.markNextPacket = true;
         }
@@ -402,7 +431,11 @@ void AudioForwarderReceiveJob::run()
     {
         rtpHeader->marker = 1;
         _ssrcContext.markNextPacket = false;
-        logger::info("%zu ssrc %u unmuted", "AudioForwarderReceiveJob", _packet->endpointIdHash, rtpHeader->ssrc.get());
+        logger::info("%zu ssrc %u unmuted. %s",
+            "AudioForwarderReceiveJob",
+            _packet->endpointIdHash,
+            rtpHeader->ssrc.get(),
+            _sender->getLoggableId().c_str());
     }
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap.payloadType));
