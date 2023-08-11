@@ -78,7 +78,8 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
         }
         else if (_emulatedAudioType == Audio::Fake)
         {
-            audioLevel.data[0] = 28;
+            int16_t sample = _amplitude * 0.51;
+            audioLevel.data[0] = codec::computeAudioLevel(&sample, 1);
         }
         else
         {

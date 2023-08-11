@@ -239,7 +239,7 @@ public:
     }
 
 protected:
-    void runTestInThread(const size_t expectedNumThreads, std::function<void()> test);
+    void runTestInThread(const size_t expectedNumThreads, std::function<void()> test, uint32_t maxTestDurationSec = 80);
     void startSimulation();
 
     void initLocalTransports(config::Config& bridgeConfig);
@@ -256,6 +256,7 @@ protected:
     std::map<std::string, NetworkLinkInfo> _endpointNetworkLinkMap;
     std::map<std::string, NetworkLinkInfo> _clientNetworkLinkMap;
     const uint32_t _clientsConnectionTimeout;
+    uint64_t _networkTickInterval;
 
 private:
     size_t getNumWorkerThreads();
@@ -318,6 +319,40 @@ void makeShortCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClien
     {
         client->stopRecording();
     }
+}
+
+template <typename TChannel>
+void startCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClient<TChannel>>& groupCall, uint64_t duration)
+{
+    static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
+    for (size_t i = 0; i < groupCall.clients.size(); ++i)
+    {
+        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
+    }
+
+    for (auto& client : groupCall.clients)
+    {
+        client->_audioSource->setVolume(0.6);
+    }
+
+    groupCall.run(duration);
+}
+
+template <typename TChannel>
+void endCall(emulator::GroupCall<emulator::SfuClient<TChannel>>& groupCall)
+{
+    utils::Time::nanoSleep(utils::Time::sec * 1);
+
+    for (auto& client : groupCall.clients)
+    {
+        client->stopRecording();
+    }
+
+    for (auto& client : groupCall.clients)
+    {
+        client->stopTransports();
+    }
+    utils::Time::nanoSleep(utils::Time::ms * 500);
 }
 
 } // namespace

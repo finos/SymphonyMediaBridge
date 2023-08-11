@@ -123,6 +123,12 @@ uint32_t RtpReceiveState::getExtendedSequenceNumber() const
     return _receiveCounters.extendedSequenceNumber;
 }
 
+uint32_t RtpReceiveState::toExtendedSequenceNumber(uint16_t sequenceNumber) const
+{
+    const int16_t advance = sequenceNumber - static_cast<uint16_t>(_receiveCounters.extendedSequenceNumber & 0xFFFFu);
+    return _receiveCounters.extendedSequenceNumber + advance;
+}
+
 PacketCounters RtpReceiveState::getCounters() const
 {
     PacketCounters counters;

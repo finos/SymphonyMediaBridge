@@ -45,6 +45,7 @@ public:
     PacketCounters getCounters() const;
     PacketCounters getCumulativeCounters() const;
     uint32_t getExtendedSequenceNumber() const;
+    uint32_t toExtendedSequenceNumber(uint16_t sequenceNumber) const;
     uint64_t getSenderReportReceiveTimeNtp() const { return _lastReceivedSenderReport._receiveTimeNtp; }
 
     int64_t timeToReceiveReport(uint64_t timestamp) const;

@@ -408,6 +408,10 @@ void SrtpClient::removeLocalSsrc(const uint32_t ssrc)
     }
 }
 
+/**
+ * ROC is automatically deduced from continuous inbound stream. But if there are gaps or reordering in the sequence,
+ * the roc must be set explicitly.
+ */
 bool SrtpClient::setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);

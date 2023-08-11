@@ -231,7 +231,8 @@ TEST_F(IntegrationLegApi, audioOnlyNoPadding)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,*_publicTransportFactory,
+            *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -292,7 +293,8 @@ TEST_F(IntegrationLegApi, paddingOffWhenRtxNotProvided)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,*_publicTransportFactory,
+            *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             3);
 
@@ -407,7 +409,8 @@ TEST_F(IntegrationLegApi, videoOffPaddingOff)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,*_publicTransportFactory,
+            *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 
@@ -528,7 +531,8 @@ TEST_F(IntegrationLegApi, packetLossVideoRecoveredViaNack)
             _instanceCounter,
             *_mainPoolAllocator,
             _audioAllocator,
-            *_clientTransportFactory,*_publicTransportFactory,
+            *_clientTransportFactory,
+            *_publicTransportFactory,
             *_sslDtls,
             2);
 

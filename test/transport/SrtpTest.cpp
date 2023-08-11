@@ -166,11 +166,11 @@ TEST_F(SrtpTest, seqSkip)
         if (i == 90000)
         {
             i += 35000;
-            _srtp1->setLocalRolloverCounter(1, 1 + (i >> 16));
+            EXPECT_TRUE(_srtp1->setLocalRolloverCounter(1, 1 + (i >> 16)));
         }
         if (i == 90000 + 35000 + 540)
         {
-            _srtp2->setRemoteRolloverCounter(1, 1 + (i >> 16));
+            EXPECT_TRUE(_srtp2->setRemoteRolloverCounter(1, 1 + (i >> 16)));
         }
 
         header->sequenceNumber = seqStart + i;
@@ -276,4 +276,162 @@ TEST_F(SrtpTest, sdesSimple)
     EXPECT_TRUE(_srtp2->unprotect(*packet));
     EXPECT_EQ(dataLen, packet->getLength());
     EXPECT_TRUE(isAudioPayloadValid(*packet));
+}
+
+TEST_F(SrtpTest, sendReplayWindow)
+{
+    setupDtls();
+    connect();
+
+    int seq = 5678;
+    logger::debug("encrypt %u", "", seq);
+    // fill lib SRTP seqno cache
+    for (int i = 0; i < 32 * 1024; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = seq++;
+
+        EXPECT_TRUE(_srtp1->protect(*packet));
+
+        EXPECT_TRUE(_srtp2->unprotect(*packet));
+    }
+    logger::debug("encrypted %u", "", seq - 1);
+
+    // right before the replay window
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = seq + 1024 * 31;
+        logger::debug("encrypt %u", "", header->sequenceNumber.get());
+        EXPECT_TRUE(_srtp1->protect(*packet));
+    }
+
+    // wrap into the replay window
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 4321;
+        header->timestamp = 1234;
+        header->sequenceNumber = seq + 1024 * 31;
+        logger::debug("encrypt %u", "", header->sequenceNumber.get());
+        EXPECT_FALSE(_srtp1->protect(*packet));
+    }
+}
+
+TEST_F(SrtpTest, sendRoc)
+{
+    setupDtls();
+    connect();
+
+    uint16_t seqStart = 5;
+    uint32_t prevRoc = 0;
+
+    for (uint32_t i = seqStart; i < 170000; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 1;
+        header->sequenceNumber = i & 0xFFFFu;
+        header->timestamp = i * 160;
+
+        ASSERT_TRUE(_srtp1->protect(*packet));
+
+        if (prevRoc != (i >> 16))
+        {
+            prevRoc = i >> 16;
+            EXPECT_TRUE(_srtp2->setRemoteRolloverCounter(1, prevRoc)); // works without this due to continuous sequence
+        }
+        ASSERT_TRUE(_srtp2->unprotect(*packet));
+    }
+}
+
+TEST_F(SrtpTest, sendRocGap)
+{
+    setupDtls();
+    connect();
+
+    uint16_t seqStart = 5;
+    uint32_t prevRoc = 0;
+
+    for (uint32_t i = seqStart; i < 200000; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 1;
+        header->sequenceNumber = i & 0xFFFFu;
+        header->timestamp = i * 160;
+
+        ASSERT_TRUE(_srtp1->protect(*packet));
+
+        if (i > 64000 && i < 66000)
+        {
+            continue;
+        }
+        if (i > 130000 && i < 190000)
+        {
+            continue;
+        }
+        if (prevRoc != (i >> 16))
+        {
+            prevRoc = i >> 16;
+            logger::info("set roc %u", "", prevRoc);
+            EXPECT_TRUE(_srtp2->setRemoteRolloverCounter(1, prevRoc)); // works without this due to continuous sequence
+        }
+        ASSERT_TRUE(_srtp2->unprotect(*packet));
+    }
+}
+
+TEST_F(SrtpTest, rocReorder)
+{
+    setupDtls();
+    connect();
+
+    uint32_t prevRoc = 0;
+    uint32_t prevSendRoc = 0;
+
+    std::vector<uint32_t> seqNos(0);
+    seqNos.reserve(32000);
+    for (uint32_t s = 35000; s < 67000; ++s)
+    {
+        seqNos.push_back(s);
+    }
+
+    for (size_t i = 0; i < seqNos.size() - 10; ++i)
+    {
+        if (rand() % 1000 < 300)
+        {
+            std::swap(seqNos[i], seqNos[i + (rand() % 10)]);
+        }
+    }
+
+    for (uint32_t i = 0; i < seqNos.size(); ++i)
+    {
+        const uint32_t extSeqNo = seqNos[i];
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::create(*packet);
+        header->ssrc = 1;
+        header->sequenceNumber = extSeqNo & 0xFFFFu;
+        header->timestamp = i * 160;
+
+        if (prevSendRoc != extSeqNo >> 16)
+        {
+            EXPECT_TRUE(_srtp1->setLocalRolloverCounter(1, extSeqNo >> 16));
+            prevSendRoc = extSeqNo >> 16;
+        }
+        ASSERT_TRUE(_srtp1->protect(*packet));
+
+        if (prevRoc != (extSeqNo >> 16))
+        {
+            prevRoc = extSeqNo >> 16;
+            logger::info("set roc %u", "", prevRoc);
+            EXPECT_TRUE(_srtp2->setRemoteRolloverCounter(1, prevRoc));
+            // sequence
+        }
+        ASSERT_TRUE(_srtp2->unprotect(*packet));
+    }
 }

@@ -156,8 +156,6 @@ void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
 {
-    // TODO we should also check if this ssrc is in use, mixed clients are present, or it needs to be forwarded over
-    // barbell. If not, we can drop this packet.
     if (!_engineAudioStreams.empty())
     {
         sender->getJobQueue().addJob<bridge::AudioForwarderReceiveJob>(std::move(packet),
