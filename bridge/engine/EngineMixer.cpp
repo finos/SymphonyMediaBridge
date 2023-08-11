@@ -648,7 +648,7 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     auto ssrcContext = emplaceInboundSsrcContext(ssrc, sender, rtpHeader->payloadType, timestamp);
     if (!ssrcContext)
     {
-        logger::error("could not acquire inbound ssrc context ssrc %u", _loggableId.c_str(), ssrc);
+        logger::warn("could not acquire inbound ssrc context ssrc %u", _loggableId.c_str(), ssrc);
         return;
     }
 
