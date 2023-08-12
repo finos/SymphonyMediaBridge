@@ -147,13 +147,6 @@ bool AudioForwarderReceiveJob::unprotect(memory::Packet& opusPacket)
 
     if (!_sender->unprotect(opusPacket))
     {
-        logger::error("Failed to unprotect srtp %u, extseqno %u->%u, %s, %s",
-            "AudioForwarderReceiveJob",
-            _ssrcContext.ssrc,
-            _ssrcContext.lastUnprotectedExtendedSequenceNumber,
-            _extendedSequenceNumber,
-            _engineMixer.getLoggableId().c_str(),
-            _sender->getLoggableId().c_str());
         return false;
     }
     _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
