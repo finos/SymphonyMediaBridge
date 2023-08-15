@@ -68,10 +68,6 @@ void VideoForwarderRtxReceiveJob::run()
 
     if (!_sender->unprotect(*_packet))
     {
-        logger::error("Failed to unprotect srtp %u, mixer %s",
-            "VideoForwarderRtxReceiveJob",
-            _rtxSsrcContext.ssrc,
-            _engineMixer.getLoggableId().c_str());
         return;
     }
 
