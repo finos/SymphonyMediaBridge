@@ -116,11 +116,13 @@ void AudioForwarderReceiveJob::decode(const memory::Packet& opusPacket, memory::
 
 bool AudioForwarderReceiveJob::unprotect(memory::Packet& opusPacket)
 {
-    const auto oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
-    const auto newRolloverCounter = _extendedSequenceNumber >> 16;
-    if (newRolloverCounter > oldRolloverCounter)
+    if (transport::SrtpClient::shouldSetRolloverCounter(_ssrcContext.lastUnprotectedExtendedSequenceNumber,
+            _extendedSequenceNumber))
     {
-        logger::info("Setting new rollover counter for ssrc %u, extseqno %u->%u, seqno %u->%u, roc %u->%u, %s",
+        const uint32_t oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
+        const uint32_t newRolloverCounter = _extendedSequenceNumber >> 16;
+
+        logger::info("Setting rollover counter for ssrc %u, extseqno %u->%u, seqno %u->%u, roc %u->%u, %s",
             "AudioForwarderReceiveJob",
             _ssrcContext.ssrc,
             _ssrcContext.lastUnprotectedExtendedSequenceNumber,
@@ -130,7 +132,7 @@ bool AudioForwarderReceiveJob::unprotect(memory::Packet& opusPacket)
             oldRolloverCounter,
             newRolloverCounter,
             _sender->getLoggableId().c_str());
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
+        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, _extendedSequenceNumber >> 16))
         {
             logger::error("Failed to set rollover counter srtp %u, seqno %u->%u, roc %u->%u, %s, %s",
                 "AudioForwarderReceiveJob",

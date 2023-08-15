@@ -2,6 +2,9 @@
 #include "bridge/endpointActions/ApiActions.h"
 #include "config/Config.h"
 #include "git_version.h"
+#include "openssl/opensslv.h"
+#include "transport/dtls/SrtpClient.h"
+#include "utils/Format.h"
 #include "utils/StringTokenizer.h"
 
 namespace bridge
@@ -14,7 +17,10 @@ httpd::Response handleAbout(ActionContext* context,
     const auto nextToken = ::utils::StringTokenizer::tokenize(token.next, token.remainingLength, '/');
     if (utils::StringTokenizer::isEqual(nextToken, "version"))
     {
-        std::string versionString = "{\"revision\":\"" + std::string(kGitHash) + "\"}";
+        std::string versionString = utils::format(R"({"revision":"%s", "srtp":"%s", "openssl":"%s"})",
+            kGitHash,
+            srtp_get_version_string(),
+            OPENSSL_VERSION_TEXT);
         httpd::Response response(httpd::StatusCode::OK, versionString);
         response._headers["Content-type"] = "text/json";
         return response;

@@ -48,11 +48,14 @@ void VideoForwarderRtxReceiveJob::run()
         return;
     }
 
-    const auto oldRolloverCounter = _rtxSsrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
-    const auto newRolloverCounter = _extendedSequenceNumber >> 16;
-    if (newRolloverCounter > oldRolloverCounter)
+    if (transport::SrtpClient::shouldSetRolloverCounter(_ssrcContext.lastUnprotectedExtendedSequenceNumber,
+            _extendedSequenceNumber))
     {
-        logger::debug("Setting new rollover counter for ssrc %u", "VideoForwarderRtxReceiveJob", _rtxSsrcContext.ssrc);
+        const uint32_t newRolloverCounter = _extendedSequenceNumber >> 16;
+        logger::debug("Setting rollover counter for ssrc %u, extSeq %u",
+            "VideoForwarderRtxReceiveJob",
+            _rtxSsrcContext.ssrc,
+            _extendedSequenceNumber);
         if (!_sender->setSrtpRemoteRolloverCounter(_rtxSsrcContext.ssrc, newRolloverCounter))
         {
             logger::error("Failed to set rollover counter srtp %u, mixer %s",

@@ -408,6 +408,22 @@ void SrtpClient::removeLocalSsrc(const uint32_t ssrc)
     }
 }
 
+bool SrtpClient::shouldSetRolloverCounter(uint32_t previousSequenceNumber, uint32_t sequenceNumber)
+{
+    if (!(sequenceNumber & 0xFFFF0000u) && !(previousSequenceNumber & 0xFFFF0000u))
+    {
+        return false; // cannot set ROC 0
+    }
+
+    if (previousSequenceNumber >> 15 == sequenceNumber >> 15)
+    {
+        // seqno wraps on 16 bit, but to avoid bugs after long gaps it is better to set it also after 32768
+        return false;
+    }
+
+    return true;
+}
+
 /**
  * ROC is automatically deduced from continuous inbound stream. But if there are gaps or reordering in the sequence,
  * the roc must be set explicitly.

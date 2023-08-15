@@ -411,7 +411,8 @@ void EngineMixer::onVideoRtpPacketReceived(SsrcInboundContext& ssrcContext,
         sender->getJobQueue().addJob<bridge::DiscardReceivedVideoPacketJob>(std::move(packet),
             sender,
             ssrcContext,
-            extendedSequenceNumber);
+            extendedSequenceNumber,
+            timestamp);
         return;
     }
 

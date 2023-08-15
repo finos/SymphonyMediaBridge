@@ -19,7 +19,8 @@ public:
     DiscardReceivedVideoPacketJob(memory::UniquePacket packet,
         transport::RtcTransport* sender,
         bridge::SsrcInboundContext& ssrcContext,
-        const uint32_t extendedSequenceNumber);
+        uint32_t extendedSequenceNumber,
+        uint64_t timestamp);
 
     void run() override;
 
@@ -28,6 +29,7 @@ private:
     transport::RtcTransport* _sender;
     bridge::SsrcInboundContext& _ssrcContext;
     const uint32_t _extendedSequenceNumber;
+    const uint64_t _timestamp;
 };
 
 } // namespace bridge
