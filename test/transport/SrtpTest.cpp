@@ -435,3 +435,122 @@ TEST_F(SrtpTest, rocReorder)
         ASSERT_TRUE(_srtp2->unprotect(*packet));
     }
 }
+
+TEST_F(SrtpTest, receiveRocGap)
+{
+    setupDtls();
+    connect();
+
+    uint16_t seqStart = 50000;
+    uint32_t unprotectedExtSeqNo = 0;
+
+    for (uint32_t i = seqStart; i < 0x10000 * 5; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 1;
+        header->sequenceNumber = i & 0xFFFFu;
+        header->timestamp = i * 160;
+
+        ASSERT_TRUE(_srtp1->protect(*packet));
+
+        if (i > 0x10000 + 100 && i < (0x10000 * 4 - 33000))
+        {
+            continue;
+        }
+
+        if (transport::SrtpClient::shouldSetRolloverCounter(unprotectedExtSeqNo, i))
+        {
+            logger::info("set roc %u", "", (i >> 16));
+            EXPECT_TRUE(_srtp2->setRemoteRolloverCounter(1, i >> 16)); // works without this due to continuous
+            // sequence
+        }
+        _srtp2->unprotect(*packet);
+        unprotectedExtSeqNo = i;
+    }
+}
+
+TEST_F(SrtpTest, receive2VideoGap)
+{
+    setupDtls();
+    connect();
+
+    uint16_t seqStart = 16990;
+    uint32_t unprotectedExtSeqNo = 0;
+
+    for (uint32_t i = seqStart; i < 150000; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 1;
+        header->sequenceNumber = i & 0xFFFFu;
+        header->timestamp = i * 160;
+
+        ASSERT_TRUE(_srtp1->protect(*packet));
+        const uint32_t contPoint = 82630u;
+        // srtp must decode at least one packet while ROC is 0, otherwise we get err 7
+        if (i < 17000)
+        {
+            continue;
+        }
+        if (i > 17011 && i < contPoint)
+        {
+            continue;
+        }
+        if (i > contPoint + 2 && i < 115999)
+        {
+            continue;
+        }
+
+        if (transport::SrtpClient::shouldSetRolloverCounter(unprotectedExtSeqNo, i))
+        {
+            logger::info("set roc %u. seq %u last unprotect %u", "", (i >> 16), i, unprotectedExtSeqNo);
+            EXPECT_TRUE(_srtp2->setRemoteRolloverCounter(1, i >> 16)); // works without this due to continuous
+
+            // sequence
+        }
+        if (_srtp2->unprotect(*packet))
+        {
+            unprotectedExtSeqNo = i;
+        }
+    }
+}
+
+TEST_F(SrtpTest, muteUntilRoc1)
+{
+    setupDtls();
+    connect();
+
+    uint16_t seqStart = 65400;
+    uint32_t unprotectedExtSeqNo = 0;
+
+    for (uint32_t i = seqStart; i < 83000; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 1;
+        header->sequenceNumber = i & 0xFFFFu;
+        header->timestamp = i * 160;
+
+        ASSERT_TRUE(_srtp1->protect(*packet));
+        const uint32_t contPoint = 82630u;
+        // srtp must decode at least one packet while ROC is 0, otherwise we get err 7
+
+        if (i < contPoint && i != seqStart)
+        {
+            continue;
+        }
+
+        if (transport::SrtpClient::shouldSetRolloverCounter(unprotectedExtSeqNo, i))
+        {
+            logger::info("set roc %u. seq %u last unprotect %u", "", (i >> 16), i, unprotectedExtSeqNo);
+            EXPECT_TRUE(_srtp2->setRemoteRolloverCounter(1, i >> 16)); // works without this due to continuous
+
+            // sequence
+        }
+        if (_srtp2->unprotect(*packet))
+        {
+            unprotectedExtSeqNo = i;
+        }
+    }
+}

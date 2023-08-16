@@ -10,12 +10,14 @@ namespace bridge
 DiscardReceivedVideoPacketJob::DiscardReceivedVideoPacketJob(memory::UniquePacket packet,
     transport::RtcTransport* sender,
     bridge::SsrcInboundContext& ssrcContext,
-    const uint32_t extendedSequenceNumber)
+    uint32_t extendedSequenceNumber,
+    uint64_t timestamp)
     : CountedJob(sender->getJobCounter()),
       _packet(std::move(packet)),
       _sender(sender),
       _ssrcContext(ssrcContext),
-      _extendedSequenceNumber(extendedSequenceNumber)
+      _extendedSequenceNumber(extendedSequenceNumber),
+      _timestamp(timestamp)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -32,6 +34,17 @@ void DiscardReceivedVideoPacketJob::run()
         return;
     }
 
+    const bool noPacketsProcessedYet =
+        (_ssrcContext.packetsProcessed == 0 && _ssrcContext.lastReceivedExtendedSequenceNumber == 0 &&
+            _ssrcContext.lastUnprotectedExtendedSequenceNumber == 0);
+
+    if (noPacketsProcessedYet && (_extendedSequenceNumber >> 16) == 0)
+    {
+        _sender->unprotect(*_packet); // make sure srtp sees one packet with ROC=0
+        _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+    }
+
+    _ssrcContext.onRtpPacketReceived(_timestamp);
     _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
     if (_ssrcContext.videoMissingPacketsTracker)
     {

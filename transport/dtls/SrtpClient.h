@@ -18,6 +18,8 @@ class SslWriteBioListener;
 
 // It seems sslDtls object is not thread safe when making progress in state machine during connection setup.
 // Timers, incoming packets, handshake init have to be synchronized
+// The SrtpClient must protect / unprotect at least one packet while ROC is 0. Otherwise, it will not initialize the
+// new ssrc.
 class SrtpClient : public DtlsMessageListener
 {
 public:
@@ -54,6 +56,7 @@ public:
     bool unprotect(memory::Packet& packet);
     bool protect(memory::Packet& packet);
     void removeLocalSsrc(const uint32_t ssrc);
+    static bool shouldSetRolloverCounter(uint32_t previousSequenceNumber, uint32_t sequenceNumber);
     bool setRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
     bool setLocalRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter);
 

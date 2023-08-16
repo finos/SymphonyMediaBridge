@@ -45,7 +45,7 @@ void RecordingAudioForwarderSendJob::run()
         return;
     }
 
-    uint16_t nextSequenceNumber = 0;
+    uint16_t nextSequenceNumber = 0; // TODO never set
     if (!_outboundContext.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
     {
         logger::debug("Dropping rec audio packet - sequence number...", "RecordingAudioForwarderSendJob");
