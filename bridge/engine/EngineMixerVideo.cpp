@@ -656,7 +656,8 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
                 packetInfo.extendedSequenceNumber(),
                 _messageListener,
                 videoStream->endpointIdHash,
-                *this);
+                *this,
+                timestamp);
         }
         else
         {

@@ -60,14 +60,15 @@ public:
             bool empty() const
             {
                 return ssrc == ~0u && sequenceNumber == ~0u && 0xFFFFu == picId && 0xFFFFu == tl0PicIdx &&
-                    ~0u == timestamp;
+                    ~0u == timestamp && wallClock == ~0u;
             }
 
-            uint32_t ssrc = ~0;
-            uint32_t sequenceNumber = ~0;
-            uint32_t timestamp = ~0;
-            uint16_t picId = ~0;
-            uint16_t tl0PicIdx = ~0;
+            uint32_t ssrc = ~0u;
+            uint32_t sequenceNumber = ~0u;
+            uint32_t timestamp = ~0u;
+            uint16_t picId = -1;
+            uint16_t tl0PicIdx = -1;
+            uint64_t wallClock = ~0u;
         } lastSent;
 
         struct Offset

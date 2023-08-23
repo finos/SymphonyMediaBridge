@@ -706,7 +706,8 @@ void EngineMixer::forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInf
                 *(packetInfo.inboundContext()),
                 std::move(packet),
                 packetInfo.extendedSequenceNumber(),
-                barbell.transport);
+                barbell.transport,
+                timestamp);
         }
         else
         {
@@ -767,7 +768,8 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
                 packetInfo.extendedSequenceNumber(),
                 _messageListener,
                 barbell.idHash,
-                *this);
+                *this,
+                timestamp);
         }
         else
         {

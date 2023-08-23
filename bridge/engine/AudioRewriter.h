@@ -10,7 +10,10 @@ namespace AudioRewriter
 // no reason to emulate packet loss on our outgoing link. It could also be a long mute.
 const int32_t MAX_SEQ_GAP = 256;
 
-inline void rewrite(bridge::SsrcOutboundContext& outboundContext, const uint32_t sequenceNumber, rtp::RtpHeader& header)
+inline void rewrite(bridge::SsrcOutboundContext& outboundContext,
+    const uint32_t sequenceNumber,
+    rtp::RtpHeader& header,
+    const uint64_t timestamp)
 {
     const uint32_t originalSsrc = header.ssrc;
     const bool newSource = outboundContext.originalSsrc != originalSsrc;
@@ -19,17 +22,26 @@ inline void rewrite(bridge::SsrcOutboundContext& outboundContext, const uint32_t
 
     if (newSource)
     {
+        if (outboundContext.rewrite.lastSent.empty())
+        {
+            outboundContext.rewrite.lastSent.wallClock = timestamp;
+            outboundContext.rewrite.lastSent.timestamp = header.timestamp;
+            outboundContext.rewrite.lastSent.sequenceNumber = sequenceNumber - 1;
+        }
         outboundContext.rewrite.offset.timestamp = outboundContext.rewrite.lastSent.timestamp +
-            codec::Opus::sampleRate / codec::Opus::packetsPerSecond - header.timestamp.get();
+            (timestamp - outboundContext.rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec -
+            header.timestamp.get();
         outboundContext.rewrite.offset.sequenceNumber =
             static_cast<int32_t>(outboundContext.rewrite.lastSent.sequenceNumber + 1 - sequenceNumber);
         outboundContext.rewrite.sequenceNumberStart = sequenceNumber;
     }
     else if (seqAdvance > MAX_SEQ_GAP)
     {
-        // leave timestamp offset as is
         outboundContext.rewrite.offset.sequenceNumber =
             static_cast<int32_t>(outboundContext.rewrite.lastSent.sequenceNumber + 1 - sequenceNumber);
+        outboundContext.rewrite.offset.timestamp = outboundContext.rewrite.lastSent.timestamp +
+            (timestamp - outboundContext.rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec -
+            header.timestamp.get();
     }
 
     const uint32_t newSequenceNumber = sequenceNumber + outboundContext.rewrite.offset.sequenceNumber;
@@ -43,6 +55,7 @@ inline void rewrite(bridge::SsrcOutboundContext& outboundContext, const uint32_t
     {
         outboundContext.rewrite.lastSent.sequenceNumber = newSequenceNumber;
         outboundContext.rewrite.lastSent.timestamp = header.timestamp;
+        outboundContext.rewrite.lastSent.wallClock = timestamp;
     }
 }
 } // namespace AudioRewriter

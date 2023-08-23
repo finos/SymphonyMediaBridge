@@ -315,7 +315,8 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
                 *(packetInfo.inboundContext()),
                 std::move(packet),
                 packetInfo.extendedSequenceNumber(),
-                audioStream->transport);
+                audioStream->transport,
+                timestamp);
         }
         else
         {
