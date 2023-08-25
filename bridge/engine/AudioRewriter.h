@@ -17,8 +17,8 @@ inline void rewrite(bridge::SsrcOutboundContext& outboundContext,
 {
     const uint32_t originalSsrc = header.ssrc;
     const bool newSource = outboundContext.originalSsrc != originalSsrc;
-    const int32_t seqAdvance = static_cast<int32_t>((sequenceNumber + outboundContext.rewrite.offset.sequenceNumber) -
-        outboundContext.rewrite.lastSent.sequenceNumber);
+    const int32_t seqAdvance = (sequenceNumber + outboundContext.rewrite.offset.sequenceNumber) -
+        outboundContext.rewrite.lastSent.sequenceNumber;
 
     if (newSource)
     {
@@ -28,20 +28,22 @@ inline void rewrite(bridge::SsrcOutboundContext& outboundContext,
             outboundContext.rewrite.lastSent.timestamp = header.timestamp;
             outboundContext.rewrite.lastSent.sequenceNumber = sequenceNumber - 1;
         }
-        outboundContext.rewrite.offset.timestamp = outboundContext.rewrite.lastSent.timestamp +
-            (timestamp - outboundContext.rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec -
-            header.timestamp.get();
+        const uint32_t projectedRtpTimestamp = outboundContext.rewrite.lastSent.timestamp +
+            (timestamp - outboundContext.rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec;
+
+        outboundContext.rewrite.offset.timestamp = projectedRtpTimestamp - header.timestamp.get();
         outboundContext.rewrite.offset.sequenceNumber =
-            static_cast<int32_t>(outboundContext.rewrite.lastSent.sequenceNumber + 1 - sequenceNumber);
+            outboundContext.rewrite.lastSent.sequenceNumber + 1 - sequenceNumber;
         outboundContext.rewrite.sequenceNumberStart = sequenceNumber;
     }
     else if (seqAdvance > MAX_SEQ_GAP)
     {
+        const uint32_t projectedRtpTimestamp = outboundContext.rewrite.lastSent.timestamp +
+            (timestamp - outboundContext.rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec;
+
         outboundContext.rewrite.offset.sequenceNumber =
-            static_cast<int32_t>(outboundContext.rewrite.lastSent.sequenceNumber + 1 - sequenceNumber);
-        outboundContext.rewrite.offset.timestamp = outboundContext.rewrite.lastSent.timestamp +
-            (timestamp - outboundContext.rewrite.lastSent.wallClock) * codec::Opus::sampleRate / utils::Time::sec -
-            header.timestamp.get();
+            outboundContext.rewrite.lastSent.sequenceNumber + 1 - sequenceNumber;
+        outboundContext.rewrite.offset.timestamp = projectedRtpTimestamp - header.timestamp.get();
     }
 
     const uint32_t newSequenceNumber = sequenceNumber + outboundContext.rewrite.offset.sequenceNumber;
