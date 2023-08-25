@@ -3,6 +3,7 @@
 #include "bridge/RtpMap.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
+#include "codec/Vp8.h"
 #include "codec/Vp8Header.h"
 #include "logger/Logger.h"
 #include "math/Fields.h"
@@ -24,7 +25,7 @@ namespace bridge
 
 namespace RtpVideoRewriter
 {
-constexpr int32_t MAX_JUMP_AHEAD = 0x10000 / 4;
+constexpr int32_t MAX_JUMP_AHEAD = 512; // if inbound gap is more than this we will keep the outbound sequence monotone
 
 constexpr uint16_t extractSequenceNumber(const uint32_t extendedSequenceNumber)
 {
@@ -41,6 +42,7 @@ inline bool rewriteVp8(SsrcOutboundContext& ssrcOutboundContext,
     const uint32_t extendedSequenceNumber,
     const char* transportName,
     uint32_t& outExtendedSequenceNumber,
+    const uint64_t timestamp,
     bool isKeyFrame = false)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(rewritePacket);
@@ -51,7 +53,7 @@ inline bool rewriteVp8(SsrcOutboundContext& ssrcOutboundContext,
     }
 
     const auto rtpPayload = rtpHeader->getPayload();
-    const auto timestamp = rtpHeader->timestamp.get();
+    const auto rtpTimestamp = rtpHeader->timestamp.get();
     const auto ssrc = rtpHeader->ssrc.get();
     const auto picId = codec::Vp8Header::getPicId(rtpPayload);
     const auto tl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload);
@@ -63,7 +65,8 @@ inline bool rewriteVp8(SsrcOutboundContext& ssrcOutboundContext,
         ssrcRewrite.lastSent.sequenceNumber = extendedSequenceNumber - 1;
         ssrcRewrite.lastSent.picId = (codec::Vp8Header::getPicId(rtpPayload) - 1) & 0x7FFF;
         ssrcRewrite.lastSent.tl0PicIdx = codec::Vp8Header::getTl0PicIdx(rtpPayload) - 1;
-        ssrcRewrite.lastSent.timestamp = timestamp;
+        ssrcRewrite.lastSent.timestamp = rtpTimestamp;
+        ssrcRewrite.lastSent.wallClock = timestamp;
         logger::info("%s start ssrc %u -> %u, sequence %u roc %u",
             "RtpVideoRewriter",
             transportName,
@@ -84,8 +87,9 @@ inline bool rewriteVp8(SsrcOutboundContext& ssrcOutboundContext,
 
         ssrcRewrite.offset.tl0PicIdx = math::ringDifference<uint16_t, 8>(tl0PicIdx, ssrcRewrite.lastSent.tl0PicIdx + 1);
 
-        ssrcRewrite.offset.timestamp =
-            math::ringDifference<uint32_t, 32>(timestamp, ssrcRewrite.lastSent.timestamp + 500);
+        const uint32_t projectedRtpTimestamp = ssrcRewrite.lastSent.timestamp +
+            utils::Time::diff(ssrcRewrite.lastSent.wallClock, timestamp) * codec::Vp8::sampleRate / utils::Time::sec;
+        ssrcRewrite.offset.timestamp = math::ringDifference<uint32_t, 32>(rtpTimestamp, projectedRtpTimestamp);
 
         REWRITER_LOG("%s new offset, ssrc %u, oseq %d, oPicId %d, otl0PicIdx %d, oTimestamp %d",
             "RtpVideoRewriter",
@@ -96,18 +100,23 @@ inline bool rewriteVp8(SsrcOutboundContext& ssrcOutboundContext,
             ssrcRewrite.offset.tl0PicIdx,
             ssrcRewrite.offset.timestamp);
 
-        logger::info("%s ssrc %u -> %u, sequence %u",
+        logger::info("%s ssrc %u -> %u, sequence %u, timestamp %u",
             "RtpVideoRewriter",
             transportName,
             rtpHeader->ssrc.get(),
             ssrcOutboundContext.ssrc,
-            extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber);
+            extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber,
+            rtpHeader->timestamp.get() + ssrcRewrite.offset.timestamp);
     }
     else if (static_cast<int32_t>(extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber -
                  ssrcRewrite.lastSent.sequenceNumber) > MAX_JUMP_AHEAD)
     {
         ssrcRewrite.offset.sequenceNumber =
             math::ringDifference<uint32_t, 32>(extendedSequenceNumber, ssrcRewrite.lastSent.sequenceNumber + 1);
+        const uint32_t projectedRtpTimestamp = ssrcRewrite.lastSent.timestamp +
+            utils::Time::diff(ssrcRewrite.lastSent.wallClock, timestamp) * codec::Vp8::sampleRate / utils::Time::sec;
+        ssrcRewrite.offset.timestamp = math::ringDifference<uint32_t, 32>(rtpTimestamp, projectedRtpTimestamp);
+
         logger::debug("Major sequence number skip ssrc %u, seq %u, sent %u. Adjusting offset to hide it",
             "RtpVideoRewriter",
             rtpHeader->ssrc.get(),
@@ -118,7 +127,7 @@ inline bool rewriteVp8(SsrcOutboundContext& ssrcOutboundContext,
     outExtendedSequenceNumber = extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber;
     const auto newPicId = picId + ssrcRewrite.offset.picId;
     const auto newTl0PicIdx = tl0PicIdx + ssrcRewrite.offset.tl0PicIdx;
-    const auto newTimestamp = timestamp + ssrcRewrite.offset.timestamp;
+    const auto newTimestamp = rtpTimestamp + ssrcRewrite.offset.timestamp;
 
     rtpHeader->ssrc = ssrcOutboundContext.ssrc;
     rtpHeader->sequenceNumber = outExtendedSequenceNumber & 0xFFFFu;
@@ -150,6 +159,7 @@ inline bool rewriteVp8(SsrcOutboundContext& ssrcOutboundContext,
         ssrcRewrite.lastSent.picId = newPicId;
         ssrcRewrite.lastSent.tl0PicIdx = newTl0PicIdx;
         ssrcRewrite.lastSent.timestamp = newTimestamp;
+        ssrcRewrite.lastSent.wallClock = timestamp;
     }
 
     if (isKeyFrame)
@@ -197,6 +207,7 @@ inline bool rewriteH264(SsrcOutboundContext& ssrcOutboundContext,
     const uint32_t extendedSequenceNumber,
     const char* transportName,
     uint32_t& outExtendedSequenceNumber,
+    const uint64_t timestamp,
     bool isKeyFrame = false)
 {
     auto rtpHeader = rtp::RtpHeader::fromPacket(rewritePacket);
@@ -206,7 +217,7 @@ inline bool rewriteH264(SsrcOutboundContext& ssrcOutboundContext,
         return false;
     }
 
-    const auto timestamp = rtpHeader->timestamp.get();
+    const auto rtpTimestamp = rtpHeader->timestamp.get();
     const auto ssrc = rtpHeader->ssrc.get();
 
     auto& ssrcRewrite = ssrcOutboundContext.rewrite;
@@ -214,7 +225,8 @@ inline bool rewriteH264(SsrcOutboundContext& ssrcOutboundContext,
     {
         ssrcOutboundContext.originalSsrc = ssrc - 1; // to make it differ in next check
         ssrcRewrite.lastSent.sequenceNumber = extendedSequenceNumber - 1;
-        ssrcRewrite.lastSent.timestamp = timestamp;
+        ssrcRewrite.lastSent.timestamp = rtpTimestamp;
+        ssrcRewrite.lastSent.wallClock = timestamp;
         logger::info("%s start ssrc %u -> %u, sequence %u roc %u",
             "RtpVideoRewriter",
             transportName,
@@ -231,8 +243,9 @@ inline bool rewriteH264(SsrcOutboundContext& ssrcOutboundContext,
             math::ringDifference<uint32_t, 32>(extendedSequenceNumber, ssrcRewrite.lastSent.sequenceNumber + 1);
         ssrcRewrite.sequenceNumberStart = extendedSequenceNumber;
 
-        ssrcRewrite.offset.timestamp =
-            math::ringDifference<uint32_t, 32>(timestamp, ssrcRewrite.lastSent.timestamp + 500);
+        const uint32_t projectedRtpTimestamp = ssrcRewrite.lastSent.timestamp +
+            utils::Time::diff(ssrcRewrite.lastSent.wallClock, timestamp) * 90000 / utils::Time::sec;
+        ssrcRewrite.offset.timestamp = math::ringDifference<uint32_t, 32>(rtpTimestamp, projectedRtpTimestamp);
 
         REWRITER_LOG("%s new offset, ssrc %u, oseq %d, oTimestamp %d",
             "RtpVideoRewriter",
@@ -253,6 +266,10 @@ inline bool rewriteH264(SsrcOutboundContext& ssrcOutboundContext,
     {
         ssrcRewrite.offset.sequenceNumber =
             math::ringDifference<uint32_t, 32>(extendedSequenceNumber, ssrcRewrite.lastSent.sequenceNumber + 1);
+        const uint32_t projectedRtpTimestamp = ssrcRewrite.lastSent.timestamp +
+            utils::Time::diff(ssrcRewrite.lastSent.wallClock, timestamp) * 90000 / utils::Time::sec;
+        ssrcRewrite.offset.timestamp = math::ringDifference<uint32_t, 32>(rtpTimestamp, projectedRtpTimestamp);
+
         logger::debug("Major sequence number skip ssrc %u, seq %u, sent %u. Adjusting offset to hide it",
             "RtpVideoRewriter",
             rtpHeader->ssrc.get(),
@@ -261,7 +278,7 @@ inline bool rewriteH264(SsrcOutboundContext& ssrcOutboundContext,
     }
 
     outExtendedSequenceNumber = extendedSequenceNumber + ssrcRewrite.offset.sequenceNumber;
-    const auto newTimestamp = timestamp + ssrcRewrite.offset.timestamp;
+    const auto newTimestamp = rtpTimestamp + ssrcRewrite.offset.timestamp;
 
     rtpHeader->ssrc = ssrcOutboundContext.ssrc;
     rtpHeader->sequenceNumber = outExtendedSequenceNumber & 0xFFFFu;
@@ -284,6 +301,7 @@ inline bool rewriteH264(SsrcOutboundContext& ssrcOutboundContext,
     {
         ssrcRewrite.lastSent.sequenceNumber = outExtendedSequenceNumber;
         ssrcRewrite.lastSent.timestamp = newTimestamp;
+        ssrcRewrite.lastSent.wallClock = timestamp;
     }
 
     if (isKeyFrame)

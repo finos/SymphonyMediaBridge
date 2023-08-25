@@ -57,13 +57,15 @@ AudioForwarderRewriteAndSendJob::AudioForwarderRewriteAndSendJob(SsrcOutboundCon
     SsrcInboundContext& senderInboundContext,
     memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber,
-    transport::Transport& transport)
+    transport::Transport& transport,
+    uint64_t timestamp)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
       _senderInboundContext(senderInboundContext),
       _packet(std::move(packet)),
       _extendedSequenceNumber(extendedSequenceNumber),
-      _transport(transport)
+      _transport(transport),
+      _timestamp(timestamp)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -90,7 +92,7 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *header);
+    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *header, _timestamp);
 
     rewriteHeaderExtensions(*header, _senderInboundContext, _outboundContext);
     _transport.protectAndSend(std::move(_packet));

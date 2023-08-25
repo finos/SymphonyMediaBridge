@@ -15,7 +15,8 @@ RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundConte
     const uint32_t extendedSequenceNumber,
     MixerManagerAsync& mixerManager,
     size_t endpointIdHash,
-    EngineMixer& mixer)
+    EngineMixer& mixer,
+    uint64_t timestamp)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
       _packet(std::move(packet)),
@@ -23,7 +24,8 @@ RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundConte
       _extendedSequenceNumber(extendedSequenceNumber),
       _mixerManager(mixerManager),
       _endpointIdHash(endpointIdHash),
-      _mixer(mixer)
+      _mixer(mixer),
+      _timestamp(timestamp)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -52,7 +54,7 @@ void RecordingAudioForwarderSendJob::run()
         return;
     }
 
-    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *rtpHeader);
+    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *rtpHeader, _timestamp);
 
     if (_outboundContext.packetCache.isSet())
     {

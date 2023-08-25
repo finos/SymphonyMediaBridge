@@ -17,7 +17,8 @@ RecordingVideoForwarderSendJob::RecordingVideoForwarderSendJob(SsrcOutboundConte
     const uint32_t extendedSequenceNumber,
     MixerManagerAsync& mixerManager,
     size_t endpointIdHash,
-    EngineMixer& mixer)
+    EngineMixer& mixer,
+    uint64_t timestamp)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
       _senderInboundContext(senderInboundContext),
@@ -26,7 +27,8 @@ RecordingVideoForwarderSendJob::RecordingVideoForwarderSendJob(SsrcOutboundConte
       _extendedSequenceNumber(extendedSequenceNumber),
       _mixerManager(mixerManager),
       _endpointIdHash(endpointIdHash),
-      _mixer(mixer)
+      _mixer(mixer),
+      _timestamp(timestamp)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -106,6 +108,7 @@ void RecordingVideoForwarderSendJob::run()
             _extendedSequenceNumber,
             _transport.getLoggableId().c_str(),
             rewrittenExtendedSequenceNumber,
+            _timestamp,
             isKeyFrame))
     {
         return;

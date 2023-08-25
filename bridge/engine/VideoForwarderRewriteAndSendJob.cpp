@@ -19,7 +19,8 @@ VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundCon
     const uint32_t extendedSequenceNumber,
     MixerManagerAsync& mixerManager,
     size_t endpointIdHash,
-    EngineMixer& mixer)
+    EngineMixer& mixer,
+    uint64_t timestamp)
     : jobmanager::CountedJob(transport.getJobCounter()),
       _outboundContext(outboundContext),
       _senderInboundContext(senderInboundContext),
@@ -28,7 +29,8 @@ VideoForwarderRewriteAndSendJob::VideoForwarderRewriteAndSendJob(SsrcOutboundCon
       _extendedSequenceNumber(extendedSequenceNumber),
       _mixerManager(mixerManager),
       _endpointIdHash(endpointIdHash),
-      _mixer(mixer)
+      _mixer(mixer),
+      _timestamp(timestamp)
 {
     assert(_packet);
     assert(_packet->getLength() > 0);
@@ -136,6 +138,7 @@ void VideoForwarderRewriteAndSendJob::run()
                 _extendedSequenceNumber,
                 _transport.getLoggableId().c_str(),
                 rewrittenExtendedSequenceNumber,
+                _timestamp,
                 isKeyFrame))
         {
             return;

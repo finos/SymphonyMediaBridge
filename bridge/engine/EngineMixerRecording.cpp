@@ -419,7 +419,8 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
                     packetInfo.extendedSequenceNumber(),
                     _messageListener,
                     transportEntry.first,
-                    *this);
+                    *this,
+                    timestamp);
             }
             else
             {
@@ -470,7 +471,8 @@ void EngineMixer::forwardVideoRtpPacketRecording(IncomingPacketInfo& packetInfo,
                     packetInfo.extendedSequenceNumber(),
                     _messageListener,
                     transportEntry.first,
-                    *this);
+                    *this,
+                    timestamp);
             }
             else
             {

@@ -20,7 +20,8 @@ void examine(bridge::SsrcOutboundContext& outboundContext,
     uint16_t picId,
     uint16_t picIdx,
     uint16_t expectedPicId,
-    uint16_t expectedPicIdx)
+    uint16_t expectedPicIdx,
+    uint64_t wallClock)
 {
     auto rtpHeader = rtp::RtpHeader::create(packet);
     auto payload = rtpHeader->getPayload();
@@ -31,7 +32,7 @@ void examine(bridge::SsrcOutboundContext& outboundContext,
     codec::Vp8Header::setTl0PicIdx(payload, picIdx);
 
     uint32_t sequenceNumberAfterRewrite = 0;
-    bridge::RtpVideoRewriter::rewriteVp8(outboundContext, packet, seqNo, "", sequenceNumberAfterRewrite);
+    bridge::RtpVideoRewriter::rewriteVp8(outboundContext, packet, seqNo, "", sequenceNumberAfterRewrite, wallClock);
 
     EXPECT_EQ(outboundContext.ssrc, rtpHeader->ssrc.get());
     EXPECT_EQ(expectedSeqNo & 0xFFFFu, rtpHeader->sequenceNumber.get());
@@ -40,12 +41,45 @@ void examine(bridge::SsrcOutboundContext& outboundContext,
     EXPECT_EQ(expectedPicIdx, codec::Vp8Header::getTl0PicIdx(payload));
 }
 
+void examine(bridge::SsrcOutboundContext& outboundContext,
+    memory::Packet& packet,
+    uint32_t ssrc,
+    uint32_t seqNo,
+    uint32_t timestamp,
+    uint32_t expectedSeqNo,
+    uint16_t picId,
+    uint16_t picIdx,
+    uint16_t expectedPicId,
+    uint16_t expectedPicIdx,
+    uint32_t expectedTimestamp,
+    uint64_t wallClock)
+{
+    auto rtpHeader = rtp::RtpHeader::create(packet);
+    auto payload = rtpHeader->getPayload();
+    rtpHeader->ssrc = ssrc;
+    rtpHeader->sequenceNumber = seqNo & 0xFFFFu;
+    rtpHeader->timestamp = timestamp;
+    codec::Vp8Header::setPicId(payload, picId);
+    codec::Vp8Header::setTl0PicIdx(payload, picIdx);
+
+    uint32_t sequenceNumberAfterRewrite = 0;
+    bridge::RtpVideoRewriter::rewriteVp8(outboundContext, packet, seqNo, "", sequenceNumberAfterRewrite, wallClock);
+
+    EXPECT_EQ(outboundContext.ssrc, rtpHeader->ssrc.get());
+    EXPECT_EQ(expectedSeqNo & 0xFFFFu, rtpHeader->sequenceNumber.get());
+    EXPECT_EQ(expectedSeqNo, sequenceNumberAfterRewrite);
+    EXPECT_EQ(expectedPicId, codec::Vp8Header::getPicId(payload));
+    EXPECT_EQ(expectedPicIdx, codec::Vp8Header::getTl0PicIdx(payload));
+    EXPECT_EQ(expectedTimestamp, rtpHeader->timestamp.get());
+}
+
 void examineH264(bridge::SsrcOutboundContext& outboundContext,
     memory::Packet& packet,
     uint32_t ssrc,
     uint32_t seqNo,
     uint32_t timestamp,
-    uint32_t expectedSeqNo)
+    uint32_t expectedSeqNo,
+    uint64_t wallClock)
 {
     auto rtpHeader = rtp::RtpHeader::create(packet);
     rtpHeader->ssrc = ssrc;
@@ -53,7 +87,7 @@ void examineH264(bridge::SsrcOutboundContext& outboundContext,
     rtpHeader->timestamp = timestamp;
 
     uint32_t sequenceNumberAfterRewrite = 0;
-    bridge::RtpVideoRewriter::rewriteH264(outboundContext, packet, seqNo, "", sequenceNumberAfterRewrite);
+    bridge::RtpVideoRewriter::rewriteH264(outboundContext, packet, seqNo, "", sequenceNumberAfterRewrite, wallClock);
 
     EXPECT_EQ(outboundContext.ssrc, rtpHeader->ssrc.get());
     EXPECT_EQ(expectedSeqNo & 0xFFFFu, rtpHeader->sequenceNumber.get());
@@ -70,12 +104,15 @@ class RtpVideoRewriterTest : public ::testing::Test
         _ssrcOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(outboundSsrc,
             *_allocator,
             bridge::RtpMap(bridge::RtpMap::Format::VP8));
+
+        _wallClock = 7000;
     }
     void TearDown() override { _ssrcOutboundContext.reset(); }
 
 protected:
     std::unique_ptr<memory::PacketPoolAllocator> _allocator;
     std::unique_ptr<bridge::SsrcOutboundContext> _ssrcOutboundContext;
+    uint64_t _wallClock;
 };
 
 TEST_F(RtpVideoRewriterTest, ringDifference)
@@ -151,8 +188,8 @@ TEST_F(RtpVideoRewriterTest, rewrite)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 2, 1, 1000, 2, 1, 1, 2, 2);
+    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 2, 1, 1000, 2, 1, 1, 2, 2, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, rewriteRtx)
@@ -209,9 +246,9 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsUnchanged)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2);
-    examine(*_ssrcOutboundContext, *packet, 1, 3, 3, 3, 3, 3, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 3, 3, 3, 3, 3, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsChanged)
@@ -224,9 +261,9 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsChanged)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2);
-    examine(*_ssrcOutboundContext, *packet, 2, 10, 10000, 3, 10, 10, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 2, 10, 10000, 3, 10, 10, 3, 3, 2, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsChangedSequenceNumberLower)
@@ -239,9 +276,9 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsChangedSequenceNumb
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2);
-    examine(*_ssrcOutboundContext, *packet, 2, 65535, 10000, 3, 10, 10, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 2, 65535, 10000, 3, 10, 10, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReordered)
@@ -254,12 +291,12 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReo
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 3, 3, 3, 3, 3, 3, 3);
-    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2);
+    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 3, 3, 3, 3, 3, 3, 3, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, 2, 2, 2, 2, _wallClock);
 
     // change ssrc
-    examine(*_ssrcOutboundContext, *packet, 2, 10, 10, 4, 10, 10, 4, 4);
+    examine(*_ssrcOutboundContext, *packet, 2, 10, 10, 4, 10, 10, 4, 4, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsUnchangedAndSequenceRollover)
@@ -272,11 +309,11 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsUnchangedAndSequenc
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 65535, 1, 65535, 1, 1, 1, 1);
+    examine(*_ssrcOutboundContext, *packet, 1, 65535, 1, 65535, 1, 1, 1, 1, _wallClock);
 
-    examine(*_ssrcOutboundContext, *packet, 1, 0x10000, 2, 0x10000, 2, 2, 2, 2);
+    examine(*_ssrcOutboundContext, *packet, 1, 0x10000, 2, 0x10000, 2, 2, 2, 2, _wallClock);
 
-    examine(*_ssrcOutboundContext, *packet, 1, 0x10001, 3, 0x10001, 3, 3, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 0x10001, 3, 0x10001, 3, 3, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReorderedWithRollover)
@@ -289,11 +326,11 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReo
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 65534, 1, 65534, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 0x10000, 3, 0x10000u, 3, 3, 3, 3);
-    examine(*_ssrcOutboundContext, *packet, 1, 65535, 2, 65535, 2, 2, 2, 2);
+    examine(*_ssrcOutboundContext, *packet, 1, 65534, 1, 65534, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 0x10000, 3, 0x10000u, 3, 3, 3, 3, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 65535, 2, 65535, 2, 2, 2, 2, _wallClock);
 
-    examine(*_ssrcOutboundContext, *packet, 2, 4711 + 0x10000, 10, 0x10001, 10, 10, 4, 4);
+    examine(*_ssrcOutboundContext, *packet, 2, 4711 + 0x10000, 10, 0x10001, 10, 10, 4, 4, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, longGapInSequenceNumbersSameSsrc)
@@ -306,8 +343,9 @@ TEST_F(RtpVideoRewriterTest, longGapInSequenceNumbersSameSsrc)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 10000, 1, 10000, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 10, 1000, 10, 3, 3, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 10, 1000, 10, 1, 1, 1, 1, 1000, _wallClock);
+    _wallClock += utils::Time::sec * 170;
+    examine(*_ssrcOutboundContext, *packet, 1, 17000, 12000000, 11, 3, 3, 3, 3, 15301000, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, longGapInSequenceNumbersNewSsrc)
@@ -320,11 +358,12 @@ TEST_F(RtpVideoRewriterTest, longGapInSequenceNumbersNewSsrc)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 10000, 1, 10000, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 2, 30000, 1, 10001, 3, 3, 2, 2);
+    examine(*_ssrcOutboundContext, *packet, 1, 10000, 1, 10000, 1, 1, 1, 1, 1, _wallClock);
+    _wallClock += utils::Time::sec * 2;
+    examine(*_ssrcOutboundContext, *packet, 2, 30000, 1000000, 10001, 3, 3, 2, 2, 180001, _wallClock);
 }
 
-TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtx)
+TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcChangeAndReorder)
 {
     memory::PacketPoolAllocator packetAllocator(512, "test");
     bridge::RtpMap map1(bridge::RtpMap::Format::VP8);
@@ -340,30 +379,30 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtx)
 
     uint32_t lastTimestamp = 0;
 
-    examine(outboundContext, *packet, 1, 74, 60000, 74, 32764, 255, 32764, 255);
-    examine(outboundContext, *packet, 1, 75, 60010, 75, 2, 2, 2, 2);
+    examine(outboundContext, *packet, 1, 74, 60000, 74, 32764, 255, 32764, 255, _wallClock);
+    examine(outboundContext, *packet, 1, 75, 60010, 75, 2, 2, 2, 2, _wallClock);
 
     // change ssrc
     lastTimestamp = rtpHeader->timestamp.get();
-    examine(outboundContext, *packet, 2, 82, 10000, 76, 10, 10, 3, 3);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+    examine(outboundContext, *packet, 2, 82, 10000, 76, 10, 10, 3, 3, _wallClock);
+    EXPECT_EQ(lastTimestamp, rtpHeader->timestamp.get()); // equal since wallClock did not advance
 
     // emulate 2 rtx
-    examine(outboundContext, *packet, 2, 3, 10000, -3, 10, 10, 3, 3);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+    examine(outboundContext, *packet, 2, 3, 10000 - 9990, -3, 10, 10, 3, 3, _wallClock);
+    EXPECT_EQ(lastTimestamp - 9990, rtpHeader->timestamp.get());
 
-    examine(outboundContext, *packet, 2, 4, 10000, -2, 10, 10, 3, 3);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+    examine(outboundContext, *packet, 2, 4, 10000 - 9990, -2, 10, 10, 3, 3, _wallClock);
+    EXPECT_EQ(lastTimestamp - 9990, rtpHeader->timestamp.get());
 
     // continue rtp
-    examine(outboundContext, *packet, 2, 83, 10000, 77, 10, 10, 3, 3);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+    examine(outboundContext, *packet, 2, 83, 10000, 77, 10, 10, 3, 3, _wallClock);
+    EXPECT_EQ(lastTimestamp, rtpHeader->timestamp.get());
 }
+
+constexpr int32_t MAX_JUMP_AHEAD = bridge::RtpVideoRewriter::MAX_JUMP_AHEAD;
 
 TEST_F(RtpVideoRewriterTest, seqSkipWithinMargin)
 {
-    constexpr int32_t MAX_JUMP_AHEAD = 0x10000 / 4;
-
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
@@ -372,9 +411,9 @@ TEST_F(RtpVideoRewriterTest, seqSkipWithinMargin)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD, 2, MAX_JUMP_AHEAD, 2, 2, 2, 2);
-    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 1, 3, MAX_JUMP_AHEAD + 1, 3, 3, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD, 2, MAX_JUMP_AHEAD, 2, 2, 2, 2, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 1, 3, MAX_JUMP_AHEAD + 1, 3, 3, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, seqSkipWithinMarginRollover)
@@ -387,15 +426,13 @@ TEST_F(RtpVideoRewriterTest, seqSkipWithinMarginRollover)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 0x13F90, 2, 0x13F90, 2, 2, 2, 2);
-    examine(*_ssrcOutboundContext, *packet, 1, 0x13F92 + 1, 3, 0x13F92 + 1, 3, 3, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 0x13F90, 2, 0xFFF0 + 1, 2, 2, 2, 2, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 0x13F90 + 3, 3, 0xFFF0 + 4, 3, 3, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, seqSkipBeyondMargin)
 {
-    constexpr int32_t MAX_JUMP_AHEAD = 0x10000 / 4;
-
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
 
@@ -404,9 +441,9 @@ TEST_F(RtpVideoRewriterTest, seqSkipBeyondMargin)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 10, 2, 2, 2, 2, 2, 2);
-    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 11, 3, 3, 3, 3, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 10, 2, 2, 2, 2, 2, 2, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 11, 3, 3, 3, 3, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, seqSkipBeyondMarginRollover)
@@ -419,94 +456,94 @@ TEST_F(RtpVideoRewriterTest, seqSkipBeyondMarginRollover)
     std::array<uint8_t, 6> vp8PayloadDescriptor = {0x90, 0xe0, 0xab, 0xb9, 0xd3, 0x60};
     memcpy(payload, vp8PayloadDescriptor.data(), vp8PayloadDescriptor.size());
 
-    examine(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0, 1, 1, 1, 1);
-    examine(*_ssrcOutboundContext, *packet, 1, 0x14002, 2, 0xFFF1, 2, 2, 2, 2);
-    examine(*_ssrcOutboundContext, *packet, 1, 0x14003, 3, 0xFFF2, 3, 3, 3, 3);
+    examine(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0, 1, 1, 1, 1, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 0x14002, 2, 0xFFF1, 2, 2, 2, 2, _wallClock);
+    examine(*_ssrcOutboundContext, *packet, 1, 0x14003, 3, 0xFFF2, 3, 3, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, rewriteH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1);
-    examineH264(*_ssrcOutboundContext, *packet, 2, 1, 1000, 2);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 2, 1, 1000, 2, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsUnchangedH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 3, 3, 3);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 3, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsChangedH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2);
-    examineH264(*_ssrcOutboundContext, *packet, 2, 10, 10000, 3);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 2, 10, 10000, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsChangedSequenceNumberLowerH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2);
-    examineH264(*_ssrcOutboundContext, *packet, 2, 65535, 10000, 3);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 2, 65535, 10000, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReorderedH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 3, 3, 3);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 3, 3, 3, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 2, 2, 2, _wallClock);
 
     // change ssrc
-    examineH264(*_ssrcOutboundContext, *packet, 2, 10, 10, 4);
+    examineH264(*_ssrcOutboundContext, *packet, 2, 10, 10, 4, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcIsUnchangedAndSequenceRolloverH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 65535, 1, 65535);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0x10000, 2, 0x10000);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0x10001, 3, 0x10001);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 65535, 1, 65535, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0x10000, 2, 0x10000, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0x10001, 3, 0x10001, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, countersAreConsecutiveIfLastPacketBeforeSwitchIsReorderedWithRolloverH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 65534, 1, 65534);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0x10000, 3, 0x10000u);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 65535, 2, 65535);
-    examineH264(*_ssrcOutboundContext, *packet, 2, 4711 + 0x10000, 10, 0x10001);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 65534, 1, 65534, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0x10000, 3, 0x10000u, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 65535, 2, 65535, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 2, 4711 + 0x10000, 10, 0x10001, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, longGapInSequenceNumbersSameSsrcH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 10000, 1, 10000);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 10, 1000, 10);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 10000, 1, 10000, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 10, 1000, 10, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, longGapInSequenceNumbersNewSsrcH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 10000, 1, 10000);
-    examineH264(*_ssrcOutboundContext, *packet, 2, 30000, 1, 10001);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 10000, 1, 10000, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 2, 30000, 1, 10001, _wallClock);
 }
 
-TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtxH264)
+TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcChangeAndReorderH264)
 {
     memory::PacketPoolAllocator packetAllocator(512, "test");
     bridge::RtpMap map1(bridge::RtpMap::Format::VP8);
@@ -517,62 +554,60 @@ TEST_F(RtpVideoRewriterTest, countersAreConsecutiveWhenSsrcChangeAndRtxH264)
 
     auto rtpHeader = rtp::RtpHeader::create(*packet);
 
-    examineH264(outboundContext, *packet, 1, 74, 60000, 74);
-    examineH264(outboundContext, *packet, 1, 75, 60010, 75);
+    examineH264(outboundContext, *packet, 1, 74, 60000, 74, _wallClock);
+    examineH264(outboundContext, *packet, 1, 75, 60010, 75, _wallClock);
 
     // change ssrc
-    const auto lastTimestamp = rtpHeader->timestamp.get();
-    examineH264(outboundContext, *packet, 2, 82, 10000, 76);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
-
+    auto lastTimestamp = rtpHeader->timestamp.get();
+    EXPECT_EQ(60010, lastTimestamp);
+    _wallClock += utils::Time::ms * 100;
+    examineH264(outboundContext, *packet, 2, 82, 10000, 76, _wallClock);
+    EXPECT_EQ(lastTimestamp + 90000 / 10, rtpHeader->timestamp.get());
+    lastTimestamp = rtpHeader->timestamp.get();
     // emulate 2 rtx
-    examineH264(outboundContext, *packet, 2, 3, 10000, -3);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+    examineH264(outboundContext, *packet, 2, 3, 10000 - 9000, -3, _wallClock);
+    EXPECT_EQ(lastTimestamp - 9000, rtpHeader->timestamp.get());
 
-    examineH264(outboundContext, *packet, 2, 4, 10000, -2);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+    examineH264(outboundContext, *packet, 2, 4, 10000 - 9000, -2, _wallClock);
+    EXPECT_EQ(lastTimestamp - 9000, rtpHeader->timestamp.get());
 
     // continue rtp
-    examineH264(outboundContext, *packet, 2, 83, 10000, 77);
-    EXPECT_LT(lastTimestamp, rtpHeader->timestamp.get());
+    examineH264(outboundContext, *packet, 2, 83, 10000, 77, _wallClock);
+    EXPECT_EQ(lastTimestamp, rtpHeader->timestamp.get());
 }
 
 TEST_F(RtpVideoRewriterTest, seqSkipWithinMarginH264)
 {
-    constexpr int32_t MAX_JUMP_AHEAD = 0x10000 / 4;
-
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1);
-    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD, 2, MAX_JUMP_AHEAD);
-    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 1, 3, MAX_JUMP_AHEAD + 1);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD, 2, MAX_JUMP_AHEAD, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 1, 3, MAX_JUMP_AHEAD + 1, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, seqSkipWithinMarginRolloverH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0x13F90, 2, 0x13F90);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0x13F92 + 1, 3, 0x13F92 + 1);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0x13F90, 2, 0xFFF0 + 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0x13F90 + 3, 3, 0xFFF0 + 4, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, seqSkipBeyondMarginH264)
 {
-    constexpr int32_t MAX_JUMP_AHEAD = 0x10000 / 4;
-
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1);
-    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 10, 2, 2);
-    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 11, 3, 3);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 1, 1, 1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 10, 2, 2, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, MAX_JUMP_AHEAD + 11, 3, 3, _wallClock);
 }
 
 TEST_F(RtpVideoRewriterTest, seqSkipBeyondMarginRolloverH264)
 {
     auto packet = memory::makeUniquePacket(*_allocator);
     packet->setLength(packet->size);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0x14002, 2, 0xFFF1);
-    examineH264(*_ssrcOutboundContext, *packet, 1, 0x14003, 3, 0xFFF2);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0xFFF0, 1, 0xFFF0, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0x14002, 2, 0xFFF1, _wallClock);
+    examineH264(*_ssrcOutboundContext, *packet, 1, 0x14003, 3, 0xFFF2, _wallClock);
 }

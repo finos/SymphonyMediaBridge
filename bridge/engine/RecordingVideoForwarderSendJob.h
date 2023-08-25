@@ -25,7 +25,8 @@ public:
         const uint32_t extendedSequenceNumber,
         MixerManagerAsync& mixerManager,
         size_t endpointIdHash,
-        EngineMixer& mixer);
+        EngineMixer& mixer,
+        uint64_t timestamp);
 
     void run() override;
 
@@ -38,6 +39,7 @@ private:
     MixerManagerAsync& _mixerManager;
     size_t _endpointIdHash;
     EngineMixer& _mixer;
+    const uint64_t _timestamp;
 };
 
 } // namespace bridge

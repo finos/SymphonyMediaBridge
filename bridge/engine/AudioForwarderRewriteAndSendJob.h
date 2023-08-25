@@ -22,7 +22,8 @@ public:
         SsrcInboundContext& senderInboundContext,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber,
-        transport::Transport& transport);
+        transport::Transport& transport,
+        uint64_t timestamp);
 
     void run() override;
 
@@ -30,8 +31,9 @@ private:
     SsrcOutboundContext& _outboundContext;
     SsrcInboundContext& _senderInboundContext;
     memory::UniquePacket _packet;
-    uint32_t _extendedSequenceNumber;
+    const uint32_t _extendedSequenceNumber;
     transport::Transport& _transport;
+    const uint64_t _timestamp;
 };
 
 } // namespace bridge
