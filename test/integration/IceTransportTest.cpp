@@ -100,12 +100,12 @@ TEST_F(IceTransportEmuTest, plainNewApi)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
                     EXPECT_EQ(data.amplitudeProfile[0].second, 0);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3652, 250);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);

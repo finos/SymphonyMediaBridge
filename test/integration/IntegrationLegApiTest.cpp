@@ -127,7 +127,7 @@ TEST_F(IntegrationLegApi, plain)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
                     EXPECT_EQ(data.amplitudeProfile[0].second, 0);

@@ -36,27 +36,6 @@ struct StreamSsrcVerifier
     }
 };
 
-// computes p-th percentile among absolule values of audio samples in given ranage
-int16_t getAudioDataPercentile(const SampleDataUtils::AudioData& audioData,
-    SampleDataUtils::DurationIterations begin,
-    SampleDataUtils::DurationIterations end,
-    int p /* 0..100 */)
-{
-    assert(p >= 0 && p <= 100);
-    assert(end >= begin);
-    assert(end * bridge::EngineMixer::samplesPerIteration <= audioData.size());
-    SampleDataUtils::AudioData copy;
-    std::transform(audioData.begin() + begin * bridge::EngineMixer::samplesPerIteration,
-        audioData.begin() + end * bridge::EngineMixer::samplesPerIteration,
-        std::back_inserter(copy),
-        [](int16_t sample) {
-            return std::min(static_cast<int>(std::numeric_limits<int16_t>::max()), std::abs(static_cast<int>(sample)));
-        });
-    const size_t pos = (p * copy.size()) / 100;
-    std::nth_element(copy.begin(), copy.begin() + pos, copy.end());
-    return copy[pos];
-}
-
 template <typename WORDTYPE>
 void dumpAudio(const char* name, const std::vector<WORDTYPE>& audio)
 {
@@ -64,15 +43,6 @@ void dumpAudio(const char* name, const std::vector<WORDTYPE>& audio)
     fileName += name;
     utils::ScopedFileHandle dump(fopen(fileName.c_str(), "wr"));
     fwrite(audio.data(), sizeof(WORDTYPE), audio.size(), dump.get());
-}
-
-void logSamplesOnVerificationFailure(const char* name,
-    const SampleDataUtils::AudioData& audioData,
-    SampleDataUtils::DurationIterations begin,
-    SampleDataUtils::DurationIterations end)
-{
-    logger::info("verification of samples %lu-%lu failed. Samples dump follows.", "Test", begin, end);
-    dumpAudio(name, audioData);
 }
 
 bool containsNear(std::vector<std::pair<double, double>>& frequencies, double frequency, double difference)
@@ -284,64 +254,6 @@ SampleDataUtils::AudioData SampleDataUtils::decodeOpusRtpStream(const std::vecto
 
     return result;
 }
-
-void SampleDataUtils::assertSilence(const char* name,
-    const AudioData& audioData,
-    DurationIterations begin,
-    DurationIterations end)
-{
-    const auto p = getAudioDataPercentile(audioData, begin, end, 95);
-    if (p > 100)
-    {
-        logSamplesOnVerificationFailure(name, audioData, begin, end);
-        assert(false);
-    }
-}
-
-void SampleDataUtils::assertBuzz(const char* name,
-    const AudioData& audioData,
-    DurationIterations begin,
-    DurationIterations end)
-{
-    const auto p = getAudioDataPercentile(audioData, begin, end, 5);
-    if (p < 100)
-    {
-        logSamplesOnVerificationFailure(name, audioData, begin, end);
-        assert(false);
-    }
-}
-
-namespace
-{
-int computeAudioLevel(const int16_t* payload, int count)
-{
-    double rms = 0;
-    const double overloadLevel = 0x8000;
-    for (int i = 0; i < count; ++i)
-    {
-        const double power = payload[i] / overloadLevel;
-        rms += power * power;
-    }
-    rms = count ? std::sqrt(rms / count) : 0;
-    rms = std::max(rms, 1e-9);
-    return -std::max(-127.0, 20 * std::log10(rms));
-}
-
-int audioLevelFromPacket(const memory::Packet& packet)
-{
-    auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
-    auto extensions = rtpHeader->getExtensionHeader()->extensions();
-    for (auto extension : extensions)
-    {
-        if (extension.getId() == 1)
-        {
-            return extension.data[0];
-        }
-    }
-    return 127;
-}
-
-} // namespace
 
 void SampleDataUtils::fft(CmplxArray& x)
 {
@@ -619,35 +531,6 @@ void SampleDataUtils::topFrequencyPeaks(const CmplxArray& frequencyTransform,
             frequencies.push_back(prevFrequency);
         }
     }
-}
-
-bool SampleDataUtils::verifyAudioLevel(const std::vector<memory::Packet>& packets, const AudioData& audio)
-{
-    int cursor = 0;
-    int prevExpectedLevel = 127;
-    for (auto& packet : packets)
-    {
-        if (!rtp::isRtpPacket(packet))
-        {
-            continue;
-        }
-        int level = audioLevelFromPacket(packet);
-        int expectedLevel = computeAudioLevel(&audio[cursor], bridge::EngineMixer::samplesPerIteration);
-
-        if (prevExpectedLevel == expectedLevel && std::abs(level - expectedLevel) > 2)
-        {
-            logger::warn("audio level differ at %zu expected %d got %d",
-                "",
-                cursor / bridge::EngineMixer::samplesPerIteration,
-                expectedLevel,
-                level);
-            return false;
-        }
-
-        cursor += bridge::EngineMixer::samplesPerIteration;
-        prevExpectedLevel = expectedLevel;
-    }
-    return true;
 }
 
 bool SampleDataUtils::dumpPayload(FILE* h, const memory::Packet& packet)

@@ -112,7 +112,6 @@ private:
     // Async interface
     bool post(utils::Function&& task) override { return _backgroundJobQueue.post(std::move(task)); }
 
-    void allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc) override;
     void audioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream) override;
     void engineMixerRemoved(EngineMixer& mixer) override;
     void freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;

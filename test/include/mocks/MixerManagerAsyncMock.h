@@ -11,7 +11,6 @@ class MixerManagerAsyncMock : public bridge::MixerManagerAsync
 public:
     MOCK_METHOD(bool, post, (utils::Function && task), (override));
 
-    MOCK_METHOD(void, allocateAudioBuffer, (bridge::EngineMixer & mixer, uint32_t ssrc), (override));
     MOCK_METHOD(void,
         audioStreamRemoved,
         (bridge::EngineMixer & mixer, const bridge::EngineAudioStream& audioStream),

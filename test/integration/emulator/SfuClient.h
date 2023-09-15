@@ -46,8 +46,7 @@ public:
         memory::AudioPacketPoolAllocator& audioAllocator,
         transport::TransportFactory& transportFactory,
         transport::TransportFactory& publicTransportFactory,
-        transport::SslDtls& sslDtls,
-        uint32_t ptime = 20)
+        transport::SslDtls& sslDtls)
         : _channel(httpd),
           _httpd(httpd),
           _allocator(allocator),
@@ -59,7 +58,6 @@ public:
           _videoSsrcMap(128),
           _loggableId("client", id),
           _recordingActive(true),
-          _ptime(ptime),
           _expectedReceiveAudioType(Audio::None),
           _startTime(0)
     {
@@ -177,7 +175,11 @@ public:
 
         if (_channel.isAudioOffered())
         {
-            _audioSource = std::make_unique<emulator::AudioSource>(_allocator, _idGenerator.next(), _callConfig.audio);
+            _audioSource = std::make_unique<emulator::AudioSource>(_allocator,
+                _idGenerator.next(),
+                _callConfig.audio,
+                _callConfig.ptime);
+
             if (_bundleTransport)
             {
                 _bundleTransport->setAudioPayloadType(111, codec::Opus::sampleRate);
@@ -427,6 +429,7 @@ public:
             auto it = _audioReceivers.find(rtpHeader->ssrc.get());
             if (it == _audioReceivers.end())
             {
+                logger::info("audio RTP received %u", _loggableId.c_str(), rtpHeader->sequenceNumber.get());
                 bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
                 rtpMap.audioLevelExtId.set(1);
                 rtpMap.c9infoExtId.set(8);
@@ -844,7 +847,6 @@ private:
     std::atomic_bool _recordingActive;
     std::unordered_set<uint32_t> _remoteVideoSsrc;
     std::vector<api::SimulcastGroup> _remoteVideoStreams;
-    uint32_t _ptime;
     std::unique_ptr<webrtc::WebRtcDataStream> _dataStream;
     size_t _instanceId;
     RtxStats _rtxStats;

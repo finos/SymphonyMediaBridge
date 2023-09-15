@@ -29,6 +29,7 @@ struct CallConfig
     uint64_t ipv6CandidateDelay = 0;
     TransportMode transportMode = TransportMode::BundledIce;
     bool enableIpv6 = true;
+    uint32_t ptime = 20;
 
     bool hasAudio() const { return audio != Audio::None; }
 };
@@ -166,6 +167,12 @@ public:
     CallConfigBuilder& disableIpv6()
     {
         _config.enableIpv6 = false;
+        return *this;
+    }
+
+    CallConfigBuilder& ptime(uint32_t ms)
+    {
+        _config.ptime = ms;
         return *this;
     }
 

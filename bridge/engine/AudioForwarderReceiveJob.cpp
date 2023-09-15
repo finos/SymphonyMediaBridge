@@ -14,81 +14,6 @@
 namespace bridge
 {
 
-void AudioForwarderReceiveJob::onPacketDecoded(const int32_t decodedFrames, const uint8_t* decodedData)
-{
-    if (decodedFrames > 0)
-    {
-        auto pcmPacket = memory::makeUniquePacket(_engineMixer.getAudioAllocator(), *_packet);
-        if (!pcmPacket)
-        {
-            return;
-        }
-        auto rtpHeader = rtp::RtpHeader::fromPacket(*pcmPacket);
-        const auto decodedPayloadLength = decodedFrames * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
-        memcpy(rtpHeader->getPayload(), decodedData, decodedPayloadLength);
-        pcmPacket->setLength(rtpHeader->headerLength() + decodedPayloadLength);
-
-        _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
-        return;
-    }
-
-    logger::error("Unable to decode opus packet, error code %d, ssrc %u, %s",
-        "AudioForwarderReceiveJob",
-        decodedFrames,
-        _ssrcContext.ssrc,
-        _sender->getLoggableId().c_str());
-}
-
-memory::UniqueAudioPacket AudioForwarderReceiveJob::makePcmPacket(const memory::Packet& opusPacket,
-    uint32_t sequenceNumber)
-{
-    const auto opusRtpHeader = rtp::RtpHeader::fromPacket(opusPacket);
-    auto pcmPacket =
-        memory::makeUniquePacket(_engineMixer.getAudioAllocator(), opusPacket.get(), opusRtpHeader->headerLength());
-    if (!pcmPacket)
-    {
-        return nullptr;
-    }
-    auto pcmRtpHeader = rtp::RtpHeader::fromPacket(*pcmPacket);
-    pcmRtpHeader->sequenceNumber = sequenceNumber & 0xFFFFu;
-    pcmRtpHeader->payloadType = 10;
-    return pcmPacket;
-}
-
-void AudioForwarderReceiveJob::conceal(memory::AudioPacket& pcmPacket)
-{
-    codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
-    auto pcmHeader = rtp::RtpHeader::fromPacket(pcmPacket);
-    const auto decodedFrames = decoder.conceal(pcmHeader->getPayload());
-    if (decodedFrames > 0)
-    {
-        const auto decodedPayloadLength = decodedFrames * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
-        pcmPacket.setLength(pcmHeader->headerLength() + decodedPayloadLength);
-    }
-    else
-    {
-        pcmPacket.setLength(0);
-    }
-}
-
-void AudioForwarderReceiveJob::conceal(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket)
-{
-    codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
-    auto pcmHeader = rtp::RtpHeader::fromPacket(pcmPacket);
-    const auto opusHeader = rtp::RtpHeader::fromPacket(opusPacket);
-    const auto opusPayloadLength = opusPacket.getLength() - opusHeader->headerLength();
-    const auto decodedFrames = decoder.conceal(opusHeader->getPayload(), opusPayloadLength, pcmHeader->getPayload());
-    if (decodedFrames > 0)
-    {
-        const auto decodedPayloadLength = decodedFrames * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
-        pcmPacket.setLength(pcmHeader->headerLength() + decodedPayloadLength);
-    }
-    else
-    {
-        pcmPacket.setLength(0);
-    }
-}
-
 void AudioForwarderReceiveJob::decode(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket)
 {
     const auto framesInPacketBuffer =
@@ -154,94 +79,6 @@ bool AudioForwarderReceiveJob::unprotect(memory::Packet& opusPacket)
     _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
 
     return true;
-}
-
-// @return -1 on error, otherwise audio level if requested.
-int AudioForwarderReceiveJob::decodeOpus(const memory::Packet& opusPacket, bool needAudioLevel)
-{
-    if (!_ssrcContext.opusDecoder)
-    {
-        logger::debug("Creating new opus decoder for ssrc %u in mixer %s, %s",
-            "AudioForwarderReceiveJob",
-            _ssrcContext.ssrc,
-            _engineMixer.getLoggableId().c_str(),
-            _sender->getLoggableId().c_str());
-        _ssrcContext.opusDecoder.reset(new codec::OpusDecoder());
-        _ssrcContext.opusPacketRate.reset(new utils::AvgRateTracker(0.1));
-    }
-
-    codec::OpusDecoder& decoder = *_ssrcContext.opusDecoder;
-
-    if (!decoder.isInitialized())
-    {
-        return -1;
-    }
-
-    auto rtpPacket = rtp::RtpHeader::fromPacket(*_packet);
-    if (!rtpPacket)
-    {
-        return -1;
-    }
-
-    if (decoder.hasDecoded() && _extendedSequenceNumber != decoder.getExpectedSequenceNumber())
-    {
-        const int32_t lossCount = static_cast<int32_t>(_extendedSequenceNumber - decoder.getExpectedSequenceNumber());
-        if (lossCount <= 0)
-        {
-            logger::debug("Old opus packet sequence %u expected %u, discarding",
-                "AudioForwarderReceiveJob",
-                _extendedSequenceNumber,
-                decoder.getExpectedSequenceNumber());
-            return -1;
-        }
-
-        logger::debug("Lost opus packet sequence %u expected %u, fec",
-            "AudioForwarderReceiveJob",
-            _extendedSequenceNumber,
-            decoder.getExpectedSequenceNumber());
-
-        const auto concealCount = std::min(5u, _extendedSequenceNumber - decoder.getExpectedSequenceNumber() - 1);
-        for (uint32_t i = 0; concealCount > 1 && i < concealCount - 1; ++i)
-        {
-            const uint32_t sequenceNumber = _extendedSequenceNumber - concealCount - 1 + i;
-            auto pcmPacket = makePcmPacket(*_packet, sequenceNumber);
-            if (!pcmPacket)
-            {
-                return -1;
-            }
-            conceal(*pcmPacket);
-            if (pcmPacket->getLength() > 0)
-            {
-                _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
-            }
-        }
-
-        auto pcmPacket = makePcmPacket(*_packet, _extendedSequenceNumber - 1);
-        if (!pcmPacket)
-        {
-            return -1;
-        }
-        conceal(*_packet, *pcmPacket);
-        if (pcmPacket->getLength() > 0)
-        {
-            _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
-        }
-    }
-
-    auto pcmPacket = makePcmPacket(*_packet, _extendedSequenceNumber);
-    if (!pcmPacket)
-    {
-        return -1;
-    }
-    decode(*_packet, *pcmPacket);
-    if (pcmPacket->getLength() == 0)
-    {
-        return -1;
-    }
-    _ssrcContext.opusPacketRate->update(1, utils::Time::getAbsoluteTime());
-    const int audioLevel = needAudioLevel ? codec::computeAudioLevel(*pcmPacket) : 0;
-    _engineMixer.onMixerAudioRtpPacketDecoded(_ssrcContext, std::move(pcmPacket));
-    return audioLevel;
 }
 
 int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPacket)
@@ -372,9 +209,21 @@ void AudioForwarderReceiveJob::run()
     {
         if (_hasMixedAudioStreams)
         {
-            calculatedAudioLevel = decodeOpus(*_packet, !audioLevel.isSet());
+            if (!_ssrcContext.audioReceivePipe)
+            {
+                _ssrcContext.audioReceivePipe =
+                    std::make_unique<codec::AudioReceivePipeline>(_ssrcContext.rtpMap.sampleRate,
+                        20,
+                        100,
+                        _ssrcContext.rtpMap.audioLevelExtId.valueOr(255));
+                _ssrcContext.hasAudioReceivePipe = true;
+            }
+            _ssrcContext.audioReceivePipe->onRtpPacket(_extendedSequenceNumber,
+                memory::makeUniquePacket(_engineMixer.getMainAllocator(), *_packet),
+                utils::Time::getAbsoluteTime());
         }
-        else if (_needAudioLevel && !audioLevel.isSet())
+
+        if (_needAudioLevel && !audioLevel.isSet())
         {
             calculatedAudioLevel = computeOpusAudioLevel(*_packet);
         }

@@ -38,7 +38,6 @@ public:
     virtual bool post(utils::Function&& task) = 0;
 
 protected:
-    virtual void allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc) = 0;
     virtual void audioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream) = 0;
     virtual void engineMixerRemoved(EngineMixer& mixer) = 0;
     virtual void freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) = 0;
@@ -56,11 +55,6 @@ protected:
     virtual void engineRecordingStopped(EngineMixer& mixer, const RecordingDescription& recordingDesc) = 0;
 
 public:
-    bool asyncAllocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc)
-    {
-        return post(utils::bind(&MixerManagerAsync::allocateAudioBuffer, this, std::ref(mixer), ssrc));
-    }
-
     bool asyncAudioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream);
     bool asyncEngineMixerRemoved(EngineMixer& mixer);
     bool asyncFreeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash);

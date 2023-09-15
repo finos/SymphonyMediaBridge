@@ -168,6 +168,7 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
         _config,
         _sendAllocator,
         _audioAllocator,
+        _mainAllocator,
         audioSsrcs,
         videoSsrcs,
         lastN);
@@ -352,19 +353,6 @@ void MixerManager::finalizeEngineMixerRemoval(const std::string& mixerId)
     }
 
     logger::info("Mixer %s has been finalized", "MixerManager", mixerId.c_str());
-}
-
-void MixerManager::allocateAudioBuffer(EngineMixer& mixer, uint32_t ssrc)
-{
-    std::lock_guard<std::mutex> locker(_configurationLock);
-
-    auto it = _mixers.find(mixer.getId());
-    if (it == _mixers.end())
-    {
-        return;
-    }
-
-    it->second->allocateAudioBuffer(ssrc);
 }
 
 void MixerManager::audioStreamRemoved(EngineMixer& mixer, const EngineAudioStream& audioStream)

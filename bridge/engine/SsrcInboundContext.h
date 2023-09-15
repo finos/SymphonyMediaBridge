@@ -3,6 +3,7 @@
 #include "bridge/RtpMap.h"
 #include "bridge/engine/PliScheduler.h"
 #include "bridge/engine/VideoMissingPacketsTracker.h"
+#include "codec/AudioReceivePipeline.h"
 #include "codec/OpusDecoder.h"
 #include "jobmanager/JobQueue.h"
 #include "transport/RtcTransport.h"
@@ -13,6 +14,11 @@
 namespace jobmanager
 {
 class JobManager;
+}
+
+namespace codec
+{
+class AudioReceivePipeline;
 }
 
 namespace bridge
@@ -48,6 +54,8 @@ public:
           shouldDropPackets(false),
           hasAudioLevelExtension(true),
           opusDecodePacketRate(0),
+          audioReceivePipe(nullptr),
+          hasAudioReceivePipe(false),
           _lastRtpReceiveTime(timestamp)
     {
     }
@@ -103,6 +111,9 @@ public:
     std::atomic_bool shouldDropPackets;
     std::atomic_bool hasAudioLevelExtension;
     std::atomic<double> opusDecodePacketRate;
+
+    std::unique_ptr<codec::AudioReceivePipeline> audioReceivePipe;
+    std::atomic_bool hasAudioReceivePipe;
 
 private:
     std::atomic_uint64_t _lastRtpReceiveTime;
