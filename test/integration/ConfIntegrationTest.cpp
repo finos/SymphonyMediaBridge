@@ -116,6 +116,10 @@ TEST_F(IntegrationTest, plain)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
+            if (data.dominantFrequencies.size() < 2)
+            {
+                continue;
+            }
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
             EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
 
