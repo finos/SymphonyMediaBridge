@@ -14,8 +14,9 @@ void makeStereo(int16_t* data, size_t count)
     }
 }
 
-// compacts stereo pcm16 data and returns new length of vector
-// shrinks by 2% which is barely noticeable in pitch
+// compacts stereo pcm16 by dropping every 48th sample
+// shrinks by 2%
+// returns new length of vector
 size_t compactStereo(int16_t* pcmData, size_t samples)
 {
     size_t writeIndex = 0;
@@ -27,24 +28,6 @@ size_t compactStereo(int16_t* pcmData, size_t samples)
         if ((i % 48) == 0)
         {
             ++i;
-        }
-
-        writeIndex += 2;
-    }
-    return writeIndex / 2;
-}
-
-// compacts stereo pcm16 data and returns new length of vector
-size_t compactStereoLowPower(int16_t* pcmData, size_t samples, double noiseLevel)
-{
-    // TODO. only shrink if there are multiple consecutive sample below noiseLevel
-    size_t writeIndex = 0;
-    for (size_t i = 0; i < samples; ++i)
-    {
-        if (std::abs(pcmData[i * 2]) >= noiseLevel / 2)
-        {
-            pcmData[writeIndex] = pcmData[i * 2];
-            pcmData[writeIndex + 1] = pcmData[i * 2 + 1];
         }
 
         writeIndex += 2;
@@ -138,5 +121,54 @@ void subtractFromMix(const int16_t* srcAudio, int16_t* mixAudio, size_t count, d
     {
         mixAudio[i] -= amplification * srcAudio[i];
     }
+}
+
+/**
+ * Eliminate samples at times where energy is low which makes it less audible.
+ */
+size_t compactStereoSlope(int16_t* pcmData, size_t samples, size_t maxReduction)
+{
+    const int16_t DELTA_THRESHOLD = 10;
+    const int16_t SILENCE_THRESHOLD = 10;
+
+    size_t produced = 1;
+    pcmData[produced * 2] = pcmData[0];
+    pcmData[produced * 2 + 1] = pcmData[1];
+
+    size_t removedSamples = 0;
+    int keepSamples = 0;
+    for (size_t i = 1; i < samples - 1; ++i)
+    {
+        const int16_t a = pcmData[i * 2 - 2];
+        const int16_t c = pcmData[i * 2 + 2];
+
+        if (removedSamples < maxReduction && !keepSamples && std::abs(a - c) < DELTA_THRESHOLD)
+        {
+            if (std::abs(a) < SILENCE_THRESHOLD)
+            {
+                // low volume allow more sample removal
+                keepSamples = 2;
+            }
+            else
+            {
+                keepSamples = 8;
+            }
+            ++removedSamples;
+            continue;
+        }
+        keepSamples = std::max(0, keepSamples - 1);
+
+        pcmData[produced * 2] = pcmData[i * 2];
+        pcmData[produced * 2 + 1] = pcmData[i * 2 + 1];
+
+        ++produced;
+    }
+
+    const size_t i = samples - 1;
+    pcmData[produced * 2] = pcmData[i * 2];
+    pcmData[produced * 2 + 1] = pcmData[i * 2 + 1];
+    ++produced;
+
+    return produced;
 }
 } // namespace codec

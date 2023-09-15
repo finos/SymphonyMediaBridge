@@ -125,7 +125,8 @@ public:
           _sequenceOffset(0),
           _traceOffset(0),
           _audioTimeline(0),
-          _eof(false)
+          _eof(false),
+          _packetLossRatio(0)
     {
     }
 
@@ -142,7 +143,7 @@ public:
     {
         for (; _traceReader->getNext(item);)
         {
-            if (item.ssrc == _audioSsrc)
+            if (item.ssrc == _audioSsrc && rand() % 1000 > _packetLossRatio * 1000.0)
             {
                 return true;
             }
@@ -214,6 +215,8 @@ public:
 
     bool isEof() const { return _eof; }
 
+    void setRandomPacketLoss(double ratio) { _packetLossRatio = ratio; }
+
 private:
     emulator::AudioSource _audioSource;
     memory::UniquePacket _nextPacket;
@@ -225,6 +228,7 @@ private:
     uint32_t _audioSsrc;
     uint64_t _audioTimeline;
     bool _eof;
+    double _packetLossRatio;
 };
 
 TEST_P(AjbTest, DISABLED_fileReRun)
@@ -239,7 +243,8 @@ TEST_P(AjbTest, DISABLED_fileReRun)
     logger::info("scanning file %s", "", trace.c_str());
 
     JbPacketSource psource(allocator);
-    psource.open("./tools/testfiles/jpsample.raw", ("./_bwelogs/" + trace).c_str());
+    psource.setRandomPacketLoss(0.03);
+    psource.open("./_bwelogs/2minrecording.raw", ("./_bwelogs/" + trace).c_str());
 
     utils::ScopedFileHandle audioPlayback(::fopen(("/mnt/c/dev/rtc/" + trace + "out.raw").c_str(), "w+"));
 
@@ -261,11 +266,11 @@ TEST_P(AjbTest, DISABLED_fileReRun)
         {
             auto header = rtp::RtpHeader::fromPacket(*packet);
 
-            logger::debug("%" PRIu64 "ms received packet seq %u, ts %u",
-                "",
-                (timestamp - startTime) / utils::Time::ms,
-                header->sequenceNumber.get(),
-                header->timestamp.get());
+            /*    logger::debug("%" PRIu64 "ms received packet seq %u, ts %u",
+                    "",
+                    (timestamp - startTime) / utils::Time::ms,
+                    header->sequenceNumber.get(),
+                    header->timestamp.get());*/
             uint16_t curExtSeq = extendedSequenceNumber & 0xFFFFu;
             int16_t adv = header->sequenceNumber.get() - curExtSeq;
 
@@ -280,16 +285,16 @@ TEST_P(AjbTest, DISABLED_fileReRun)
             }
         }
 
-        ajb->process(timestamp);
+        if (ajb->needProcess())
+        {
+            ajb->process(timestamp);
+        }
 
         if (playbackPacer.timeToNextTick(timestamp) <= 0)
         {
-            int16_t audio[samplesPerPacket * 2];
-            codec::clearStereo(audio, samplesPerPacket);
+            ajb->fetchStereo(samplesPerPacket);
 
-            ajb->fetchStereo(audio, samplesPerPacket);
-
-            ::fwrite(audio, samplesPerPacket * 2, sizeof(int16_t), audioPlayback.get());
+            ::fwrite(ajb->getAudio(), samplesPerPacket * 2, sizeof(int16_t), audioPlayback.get());
 
             playbackPacer.tick(timestamp);
         }

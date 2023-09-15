@@ -17,15 +17,8 @@ namespace rtp
 class AudioReceivePipeline
 {
 public:
-    enum Media
-    {
-        NotYet = 0,
-        Audio,
-        Silence
-    };
-
-public:
     AudioReceivePipeline(uint32_t rtpFrequency, uint32_t ptime, uint32_t maxPackets, int audioLevelExtensionId = 255);
+    ~AudioReceivePipeline();
 
     // called from same thread context
     bool onRtpPacket(uint32_t extendedSequenceNumber, memory::UniquePacket packet, uint64_t receiveTime);
@@ -35,18 +28,23 @@ public:
     uint32_t getTargetDelay() const { return _targetDelay; }
     uint32_t size() const { return _buffer.count(); }
 
-    size_t fetchStereo(int16_t* buffer, size_t sampleCount);
+    bool needProcess() const { return _pcmData.size() <= _samplesPerPacket * 2; }
+    size_t fetchStereo(size_t sampleCount);
+
+    const int16_t* getAudio() const { return _audio; }
 
 private:
     bool updateTargetDelay(double delayMs);
-    void decodePacket(uint32_t extendedSequenceNumber, uint64_t timestamp, const memory::Packet& packet);
-    void popPcm(uint64_t timestamp);
+    size_t decodePacket(uint32_t extendedSequenceNumber,
+        uint64_t timestamp,
+        const memory::Packet& packet,
+        int16_t* audioData);
+    size_t compact(const memory::Packet& packet, int16_t* audioData, size_t samples);
     void replayFadeOut(int16_t* buffer);
 
     const uint32_t _rtpFrequency;
     const uint32_t _samplesPerPacket;
 
-    SpscAudioBuffer<int16_t> _pcmData;
     JitterBuffer _buffer;
     JitterEstimator _estimator;
 
@@ -69,14 +67,19 @@ private:
         uint32_t sequenceStart = 0;
     } _jitterEmergency;
 
-    // for receive thread
-    uint32_t _underrunCount;
-
     struct Metrics
     {
-        uint32_t shrinks = 0;
+        uint32_t shrunkPackets = 0;
         uint32_t eliminatedPackets = 0;
+        uint32_t eliminatedSamples = 0;
     } _metrics;
+
+    SpscAudioBuffer<int16_t> _pcmData;
+
+    // for receive thread
+    uint32_t _underrunCount;
+    const size_t _audioBufferSize;
+    int16_t* _audio;
 };
 
 } // namespace rtp
