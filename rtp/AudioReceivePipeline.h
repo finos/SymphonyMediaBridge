@@ -31,7 +31,8 @@ public:
     bool needProcess() const { return _pcmData.size() <= _samplesPerPacket * 2; }
     size_t fetchStereo(size_t sampleCount);
 
-    const int16_t* getAudio() const { return _audio; }
+    const int16_t* getAudio() const { return _receiveBox.audio; }
+    uint32_t getAudioSampleCount() const { return _receiveBox.audioSampleCount; }
 
 private:
     bool updateTargetDelay(double delayMs);
@@ -42,6 +43,7 @@ private:
     size_t compact(const memory::Packet& packet, int16_t* audioData, size_t samples);
     void replayFadeOut(int16_t* buffer);
 
+    uint32_t _ssrc;
     const uint32_t _rtpFrequency;
     const uint32_t _samplesPerPacket;
 
@@ -77,9 +79,21 @@ private:
     SpscAudioBuffer<int16_t> _pcmData;
 
     // for receive thread
-    uint32_t _underrunCount;
-    const size_t _audioBufferSize;
-    int16_t* _audio;
+    struct ReceiveBox
+    {
+        ReceiveBox(size_t bufferSize)
+            : underrunCount(0),
+              audioBufferSize(bufferSize),
+              audio(nullptr),
+              audioSampleCount(0)
+        {
+        }
+
+        uint32_t underrunCount;
+        const size_t audioBufferSize;
+        int16_t* audio;
+        uint32_t audioSampleCount;
+    } _receiveBox;
 };
 
 } // namespace rtp
