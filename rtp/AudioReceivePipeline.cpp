@@ -247,7 +247,7 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
 {
     codec::clearStereo(_receiveBox.audio, _samplesPerPacket);
     const auto currentSize = _pcmData.size();
-    if (currentSize < sampleCount * 2)
+    if (currentSize < sampleCount * CHANNELS)
     {
         ++_receiveBox.underrunCount;
         if (_receiveBox.underrunCount % 100 == 0)
@@ -264,7 +264,7 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
             codec::AudioLinearFade fader(currentSize / CHANNELS);
             codec::fadeOutStereo(_receiveBox.audio, currentSize / CHANNELS, fader);
             logger::debug("fade out, TD %ums", "AudioReceivePipeline", _targetDelay * 1000 / _rtpFrequency);
-            _pcmData.popFront(sampleCount * 2);
+            _pcmData.popFront(sampleCount * CHANNELS);
             _receiveBox.audioSampleCount = sampleCount;
             return sampleCount;
         }
@@ -272,10 +272,8 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
         {
             _pcmData.replay(_receiveBox.audio, sampleCount * CHANNELS);
 
-            codec::sineTail(_receiveBox.audio, 250, 48000, sampleCount);
-            codec::AudioLinearFade fader(sampleCount);
-            codec::fadeOutStereo(_receiveBox.audio, sampleCount, fader);
-            logger::debug("%u appended sine tail, TD %ums",
+            codec::swingTail(_receiveBox.audio, 48000, sampleCount);
+            logger::debug("%u appended tail, TD %ums",
                 "AudioReceivePipeline",
                 _ssrc,
                 _targetDelay * 1000 / _rtpFrequency);
@@ -339,7 +337,7 @@ void AudioReceivePipeline::process(uint64_t timestamp)
             _head.timestamp += rtpTimestampAdv * utils::Time::ms / (_rtpFrequency / 1000);
             _head.extendedSequenceNumber += seqDiff;
             const auto timeRemaining = utils::Time::diff(_head.timestamp, timestamp);
-            if (timeRemaining < 0 || timeRemaining > utils::Time::sec)
+            if (timeRemaining < 0 || timeRemaining > static_cast<int64_t>(utils::Time::sec))
             {
                 _head.timestamp = timestamp;
             }

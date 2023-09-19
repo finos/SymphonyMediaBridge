@@ -40,8 +40,7 @@ void sineTail(int16_t* data, double freq, uint32_t sampleRate, size_t count)
     auto maxIt = std::max_element(data, data + count * 2);
     const double peak = std::abs(*maxIt);
 
-    const double pi = 3.14159;
-    const double delta = 2 * pi * freq / sampleRate;
+    const double delta = 2 * M_PI * freq / sampleRate;
     double s = data[(count - 1) * 2];
     uint32_t downCount = 0;
     for (size_t i = count - 10; i < count; ++i)
@@ -53,7 +52,7 @@ void sineTail(int16_t* data, double freq, uint32_t sampleRate, size_t count)
     }
     const double fqCut = 250.0;
     const double invSampleRate = 1.0 / sampleRate;
-    const double m = (2 * pi * fqCut * invSampleRate);
+    const double m = (2 * M_PI * fqCut * invSampleRate);
     const double alpha = m / (1.0 + m);
 
     if (peak == 0)
@@ -65,7 +64,7 @@ void sineTail(int16_t* data, double freq, uint32_t sampleRate, size_t count)
     double phase = 0;
     if (downCount > 5)
     {
-        const double quadrant = (s >= 0) ? pi / 2 : pi;
+        const double quadrant = (s >= 0) ? M_PI / 2 : M_PI;
 
         for (size_t t = 0; t < sampleRate * 4 / freq; ++t)
         {
@@ -78,7 +77,7 @@ void sineTail(int16_t* data, double freq, uint32_t sampleRate, size_t count)
     }
     else
     {
-        const double quadrant = (s >= 0) ? 0 : pi * 3 / 4;
+        const double quadrant = (s >= 0) ? 0 : M_PI * 3 / 4;
         for (size_t t = 0; t < freq / 2; ++t)
         {
             if (peak * sin(t * delta + quadrant) > s)
@@ -97,6 +96,39 @@ void sineTail(int16_t* data, double freq, uint32_t sampleRate, size_t count)
         data[t * 2] = s;
         data[t * 2 + 1] = s;
     }
+}
+
+void swingTailMono(int16_t* data, const uint32_t sampleRate, const size_t count, const int step)
+{
+    const double tailFrequency = 250;
+    const double m = 2.0 * M_PI * 2550.0 / sampleRate;
+    const double alpha = m / (1.0 + m);
+    double y[2] = {0};
+    y[0] = data[(count - 51) * step];
+
+    for (size_t i = count - 50; i < count; ++i)
+    {
+        y[1] = y[0];
+        y[0] += alpha * (data[i * step] - y[0]);
+    }
+
+    double v = y[0] - y[1];
+    const double beta = tailFrequency / (M_PI * sampleRate);
+    double yn = data[(count - 1) * step];
+    double amplification = 0.9;
+    for (size_t i = 0; i < count; ++i)
+    {
+        yn = yn + v;
+        v = (v - beta * yn);
+        data[i * step] = yn * amplification;
+        amplification *= 0.99;
+    }
+}
+
+void swingTail(int16_t* data, const uint32_t sampleRate, const size_t count)
+{
+    swingTailMono(data, sampleRate, count, 2);
+    swingTailMono(data + 1, sampleRate, count, 2);
 }
 
 void addToMix(const int16_t* srcAudio, int16_t* mixAudio, size_t count, double amplification)

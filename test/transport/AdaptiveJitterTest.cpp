@@ -243,7 +243,7 @@ TEST_P(AjbTest, DISABLED_fileReRun)
     logger::info("scanning file %s", "", trace.c_str());
 
     JbPacketSource psource(allocator);
-    psource.setRandomPacketLoss(0.03);
+    // psource.setRandomPacketLoss(0.03);
     psource.open("./_bwelogs/2minrecording.raw", ("./_bwelogs/" + trace).c_str());
 
     utils::ScopedFileHandle audioPlayback(::fopen(("/mnt/c/dev/rtc/" + trace + "out.raw").c_str(), "w+"));
