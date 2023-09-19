@@ -1,13 +1,13 @@
 #pragma once
 #include "codec/NoiseFloor.h"
 #include "codec/OpusDecoder.h"
+#include "codec/SpscAudioBuffer.h"
 #include "rtp/JitterBuffer.h"
 #include "rtp/JitterEstimator.h"
-#include "rtp/SpscAudioBuffer.h"
 #include "utils/Time.h"
 #include <atomic>
 
-namespace rtp
+namespace codec
 {
 
 /**
@@ -46,8 +46,8 @@ private:
     const uint32_t _rtpFrequency;
     const uint32_t _samplesPerPacket;
 
-    JitterBuffer _buffer;
-    JitterEstimator _estimator;
+    rtp::JitterBuffer _buffer;
+    rtp::JitterEstimator _estimator;
 
     const int _audioLevelExtensionId;
     codec::OpusDecoder _decoder;
@@ -90,4 +90,4 @@ private:
     } _receiveBox;
 };
 
-} // namespace rtp
+} // namespace codec

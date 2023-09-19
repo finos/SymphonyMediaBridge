@@ -1,10 +1,10 @@
-#include "rtp/AudioReceivePipeline.h"
+#include "codec/AudioReceivePipeline.h"
 #include "codec/AudioFader.h"
 #include "codec/AudioLevel.h"
 #include "codec/AudioTools.h"
 #include "memory/Allocator.h"
 
-namespace rtp
+namespace codec
 {
 const size_t CHANNELS = 2;
 
@@ -59,7 +59,7 @@ size_t AudioReceivePipeline::decodePacket(uint32_t extendedSequenceNumber,
     const memory::Packet& packet,
     int16_t* audioData)
 {
-    const auto header = RtpHeader::fromPacket(packet);
+    const auto header = rtp::RtpHeader::fromPacket(packet);
     const int16_t* originalAudioStart = audioData;
 
     if (_decoder.hasDecoded() && extendedSequenceNumber != _decoder.getExpectedSequenceNumber())
@@ -129,7 +129,7 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
     }
     _noiseFloor.update(lvl);
 
-    const auto header = RtpHeader::fromPacket(packet);
+    const auto header = rtp::RtpHeader::fromPacket(packet);
     const uint32_t EXPECTED_REDUCTION_SAMPLES = 20;
     const auto currentLag = (!_buffer.empty() ? _buffer.getTailRtp()->timestamp - _head.rtpTimestamp : 0) +
         _pcmData.size() / CHANNELS + samples;
@@ -147,7 +147,7 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
         }
         else
         {
-            const auto newSampleCount = codec::compactStereoSlope(audioData, samples);
+            const auto newSampleCount = codec::compactStereoTroughs(audioData, samples);
             if (newSampleCount < _samplesPerPacket)
             {
                 ++_metrics.shrunkPackets;
@@ -191,7 +191,7 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
     memory::UniquePacket packet,
     uint64_t receiveTime)
 {
-    auto header = RtpHeader::fromPacket(*packet);
+    auto header = rtp::RtpHeader::fromPacket(*packet);
     if (!header)
     {
         return false; // corrupt
@@ -272,7 +272,6 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
             codec::AudioLinearFade fader(currentSize / CHANNELS);
             codec::fadeOutStereo(_receiveBox.audio, currentSize / CHANNELS, fader);
             logger::debug("fade out, TD %ums", "AudioReceivePipeline", _targetDelay * 1000 / _rtpFrequency);
-            _pcmData.popFront(sampleCount * CHANNELS);
             _receiveBox.audioSampleCount = sampleCount;
             return sampleCount;
         }
@@ -292,7 +291,6 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
     }
 
     _pcmData.fetch(_receiveBox.audio, sampleCount * CHANNELS);
-    _pcmData.popFront(sampleCount * CHANNELS);
     if (_receiveBox.underrunCount > 0)
     {
         logger::debug("%u fade in", "AudioReceivePipeline", _ssrc);
@@ -363,4 +361,4 @@ void AudioReceivePipeline::process(uint64_t timestamp)
     }
 }
 
-} // namespace rtp
+} // namespace codec

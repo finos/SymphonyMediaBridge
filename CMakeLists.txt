@@ -222,7 +222,6 @@ set(FILES
         bridge/engine/DiscardReceivedVideoPacketJob.cpp
         bridge/engine/SetMaxMediaBitrateJob.h
         bridge/engine/SetMaxMediaBitrateJob.cpp
-        rtp/SpscAudioBuffer.h
         bridge/MixerJobs.h
         bridge/MixerJobs.cpp
         bridge/MixerManagerAsync.h
@@ -245,6 +244,9 @@ set(FILES
         codec/AudioTools.h
         codec/AudioTools.cpp
         codec/NoiseFloor.cpp
+        codec/AudioReceivePipeline.h
+        codec/AudioReceivePipeline.cpp
+        codec/SpscAudioBuffer.h
         concurrency/EventSemaphore.cpp
         concurrency/EventSemaphore.h
         concurrency/LockFreeList.cpp
@@ -348,8 +350,6 @@ set(FILES
         rtp/RtpDelayTracker.cpp
         rtp/JitterBuffer.cpp
         rtp/JitterBuffer.h
-        rtp/AudioReceivePipeline.h
-        rtp/AudioReceivePipeline.cpp
         test/macros.h
         transport/UdpEndpoint.h
         transport/BaseUdpEndpoint.cpp

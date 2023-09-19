@@ -158,7 +158,7 @@ void subtractFromMix(const int16_t* srcAudio, int16_t* mixAudio, size_t count, d
 /**
  * Eliminate samples at times where energy is low which makes it less audible.
  */
-size_t compactStereoSlope(int16_t* pcmData, size_t samples, size_t maxReduction)
+size_t compactStereoTroughs(int16_t* pcmData, size_t samples, size_t maxReduction)
 {
     const int16_t DELTA_THRESHOLD = 10;
     const int16_t SILENCE_THRESHOLD = 10;

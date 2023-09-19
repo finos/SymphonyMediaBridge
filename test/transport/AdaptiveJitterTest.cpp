@@ -1,6 +1,7 @@
 
 #include "bwe/BandwidthEstimator.h"
 #include "codec/AudioFader.h"
+#include "codec/AudioReceivePipeline.h"
 #include "codec/AudioTools.h"
 #include "codec/OpusDecoder.h"
 #include "concurrency/MpmcQueue.h"
@@ -10,7 +11,6 @@
 #include "math/WelfordVariance.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
-#include "rtp/AudioReceivePipeline.h"
 #include "rtp/JitterBuffer.h"
 #include "rtp/JitterEstimator.h"
 #include "rtp/JitterTracker.h"
@@ -249,7 +249,7 @@ TEST_P(AjbTest, DISABLED_fileReRun)
     utils::ScopedFileHandle audioPlayback(::fopen(("/mnt/c/dev/rtc/" + trace + "out.raw").c_str(), "w+"));
 
     memory::AudioPacketPoolAllocator audioAllocator(2048, "jitterAllocator");
-    auto ajb = std::make_unique<rtp::AudioReceivePipeline>(48000, 20, 100, 1);
+    auto ajb = std::make_unique<codec::AudioReceivePipeline>(48000, 20, 100, 1);
 
     const auto samplesPerPacket = rtpFrequency / 50;
     uint32_t extendedSequenceNumber = 0;

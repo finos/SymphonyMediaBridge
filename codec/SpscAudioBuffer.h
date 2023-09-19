@@ -5,7 +5,7 @@
 #include <atomic>
 #include <cassert>
 
-namespace rtp
+namespace codec
 {
 
 /**
@@ -36,28 +36,6 @@ public:
     }
 
     ~SpscAudioBuffer() { memory::page::free(_data, _size); }
-
-    void popFront(const uint32_t count)
-    {
-        REENTRANCE_CHECK(_reentranceRead);
-
-        const auto currentLength = _length.load(std::memory_order_consume);
-        const auto toPop = std::min(currentLength, count);
-
-        const auto maxItems = _size / sizeof(T);
-        if (_readHead + toPop > maxItems)
-        {
-            const auto remaining = maxItems - _readHead;
-            _readHead = toPop - remaining;
-        }
-        else
-        {
-            _readHead += toPop;
-        }
-
-        _recentReadSize = 0;
-        _length.fetch_sub(toPop);
-    }
 
     /**
      * copies data from replay backlog memory. Useful for concealment attempts
@@ -159,15 +137,15 @@ public:
 
     /**
      * Reads count elements from the buffer and adds each element of the read data to mixedData, scaled with
-     * scaleFactor. read head is untouched.
+     * scaleFactor.
      */
-    size_t fetch(T* mixedData, const uint32_t count) const
+    size_t fetch(T* mixedData, const uint32_t count)
     {
         assert(mixedData);
         REENTRANCE_CHECK(_reentranceRead);
 
         const auto currentLength = _length.load(std::memory_order_consume);
-        const auto toRead = std::min(currentLength, count);
+        const uint32_t toRead = std::min(currentLength, count);
 
         const auto maxItems = _size / sizeof(T);
         if (_readHead + toRead > maxItems)
@@ -181,6 +159,7 @@ public:
             {
                 mixedData[remaining + i] = _data[i];
             }
+            _readHead = toRead - remaining;
         }
         else
         {
@@ -188,9 +167,11 @@ public:
             {
                 mixedData[i] = _data[i + _readHead];
             }
+            _readHead += toRead;
         }
 
         _recentReadSize = toRead;
+        _length.fetch_sub(toRead);
         return toRead;
     }
 
@@ -212,4 +193,4 @@ private:
 #endif
 };
 
-} // namespace rtp
+} // namespace codec
