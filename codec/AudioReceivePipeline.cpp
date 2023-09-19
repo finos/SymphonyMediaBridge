@@ -189,7 +189,8 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
 
 bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
     memory::UniquePacket packet,
-    uint64_t receiveTime)
+    uint64_t receiveTime,
+    bool isSsrcUsed)
 {
     auto header = rtp::RtpHeader::fromPacket(*packet);
     if (!header)
@@ -245,7 +246,7 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
     {
         updateTargetDelay(delay);
     }
-    process(receiveTime);
+    process(receiveTime, isSsrcUsed);
 
     return posted;
 }
@@ -260,12 +261,14 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
         ++_receiveBox.underrunCount;
         if (_receiveBox.underrunCount % 100 == 0)
         {
-            logger::info("%u underrun %u, TD %ums",
+            logger::info("%u underrun %u, samples %zu, TD %ums",
                 "AudioReceivePipeline",
                 _ssrc,
                 _receiveBox.underrunCount,
+                currentSize / 2,
                 _targetDelay * 1000 / _rtpFrequency);
         }
+
         if (currentSize > 0)
         {
             _pcmData.fetch(_receiveBox.audio, sampleCount * CHANNELS);
@@ -278,7 +281,6 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
         else if (_receiveBox.underrunCount == 1)
         {
             _pcmData.replay(_receiveBox.audio, sampleCount * CHANNELS);
-
             codec::swingTail(_receiveBox.audio, 48000, sampleCount);
             logger::debug("%u appended tail, TD %ums",
                 "AudioReceivePipeline",
@@ -302,7 +304,7 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
     return sampleCount;
 }
 
-void AudioReceivePipeline::process(uint64_t timestamp)
+void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
 {
     if (!_buffer.empty())
     {
@@ -335,7 +337,16 @@ void AudioReceivePipeline::process(uint64_t timestamp)
             auto packet = _buffer.pop();
 
             int16_t audioData[_samplesPerPacket * 4 * CHANNELS];
-            const size_t decodedSamples = decodePacket(extendedSequenceNumber, timestamp, *packet, audioData);
+            size_t decodedSamples = 0;
+            if (isSsrcUsed)
+            {
+                decodedSamples = decodePacket(extendedSequenceNumber, timestamp, *packet, audioData);
+            }
+            else
+            {
+                codec::clearStereo(audioData, _samplesPerPacket);
+                decodedSamples = _samplesPerPacket;
+            }
             compact(*packet, audioData, decodedSamples);
 
             const int32_t rtpTimestampAdv = header->timestamp - _head.rtpTimestamp;

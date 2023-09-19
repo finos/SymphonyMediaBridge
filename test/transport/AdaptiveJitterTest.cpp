@@ -273,7 +273,8 @@ TEST_P(AjbTest, DISABLED_fileReRun)
             uint16_t curExtSeq = extendedSequenceNumber & 0xFFFFu;
             int16_t adv = header->sequenceNumber.get() - curExtSeq;
 
-            const auto acceptedPacket = ajb->onRtpPacket(extendedSequenceNumber + adv, std::move(packet), timestamp);
+            const auto acceptedPacket =
+                ajb->onRtpPacket(extendedSequenceNumber + adv, std::move(packet), timestamp, true);
             if (adv > 0)
             {
                 extendedSequenceNumber += adv;
@@ -286,7 +287,7 @@ TEST_P(AjbTest, DISABLED_fileReRun)
 
         if (ajb->needProcess())
         {
-            ajb->process(timestamp);
+            ajb->process(timestamp, true);
         }
 
         if (playbackPacer.timeToNextTick(timestamp) <= 0)

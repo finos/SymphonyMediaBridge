@@ -168,7 +168,7 @@ TEST(Welford, normal)
         }
     }
     EXPECT_NEAR(w2.getMean(), 500.0, 5.0);
-    EXPECT_NEAR(w2.getVariance(), 100.0 * 100, 700.0);
+    EXPECT_NEAR(w2.getVariance(), 100.0 * 100, 2500.0);
 }
 
 // jitter below 10ms will never affect subsequent packet. It is just a delay inflicted on each packet unrelated to

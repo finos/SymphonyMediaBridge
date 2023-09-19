@@ -20,9 +20,12 @@ public:
     AudioReceivePipeline(uint32_t rtpFrequency, uint32_t ptime, uint32_t maxPackets, int audioLevelExtensionId = 255);
 
     // called from same thread context
-    bool onRtpPacket(uint32_t extendedSequenceNumber, memory::UniquePacket packet, uint64_t receiveTime);
+    bool onRtpPacket(uint32_t extendedSequenceNumber,
+        memory::UniquePacket packet,
+        uint64_t receiveTime,
+        bool isSsrcUsed);
 
-    void process(uint64_t timestamp);
+    void process(uint64_t timestamp, bool isSsrcUsed);
 
     uint32_t getTargetDelay() const { return _targetDelay; }
     uint32_t size() const { return _buffer.count(); }
