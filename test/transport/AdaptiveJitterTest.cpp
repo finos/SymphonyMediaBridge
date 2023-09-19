@@ -256,7 +256,6 @@ TEST_P(AjbTest, DISABLED_fileReRun)
 
     utils::Pacer playbackPacer(utils::Time::ms * 20);
     playbackPacer.reset(100);
-    const auto startTime = utils::Time::getAbsoluteTime();
 
     for (uint64_t timeSteps = 0; timeSteps < 90000 && !psource.isEof(); ++timeSteps)
     {

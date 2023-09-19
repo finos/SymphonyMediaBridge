@@ -18,7 +18,6 @@ class AudioReceivePipeline
 {
 public:
     AudioReceivePipeline(uint32_t rtpFrequency, uint32_t ptime, uint32_t maxPackets, int audioLevelExtensionId = 255);
-    ~AudioReceivePipeline();
 
     // called from same thread context
     bool onRtpPacket(uint32_t extendedSequenceNumber, memory::UniquePacket packet, uint64_t receiveTime);
@@ -81,13 +80,8 @@ private:
     // for receive thread
     struct ReceiveBox
     {
-        ReceiveBox(size_t bufferSize)
-            : underrunCount(0),
-              audioBufferSize(bufferSize),
-              audio(nullptr),
-              audioSampleCount(0)
-        {
-        }
+        ReceiveBox(size_t bufferSize);
+        ~ReceiveBox();
 
         uint32_t underrunCount;
         const size_t audioBufferSize;

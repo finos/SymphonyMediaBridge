@@ -8,6 +8,20 @@ namespace rtp
 {
 const size_t CHANNELS = 2;
 
+AudioReceivePipeline::ReceiveBox::ReceiveBox(size_t bufferSize)
+    : underrunCount(0),
+      audioBufferSize(bufferSize),
+      audio(nullptr),
+      audioSampleCount(0)
+{
+    audio = reinterpret_cast<int16_t*>(memory::page::allocate(audioBufferSize));
+}
+
+AudioReceivePipeline::ReceiveBox::~ReceiveBox()
+{
+    memory::page::free(audio, audioBufferSize);
+}
+
 AudioReceivePipeline::AudioReceivePipeline(uint32_t rtpFrequency,
     uint32_t ptime,
     uint32_t maxPackets,
@@ -22,12 +36,6 @@ AudioReceivePipeline::AudioReceivePipeline(uint32_t rtpFrequency,
       _pcmData(7 * 2 * _samplesPerPacket, 2 * rtpFrequency / 50),
       _receiveBox(memory::page::alignedSpace(sizeof(int16_t) * CHANNELS * _samplesPerPacket))
 {
-    _receiveBox.audio = reinterpret_cast<int16_t*>(memory::page::allocate(_receiveBox.audioBufferSize));
-}
-
-AudioReceivePipeline::~AudioReceivePipeline()
-{
-    memory::page::free(_receiveBox.audio, _receiveBox.audioBufferSize);
 }
 
 bool AudioReceivePipeline::updateTargetDelay(double delay)

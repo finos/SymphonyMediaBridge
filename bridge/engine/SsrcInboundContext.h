@@ -5,10 +5,6 @@
 #include "bridge/engine/VideoMissingPacketsTracker.h"
 #include "codec/OpusDecoder.h"
 #include "jobmanager/JobQueue.h"
-#include "memory/RingBuffer.h"
-#include "rtp/AudioReceivePipeline.h"
-#include "rtp/JitterBuffer.h"
-#include "rtp/JitterEstimator.h"
 #include "transport/RtcTransport.h"
 #include "utils/Optional.h"
 #include <cstdint>
@@ -107,13 +103,6 @@ public:
     std::atomic_bool shouldDropPackets;
     std::atomic_bool hasAudioLevelExtension;
     std::atomic<double> opusDecodePacketRate;
-
-    struct JitterHandling
-    {
-        std::unique_ptr<rtp::AudioReceivePipeline> jitterBuffer;
-
-        uint32_t replayTimestamp;
-    } jitter;
 
 private:
     std::atomic_uint64_t _lastRtpReceiveTime;
