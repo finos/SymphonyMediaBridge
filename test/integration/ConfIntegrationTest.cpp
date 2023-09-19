@@ -213,7 +213,8 @@ TEST_F(IntegrationTest, ptime10)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
+            const auto data =
+                analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             if (data.dominantFrequencies.size() >= 2)
             {

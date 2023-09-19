@@ -98,6 +98,21 @@ void EngineMixer::removeStream(const EngineAudioStream* engineAudioStream)
     if (engineAudioStream->isMixed())
     {
         _numMixedAudioStreams--;
+        if (_numMixedAudioStreams == 0)
+        {
+            for (auto& audioStreamIt : _engineAudioStreams)
+            {
+                if (audioStreamIt.second->remoteSsrc.isSet())
+                {
+                    auto ssrcContext = _ssrcInboundContexts.getItem(audioStreamIt.second->remoteSsrc.get());
+                    if (ssrcContext && ssrcContext->hasAudioReceivePipe.load())
+                    {
+                        audioStreamIt.second->transport.postOnQueue(
+                            [ssrcContext]() { ssrcContext->audioReceivePipe->flush(); });
+                    }
+                }
+            }
+        }
     }
 
     logger::debug("Remove engineAudioStream, transport %s",
@@ -323,19 +338,16 @@ void EngineMixer::processAudioStreams()
 
     for (auto& ssrcContext : _ssrcInboundContexts)
     {
-        if (ssrcContext.second->rtpMap.isAudio())
+        if (ssrcContext.second->rtpMap.isAudio() && ssrcContext.second->hasAudioReceivePipe.load())
         {
-            if (ssrcContext.second->hasAudioReceivePipe.load())
+            auto& rcvPipe = *ssrcContext.second->audioReceivePipe;
+            const auto readySamples = rcvPipe.fetchStereo(samplesPerFrame20ms);
+            if (readySamples > 0)
             {
-                auto& rcvPipe = *ssrcContext.second->audioReceivePipe;
-                const auto readySamples = rcvPipe.fetchStereo(samplesPerFrame20ms);
-                if (readySamples > 0)
-                {
-                    codec::addToMix(rcvPipe.getAudio(),
-                        _mixedData,
-                        readySamples * codec::Opus::channelsPerFrame,
-                        mixSampleScaleFactor);
-                }
+                codec::addToMix(rcvPipe.getAudio(),
+                    _mixedData,
+                    readySamples * codec::Opus::channelsPerFrame,
+                    mixSampleScaleFactor);
             }
         }
     }

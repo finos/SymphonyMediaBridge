@@ -220,7 +220,8 @@ void AudioForwarderReceiveJob::run()
             }
             _ssrcContext.audioReceivePipe->onRtpPacket(_extendedSequenceNumber,
                 memory::makeUniquePacket(_engineMixer.getMainAllocator(), *_packet),
-                utils::Time::getAbsoluteTime());
+                utils::Time::getAbsoluteTime(),
+                _ssrcContext.isSsrcUsed);
         }
 
         if (_needAudioLevel && !audioLevel.isSet())

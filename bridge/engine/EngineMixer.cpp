@@ -448,9 +448,7 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
             if (ssrcContext && ssrcContext->hasAudioReceivePipe.load())
             {
                 ++stats.audioInQueues;
-                const uint32_t samples = ssrcContext->audioReceivePipe->size() * channelsPerFrame;
-                stats.audioInQueueSamples += samples;
-                stats.maxAudioInQueueSamples = std::max(stats.maxAudioInQueueSamples, samples);
+                // fetching JB sizes would require more atomics in audio pipeline.
             }
         }
     }
@@ -981,8 +979,9 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                     ssrcContext->audioReceivePipe->needProcess())
                 {
                     auto& transport = audioStream.second->transport;
-                    transport.postOnQueue(
-                        [ssrcContext]() { ssrcContext->audioReceivePipe->process(utils::Time::getAbsoluteTime()); });
+                    transport.postOnQueue([ssrcContext]() {
+                        ssrcContext->audioReceivePipe->process(utils::Time::getAbsoluteTime(), ssrcContext->isSsrcUsed);
+                    });
                 }
             }
         }

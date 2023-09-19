@@ -335,12 +335,10 @@ void make5secCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClient
     static const double frequencies[] = {600, 1300, 2100, 3200, 4100, 4800, 5200};
     for (size_t i = 0; i < groupCall.clients.size(); ++i)
     {
-        groupCall.clients[i]->_audioSource->setFrequency(frequencies[i]);
-    }
-
-    for (auto& client : groupCall.clients)
-    {
+        auto& client = groupCall.clients[i];
+        client->_audioSource->setFrequency(frequencies[i]);
         client->_audioSource->setVolume(0.6);
+        client->_audioSource->enableIntermittentTone(0.8);
     }
 
     groupCall.run(utils::Time::sec * 5);
