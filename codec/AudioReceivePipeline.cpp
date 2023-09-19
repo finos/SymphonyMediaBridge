@@ -372,4 +372,12 @@ void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
     }
 }
 
+// flushes buffers.
+// useful if last mixed participant leaves and audio pipelines are not used atm
+void AudioReceivePipeline::flush()
+{
+    _pcmData.clear();
+    while (_buffer.pop()) {}
+}
+
 } // namespace codec

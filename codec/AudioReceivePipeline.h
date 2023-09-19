@@ -26,6 +26,7 @@ public:
         bool isSsrcUsed);
 
     void process(uint64_t timestamp, bool isSsrcUsed);
+    void flush();
 
     uint32_t getTargetDelay() const { return _targetDelay; }
     uint32_t size() const { return _buffer.count(); }

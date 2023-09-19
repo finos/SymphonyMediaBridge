@@ -177,6 +177,13 @@ public:
 
     size_t size() const { return _length.load(std::memory_order_consume); }
     bool empty() const { return size() == 0; }
+    void clear()
+    {
+        _length = 0;
+        _readHead = 0;
+        _writeHead = 0;
+        _recentReadSize = 0;
+    }
 
 private:
     const uint32_t _size;
