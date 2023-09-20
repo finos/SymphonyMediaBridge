@@ -22,6 +22,13 @@ uint64_t RtpDelayTracker::update(uint64_t receiveTime, uint32_t rtpTimestamp)
         _delay = 0;
         return 0;
     }
+    if (static_cast<int32_t>(_rtpTimestamp - rtpTimestamp) > static_cast<int32_t>(_frequency * 2))
+    {
+        // very long reverse, indicating a reordered packet arriving later than 2s, or an rtp timestamp reset.
+        _renderTime = receiveTime;
+        _rtpTimestamp = rtpTimestamp;
+        return utils::Time::ms * 10;
+    }
 
     _renderTime += static_cast<int32_t>(rtpTimestamp - _rtpTimestamp) * static_cast<int64_t>(utils::Time::sec) /
         (_frequency - _clockSkewCompensation);
@@ -35,11 +42,10 @@ uint64_t RtpDelayTracker::update(uint64_t receiveTime, uint32_t rtpTimestamp)
     _rtpTimestamp = rtpTimestamp;
 
     _delay = receiveTime - _renderTime;
-    return _delay;
-}
-
-uint64_t RtpDelayTracker::getDelay() const
-{
+    if (_delay > utils::Time::ms * 10)
+    {
+        _renderTime += _delay * 0.01;
+    }
     return _delay;
 }
 

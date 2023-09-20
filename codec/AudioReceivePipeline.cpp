@@ -2,6 +2,7 @@
 #include "codec/AudioFader.h"
 #include "codec/AudioLevel.h"
 #include "codec/AudioTools.h"
+#include "math/helpers.h"
 #include "memory/Allocator.h"
 
 namespace codec
@@ -130,15 +131,15 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
     _noiseFloor.update(lvl);
 
     const auto header = rtp::RtpHeader::fromPacket(packet);
-    const uint32_t EXPECTED_REDUCTION_SAMPLES = 20;
-    const auto currentLag = (!_buffer.empty() ? _buffer.getTailRtp()->timestamp - _head.rtpTimestamp : 0) +
+    uint32_t currentLag = (!_buffer.empty() ? _buffer.getTailRtp()->timestamp - header->timestamp : 0) +
         _pcmData.size() / CHANNELS + samples;
-    bool mustCompact =
-        !_buffer.empty() && !_pcmData.empty() && (currentLag > _targetDelay + EXPECTED_REDUCTION_SAMPLES);
+
+    bool mustCompact = !_buffer.empty() && !_pcmData.empty() &&
+        currentLag > math::roundUpMultiple(_targetDelay, _samplesPerPacket) + 50;
 
     if (mustCompact)
     {
-        if (lvl > _noiseFloor.getLevel() - 6 && _pcmData.size() > _samplesPerPacket &&
+        if (lvl > _noiseFloor.getLevel() - 6 && _pcmData.size() > _samplesPerPacket * CHANNELS &&
             currentLag > _targetDelay + _samplesPerPacket)
         {
             ++_metrics.eliminatedPackets;
@@ -147,6 +148,7 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
         }
         else
         {
+            logger::debug("shrinking lag %u, TD %u", "AudioReceivePipeline", currentLag, _targetDelay);
             const auto newSampleCount = codec::compactStereoTroughs(audioData, samples);
             if (newSampleCount < _samplesPerPacket)
             {
@@ -161,14 +163,16 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
     {
         if (_metrics.eliminatedSamples > 0)
         {
-            logger::debug("%u shrunk %u packets, eliminated samples %u, eliminated %u packets, JB %zu, TD %u",
+            logger::debug("%u shrunk %u packets, eliminated samples %u, eliminated %u packets, JB %u, TD %u, "
+                          "slowJitter %.2f",
                 "AudioReceivePipeline",
                 _ssrc,
                 _metrics.shrunkPackets,
                 _metrics.eliminatedSamples,
                 _metrics.eliminatedPackets,
-                _buffer.getRtpDelay() + _pcmData.size(),
-                _targetDelay);
+                currentLag - _metrics.eliminatedSamples,
+                _targetDelay,
+                _estimator.getJitterMaxStable());
             _metrics.shrunkPackets = 0;
             _metrics.eliminatedSamples = 0;
             _metrics.eliminatedPackets = 0;
@@ -295,7 +299,11 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
     _pcmData.fetch(_receiveBox.audio, sampleCount * CHANNELS);
     if (_receiveBox.underrunCount > 0)
     {
-        logger::debug("%u fade in", "AudioReceivePipeline", _ssrc);
+        logger::debug("%u fade in after %u underruns, TD %ums",
+            "AudioReceivePipeline",
+            _ssrc,
+            _receiveBox.underrunCount,
+            _targetDelay * 1000 / _rtpFrequency);
         codec::AudioLinearFade fader(sampleCount);
         codec::fadeInStereo(_receiveBox.audio, sampleCount, fader);
         _receiveBox.underrunCount = 0;
@@ -318,9 +326,9 @@ void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
             return;
         }
 
-        const auto bufferLevel = _pcmData.size();
-        if ((bufferLevel <= CHANNELS * _samplesPerPacket && isDue) ||
-            (bufferLevel > 0 && bufferLevel <= CHANNELS * _samplesPerPacket && isNext))
+        const auto bufferLevel = _pcmData.size() / CHANNELS;
+        if ((bufferLevel <= _samplesPerPacket && isDue) ||
+            (bufferLevel > 0 && bufferLevel <= _samplesPerPacket && isNext))
         {
             if (!isNext)
             {

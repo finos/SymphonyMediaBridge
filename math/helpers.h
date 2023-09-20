@@ -30,4 +30,16 @@ bool extractMantissaExponent(uint64_t value, uint32_t& mantissa, uint32_t& expon
     mantissa = static_cast<uint32_t>(value);
     return true;
 }
+
+template <typename T>
+T roundUpMultiple(T value, T N)
+{
+    const auto r = value % N;
+    if (r > 0)
+    {
+        return value - r + N;
+    }
+
+    return value;
+}
 } // namespace math

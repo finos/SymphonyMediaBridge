@@ -5,7 +5,8 @@ namespace rtp
 {
 /**
  * Tracks arrival delay based on RTP timestamp. This measurement can be used in various filters, max trackers, avg
- * windows to decide jitter buffer levels
+ * windows to decide jitter buffer levels.
+ * Measures delay of packets up to 2s for re-ordered packet
  *
  * Clock skew compensation default is for 48kHz rtp frequency and gives 0.5ms / s
  */
@@ -16,7 +17,7 @@ public:
 
     uint64_t update(uint64_t receiveTime, uint32_t rtpTimestamp);
 
-    uint64_t getDelay() const;
+    uint64_t getDelay() const { return _delay; }
 
     void reset();
 

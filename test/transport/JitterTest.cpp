@@ -495,6 +495,59 @@ TEST(JitterTest, gap)
     EXPECT_NEAR(jitt.getJitter(), 5.5, 1.5);
 }
 
+TEST(JitterTest, dtx)
+{
+    memory::PacketPoolAllocator allocator(3000, "TestAllocator");
+    rtp::RtpDelayTracker delayTracker(48000);
+
+    uint64_t receiveTime = 5000;
+    uint32_t rtpTimestamp = 7800;
+    for (int i = 0; i < 300; ++i)
+    {
+        delayTracker.update(receiveTime + (rand() % 40) * utils::Time::ms / 10, rtpTimestamp);
+        receiveTime += utils::Time::ms * 20;
+        rtpTimestamp += 960;
+    }
+
+    receiveTime += utils::Time::minute * 3;
+    rtpTimestamp += 24 * 60 * 48000; // 24 min increase in rtptimestamp
+    auto delay = delayTracker.update(receiveTime, rtpTimestamp);
+    EXPECT_EQ(delay, 0);
+
+    rtpTimestamp += 960;
+    receiveTime += utils::Time::ms * 20;
+    delay = delayTracker.update(receiveTime + 2 * utils::Time::ms, rtpTimestamp);
+    EXPECT_NEAR(delay, 2.0 * utils::Time::ms, 11 * utils::Time::us);
+
+    rtpTimestamp -= 3 * 48000; // rollback rtp by 3s, would look like huge 3s jitter
+    receiveTime += utils::Time::ms * 20;
+    delay = delayTracker.update(receiveTime, rtpTimestamp);
+    EXPECT_LE(delay, utils::Time::ms * 10);
+
+    rtpTimestamp += 960;
+    receiveTime += utils::Time::ms * 200;
+    delay = delayTracker.update(receiveTime, rtpTimestamp);
+    EXPECT_GE(delay, utils::Time::ms * 179);
+
+    // run for 10s
+    for (int i = 0; i < 9 * 50; ++i)
+    {
+        rtpTimestamp += 960;
+        receiveTime += utils::Time::ms * 20;
+        delay = delayTracker.update(receiveTime + (rand() % 4) * utils::Time::ms, rtpTimestamp);
+    }
+    EXPECT_LT(delay, utils::Time::ms * 9);
+
+    receiveTime += utils::Time::sec * 10;
+    for (int i = 0; i < 10 * 50; ++i)
+    {
+        rtpTimestamp += 960;
+        receiveTime += utils::Time::ms * 20;
+        delay = delayTracker.update(receiveTime + (rand() % 4) * utils::Time::ms, rtpTimestamp);
+    }
+    EXPECT_LT(delay, utils::Time::ms * 100);
+}
+
 TEST(JitterTest, adaptDown23)
 {
     memory::PacketPoolAllocator allocator(3000, "TestAllocator");
