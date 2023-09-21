@@ -34,22 +34,25 @@ AudioReceivePipeline::AudioReceivePipeline(uint32_t rtpFrequency,
       _estimator(rtpFrequency),
       _audioLevelExtensionId(audioLevelExtensionId),
       _targetDelay(0),
-      _pcmData(7 * 2 * _samplesPerPacket, 2 * rtpFrequency / 50),
+      _pcmData(7 * CHANNELS * _samplesPerPacket, CHANNELS * _samplesPerPacket),
       _receiveBox(memory::page::alignedSpace(sizeof(int16_t) * CHANNELS * _samplesPerPacket))
 {
 }
 
 bool AudioReceivePipeline::updateTargetDelay(double delay)
 {
+    const auto decodeTime = 3;
+
     auto prev = _targetDelay;
-    _targetDelay = (_estimator.getJitterMaxStable() + 1) * _rtpFrequency / 1000;
+
+    _targetDelay = (_estimator.getJitterMaxStable() + 1 + decodeTime) * _rtpFrequency / 1000;
 
     if (_targetDelay > prev + _rtpFrequency / 100)
     {
         logger::info("%u jitter increase to %0.3fms",
             "AudioReceivePipeline",
             _ssrc,
-            _estimator.getJitterMaxStable() + 1);
+            _targetDelay * 1000.0 / _rtpFrequency);
     }
     return true;
 }
@@ -134,8 +137,9 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
     uint32_t currentLag = (!_buffer.empty() ? _buffer.getTailRtp()->timestamp - header->timestamp : 0) +
         _pcmData.size() / CHANNELS + samples;
 
+    const uint32_t expectedSampleReduction = 50;
     bool mustCompact = !_buffer.empty() && !_pcmData.empty() &&
-        currentLag > math::roundUpMultiple(_targetDelay, _samplesPerPacket) + 50;
+        currentLag > math::roundUpMultiple(_targetDelay, _samplesPerPacket) + expectedSampleReduction;
 
     if (mustCompact)
     {
@@ -148,8 +152,9 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
         }
         else
         {
-            logger::debug("shrinking lag %u, TD %u", "AudioReceivePipeline", currentLag, _targetDelay);
-            const auto newSampleCount = codec::compactStereoTroughs(audioData, samples);
+            // logger::debug("shrinking lag %u, TD %u", "AudioReceivePipeline", currentLag, _targetDelay);
+            const auto maxReduction = currentLag - math::roundUpMultiple(_targetDelay, _samplesPerPacket);
+            const auto newSampleCount = codec::compactStereoTroughs(audioData, samples, maxReduction);
             if (newSampleCount < _samplesPerPacket)
             {
                 ++_metrics.shrunkPackets;
@@ -259,8 +264,8 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
 size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
 {
     codec::clearStereo(_receiveBox.audio, _samplesPerPacket);
-    const auto currentSize = _pcmData.size();
-    if (currentSize < sampleCount * CHANNELS)
+    const auto bufferLevel = _pcmData.size() / CHANNELS;
+    if (bufferLevel < sampleCount)
     {
         ++_receiveBox.underrunCount;
         if (_receiveBox.underrunCount % 100 == 0)
@@ -269,15 +274,15 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
                 "AudioReceivePipeline",
                 _ssrc,
                 _receiveBox.underrunCount,
-                currentSize / 2,
+                bufferLevel,
                 _targetDelay * 1000 / _rtpFrequency);
         }
 
-        if (currentSize > 0)
+        if (bufferLevel > 0)
         {
             _pcmData.fetch(_receiveBox.audio, sampleCount * CHANNELS);
-            codec::AudioLinearFade fader(currentSize / CHANNELS);
-            codec::fadeOutStereo(_receiveBox.audio, currentSize / CHANNELS, fader);
+            codec::AudioLinearFade fader(bufferLevel);
+            fader.fadeOutStereo(_receiveBox.audio, bufferLevel);
             logger::debug("fade out, TD %ums", "AudioReceivePipeline", _targetDelay * 1000 / _rtpFrequency);
             _receiveBox.audioSampleCount = sampleCount;
             return sampleCount;
@@ -305,7 +310,7 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
             _receiveBox.underrunCount,
             _targetDelay * 1000 / _rtpFrequency);
         codec::AudioLinearFade fader(sampleCount);
-        codec::fadeInStereo(_receiveBox.audio, sampleCount, fader);
+        fader.fadeInStereo(_receiveBox.audio, sampleCount);
         _receiveBox.underrunCount = 0;
         _receiveBox.audioSampleCount = sampleCount;
     }

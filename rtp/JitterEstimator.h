@@ -23,6 +23,8 @@ public:
     double getJitter() const;
     double get95Percentile() const;
     double getMaxJitter() const { return _maxJitter.get(); }
+
+    // in ms
     double getJitterMaxStable() const { return _maxJitterStable.get(); }
     uint32_t toRtpTimestamp(uint64_t timestamp) const { return _delayTracker.toRtpTimestamp(timestamp); }
     uint32_t getRtpFrequency() const { return _delayTracker.getFrequency(); }

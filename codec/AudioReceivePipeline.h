@@ -58,6 +58,7 @@ private:
     codec::NoiseFloor _noiseFloor;
 
     uint32_t _targetDelay;
+    uint64_t _fetchReferenceTime;
 
     struct HeadInfo
     {
