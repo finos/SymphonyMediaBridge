@@ -771,8 +771,8 @@ TEST(JitterTest, jitterTracker)
 
 TEST(JitterTest, bufferPlain)
 {
-    memory::PacketPoolAllocator allocator(200, "test");
-    rtp::JitterBuffer buffer(27);
+    memory::PacketPoolAllocator allocator(400, "test");
+    rtp::JitterBuffer buffer;
 
     memory::Packet stageArea;
     {
@@ -780,8 +780,9 @@ TEST(JitterTest, bufferPlain)
         header->ssrc = 4000;
         stageArea.setLength(250);
     }
+    const auto oneFromFull = rtp::JitterBuffer::SIZE - 2;
 
-    for (int i = 0; i < 25; ++i)
+    for (int i = 0; i < oneFromFull; ++i)
     {
         auto p = memory::makeUniquePacket(allocator, stageArea);
         auto header = rtp::RtpHeader::create(*p);
@@ -791,8 +792,8 @@ TEST(JitterTest, bufferPlain)
         EXPECT_TRUE(buffer.add(std::move(p)));
     }
 
-    EXPECT_EQ(buffer.count(), 25);
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * 24);
+    EXPECT_EQ(buffer.count(), oneFromFull);
+    EXPECT_EQ(buffer.getRtpDelay(), 960 * (oneFromFull - 1));
     EXPECT_FALSE(buffer.empty());
     EXPECT_EQ(buffer.getFrontRtp()->timestamp.get(), 56000);
 
@@ -800,14 +801,15 @@ TEST(JitterTest, bufferPlain)
     auto p = memory::makeUniquePacket(allocator, stageArea);
     {
         auto header = rtp::RtpHeader::create(*p);
-        header->sequenceNumber = 127;
-        header->timestamp = 56000 + 27 * 960;
+        header->sequenceNumber = 100 + oneFromFull;
+        header->timestamp = 56000 + oneFromFull * 960;
     }
     EXPECT_TRUE(buffer.add(std::move(p)));
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * 27);
+    EXPECT_EQ(buffer.getRtpDelay(), 960 * oneFromFull);
 
     uint16_t prevSeq = 99;
     uint32_t count = 0;
+    EXPECT_EQ(buffer.count(), oneFromFull + 1);
     for (auto packet = buffer.pop(); packet; packet = buffer.pop())
     {
         auto header = rtp::RtpHeader::fromPacket(*packet);
@@ -815,13 +817,13 @@ TEST(JitterTest, bufferPlain)
         prevSeq = header->sequenceNumber.get();
         ++count;
     }
-    EXPECT_EQ(count, 26);
+    EXPECT_EQ(count, oneFromFull + 1);
 }
 
 TEST(JitterTest, bufferReorder)
 {
-    memory::PacketPoolAllocator allocator(200, "test");
-    rtp::JitterBuffer buffer(27);
+    memory::PacketPoolAllocator allocator(300, "test");
+    rtp::JitterBuffer buffer;
 
     memory::Packet stageArea;
     {
@@ -888,8 +890,8 @@ TEST(JitterTest, bufferReorder)
 
 TEST(JitterTest, bufferEmptyFull)
 {
-    memory::PacketPoolAllocator allocator(200, "test");
-    rtp::JitterBuffer buffer(27);
+    memory::PacketPoolAllocator allocator(300, "test");
+    rtp::JitterBuffer buffer;
 
     memory::Packet stageArea;
     {
@@ -900,7 +902,7 @@ TEST(JitterTest, bufferEmptyFull)
 
     EXPECT_EQ(buffer.pop(), nullptr);
 
-    for (int i = 0; i < 27; ++i)
+    for (int i = 0; i < rtp::JitterBuffer::SIZE - 1; ++i)
     {
         auto p = memory::makeUniquePacket(allocator, stageArea);
         auto header = rtp::RtpHeader::create(*p);
@@ -910,22 +912,23 @@ TEST(JitterTest, bufferEmptyFull)
         EXPECT_TRUE(buffer.add(std::move(p)));
     }
 
-    EXPECT_EQ(buffer.count(), 27);
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * 26);
+    EXPECT_EQ(buffer.count(), rtp::JitterBuffer::SIZE - 1);
+    EXPECT_EQ(buffer.getRtpDelay(), 960 * (rtp::JitterBuffer::SIZE - 2));
     EXPECT_FALSE(buffer.empty());
     EXPECT_EQ(buffer.getFrontRtp()->timestamp.get(), 56000);
 
     auto p = memory::makeUniquePacket(allocator, stageArea);
     {
         auto header = rtp::RtpHeader::create(*p);
-        header->sequenceNumber = 110;
+        header->sequenceNumber = 100 + buffer.count();
         header->timestamp = 56000 + 10 * 960;
     }
     EXPECT_FALSE(buffer.add(std::move(p)));
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * 26);
+    EXPECT_EQ(buffer.getRtpDelay(), 960 * (rtp::JitterBuffer::SIZE - 2));
 
     uint16_t prevSeq = 99;
     uint32_t count = 0;
+    EXPECT_EQ(buffer.count(), rtp::JitterBuffer::SIZE - 1);
     for (auto packet = buffer.pop(); packet; packet = buffer.pop())
     {
         auto header = rtp::RtpHeader::fromPacket(*packet);
@@ -933,213 +936,40 @@ TEST(JitterTest, bufferEmptyFull)
         prevSeq = header->sequenceNumber.get();
         ++count;
     }
-    EXPECT_EQ(count, 27);
+    EXPECT_EQ(count, rtp::JitterBuffer::SIZE - 1);
     EXPECT_TRUE(buffer.empty());
     EXPECT_EQ(buffer.pop(), nullptr);
 }
 
-namespace
+TEST(JitterTest, reorderedFull)
 {
-struct SsrcTrack
-{
-    uint64_t prevReceiveTime;
-    double avgReceiveTime;
-    uint32_t count;
-};
+    memory::PacketPoolAllocator allocator(300, "test");
+    rtp::JitterBuffer buffer;
 
-uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
-{
-    logger::PacketLogItem item;
-    std::map<uint32_t, SsrcTrack> ssrcs;
-    for (int i = 0; reader.getNext(item); ++i)
+    memory::Packet stageArea;
     {
-        if (item.size >= 300)
-        {
-            if (ssrcs.end() != ssrcs.find(item.ssrc))
-            {
-                ssrcs.erase(item.ssrc);
-            }
-            continue;
-        }
-
-        auto it = ssrcs.find(item.ssrc);
-        if (ssrcs.end() == it)
-        {
-            ssrcs[item.ssrc] = SsrcTrack{item.receiveTimestamp, 0.02, 1};
-            continue;
-        }
-
-        if (item.receiveTimestamp - it->second.prevReceiveTime > utils::Time::ms * 15)
-        {
-            it->second.prevReceiveTime = item.receiveTimestamp;
-            ++it->second.count;
-
-            if (it->second.count > 300)
-            {
-                return item.ssrc;
-            }
-        }
+        auto header = rtp::RtpHeader::create(stageArea);
+        header->ssrc = 4000;
+        stageArea.setLength(250);
     }
 
-    if (ssrcs.size() > 0)
-    {
-        return ssrcs.begin()->first;
-    }
-    return 0;
-}
+    EXPECT_EQ(buffer.pop(), nullptr);
 
-size_t eliminateSamples(int16_t* buf, size_t sampleCount, int everyNth)
-{
-    int16_t* endPtr = buf + sampleCount;
-    int16_t* src = buf;
-    size_t newSize = 0;
-    for (int i = 1; src < endPtr; ++i)
+    for (int i = 0; i < rtp::JitterBuffer::SIZE - 50; ++i)
     {
-        *buf = *src;
-        ++newSize;
-        if (i % everyNth == 0)
-        {
-            ++src;
-        }
-        ++src;
-        ++buf;
+        auto p = memory::makeUniquePacket(allocator, stageArea);
+        auto header = rtp::RtpHeader::create(*p);
+        header->sequenceNumber = i + 100;
+        header->timestamp = 56000 + i * 960;
+
+        EXPECT_TRUE(buffer.add(std::move(p)));
     }
 
-    return newSize;
-}
+    auto p = memory::makeUniquePacket(allocator, stageArea);
+    auto header = rtp::RtpHeader::create(*p);
+    header->sequenceNumber = 49;
+    header->timestamp = 56100;
 
-size_t eliminateSilence(int16_t* buf, size_t sampleCount)
-{
-    int16_t r[sampleCount];
-    std::memset(r, 0, sampleCount * 2);
-    int cursor = 0;
-    for (size_t j = 0; j < sampleCount; ++j)
-    {
-        for (size_t i = 0; i < sampleCount; ++i)
-        {
-            if (std::abs(buf[j]) > 50)
-            {
-                r[cursor] = buf[j];
-            }
-        }
-    }
-
-    return cursor;
-}
-
-} // namespace
-
-TEST(JitterRerun, file)
-{
-    uint16_t* tmpZeroes = new uint16_t[960 * 50];
-    std::fill(tmpZeroes, tmpZeroes + 960 * 10, 0);
-    std::array<std::string, 1> traces = {"Transport-6-4G-1-5Mbps"};
-    for (const auto& trace : traces)
-    {
-        if (trace.empty())
-        {
-            break;
-        }
-
-        logger::info("scanning file %s", "", trace.c_str());
-
-        utils::ScopedFileHandle audioFile(::fopen("./_bwelogs/2minrecording.raw", "r"));
-        utils::ScopedFileHandle audioPlayback(::fopen("/mnt/c/dev/rtc/2minplayback.raw", "w+"));
-        CsvWriter csv("./_ssdata/jdelay.csv");
-        csv.writeLine("time, jbuf, delay");
-
-        logger::PacketLogReader reader(::fopen(("./_bwelogs/" + trace).c_str(), "r"));
-        uint32_t audioSsrc = identifyAudioSsrc(reader);
-        reader.rewind();
-
-        rtp::JitterTracker tracker(48000);
-        math::RollingWelfordVariance<uint64_t> welf(75);
-        rtp::RtpDelayTracker jitt(48000);
-        logger::PacketLogItem item;
-        uint64_t start = 0;
-        uint32_t rtpTimestamp = 0;
-        uint32_t prevSeqNo = 0;
-
-        uint64_t prevRecv = 0;
-        int32_t consumedSamples = 0;
-        int32_t jitterBufferLevel = 0;
-
-        for (int i = 0; reader.getNext(item); ++i)
-        {
-
-            if (item.ssrc == audioSsrc)
-            {
-                int16_t audioBuf[960];
-                int readBytes = ::fread(audioBuf, 1, 960 * 2, audioFile.get());
-                if (readBytes < 2 * 960)
-                {
-                    return;
-                }
-                if (prevSeqNo == 0)
-                {
-                    rtpTimestamp = 1000;
-                    prevSeqNo = item.sequenceNumber;
-                    start = item.receiveTimestamp;
-                    prevRecv = item.receiveTimestamp - utils::Time::ms * 20;
-                    jitterBufferLevel = 960;
-                    consumedSamples = 0;
-                    ::fwrite(audioBuf, 1, 960 * 2, audioPlayback.get());
-                }
-                else
-                {
-                    consumedSamples = (item.receiveTimestamp - prevRecv) * 48 / utils::Time::ms;
-                    rtpTimestamp += 960 * (item.sequenceNumber - prevSeqNo);
-                    prevSeqNo = item.sequenceNumber;
-                    prevRecv = item.receiveTimestamp;
-
-                    if (consumedSamples > jitterBufferLevel)
-                    {
-                        ::fwrite(tmpZeroes, (consumedSamples - jitterBufferLevel) * 2, 1, audioPlayback.get());
-                        logger::debug("padding %d", "", (consumedSamples - jitterBufferLevel));
-                        jitterBufferLevel = 0;
-                    }
-                    else
-                    {
-                        jitterBufferLevel -= consumedSamples;
-                    }
-
-                    if (i > 250 &&
-                        jitterBufferLevel > 960 + 96 + (welf.getMean() + sqrt(welf.getVariance()) * 2) * 0.048)
-                    {
-                        logger::debug("eliminating", "");
-                        auto newSize = eliminateSamples(audioBuf, 960, 40);
-                        // autoCorrelate(audioBuf, 960);
-                        // auto newSize = eliminateSamplesFade(audioBuf, 960, 24);
-                        newSize = eliminateSilence(audioBuf, newSize);
-
-                        jitterBufferLevel += newSize;
-                        ::fwrite(audioBuf, 1, newSize * 2, audioPlayback.get());
-                    }
-                    else
-                    {
-                        jitterBufferLevel += 960;
-                        ::fwrite(audioBuf, 1, 960 * 2, audioPlayback.get());
-                    }
-                }
-
-                tracker.update(item.receiveTimestamp, rtpTimestamp);
-                auto delay = jitt.update(item.receiveTimestamp, rtpTimestamp);
-                welf.add(delay / utils::Time::us);
-
-                csv.writeLine("%.3f, %.2f, %.2f",
-                    ((item.receiveTimestamp - start) / utils::Time::ms) / 1000.0,
-                    (jitterBufferLevel - 960) / 48.0,
-                    (delay / utils::Time::us) / 1000.0);
-
-                logger::debug("%.1f, jlvl %d, %.3fms, delay %.3f, wfstd %.3f, d%.3f",
-                    "",
-                    ((item.receiveTimestamp - start) / utils::Time::ms) / 1000.0,
-                    jitterBufferLevel - 960,
-                    (jitterBufferLevel - 960) / 48.0,
-                    welf.getMean() / 1000.0,
-                    sqrt(welf.getVariance()) / 1000.0,
-                    (delay / utils::Time::us) / 1000.0);
-            }
-        }
-    }
+    EXPECT_EQ(buffer.count(), rtp::JitterBuffer::SIZE - 50);
+    EXPECT_FALSE(buffer.add(std::move(p)));
 }

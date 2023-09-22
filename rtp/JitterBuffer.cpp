@@ -3,37 +3,10 @@
 
 namespace rtp
 {
-JitterBuffer::JitterBuffer(size_t maxLength)
-    : _freeItems(nullptr),
-      _itemStore(new ListItem[maxLength]),
-      _head(nullptr),
-      _tail(nullptr),
-      _count(0)
-{
-    for (size_t i = 0; i < maxLength; ++i)
-    {
-        _itemStore[i].next = _freeItems;
-        _freeItems = &_itemStore[i];
-    }
-}
 
-JitterBuffer::~JitterBuffer()
-{
-    delete[] _itemStore;
-}
+JitterBuffer::JitterBuffer() : _head(0), _tail(0), _count(0) {}
 
-JitterBuffer::ListItem* JitterBuffer::allocItem()
-{
-    if (!_freeItems)
-    {
-        return nullptr;
-    }
-
-    auto item = _freeItems;
-    _freeItems = item->next;
-    item->next = nullptr;
-    return item;
-}
+JitterBuffer::~JitterBuffer() {}
 
 bool JitterBuffer::add(memory::UniquePacket packet)
 {
@@ -43,111 +16,102 @@ bool JitterBuffer::add(memory::UniquePacket packet)
         return false; // corrupt
     }
 
-    auto newItem = allocItem();
-    if (!newItem)
+    if (empty())
     {
-        return false; // full
-    }
-
-    newItem->packet = std::move(packet);
-    ++_count;
-
-    if (_tail)
-    {
-        const auto tailHeader = RtpHeader::fromPacket(*_tail->packet);
-        if (static_cast<int16_t>(newHeader->sequenceNumber.get() - tailHeader->sequenceNumber.get()) >= 0)
-        {
-            _tail->next = newItem;
-            _tail = newItem;
-            return true;
-        }
-    }
-    else
-    {
-        _head = newItem;
-        _tail = newItem;
+        const auto pos = newHeader->sequenceNumber.get() % SIZE;
+        _items[pos] = std::move(packet);
+        _head = pos;
+        _tail = (pos + 1) % SIZE;
+        ++_count;
         return true;
     }
 
-    for (ListItem* item = _head; item; item = item->next)
+    const auto frontHeader = getFrontRtp();
+    const auto pos = newHeader->sequenceNumber.get() % SIZE;
+    const auto relativeHead = static_cast<int16_t>(newHeader->sequenceNumber.get() - frontHeader->sequenceNumber.get());
+    if (relativeHead < 0 && -relativeHead >= static_cast<int>(SIZE - 1 - sequenceSpan()))
     {
-        const auto itemHeader = RtpHeader::fromPacket(*item->next->packet);
-        if (static_cast<int16_t>(itemHeader->sequenceNumber.get() - newHeader->sequenceNumber.get()) > 0)
-        {
-            newItem->next = item->next;
-            item->next = newItem;
-            if (item == _head)
-            {
-                _head = newItem;
-            }
-            return true;
-        }
+        return false; // cannot insert because it would be outside range
+    }
+    else if (relativeHead > SIZE - 2)
+    {
+        return false; // cannot extend range
     }
 
-    return false;
+    _items[pos] = std::move(packet);
+    ++_count;
+    if (relativeHead < 0)
+    {
+        _head = pos;
+    }
+    else if (static_cast<uint32_t>(relativeHead) >= sequenceSpan())
+    {
+        _tail = (pos + 1) % SIZE;
+    }
+
+    return true;
 }
 
 memory::UniquePacket JitterBuffer::pop()
 {
-    if (!_head)
+    if (empty())
     {
         return nullptr;
     }
 
-    auto item = _head;
-    _head = item->next;
-    if (_tail == item)
+    for (uint32_t i = _head; i != _tail; i = (i + 1) % SIZE)
     {
-        _tail = nullptr;
+        if (_items[i])
+        {
+            for (_head = (_head + 1) % SIZE; !_items[_head] && _head != _tail; _head = (_head + 1) % SIZE) {}
+            --_count;
+            return std::move(_items[i]);
+        }
     }
 
-    item->next = _freeItems;
-    _freeItems = item;
-    --_count;
-    return std::move(item->packet);
+    return nullptr;
 }
 
 uint32_t JitterBuffer::getRtpDelay() const
 {
-    if (!_tail)
+    if (empty())
     {
         return 0;
     }
 
-    const auto headHeader = rtp::RtpHeader::fromPacket(*_head->packet);
-    const auto tailHeader = rtp::RtpHeader::fromPacket(*_tail->packet);
+    const auto headHeader = getFrontRtp();
+    const auto tailHeader = getTailRtp();
     return tailHeader->timestamp.get() - headHeader->timestamp.get();
 }
 
 int32_t JitterBuffer::getRtpDelay(uint32_t rtpTimestamp) const
 {
-    if (!_tail)
+    if (empty())
     {
         return 0;
     }
 
-    const auto tailHeader = rtp::RtpHeader::fromPacket(*_tail->packet);
-    return static_cast<int32_t>(tailHeader->timestamp.get() - rtpTimestamp);
+    return static_cast<int32_t>(getTailRtp()->timestamp.get() - rtpTimestamp);
 }
 
 const rtp::RtpHeader* JitterBuffer::getFrontRtp() const
 {
-    if (!_head)
+    if (empty())
     {
         return nullptr;
     }
 
-    return rtp::RtpHeader::fromPacket(*_head->packet);
+    return rtp::RtpHeader::fromPacket(*_items[_head]);
 }
 
 const rtp::RtpHeader* JitterBuffer::getTailRtp() const
 {
-    if (!_tail)
+    if (empty())
     {
         return nullptr;
     }
 
-    return rtp::RtpHeader::fromPacket(*_tail->packet);
+    return rtp::RtpHeader::fromPacket(*_items[(_tail + SIZE - 1) % SIZE]);
 }
 
 } // namespace rtp

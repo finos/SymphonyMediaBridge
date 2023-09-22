@@ -108,7 +108,7 @@ private:
     uint64_t _time;
 };
 
-class AjbTest : public testing::TestWithParam<std::string>
+class AudioPipelineTest : public testing::TestWithParam<std::string>
 {
 public:
     void SetUp() override { utils::Time::initialize(_timeTurner); }
@@ -231,7 +231,7 @@ private:
     double _packetLossRatio;
 };
 
-TEST_P(AjbTest, DISABLED_fileReRun)
+TEST_P(AudioPipelineTest, DISABLED_fileReRun)
 {
 
     const uint32_t rtpFrequency = 48000;
@@ -301,8 +301,8 @@ TEST_P(AjbTest, DISABLED_fileReRun)
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(AjbFileReRun,
-    AjbTest,
+INSTANTIATE_TEST_SUITE_P(ArpFileReRun,
+    AudioPipelineTest,
     ::testing::Values("Transport-6-4G-1-5Mbps",
         "Transport-22-4G-2.3Mbps",
         "Transport-30-3G-1Mbps",
