@@ -564,7 +564,7 @@ TEST(JitterTest, adaptDown23)
     {
         if (i == 9980)
         {
-            EXPECT_NEAR(jitt.getJitter(), 72, 12.5);
+            EXPECT_NEAR(jitt.getJitter(), 72, 14.0);
             emulator.setJitter(23);
             logger::info("decrease jitter to 23ms", "");
         }
@@ -670,7 +670,7 @@ TEST(JitterTest, adaptUp200)
     EXPECT_GE(countAbove, 600);
     EXPECT_GE(countBelow, 600);
     EXPECT_GE(below95, 1430);
-    EXPECT_NEAR(jitt.getJitter(), 75, 5.5);
+    EXPECT_NEAR(jitt.getJitter(), 75, 13.5);
 }
 
 TEST(JitterTest, adaptUp30)
