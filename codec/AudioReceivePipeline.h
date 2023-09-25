@@ -28,9 +28,7 @@ public:
     void process(uint64_t timestamp, bool isSsrcUsed);
     void flush();
 
-    uint32_t getTargetDelay() const { return _targetDelay; }
-    uint32_t size() const { return _buffer.count(); }
-
+    // called from mix consumer
     bool needProcess() const { return _pcmData.size() <= _samplesPerPacket * 2; }
     size_t fetchStereo(size_t sampleCount);
 
@@ -43,14 +41,14 @@ private:
         uint64_t timestamp,
         const memory::Packet& packet,
         int16_t* audioData);
-    size_t compact(const memory::Packet& packet, int16_t* audioData, size_t samples);
-    void replayFadeOut(int16_t* buffer);
+    size_t compact(const memory::Packet& packet, int16_t* audioData, uint32_t samples);
+    uint32_t totalBufferSize() const;
 
     uint32_t _ssrc;
     const uint32_t _rtpFrequency;
     const uint32_t _samplesPerPacket;
 
-    rtp::JitterBuffer _buffer;
+    rtp::JitterBuffer _jitterBuffer;
     rtp::JitterEstimator _estimator;
 
     const int _audioLevelExtensionId;
@@ -58,12 +56,10 @@ private:
     codec::NoiseFloor _noiseFloor;
 
     uint32_t _targetDelay;
-    uint64_t _fetchReferenceTime;
 
     struct HeadInfo
     {
-        uint32_t timestamp = 0;
-        uint32_t rtpTimestamp = 0;
+        uint32_t rtpTimestamp;
         uint32_t extendedSequenceNumber = 0;
     } _head;
 
@@ -78,6 +74,7 @@ private:
         uint32_t shrunkPackets = 0;
         uint32_t eliminatedPackets = 0;
         uint32_t eliminatedSamples = 0;
+        uint32_t receivedRtpCyclesPerPacket = 960;
     } _metrics;
 
     SpscAudioBuffer<int16_t> _pcmData;
