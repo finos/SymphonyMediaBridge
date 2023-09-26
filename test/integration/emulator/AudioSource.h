@@ -35,6 +35,7 @@ public:
     void setFrequency(double frequency) { _frequency = frequency; }
     void setPtt(const PttState isPtt);
     void setUseAudioLevel(const bool useAudioLevel);
+    void enableIntermittentTone(double onRatio);
 
     bool openPcm16File(const char* filename);
 
@@ -56,6 +57,12 @@ private:
     bool _useAudioLevel;
     Audio _emulatedAudioType;
     FILE* _pcm16File;
+
+    struct TonePattern
+    {
+        double onRatio = 1.0;
+        int32_t silenceCountDown = 0;
+    } _tonePattern;
 };
 
 } // namespace emulator

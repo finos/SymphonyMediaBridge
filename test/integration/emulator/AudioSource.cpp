@@ -37,6 +37,7 @@ AudioSource::~AudioSource()
 
 memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
 {
+    const auto samplesPerPacket = codec::Opus::sampleRate * _ptime / 1000;
     if (timeToRelease(timestamp) > 0)
     {
         return nullptr;
@@ -61,7 +62,6 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     rtpHeader->ssrc = _ssrc;
     rtpHeader->timestamp = _rtpTimestamp;
 
-    const auto samplesPerPacket = codec::Opus::sampleRate * _ptime / 1000;
     int16_t audio[codec::Opus::channelsPerFrame * samplesPerPacket];
     _rtpTimestamp += samplesPerPacket;
 
@@ -73,6 +73,20 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
             audio[x * 2 + 1] = 0;
         }
         _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
+
+        if (_tonePattern.onRatio < 1.0)
+        {
+            if (_tonePattern.silenceCountDown <= -20)
+            {
+                const auto p = 2.0 * _tonePattern.onRatio * (rand() % 1000) * 0.001;
+                _tonePattern.silenceCountDown = 20.0 * (1.0 / (p + 0.0001) - 1.0);
+            }
+            if (_tonePattern.silenceCountDown-- >= 0)
+            {
+
+                std::memset(audio, 0, samplesPerPacket * 2);
+            }
+        }
     }
     else if (_emulatedAudioType == Audio::Opus && _pcm16File)
     {
@@ -185,4 +199,8 @@ bool AudioSource::openPcm16File(const char* filename)
     return _pcm16File != nullptr;
 }
 
+void AudioSource::enableIntermittentTone(double onRatio)
+{
+    _tonePattern.onRatio = onRatio;
+}
 } // namespace emulator

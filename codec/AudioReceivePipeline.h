@@ -29,7 +29,7 @@ public:
     void flush();
 
     // called from mix consumer
-    bool needProcess() const { return _pcmData.size() <= _samplesPerPacket * 2; }
+    bool needProcess() const { return _pcmData.size() < _samplesPerPacket; }
     size_t fetchStereo(size_t sampleCount);
 
     const int16_t* getAudio() const { return _receiveBox.audio; }
@@ -59,6 +59,7 @@ private:
 
     struct HeadInfo
     {
+        uint64_t readyPcmTimestamp;
         uint32_t rtpTimestamp;
         uint32_t extendedSequenceNumber = 0;
     } _head;

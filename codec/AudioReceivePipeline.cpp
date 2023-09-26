@@ -138,9 +138,7 @@ size_t AudioReceivePipeline::compact(const memory::Packet& packet, int16_t* audi
 
     if (!_jitterBuffer.empty() && maxReduction > 10)
     {
-        const auto bufferLevel = _pcmData.size() / CHANNELS;
-        if (audioLevel > _noiseFloor.getLevel() - 6 && bufferLevel > _samplesPerPacket &&
-            maxReduction >= static_cast<int32_t>(_samplesPerPacket))
+        if (audioLevel > _noiseFloor.getLevel() - 6 && maxReduction >= static_cast<int32_t>(_samplesPerPacket))
         {
             ++_metrics.eliminatedPackets;
             _metrics.eliminatedSamples += samples;
@@ -232,7 +230,8 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
             delay,
             _jitterBuffer.count());
     }
-    else if (_jitterEmergency.counter > 0 && delayInRtpCycles < _jitterBuffer.getRtpDelay() + _samplesPerPacket)
+    else if (_jitterEmergency.counter > 0 &&
+        delayInRtpCycles < _jitterBuffer.getRtpDelay() + _metrics.receivedRtpCyclesPerPacket)
     {
         logger::debug("%u continue after emergency pause %u packets. Recent packet delay %.02fms, JB lag %ums, JB %u",
             "AudioReceivePipeline",
@@ -322,19 +321,16 @@ uint32_t AudioReceivePipeline::totalBufferSize() const
 
 void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
 {
-    while (!_jitterBuffer.empty())
-    {
-        const auto bufferLevel = _pcmData.size() / CHANNELS;
-        if (_jitterEmergency.counter > 0 || bufferLevel >= _samplesPerPacket)
-        {
-            return;
-        }
+    size_t bufferLevel = _pcmData.size() / CHANNELS;
 
+    for (; !_jitterBuffer.empty() && bufferLevel < _samplesPerPacket; bufferLevel = _pcmData.size() / CHANNELS)
+    {
         const auto header = _jitterBuffer.getFrontRtp();
         const int16_t sequenceAdvance =
             header->sequenceNumber.get() - static_cast<uint16_t>(_head.extendedSequenceNumber & 0xFFFFu);
         const int32_t timestampAdvance = header->timestamp - _head.rtpTimestamp;
 
+        // DTX
         if (sequenceAdvance == 1 && timestampAdvance > static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket) &&
             totalBufferSize() > _targetDelay && timestampAdvance <= static_cast<int32_t>(3 * _samplesPerPacket))
         {
@@ -347,6 +343,12 @@ void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
                 _head.rtpTimestamp += _metrics.receivedRtpCyclesPerPacket;
                 continue;
             }
+        }
+
+        const int32_t halfPtime = _samplesPerPacket * utils::Time::sec / (2 * _rtpFrequency);
+        if (sequenceAdvance != 1 && static_cast<int32_t>(timestamp - _head.readyPcmTimestamp) <= halfPtime)
+        {
+            return; // wait a bit more for ordered packet to show up.
         }
 
         const uint32_t extendedSequenceNumber = _head.extendedSequenceNumber + sequenceAdvance;
@@ -368,7 +370,7 @@ void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
             decodedSamples = _samplesPerPacket;
         }
         const auto remainingSamples = compact(*packet, audioData, decodedSamples);
-        _head.extendedSequenceNumber += sequenceAdvance;
+        _head.extendedSequenceNumber = extendedSequenceNumber;
         _head.rtpTimestamp = header->timestamp;
 
         const uint32_t newBufferLevel = _pcmData.size() / CHANNELS;
@@ -385,6 +387,11 @@ void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
         {
             logger::debug("%u JB %u", "AudioReceivePipeline", _ssrc, totalBufferSize());
         }
+    }
+
+    if (bufferLevel >= _samplesPerPacket)
+    {
+        _head.readyPcmTimestamp = timestamp;
     }
 }
 

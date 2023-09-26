@@ -253,42 +253,37 @@ public:
     {
     }
 
-    void openWithTone(double frequency)
+    void openWithTone(double frequency, double onRatio = 1.0)
     {
         _audioSource.setFrequency(frequency);
-        _audioSource.setVolume(0.6);
+        _audioSource.setVolume(0.2);
+        _audioSource.enableIntermittentTone(onRatio);
     }
 
     memory::UniquePacket getNext(uint64_t timestamp)
     {
-        if (_audioTimeline == 0)
-        {
-            _audioTimeline = timestamp;
-        }
-
         if (!_nextPacket)
         {
-            logger::PacketLogItem item;
-
-            _nextPacket = _audioSource.getPacket(_audioTimeline);
+            _nextPacket = _audioSource.getPacket(timestamp);
             if (!_nextPacket)
             {
                 return nullptr;
             }
-            if (rand() % 1000 < _packetLossRatio * 100000)
-            {
-                return nullptr;
-            }
-
-            const auto releaseAt = _audioTimeline + (rand() % 45) * utils::Time::ms;
-            _releaseTime = (releaseAt > _releaseTime ? releaseAt : timestamp);
-            _audioTimeline += _ptime * utils::Time::ms;
+            _releaseTime = timestamp + (rand() % 45) * utils::Time::ms;
+            _audioTimeline = timestamp;
         }
 
-        if (utils::Time::diffGE(_releaseTime, timestamp, 0))
+        if (static_cast<int64_t>(timestamp - _releaseTime) >= 0)
         {
-            return std::move(_nextPacket);
+            auto p = std::move(_nextPacket);
+            _audioTimeline += _ptime * utils::Time::ms;
+            _nextPacket = _audioSource.getPacket(_audioTimeline);
+            assert(_nextPacket);
+
+            _releaseTime = _audioTimeline + (rand() % 45) * utils::Time::ms;
+            return p;
         }
+
         return nullptr;
     }
 
@@ -444,7 +439,6 @@ TEST_F(AudioPipelineTest, DISABLED_ptime10)
 
     auto pipeline = std::make_unique<codec::AudioReceivePipeline>(48000, 20, 100, 1);
 
-    const auto samplesPerPacket = 10 * rtpFrequency / 1000;
     uint32_t extendedSequenceNumber = 0;
     uint32_t timestampCounter = 4000;
 
@@ -452,7 +446,7 @@ TEST_F(AudioPipelineTest, DISABLED_ptime10)
     playbackPacer.reset(100);
 
     JitterPacketSource audioSource(allocator, 10);
-    audioSource.openWithTone(440);
+    audioSource.openWithTone(210, 0.34);
 
     for (uint64_t timeSteps = 0; timeSteps < 9000; ++timeSteps)
     {
@@ -463,6 +457,7 @@ TEST_F(AudioPipelineTest, DISABLED_ptime10)
             pipeline->process(timestamp, true);
         }
 
+        const auto samplesPerPacket = 20 * rtpFrequency / 1000;
         if (playbackPacer.timeToNextTick(timestamp) <= 0)
         {
             auto fetched = pipeline->fetchStereo(samplesPerPacket);

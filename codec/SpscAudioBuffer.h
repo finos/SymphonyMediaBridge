@@ -114,12 +114,13 @@ public:
     void appendSilence(const uint32_t count)
     {
         REENTRANCE_CHECK(_reentranceWrite);
-        const auto maxItems = _size / sizeof(T);
+        const uint32_t maxItems = _size / sizeof(T);
 
         const auto currentLength = _length.load(std::memory_order_consume);
-        const auto toWrite = std::min(currentLength, count);
+        const uint32_t spaceLeft = maxItems - _replayMemorySize - currentLength;
+        const auto toWrite = std::min(spaceLeft, count);
 
-        if (_writeHead + toWrite + _replayMemorySize > maxItems)
+        if (_writeHead + toWrite > maxItems)
         {
             const auto remaining = maxItems - _writeHead;
             std::memset(&_data[_writeHead], 0, remaining * sizeof(T));
