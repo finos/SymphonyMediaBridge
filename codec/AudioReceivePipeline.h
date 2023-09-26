@@ -29,7 +29,7 @@ public:
     void flush();
 
     // called from mix consumer
-    bool needProcess() const { return _pcmData.size() < _samplesPerPacket; }
+    bool needProcess() const { return _pcmData.size() < _samplesPerPacket * 2; }
     size_t fetchStereo(size_t sampleCount);
 
     const int16_t* getAudio() const { return _receiveBox.audio; }
@@ -42,7 +42,7 @@ private:
         const memory::Packet& packet,
         int16_t* audioData);
     size_t compact(const memory::Packet& packet, int16_t* audioData, uint32_t samples);
-    uint32_t totalBufferSize() const;
+    uint32_t jitterBufferSize(uint32_t rtpTimestamp) const;
 
     uint32_t _ssrc;
     const uint32_t _rtpFrequency;

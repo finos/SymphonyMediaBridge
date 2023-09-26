@@ -377,7 +377,7 @@ INSTANTIATE_TEST_SUITE_P(ArpFileReRun,
         "Transport-48_50_3G",
         "Transport-86_tcp_1ploss"));
 
-TEST_F(AudioPipelineTest, DISABLED_DTX)
+TEST_F(AudioPipelineTest, DTX)
 {
     const uint32_t rtpFrequency = 48000;
     memory::PacketPoolAllocator allocator(4096 * 4, "JitterTest");
@@ -391,8 +391,9 @@ TEST_F(AudioPipelineTest, DISABLED_DTX)
     utils::Pacer playbackPacer(utils::Time::ms * 20);
     playbackPacer.reset(100);
 
-    JitterTracePacketSource audioSource(allocator);
-    audioSource.openWithTone(440, "./_bwelogs/Transport-48_50_3G");
+    JitterPacketSource audioSource(allocator, 20);
+    audioSource.openWithTone(210, 0.34);
+    uint32_t underruns = 0;
 
     for (uint64_t timeSteps = 0; timeSteps < 9000; ++timeSteps)
     {
@@ -405,6 +406,10 @@ TEST_F(AudioPipelineTest, DISABLED_DTX)
 
         if (playbackPacer.timeToNextTick(timestamp) <= 0)
         {
+            if (pipeline->needProcess())
+            {
+                ++underruns;
+            }
             auto fetched = pipeline->fetchStereo(samplesPerPacket);
             playbackPacer.tick(timestamp);
             if (fetched == 0)
@@ -422,6 +427,7 @@ TEST_F(AudioPipelineTest, DISABLED_DTX)
         {
             timestampCounter += 960;
             logger::info("dtx at %u", "test", timestampCounter);
+            continue;
         }
         auto header = rtp::RtpHeader::fromPacket(*packet);
         header->sequenceNumber = extendedSequenceNumber++ & 0xFFFFu;
@@ -430,9 +436,11 @@ TEST_F(AudioPipelineTest, DISABLED_DTX)
 
         pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp, true);
     }
+
+    EXPECT_LT(underruns, 7);
 }
 
-TEST_F(AudioPipelineTest, DISABLED_ptime10)
+TEST_F(AudioPipelineTest, ptime10)
 {
     const uint32_t rtpFrequency = 48000;
     memory::PacketPoolAllocator allocator(4096 * 4, "JitterTest");
@@ -448,6 +456,9 @@ TEST_F(AudioPipelineTest, DISABLED_ptime10)
     JitterPacketSource audioSource(allocator, 10);
     audioSource.openWithTone(210, 0.34);
 
+    uint32_t underruns = 0;
+
+    const uint32_t samplesPerPacketSent = 10 * rtpFrequency / 1000;
     for (uint64_t timeSteps = 0; timeSteps < 9000; ++timeSteps)
     {
         _timeTurner.advance(utils::Time::ms * 2);
@@ -457,15 +468,15 @@ TEST_F(AudioPipelineTest, DISABLED_ptime10)
             pipeline->process(timestamp, true);
         }
 
-        const auto samplesPerPacket = 20 * rtpFrequency / 1000;
+        const auto samplesPerPacketFetch = 20 * rtpFrequency / 1000;
         if (playbackPacer.timeToNextTick(timestamp) <= 0)
         {
-            auto fetched = pipeline->fetchStereo(samplesPerPacket);
-            playbackPacer.tick(timestamp);
-            if (fetched == 0)
+            if (pipeline->needProcess())
             {
-                logger::info("no audio", "test");
+                ++underruns;
             }
+            pipeline->fetchStereo(samplesPerPacketFetch);
+            playbackPacer.tick(timestamp);
         }
 
         auto packet = audioSource.getNext(timestamp);
@@ -475,16 +486,20 @@ TEST_F(AudioPipelineTest, DISABLED_ptime10)
         }
         if (timestampCounter == 4000 + 960 * 20)
         {
-            timestampCounter += 960;
+            timestampCounter += samplesPerPacketSent;
             logger::info("dtx at %u", "test", timestampCounter);
+            continue;
         }
         auto header = rtp::RtpHeader::fromPacket(*packet);
         header->sequenceNumber = extendedSequenceNumber++ & 0xFFFFu;
         header->timestamp = timestampCounter;
-        timestampCounter += samplesPerPacket;
+        timestampCounter += samplesPerPacketSent;
+        ;
 
         pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp, true);
     }
+
+    EXPECT_LT(underruns, 5);
 
     // send through a few packets then gap in rtp timestamp but in sequence
 
