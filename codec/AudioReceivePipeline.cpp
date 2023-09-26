@@ -5,6 +5,13 @@
 #include "math/helpers.h"
 #include "memory/Allocator.h"
 
+#define DEBUG_JB 1
+
+#if DEBUG_JB
+#define JBLOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define JBLOG(fmt, ...)
+#endif
 namespace codec
 {
 const size_t CHANNELS = 2;
@@ -301,7 +308,7 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
         return 0;
     }
 
-    logger::debug("fetched %zu", "AudioReceivePipeline", sampleCount);
+    JBLOG("fetched %zu", "AudioReceivePipeline", sampleCount);
     _pcmData.fetch(_receiveBox.audio, sampleCount * CHANNELS);
     if (_receiveBox.underrunCount > 0)
     {
@@ -345,7 +352,7 @@ void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
 
             if (maxReduction < static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket))
             {
-                logger::debug("%u DTX silence", "AudioReceivePipeline", _ssrc);
+                JBLOG("%u DTX silence", "AudioReceivePipeline", _ssrc);
                 _pcmData.appendSilence(_metrics.receivedRtpCyclesPerPacket);
                 _head.rtpTimestamp += _metrics.receivedRtpCyclesPerPacket;
                 continue;
@@ -382,7 +389,7 @@ void AudioReceivePipeline::process(uint64_t timestamp, bool isSsrcUsed)
 
         const uint32_t newBufferLevel = _pcmData.size() / CHANNELS;
 
-        logger::debug("ssrc %u added pcm %u, JB %u (%u), TD %u, eliminated %zu, tstmp %u",
+        JBLOG("ssrc %u added pcm %u, JB %u (%u), TD %u, eliminated %zu, tstmp %u",
             "AudioReceivePipeline",
             _ssrc,
             newBufferLevel,
