@@ -58,6 +58,9 @@ void LoggerThread::run()
             if (_logStdOut)
             {
                 formatTo(stdout, localTime, item->logLevel, item->threadId, item->message);
+                if (!std::strcmp(item->logLevel, "ERROR")) {
+                    formatTo(stderr, localTime, item->logLevel, item->threadId, item->message);
+                }
             }
             if (_logFile)
             {
