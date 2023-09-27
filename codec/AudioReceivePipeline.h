@@ -60,7 +60,7 @@ private:
     struct HeadInfo
     {
         uint64_t readyPcmTimestamp;
-        uint32_t rtpTimestamp;
+        uint32_t nextRtpTimestamp;
         uint32_t extendedSequenceNumber = 0;
     } _head;
 
