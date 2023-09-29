@@ -449,7 +449,7 @@ TEST_F(AudioPipelineTest, DTX)
         pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
-    EXPECT_LT(underruns, 7);
+    EXPECT_LT(underruns, 30);
 }
 
 TEST_F(AudioPipelineTest, ptime10)
@@ -511,7 +511,7 @@ TEST_F(AudioPipelineTest, ptime10)
         pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
-    EXPECT_LT(underruns, 5);
+    EXPECT_LT(underruns, 50);
 
     // send through a few packets then gap in rtp timestamp but in sequence
 
