@@ -57,6 +57,7 @@ private:
     bool _useAudioLevel;
     Audio _emulatedAudioType;
     FILE* _pcm16File;
+    uint32_t _packetCount;
 
     struct TonePattern
     {

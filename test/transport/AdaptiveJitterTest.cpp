@@ -21,6 +21,7 @@
 #include "test/bwe/FakeCall.h"
 #include "test/bwe/FakeCrossTraffic.h"
 #include "test/bwe/FakeVideoSource.h"
+#include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/AudioSource.h"
 #include "test/integration/emulator/TimeTurner.h"
 #include "test/transport/NetworkLink.h"
@@ -244,12 +245,15 @@ private:
 class JitterPacketSource
 {
 public:
-    JitterPacketSource(memory::PacketPoolAllocator& allocator, uint32_t ptime)
+    JitterPacketSource(memory::PacketPoolAllocator& allocator, uint32_t ptime, uint32_t jitterMs = 45)
         : _ptime(ptime),
           _audioSource(allocator, 50, emulator::Audio::Opus, ptime),
           _releaseTime(0),
           _audioTimeline(0),
-          _packetLossRatio(0)
+          _packetLossRatio(0),
+          _jitterMs(jitterMs),
+          _poissonDistribution(jitterMs / 2),
+          _randTwister(std::random_device{}())
     {
     }
 
@@ -269,7 +273,10 @@ public:
             {
                 return nullptr;
             }
-            _releaseTime = timestamp + (rand() % 45) * utils::Time::ms;
+
+            _releaseTime =
+                (_jitterMs > 0 ? timestamp + _poissonDistribution(_randTwister) * _jitterMs * 10 * utils::Time::ms
+                               : timestamp);
             _audioTimeline = timestamp;
         }
 
@@ -280,7 +287,9 @@ public:
             _nextPacket = _audioSource.getPacket(_audioTimeline);
             assert(_nextPacket);
 
-            _releaseTime = _audioTimeline + (rand() % 45) * utils::Time::ms;
+            _releaseTime =
+                (_jitterMs > 0 ? _audioTimeline + _poissonDistribution(_randTwister) * _jitterMs * 10 * utils::Time::ms
+                               : _audioTimeline);
             return p;
         }
 
@@ -297,6 +306,9 @@ private:
     std::unique_ptr<logger::PacketLogReader> _traceReader;
     uint64_t _audioTimeline;
     double _packetLossRatio;
+    uint32_t _jitterMs;
+    std::exponential_distribution<double> _poissonDistribution;
+    std::mt19937 _randTwister;
 };
 
 TEST_P(AudioPipelineTest, DISABLED_fileReRun)
@@ -504,4 +516,75 @@ TEST_F(AudioPipelineTest, ptime10)
     // send through a few packets then gap in rtp timestamp but in sequence
 
     // make sure the audio data reflects this
+}
+
+TEST_F(AudioPipelineTest, ContinuousTone)
+{
+    const uint32_t rtpFrequency = 48000;
+    memory::PacketPoolAllocator allocator(4096 * 4, "JitterTest");
+
+    auto pipeline = std::make_unique<codec::AudioReceivePipeline>(48000, 20, 100, 1);
+
+    const auto samplesPerPacket = rtpFrequency / 50;
+    uint32_t extendedSequenceNumber = 0;
+
+    utils::Pacer playbackPacer(utils::Time::ms * 20);
+    playbackPacer.reset(100);
+
+    JitterPacketSource audioSource(allocator, 20, 43);
+    audioSource.openWithTone(800, 1.0);
+    uint32_t underruns = 0;
+
+    utils::ScopedFileHandle dumpFile(nullptr); //(::fopen("/mnt/c/dev/rtc/ContinuousTone.raw", "wr"));
+
+    for (uint64_t timeSteps = 0; timeSteps < 9000; ++timeSteps)
+    {
+        _timeTurner.advance(utils::Time::ms * 2);
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        if (pipeline->needProcess())
+        {
+            pipeline->process(timestamp, true);
+        }
+
+        if (playbackPacer.timeToNextTick(timestamp) <= 0)
+        {
+            if (pipeline->needProcess())
+            {
+                ++underruns;
+            }
+            auto fetched = pipeline->fetchStereo(samplesPerPacket);
+            playbackPacer.tick(timestamp);
+            if (fetched == 0)
+            {
+                logger::info("no audio", "test");
+                int16_t silence[samplesPerPacket * 2];
+                std::memset(silence, 0, samplesPerPacket * 2 * sizeof(int16_t));
+                if (dumpFile)
+                {
+                    SampleDataUtils::dumpPayload(dumpFile.get(), silence, samplesPerPacket * 2);
+                }
+            }
+            else
+            {
+                if (dumpFile)
+                {
+                    SampleDataUtils::dumpPayload(dumpFile.get(), pipeline->getAudio(), fetched * 2);
+                }
+            }
+        }
+
+        auto packet = audioSource.getNext(timestamp);
+        if (!packet)
+        {
+            continue;
+        }
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+
+        int16_t advance = static_cast<int16_t>(header->timestamp.get() - (extendedSequenceNumber & 0xFFFFu));
+        extendedSequenceNumber += advance;
+
+        pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp, true);
+    }
+
+    EXPECT_LT(underruns, 25);
 }

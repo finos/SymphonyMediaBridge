@@ -26,7 +26,11 @@ void makeStereo(T* data, size_t count)
 }
 
 size_t compactStereo(int16_t* pcmData, size_t size);
-size_t compactStereoTroughs(int16_t* pcmData, size_t samples, size_t maxReduction = 1000);
+size_t compactStereoTroughs(int16_t* pcmData,
+    size_t samples,
+    size_t maxReduction = 1000,
+    int16_t silenceThreshold = 10,
+    int16_t deltaThreshold = 10);
 
 template <typename T>
 void clearStereo(T* data, size_t count)

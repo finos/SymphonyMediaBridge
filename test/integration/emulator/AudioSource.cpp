@@ -23,7 +23,8 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, 
       _isPtt(PttState::NotSpecified),
       _useAudioLevel(true),
       _emulatedAudioType(fakeAudio),
-      _pcm16File(nullptr)
+      _pcm16File(nullptr),
+      _packetCount(0)
 {
 }
 
@@ -74,6 +75,14 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
         }
         _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
 
+        if (_packetCount++ < 150)
+        {
+            // create noise floor
+            for (uint64_t x = 0; x < samplesPerPacket; ++x)
+            {
+                audio[x * 2] *= 0.01;
+            }
+        }
         if (_tonePattern.onRatio < 1.0)
         {
             if (_tonePattern.silenceCountDown <= -20)
@@ -83,8 +92,10 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
             }
             if (_tonePattern.silenceCountDown-- >= 0)
             {
-
-                std::memset(audio, 0, samplesPerPacket * 2);
+                for (uint64_t x = 0; x < samplesPerPacket; ++x)
+                {
+                    audio[x * 2] *= 0.001;
+                }
             }
         }
     }

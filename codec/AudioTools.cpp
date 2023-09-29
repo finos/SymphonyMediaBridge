@@ -158,14 +158,15 @@ void subtractFromMix(const int16_t* srcAudio, int16_t* mixAudio, size_t count, d
 /**
  * Eliminate samples at times where energy is low which makes it less audible.
  */
-size_t compactStereoTroughs(int16_t* pcmData, size_t samples, size_t maxReduction)
+size_t compactStereoTroughs(int16_t* pcmData,
+    size_t samples,
+    size_t maxReduction,
+    const int16_t silenceThreshold,
+    const int16_t deltaThreshold)
 {
-    const int16_t DELTA_THRESHOLD = 10;
-    const int16_t SILENCE_THRESHOLD = 10;
-
+    pcmData[0] = pcmData[0];
+    pcmData[1] = pcmData[1];
     size_t produced = 1;
-    pcmData[produced * 2] = pcmData[0];
-    pcmData[produced * 2 + 1] = pcmData[1];
 
     size_t removedSamples = 0;
     int keepSamples = 0;
@@ -174,9 +175,9 @@ size_t compactStereoTroughs(int16_t* pcmData, size_t samples, size_t maxReductio
         const int16_t a = pcmData[i * 2 - 2];
         const int16_t c = pcmData[i * 2 + 2];
 
-        if (removedSamples < maxReduction && !keepSamples && std::abs(a - c) < DELTA_THRESHOLD)
+        if (removedSamples < maxReduction && !keepSamples && std::abs(a - c) < deltaThreshold)
         {
-            if (std::abs(a) < SILENCE_THRESHOLD)
+            if (std::abs(a) < silenceThreshold)
             {
                 // low volume allow more sample removal
                 keepSamples = 2;

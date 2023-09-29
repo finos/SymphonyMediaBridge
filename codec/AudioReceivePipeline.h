@@ -41,8 +41,9 @@ private:
         uint64_t timestamp,
         const memory::Packet& packet,
         int16_t* audioData);
-    size_t compact(const memory::Packet& packet, int16_t* audioData, uint32_t samples);
+    size_t reduce(const memory::Packet& packet, int16_t* audioData, uint32_t samples, uint32_t totalJitterSize);
     uint32_t jitterBufferSize(uint32_t rtpTimestamp) const;
+    void adjustReductionPower(uint32_t recentReduction);
 
     uint32_t _ssrc;
     const uint32_t _rtpFrequency;
@@ -56,11 +57,16 @@ private:
     codec::NoiseFloor _noiseFloor;
 
     uint32_t _targetDelay;
+    struct SampleElimination
+    {
+        uint32_t uncompressableCount = 0;
+        int16_t deltaThreshold = 10;
+    } _elimination;
 
     struct HeadInfo
     {
-        uint64_t readyPcmTimestamp;
-        uint32_t nextRtpTimestamp;
+        uint64_t readyPcmTimestamp = 0;
+        uint32_t nextRtpTimestamp = 0;
         uint32_t extendedSequenceNumber = 0;
     } _head;
 
