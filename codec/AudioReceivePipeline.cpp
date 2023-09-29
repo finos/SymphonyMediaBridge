@@ -49,12 +49,11 @@ AudioReceivePipeline::AudioReceivePipeline(uint32_t rtpFrequency,
 bool AudioReceivePipeline::updateTargetDelay(double delay)
 {
     const auto decodeTime = 3;
-
-    auto prev = _targetDelay;
+    const auto prevDelay = _targetDelay;
 
     _targetDelay = (_estimator.getJitterMaxStable() + 1 + decodeTime) * _rtpFrequency / 1000;
 
-    if (_targetDelay > prev + _rtpFrequency / 100)
+    if (_targetDelay > prevDelay + _rtpFrequency / 100)
     {
         logger::info("%u jitter increase to %0.3fms",
             "AudioReceivePipeline",
@@ -122,7 +121,8 @@ size_t AudioReceivePipeline::decodePacket(uint32_t extendedSequenceNumber,
     {
         audioData += CHANNELS * decodedFrames;
     }
-    size_t samplesProduced = (audioData - originalAudioStart) / CHANNELS;
+
+    const size_t samplesProduced = (audioData - originalAudioStart) / CHANNELS;
     if (samplesProduced < _samplesPerPacket / 2)
     {
         logger::warn("%u failed to decode opus %zu", "AudioReceivePipeline", _ssrc, samplesProduced);
@@ -194,8 +194,7 @@ size_t AudioReceivePipeline::reduce(const memory::Packet& packet,
     }
     else
     {
-        auto result = _pcmData.append(audioData, samples * CHANNELS);
-        if (!result)
+        if (!_pcmData.append(audioData, samples * CHANNELS))
         {
             const auto header = rtp::RtpHeader::fromPacket(packet);
             logger::warn("%u failed to append seq %u ts %u",
@@ -279,7 +278,7 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
     memory::UniquePacket packet,
     uint64_t receiveTime)
 {
-    auto header = rtp::RtpHeader::fromPacket(*packet);
+    const auto header = rtp::RtpHeader::fromPacket(*packet);
     if (!header)
     {
         return false; // corrupt
@@ -308,7 +307,7 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
     memory::UniquePacket packet,
     uint64_t receiveTime)
 {
-    auto header = rtp::RtpHeader::fromPacket(*packet);
+    const auto header = rtp::RtpHeader::fromPacket(*packet);
     if (!header)
     {
         return false; // corrupt
@@ -322,7 +321,6 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
     }
 
     const auto delay = analysePacketJitter(extendedSequenceNumber, *header, receiveTime);
-
     const auto posted = _jitterBuffer.add(std::move(packet));
     if (posted)
     {
@@ -330,7 +328,7 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
     }
 
     process(receiveTime);
-    return true;
+    return posted;
 }
 
 // Fetch audio and suppress pops after underruns as well as resume

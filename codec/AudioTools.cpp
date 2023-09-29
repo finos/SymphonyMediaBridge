@@ -35,69 +35,6 @@ size_t compactStereo(int16_t* pcmData, size_t samples)
     return writeIndex / 2;
 }
 
-void sineTail(int16_t* data, double freq, uint32_t sampleRate, size_t count)
-{
-    auto maxIt = std::max_element(data, data + count * 2);
-    const double peak = std::abs(*maxIt);
-
-    const double delta = 2 * M_PI * freq / sampleRate;
-    double s = data[(count - 1) * 2];
-    uint32_t downCount = 0;
-    for (size_t i = count - 10; i < count; ++i)
-    {
-        if (data[i * 2] > s)
-        {
-            ++downCount;
-        }
-    }
-    const double fqCut = 250.0;
-    const double invSampleRate = 1.0 / sampleRate;
-    const double m = (2 * M_PI * fqCut * invSampleRate);
-    const double alpha = m / (1.0 + m);
-
-    if (peak == 0)
-    {
-        codec::clearStereo(data, count);
-        return;
-    }
-
-    double phase = 0;
-    if (downCount > 5)
-    {
-        const double quadrant = (s >= 0) ? M_PI / 2 : M_PI;
-
-        for (size_t t = 0; t < sampleRate * 4 / freq; ++t)
-        {
-            if (peak * sin(t * delta + quadrant) < s)
-            {
-                phase = quadrant + t * delta;
-                break;
-            }
-        }
-    }
-    else
-    {
-        const double quadrant = (s >= 0) ? 0 : M_PI * 3 / 4;
-        for (size_t t = 0; t < freq / 2; ++t)
-        {
-            if (peak * sin(t * delta + quadrant) > s)
-            {
-                phase = quadrant + t * delta;
-                break;
-            }
-        }
-    }
-
-    for (size_t t = 0; t < count; ++t)
-    {
-        double v = peak * sin(t * delta + phase);
-
-        s += alpha * (v - s);
-        data[t * 2] = s;
-        data[t * 2 + 1] = s;
-    }
-}
-
 void swingTailMono(int16_t* data, const uint32_t sampleRate, const size_t count, const int step)
 {
     const double tailFrequency = 250;

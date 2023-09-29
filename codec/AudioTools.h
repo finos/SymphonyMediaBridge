@@ -44,7 +44,6 @@ void copyStereo(const T* srcData, T* data, size_t count)
     std::memcpy(data, srcData, count * 2 * sizeof(T));
 }
 
-void sineTail(int16_t* data, double freq, uint32_t sampleRate, size_t count);
 void swingTail(int16_t* data, uint32_t sampleRate, size_t count);
 
 void addToMix(const int16_t* srcAudio, int16_t* mixAudio, size_t count, double amplification);
