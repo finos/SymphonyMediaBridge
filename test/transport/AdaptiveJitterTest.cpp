@@ -346,7 +346,7 @@ TEST_P(AudioPipelineTest, DISABLED_fileReRun)
             int16_t adv = header->sequenceNumber.get() - curExtSeq;
 
             const auto acceptedPacket =
-                pipeline->onRtpPacket(extendedSequenceNumber + adv, std::move(packet), timestamp, true);
+                pipeline->onRtpPacket(extendedSequenceNumber + adv, std::move(packet), timestamp);
             if (adv > 0)
             {
                 extendedSequenceNumber += adv;
@@ -359,7 +359,7 @@ TEST_P(AudioPipelineTest, DISABLED_fileReRun)
 
         if (pipeline->needProcess())
         {
-            pipeline->process(timestamp, true);
+            pipeline->process(timestamp);
         }
 
         if (playbackPacer.timeToNextTick(timestamp) <= 0)
@@ -413,7 +413,7 @@ TEST_F(AudioPipelineTest, DTX)
         const auto timestamp = utils::Time::getAbsoluteTime();
         if (pipeline->needProcess())
         {
-            pipeline->process(timestamp, true);
+            pipeline->process(timestamp);
         }
 
         if (playbackPacer.timeToNextTick(timestamp) <= 0)
@@ -446,7 +446,7 @@ TEST_F(AudioPipelineTest, DTX)
         header->timestamp = timestampCounter;
         timestampCounter += samplesPerPacket;
 
-        pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp, true);
+        pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
     EXPECT_LT(underruns, 7);
@@ -477,7 +477,7 @@ TEST_F(AudioPipelineTest, ptime10)
         const auto timestamp = utils::Time::getAbsoluteTime();
         if (pipeline->needProcess())
         {
-            pipeline->process(timestamp, true);
+            pipeline->process(timestamp);
         }
 
         const auto samplesPerPacketFetch = 20 * rtpFrequency / 1000;
@@ -508,7 +508,7 @@ TEST_F(AudioPipelineTest, ptime10)
         timestampCounter += samplesPerPacketSent;
         ;
 
-        pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp, true);
+        pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
     EXPECT_LT(underruns, 5);
@@ -543,7 +543,7 @@ TEST_F(AudioPipelineTest, ContinuousTone)
         const auto timestamp = utils::Time::getAbsoluteTime();
         if (pipeline->needProcess())
         {
-            pipeline->process(timestamp, true);
+            pipeline->process(timestamp);
         }
 
         if (playbackPacer.timeToNextTick(timestamp) <= 0)
@@ -583,7 +583,7 @@ TEST_F(AudioPipelineTest, ContinuousTone)
         int16_t advance = static_cast<int16_t>(header->timestamp.get() - (extendedSequenceNumber & 0xFFFFu));
         extendedSequenceNumber += advance;
 
-        pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp, true);
+        pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
     EXPECT_LT(underruns, 25);

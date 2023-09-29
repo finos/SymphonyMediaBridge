@@ -20,12 +20,10 @@ public:
     AudioReceivePipeline(uint32_t rtpFrequency, uint32_t ptime, uint32_t maxPackets, int audioLevelExtensionId = 255);
 
     // called from same thread context
-    bool onRtpPacket(uint32_t extendedSequenceNumber,
-        memory::UniquePacket packet,
-        uint64_t receiveTime,
-        bool isSsrcUsed);
+    bool onRtpPacket(uint32_t extendedSequenceNumber, memory::UniquePacket packet, uint64_t receiveTime);
+    bool onSilencedRtpPacket(uint32_t extendedSequenceNumber, memory::UniquePacket packet, uint64_t receiveTime);
 
-    void process(uint64_t timestamp, bool isSsrcUsed);
+    void process(uint64_t timestamp);
     void flush();
 
     // called from mix consumer
@@ -36,6 +34,8 @@ public:
     uint32_t getAudioSampleCount() const { return _receiveBox.audioSampleCount; }
 
 private:
+    void init(uint32_t extendedSequenceNumber, rtp::RtpHeader& header, uint64_t receiveTime);
+    double analysePacketJitter(uint32_t extendedSequenceNumber, rtp::RtpHeader& header, uint64_t receiveTime);
     bool updateTargetDelay(double delayMs);
     size_t decodePacket(uint32_t extendedSequenceNumber,
         uint64_t timestamp,

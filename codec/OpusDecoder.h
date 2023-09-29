@@ -28,6 +28,8 @@ public:
 
     int32_t getLastPacketDuration();
 
+    void onUnusedPacketReceived(uint32_t extendedSequenceNumber);
+
 private:
     struct OpaqueDecoderState;
 
