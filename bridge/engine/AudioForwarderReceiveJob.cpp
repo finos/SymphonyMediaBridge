@@ -140,6 +140,8 @@ void AudioForwarderReceiveJob::run()
         return;
     }
 
+    const bool isSsrcUsed = _ssrcContext.isSsrcUsed.load();
+
     bool silence = false;
     utils::Optional<uint8_t> audioLevel;
     utils::Optional<bool> isPtt;
@@ -179,6 +181,14 @@ void AudioForwarderReceiveJob::run()
         {
             if (_ssrcContext.markNextPacket)
             {
+                if (_hasMixedAudioStreams && _ssrcContext.audioReceivePipe)
+                {
+                    _ssrcContext.audioReceivePipe->onSilencedRtpPacket(_extendedSequenceNumber,
+                        memory::makeUniquePacket(_engineMixer.getMainAllocator(),
+                            _packet->get(),
+                            rtpHeader->headerLength()),
+                        utils::Time::getAbsoluteTime());
+                }
                 return;
             }
             // Let first silent packet through to clients and barbells
@@ -218,10 +228,20 @@ void AudioForwarderReceiveJob::run()
                         _ssrcContext.rtpMap.audioLevelExtId.valueOr(255));
                 _ssrcContext.hasAudioReceivePipe = true;
             }
-            _ssrcContext.audioReceivePipe->onRtpPacket(_extendedSequenceNumber,
-                memory::makeUniquePacket(_engineMixer.getMainAllocator(), *_packet),
-                utils::Time::getAbsoluteTime(),
-                _ssrcContext.isSsrcUsed);
+            if (isSsrcUsed)
+            {
+                _ssrcContext.audioReceivePipe->onRtpPacket(_extendedSequenceNumber,
+                    memory::makeUniquePacket(_engineMixer.getMainAllocator(), *_packet),
+                    utils::Time::getAbsoluteTime());
+            }
+            else
+            {
+                _ssrcContext.audioReceivePipe->onSilencedRtpPacket(_extendedSequenceNumber,
+                    memory::makeUniquePacket(_engineMixer.getMainAllocator(),
+                        _packet->get(),
+                        rtpHeader->headerLength()),
+                    utils::Time::getAbsoluteTime());
+            }
         }
 
         if (_needAudioLevel && !audioLevel.isSet())

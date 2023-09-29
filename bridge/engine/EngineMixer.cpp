@@ -979,9 +979,8 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
                     ssrcContext->audioReceivePipe->needProcess())
                 {
                     auto& transport = audioStream.second->transport;
-                    transport.postOnQueue([ssrcContext]() {
-                        ssrcContext->audioReceivePipe->process(utils::Time::getAbsoluteTime(), ssrcContext->isSsrcUsed);
-                    });
+                    transport.postOnQueue(
+                        [ssrcContext]() { ssrcContext->audioReceivePipe->process(utils::Time::getAbsoluteTime()); });
                 }
             }
         }
