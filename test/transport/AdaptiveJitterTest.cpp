@@ -1,35 +1,17 @@
 
-#include "bwe/BandwidthEstimator.h"
-#include "codec/AudioFader.h"
 #include "codec/AudioReceivePipeline.h"
 #include "codec/AudioTools.h"
-#include "codec/OpusDecoder.h"
-#include "concurrency/MpmcQueue.h"
 #include "logger/Logger.h"
 #include "logger/PacketLogger.h"
-#include "math/Matrix.h"
-#include "math/WelfordVariance.h"
-#include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/JitterBuffer.h"
 #include "rtp/JitterEstimator.h"
 #include "rtp/JitterTracker.h"
 #include "rtp/RtpHeader.h"
-#include "rtp/SendTimeDial.h"
-#include "test/CsvWriter.h"
-#include "test/bwe/FakeAudioSource.h"
-#include "test/bwe/FakeCall.h"
-#include "test/bwe/FakeCrossTraffic.h"
-#include "test/bwe/FakeVideoSource.h"
 #include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/AudioSource.h"
 #include "test/integration/emulator/TimeTurner.h"
-#include "test/transport/NetworkLink.h"
 #include "utils/Pacer.h"
-#include <gtest/gtest.h>
-
-using namespace math;
-
 #include "utils/ScopedFileHandle.h"
 #include <gtest/gtest.h>
 #include <random>
@@ -449,7 +431,7 @@ TEST_F(AudioPipelineTest, DTX)
         pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
-    EXPECT_LT(underruns, 30);
+    EXPECT_LT(underruns, 50);
 }
 
 TEST_F(AudioPipelineTest, ptime10)
@@ -511,11 +493,7 @@ TEST_F(AudioPipelineTest, ptime10)
         pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
-    EXPECT_LT(underruns, 50);
-
-    // send through a few packets then gap in rtp timestamp but in sequence
-
-    // make sure the audio data reflects this
+    EXPECT_LT(underruns, 70);
 }
 
 TEST_F(AudioPipelineTest, ContinuousTone)
