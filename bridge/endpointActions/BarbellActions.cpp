@@ -112,9 +112,9 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     const auto responseBody = api::Generator::generateAllocateBarbellResponse(channelsDescription);
 
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
 
-    logger::debug("barbell response %s", "BarbellActions", response._body.c_str());
+    logger::debug("barbell response %s", "BarbellActions", response.body.c_str());
     return response;
 }
 
@@ -232,7 +232,7 @@ httpd::Response processBarbellPutAction(ActionContext* context,
     const std::string& conferenceId,
     const std::string& barbellId)
 {
-    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
+    const auto requestBodyJson = nlohmann::json::parse(request.body.getSpan());
     const auto actionJsonItr = requestBodyJson.find("action");
     if (actionJsonItr == requestBodyJson.end())
     {
@@ -247,7 +247,7 @@ httpd::Response processBarbellPutAction(ActionContext* context,
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-        utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
+        utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request.methodString.c_str()));
 }
 
 httpd::Response processBarbellAction(ActionContext* context,
@@ -256,13 +256,13 @@ httpd::Response processBarbellAction(ActionContext* context,
     const std::string& conferenceId,
     const std::string& barbellId)
 {
-    if (request._method == httpd::Method::DELETE)
+    if (request.method == httpd::Method::DELETE)
     {
         return deleteBarbell(context, requestLogger, conferenceId, barbellId);
     }
-    else if (request._method == httpd::Method::POST)
+    else if (request.method == httpd::Method::POST)
     {
-        const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
+        const auto requestBodyJson = nlohmann::json::parse(request.body.getSpan());
         const auto actionJsonItr = requestBodyJson.find("action");
         if (actionJsonItr == requestBodyJson.end())
         {
@@ -282,14 +282,14 @@ httpd::Response processBarbellAction(ActionContext* context,
         }
 
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-            utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request._methodString.c_str()));
+            utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request.methodString.c_str()));
     }
-    else if (request._method == httpd::Method::PUT)
+    else if (request.method == httpd::Method::PUT)
     {
         return processBarbellPutAction(context, requestLogger, request, conferenceId, barbellId);
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-        utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
+        utils::format("HTTP method '%s' not allowed on this endpoint", request.methodString.c_str()));
 }
 } // namespace bridge

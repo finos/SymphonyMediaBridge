@@ -22,13 +22,13 @@ httpd::Response handleAbout(ActionContext* context,
             srtp_get_version_string(),
             OPENSSL_VERSION_TEXT);
         httpd::Response response(httpd::StatusCode::OK, versionString);
-        response._headers["Content-type"] = "text/json";
+        response.headers["Content-type"] = "text/json";
         return response;
     }
     else if (utils::StringTokenizer::isEqual(nextToken, "health"))
     {
         httpd::Response response(httpd::StatusCode::OK, "{}");
-        response._headers["Content-type"] = "text/json";
+        response.headers["Content-type"] = "text/json";
         return response;
     }
     else if (utils::StringTokenizer::isEqual(nextToken, "capabilities"))
@@ -45,7 +45,7 @@ httpd::Response handleAbout(ActionContext* context,
         body.append("]");
 
         httpd::Response response(httpd::StatusCode::OK, body);
-        response._headers["Content-type"] = "text/json";
+        response.headers["Content-type"] = "text/json";
         return response;
     }
     else

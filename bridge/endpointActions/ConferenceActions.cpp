@@ -274,8 +274,8 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
 
     const auto responseBody = api::Generator::generateAllocateEndpointResponse(channelsDescription);
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-    response._headers["Content-type"] = "text/json";
-    logger::debug("POST response %s", "RequestHandler", response._body.c_str());
+    response.headers["Content-type"] = "text/json";
+    logger::debug("POST response %s", "RequestHandler", response.body.c_str());
     requestLogger.setResponse(response);
     return response;
 }
@@ -820,7 +820,7 @@ httpd::Response configureEndpoint(ActionContext* context,
 
     const auto responseBody = nlohmann::json::object();
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
 }
@@ -897,7 +897,7 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
 
     const auto responseBody = nlohmann::json::object();
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
 }
@@ -947,7 +947,7 @@ httpd::Response recordEndpoint(ActionContext* context,
 
     const auto responseBody = nlohmann::json::object();
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
 }
@@ -966,7 +966,7 @@ httpd::Response expireEndpoint(ActionContext* context,
 
     const auto responseBody = nlohmann::json::object();
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
 }
@@ -977,7 +977,7 @@ httpd::Response processEndpointPutRequest(ActionContext* context,
     const std::string& conferenceId,
     const std::string& endpointId)
 {
-    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
+    const auto requestBodyJson = nlohmann::json::parse(request.body.getSpan());
     const auto actionJsonItr = requestBodyJson.find("action");
     if (actionJsonItr == requestBodyJson.end())
     {
@@ -1011,7 +1011,7 @@ httpd::Response processEndpointPostRequest(ActionContext* context,
     const std::string& conferenceId,
     const std::string& endpointId)
 {
-    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
+    const auto requestBodyJson = nlohmann::json::parse(request.body.getSpan());
     const auto actionJsonItr = requestBodyJson.find("action");
     if (actionJsonItr == requestBodyJson.end())
     {

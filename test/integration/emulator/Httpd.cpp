@@ -33,7 +33,7 @@ std::unique_ptr<httpd::HttpDaemon> HttpdFactory::create(httpd::HttpRequestHandle
 httpd::Response HttpdFactory::sendRequest(httpd::Method method, const char* url, const char* body)
 {
     httpd::Request request(method);
-    request._body.append(body);
+    request.body.append(body, strlen(body));
     std::string fqUrl = url;
     if (utils::startsWith("http://", fqUrl))
     {
@@ -41,7 +41,7 @@ httpd::Response HttpdFactory::sendRequest(httpd::Method method, const char* url,
         const auto paramStart = fqUrl.find('?', urlStart + 2);
         if (paramStart != std::string::npos)
         {
-            request._url = fqUrl.substr(urlStart, paramStart - urlStart);
+            request.url = fqUrl.substr(urlStart, paramStart - urlStart);
             const auto params = fqUrl.substr(paramStart + 1);
             for (auto keyValueToken = utils::StringTokenizer::tokenize(params.c_str(), params.size(), "&");
                  !keyValueToken.empty();
@@ -50,23 +50,23 @@ httpd::Response HttpdFactory::sendRequest(httpd::Method method, const char* url,
                 auto paramSplit = utils::StringTokenizer::tokenize(keyValueToken.start, keyValueToken.length, "=");
                 if (!paramSplit.next)
                 {
-                    request._params.emplace(keyValueToken.str(), "");
+                    request.params.emplace(keyValueToken.str(), "");
                 }
                 else
                 {
-                    request._params.emplace(paramSplit.str(), utils::StringTokenizer::tokenize(paramSplit, '&').str());
+                    request.params.emplace(paramSplit.str(), utils::StringTokenizer::tokenize(paramSplit, '&').str());
                 }
             }
         }
         else
         {
-            request._url = fqUrl.substr(urlStart);
+            request.url = fqUrl.substr(urlStart);
         }
     }
     else
     {
         assert(false);
-        request._url = url;
+        request.url = url;
     }
 
     return _requestHandler->onRequest(request);

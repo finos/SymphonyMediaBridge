@@ -13,10 +13,10 @@ namespace bridge
 {
 httpd::Response getProbingInfo(ActionContext* context, RequestLogger& requestLogger, const httpd::Request& request)
 {
-    if (request._method != httpd::Method::GET)
+    if (request.method != httpd::Method::GET)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-            utils::format("HTTP method '%s' not allowed on this endpoint", request._methodString.c_str()));
+            utils::format("HTTP method '%s' not allowed on this endpoint", request.methodString.c_str()));
     }
 
     nlohmann::json responseBodyJson;
@@ -61,7 +61,7 @@ httpd::Response getProbingInfo(ActionContext* context, RequestLogger& requestLog
     responseBodyJson["ice"] = iceJson;
 
     httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
 }

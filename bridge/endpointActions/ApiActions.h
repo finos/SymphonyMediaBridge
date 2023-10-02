@@ -64,4 +64,5 @@ httpd::Response expireEndpoint(ActionContext* context,
     RequestLogger& requestLogger,
     const std::string& conferenceId,
     const std::string& endpointId);
+
 } // namespace bridge

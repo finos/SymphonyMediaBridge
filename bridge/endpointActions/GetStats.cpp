@@ -1,7 +1,7 @@
 #include "ApiActions.h"
+#include "bridge/Mixer.h"
 #include "bridge/MixerManager.h"
 #include "bridge/RequestLogger.h"
-#include "bridge/Mixer.h"
 
 namespace bridge
 {
@@ -10,7 +10,7 @@ httpd::Response handleStats(ActionContext* context, RequestLogger&, const httpd:
     auto stats = context->mixerManager.getStats();
     const auto statsDescription = stats.describe();
     httpd::Response response(httpd::StatusCode::OK, statsDescription);
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     return response;
 }
 
@@ -19,11 +19,14 @@ httpd::Response handleBarbellStats(ActionContext* context, RequestLogger&, const
     auto barbellStats = context->mixerManager.getBarbellStats();
     const auto statsDescription = barbellStats.describe();
     httpd::Response response(httpd::StatusCode::OK, statsDescription);
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     return response;
 }
 
-httpd::Response handleBarbellStats(ActionContext* context, RequestLogger&, const httpd::Request& request, const std::string& confId)
+httpd::Response handleBarbellStats(ActionContext* context,
+    RequestLogger&,
+    const httpd::Request& request,
+    const std::string& confId)
 {
     Mixer* mixer;
     auto scopedMixerLock = getConferenceMixer(context, confId, mixer);
@@ -33,7 +36,7 @@ httpd::Response handleBarbellStats(ActionContext* context, RequestLogger&, const
 
     const auto statsDescription = barbellStats.describe();
     httpd::Response response(httpd::StatusCode::OK, statsDescription);
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     return response;
 }
 

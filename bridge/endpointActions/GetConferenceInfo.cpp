@@ -27,7 +27,7 @@ httpd::Response getConferenceInfo(ActionContext* context,
     }
 
     httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
 }

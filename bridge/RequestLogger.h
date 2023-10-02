@@ -21,24 +21,24 @@ public:
         : _request(request),
           _responseStatusCode(0)
     {
-        if (shouldLog(request._url))
+        if (shouldLog(request.url))
         {
-            const auto traceIdHeader = request._headers.find("X-Trace-Id");
-            _requestId = (traceIdHeader != request._headers.end() ? traceIdHeader->second
-                                                                  : std::to_string(1000 + (++lastAutoRequestId)));
+            const auto traceIdHeader = request.headers.find("X-Trace-Id");
+            _requestId = (traceIdHeader != request.headers.end() ? traceIdHeader->second
+                                                                 : std::to_string(1000 + (++lastAutoRequestId)));
 
             logger::info("Incoming request [%s] %s %s%s",
                 "RequestHandler",
                 _requestId.c_str(),
-                request._methodString.c_str(),
-                request._url.c_str(),
+                request.methodString.c_str(),
+                request.url.c_str(),
                 request.paramsToString().c_str());
         }
     }
 
     void setResponse(const httpd::Response& response)
     {
-        _responseStatusCode = static_cast<uint32_t>(response._statusCode);
+        _responseStatusCode = static_cast<uint32_t>(response.statusCode);
     }
 
     void setErrorMessage(const std::string& message) { _errorMessages = message; }
@@ -64,7 +64,7 @@ public:
         {
             logger::error("Outgoing response for '%s' %u. Error message: %s",
                 "RequestHandler",
-                _request._url.c_str(),
+                _request.url.c_str(),
                 _responseStatusCode,
                 _errorMessages.c_str());
         }

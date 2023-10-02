@@ -11,15 +11,16 @@ namespace
 
 struct Context
 {
-    Context() : _request(nullptr), _response(nullptr) {}
-    httpd::Request* _request;
-    httpd::Response* _response;
+    Context() {}
+
+    std::unique_ptr<httpd::Request> request;
+    std::unique_ptr<httpd::Response> response;
 };
 
 int32_t getHeaders(void* cls, MHD_ValueKind, const char* key, const char* value)
 {
     auto request = reinterpret_cast<httpd::Request*>(cls);
-    request->_headers.emplace(key, value);
+    request->headers.emplace(key, value);
     return MHD_YES;
 }
 
@@ -28,11 +29,11 @@ int32_t getParams(void* cls, MHD_ValueKind, const char* key, const char* value)
     auto request = reinterpret_cast<httpd::Request*>(cls);
     if (value)
     {
-        request->_params.emplace(key, value);
+        request->params.emplace(key, value);
     }
     else
     {
-        request->_params.emplace(key, std::string());
+        request->params.emplace(key, std::string());
     }
 
     return MHD_YES;
@@ -51,8 +52,8 @@ int32_t addCorsHeaders(const httpd::Request& request, MHD_Response* response)
     {
         return result;
     }
-    const auto requestMethod = request._headers.find("Access-Control-Request-Method");
-    if (requestMethod != request._headers.cend())
+    const auto requestMethod = request.headers.find("Access-Control-Request-Method");
+    if (requestMethod != request.headers.cend())
     {
         result = MHD_add_response_header(response, "Access-Control-Allow-Methods", requestMethod->second.c_str());
         if (result != MHD_YES)
@@ -61,8 +62,8 @@ int32_t addCorsHeaders(const httpd::Request& request, MHD_Response* response)
         }
     }
 
-    const auto requestHeaders = request._headers.find("Access-Control-Request-Headers");
-    if (requestHeaders != request._headers.cend())
+    const auto requestHeaders = request.headers.find("Access-Control-Request-Headers");
+    if (requestHeaders != request.headers.cend())
     {
         result = MHD_add_response_header(response, "Access-Control-Allow-Headers", requestHeaders->second.c_str());
         if (result != MHD_YES)
@@ -76,6 +77,12 @@ int32_t addCorsHeaders(const httpd::Request& request, MHD_Response* response)
 void httpdPanicCallback(void* cls, const char* file, unsigned int line, const char* reason)
 {
     logger::error("MHD error %s at %s, %d", "httpd", reason, file, line);
+}
+
+void acquireHeadersParams(MHD_Connection* connection, httpd::Request* request)
+{
+    MHD_get_connection_values(connection, MHD_HEADER_KIND, (MHD_KeyValueIterator)(&getHeaders), request);
+    MHD_get_connection_values(connection, MHD_GET_ARGUMENT_KIND, (MHD_KeyValueIterator)(&getParams), request);
 }
 
 int32_t answerCallback(void* cls,
@@ -94,21 +101,25 @@ int32_t answerCallback(void* cls,
         if (!context)
         {
             context = new Context();
-            context->_request = new httpd::Request(method);
+            context->request = std::make_unique<httpd::Request>(method);
             *conCls = context;
+            acquireHeadersParams(connection, context->request.get());
+            if (context->request->getHeader<size_t>("Content-Length") > context->request->body.capacity())
+            {
+                return MHD_NO;
+            }
             return MHD_YES;
         }
 
         if (*uploadDataSize != 0)
         {
-            auto request = context->_request;
-            if (!request)
+            if (!context->request)
             {
                 return MHD_NO;
             }
 
-            request->_body.append(uploadData, *uploadDataSize);
-            request->_url = url;
+            context->request->body.append(uploadData, *uploadDataSize);
+            context->request->url = url;
             *uploadDataSize = 0;
             return MHD_YES;
         }
@@ -119,34 +130,31 @@ int32_t answerCallback(void* cls,
         if (!context)
         {
             context = new Context();
-            context->_request = new httpd::Request(method);
+            context->request = std::make_unique<httpd::Request>(method);
             *conCls = context;
+            acquireHeadersParams(connection, context->request.get());
             return MHD_YES;
         }
         else
         {
-            auto request = context->_request;
-            if (!request)
+            if (!context->request)
             {
                 return MHD_NO;
             }
-            request->_url = url;
+            context->request->url = url;
         }
     }
 
-    auto request = context->_request;
-    if (!request)
+    if (!context->request)
     {
         return MHD_NO;
     }
 
     auto httpRequestHandler = reinterpret_cast<httpd::HttpRequestHandler*>(cls);
-    MHD_get_connection_values(connection, MHD_HEADER_KIND, (MHD_KeyValueIterator)(&getHeaders), request);
-    MHD_get_connection_values(connection, MHD_GET_ARGUMENT_KIND, (MHD_KeyValueIterator)(&getParams), request);
-    context->_response = new httpd::Response(httpRequestHandler->onRequest(*request));
+    context->response = std::make_unique<httpd::Response>(httpRequestHandler->onRequest(*context->request));
 
     MHD_Response* mhdResponse;
-    if (context->_response->_body.empty())
+    if (context->response->body.empty())
     {
         mhdResponse = MHD_create_response_from_buffer(0, nullptr, MHD_RESPMEM_PERSISTENT);
         if (!mhdResponse)
@@ -156,14 +164,14 @@ int32_t answerCallback(void* cls,
     }
     else
     {
-        mhdResponse = MHD_create_response_from_buffer(context->_response->_body.length(),
-            const_cast<char*>(context->_response->_body.data()),
+        mhdResponse = MHD_create_response_from_buffer(context->response->body.length(),
+            const_cast<char*>(context->response->body.data()),
             MHD_RESPMEM_PERSISTENT);
         if (!mhdResponse)
         {
-            logger::error("failed to create response. %s, body %s", "Httpd", url, context->_response->_body.c_str());
+            logger::error("failed to create response. %s, body %s", "Httpd", url, context->response->body.c_str());
         }
-        for (const auto& header : context->_response->_headers)
+        for (const auto& header : context->response->headers)
         {
             const auto addHeaderResult =
                 MHD_add_response_header(mhdResponse, header.first.c_str(), header.second.c_str());
@@ -174,22 +182,22 @@ int32_t answerCallback(void* cls,
                     url,
                     header.first.c_str(),
                     header.second.c_str(),
-                    context->_response->_body.c_str());
+                    context->response->body.c_str());
             }
         }
     }
 
-    auto addCorsResult = addCorsHeaders(*request, mhdResponse);
+    auto addCorsResult = addCorsHeaders(*context->request, mhdResponse);
     if (addCorsResult != MHD_YES)
     {
-        logger::error("failed to add cors headers %s, body %s", "Httpd", url, context->_response->_body.c_str());
+        logger::error("failed to add cors headers %s, body %s", "Httpd", url, context->response->body.c_str());
     }
 
     const auto mhdQueueResponse =
-        MHD_queue_response(connection, static_cast<uint32_t>(context->_response->_statusCode), mhdResponse);
+        MHD_queue_response(connection, static_cast<uint32_t>(context->response->statusCode), mhdResponse);
     if (mhdQueueResponse != MHD_YES)
     {
-        logger::error("failed to queue response %s, body %s", "Httpd", url, context->_response->_body.c_str());
+        logger::error("failed to queue response %s, body %s", "Httpd", url, context->response->body.c_str());
     }
 
     MHD_destroy_response(mhdResponse);
@@ -208,16 +216,6 @@ void requestCompletedCallback(void*, MHD_Connection*, void** conCls, MHD_Request
     if (!context)
     {
         return;
-    }
-
-    if (context->_request)
-    {
-        delete context->_request;
-    }
-
-    if (context->_response)
-    {
-        delete context->_response;
     }
 
     delete context;
