@@ -461,7 +461,8 @@ void EngineMixer::processAudioStreams()
             for (auto& stream : _engineAudioStreams)
             {
                 auto& peerAudioStream = *stream.second;
-                if (peerAudioStream.remoteSsrc.isSet() && peerAudioStream.transport.isConnected() &&
+                if (stream.second->endpointIdHash != audioStream->endpointIdHash &&
+                    peerAudioStream.remoteSsrc.isSet() && peerAudioStream.transport.isConnected() &&
                     areNeighbours(audioStream->neighbours, peerAudioStream.neighbours))
                 {
                     auto* neighbourAudioBuffer = _mixerSsrcAudioBuffers.getItem(peerAudioStream.remoteSsrc.get());
