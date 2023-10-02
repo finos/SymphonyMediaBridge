@@ -101,7 +101,7 @@ int32_t answerCallback(void* cls,
         if (!context)
         {
             context = new Context();
-            context->request = std::make_unique<httpd::Request>(method);
+            context->request = std::make_unique<httpd::Request>(method, url);
             *conCls = context;
             acquireHeadersParams(connection, context->request.get());
             if (context->request->getHeader<size_t>("Content-Length") > context->request->body.capacity())
@@ -119,7 +119,6 @@ int32_t answerCallback(void* cls,
             }
 
             context->request->body.append(uploadData, *uploadDataSize);
-            context->request->url = url;
             *uploadDataSize = 0;
             return MHD_YES;
         }
@@ -130,7 +129,7 @@ int32_t answerCallback(void* cls,
         if (!context)
         {
             context = new Context();
-            context->request = std::make_unique<httpd::Request>(method);
+            context->request = std::make_unique<httpd::Request>(method, url);
             *conCls = context;
             acquireHeadersParams(connection, context->request.get());
             return MHD_YES;
@@ -141,7 +140,6 @@ int32_t answerCallback(void* cls,
             {
                 return MHD_NO;
             }
-            context->request->url = url;
         }
     }
 

@@ -49,7 +49,7 @@ httpd::Response ApiRequestHandler::handleConferenceRequest(RequestLogger& reques
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-        utils::format("HTTP method '%s' not allowed on this endpoint", request.methodString.c_str()));
+        utils::format("HTTP method '%s' not allowed on this endpoint", request.getMethodString()));
 }
 
 httpd::Response ApiRequestHandler::handleConferenceRequest(RequestLogger& requestLogger,
@@ -62,7 +62,7 @@ httpd::Response ApiRequestHandler::handleConferenceRequest(RequestLogger& reques
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-        utils::format("HTTP method '%s' not allowed on this endpoint", request.methodString.c_str()));
+        utils::format("HTTP method '%s' not allowed on this endpoint", request.getMethodString()));
 }
 
 httpd::Response ApiRequestHandler::handleEndpointRequest(RequestLogger& requestLogger,
@@ -88,7 +88,7 @@ httpd::Response ApiRequestHandler::handleEndpointRequest(RequestLogger& requestL
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-        utils::format("HTTP method '%s' not allowed on this endpoint", request.methodString.c_str()));
+        utils::format("HTTP method '%s' not allowed on this endpoint", request.getMethodString()));
 }
 
 httpd::Response ApiRequestHandler::onRequest(const httpd::Request& request)

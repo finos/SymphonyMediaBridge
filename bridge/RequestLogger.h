@@ -30,7 +30,7 @@ public:
             logger::info("Incoming request [%s] %s %s%s",
                 "RequestHandler",
                 _requestId.c_str(),
-                request.methodString.c_str(),
+                request.getMethodString(),
                 request.url.c_str(),
                 request.paramsToString().c_str());
         }

@@ -247,7 +247,7 @@ httpd::Response processBarbellPutAction(ActionContext* context,
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-        utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request.methodString.c_str()));
+        utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request.getMethodString()));
 }
 
 httpd::Response processBarbellAction(ActionContext* context,
@@ -282,7 +282,7 @@ httpd::Response processBarbellAction(ActionContext* context,
         }
 
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
-            utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request.methodString.c_str()));
+            utils::format("Unknown action '%s' on endpoint %s ", action.c_str(), request.getMethodString()));
     }
     else if (request.method == httpd::Method::PUT)
     {
@@ -290,6 +290,6 @@ httpd::Response processBarbellAction(ActionContext* context,
     }
 
     throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-        utils::format("HTTP method '%s' not allowed on this endpoint", request.methodString.c_str()));
+        utils::format("HTTP method '%s' not allowed on this endpoint", request.getMethodString()));
 }
 } // namespace bridge

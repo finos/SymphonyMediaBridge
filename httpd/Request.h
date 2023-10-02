@@ -81,17 +81,16 @@ const char* methodToString(Method method)
         return "PUT";
     default:
         assert(false);
+        return "unknown";
     }
 }
 } // namespace
 
 struct Request
 {
-    explicit Request(const char* requestMethod) : method(methodFromString(requestMethod)), methodString(requestMethod)
-    {
-    }
+    explicit Request(const char* requestMethod, const char* url) : method(methodFromString(requestMethod)), url(url) {}
 
-    explicit Request(Method requestMethod) : method(requestMethod), methodString(methodToString(requestMethod)) {}
+    explicit Request(Method requestMethod, const char* url) : method(requestMethod), url(url) {}
 
     std::string paramsToString() const
     {
@@ -153,9 +152,10 @@ struct Request
         return 0;
     }
 
+    const char* getMethodString() const { return methodToString(method); }
+
     const Method method;
-    const std::string methodString;
-    std::string url;
+    const std::string url;
     std::unordered_map<std::string, std::string> headers;
     std::unordered_map<std::string, std::string> params;
     Body body;

@@ -16,7 +16,7 @@ httpd::Response getProbingInfo(ActionContext* context, RequestLogger& requestLog
     if (request.method != httpd::Method::GET)
     {
         throw httpd::RequestErrorException(httpd::StatusCode::METHOD_NOT_ALLOWED,
-            utils::format("HTTP method '%s' not allowed on this endpoint", request.methodString.c_str()));
+            utils::format("HTTP method '%s' not allowed on this endpoint", request.getMethodString()));
     }
 
     nlohmann::json responseBodyJson;
