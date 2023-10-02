@@ -59,7 +59,11 @@ public:
         size_t sampleRate);
 
     static void applyHannWindow(CmplxArray& x);
+
     static void listFrequencies(CmplxArray& frequencyTransform, uint32_t sampleRate, std::vector<double>& frequencies);
+    static void listFrequenciesNew(CmplxArray& frequencyTransform,
+        uint32_t sampleRate,
+        std::vector<double>& frequencies);
     static void listPeaks(const CmplxArray& frequencyTransform,
         uint32_t sampleRate,
         std::vector<double>& frequencies,

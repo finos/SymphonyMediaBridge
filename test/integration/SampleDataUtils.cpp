@@ -441,6 +441,24 @@ void SampleDataUtils::listFrequencies(CmplxArray& frequencyTransform,
     std::vector<double>& frequencies)
 {
     const double freqDelta = static_cast<double>(sampleRate) / frequencyTransform.size();
+    double delta = 0;
+    const double threshold = frequencyTransform.size() * 0.01;
+    for (size_t i = 1; i < frequencyTransform.size() / 2; ++i)
+    {
+        auto prevDelta = delta;
+        delta = std::abs(frequencyTransform[i]) - std::abs(frequencyTransform[i - 1]);
+        if (prevDelta > 0 && delta < 0 && std::abs(frequencyTransform[i - 1]) > threshold && prevDelta > threshold / 2)
+        {
+            frequencies.push_back(freqDelta * (i - 1));
+        }
+    }
+}
+
+void SampleDataUtils::listFrequenciesNew(CmplxArray& frequencyTransform,
+    uint32_t sampleRate,
+    std::vector<double>& frequencies)
+{
+    const double freqDelta = static_cast<double>(sampleRate) / frequencyTransform.size();
 
     size_t maxItem = 0;
     for (size_t i = 1; i < frequencyTransform.size() / 2; ++i)

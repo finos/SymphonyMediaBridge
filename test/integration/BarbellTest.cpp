@@ -12,6 +12,7 @@
 #include "external/http.h"
 #include "jobmanager/JobManager.h"
 #include "jobmanager/WorkerThread.h"
+#include "math.h"
 #include "memory/PacketPoolAllocator.h"
 #include "nlohmann/json.hpp"
 #include "test/bwe/FakeVideoSource.h"
@@ -37,7 +38,6 @@
 #include <memory>
 #include <sstream>
 #include <unordered_set>
-#include "math.h"
 
 BarbellTest::BarbellTest() {}
 
@@ -348,8 +348,11 @@ TEST_F(BarbellTest, simpleBarbell)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            if (data.dominantFrequencies.size() >= 2)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            }
         }
 
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;
@@ -703,7 +706,10 @@ TEST_F(BarbellTest, barbellStats)
         // Gather SPECIFIC conference's barbell stats from BB 1 (there is only one conference):
         nlohmann::json statsResponseBody1;
         std::string statsRequestUrl = std::string(baseUrl) + "/stats/barbell/" + conf.getId();
-        auto barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(_httpd, statsRequestUrl, 1500 * utils::Time::ms, statsResponseBody1);
+        auto barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            statsRequestUrl,
+            1500 * utils::Time::ms,
+            statsResponseBody1);
         EXPECT_TRUE(barbellStatsRequest);
 
         logger::debug("%s %s", "bbTest", statsRequestUrl.c_str(), statsResponseBody1.dump(4).c_str());
@@ -711,7 +717,10 @@ TEST_F(BarbellTest, barbellStats)
         // Gather ALL barbell stats from BB 2:
         nlohmann::json statsResponseBody2;
         statsRequestUrl = std::string(baseUrl2) + "/stats/barbell";
-        barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(&httpd2, statsRequestUrl, 1500 * utils::Time::ms, statsResponseBody2);
+        barbellStatsRequest = emulator::awaitResponse<HttpGetRequest>(&httpd2,
+            statsRequestUrl,
+            1500 * utils::Time::ms,
+            statsResponseBody2);
         EXPECT_TRUE(barbellStatsRequest);
 
         logger::debug("%s %s", "bbTest", statsRequestUrl.c_str(), statsResponseBody2.dump(4).c_str());
@@ -765,14 +774,18 @@ TEST_F(BarbellTest, barbellStats)
             EXPECT_NE(s1["audio"]["inbound"]["packets"], 0);
             EXPECT_NE(s1["audio"]["outbound"]["packets"], 0);
 
-            double packetsCompareInPercent = 100.0 * fabs((float)s1["audio"]["inbound"]["packets"] - (float)s2["audio"]["outbound"]["packets"])/(float)s1["audio"]["inbound"]["packets"];
+            double packetsCompareInPercent = 100.0 *
+                fabs((float)s1["audio"]["inbound"]["packets"] - (float)s2["audio"]["outbound"]["packets"]) /
+                (float)s1["audio"]["inbound"]["packets"];
             EXPECT_NEAR(packetsCompareInPercent, 0.0, 5.0);
 
             // Octets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
             EXPECT_NE(s1["audio"]["inbound"]["octets"], 0);
             EXPECT_NE(s1["audio"]["outbound"]["octets"], 0);
 
-            double octetsCompareInPercent = 100.0 * fabs((float)s1["audio"]["inbound"]["octets"] - (float)s2["audio"]["outbound"]["octets"])/(float)s1["audio"]["inbound"]["octets"];
+            double octetsCompareInPercent = 100.0 *
+                fabs((float)s1["audio"]["inbound"]["octets"] - (float)s2["audio"]["outbound"]["octets"]) /
+                (float)s1["audio"]["inbound"]["octets"];
             EXPECT_NEAR(octetsCompareInPercent, 0.0, 5.0);
 
             // VIDEO:
@@ -803,14 +816,18 @@ TEST_F(BarbellTest, barbellStats)
             EXPECT_NE(s1["video"]["inbound"]["packets"], 0);
             EXPECT_NE(s1["video"]["outbound"]["packets"], 0);
 
-            packetsCompareInPercent = 100.0 * fabs((float)s1["video"]["inbound"]["packets"] - (float)s2["video"]["outbound"]["packets"])/(float)s1["video"]["inbound"]["packets"];
+            packetsCompareInPercent = 100.0 *
+                fabs((float)s1["video"]["inbound"]["packets"] - (float)s2["video"]["outbound"]["packets"]) /
+                (float)s1["video"]["inbound"]["packets"];
             EXPECT_NEAR(packetsCompareInPercent, 0.0, 5.0);
 
             // Octets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
             EXPECT_NE(s1["video"]["inbound"]["octets"], 0);
             EXPECT_NE(s1["video"]["outbound"]["octets"], 0);
 
-            octetsCompareInPercent = 100.0 * fabs((float)s1["video"]["inbound"]["octets"] - (float)s2["video"]["outbound"]["octets"])/(float)s1["video"]["inbound"]["octets"];
+            octetsCompareInPercent = 100.0 *
+                fabs((float)s1["video"]["inbound"]["octets"] - (float)s2["video"]["outbound"]["octets"]) /
+                (float)s1["video"]["inbound"]["octets"];
             EXPECT_NEAR(octetsCompareInPercent, 0.0, 5.0);
         }
 
@@ -835,8 +852,11 @@ TEST_F(BarbellTest, barbellStats)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            if (data.dominantFrequencies.size() >= 2)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            }
         }
 
         std::unordered_map<uint32_t, transport::ReportSummary> transportSummary1;

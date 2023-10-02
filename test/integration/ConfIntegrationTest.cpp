@@ -215,8 +215,11 @@ TEST_F(IntegrationTest, ptime10)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            if (data.dominantFrequencies.size() >= 2)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            }
 
             if (2 == id)
             {
@@ -588,8 +591,11 @@ TEST_F(IntegrationTest, conferencePort)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            if (data.dominantFrequencies.size() >= 2)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            }
 
             if (2 == id)
             {
@@ -875,8 +881,11 @@ TEST_F(IntegrationTest, noAudioLevelExt)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            if (data.dominantFrequencies.size() >= 2)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            }
         }
     });
 }
@@ -975,8 +984,11 @@ TEST_F(IntegrationTest, confList)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            if (data.dominantFrequencies.size() >= 2)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            }
 
             if (2 == id)
             {
@@ -1083,8 +1095,11 @@ TEST_F(IntegrationTest, opusDecodeRate)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-            EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            if (data.dominantFrequencies.size() >= 2)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+            }
         }
     });
 }
@@ -1161,7 +1176,10 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
             {
                 EXPECT_NEAR(data.amplitudeProfile[1].second, 5725, 100);
             }
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId++], 25.0);
+            if (data.dominantFrequencies.size() >= 1)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId++], 25.0);
+            }
         }
     });
 }

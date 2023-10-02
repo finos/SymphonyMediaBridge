@@ -27,7 +27,7 @@ void fftThreadRun(const std::vector<int16_t>& recording,
 
         SampleDataUtils::applyHannWindow(testVector);
         SampleDataUtils::fft(testVector);
-        SampleDataUtils::listPeaks(testVector, sampleRate, frequencies, -18, 290);
+        SampleDataUtils::listPeaks(testVector, sampleRate, frequencies, -40, 90);
     }
 }
 
