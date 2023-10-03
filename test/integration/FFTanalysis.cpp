@@ -67,7 +67,7 @@ void analyzeRecording(const std::vector<int16_t>& recording,
 #ifdef LCHECK_BUILD
     size_t const numThreads = 2;
 #else
-    auto const numThreads = 1; // std::max(std::thread::hardware_concurrency(), 4U);
+    auto const numThreads = std::max(std::thread::hardware_concurrency(), 4U);
 #endif
 
     std::vector<std::thread> workers;
