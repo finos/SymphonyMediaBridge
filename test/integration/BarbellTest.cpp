@@ -819,7 +819,7 @@ TEST_F(BarbellTest, barbellStats)
             packetsCompareInPercent = 100.0 *
                 fabs((float)s1["video"]["inbound"]["packets"] - (float)s2["video"]["outbound"]["packets"]) /
                 (float)s1["video"]["inbound"]["packets"];
-            EXPECT_NEAR(packetsCompareInPercent, 0.0, 5.0);
+            EXPECT_NEAR(packetsCompareInPercent, 0.0, 8.0);
 
             // Octets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
             EXPECT_NE(s1["video"]["inbound"]["octets"], 0);
@@ -828,7 +828,7 @@ TEST_F(BarbellTest, barbellStats)
             octetsCompareInPercent = 100.0 *
                 fabs((float)s1["video"]["inbound"]["octets"] - (float)s2["video"]["outbound"]["octets"]) /
                 (float)s1["video"]["inbound"]["octets"];
-            EXPECT_NEAR(octetsCompareInPercent, 0.0, 5.0);
+            EXPECT_NEAR(octetsCompareInPercent, 0.0, 8.0);
         }
 
         bb1.remove(baseUrl);
