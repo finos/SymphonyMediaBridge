@@ -11,7 +11,7 @@ namespace bridge
 
 httpd::Response allocateConference(ActionContext* context, RequestLogger& requestLogger, const httpd::Request& request)
 {
-    const auto requestBodyJson = nlohmann::json::parse(request._body.getSpan());
+    const auto requestBodyJson = nlohmann::json::parse(request.body.getSpan());
     if (!requestBodyJson.is_object())
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
@@ -40,7 +40,7 @@ httpd::Response allocateConference(ActionContext* context, RequestLogger& reques
     responseJson["id"] = mixer->getId();
 
     httpd::Response response(httpd::StatusCode::OK, responseJson.dump(4));
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     requestLogger.setResponse(response);
     return response;
 }

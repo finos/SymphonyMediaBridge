@@ -30,7 +30,7 @@ public:
     bool isSuccess() const { return _success; }
 
 private:
-    emulator::HttpdFactory* _httpd;
+    emulator::HttpdFactory* const _httpd;
     std::string _id;
     bool _success;
 };

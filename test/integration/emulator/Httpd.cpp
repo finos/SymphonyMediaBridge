@@ -30,10 +30,30 @@ std::unique_ptr<httpd::HttpDaemon> HttpdFactory::create(httpd::HttpRequestHandle
     return std::make_unique<FakeHttpd>();
 }
 
+namespace
+{
+std::string formUrl(const std::string& fqUrl)
+{
+    if (utils::startsWith("http://", fqUrl))
+    {
+        const auto urlStart = fqUrl.find('/', 7);
+        const auto paramStart = fqUrl.find('?', urlStart + 2);
+        if (paramStart != std::string::npos)
+        {
+            return fqUrl.substr(urlStart, paramStart - urlStart);
+        }
+
+        return fqUrl.substr(urlStart);
+    }
+
+    return fqUrl;
+}
+} // namespace
+
 httpd::Response HttpdFactory::sendRequest(httpd::Method method, const char* url, const char* body)
 {
-    httpd::Request request(method);
-    request._body.append(body);
+    httpd::Request request(method, formUrl(url).c_str());
+    request.body.append(body, strlen(body));
     std::string fqUrl = url;
     if (utils::startsWith("http://", fqUrl))
     {
@@ -41,7 +61,6 @@ httpd::Response HttpdFactory::sendRequest(httpd::Method method, const char* url,
         const auto paramStart = fqUrl.find('?', urlStart + 2);
         if (paramStart != std::string::npos)
         {
-            request._url = fqUrl.substr(urlStart, paramStart - urlStart);
             const auto params = fqUrl.substr(paramStart + 1);
             for (auto keyValueToken = utils::StringTokenizer::tokenize(params.c_str(), params.size(), "&");
                  !keyValueToken.empty();
@@ -50,23 +69,18 @@ httpd::Response HttpdFactory::sendRequest(httpd::Method method, const char* url,
                 auto paramSplit = utils::StringTokenizer::tokenize(keyValueToken.start, keyValueToken.length, "=");
                 if (!paramSplit.next)
                 {
-                    request._params.emplace(keyValueToken.str(), "");
+                    request.params.emplace(keyValueToken.str(), "");
                 }
                 else
                 {
-                    request._params.emplace(paramSplit.str(), utils::StringTokenizer::tokenize(paramSplit, '&').str());
+                    request.params.emplace(paramSplit.str(), utils::StringTokenizer::tokenize(paramSplit, '&').str());
                 }
             }
-        }
-        else
-        {
-            request._url = fqUrl.substr(urlStart);
         }
     }
     else
     {
         assert(false);
-        request._url = url;
     }
 
     return _requestHandler->onRequest(request);

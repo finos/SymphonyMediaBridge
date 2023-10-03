@@ -38,8 +38,8 @@ bool awaitResponse(HttpdFactory* httpd,
     if (httpd)
     {
         auto response = httpd->sendRequest(RequestT::method, url.c_str(), body.c_str());
-        outBody = nlohmann::json::parse(response._body);
-        return response._statusCode <= httpd::StatusCode::NO_CONTENT;
+        outBody = nlohmann::json::parse(response.body);
+        return response.statusCode <= httpd::StatusCode::NO_CONTENT;
     }
     else
     {
@@ -65,9 +65,9 @@ bool awaitResponse(HttpdFactory* httpd, const std::string& url, const uint64_t t
     if (httpd)
     {
         auto response = httpd->sendRequest(RequestT::method, url.c_str(), "");
-        if (!response._body.empty())
+        if (!response.body.empty())
         {
-            outBody = nlohmann::json::parse(response._body);
+            outBody = nlohmann::json::parse(response.body);
         }
         return true;
     }

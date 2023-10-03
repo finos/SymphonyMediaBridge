@@ -19,20 +19,20 @@ enum class StatusCode : uint32_t
 
 struct Response
 {
-    Response(const StatusCode statusCode, std::string&& body) : _statusCode(statusCode), _body(std::move(body)) {}
-    Response(const StatusCode statusCode, const std::string& body) : _statusCode(statusCode), _body(body) {}
-    explicit Response(const StatusCode statusCode) : _statusCode(statusCode) {}
+    Response(const StatusCode statusCode, std::string&& body) : statusCode(statusCode), body(std::move(body)) {}
+    Response(const StatusCode statusCode, const std::string& body) : statusCode(statusCode), body(body) {}
+    explicit Response(const StatusCode statusCode) : statusCode(statusCode) {}
 
     Response(Response&& other)
-        : _statusCode(other._statusCode),
-          _body(std::move(other._body)),
-          _headers(std::move(other._headers))
+        : statusCode(other.statusCode),
+          body(std::move(other.body)),
+          headers(std::move(other.headers))
     {
     }
 
-    StatusCode _statusCode;
-    std::string _body;
-    std::unordered_map<std::string, std::string> _headers;
+    const StatusCode statusCode;
+    std::string body;
+    std::unordered_map<std::string, std::string> headers;
 };
 
 } // namespace httpd

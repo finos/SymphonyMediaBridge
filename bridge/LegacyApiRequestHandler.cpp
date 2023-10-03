@@ -194,12 +194,12 @@ httpd::Response LegacyApiRequestHandler::onRequest(const httpd::Request& request
 {
     try
     {
-        if (request._method == httpd::Method::OPTIONS)
+        if (request.method == httpd::Method::OPTIONS)
         {
             return httpd::Response(httpd::StatusCode::NO_CONTENT);
         }
 
-        auto token = utils::StringTokenizer::tokenize(request._url.c_str(), request._url.length(), '/');
+        auto token = utils::StringTokenizer::tokenize(request.url.c_str(), request.url.length(), '/');
 
         if (!utils::StringTokenizer::isEqual(token, "colibri") || !token.next)
         {
@@ -234,7 +234,7 @@ httpd::Response LegacyApiRequestHandler::onRequest(const httpd::Request& request
 
 httpd::Response LegacyApiRequestHandler::handleConferences(const httpd::Request& request)
 {
-    if (request._method == httpd::Method::GET)
+    if (request.method == httpd::Method::GET)
     {
         RequestLogger requestLogger(request, lastAutoRequestId);
 
@@ -245,11 +245,11 @@ httpd::Response LegacyApiRequestHandler::handleConferences(const httpd::Request&
         }
 
         httpd::Response response(httpd::StatusCode::OK, responseBodyJson.dump(4));
-        response._headers["Content-type"] = "text/json";
+        response.headers["Content-type"] = "text/json";
         requestLogger.setResponse(response);
         return response;
     }
-    else if (request._method == httpd::Method::POST)
+    else if (request.method == httpd::Method::POST)
     {
         return createConference(request);
     }
@@ -267,7 +267,7 @@ httpd::Response LegacyApiRequestHandler::createConference(const httpd::Request& 
     RequestLogger requestLogger(request, lastAutoRequestId);
     try
     {
-        const auto requestBody = request._body.build();
+        const auto requestBody = request.body.build();
         const auto requestBodyJson = nlohmann::json::parse(requestBody);
         if (!requestBodyJson.is_object())
         {
@@ -297,7 +297,7 @@ httpd::Response LegacyApiRequestHandler::createConference(const httpd::Request& 
 
         const auto responseBody = legacyapi::Generator::generate(conference);
         httpd::Response response(httpd::StatusCode::OK, responseBody.dump(4));
-        response._headers["Content-type"] = "text/json";
+        response.headers["Content-type"] = "text/json";
         requestLogger.setResponse(response);
         return response;
     }
@@ -321,7 +321,7 @@ httpd::Response LegacyApiRequestHandler::patchConference(const httpd::Request& r
 {
     RequestLogger requestLogger(request, lastAutoRequestId);
 
-    if (request._method != httpd::Method::PATCH)
+    if (request.method != httpd::Method::PATCH)
     {
         httpd::Response response(httpd::StatusCode::METHOD_NOT_ALLOWED);
         requestLogger.setResponse(response);
@@ -340,7 +340,7 @@ httpd::Response LegacyApiRequestHandler::patchConference(const httpd::Request& r
             return response;
         }
 
-        const auto requestBody = request._body.build();
+        const auto requestBody = request.body.build();
         const auto requestBodyJson = nlohmann::json::parse(requestBody);
         const auto conference = legacyapi::Parser::parse(requestBodyJson);
         if (!legacyapi::Validator::isValid(conference))
@@ -686,8 +686,8 @@ httpd::Response LegacyApiRequestHandler::patchConference(const httpd::Request& r
 
             const auto responseBody = legacyapi::Generator::generate(responseData);
             auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-            response._headers["Content-type"] = "text/json";
-            logger::debug("PATCH expired response %s", "RequestHandler", response._body.c_str());
+            response.headers["Content-type"] = "text/json";
+            logger::debug("PATCH expired response %s", "RequestHandler", response.body.c_str());
             requestLogger.setResponse(response);
             return response;
         }
@@ -703,8 +703,8 @@ httpd::Response LegacyApiRequestHandler::patchConference(const httpd::Request& r
                 responseData._id = conferenceId;
                 const auto responseBody = legacyapi::Generator::generate(responseData);
                 auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-                response._headers["Content-type"] = "text/json";
-                logger::debug("PATCH response %s", "RequestHandler", response._body.c_str());
+                response.headers["Content-type"] = "text/json";
+                logger::debug("PATCH response %s", "RequestHandler", response.body.c_str());
                 requestLogger.setResponse(response);
                 return response;
             }
@@ -926,8 +926,8 @@ httpd::Response LegacyApiRequestHandler::generatePatchConferenceResponse(const l
 
     const auto responseBody = legacyapi::Generator::generate(responseData);
     auto response = httpd::Response(httpd::StatusCode::OK, responseBody.dump());
-    response._headers["Content-type"] = "text/json";
-    logger::debug("PATCH response %s", "RequestHandler", response._body.c_str());
+    response.headers["Content-type"] = "text/json";
+    logger::debug("PATCH response %s", "RequestHandler", response.body.c_str());
     requestLogger.setResponse(response);
     return response;
 }
@@ -1386,7 +1386,7 @@ bool LegacyApiRequestHandler::expireChannel(const std::string& contentName,
 
 httpd::Response LegacyApiRequestHandler::handleStats(const httpd::Request& request)
 {
-    if (request._method != httpd::Method::GET)
+    if (request.method != httpd::Method::GET)
     {
         return httpd::Response(httpd::StatusCode::METHOD_NOT_ALLOWED);
     }
@@ -1394,7 +1394,7 @@ httpd::Response LegacyApiRequestHandler::handleStats(const httpd::Request& reque
     auto stats = _mixerManager.getStats();
     const auto statsDescription = stats.describe();
     httpd::Response response(httpd::StatusCode::OK, statsDescription);
-    response._headers["Content-type"] = "text/json";
+    response.headers["Content-type"] = "text/json";
     return response;
 }
 
