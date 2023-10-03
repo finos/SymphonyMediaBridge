@@ -638,6 +638,7 @@ set(TEST_FILES2
     test/integration/SrtpIntegrationTest.cpp
     test/integration/IntegrationCallTypes.cpp
     test/integration/IntegrationAudioTest.cpp
+    test/integration/FFTtest.cpp
 )
 
 set(LOAD_TEST_FILES

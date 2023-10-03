@@ -75,6 +75,19 @@ void logSamplesOnVerificationFailure(const char* name,
     dumpAudio(name, audioData);
 }
 
+bool containsNear(std::vector<std::pair<double, double>>& frequencies, double frequency, double difference)
+{
+    for (auto& f : frequencies)
+    {
+        if (std::abs(frequency - f.first) < difference)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 } // namespace
 
 const std::vector<const memory::Packet> SampleDataUtils::_opusRtpSamplePackets = {
@@ -360,6 +373,69 @@ void SampleDataUtils::ifft(SampleDataUtils::CmplxArray& x)
     x /= x.size();
 }
 
+void SampleDataUtils::applyHannWindow(SampleDataUtils::CmplxArray& x)
+{
+    for (size_t t = 0; t < x.size(); ++t)
+    {
+        x[t] = x[t] * 0.5 * (1.0 - std::cos(2.0 * M_PI * t / x.size()));
+    }
+}
+
+std::vector<double> SampleDataUtils::powerSpectrum(const CmplxArray& fftVector)
+{
+    std::vector<double> spectrum;
+    spectrum.reserve(fftVector.size() / 2);
+    const double scale = 2.0 / (fftVector.size() * sqrt(2));
+    for (size_t i = 0; i < fftVector.size() / 2; ++i)
+    {
+        spectrum.push_back(std::abs(fftVector[i]) * scale);
+    }
+    return spectrum;
+}
+
+std::valarray<double> SampleDataUtils::powerSpectrumDB(const CmplxArray& fftVector)
+{
+    std::valarray<double> spectrum(fftVector.size() / 2);
+
+    const double scale = 2.0 / (fftVector.size() * sqrt(2));
+    for (size_t i = 0; i < fftVector.size() / 2; ++i)
+    {
+        spectrum[i] = 10 * log(std::abs(fftVector[i]) * scale);
+    }
+    return spectrum;
+}
+
+std::vector<std::pair<double, double>> SampleDataUtils::toPowerVector(std::valarray<double>& powerSpectrum,
+    size_t sampleRate)
+{
+    std::vector<std::pair<double, double>> v;
+    const double freqDelta = sampleRate / 2.0 / powerSpectrum.size();
+    double f = 0;
+    for (auto m : powerSpectrum)
+    {
+        v.push_back({f, m});
+        f += freqDelta;
+    }
+    return v;
+}
+
+std::vector<std::pair<double, double>> SampleDataUtils::isolatePeaks(std::vector<std::pair<double, double>>& powerFreq,
+    double threshold,
+    size_t sampleRate)
+{
+    const double freqDelta = static_cast<double>(sampleRate) / powerFreq.size() / 2;
+    std::vector<std::pair<double, double>> v;
+    for (auto m : powerFreq)
+    {
+        if (m.second > threshold && !containsNear(v, m.first, freqDelta * 2))
+        {
+            v.push_back(m);
+        }
+    }
+
+    return v;
+}
+
 void SampleDataUtils::listFrequencies(CmplxArray& frequencyTransform,
     uint32_t sampleRate,
     std::vector<double>& frequencies)
@@ -374,6 +450,173 @@ void SampleDataUtils::listFrequencies(CmplxArray& frequencyTransform,
         if (prevDelta > 0 && delta < 0 && std::abs(frequencyTransform[i - 1]) > threshold && prevDelta > threshold / 2)
         {
             frequencies.push_back(freqDelta * (i - 1));
+        }
+    }
+}
+
+void SampleDataUtils::listFrequenciesNew(CmplxArray& frequencyTransform,
+    uint32_t sampleRate,
+    std::vector<double>& frequencies)
+{
+    const double freqDelta = static_cast<double>(sampleRate) / frequencyTransform.size();
+
+    size_t maxItem = 0;
+    for (size_t i = 1; i < frequencyTransform.size() / 2; ++i)
+    {
+        if (std::abs(frequencyTransform[i]) > std::abs(frequencyTransform[maxItem]))
+        {
+            maxItem = i;
+        }
+    }
+    const double scale = 1.0 / frequencyTransform.size();
+    if (scale * std::abs(frequencyTransform[maxItem]) < 0.01)
+    {
+        return;
+    }
+
+    const double peakPower = std::abs(frequencyTransform[maxItem]) * scale;
+
+    double delta = 0;
+    const double threshold = 0.01;
+    for (size_t i = 1; i < frequencyTransform.size() / 2; ++i)
+    {
+        const auto prevFrequency = freqDelta * (i - 1);
+
+        auto prevDelta = delta;
+        delta = std::abs(frequencyTransform[i]) - std::abs(frequencyTransform[i - 1]);
+        if (prevDelta > 0 && delta < 0 && std::abs(frequencyTransform[i - 1]) * scale > threshold &&
+            prevFrequency < 10000)
+        {
+            logger::debug("%.1fHz, power %.5f, delta %.8f-%.8f",
+                "",
+                prevFrequency,
+                std::abs(frequencyTransform[i - 1]) * scale,
+                prevDelta * scale,
+                delta * scale);
+        }
+        if (prevDelta > 0 && delta < 0 && std::abs(frequencyTransform[i - 1]) * scale > threshold &&
+            prevDelta * scale > threshold / 2 && std::abs(frequencyTransform[i - 1]) * scale > peakPower / 2)
+        {
+            frequencies.push_back(prevFrequency);
+        }
+    }
+}
+
+struct Frequency
+{
+    double freq = 0;
+    double power = 0;
+};
+
+bool containsNear(std::vector<double>& frequencies, double frequency, double difference = 300)
+{
+    for (auto& f : frequencies)
+    {
+        if (std::abs(frequency - f) < difference)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void SampleDataUtils::listPeaks(const CmplxArray& frequencyTransform,
+    uint32_t sampleRate,
+    std::vector<double>& frequencies,
+    const double minPowerdB,
+    const double peakWidth)
+{
+    const double freqDelta = static_cast<double>(sampleRate) / frequencyTransform.size();
+    auto freqPowers = powerSpectrum(frequencyTransform);
+
+    std::vector<Frequency> spectrum;
+
+    for (size_t i = 1; i < freqPowers.size() / 2; ++i)
+    {
+        spectrum.push_back(Frequency{freqDelta * i, freqPowers[i]});
+    }
+
+    std::sort(spectrum.begin(), spectrum.end(), [](const Frequency& f0, const Frequency& f1) {
+        return f0.power > f1.power;
+    });
+    if (spectrum[0].power < 0.0001)
+    {
+        return;
+    }
+
+    Frequency peak = spectrum[0];
+    const auto dB = 10 * log(peak.power);
+    if (dB > minPowerdB && !containsNear(frequencies, peak.freq, peakWidth))
+    {
+        frequencies.push_back(peak.freq);
+        logger::info("1st found %.2fHz, pwr %.6fdB", "", peak.freq, 10 * log(peak.power));
+    }
+    for (auto& f : spectrum)
+    {
+        const auto dB = 10 * log(f.power);
+        if (dB < minPowerdB)
+        {
+            break;
+        }
+        if (f.freq > 30 && dB > minPowerdB && !containsNear(frequencies, f.freq, peakWidth))
+        {
+            frequencies.push_back({f.freq});
+            logger::info("found %.2fHz, pwr %.6fdB", "", f.freq, dB);
+        }
+    }
+}
+
+void SampleDataUtils::topFrequencyPeaks(const CmplxArray& frequencyTransform,
+    uint32_t sampleRate,
+    uint32_t topN,
+    std::vector<double>& frequencies)
+{
+    const double freqDelta = static_cast<double>(sampleRate) / frequencyTransform.size();
+
+    size_t maxItem = 0;
+    for (size_t i = 1; i < frequencyTransform.size() / 2; ++i)
+    {
+        if (std::abs(frequencyTransform[i]) > std::abs(frequencyTransform[maxItem]))
+        {
+            maxItem = i;
+        }
+    }
+    const double scale = 1.0 / frequencyTransform.size();
+    if (scale * std::abs(frequencyTransform[maxItem]) < 0.01)
+    {
+        return;
+    }
+
+    const double threshold = 0.002;
+    double delta = 0;
+
+    const double peakFreq = maxItem * freqDelta;
+
+    for (size_t i = 1; i < frequencyTransform.size() / 2; ++i)
+    {
+        const auto prevFrequency = freqDelta * (i - 1);
+
+        auto prevDelta = delta;
+        delta = std::abs(frequencyTransform[i]) - std::abs(frequencyTransform[i - 1]);
+        if (prevDelta > 0 && delta < 0 && std::abs(frequencyTransform[i - 1]) * scale > threshold &&
+            prevFrequency < 10000 &&
+            (prevFrequency < peakFreq * 0.9 || prevFrequency > peakFreq * 1.1 || prevFrequency == peakFreq))
+        {
+            /*    logger::debug("%.1fHz, power %.5f, delta %.8f-%.8f",
+                    "",
+                    prevFrequency,
+                    std::abs(frequencyTransform[i - 1]) * scale,
+                    prevDelta * scale,
+                    delta * scale);*/
+        }
+
+        if (prevDelta > 0 && delta < 0 && std::abs(frequencyTransform[i - 1]) * scale > threshold &&
+            prevDelta * scale > threshold / 100 &&
+            (prevFrequency < peakFreq * 0.9 || prevFrequency > peakFreq * 1.1 || prevFrequency == peakFreq))
+        {
+            logger::debug("added %.1f power %.5f", "", prevFrequency, std::abs(frequencyTransform[i - 1]) * scale);
+            frequencies.push_back(prevFrequency);
         }
     }
 }

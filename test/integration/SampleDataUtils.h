@@ -50,8 +50,29 @@ public:
     using CmplxArray = std::valarray<std::complex<double>>;
     static void fft(CmplxArray& data);
     static void ifft(CmplxArray& data);
+    static std::vector<double> powerSpectrum(const CmplxArray& fftVector);
+    static std::valarray<double> powerSpectrumDB(const CmplxArray& fftVector);
+    static std::vector<std::pair<double, double>> toPowerVector(std::valarray<double>& powerSpectrum,
+        size_t sampleRate);
+    static std::vector<std::pair<double, double>> isolatePeaks(std::vector<std::pair<double, double>>& powerFreq,
+        double threshold,
+        size_t sampleRate);
+
+    static void applyHannWindow(CmplxArray& x);
 
     static void listFrequencies(CmplxArray& frequencyTransform, uint32_t sampleRate, std::vector<double>& frequencies);
+    static void listFrequenciesNew(CmplxArray& frequencyTransform,
+        uint32_t sampleRate,
+        std::vector<double>& frequencies);
+    static void listPeaks(const CmplxArray& frequencyTransform,
+        uint32_t sampleRate,
+        std::vector<double>& frequencies,
+        double minPowerdB = -50,
+        double peakWidth = 250);
+    static void topFrequencyPeaks(const CmplxArray& frequencyTransform,
+        uint32_t sampleRate,
+        uint32_t topN,
+        std::vector<double>& frequencies);
 
 private:
     static const std::vector<const memory::Packet> _opusRtpSamplePackets;

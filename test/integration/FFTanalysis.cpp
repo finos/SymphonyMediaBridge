@@ -7,23 +7,27 @@
 #include <thread>
 #include <valarray>
 
+using CmplxArray = std::valarray<std::complex<double>>;
+
 void fftThreadRun(const std::vector<int16_t>& recording,
     std::vector<double>& frequencies,
     const size_t fftWindowSize,
     size_t size,
+    uint32_t sampleRate,
     size_t numThreads,
     size_t threadId)
 {
     for (size_t cursor = 256 * threadId; cursor < size - fftWindowSize; cursor += 256 * numThreads)
     {
-        std::valarray<std::complex<double>> testVector(fftWindowSize);
+        CmplxArray testVector(fftWindowSize);
         for (uint64_t x = 0; x < fftWindowSize; ++x)
         {
             testVector[x] = std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
         }
 
+        SampleDataUtils::applyHannWindow(testVector);
         SampleDataUtils::fft(testVector);
-        SampleDataUtils::listFrequencies(testVector, codec::Opus::sampleRate, frequencies);
+        SampleDataUtils::listPeaks(testVector, sampleRate, frequencies, -40, 90);
     }
 }
 
@@ -31,25 +35,25 @@ void analyzeRecording(const std::vector<int16_t>& recording,
     std::vector<double>& frequencyPeaks,
     std::vector<std::pair<uint64_t, double>>& amplitudeProfile,
     const char* logId,
+    uint32_t sampleRate,
     uint64_t cutAtTime)
 {
-    utils::RateTracker<5> amplitudeTracker(codec::Opus::sampleRate / 10);
+    utils::RateTracker<5> amplitudeTracker(sampleRate / 10);
     const size_t fftWindowSize = 2048;
 
-    const auto limit = cutAtTime == 0 ? recording.size() : cutAtTime * codec::Opus::sampleRate / utils::Time::ms;
+    const auto limit = cutAtTime == 0 ? recording.size() : cutAtTime * sampleRate / utils::Time::ms;
     const auto size = recording.size() > limit ? limit : recording.size();
 
     for (size_t t = 0; t < size; ++t)
     {
         amplitudeTracker.update(std::abs(recording[t]), t);
-        if (t > codec::Opus::sampleRate / 10)
+        if (t > sampleRate / 10)
         {
             if (amplitudeProfile.empty() ||
-                (t - amplitudeProfile.back().first > codec::Opus::sampleRate / 10 &&
-                    std::abs(amplitudeProfile.back().second - amplitudeTracker.get(t, codec::Opus::sampleRate / 5)) >
-                        100))
+                (t - amplitudeProfile.back().first > sampleRate / 10 &&
+                    std::abs(amplitudeProfile.back().second - amplitudeTracker.get(t, sampleRate / 5)) > 100))
             {
-                amplitudeProfile.push_back(std::make_pair(t, amplitudeTracker.get(t, codec::Opus::sampleRate / 5)));
+                amplitudeProfile.push_back(std::make_pair(t, amplitudeTracker.get(t, sampleRate / 5)));
             }
         }
     }
@@ -78,6 +82,7 @@ void analyzeRecording(const std::vector<int16_t>& recording,
             std::ref(frequencies[threadId]),
             fftWindowSize,
             size,
+            sampleRate,
             numThreads,
             threadId));
     }
@@ -103,4 +108,68 @@ void analyzeRecording(const std::vector<int16_t>& recording,
     auto stop = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start);
     logger::debug("Analysis complete in %lld us", "Threaded FFT", duration.count());
+}
+
+void fftProducer(const std::vector<int16_t>& recording,
+    const size_t fftWindowSize,
+    const size_t size,
+    const uint32_t sampleRate,
+    const size_t numThreads,
+    const size_t threadId,
+    CmplxArray& spectrum)
+{
+    for (size_t cursor = fftWindowSize * threadId; cursor < size - fftWindowSize; cursor += fftWindowSize * numThreads)
+    {
+        CmplxArray testVector(fftWindowSize);
+        for (size_t x = 0; x < fftWindowSize; ++x)
+        {
+            testVector[x] = std::complex<double>(static_cast<double>(recording[x + cursor]), 0.0) / (256.0 * 128);
+        }
+
+        SampleDataUtils::applyHannWindow(testVector);
+        SampleDataUtils::fft(testVector);
+
+        spectrum += testVector;
+    }
+}
+
+CmplxArray createAudioSpectrum(const std::vector<int16_t>& recording, uint32_t sampleRate)
+{
+    const size_t fftWindowSize = 2048;
+    size_t numThreads = std::max(std::thread::hardware_concurrency(), 2U);
+    std::vector<std::thread> workers;
+
+    std::vector<CmplxArray> spectrums;
+    spectrums.reserve(numThreads);
+
+    for (size_t threadId = 0; threadId < numThreads; threadId++)
+    {
+        spectrums.push_back(CmplxArray(fftWindowSize));
+
+        workers.push_back(std::thread(fftProducer,
+            std::ref(recording),
+            fftWindowSize,
+            recording.size(),
+            sampleRate,
+            numThreads,
+            threadId,
+            std::ref(spectrums[threadId])));
+    }
+
+    for (size_t threadId = 0; threadId < numThreads; threadId++)
+    {
+        workers[threadId].join();
+    }
+
+    CmplxArray spectrum(fftWindowSize);
+    for (size_t threadId = 0; threadId < numThreads; threadId++)
+    {
+        spectrum += spectrums[threadId];
+    }
+
+    spectrum *= 1.63; // energy correction for Hann window
+    int count = recording.size() / fftWindowSize;
+    spectrum /= count;
+
+    return spectrum;
 }

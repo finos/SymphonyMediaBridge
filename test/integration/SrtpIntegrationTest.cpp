@@ -72,7 +72,10 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 2, true, 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
-            EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[id][0], 25.0);
+            if (data.dominantFrequencies.size() >= 1)
+            {
+                EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[id][0], 25.0);
+            }
 
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);

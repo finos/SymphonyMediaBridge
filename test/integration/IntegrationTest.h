@@ -195,6 +195,7 @@ public:
                 freqVector,
                 amplitudeProfile,
                 item.second->getLoggableId().c_str(),
+                codec::Opus::sampleRate,
                 mixedAudioSources ? expectedDurationSeconds * utils::Time::ms : 0);
 
             if (mixedAudioSources)
@@ -235,6 +236,10 @@ public:
         }
 
         std::sort(result.dominantFrequencies.begin(), result.dominantFrequencies.end());
+        for (auto& f : result.dominantFrequencies)
+        {
+            logger::debug("%.1fHz", "analyzeRecording", f);
+        }
         return result;
     }
 
