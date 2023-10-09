@@ -59,7 +59,7 @@ void logStackImmediate(void* const* stack, int frames, const char* logGroup)
 
         for (int i = 0; i < frames; ++i)
         {
-            logger::warnImmediate("%s", logGroup, strings[i]);
+            logger::errorImmediate("%s", logGroup, strings[i]);
         }
         free(strings);
     }
