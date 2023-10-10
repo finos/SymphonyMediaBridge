@@ -95,7 +95,7 @@ class AudioPipelineTest : public testing::TestWithParam<std::string>
 {
 public:
     void SetUp() override { utils::Time::initialize(_timeTurner); }
-    void ShutDown() { utils::Time::initialize(); }
+    void TearDown() override { utils::Time::initialize(); }
     TimeTicker _timeTurner;
 };
 

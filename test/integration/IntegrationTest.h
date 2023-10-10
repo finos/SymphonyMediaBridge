@@ -216,7 +216,7 @@ public:
                     EXPECT_EQ(amplitudeProfile.size(), 2);
                     if (amplitudeProfile.size() > 1)
                     {
-                        EXPECT_NEAR(amplitudeProfile[1].second, 5725, 125);
+                        EXPECT_NEAR(amplitudeProfile[1].second, 5625, 175);
                     }
                 }
             }

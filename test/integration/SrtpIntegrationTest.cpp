@@ -71,7 +71,6 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
         for (auto id : {0, 1})
         {
             const auto data = analyzeSpectrum<SfuClient<Channel>>(group.clients[id].get(), 6, -75, 0, true);
-            // const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 2, true, 0);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             if (data.dominantFrequencies.size() >= 1)
             {
