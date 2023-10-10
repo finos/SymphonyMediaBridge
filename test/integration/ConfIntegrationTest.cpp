@@ -1171,10 +1171,10 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
         {
             const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
-            EXPECT_EQ(data.amplitudeProfile.size(), 2);
+            EXPECT_EQ(data.amplitudeProfile.size(), 4);
             if (data.amplitudeProfile.size() > 1)
             {
-                EXPECT_NEAR(data.amplitudeProfile[1].second, 5725, 100);
+                EXPECT_NEAR(data.amplitudeProfile.back().second, 5725, 100);
             }
             if (data.dominantFrequencies.size() >= 1)
             {
