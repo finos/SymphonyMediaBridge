@@ -213,10 +213,11 @@ public:
 
                 if (checkAmplitudeProfile)
                 {
-                    EXPECT_EQ(amplitudeProfile.size(), 2);
-                    if (amplitudeProfile.size() > 1)
+                    // audio will start with a short noise floor to stabilize before going full amplitude.
+                    EXPECT_EQ(amplitudeProfile.size(), 4);
+                    if (amplitudeProfile.size() > 3)
                     {
-                        EXPECT_NEAR(amplitudeProfile[1].second, 5625, 175);
+                        EXPECT_NEAR(amplitudeProfile[3].second, 5625, 175);
                     }
                 }
             }
