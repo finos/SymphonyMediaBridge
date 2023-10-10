@@ -176,6 +176,10 @@ void LoggerThread::immediate(std::chrono::system_clock::time_point timestamp,
 
     if (_logStdOut)
     {
+        if (!std::strcmp(logLevel, "ERROR")) {
+            formatTo(stderr, localTime, logLevel, threadId, message);
+            fflush(stderr);
+        }
         formatTo(stdout, localTime, logLevel, threadId, message);
         fflush(stdout);
     }
