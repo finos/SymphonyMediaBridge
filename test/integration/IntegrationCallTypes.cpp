@@ -164,7 +164,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
                     EXPECT_EQ(data.amplitudeProfile[0].second, 0);
 
                     EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.60, 48000);
+                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.80, 48000);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);

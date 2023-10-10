@@ -75,7 +75,7 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
         }
         _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
 
-        if (_packetCount++ < 150)
+        if (_packetCount++ < 50)
         {
             // create noise floor
             for (uint64_t x = 0; x < samplesPerPacket; ++x)
