@@ -144,84 +144,79 @@ uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
 }
 } // namespace
 
-TEST(BweReRun, DISABLED_fromTrace)
+class BweRerunTrace : public testing::TestWithParam<std::string>
+{
+};
+
+TEST_P(BweRerunTrace, fromTrace)
 {
     bwe::Config config;
     config.congestion.cap.ratio = 0.5;
 
-    /* std::array<std::string, 58> traces = {"Transport-39_tcp",
-         "Transport-58_tcp",
-         "Transport-86_tcp_1ploss",
-         "Transport-105_tcp_1ploss",
-         "Transport-22-4G-2.3Mbps",
-         "Transport-1094-4G",
-         "Transport-3644-wifi",
-         "Transport-62-4G",
-         "Transport-3887-wifi",
-         "Transport-3629",
-         "Transport-14-wifi",
-         "Transport-4-wifi",
-         "Transport-6-4G-1-5Mbps",
-         "Transport-30-3G-1Mbps",
-         "Transport-32_Idre",
-         "Transport-30_oka",
-         "Transport-48_50_3G",
-         "Transport-48_60_3G",
-         "Transport-48_80_3G",
-         "Transport-22-3G",
-         "Transport-62-4G",
-         "Transport-4735-4G",
-         "Transport-42-clkdrift",
-         "Transport-44-clkdrift"};*/
-    std::array<std::string, 2> traces = {"Transport-5", "Transport-7"};
-    for (const auto& trace : traces)
+    std::string trace = GetParam();
+
+    if (trace.empty())
     {
-        if (trace.empty())
+        return;
+    }
+
+    const char* outputFolder = "./_ssdata/";
+    bwe::BandwidthEstimator estimator(config);
+    bwe::BwBurstTracker burstTracker;
+    rtp::SendTimeDial sendTimeDial;
+    logger::PacketLogReader reader(::fopen(("./_bwelogs/" + trace).c_str(), "r"));
+    uint32_t audioSsrc = identifyAudioSsrc(reader);
+    reader.rewind();
+
+    CsvWriter csvOut((outputFolder + trace + ".csv").c_str());
+    CsvWriter csvOutAll((outputFolder + trace + "All.csv").c_str());
+    logger::PacketLogItem item;
+    double prevBw = 0;
+    double prevDelay = 0;
+    uint64_t start = 0;
+    const char* legend = "time, bwo, burst, bw, q, co, delay, size, seqno, stime, rate, slowrate";
+    csvOut.writeLine("%s", legend);
+    csvOutAll.writeLine("%s", legend);
+    logger::info("processing %s", "bweRerun", trace.c_str());
+
+    utils::RateTracker<25> rate(100 * utils::Time::ms);
+    const char* formatLine = "%.2f, %.3f,%.1f,%.3f,%.3f,%.3f,%.3f,%u,%u,%.6f,%.2f, %.2f";
+
+    for (int i = 0; reader.getNext(item) && (start == 0 || item.receiveTimestamp - start < utils::Time::sec * 200); ++i)
+    {
+        rate.update(item.size * 8, item.receiveTimestamp);
+        burstTracker.onPacketReceived(item.size, item.receiveTimestamp);
+        if (item.ssrc == audioSsrc)
         {
-            break;
+            estimator.onUnmarkedTraffic(item.size, item.receiveTimestamp);
+            continue;
         }
+        start = (start == 0 ? item.receiveTimestamp : start);
+        auto localTimestamp = double(item.receiveTimestamp - start) / 1000000;
+        auto sendTime = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, item.receiveTimestamp);
 
-        const char* outputFolder = "./_ssdata/";
-        bwe::BandwidthEstimator estimator(config);
-        bwe::BwBurstTracker burstTracker;
-        rtp::SendTimeDial sendTimeDial;
-        logger::PacketLogReader reader(::fopen(("./_bwelogs/" + trace).c_str(), "r"));
-        uint32_t audioSsrc = identifyAudioSsrc(reader);
-        reader.rewind();
+        estimator.update(item.size, sendTime, item.receiveTimestamp);
+        auto bw = estimator.getEstimate(item.receiveTimestamp);
+        auto state = estimator.getState();
+        auto delay = estimator.getDelay();
+        csvOutAll.writeLine(formatLine,
+            localTimestamp,
+            bw,
+            burstTracker.getBandwidthPercentile(0.50),
+            state(1),
+            state(0),
+            state(2),
+            delay,
+            item.size,
+            item.sequenceNumber,
+            double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
+            std::min(5000.0, estimator.getReceiveRate(item.receiveTimestamp)),
+            rate.get(item.receiveTimestamp, utils::Time::ms * 2000) * utils::Time::ms);
 
-        CsvWriter csvOut((outputFolder + trace + ".csv").c_str());
-        CsvWriter csvOutAll((outputFolder + trace + "All.csv").c_str());
-        logger::PacketLogItem item;
-        double prevBw = 0;
-        double prevDelay = 0;
-        uint64_t start = 0;
-        const char* legend = "time, bwo, burst, bw, q, co, delay, size, seqno, stime, rate, slowrate";
-        csvOut.writeLine("%s", legend);
-        csvOutAll.writeLine("%s", legend);
-        logger::info("processing %s", "bweRerun", trace.c_str());
-
-        utils::RateTracker<25> rate(100 * utils::Time::ms);
-        const char* formatLine = "%.2f, %.3f,%.1f,%.3f,%.3f,%.3f,%.3f,%u,%u,%.6f,%.2f, %.2f";
-
-        for (int i = 0; reader.getNext(item) && (start == 0 || item.receiveTimestamp - start < utils::Time::sec * 200);
-             ++i)
+        if (((i % 1000) == 0) || std::fabs(delay - prevDelay) > 10 || delay > 70 ||
+            std::fabs((bw - prevBw) / prevBw) > 0.15)
         {
-            rate.update(item.size * 8, item.receiveTimestamp);
-            burstTracker.onPacketReceived(item.size, item.receiveTimestamp);
-            if (item.ssrc == audioSsrc)
-            {
-                estimator.onUnmarkedTraffic(item.size, item.receiveTimestamp);
-                continue;
-            }
-            start = (start == 0 ? item.receiveTimestamp : start);
-            auto localTimestamp = double(item.receiveTimestamp - start) / 1000000;
-            auto sendTime = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, item.receiveTimestamp);
-
-            estimator.update(item.size, sendTime, item.receiveTimestamp);
-            auto bw = estimator.getEstimate(item.receiveTimestamp);
-            auto state = estimator.getState();
-            auto delay = estimator.getDelay();
-            csvOutAll.writeLine(formatLine,
+            csvOut.writeLine(formatLine,
                 localTimestamp,
                 bw,
                 burstTracker.getBandwidthPercentile(0.50),
@@ -235,33 +230,39 @@ TEST(BweReRun, DISABLED_fromTrace)
                 std::min(5000.0, estimator.getReceiveRate(item.receiveTimestamp)),
                 rate.get(item.receiveTimestamp, utils::Time::ms * 2000) * utils::Time::ms);
 
-            if (((i % 1000) == 0) || std::fabs(delay - prevDelay) > 10 || delay > 70 ||
-                std::fabs((bw - prevBw) / prevBw) > 0.15)
-            {
-                csvOut.writeLine(formatLine,
-                    localTimestamp,
-                    bw,
-                    burstTracker.getBandwidthPercentile(0.50),
-                    state(1),
-                    state(0),
-                    state(2),
-                    delay,
-                    item.size,
-                    item.sequenceNumber,
-                    double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
-                    std::min(5000.0, estimator.getReceiveRate(item.receiveTimestamp)),
-                    rate.get(item.receiveTimestamp, utils::Time::ms * 2000) * utils::Time::ms);
-
-                prevBw = bw;
-                prevDelay = delay;
-            }
+            prevBw = bw;
+            prevDelay = delay;
         }
-        logger::info("%" PRIu64 "s finished at %.3fkbps",
-            "",
-            (item.receiveTimestamp - start) / utils::Time::sec,
-            prevBw);
     }
+    logger::info("%" PRIu64 "s finished at %.3fkbps", "", (item.receiveTimestamp - start) / utils::Time::sec, prevBw);
 }
+
+INSTANTIATE_TEST_SUITE_P(DISABLED_BweRerun,
+    BweRerunTrace,
+    testing::Values("Transport-39_tcp",
+        "Transport-58_tcp",
+        "Transport-86_tcp_1ploss",
+        "Transport-105_tcp_1ploss",
+        "Transport-22-4G-2.3Mbps",
+        "Transport-1094-4G",
+        "Transport-3644-wifi",
+        "Transport-62-4G",
+        "Transport-3887-wifi",
+        "Transport-3629",
+        "Transport-14-wifi",
+        "Transport-4-wifi",
+        "Transport-6-4G-1-5Mbps",
+        "Transport-30-3G-1Mbps",
+        "Transport-32_Idre",
+        "Transport-30_oka",
+        "Transport-48_50_3G",
+        "Transport-48_60_3G",
+        "Transport-48_80_3G",
+        "Transport-22-3G",
+        "Transport-62-4G",
+        "Transport-4735-4G",
+        "44-clkdrift",
+        "Transport-44-clkdrift"));
 
 class BweRerunLimit : public testing::TestWithParam<uint32_t>
 {
@@ -270,63 +271,6 @@ class BweRerunLimit : public testing::TestWithParam<uint32_t>
 TEST_P(BweRerunLimit, DISABLED_limitedLink)
 {
     bwe::Config config;
-    /*
-        std::array<std::string, 56> trace = {"Transport-113",
-            "Transport-116",
-            "Transport-119",
-            "Transport-122",
-            "Transport-125",
-            "Transport-128",
-            "Transport-131",
-            "Transport-134",
-            "Transport-136",
-            "Transport-138",
-            "Transport-140",
-            "Transport-148",
-            "Transport-150",
-            "Transport-152",
-            "Transport-154",
-            "Transport-156",
-            "Transport-158",
-            "Transport-181",
-            "Transport-186",
-            "Transport-191",
-            "Transport-196",
-            "Transport-198",
-            "Transport-202",
-            "Transport-204",
-            "Transport-206",
-            "Transport-208",
-            "Transport-210",
-            "Transport-212",
-            "Transport-214",
-            "Transport-223",
-            "Transport-225",
-            "Transport-231",
-            "Transport-233",
-            "Transport-235",
-            "Transport-237",
-            "Transport-239",
-            "Transport-241",
-            "Transport-243",
-            "Transport-245",
-            "Transport-247",
-            "Transport-249",
-            "Transport-251",
-            "Transport-253",
-            "Transport-255",
-            "Transport-257",
-            "Transport-259",
-            "Transport-261",
-            "Transport-263",
-            "Transport-265",
-            "Transport-267",
-            "Transport-269",
-            "Transport-271",
-            "Transport-273",
-            "Transport-275",
-            "Transport-277",
-            "Transport-317"};*/
 
     std::array<std::string, 56> trace = {"Transport-5", "Transport-20", "Transport-17"};
     memory::PacketPoolAllocator allocator(8092, "rerun");
