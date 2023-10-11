@@ -261,7 +261,6 @@ INSTANTIATE_TEST_SUITE_P(DISABLED_BweRerun,
         "Transport-22-3G",
         "Transport-62-4G",
         "Transport-4735-4G",
-        "44-clkdrift",
         "Transport-44-clkdrift"));
 
 class BweRerunLimit : public testing::TestWithParam<uint32_t>
