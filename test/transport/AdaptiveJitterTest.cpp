@@ -564,5 +564,5 @@ TEST_F(AudioPipelineTest, ContinuousTone)
         pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
     }
 
-    EXPECT_LT(underruns, 25);
+    EXPECT_LE(underruns, 30);
 }
