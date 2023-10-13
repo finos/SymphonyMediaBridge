@@ -324,6 +324,15 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
     }
 }
 
+namespace
+{
+bool isContributingToMix(const SsrcInboundContext* inboundAudioContext)
+{
+    return inboundAudioContext && inboundAudioContext->hasAudioReceivePipe.load() &&
+        inboundAudioContext->audioReceivePipe->getAudioSampleCount() > 0;
+}
+} // namespace
+
 void EngineMixer::processAudioStreams()
 {
     if (_numMixedAudioStreams == 0)
@@ -361,17 +370,6 @@ void EngineMixer::processAudioStreams()
             continue;
         }
 
-        auto isContributingToMix = false;
-        SsrcInboundContext* inboundAudioContext = nullptr;
-        if (audioStream->remoteSsrc.isSet())
-        {
-            inboundAudioContext = _ssrcInboundContexts.getItem(audioStream->remoteSsrc.get());
-            if (inboundAudioContext && inboundAudioContext->hasAudioReceivePipe.load())
-            {
-                isContributingToMix = inboundAudioContext->audioReceivePipe->getAudioSampleCount() > 0;
-            }
-        }
-
         auto audioPacket = memory::makeUniquePacket(_audioAllocator);
         if (!audioPacket)
         {
@@ -381,35 +379,37 @@ void EngineMixer::processAudioStreams()
         auto rtpHeader = rtp::RtpHeader::create(*audioPacket);
         rtpHeader->ssrc = audioStream->localSsrc;
 
-        auto payloadStart = rtpHeader->getPayload();
+        auto payloadStart = reinterpret_cast<int16_t*>(rtpHeader->getPayload());
         const auto headerLength = rtpHeader->headerLength();
         audioPacket->setLength(headerLength + payloadBytesPerPacket);
         std::memcpy(payloadStart, _mixedData, payloadBytesPerPacket);
+
+        SsrcInboundContext* inboundAudioContext =
+            (audioStream->remoteSsrc.isSet() ? _ssrcInboundContexts.getItem(audioStream->remoteSsrc.get()) : nullptr);
 
         if (!audioStream->neighbours.empty())
         {
             for (auto& stream : _engineAudioStreams)
             {
                 auto& peerAudioStream = *stream.second;
-                if (stream.second->endpointIdHash != audioStream->endpointIdHash &&
-                    peerAudioStream.remoteSsrc.isSet() && peerAudioStream.transport.isConnected() &&
+                if (peerAudioStream.remoteSsrc.isSet() &&
                     areNeighbours(audioStream->neighbours, peerAudioStream.neighbours))
                 {
                     auto neighbourContext = _ssrcInboundContexts.getItem(peerAudioStream.remoteSsrc.get());
-                    if (neighbourContext && neighbourContext->hasAudioReceivePipe.load())
+                    if (isContributingToMix(neighbourContext))
                     {
                         codec::subtractFromMix(neighbourContext->audioReceivePipe->getAudio(),
-                            reinterpret_cast<int16_t*>(payloadStart),
+                            payloadStart,
                             neighbourContext->audioReceivePipe->getAudioSampleCount() * codec::Opus::channelsPerFrame,
                             mixSampleScaleFactor);
                     }
                 }
             }
         }
-        else if (isContributingToMix)
+        else if (inboundAudioContext && isContributingToMix(inboundAudioContext))
         {
             codec::subtractFromMix(inboundAudioContext->audioReceivePipe->getAudio(),
-                reinterpret_cast<int16_t*>(payloadStart),
+                payloadStart,
                 inboundAudioContext->audioReceivePipe->getAudioSampleCount() * codec::Opus::channelsPerFrame,
                 mixSampleScaleFactor);
         }

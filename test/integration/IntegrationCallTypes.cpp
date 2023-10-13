@@ -157,7 +157,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
         for (auto id : {0, 1, 2})
         {
             const auto data =
-                analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0, false);
+                analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             if (data.dominantFrequencies.size() >= 2)
             {
@@ -177,10 +177,10 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
                 // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.80, 48000);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3600, 500);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.22, 48000);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);

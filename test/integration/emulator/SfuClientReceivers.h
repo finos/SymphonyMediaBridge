@@ -150,7 +150,7 @@ public:
 
         if (extendedSequenceNumber % 50 == 0)
         {
-            logger::info("recorded %u, %d samples", _loggableId.c_str(), extendedSequenceNumber, count);
+            logger::debug("recorded %u, %d samples", _loggableId.c_str(), extendedSequenceNumber, count);
         }
         for (int32_t i = 0; i < count; ++i)
         {
@@ -160,9 +160,12 @@ public:
 
     void dumpPcmData()
     {
-        logger::info("storing recording %zu samples, pcm16-mono", _loggableId.c_str(), _recording.size());
         utils::StringBuilder<512> fileName;
         fileName.append(_loggableId.c_str()).append("-").append(_context.ssrc);
+        logger::info("storing recording %s, %zu samples, pcm16-mono",
+            _loggableId.c_str(),
+            fileName.get(),
+            _recording.size());
 
         FILE* logFile = ::fopen(fileName.get(), "wr");
         ::fwrite(_recording.data(), _recording.size(), 2, logFile);

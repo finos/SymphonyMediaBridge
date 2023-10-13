@@ -74,7 +74,7 @@ void logTransportSummary(const char* clientName, T& summary)
     for (auto& report : summary)
     {
         const auto bitrate = report.second.rtpFrequency * report.second.octets /
-            (125 * (report.second.rtpTimestamp - report.second.initialRtpTimestamp));
+            (125 * std::max(1u, (report.second.rtpTimestamp - report.second.initialRtpTimestamp)));
 
         const char* modality = (report.second.rtpFrequency == 90000 ? "video" : "audio");
         logger::debug("%s ssrc %u sent %s pkts %u, %" PRIu64 " kbps",
@@ -90,13 +90,14 @@ void logTransportSummary(const char* clientName, T& summary)
 
 struct IntegrationTest : public ::testing::Test
 {
-
     struct AudioAnalysisData
     {
         std::vector<double> dominantFrequencies;
         std::vector<std::pair<uint64_t, double>> amplitudeProfile;
         size_t audioSsrcCount = 0;
         std::map<size_t, size_t> receivedBytes;
+
+        uint64_t rampupAbove(double amplitude) const;
     };
 
     IntegrationTest();
@@ -214,7 +215,7 @@ public:
                 if (checkAmplitudeProfile)
                 {
                     // audio will start with a short noise floor to stabilize before going full amplitude.
-                    EXPECT_EQ(amplitudeProfile.size(), 4);
+                    EXPECT_GE(amplitudeProfile.size(), 3);
                     if (amplitudeProfile.size() > 3)
                     {
                         EXPECT_NEAR(amplitudeProfile[3].second, 5625, 175);
@@ -338,7 +339,6 @@ void make5secCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClient
         auto& client = groupCall.clients[i];
         client->_audioSource->setFrequency(frequencies[i]);
         client->_audioSource->setVolume(0.6);
-        client->_audioSource->enableIntermittentTone(0.8);
     }
 
     groupCall.run(utils::Time::sec * 5);

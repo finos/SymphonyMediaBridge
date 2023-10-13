@@ -103,8 +103,8 @@ TEST_F(IceTransportEmuTest, plainNewApi)
                 // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
-
+                    // rampup starts earlier with jitter buffer
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
                     EXPECT_NEAR(data.amplitudeProfile.back().second, 3652, 250);
                 }
 

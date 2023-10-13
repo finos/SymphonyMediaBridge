@@ -51,7 +51,8 @@ void analyzeRecording(const std::vector<int16_t>& recording,
         {
             if (amplitudeProfile.empty() ||
                 (t - amplitudeProfile.back().first > sampleRate / 10 &&
-                    std::abs(amplitudeProfile.back().second - amplitudeTracker.get(t, sampleRate / 5)) > 100))
+                    std::abs(amplitudeProfile.back().second - amplitudeTracker.get(t, sampleRate / 5)) >
+                        amplitudeProfile.back().second * 0.2))
             {
                 amplitudeProfile.push_back(std::make_pair(t, amplitudeTracker.get(t, sampleRate / 5)));
             }
@@ -96,8 +97,9 @@ void analyzeRecording(const std::vector<int16_t>& recording,
     {
         for (size_t i = 0; i < frequencies[threadId].size() && i < 50; ++i)
         {
-            if (std::find(frequencyPeaks.begin(), frequencyPeaks.end(), frequencies[threadId][i]) ==
-                frequencyPeaks.end())
+            if (std::find_if(frequencyPeaks.begin(), frequencyPeaks.end(), [&](double f) {
+                    return std::abs(f - frequencies[threadId][i]) < 90;
+                }) == frequencyPeaks.end())
             {
                 logger::debug("added new freq %.3f", logId, frequencies[threadId][i]);
                 frequencyPeaks.push_back(frequencies[threadId][i]);
