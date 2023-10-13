@@ -5,7 +5,7 @@
 #include "math/helpers.h"
 #include "memory/Allocator.h"
 
-#define DEBUG_JB 1
+#define DEBUG_JB 0
 
 #if DEBUG_JB
 #define JBLOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
@@ -490,7 +490,7 @@ void AudioReceivePipeline::process(uint64_t timestamp)
 
         if ((header->sequenceNumber.get() % 100) == 0 && !_jitterBuffer.empty())
         {
-            logger::debug("%u pcm %u JB %u",
+            JBLOG("%u pcm %u JB %u",
                 "AudioReceivePipeline",
                 _ssrc,
                 newBufferLevel,
