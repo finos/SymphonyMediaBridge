@@ -335,6 +335,7 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
 size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
 {
     codec::clearStereo(_receiveBox.audio, _samplesPerPacket);
+    _receiveBox.audioSampleCount = 0;
     const uint32_t bufferLevel = _pcmData.size() / CHANNELS;
     if (bufferLevel < sampleCount)
     {
@@ -380,6 +381,8 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
 
     // JBLOG("fetched %zu", "AudioReceivePipeline", sampleCount);
     _pcmData.fetch(_receiveBox.audio, sampleCount * CHANNELS);
+    _receiveBox.audioSampleCount = sampleCount;
+
     if (_receiveBox.underrunCount > 0)
     {
         logger::debug("%u fade in after %u underruns, TD %u",
