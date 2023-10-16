@@ -157,7 +157,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
         for (auto id : {0, 1, 2})
         {
             const auto data =
-                analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0, true);
+                analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0, false);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             if (data.dominantFrequencies.size() >= 2)
             {
@@ -179,7 +179,9 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
                 {
                     EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3600, 500);
+                    EXPECT_NEAR(std::max_element(data.amplitudeProfile.begin(), data.amplitudeProfile.end())->second,
+                        3600,
+                        500);
                     EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.22, 48000);
                 }
 

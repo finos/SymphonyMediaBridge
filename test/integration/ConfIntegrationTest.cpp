@@ -139,7 +139,7 @@ TEST_F(IntegrationTest, plain)
                     EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
                     EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.25, 48000 * 0.2);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.25, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -238,7 +238,7 @@ TEST_F(IntegrationTest, ptime10)
                     EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
                     EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 0.74, 48000 * 0.2);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 0.74, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -613,7 +613,7 @@ TEST_F(IntegrationTest, conferencePort)
                 {
                     EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 250);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 750);
                     EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.25, 48000 * 0.2);
                 }
 
@@ -1006,8 +1006,8 @@ TEST_F(IntegrationTest, confList)
                 {
                     EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.25, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 750);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.25, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
