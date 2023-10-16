@@ -342,12 +342,11 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
         ++_receiveBox.underrunCount;
         if (_receiveBox.underrunCount % 100 == 0)
         {
-            logger::info("%u underrun %u, samples %u, TD %ums",
+            logger::info("%u underrun %u, samples %u",
                 "AudioReceivePipeline",
                 _ssrc,
                 _receiveBox.underrunCount,
-                bufferLevel,
-                _targetDelay * 1000 / _rtpFrequency);
+                bufferLevel);
         }
 
         if (bufferLevel > 0)
@@ -355,11 +354,10 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
             _pcmData.fetch(_receiveBox.audio, sampleCount * CHANNELS);
             codec::AudioLinearFade fader(bufferLevel);
             fader.fadeOutStereo(_receiveBox.audio, bufferLevel);
-            logger::debug("%u fade out %u, TD %ums, requested %zu, pcm %zu",
+            logger::debug("%u fade out %u, requested %zu, pcm %zu",
                 "AudioReceivePipeline",
                 _ssrc,
                 bufferLevel,
-                _targetDelay * 1000 / _rtpFrequency,
                 sampleCount,
                 _pcmData.size() / CHANNELS);
             _receiveBox.audioSampleCount = sampleCount;
@@ -369,10 +367,7 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
         {
             _pcmData.replay(_receiveBox.audio, sampleCount * CHANNELS);
             codec::swingTail(_receiveBox.audio, 48000, sampleCount);
-            logger::debug("%u appended tail, TD %ums",
-                "AudioReceivePipeline",
-                _ssrc,
-                _targetDelay * 1000 / _rtpFrequency);
+            logger::debug("%u appended tail", "AudioReceivePipeline", _ssrc);
             _receiveBox.audioSampleCount = sampleCount;
             return sampleCount;
         }
@@ -385,11 +380,7 @@ size_t AudioReceivePipeline::fetchStereo(size_t sampleCount)
 
     if (_receiveBox.underrunCount > 0)
     {
-        logger::debug("%u fade in after %u underruns, TD %u",
-            "AudioReceivePipeline",
-            _ssrc,
-            _receiveBox.underrunCount,
-            _targetDelay);
+        logger::debug("%u fade in after %u underruns", "AudioReceivePipeline", _ssrc, _receiveBox.underrunCount);
         codec::AudioLinearFade fader(sampleCount);
         fader.fadeInStereo(_receiveBox.audio, sampleCount);
         _receiveBox.underrunCount = 0;
