@@ -1,6 +1,9 @@
 import { addSimulcastSdpLocalDescription } from './simulcast';
 
 const joinButton: HTMLButtonElement = <HTMLButtonElement>document.getElementById('join');
+const startRecordingButton: HTMLButtonElement = <HTMLButtonElement>document.getElementById('start-recording');
+const stopRecordingButton: HTMLButtonElement = <HTMLButtonElement>document.getElementById('stop-recording');
+const downloadRecordingButton: HTMLButtonElement = <HTMLButtonElement>document.getElementById('download-recording');
 const endpointIdLabel: HTMLLabelElement = <HTMLLabelElement>document.getElementById('endpointId');
 const dominantSpeakerLabel: HTMLLabelElement = <HTMLLabelElement>document.getElementById('dominantSpeaker');
 const audioElementsDiv: HTMLDivElement = <HTMLDivElement>document.getElementById('audioElements');
@@ -9,7 +12,10 @@ let peerConnection: RTCPeerConnection|undefined = undefined
 let localMediaStream: MediaStream|undefined = undefined;
 let localDataChannel: RTCDataChannel|undefined = undefined;
 let endpointId: string|undefined = undefined;
-let remoteMediaStreams: Set<string> = new Set();
+let mixedStreamDestinationNode : MediaStreamAudioDestinationNode|undefined = undefined;
+let remoteMediaStreams: Map<string, MediaStream> = new Map();
+let recordedBlobs : Blob[] = [];
+let mediaRecorder : MediaRecorder|undefined = undefined;
 
 const serverUrl = 'https://localhost:8081/conferences/';
 
@@ -84,6 +90,7 @@ async function onIceGatheringStateChange(event: Event) {
             const result = await fetch(request);
 
             console.log('Answer result ' + result.status);
+            startRecordingButton.style.display = "block";
         }
     }
 }
@@ -94,7 +101,7 @@ function onTrack(event: RTCTrackEvent) {
             continue;
         }
 
-        remoteMediaStreams.add(stream.id);
+        remoteMediaStreams.set(stream.id, stream);
         console.log(`Added remote stream ${stream.id} audio ${stream.getAudioTracks().length} video ${stream.getVideoTracks().length}`);
 
         if (stream.getAudioTracks().length !== 0) {
@@ -140,6 +147,90 @@ function onDataChannelMessage(event: MessageEvent<any>) {
     }
 }
 
+function startRecording() {
+    if (mixedStreamDestinationNode !== undefined) {
+        console.log("Recording is already active");
+        return;
+    }
+
+    const mimeType = "audio/webm;codecs=opus";
+    if (!MediaRecorder.isTypeSupported(mimeType)) {
+        console.error(`MimeType is not supported: ${mimeType}`);
+        throw new Error(`MimeType is not supported: ${mimeType}`);
+    }
+
+    const recordingAudioContext = new AudioContext();
+    mixedStreamDestinationNode = recordingAudioContext.createMediaStreamDestination();
+    //for (const receiver of peerConnection.getReceivers()) {
+    //    if (receiver.track && receiver.track.kind === "audio") {
+    //        console.log(`Adding remote stream ${receiver.track.id} to the recording`)
+    //        const s = recordingAudioContext.createMediaStreamSource(new MediaStream([receiver.track]));
+    //        s.connect(mixedStreamDestinationNode);
+    //    }
+    //}
+    //console.log(`Number of remote streams ${remoteMediaStreams.size}`);
+
+    //const sources = audioTracks.map(t => ac.createMediaStreamSource(new MediaStream([t])));
+
+    for (const remoteStream of remoteMediaStreams) {
+        if (remoteStream[1].getAudioTracks().length !== 0) {
+            console.log(`Adding remote stream ${remoteStream[0]} to the recording`)
+            const audioStream = recordingAudioContext.createMediaStreamSource(remoteStream[1]);
+            audioStream.connect(mixedStreamDestinationNode);
+        }
+    }
+
+    const localSource = recordingAudioContext.createMediaStreamSource(localMediaStream);
+    localSource.connect(mixedStreamDestinationNode);
+
+    const options = {mimeType};
+    mediaRecorder= new MediaRecorder(mixedStreamDestinationNode.stream, options);
+    mediaRecorder.ondataavailable = handleRecordingData;
+    mediaRecorder.onstop = (event) => {
+        console.log('Recorder stopped: ', event);
+        console.log('Recorded Blobs: ', recordedBlobs);
+      };
+    mediaRecorder.start();
+    console.log('MediaRecorder started', mediaRecorder);
+
+    startRecordingButton.style.display = "none";
+    stopRecordingButton.style.display = "block";
+    downloadRecordingButton.style.display = "none";
+}
+
+function stopRecording() {
+    if (mediaRecorder) {
+        mediaRecorder.stop();
+        startRecordingButton.style.display = "block";
+        stopRecordingButton.style.display = "none";
+        downloadRecordingButton.style.display = "block";
+        mediaRecorder = undefined;
+    }
+  }
+
+function handleRecordingData(event: BlobEvent) {
+    console.log('handleDataAvailable', event);
+    if (event.data && event.data.size > 0) {
+        console.log("Pushed new data to recorder");
+      recordedBlobs.push(event.data);
+    }
+}
+
+function downloadRecorder() {
+    const blob = new Blob(recordedBlobs, {type: 'audio/webm'});
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.style.display = 'none';
+  a.href = url;
+  a.download = 'test.webm';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  }, 100);
+}
+
 async function joinClicked() {
     console.log('Join clicked');
 
@@ -157,7 +248,7 @@ async function joinClicked() {
 
     localDataChannel = peerConnection.createDataChannel("webrtc-datachannel", { ordered: true });
     localDataChannel.onmessage = onDataChannelMessage;
-        
+
     const url = serverUrl + 'endpoints/';
     const body = {};
 
@@ -180,6 +271,13 @@ async function joinClicked() {
 
 function main() {
     joinButton.onclick = joinClicked;
+    startRecordingButton.onclick = startRecording;
+    stopRecordingButton.onclick = stopRecording;
+    downloadRecordingButton.onclick = downloadRecorder;
+
+    startRecordingButton.style.display = "none";
+    stopRecordingButton.style.display = "none";
+    downloadRecordingButton.style.display = "none";
 }
 
 main();
