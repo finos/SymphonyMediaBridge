@@ -34,8 +34,8 @@ public:
     uint32_t getAudioSampleCount() const { return _receiveBox.audioSampleCount; }
 
 private:
-    void init(uint32_t extendedSequenceNumber, rtp::RtpHeader& header, uint64_t receiveTime);
-    double analysePacketJitter(uint32_t extendedSequenceNumber, rtp::RtpHeader& header, uint64_t receiveTime);
+    void init(uint32_t extendedSequenceNumber, const rtp::RtpHeader& header, uint64_t receiveTime);
+    double analysePacketJitter(uint32_t extendedSequenceNumber, const rtp::RtpHeader& header, uint64_t receiveTime);
     bool updateTargetDelay(double delayMs);
     size_t decodePacket(uint32_t extendedSequenceNumber,
         uint64_t timestamp,
