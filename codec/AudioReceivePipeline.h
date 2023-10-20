@@ -13,9 +13,45 @@ namespace codec
 /**
  * Audio receive pipe line that performs adaptive jitter buffering and cut off concealment.
  * PCM data buffer is single produce single consumer thread safe. The rest shall run on a single thread context.
+ *
+ * Mechanisms:
+ * - If buffers run empty, the tail of the audio is faded out to avoid pops and clicks.
+ * - When sound continues after an underrun, the audio is faded in to avoid pops.
+ * - Audio elements with significant sound is not dropped. Silence is removed and audio is
+ * time compressed with some distortion where it is heard the least. This avoids CPU intensive
+ * resampling and filtering.
+ * - Packet loss is concealed by Opus decoder.
+ * - If jitter is low, the pipe line will operate in the time window between packet arrival and audio fetch.
+ * Which can be less than one audio frame.
+ *
+ * Packet arrival may be offset from packet pull pace. If jitter is less than the time left to pull,
+ * the packets will arrive before pull and can be put into pcm buffer immediately. Otherwise, the pipe line will
+ * have one packet in pcm and 1 or 0 packets in JB.
+ *
+ *       |    |   |   |
+ *       v    v   v   v
+ *         |    |    |    |
+ *         v    v    v    v
  */
 class AudioReceivePipeline
 {
+    struct Config
+    {
+        uint32_t channels = 2;
+        uint32_t safeZoneCountBeforeReducingJB = 150;
+
+        struct
+        {
+            uint32_t sampleThreshold = 10;
+            uint32_t expectedCompression = 30;
+            uint32_t failedCompressLimit = 15;
+            double incrementFactor = 1.25;
+            double silenceMargin = 6.0; // dB
+            double silenceZone = 10.0;
+        } reduction;
+    };
+    const Config _config;
+
 public:
     AudioReceivePipeline(uint32_t rtpFrequency, uint32_t ptime, uint32_t maxPackets, int audioLevelExtensionId = 255);
 
@@ -27,7 +63,7 @@ public:
     void flush();
 
     // called from mix consumer
-    bool needProcess() const { return _pcmData.size() < _samplesPerPacket * 2; }
+    bool needProcess() const { return _pcmData.size() < _samplesPerPacket * _config.channels; }
     size_t fetchStereo(size_t sampleCount);
 
     const int16_t* getAudio() const { return _receiveBox.audio; }
@@ -59,7 +95,7 @@ private:
     uint32_t _targetDelay;
     struct SampleElimination
     {
-        uint32_t uncompressableCount = 0;
+        uint32_t incompressableCount = 0;
         int16_t deltaThreshold = 10;
     } _elimination;
 
@@ -72,16 +108,19 @@ private:
 
     struct JitterEmergency
     {
-        int counter = 0; // late packet arrives and buffer is empty
+        uint32_t counter = 0; // late packet arrives and buffer is empty
         uint32_t sequenceStart = 0;
     } _jitterEmergency;
+
+    // Jitter buffer is close to 1 packet and jitter is less than 20ms
+    uint32_t _jitterNearEmptyCount = 0;
 
     struct Metrics
     {
         uint32_t shrunkPackets = 0;
         uint32_t eliminatedPackets = 0;
         uint32_t eliminatedSamples = 0;
-        uint32_t receivedRtpCyclesPerPacket = 960;
+        uint32_t receivedRtpCyclesPerPacket = 960; // 480, 960, 1440
     } _metrics;
 
     SpscAudioBuffer<int16_t> _pcmData;

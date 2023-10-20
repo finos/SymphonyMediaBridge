@@ -146,6 +146,11 @@ public:
         REENTRANCE_CHECK(_reentranceRead);
 
         const auto currentLength = _length.load(std::memory_order_consume);
+        if (currentLength == 0)
+        {
+            return 0;
+        }
+
         const uint32_t toRead = std::min(currentLength, count);
 
         const auto maxItems = _size / sizeof(T);

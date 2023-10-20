@@ -147,8 +147,9 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
             if (data.dominantFrequencies.size() >= 2)
             {
                 EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId][1], 25.0);
             }
+            ++freqId;
             if (2 == id)
             {
                 EXPECT_GE(data.amplitudeProfile.size(), 2);
