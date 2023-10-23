@@ -306,6 +306,12 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
             _bufferAtTwoFrames = 0;
         }
     }
+    else if (_jitterEmergency.counter > 0)
+    {
+        flush(); // reset and start over
+        logger::warn("%u RTP delay unrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
+        return false;
+    }
 
     process(receiveTime);
 
@@ -336,6 +342,12 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
     if (posted)
     {
         updateTargetDelay(delay);
+    }
+    else if (_jitterEmergency.counter > 0)
+    {
+        flush(); // reset and start over
+        logger::warn("%u RTP delay unrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
+        return true;
     }
 
     process(receiveTime);
@@ -527,6 +539,9 @@ void AudioReceivePipeline::flush()
     _pcmData.clear();
     while (_jitterBuffer.pop()) {}
     _targetDelay = 0; // will cause start over on seqno, rtp timestamp and jitter assessment
+    _jitterEmergency.counter = 0;
+    _bufferAtTwoFrames = 0;
+    _elimination = SampleElimination();
 }
 
 } // namespace codec

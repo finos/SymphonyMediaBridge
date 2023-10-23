@@ -47,14 +47,25 @@ enum class EncryptionMode
 class IntegrationCallTypesTest : public IntegrationTest,
                                  public ::testing::WithParamInterface<std::tuple<TransportMode, EncryptionMode>>
 {
+    void SetUp() override
+    {
+#ifdef NOPERF_TEST
+        GTEST_SKIP();
+#endif
+        IntegrationTest::SetUp();
+    }
+
+    void TearDown() override
+    {
+#ifdef NOPERF_TEST
+        GTEST_SKIP();
+#endif
+        IntegrationTest::TearDown();
+    }
 };
 
 TEST_P(IntegrationCallTypesTest, party3AllModes)
 {
-#ifdef NOPERF_TEST
-    GTEST_SKIP();
-#endif
-
     auto transportMode = std::get<0>(GetParam());
     auto encryptionMode = std::get<1>(GetParam());
 

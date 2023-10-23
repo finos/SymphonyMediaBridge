@@ -448,3 +448,72 @@ TEST_F(AudioPipelineTest, nearEmpty)
     pipeline->process(utils::Time::getAbsoluteTime());
     EXPECT_EQ(pipeline->fetchStereo(samplesPerPacketFetch), 0);
 }
+
+TEST_F(AudioPipelineTest, everIncreasing)
+{
+    const uint32_t rtpFrequency = 48000;
+    memory::PacketPoolAllocator allocator(4096 * 4, "JitterTest");
+
+    auto pipeline = std::make_unique<codec::AudioReceivePipeline>(48000, 20, 100, 1);
+
+    uint32_t extendedSequenceNumber = 0;
+
+    utils::Pacer playbackPacer(utils::Time::ms * 20);
+    playbackPacer.reset(_timeTurner.getAbsoluteTime() + utils::Time::ms * 3); // consume 10ms after capture
+
+    std::vector<uint32_t> jitter = {0, 0, 0, 10, 20, 60, 90, 120};
+    for (int i = 0; i < 310; ++i)
+    {
+        jitter.push_back(120 + i * 90);
+    }
+
+    emulator::JitterPatternSource audioSource(allocator, 20, jitter);
+    audioSource.openWithTone(210, 0.34);
+    {
+        auto firstPacket = audioSource.getNext(_timeTurner.getAbsoluteTime()); // reset audio time line
+        auto header = rtp::RtpHeader::fromPacket(*firstPacket);
+        extendedSequenceNumber = header->sequenceNumber;
+    }
+    uint32_t underruns = 0;
+    const auto samplesPerPacketFetch = 20 * rtpFrequency / 1000;
+
+    for (uint64_t timeSteps = 0; timeSteps < 33000; ++timeSteps)
+    {
+        _timeTurner.advance(utils::Time::ms);
+        const auto timestamp = utils::Time::getAbsoluteTime();
+        if (pipeline->needProcess())
+        {
+            pipeline->process(timestamp);
+        }
+
+        if (playbackPacer.timeToNextTick(timestamp) <= 0)
+        {
+            if (pipeline->needProcess())
+            {
+                ++underruns;
+            }
+            pipeline->fetchStereo(samplesPerPacketFetch);
+            playbackPacer.tick(timestamp);
+        }
+
+        while (auto packet = audioSource.getNext(timestamp))
+        {
+            auto header = rtp::RtpHeader::fromPacket(*packet);
+            auto adv = static_cast<int16_t>(
+                header->sequenceNumber.get() - static_cast<uint16_t>(extendedSequenceNumber & 0xFFFFu));
+            extendedSequenceNumber += adv;
+            bool posted = pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
+            if (timeSteps == 32859)
+            {
+                ASSERT_FALSE(posted);
+            }
+            else
+            {
+                ASSERT_TRUE(posted);
+            }
+        }
+    }
+
+    EXPECT_LT(underruns, 1650);
+    EXPECT_GE(underruns, 1600);
+}
