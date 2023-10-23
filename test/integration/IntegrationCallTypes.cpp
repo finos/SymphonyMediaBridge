@@ -51,6 +51,10 @@ class IntegrationCallTypesTest : public IntegrationTest,
 
 TEST_P(IntegrationCallTypesTest, party3AllModes)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
+
     auto transportMode = std::get<0>(GetParam());
     auto encryptionMode = std::get<1>(GetParam());
 

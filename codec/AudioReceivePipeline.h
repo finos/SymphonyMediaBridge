@@ -101,7 +101,7 @@ private:
 
     struct HeadInfo
     {
-        uint64_t readyPcmTimestamp = 0;
+        uint64_t readyPcmTimestamp = 0; // last time we saw pcm data pending in
         uint32_t nextRtpTimestamp = 0;
         uint32_t extendedSequenceNumber = 0;
     } _head;
@@ -112,8 +112,8 @@ private:
         uint32_t sequenceStart = 0;
     } _jitterEmergency;
 
-    // Jitter buffer is close to 1 packet and jitter is less than 20ms
-    uint32_t _jitterNearEmptyCount = 0;
+    // Count how many times buffer has been at 2 frames. If target delay is low we can reduce to one frame
+    uint32_t _bufferAtTwoFrames;
 
     struct Metrics
     {

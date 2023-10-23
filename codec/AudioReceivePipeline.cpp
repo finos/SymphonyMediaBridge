@@ -40,6 +40,7 @@ AudioReceivePipeline::AudioReceivePipeline(uint32_t rtpFrequency,
       _estimator(rtpFrequency),
       _audioLevelExtensionId(audioLevelExtensionId),
       _targetDelay(0),
+      _bufferAtTwoFrames(0),
       _pcmData(7 * _config.channels * _samplesPerPacket, _config.channels * _samplesPerPacket),
       _receiveBox(memory::page::alignedSpace(sizeof(int16_t) * _config.channels * _samplesPerPacket))
 {
@@ -165,10 +166,11 @@ size_t AudioReceivePipeline::reduce(const memory::Packet& packet,
 
     auto allowedReduction =
         static_cast<int32_t>(totalJitterSize - math::roundUpMultiple(_targetDelay, _samplesPerPacket));
-    if (allowedReduction == 0 && _jitterNearEmptyCount > _config.safeZoneCountBeforeReducingJB &&
+    if (allowedReduction == 0 && _bufferAtTwoFrames > _config.safeZoneCountBeforeReducingJB &&
         _targetDelay <= _samplesPerPacket * 3 / 4)
     {
-        // start grinding down the last buffer packet and go for
+        // target delay < 1 frame and buffer has been at two frames for a while
+        // start reduction to 1 frame
         allowedReduction = _samplesPerPacket / 4;
     }
 
@@ -295,13 +297,13 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
     if (posted)
     {
         updateTargetDelay(delay);
-        if (_targetDelay < _samplesPerPacket && !_pcmData.empty())
+        if (_targetDelay < _samplesPerPacket && _pcmData.size() >= _samplesPerPacket)
         {
-            ++_jitterNearEmptyCount;
+            ++_bufferAtTwoFrames;
         }
         else
         {
-            _jitterNearEmptyCount = 0;
+            _bufferAtTwoFrames = 0;
         }
     }
 
@@ -413,10 +415,9 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
         const auto header = _jitterBuffer.getFrontRtp();
         const int16_t sequenceAdvance =
             header->sequenceNumber.get() - static_cast<uint16_t>(_head.extendedSequenceNumber & 0xFFFFu);
-        const int32_t timestampAdvance = header->timestamp - _head.nextRtpTimestamp;
 
-        const uint32_t totalJitterBufferSize = jitterBufferSize(_head.nextRtpTimestamp) + bufferLevel;
-
+        // Re-ordering.
+        // previous packet already played
         if (sequenceAdvance < 0)
         {
             _jitterBuffer.pop();
@@ -428,11 +429,21 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
             continue;
         }
 
+        // Re-ordering, or loss
+        const int32_t halfPtime = _samplesPerPacket * utils::Time::sec / (2 * _rtpFrequency);
+        if (sequenceAdvance > 1 && static_cast<int32_t>(timestamp - _head.readyPcmTimestamp) <= halfPtime)
+        {
+            // It is less than 10ms since we had data ready in pcm buffer.
+            return; // wait a bit more for re-ordered packet to arrive.
+        }
+
+        const int32_t timestampAdvance = header->timestamp - _head.nextRtpTimestamp;
+        const uint32_t totalJitterBufferSize = jitterBufferSize(_head.nextRtpTimestamp) + bufferLevel;
+
         // DTX
         const bool isDTX =
             sequenceAdvance == 1 && timestampAdvance > static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket);
-        if (isDTX && totalJitterBufferSize > _targetDelay &&
-            timestampAdvance <= static_cast<int32_t>(3 * _samplesPerPacket))
+        if (isDTX && timestampAdvance <= static_cast<int32_t>(3 * _samplesPerPacket))
         {
             const auto allowedReduction =
                 static_cast<int32_t>(totalJitterBufferSize - math::roundUpMultiple(_targetDelay, _samplesPerPacket));
@@ -440,18 +451,13 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
             if (allowedReduction < static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket))
             {
                 JBLOG("%u DTX silence", "AudioReceivePipeline", _ssrc);
-                _pcmData.appendSilence(_metrics.receivedRtpCyclesPerPacket);
+                _pcmData.appendSilence(_metrics.receivedRtpCyclesPerPacket - std::max(allowedReduction, 0));
                 _head.nextRtpTimestamp += _metrics.receivedRtpCyclesPerPacket;
-                continue;
             }
+            continue;
         }
 
-        const int32_t halfPtime = _samplesPerPacket * utils::Time::sec / (2 * _rtpFrequency);
-        if (sequenceAdvance > 1 && static_cast<int32_t>(timestamp - _head.readyPcmTimestamp) <= halfPtime)
-        {
-            return; // wait a bit more for disordered packet to arrive.
-        }
-
+        // Decode, reduce and append the packet
         const uint32_t extendedSequenceNumber = _head.extendedSequenceNumber + sequenceAdvance;
         auto packet = _jitterBuffer.pop();
 
@@ -476,7 +482,19 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
         _head.extendedSequenceNumber = extendedSequenceNumber;
         _head.nextRtpTimestamp = header->timestamp + _metrics.receivedRtpCyclesPerPacket;
         const auto remainingSamples = reduce(*packet, audioData, decodedSamples, totalJitterBufferSize);
-        if (!_pcmData.append(audioData, remainingSamples * _config.channels))
+        if (_pcmData.append(audioData, remainingSamples * _config.channels))
+        {
+            JBLOG("ssrc %u added pcm %zu, JB %u (%u), TD %u, eliminated %zu, tstmp %u",
+                "AudioReceivePipeline",
+                _ssrc,
+                _pcmData.size() / _config.channels,
+                jitterBufferSize(_head.nextRtpTimestamp),
+                _jitterBuffer.count(),
+                _targetDelay,
+                decodedSamples - remainingSamples,
+                _head.nextRtpTimestamp);
+        }
+        else
         {
             const auto header = rtp::RtpHeader::fromPacket(*packet);
             logger::warn("%u failed to append seq %u ts %u",
@@ -485,16 +503,6 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
                 header->sequenceNumber.get(),
                 header->timestamp.get());
         }
-
-        JBLOG("ssrc %u added pcm %zu, JB %u (%u), TD %u, eliminated %zu, tstmp %u",
-            "AudioReceivePipeline",
-            _ssrc,
-            _pcmData.size() / _config.channels,
-            jitterBufferSize(_head.nextRtpTimestamp),
-            _jitterBuffer.count(),
-            _targetDelay,
-            decodedSamples - remainingSamples,
-            _head.nextRtpTimestamp);
 
         if ((header->sequenceNumber.get() % 100) == 0 && !_jitterBuffer.empty())
         {
