@@ -172,7 +172,7 @@ size_t AudioReceivePipeline::reduce(const memory::Packet& packet,
         allowedReduction = _samplesPerPacket / 4;
     }
 
-    if (allowedReduction == 0)
+    if (allowedReduction <= 0)
     {
         if (_metrics.eliminatedSamples > 0)
         {
