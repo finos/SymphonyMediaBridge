@@ -20,8 +20,9 @@ namespace bridge
 const uint64_t delayFirstNack = 30 * utils::Time::ms;
 
 VideoMissingPacketsTracker::VideoMissingPacketsTracker()
-    : _loggableId("VideoMissingPacketsTracker"),
+    : _loggableId("VideoMissingPacketsTracker")
 #if DEBUG
+      ,
       _producerCounter(0)
 #endif
 {
