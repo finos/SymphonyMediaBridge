@@ -1,7 +1,7 @@
 #pragma once
 
-#include "concurrency/MpmcHashmap.h"
 #include "logger/Logger.h"
+#include "memory/Map.h"
 #include <array>
 #include <atomic>
 
@@ -40,7 +40,7 @@ private:
 #if DEBUG
     std::atomic_uint32_t _producerCounter;
 #endif
-    concurrency::MpmcHashmap32<uint16_t, Entry> _missingPackets;
+    memory::Map<uint16_t, Entry, maxMissingPackets> _missingPackets;
 };
 
 } // namespace bridge
