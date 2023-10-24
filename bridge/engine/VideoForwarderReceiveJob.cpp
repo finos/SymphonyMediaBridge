@@ -167,13 +167,15 @@ void VideoForwarderReceiveJob::run()
     }
 
     assert(_ssrcContext.videoMissingPacketsTracker.get());
+    const auto sequenceAdvance =
+        static_cast<int32_t>(_extendedSequenceNumber - _ssrcContext.lastReceivedExtendedSequenceNumber);
 
-    if (_extendedSequenceNumber == _ssrcContext.lastReceivedExtendedSequenceNumber + 1)
+    if (sequenceAdvance == 1)
     {
         _ssrcContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber);
         _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
     }
-    else if (static_cast<int32_t>(_extendedSequenceNumber - _ssrcContext.lastReceivedExtendedSequenceNumber) <= 0)
+    else if (sequenceAdvance <= 0)
     {
         logger::info("%s received out of order on %u, seqno %u, last received %u",
             "VideoForwarderReceiveJob",
