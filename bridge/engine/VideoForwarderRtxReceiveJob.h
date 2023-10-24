@@ -32,8 +32,8 @@ public:
         bridge::EngineMixer& engineMixer,
         bridge::SsrcInboundContext& ssrcFeedbackContext,
         bridge::SsrcInboundContext& ssrcContext,
-        const uint32_t mainSsrc,
-        const uint32_t extendedSequenceNumber);
+        uint32_t mainSsrc,
+        uint32_t extendedSequenceNumber);
 
     void run() override;
 

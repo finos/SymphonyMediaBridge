@@ -96,11 +96,10 @@ void VideoForwarderReceiveJob::run()
         : codec::Vp8Header::isKeyFrame(payload, codec::Vp8Header::getPayloadDescriptorSize(payload, payloadSize));
 
     ++_ssrcContext.packetsProcessed;
-    bool missingPacketsTrackerReset = false;
 
     if (_ssrcContext.packetsProcessed == 1)
     {
-        _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
+        _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber - 1;
         _ssrcContext.videoMissingPacketsTracker = std::make_shared<VideoMissingPacketsTracker>();
 
         logger::info("Adding missing packet tracker for %s, ssrc %u",
@@ -143,8 +142,7 @@ void VideoForwarderReceiveJob::run()
                 rtpHeader->marker);
 
             _ssrcContext.pliScheduler.onKeyFrameReceived();
-            _ssrcContext.videoMissingPacketsTracker->reset(_timestamp);
-            missingPacketsTrackerReset = true;
+            _ssrcContext.videoMissingPacketsTracker->reset();
         }
         else
         {
@@ -163,21 +161,19 @@ void VideoForwarderReceiveJob::run()
         }
     }
 
-    if (rtpHeader->marker && isKeyFrame)
-    {
-        logger::debug("end of key frame ssrc %u, seqno %u",
-            "VideoForwarderReceiveJob",
-            _ssrcContext.ssrc,
-            rtpHeader->sequenceNumber.get());
-    }
-
     if (videoDumpFile != nullptr)
     {
         dumpPacket(videoDumpFile, *_packet, std::min(size_t(36), _packet->getLength()));
     }
 
-    if (_extendedSequenceNumber <= _ssrcContext.lastReceivedExtendedSequenceNumber &&
-        _ssrcContext.packetsProcessed != 1)
+    assert(_ssrcContext.videoMissingPacketsTracker.get());
+
+    if (_extendedSequenceNumber == _ssrcContext.lastReceivedExtendedSequenceNumber + 1)
+    {
+        _ssrcContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber);
+        _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
+    }
+    else if (static_cast<int32_t>(_extendedSequenceNumber - _ssrcContext.lastReceivedExtendedSequenceNumber) <= 0)
     {
         logger::info("%s received out of order on %u, seqno %u, last received %u",
             "VideoForwarderReceiveJob",
@@ -185,45 +181,37 @@ void VideoForwarderReceiveJob::run()
             _ssrcContext.ssrc,
             _extendedSequenceNumber,
             _ssrcContext.lastReceivedExtendedSequenceNumber);
+        _ssrcContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber);
     }
-
-    assert(_ssrcContext.videoMissingPacketsTracker.get());
-    if (_extendedSequenceNumber > _ssrcContext.lastReceivedExtendedSequenceNumber)
+    else // loss
     {
         if (_extendedSequenceNumber - _ssrcContext.lastReceivedExtendedSequenceNumber >=
             VideoMissingPacketsTracker::maxMissingPackets)
         {
-            logger::info("Resetting full missing packet tracker for %s, ssrc %u",
+            logger::info("Immense loss. Resetting missing packet tracker for %s, ssrc %u",
                 "VideoForwarderReceiveJob",
                 _sender->getLoggableId().c_str(),
                 _ssrcContext.ssrc);
-            _ssrcContext.videoMissingPacketsTracker->reset(_timestamp);
+            _ssrcContext.videoMissingPacketsTracker->reset();
         }
-        else if (!missingPacketsTrackerReset)
+        else
         {
             for (uint32_t missingSequenceNumber = _ssrcContext.lastReceivedExtendedSequenceNumber + 1;
                  missingSequenceNumber != _extendedSequenceNumber;
                  ++missingSequenceNumber)
             {
-                _ssrcContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, _timestamp);
+                if (!_ssrcContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, _timestamp))
+                {
+                    logger::info("missing packet tracker is full on %s. ssrc %u",
+                        "VideoForwarderReceiveJob",
+                        _sender->getLoggableId().c_str(),
+                        _ssrcContext.ssrc);
+                    break;
+                }
             }
         }
 
         _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
-    }
-    else if (_extendedSequenceNumber != _ssrcContext.lastReceivedExtendedSequenceNumber)
-    {
-        uint32_t extendedSequenceNumber = 0;
-        if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(sequenceNumber, extendedSequenceNumber) ||
-            extendedSequenceNumber != _extendedSequenceNumber)
-        {
-            logger::debug("%s received unexpected rtp sequence number seq %u ssrc %u, dropping",
-                "VideoForwarderReceiveJob",
-                _sender->getLoggableId().c_str(),
-                sequenceNumber,
-                _ssrcContext.ssrc);
-            return;
-        }
     }
 
     assert(rtpHeader->payloadType == utils::checkedCast<uint16_t>(_ssrcContext.rtpMap.payloadType));
