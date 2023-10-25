@@ -5,23 +5,13 @@
 namespace rtp
 {
 
-JitterBufferList::JitterBufferList(size_t maxLength)
-    : _freeItems(nullptr),
-      _itemStore(new ListItem[maxLength]),
-      _head(nullptr),
-      _tail(nullptr),
-      _count(0)
+JitterBufferList::JitterBufferList() : _freeItems(nullptr), _head(nullptr), _tail(nullptr), _count(0)
 {
-    for (size_t i = 0; i < maxLength; ++i)
+    for (size_t i = 0; i < SIZE; ++i)
     {
         _itemStore[i].next = _freeItems;
         _freeItems = &_itemStore[i];
     }
-}
-
-JitterBufferList::~JitterBufferList()
-{
-    delete[] _itemStore;
 }
 
 JitterBufferList::ListItem* JitterBufferList::allocItem()

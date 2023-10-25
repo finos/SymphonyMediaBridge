@@ -115,7 +115,7 @@ TEST_P(AudioPipelineTest, DISABLED_fileReRun)
     }
 }
 
-INSTANTIATE_TEST_SUITE_P(ArpFileReRun,
+INSTANTIATE_TEST_SUITE_P(AudioPipelineRerun,
     AudioPipelineTest,
     ::testing::Values("Transport-6-4G-1-5Mbps",
         "Transport-22-4G-2.3Mbps",
@@ -503,7 +503,7 @@ TEST_F(AudioPipelineTest, everIncreasing)
                 header->sequenceNumber.get() - static_cast<uint16_t>(extendedSequenceNumber & 0xFFFFu));
             extendedSequenceNumber += adv;
             bool posted = pipeline->onRtpPacket(extendedSequenceNumber, std::move(packet), timestamp);
-            if (timeSteps == 32859)
+            if (timeSteps == 32969)
             {
                 ASSERT_FALSE(posted);
             }

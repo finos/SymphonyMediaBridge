@@ -2,7 +2,7 @@
 #include "codec/NoiseFloor.h"
 #include "codec/OpusDecoder.h"
 #include "codec/SpscAudioBuffer.h"
-#include "rtp/JitterBuffer.h"
+#include "rtp/JitterBufferList.h"
 #include "rtp/JitterEstimator.h"
 #include "utils/Time.h"
 #include <atomic>
@@ -85,7 +85,7 @@ private:
     const uint32_t _rtpFrequency;
     const uint32_t _samplesPerPacket;
 
-    rtp::JitterBuffer _jitterBuffer;
+    rtp::JitterBufferList _jitterBuffer;
     rtp::JitterEstimator _estimator;
 
     const int _audioLevelExtensionId;

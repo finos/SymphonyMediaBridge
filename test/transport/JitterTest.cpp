@@ -6,7 +6,7 @@
 #include "math/Matrix.h"
 #include "math/WelfordVariance.h"
 #include "memory/PacketPoolAllocator.h"
-#include "rtp/JitterBuffer.h"
+#include "rtp/JitterBufferList.h"
 #include "rtp/JitterEstimator.h"
 #include "rtp/JitterTracker.h"
 #include "rtp/RtpHeader.h"
@@ -170,6 +170,15 @@ TEST(Welford, normal)
     EXPECT_NEAR(w2.getMean(), 500.0, 20.0);
     EXPECT_NEAR(w2.getVariance(), 100.0 * 100, 2500.0);
 }
+
+class JitterBufferTest : public ::testing::Test
+{
+public:
+    JitterBufferTest() : _allocator(400, "test") {}
+
+    memory::PacketPoolAllocator _allocator;
+    rtp::JitterBufferList _buffer;
+};
 
 // jitter below 10ms will never affect subsequent packet. It is just a delay inflicted on each packet unrelated to
 // previous events
@@ -769,48 +778,45 @@ TEST(JitterTest, jitterTracker)
     EXPECT_NEAR(tracker.get(), 2 * 48, 15);
 }
 
-TEST(JitterTest, bufferPlain)
+TEST_F(JitterBufferTest, bufferPlain)
 {
-    memory::PacketPoolAllocator allocator(400, "test");
-    rtp::JitterBuffer buffer;
-
     memory::Packet stageArea;
     {
         auto header = rtp::RtpHeader::create(stageArea);
         header->ssrc = 4000;
         stageArea.setLength(250);
     }
-    const auto oneFromFull = rtp::JitterBuffer::SIZE - 2;
+    const auto oneFromFull = _buffer.SIZE - 2;
 
     for (int i = 0; i < oneFromFull; ++i)
     {
-        auto p = memory::makeUniquePacket(allocator, stageArea);
+        auto p = memory::makeUniquePacket(_allocator, stageArea);
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = i + 100;
         header->timestamp = 56000 + i * 960;
 
-        EXPECT_TRUE(buffer.add(std::move(p)));
+        EXPECT_TRUE(_buffer.add(std::move(p)));
     }
 
-    EXPECT_EQ(buffer.count(), oneFromFull);
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * (oneFromFull - 1));
-    EXPECT_FALSE(buffer.empty());
-    EXPECT_EQ(buffer.getFrontRtp()->timestamp.get(), 56000);
+    EXPECT_EQ(_buffer.count(), oneFromFull);
+    EXPECT_EQ(_buffer.getRtpDelay(), 960 * (oneFromFull - 1));
+    EXPECT_FALSE(_buffer.empty());
+    EXPECT_EQ(_buffer.getFrontRtp()->timestamp.get(), 56000);
 
     // make a gap of 3 pkts
-    auto p = memory::makeUniquePacket(allocator, stageArea);
+    auto p = memory::makeUniquePacket(_allocator, stageArea);
     {
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = 100 + oneFromFull;
         header->timestamp = 56000 + oneFromFull * 960;
     }
-    EXPECT_TRUE(buffer.add(std::move(p)));
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * oneFromFull);
+    EXPECT_TRUE(_buffer.add(std::move(p)));
+    EXPECT_EQ(_buffer.getRtpDelay(), 960 * oneFromFull);
 
     uint16_t prevSeq = 99;
     uint32_t count = 0;
-    EXPECT_EQ(buffer.count(), oneFromFull + 1);
-    for (auto packet = buffer.pop(); packet; packet = buffer.pop())
+    EXPECT_EQ(_buffer.count(), oneFromFull + 1);
+    for (auto packet = _buffer.pop(); packet; packet = _buffer.pop())
     {
         auto header = rtp::RtpHeader::fromPacket(*packet);
         EXPECT_GT(header->sequenceNumber.get(), prevSeq);
@@ -820,11 +826,8 @@ TEST(JitterTest, bufferPlain)
     EXPECT_EQ(count, oneFromFull + 1);
 }
 
-TEST(JitterTest, bufferReorder)
+TEST_F(JitterBufferTest, bufferReorder)
 {
-    memory::PacketPoolAllocator allocator(300, "test");
-    rtp::JitterBuffer buffer;
-
     memory::Packet stageArea;
     {
         auto header = rtp::RtpHeader::create(stageArea);
@@ -834,51 +837,51 @@ TEST(JitterTest, bufferReorder)
 
     for (int i = 0; i < 5; ++i)
     {
-        auto p = memory::makeUniquePacket(allocator, stageArea);
+        auto p = memory::makeUniquePacket(_allocator, stageArea);
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = i + 100;
         header->timestamp = 56000 + i * 960;
 
-        EXPECT_TRUE(buffer.add(std::move(p)));
+        EXPECT_TRUE(_buffer.add(std::move(p)));
     }
 
-    EXPECT_EQ(buffer.count(), 5);
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * 4);
-    EXPECT_FALSE(buffer.empty());
-    EXPECT_EQ(buffer.getFrontRtp()->timestamp.get(), 56000);
+    EXPECT_EQ(_buffer.count(), 5);
+    EXPECT_EQ(_buffer.getRtpDelay(), 960 * 4);
+    EXPECT_FALSE(_buffer.empty());
+    EXPECT_EQ(_buffer.getFrontRtp()->timestamp.get(), 56000);
 
     // make a gap
-    auto p = memory::makeUniquePacket(allocator, stageArea);
+    auto p = memory::makeUniquePacket(_allocator, stageArea);
     {
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = 110;
         header->timestamp = 56000 + 10 * 960;
     }
-    EXPECT_TRUE(buffer.add(std::move(p)));
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * 10);
+    EXPECT_TRUE(_buffer.add(std::move(p)));
+    EXPECT_EQ(_buffer.getRtpDelay(), 960 * 10);
 
     // reorder
-    p = memory::makeUniquePacket(allocator, stageArea);
+    p = memory::makeUniquePacket(_allocator, stageArea);
     {
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = 105;
         header->timestamp = 56000 + 5 * 960;
     }
-    EXPECT_TRUE(buffer.add(std::move(p)));
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * 10);
-    EXPECT_EQ(buffer.count(), 7);
+    EXPECT_TRUE(_buffer.add(std::move(p)));
+    EXPECT_EQ(_buffer.getRtpDelay(), 960 * 10);
+    EXPECT_EQ(_buffer.count(), 7);
 
-    p = memory::makeUniquePacket(allocator, stageArea);
+    p = memory::makeUniquePacket(_allocator, stageArea);
     {
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = 108;
         header->timestamp = 56000 + 28 * 960;
     }
-    EXPECT_TRUE(buffer.add(std::move(p)));
+    EXPECT_TRUE(_buffer.add(std::move(p)));
 
     uint16_t prevSeq = 99;
     uint32_t count = 0;
-    for (auto packet = buffer.pop(); packet; packet = buffer.pop())
+    for (auto packet = _buffer.pop(); packet; packet = _buffer.pop())
     {
         auto header = rtp::RtpHeader::fromPacket(*packet);
         EXPECT_GT(header->sequenceNumber.get(), prevSeq);
@@ -888,11 +891,8 @@ TEST(JitterTest, bufferReorder)
     EXPECT_EQ(count, 8);
 }
 
-TEST(JitterTest, bufferEmptyFull)
+TEST_F(JitterBufferTest, bufferEmptyFull)
 {
-    memory::PacketPoolAllocator allocator(300, "test");
-    rtp::JitterBuffer buffer;
-
     memory::Packet stageArea;
     {
         auto header = rtp::RtpHeader::create(stageArea);
@@ -900,52 +900,49 @@ TEST(JitterTest, bufferEmptyFull)
         stageArea.setLength(250);
     }
 
-    EXPECT_EQ(buffer.pop(), nullptr);
+    EXPECT_EQ(_buffer.pop(), nullptr);
 
-    for (int i = 0; i < rtp::JitterBuffer::SIZE - 1; ++i)
+    for (int i = 0; i < _buffer.SIZE; ++i)
     {
-        auto p = memory::makeUniquePacket(allocator, stageArea);
+        auto p = memory::makeUniquePacket(_allocator, stageArea);
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = i + 100;
         header->timestamp = 56000 + i * 960;
 
-        EXPECT_TRUE(buffer.add(std::move(p)));
+        EXPECT_TRUE(_buffer.add(std::move(p)));
     }
 
-    EXPECT_EQ(buffer.count(), rtp::JitterBuffer::SIZE - 1);
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * (rtp::JitterBuffer::SIZE - 2));
-    EXPECT_FALSE(buffer.empty());
-    EXPECT_EQ(buffer.getFrontRtp()->timestamp.get(), 56000);
+    EXPECT_EQ(_buffer.count(), _buffer.SIZE);
+    EXPECT_EQ(_buffer.getRtpDelay(), 960 * (_buffer.SIZE - 1));
+    EXPECT_FALSE(_buffer.empty());
+    EXPECT_EQ(_buffer.getFrontRtp()->timestamp.get(), 56000);
 
-    auto p = memory::makeUniquePacket(allocator, stageArea);
+    auto p = memory::makeUniquePacket(_allocator, stageArea);
     {
         auto header = rtp::RtpHeader::create(*p);
-        header->sequenceNumber = 100 + buffer.count();
+        header->sequenceNumber = 100 + _buffer.count();
         header->timestamp = 56000 + 10 * 960;
     }
-    EXPECT_FALSE(buffer.add(std::move(p)));
-    EXPECT_EQ(buffer.getRtpDelay(), 960 * (rtp::JitterBuffer::SIZE - 2));
+    EXPECT_FALSE(_buffer.add(std::move(p)));
+    EXPECT_EQ(_buffer.getRtpDelay(), 960 * (_buffer.SIZE - 1));
 
     uint16_t prevSeq = 99;
     uint32_t count = 0;
-    EXPECT_EQ(buffer.count(), rtp::JitterBuffer::SIZE - 1);
-    for (auto packet = buffer.pop(); packet; packet = buffer.pop())
+    EXPECT_EQ(_buffer.count(), _buffer.SIZE);
+    for (auto packet = _buffer.pop(); packet; packet = _buffer.pop())
     {
         auto header = rtp::RtpHeader::fromPacket(*packet);
         EXPECT_GT(header->sequenceNumber.get(), prevSeq);
         prevSeq = header->sequenceNumber.get();
         ++count;
     }
-    EXPECT_EQ(count, rtp::JitterBuffer::SIZE - 1);
-    EXPECT_TRUE(buffer.empty());
-    EXPECT_EQ(buffer.pop(), nullptr);
+    EXPECT_EQ(count, _buffer.SIZE);
+    EXPECT_TRUE(_buffer.empty());
+    EXPECT_EQ(_buffer.pop(), nullptr);
 }
 
-TEST(JitterTest, reorderedFull)
+TEST_F(JitterBufferTest, reorderedFull)
 {
-    memory::PacketPoolAllocator allocator(300, "test");
-    rtp::JitterBuffer buffer;
-
     memory::Packet stageArea;
     {
         auto header = rtp::RtpHeader::create(stageArea);
@@ -953,23 +950,23 @@ TEST(JitterTest, reorderedFull)
         stageArea.setLength(250);
     }
 
-    EXPECT_EQ(buffer.pop(), nullptr);
+    EXPECT_EQ(_buffer.pop(), nullptr);
 
-    for (int i = 0; i < rtp::JitterBuffer::SIZE - 50; ++i)
+    for (int i = 0; i < _buffer.SIZE - 50; ++i)
     {
-        auto p = memory::makeUniquePacket(allocator, stageArea);
+        auto p = memory::makeUniquePacket(_allocator, stageArea);
         auto header = rtp::RtpHeader::create(*p);
         header->sequenceNumber = i + 100;
         header->timestamp = 56000 + i * 960;
 
-        EXPECT_TRUE(buffer.add(std::move(p)));
+        EXPECT_TRUE(_buffer.add(std::move(p)));
     }
 
-    auto p = memory::makeUniquePacket(allocator, stageArea);
+    auto p = memory::makeUniquePacket(_allocator, stageArea);
     auto header = rtp::RtpHeader::create(*p);
     header->sequenceNumber = 49;
     header->timestamp = 56100;
 
-    EXPECT_EQ(buffer.count(), rtp::JitterBuffer::SIZE - 50);
-    EXPECT_FALSE(buffer.add(std::move(p)));
+    EXPECT_EQ(_buffer.count(), _buffer.SIZE - 50);
+    EXPECT_TRUE(_buffer.add(std::move(p)));
 }

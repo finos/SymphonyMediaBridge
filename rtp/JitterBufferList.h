@@ -6,14 +6,18 @@ namespace rtp
 struct RtpHeader;
 /**
  * Effective jitter buffer. Packets are stored in linked list. Ordered packets are quickly added to the end of the list.
- * Rarely occurring out of order packets has to be inserted in the list after a quick scan.
+ * Rarely occurring out of order packets have to be inserted in the list after a quick scan.
  */
 
 class JitterBufferList
 {
 public:
-    JitterBufferList(size_t maxLength);
-    ~JitterBufferList();
+    enum
+    {
+        SIZE = 300
+    };
+
+    JitterBufferList();
 
     bool add(memory::UniquePacket packet);
     memory::UniquePacket pop();
@@ -35,7 +39,7 @@ private:
     ListItem* allocItem();
 
     ListItem* _freeItems;
-    ListItem* const _itemStore;
+    ListItem _itemStore[SIZE];
     ListItem* _head;
     ListItem* _tail;
     uint32_t _count;
