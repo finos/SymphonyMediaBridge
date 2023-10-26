@@ -417,6 +417,39 @@ uint32_t AudioReceivePipeline::jitterBufferSize(uint32_t rtpTimestamp) const
     return (_jitterBuffer.empty() ? 0 : _jitterBuffer.getRtpDelay(rtpTimestamp) + _metrics.receivedRtpCyclesPerPacket);
 }
 
+// If it is less than 10ms since data was still not fetched from pcm buffer
+// we can wait another cycle before assuming packet is lost rather than re-ordered.
+bool AudioReceivePipeline::shouldWaitForMissingPacket(uint64_t timestamp) const
+{
+    const int32_t halfPtime = _samplesPerPacket * utils::Time::sec / (2 * _rtpFrequency);
+    return static_cast<int32_t>(timestamp - _head.readyPcmTimestamp) <= halfPtime;
+}
+
+// insert DTX silence if the gap is reasonably small to keep speak pace.
+// If we are lagging behind we use it to catch up instead
+bool AudioReceivePipeline::dtxHandler(const int16_t sequenceAdvance,
+    const int64_t timestampAdvance,
+    const uint32_t totalJitterBufferSize)
+{
+    const bool isDTX =
+        sequenceAdvance == 1 && timestampAdvance > static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket);
+
+    if (isDTX && timestampAdvance <= static_cast<int32_t>(3 * _samplesPerPacket))
+    {
+        const auto allowedReduction =
+            static_cast<int32_t>(totalJitterBufferSize - math::roundUpMultiple(_targetDelay, _samplesPerPacket));
+
+        if (allowedReduction < static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket))
+        {
+            JBLOG("%u DTX silence", "AudioReceivePipeline", _ssrc);
+            _pcmData.appendSilence(_metrics.receivedRtpCyclesPerPacket - std::max(allowedReduction, 0));
+            _head.nextRtpTimestamp += _metrics.receivedRtpCyclesPerPacket;
+        }
+        return true;
+    }
+    return false;
+}
+
 void AudioReceivePipeline::process(const uint64_t timestamp)
 {
     size_t bufferLevel = _pcmData.size() / _config.channels;
@@ -442,30 +475,16 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
         }
 
         // Re-ordering, or loss
-        const int32_t halfPtime = _samplesPerPacket * utils::Time::sec / (2 * _rtpFrequency);
-        if (sequenceAdvance > 1 && static_cast<int32_t>(timestamp - _head.readyPcmTimestamp) <= halfPtime)
+        if (sequenceAdvance > 1 && shouldWaitForMissingPacket(timestamp))
         {
-            // It is less than 10ms since we had data ready in pcm buffer.
-            return; // wait a bit more for re-ordered packet to arrive.
+            return;
         }
 
         const int32_t timestampAdvance = header->timestamp - _head.nextRtpTimestamp;
         const uint32_t totalJitterBufferSize = jitterBufferSize(_head.nextRtpTimestamp) + bufferLevel;
 
-        // DTX
-        const bool isDTX =
-            sequenceAdvance == 1 && timestampAdvance > static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket);
-        if (isDTX && timestampAdvance <= static_cast<int32_t>(3 * _samplesPerPacket))
+        if (dtxHandler(sequenceAdvance, timestampAdvance, totalJitterBufferSize))
         {
-            const auto allowedReduction =
-                static_cast<int32_t>(totalJitterBufferSize - math::roundUpMultiple(_targetDelay, _samplesPerPacket));
-
-            if (allowedReduction < static_cast<int32_t>(_metrics.receivedRtpCyclesPerPacket))
-            {
-                JBLOG("%u DTX silence", "AudioReceivePipeline", _ssrc);
-                _pcmData.appendSilence(_metrics.receivedRtpCyclesPerPacket - std::max(allowedReduction, 0));
-                _head.nextRtpTimestamp += _metrics.receivedRtpCyclesPerPacket;
-            }
             continue;
         }
 
@@ -528,6 +547,7 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
 
     if (bufferLevel >= _samplesPerPacket)
     {
+        // track when we last had enough data in buffer so we know how long we may wait for more
         _head.readyPcmTimestamp = timestamp;
     }
 }

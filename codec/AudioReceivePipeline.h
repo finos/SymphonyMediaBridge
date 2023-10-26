@@ -81,6 +81,9 @@ private:
     uint32_t jitterBufferSize(uint32_t rtpTimestamp) const;
     void adjustReductionPower(uint32_t recentReduction);
 
+    bool shouldWaitForMissingPacket(uint64_t timestamp) const;
+    bool dtxHandler(int16_t seqAdvance, int64_t timestampAdvance,uint32_t totalJitterBufferSize);
+
     uint32_t _ssrc;
     const uint32_t _rtpFrequency;
     const uint32_t _samplesPerPacket;
