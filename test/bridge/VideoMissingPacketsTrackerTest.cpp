@@ -57,3 +57,38 @@ TEST_F(VideoMissingPacketsTrackerTest, test1)
         _videoMissingPacketsTracker->process(1100 * utils::Time::ms, 100, missingSequenceNumbers);
     EXPECT_EQ(0, numMissingSequenceNumbers);
 }
+
+TEST_F(VideoMissingPacketsTrackerTest, doubleRtx)
+{
+    const uint64_t rtt = 30 * utils::Time::ms;
+    uint64_t timestamp = utils::Time::ms;
+    _videoMissingPacketsTracker->onMissingPacket(1, timestamp);
+    _videoMissingPacketsTracker->onMissingPacket(2, timestamp);
+
+    timestamp += 30 * utils::Time::ms;
+    std::array<uint16_t, bridge::VideoMissingPacketsTracker::maxMissingPackets> missingSequenceNumbers;
+    auto numMissingSequenceNumbers = _videoMissingPacketsTracker->process(timestamp, rtt, missingSequenceNumbers);
+    // initial delay has not passed so we do not send NACK
+    EXPECT_EQ(0, numMissingSequenceNumbers);
+
+    timestamp += 60 * utils::Time::ms;
+    numMissingSequenceNumbers = _videoMissingPacketsTracker->process(timestamp, rtt, missingSequenceNumbers);
+    EXPECT_EQ(2, numMissingSequenceNumbers);
+    EXPECT_EQ(1, missingSequenceNumbers[0]);
+    EXPECT_EQ(2, missingSequenceNumbers[1]);
+
+    EXPECT_TRUE(_videoMissingPacketsTracker->onPacketArrived(2));
+
+    numMissingSequenceNumbers = _videoMissingPacketsTracker->process(timestamp, rtt, missingSequenceNumbers);
+    EXPECT_EQ(numMissingSequenceNumbers, 0); // too soon after NACK
+    EXPECT_FALSE(_videoMissingPacketsTracker->onPacketArrived(2));
+
+    timestamp += 101 * utils::Time::ms;
+    numMissingSequenceNumbers = _videoMissingPacketsTracker->process(timestamp, rtt, missingSequenceNumbers);
+    EXPECT_EQ(1, numMissingSequenceNumbers);
+    EXPECT_EQ(1, missingSequenceNumbers[0]);
+    EXPECT_FALSE(_videoMissingPacketsTracker->onPacketArrived(2));
+
+    _videoMissingPacketsTracker->process(timestamp, rtt, missingSequenceNumbers);
+    EXPECT_FALSE(_videoMissingPacketsTracker->onPacketArrived(2));
+}

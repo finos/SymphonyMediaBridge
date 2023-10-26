@@ -294,7 +294,6 @@ private:
 
     const uint32_t _end;
     uint32_t _nextFreeEntry = 0;
-    T _emptyObject;
     uint32_t _maxSpread;
     uint32_t _count = 0;
 };

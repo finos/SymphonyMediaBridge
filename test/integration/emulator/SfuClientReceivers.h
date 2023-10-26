@@ -300,7 +300,7 @@ public:
 
         if (isKeyframe)
         {
-            inboundContext.videoMissingPacketsTracker->reset(timestamp);
+            inboundContext.videoMissingPacketsTracker->reset();
             missingPacketsTrackerReset = true;
             _videoDecoder.resetPacketCache();
         }
@@ -315,7 +315,7 @@ public:
                     sender->getLoggableId().c_str(),
                     inboundContext.ssrc);
 
-                inboundContext.videoMissingPacketsTracker->reset(timestamp);
+                inboundContext.videoMissingPacketsTracker->reset();
                 _videoDecoder.resetPacketCache();
             }
             else if (!missingPacketsTrackerReset)

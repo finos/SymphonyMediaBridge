@@ -48,8 +48,7 @@ void DiscardReceivedVideoPacketJob::run()
     _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber;
     if (_ssrcContext.videoMissingPacketsTracker)
     {
-        uint32_t extSeqno = 0;
-        _ssrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber, extSeqno);
+        _ssrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber);
     }
 }
 

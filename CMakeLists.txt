@@ -215,6 +215,7 @@ set(FILES
         bridge/engine/VideoForwarderRtxReceiveJob.cpp
         bridge/engine/VideoForwarderRtxReceiveJob.h
         bridge/engine/VideoMissingPacketsTracker.h
+        bridge/engine/VideoMissingPacketsTracker.cpp
         bridge/engine/VideoNackReceiveJob.cpp
         bridge/engine/VideoNackReceiveJob.h
         bridge/engine/DiscardReceivedVideoPacketJob.h

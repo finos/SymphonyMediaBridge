@@ -6,6 +6,40 @@
 namespace codec
 {
 
+/*
+         0 1 2 3 4 5 6 7                      0 1 2 3 4 5 6 7
+        +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+        |X|R|N|S|R| PID | (REQUIRED)        |X|R|N|S|R| PID | (REQUIRED)
+        +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+   X:   |I|L|T|K| RSV   | (OPTIONAL)   X:   |I|L|T|K| RSV   | (OPTIONAL)
+        +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+   I:   |M| PictureID   | (OPTIONAL)   I:   |M| PictureID   | (OPTIONAL)
+        +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+   L:   |   TL0PICIDX   | (OPTIONAL)        |   PictureID   |
+        +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+   T/K: |TID|Y| KEYIDX  | (OPTIONAL)   L:   |   TL0PICIDX   | (OPTIONAL)
+        +-+-+-+-+-+-+-+-+                   +-+-+-+-+-+-+-+-+
+                                       T/K: |TID|Y| KEYIDX  | (OPTIONAL)
+                                            +-+-+-+-+-+-+-+-+
+
+    S: start of partition
+    x:1
+    PID: partition index. 0 for key frame
+    N: non ref frame. If 1, it can be discarded
+
+      0 1 2 3 4 5 6 7
+     +-+-+-+-+-+-+-+-+
+     |Size0|1| VER |0| P = 0
+     +-+-+-+-+-+-+-+-+
+     |     Size1     |
+     +-+-+-+-+-+-+-+-+
+     |     Size2     |
+     +-+-+-+-+-+-+-+-+
+     | VP8 payload   |
+
+    P: inverse key frame flag
+*/
+
 namespace Vp8Header
 {
 
@@ -161,6 +195,7 @@ constexpr void setTl0PicIdx(uint8_t* payload, uint8_t tl0PixIdx)
     payload[4] = tl0PixIdx;
 }
 
+// return true if this is the first packet of key frame (start of partition)
 constexpr bool isKeyFrame(const uint8_t* payload, const size_t payloadDescriptorSize)
 {
     if (!isStartOfPartition(payload) || getPartitionId(payload) != 0 || payloadDescriptorSize == 0)
