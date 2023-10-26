@@ -54,7 +54,6 @@ public:
           shouldDropPackets(false),
           hasAudioLevelExtension(true),
           opusDecodePacketRate(0),
-          audioReceivePipe(nullptr),
           hasAudioReceivePipe(false),
           _lastRtpReceiveTime(timestamp)
     {
@@ -95,7 +94,7 @@ public:
     uint32_t packetsProcessed;
     uint32_t lastUnprotectedExtendedSequenceNumber;
     std::shared_ptr<VideoMissingPacketsTracker> videoMissingPacketsTracker;
-    std::unique_ptr<codec::OpusDecoder> opusDecoder;
+    std::unique_ptr<codec::OpusDecoder> opusDecoder; // used for missing audio level
     std::unique_ptr<utils::AvgRateTracker> opusPacketRate; // pkt/s
 
     // engine variables ==============================================

@@ -348,7 +348,6 @@ private:
     };
 
     using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket>;
-    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::UniqueAudioPacket>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -378,7 +377,7 @@ private:
 
     uint32_t _localVideoSsrc;
 
-    int16_t _mixedData[samplesPerFrame20ms * 2];
+    int16_t _mixedData[samplesPerFrame20ms * channelsPerFrame];
     uint64_t _rtpTimestampSource; // 1kHz. it works with wrapping since it is truncated to uint32.
 
     memory::PacketPoolAllocator& _mainAllocator;
@@ -422,7 +421,6 @@ private:
     void forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp);
-    void addPacketToMixerBuffers(const IncomingAudioPacketInfo& packet, const uint64_t timestamp, bool logSpamGuard);
 
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,

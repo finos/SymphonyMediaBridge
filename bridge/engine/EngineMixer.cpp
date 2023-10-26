@@ -19,9 +19,6 @@ using namespace bridge;
 namespace bridge
 {
 
-const size_t EngineMixer::samplesPerIteration;
-constexpr size_t EngineMixer::iterationDurationMs;
-
 EngineMixer::EngineMixer(const std::string& id,
     jobmanager::JobManager& jobManager,
     const concurrency::SynchronizationContext& engineSyncContext,
@@ -84,7 +81,7 @@ EngineMixer::EngineMixer(const std::string& id,
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
-    memset(_mixedData, 0, samplesPerIteration * sizeof(int16_t));
+    memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
 }
 
 EngineMixer::~EngineMixer() {}
