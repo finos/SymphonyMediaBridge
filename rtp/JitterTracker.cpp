@@ -1,5 +1,6 @@
 #include "rtp/JitterTracker.h"
 #include "utils/Time.h"
+#include <algorithm>
 
 namespace rtp
 {
@@ -23,12 +24,10 @@ void JitterTracker::update(uint64_t receiveTime, uint32_t rtpTimestamp)
     const int32_t deltaReceive =
         static_cast<int64_t>(receiveTime - _prevReceiveTime) * _rtpFrequency / utils::Time::sec;
     const int32_t deltaTransmit = static_cast<int32_t>(rtpTimestamp - _prevRtpTimestamp);
-    if (deltaTransmit < 0)
-    {
-        return;
-    }
 
     _jitter += (std::abs(deltaReceive - deltaTransmit) - _jitter) / 16;
+    _jitter = std::min(_jitter, static_cast<int32_t>(_rtpFrequency * 3)); // cap at 3s
+    _jitter = std::max(0, _jitter);
     _prevReceiveTime = receiveTime;
     _prevRtpTimestamp = rtpTimestamp;
 }
