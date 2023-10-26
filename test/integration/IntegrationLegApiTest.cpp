@@ -133,7 +133,7 @@ TEST_F(IntegrationLegApi, plain)
                     EXPECT_EQ(data.amplitudeProfile[0].second, 0);
 
                     EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 0.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.79, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -209,10 +209,10 @@ TEST_F(IntegrationLegApi, twoClientsAudioOnly)
         {
             const auto data = analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
-            EXPECT_EQ(data.amplitudeProfile.size(), 2);
-            if (data.amplitudeProfile.size() > 1)
+            EXPECT_EQ(data.amplitudeProfile.size(), 4);
+            if (data.amplitudeProfile.size() > 2)
             {
-                EXPECT_NEAR(data.amplitudeProfile[1].second, 5725, 100);
+                EXPECT_NEAR(data.amplitudeProfile.back().second, 5725, 100);
             }
             if (data.dominantFrequencies.size() >= 1)
             {

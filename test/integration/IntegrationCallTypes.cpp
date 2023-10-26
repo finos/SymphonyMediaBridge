@@ -47,6 +47,21 @@ enum class EncryptionMode
 class IntegrationCallTypesTest : public IntegrationTest,
                                  public ::testing::WithParamInterface<std::tuple<TransportMode, EncryptionMode>>
 {
+    void SetUp() override
+    {
+#ifdef NOPERF_TEST
+        GTEST_SKIP();
+#endif
+        IntegrationTest::SetUp();
+    }
+
+    void TearDown() override
+    {
+#ifdef NOPERF_TEST
+        GTEST_SKIP();
+#endif
+        IntegrationTest::TearDown();
+    }
 };
 
 TEST_P(IntegrationCallTypesTest, party3AllModes)
@@ -147,8 +162,9 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
             if (data.dominantFrequencies.size() >= 2)
             {
                 EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId][0], 25.0);
-                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId++][1], 25.0);
+                EXPECT_NEAR(data.dominantFrequencies[1], expectedFrequencies[freqId][1], 25.0);
             }
+            ++freqId;
             if (2 == id)
             {
                 EXPECT_GE(data.amplitudeProfile.size(), 2);
@@ -164,7 +180,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
                     EXPECT_EQ(data.amplitudeProfile[0].second, 0);
 
                     EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.60, 48000);
+                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.80, 48000);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);

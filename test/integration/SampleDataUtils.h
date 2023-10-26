@@ -74,6 +74,10 @@ public:
         uint32_t topN,
         std::vector<double>& frequencies);
 
+    static bool dumpPayload(FILE* h, const memory::Packet& packet);
+
+    static bool dumpPayload(FILE* h, const int16_t* audio, size_t samples);
+
 private:
     static const std::vector<const memory::Packet> _opusRtpSamplePackets;
 };

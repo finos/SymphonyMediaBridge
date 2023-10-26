@@ -72,6 +72,18 @@ void MaxTracker::update(double value)
     }
 }
 
+void MaxTrackerPlain::update(double value)
+{
+    if (value > _value)
+    {
+        _value = value;
+    }
+    else
+    {
+        _value = _value - _decay * (_value - value);
+    }
+}
+
 void TimeTracker::stop()
 {
     _stopTime = Time::getApproximateTime();

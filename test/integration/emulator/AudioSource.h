@@ -23,7 +23,7 @@ public:
     };
 
     AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, Audio fakeAudio, uint32_t ptime = 20);
-    ~AudioSource(){};
+    ~AudioSource();
     memory::UniquePacket getPacket(uint64_t timestamp);
     int64_t timeToRelease(uint64_t timestamp) const;
 
@@ -35,6 +35,11 @@ public:
     void setFrequency(double frequency) { _frequency = frequency; }
     void setPtt(const PttState isPtt);
     void setUseAudioLevel(const bool useAudioLevel);
+    void enableIntermittentTone(double onRatio);
+
+    bool openPcm16File(const char* filename);
+
+    uint16_t getSequenceCounter() const { return _sequenceCounter; }
 
 private:
     static const uint32_t maxSentBufferSize = 12 * 1024;
@@ -51,6 +56,14 @@ private:
     PttState _isPtt;
     bool _useAudioLevel;
     Audio _emulatedAudioType;
+    FILE* _pcm16File;
+    uint32_t _packetCount;
+
+    struct TonePattern
+    {
+        double onRatio = 1.0;
+        int32_t silenceCountDown = 0;
+    } _tonePattern;
 };
 
 } // namespace emulator

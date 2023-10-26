@@ -649,3 +649,15 @@ bool SampleDataUtils::verifyAudioLevel(const std::vector<memory::Packet>& packet
     }
     return true;
 }
+
+bool SampleDataUtils::dumpPayload(FILE* h, const memory::Packet& packet)
+{
+    const auto header = rtp::RtpHeader::fromPacket(packet);
+    const auto toWrite = packet.getLength() - header->headerLength();
+    return toWrite == ::fwrite(header->getPayload(), 1, toWrite, h);
+}
+
+bool SampleDataUtils::dumpPayload(FILE* h, const int16_t* audio, size_t samples)
+{
+    return samples == ::fwrite(audio, 2, samples, h);
+}

@@ -241,6 +241,12 @@ set(FILES
         codec/OpusEncoder.cpp
         codec/OpusEncoder.h
         codec/Vp8Header.h
+        codec/AudioTools.h
+        codec/AudioTools.cpp
+        codec/NoiseFloor.cpp
+        codec/AudioReceivePipeline.h
+        codec/AudioReceivePipeline.cpp
+        codec/SpscAudioBuffer.h
         concurrency/EventSemaphore.cpp
         concurrency/EventSemaphore.h
         concurrency/LockFreeList.cpp
@@ -338,6 +344,12 @@ set(FILES
         rtp/SendTimeDial.h
         rtp/JitterTracker.h
         rtp/JitterTracker.cpp
+        rtp/JitterEstimator.h
+        rtp/JitterEstimator.cpp
+        rtp/RtpDelayTracker.h
+        rtp/RtpDelayTracker.cpp
+        rtp/JitterBufferList.cpp
+        rtp/JitterBufferList.h
         test/macros.h
         transport/UdpEndpoint.h
         transport/BaseUdpEndpoint.cpp
@@ -528,6 +540,8 @@ set(TEST_LIB_FILES
     test/integration/emulator/FakeTcpServerEndpoint.h
     test/integration/emulator/FakeTcpServerEndpoint.cpp
     test/integration/emulator/Httpd.cpp
+    test/integration/emulator/JitterPacketSource.h
+    test/integration/emulator/JitterPacketSource.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp
     test/ResourceLoader.cpp
@@ -579,6 +593,7 @@ set(TEST_FILES
     test/transport/SrtpTest.cpp
     test/transport/Ipv6Test.cpp
     test/transport/JitterTest.cpp
+    test/transport/AdaptiveJitterTest.cpp
     test/integration/TimeTurnerTest.cpp
     test/config/ConfigTest.cpp
     test/codec/AudioProcessingTest.cpp
@@ -625,7 +640,8 @@ set(TEST_FILES
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp
-    test/bridge/RtpAudioRewriterTest.cpp)
+    test/bridge/RtpAudioRewriterTest.cpp
+    test/transport/JitterTest.cpp)
 
 
 set(TEST_FILES2

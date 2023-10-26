@@ -1,5 +1,6 @@
 #include "test/integration/emulator/AudioSource.h"
 #include "codec/AudioLevel.h"
+#include "codec/AudioTools.h"
 #include "codec/Opus.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
@@ -21,12 +22,23 @@ AudioSource::AudioSource(memory::PacketPoolAllocator& allocator, uint32_t ssrc, 
       _ptime(ptime),
       _isPtt(PttState::NotSpecified),
       _useAudioLevel(true),
-      _emulatedAudioType(fakeAudio)
+      _emulatedAudioType(fakeAudio),
+      _pcm16File(nullptr),
+      _packetCount(0)
 {
+}
+
+AudioSource::~AudioSource()
+{
+    if (_pcm16File)
+    {
+        ::fclose(_pcm16File);
+    }
 }
 
 memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
 {
+    const auto samplesPerPacket = codec::Opus::sampleRate * _ptime / 1000;
     if (timeToRelease(timestamp) > 0)
     {
         return nullptr;
@@ -51,16 +63,52 @@ memory::UniquePacket AudioSource::getPacket(uint64_t timestamp)
     rtpHeader->ssrc = _ssrc;
     rtpHeader->timestamp = _rtpTimestamp;
 
-    const auto samplesPerPacket = codec::Opus::sampleRate * _ptime / 1000;
     int16_t audio[codec::Opus::channelsPerFrame * samplesPerPacket];
     _rtpTimestamp += samplesPerPacket;
 
-    for (uint64_t x = 0; _emulatedAudioType == Audio::Opus && x < samplesPerPacket; ++x)
+    if (_emulatedAudioType == Audio::Opus && !_pcm16File)
     {
-        audio[x * 2] = _amplitude * sin(_phase + x * 2 * M_PI * _frequency / codec::Opus::sampleRate);
-        audio[x * 2 + 1] = 0;
+        for (uint64_t x = 0; x < samplesPerPacket; ++x)
+        {
+            audio[x * 2] = _amplitude * sin(_phase + x * 2 * M_PI * _frequency / codec::Opus::sampleRate);
+            audio[x * 2 + 1] = 0;
+        }
+        _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
+
+        if (_packetCount++ < 50)
+        {
+            // create noise floor
+            for (uint64_t x = 0; x < samplesPerPacket; ++x)
+            {
+                audio[x * 2] *= 0.01;
+            }
+        }
+        if (_tonePattern.onRatio < 1.0)
+        {
+            if (_tonePattern.silenceCountDown <= -20)
+            {
+                const auto p = 2.0 * _tonePattern.onRatio * (rand() % 1000) * 0.001;
+                _tonePattern.silenceCountDown = 20.0 * (1.0 / (p + 0.0001) - 1.0);
+            }
+            if (_tonePattern.silenceCountDown-- >= 0)
+            {
+                for (uint64_t x = 0; x < samplesPerPacket; ++x)
+                {
+                    audio[x * 2] *= 0.001;
+                }
+            }
+        }
     }
-    _phase += samplesPerPacket * 2 * M_PI * _frequency / codec::Opus::sampleRate;
+    else if (_emulatedAudioType == Audio::Opus && _pcm16File)
+    {
+        auto readSamples = ::fread(audio, sizeof(int16_t), samplesPerPacket, _pcm16File);
+        if (readSamples < samplesPerPacket)
+        {
+            ::rewind(_pcm16File);
+            readSamples = ::fread(audio, sizeof(int16_t), samplesPerPacket, _pcm16File);
+        }
+        codec::makeStereo(audio, samplesPerPacket);
+    }
 
     rtp::RtpHeaderExtension extensionHead;
     auto cursor = extensionHead.extensions().begin();
@@ -150,4 +198,20 @@ void AudioSource::setUseAudioLevel(const bool useAudioLevel)
     _useAudioLevel = useAudioLevel;
 }
 
+bool AudioSource::openPcm16File(const char* filename)
+{
+    if (_pcm16File)
+    {
+        ::fclose(_pcm16File);
+        _pcm16File = nullptr;
+    }
+
+    _pcm16File = ::fopen(filename, "r");
+    return _pcm16File != nullptr;
+}
+
+void AudioSource::enableIntermittentTone(double onRatio)
+{
+    _tonePattern.onRatio = onRatio;
+}
 } // namespace emulator

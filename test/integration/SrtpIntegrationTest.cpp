@@ -46,7 +46,7 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-        makeShortCallWithDefaultAudioProfile(group, utils::Time::sec * 2);
+        makeShortCallWithDefaultAudioProfile(group, utils::Time::sec * 4);
 
         nlohmann::json responseBody;
         auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
@@ -64,13 +64,13 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
         group.clients[0]->stopTransports();
         group.clients[1]->stopTransports();
 
-        group.awaitPendingJobs(utils::Time::sec * 4);
+        group.awaitPendingJobs(utils::Time::sec * 6);
         finalizeSimulation();
 
         const double expectedFrequencies[2][1] = {{1300.0}, {600.0}};
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 2, true, 0);
+            const auto data = analyzeSpectrum<SfuClient<Channel>>(group.clients[id].get(), 6, -75, 0, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             if (data.dominantFrequencies.size() >= 1)
             {

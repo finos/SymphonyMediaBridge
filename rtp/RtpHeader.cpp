@@ -316,4 +316,30 @@ bool getTransmissionTimestamp(const memory::Packet& packet, uint8_t extensionId,
     return false;
 }
 
+bool getAudioLevel(const memory::Packet& packet, uint8_t extensionId, int& level)
+{
+    assert(rtp::isRtpPacket(packet));
+
+    auto* rtpHeader = RtpHeader::fromPacket(packet);
+    if (!rtpHeader)
+    {
+        return false;
+    }
+
+    auto* extensionHeader = rtpHeader->getExtensionHeader();
+    if (extensionHeader)
+    {
+        for (auto& extension : extensionHeader->extensions())
+        {
+            if (extension.getId() == extensionId)
+            {
+                level = extension.data[0] & 0x7F;
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 } // namespace rtp

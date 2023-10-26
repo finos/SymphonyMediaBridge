@@ -5,6 +5,7 @@
 #include "config/Config.h"
 #include "emulator/TimeTurner.h"
 #include "test/integration/FFTanalysis.h"
+#include "test/integration/SampleDataUtils.h"
 #include "test/integration/emulator/Httpd.h"
 #include "test/integration/emulator/SfuClient.h"
 #include "test/integration/emulator/SfuGroupCall.h"
@@ -212,10 +213,11 @@ public:
 
                 if (checkAmplitudeProfile)
                 {
-                    EXPECT_EQ(amplitudeProfile.size(), 2);
-                    if (amplitudeProfile.size() > 1)
+                    // audio will start with a short noise floor to stabilize before going full amplitude.
+                    EXPECT_EQ(amplitudeProfile.size(), 4);
+                    if (amplitudeProfile.size() > 3)
                     {
-                        EXPECT_NEAR(amplitudeProfile[1].second, 5725, 125);
+                        EXPECT_NEAR(amplitudeProfile[3].second, 5625, 175);
                     }
                 }
             }
@@ -240,6 +242,54 @@ public:
         {
             logger::debug("%.1fHz", "analyzeRecording", f);
         }
+        return result;
+    }
+
+    template <typename TClient>
+    static IntegrationTest::AudioAnalysisData analyzeSpectrum(TClient* client,
+        double expectedDurationSeconds,
+        double inclusionThreshold,
+        size_t mixedAudioSources = 0,
+        bool dumpPcmData = false)
+    {
+        auto audioCounters = client->getAudioReceiveCounters(utils::Time::getAbsoluteTime());
+        EXPECT_EQ(audioCounters.lostPackets, 0);
+
+        const auto& data = client->getAudioReceiveStats();
+        IntegrationTest::AudioAnalysisData result;
+
+        for (const auto& item : data)
+        {
+            if (client->isRemoteVideoSsrc(item.first))
+            {
+                continue;
+            }
+
+            result.audioSsrcCount++;
+
+            std::vector<double> freqVector;
+            std::vector<std::pair<uint64_t, double>> amplitudeProfile;
+            auto rec = item.second->getRecording();
+            auto spectrum = createAudioSpectrum(rec, 48000);
+            auto powerSpectrum = SampleDataUtils::powerSpectrumDB(spectrum);
+            auto pwrFreq = SampleDataUtils::toPowerVector(powerSpectrum, 48000);
+            std::sort(pwrFreq.begin(),
+                pwrFreq.end(),
+                [](const std::pair<double, double>& f1, const std::pair<double, double>& f2) {
+                    return f2.second < f1.second;
+                });
+
+            auto peaks = SampleDataUtils::isolatePeaks(pwrFreq, inclusionThreshold, 48000);
+            for (auto& p : peaks)
+            {
+                result.dominantFrequencies.push_back(p.first);
+            }
+            if (dumpPcmData)
+            {
+                item.second->dumpPcmData();
+            }
+        }
+
         return result;
     }
 

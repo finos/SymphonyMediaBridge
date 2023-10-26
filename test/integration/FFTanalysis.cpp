@@ -137,6 +137,9 @@ CmplxArray createAudioSpectrum(const std::vector<int16_t>& recording, uint32_t s
 {
     const size_t fftWindowSize = 2048;
     size_t numThreads = std::max(std::thread::hardware_concurrency(), 2U);
+#ifdef LCHECK_BUILD
+    numThreads = 2;
+#endif
     std::vector<std::thread> workers;
 
     std::vector<CmplxArray> spectrums;

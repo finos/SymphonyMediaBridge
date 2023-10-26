@@ -108,4 +108,13 @@ int32_t OpusDecoder::getLastPacketDuration()
     return lastPacketDuration;
 }
 
+void OpusDecoder::onUnusedPacketReceived(uint32_t extendedSequenceNumber)
+{
+    const auto advance = static_cast<int32_t>(extendedSequenceNumber - _sequenceNumber);
+    if (advance > 0)
+    {
+        _sequenceNumber = extendedSequenceNumber;
+    }
+}
+
 } // namespace codec

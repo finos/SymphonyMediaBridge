@@ -20,8 +20,10 @@ public:
 
     FILE* get() { return _file; }
 
+    operator bool() const { return _file != nullptr; }
+
 private:
     FILE* _file;
 };
 
-}
+} // namespace utils
