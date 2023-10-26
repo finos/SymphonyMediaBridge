@@ -14,27 +14,6 @@ void makeStereo(int16_t* data, size_t count)
     }
 }
 
-// compacts stereo pcm16 by dropping every 48th sample
-// shrinks by 2%
-// returns new length of vector
-size_t compactStereo(int16_t* pcmData, size_t samples)
-{
-    size_t writeIndex = 0;
-    for (size_t i = 0; i < samples; ++i)
-    {
-        pcmData[writeIndex] = pcmData[i * 2];
-        pcmData[writeIndex + 1] = pcmData[i * 2 + 1];
-
-        if ((i % 48) == 0)
-        {
-            ++i;
-        }
-
-        writeIndex += 2;
-    }
-    return writeIndex / 2;
-}
-
 void swingTailMono(int16_t* data, const uint32_t sampleRate, const size_t count, const int step)
 {
     const double tailFrequency = 250;

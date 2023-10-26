@@ -348,8 +348,6 @@ set(FILES
         rtp/JitterEstimator.cpp
         rtp/RtpDelayTracker.h
         rtp/RtpDelayTracker.cpp
-        rtp/JitterBuffer.cpp
-        rtp/JitterBuffer.h
         rtp/JitterBufferList.cpp
         rtp/JitterBufferList.h
         test/macros.h

@@ -4,7 +4,6 @@
 #include "logger/Logger.h"
 #include "logger/PacketLogger.h"
 #include "memory/PacketPoolAllocator.h"
-#include "rtp/JitterBuffer.h"
 #include "rtp/JitterEstimator.h"
 #include "rtp/JitterTracker.h"
 #include "rtp/RtpHeader.h"
