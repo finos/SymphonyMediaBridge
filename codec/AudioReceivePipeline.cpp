@@ -16,6 +16,16 @@
 namespace codec
 {
 
+namespace
+{
+bool isDiscardedPacket(const memory::Packet& packet)
+{
+    const auto* header = rtp::RtpHeader::fromPacket(packet);
+    // check if payload length is zero
+    return 0 == (packet.getLength() - header->headerLength());
+}
+} // namespace
+
 AudioReceivePipeline::ReceiveBox::ReceiveBox(size_t bufferSize)
     : underrunCount(0),
       audioBufferSize(bufferSize),
@@ -324,34 +334,8 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
     memory::UniquePacket packet,
     uint64_t receiveTime)
 {
-    const auto header = rtp::RtpHeader::fromPacket(*packet);
-    if (!header)
-    {
-        return false; // corrupt
-    }
-
-    if (_targetDelay == 0)
-    {
-        init(extendedSequenceNumber, *header, receiveTime);
-        _jitterBuffer.add(std::move(packet));
-        return true;
-    }
-
-    const auto delay = analysePacketJitter(extendedSequenceNumber, *header, receiveTime);
-    const auto posted = _jitterBuffer.add(std::move(packet));
-    if (posted)
-    {
-        updateTargetDelay(delay);
-    }
-    else if (_jitterEmergency.counter > 0)
-    {
-        flush(); // reset and start over
-        logger::warn("%u RTP delay irrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
-        return true;
-    }
-
-    process(receiveTime);
-    return posted;
+    assert(isDiscardedPacket(*packet));
+    return onRtpPacket(extendedSequenceNumber, std::move(packet), receiveTime);
 }
 
 // Fetch audio and suppress pops after underruns as well as resume
@@ -449,16 +433,6 @@ bool AudioReceivePipeline::dtxHandler(const int16_t sequenceAdvance,
     }
     return false;
 }
-
-namespace
-{
-bool isDiscardedPacket(const memory::Packet& packet)
-{
-    const auto* header = rtp::RtpHeader::fromPacket(packet);
-    // check if payload length is zero
-    return 0 == (packet.getLength() - header->headerLength());
-}
-} // namespace
 
 void AudioReceivePipeline::process(const uint64_t timestamp)
 {
