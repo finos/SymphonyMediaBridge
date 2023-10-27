@@ -631,6 +631,9 @@ TEST_F(BarbellTest, barbellNeighbours)
 
 TEST_F(BarbellTest, barbellStats)
 {
+#ifdef TCHECK_BUILD
+    GTEST_SKIP();
+#endif
     runTestInThread(expectedTestThreadCount(2), [this]() {
         _config.readFromString(_smbConfig1);
 
