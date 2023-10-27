@@ -309,7 +309,7 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
     else if (_jitterEmergency.counter > 0)
     {
         flush(); // reset and start over
-        logger::warn("%u RTP delay unrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
+        logger::warn("%u RTP delay irrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
         return false;
     }
 
@@ -346,7 +346,7 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
     else if (_jitterEmergency.counter > 0)
     {
         flush(); // reset and start over
-        logger::warn("%u RTP delay unrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
+        logger::warn("%u RTP delay irrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
         return true;
     }
 
@@ -450,6 +450,16 @@ bool AudioReceivePipeline::dtxHandler(const int16_t sequenceAdvance,
     return false;
 }
 
+namespace
+{
+bool isDiscardedPacket(const memory::Packet& packet)
+{
+    const auto* header = rtp::RtpHeader::fromPacket(packet);
+    // check if payload length is zero
+    return 0 == (packet.getLength() - header->headerLength());
+}
+} // namespace
+
 void AudioReceivePipeline::process(const uint64_t timestamp)
 {
     size_t bufferLevel = _pcmData.size() / _config.channels;
@@ -494,12 +504,12 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
 
         int16_t audioData[_samplesPerPacket * 4 * _config.channels];
         size_t decodedSamples = 0;
-        const size_t payloadLength = packet->getLength() - header->headerLength();
-        if (payloadLength == 0)
+
+        if (isDiscardedPacket(*packet))
         {
             decodedSamples = std::max(480u, _metrics.receivedRtpCyclesPerPacket);
-            _head.nextRtpTimestamp += decodedSamples;
             _decoder.onUnusedPacketReceived(extendedSequenceNumber);
+            std::memset(audioData, 0, decodedSamples);
         }
         else
         {
