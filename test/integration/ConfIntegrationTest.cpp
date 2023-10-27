@@ -812,6 +812,11 @@ TEST_F(IntegrationTest, endpointMessage)
 
 TEST_F(IntegrationTest, noAudioLevelExt)
 {
+#ifdef NOPERF_TEST
+    enterRealTime(2 + _numWorkerThreads);
+    GTEST_SKIP();
+#endif
+
     runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(_defaultSmbConfig);
         _config.audio.lastN = 1;

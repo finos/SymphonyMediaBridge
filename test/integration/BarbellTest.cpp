@@ -632,9 +632,7 @@ TEST_F(BarbellTest, barbellNeighbours)
 TEST_F(BarbellTest, barbellStats)
 {
 #ifdef TCHECK_BUILD
-    utils::Time::initialize();
-    utils::Time::rawNanoSleep(400);
-    _timeSource.shutdown();
+    enterRealTime(2 + _numWorkerThreads);
     GTEST_SKIP();
 #endif
     runTestInThread(expectedTestThreadCount(2), [this]() {
