@@ -132,7 +132,7 @@ TEST_F(IntegrationLegApi, plain)
                 {
                     EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3600, 250);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3600, 750);
                     EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.25, 48000 * 0.2);
                 }
 

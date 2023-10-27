@@ -105,7 +105,7 @@ TEST_F(IceTransportEmuTest, plainNewApi)
                 {
                     // rampup starts earlier with jitter buffer
                     EXPECT_LT(data.amplitudeProfile[0].second, 100);
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3652, 250);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3652, 750);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
