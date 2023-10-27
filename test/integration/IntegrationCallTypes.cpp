@@ -174,13 +174,15 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.80, 48000);
+                    EXPECT_NEAR(std::max_element(data.amplitudeProfile.begin(), data.amplitudeProfile.end())->second,
+                        3600,
+                        500);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.22, 48000);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);

@@ -74,13 +74,10 @@ public:
     static constexpr size_t framesPerIteration48kHz = sampleRate / (1000 / iterationDurationMs);
     static constexpr size_t framesPerIteration1kHz = iterationDurationMs;
     static constexpr size_t samplesPerIteration = framesPerIteration48kHz * channelsPerFrame;
-    static constexpr size_t preBufferSamples = samplesPerIteration * 50; // 500 ms
-    static constexpr size_t minimumSamplesInBuffer = samplesPerIteration * 25; // 250 ms
-    static constexpr size_t audioBufferSamples = preBufferSamples * 2; // 1000 ms
 
     static constexpr size_t maxNumBarbells = 16;
 
-    using AudioBuffer = memory::RingBuffer<int16_t, audioBufferSamples, preBufferSamples>;
+    static constexpr size_t samplesPerFrame20ms = sampleRate * 20 / 1000;
 
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
@@ -91,6 +88,7 @@ public:
         const config::Config& config,
         memory::PacketPoolAllocator& sendAllocator,
         memory::AudioPacketPoolAllocator& audioAllocator,
+        memory::PacketPoolAllocator& mainAllocator,
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<api::SimulcastGroup>& videoSsrcs,
         const uint32_t lastN);
@@ -109,6 +107,7 @@ public:
     void run(const uint64_t engineIterationStartTimestamp);
     // --
 
+    memory::PacketPoolAllocator& getMainAllocator() { return _mainAllocator; }
     memory::AudioPacketPoolAllocator& getAudioAllocator() { return _audioAllocator; }
     size_t getDominantSpeakerId() const;
     std::map<size_t, ActiveTalker> getActiveTalkers() const;
@@ -144,7 +143,7 @@ public:
     void onForwarderVideoRtpPacketDecrypted(SsrcInboundContext& inboundContext,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
-    void onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet);
+
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
     void onOutboundContextFinalized(size_t ownerEndpointHash, uint32_t ssrc, uint32_t feedbackSsrc, bool isVideo);
     void onRecordingOutboundContextFinalized(size_t recordingStreamIdHash, uint32_t ssrc);
@@ -161,7 +160,6 @@ public: // EngineMixer async interface. Will execute on engine thread
         const SimulcastStream& simulcastStream,
         const utils::Optional<SimulcastStream>& secondarySimulcastStream);
 
-    bool asyncAddAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
     bool asyncRemoveStream(const EngineAudioStream* engineAudioStream);
     bool asyncRemoveStream(const EngineVideoStream* stream);
     bool asyncRemoveStream(const EngineDataStream* stream);
@@ -200,7 +198,7 @@ private: // impl async interface
         const SimulcastStream& simulcastStream,
         const utils::Optional<SimulcastStream>& secondarySimulcastStream);
     void addAudioStream(EngineAudioStream* engineAudioStream);
-    void addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer);
+
     void addVideoStream(EngineVideoStream* engineVideoStream);
     void addRecordingStream(EngineRecordingStream* engineRecordingStream);
     void removeRecordingStream(const EngineRecordingStream& engineRecordingStream);
@@ -350,7 +348,6 @@ private:
     };
 
     using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket>;
-    using IncomingAudioPacketInfo = IncomingPacketAggregate<memory::UniqueAudioPacket>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -359,11 +356,8 @@ private:
     concurrency::SynchronizationContext _engineSyncContext;
     MixerManagerAsync& _messageListener;
 
-    concurrency::MpmcHashmap32<uint32_t, AudioBuffer*> _mixerSsrcAudioBuffers;
-
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingBarbellSctp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderAudioRtp;
-    concurrency::MpmcQueue<IncomingAudioPacketInfo> _incomingMixerAudioRtp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingRtcp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderVideoRtp;
 
@@ -383,9 +377,10 @@ private:
 
     uint32_t _localVideoSsrc;
 
-    int16_t _mixedData[samplesPerIteration];
+    int16_t _mixedData[samplesPerFrame20ms * channelsPerFrame];
     uint64_t _rtpTimestampSource; // 1kHz. it works with wrapping since it is truncated to uint32.
 
+    memory::PacketPoolAllocator& _mainAllocator;
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
@@ -426,7 +421,6 @@ private:
     void forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp);
-    void addPacketToMixerBuffers(const IncomingAudioPacketInfo& packet, const uint64_t timestamp, bool logSpamGuard);
 
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
@@ -443,7 +437,6 @@ private:
     void runTransportTicks(const uint64_t timestamp);
     void removeIdleStreams(const uint64_t timestamp);
 
-    void mixSsrcBuffers();
     void processAudioStreams();
     void runDominantSpeakerCheck(const uint64_t engineIterationStartTimestamp);
     void updateDirectorUplinkEstimates(const uint64_t engineIterationStartTimestamp);

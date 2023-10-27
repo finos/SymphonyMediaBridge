@@ -13,6 +13,19 @@
 #include "utils/Format.h"
 #include <gtest/gtest.h>
 
+uint64_t IntegrationTest::AudioAnalysisData::rampupAbove(double amplitude) const
+{
+    for (auto& item : amplitudeProfile)
+    {
+        if (item.second >= amplitude)
+        {
+            return item.first;
+        }
+    }
+
+    return std::numeric_limits<uint32_t>::max();
+}
+
 IntegrationTest::IntegrationTest()
     : _httpd(nullptr),
       _sendAllocator(memory::packetPoolSize, "IntegrationTest"),

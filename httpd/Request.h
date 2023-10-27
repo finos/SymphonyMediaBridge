@@ -60,6 +60,7 @@ Method methodFromString(const char* method)
     else
     {
         assert(false);
+        return Method::GET;
     }
 }
 

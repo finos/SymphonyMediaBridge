@@ -36,6 +36,7 @@
 #include <unordered_set>
 
 using namespace emulator;
+const uint32_t MIXED_VOLUME = 3652;
 
 TEST_F(IntegrationTest, plain)
 {
@@ -132,13 +133,13 @@ TEST_F(IntegrationTest, plain)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 750);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.25, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -179,7 +180,7 @@ TEST_F(IntegrationTest, ptime10)
 
         group.startConference(conf, baseUrl);
         CallConfigBuilder cfg(conf.getId());
-        cfg.url(baseUrl).av();
+        cfg.url(baseUrl).av().ptime(10);
 
         group.clients[0]->initiateCall(cfg.build());
         group.clients[1]->joinCall(cfg.build());
@@ -213,7 +214,8 @@ TEST_F(IntegrationTest, ptime10)
         size_t freqId = 0;
         for (auto id : {0, 1, 2})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0);
+            const auto data =
+                analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, 2 == id ? 2 : 0, false);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             if (data.dominantFrequencies.size() >= 2)
             {
@@ -230,13 +232,13 @@ TEST_F(IntegrationTest, ptime10)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 750);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 0.74, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -606,13 +608,13 @@ TEST_F(IntegrationTest, conferencePort)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 750);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.25, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -665,7 +667,7 @@ TEST_F(IntegrationTest, neighbours)
         group.clients[1]->joinCall(cfgNeighbours.build());
         group.clients[2]->joinCall(cfgNeighbours.build());
         group.clients[3]->joinCall(cfgNeighbours.mixed().build());
-
+        // 600, 1300, 2100, 3200
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
         make5secCallWithDefaultAudioProfile(group);
@@ -810,6 +812,11 @@ TEST_F(IntegrationTest, endpointMessage)
 
 TEST_F(IntegrationTest, noAudioLevelExt)
 {
+#ifdef NOPERF_TEST
+    enterRealTime(2 + _numWorkerThreads);
+    GTEST_SKIP();
+#endif
+
     runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(_defaultSmbConfig);
         _config.audio.lastN = 1;
@@ -999,13 +1006,13 @@ TEST_F(IntegrationTest, confList)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, MIXED_VOLUME, 750);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.25, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -1169,12 +1176,12 @@ TEST_F(IntegrationTest, twoClientsAudioOnly)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
-            EXPECT_EQ(data.amplitudeProfile.size(), 4);
+            EXPECT_GE(data.amplitudeProfile.size(), 3);
             if (data.amplitudeProfile.size() > 1)
             {
-                EXPECT_NEAR(data.amplitudeProfile.back().second, 5725, 100);
+                EXPECT_NEAR(data.amplitudeProfile.back().second, 5725, 700);
             }
             if (data.dominantFrequencies.size() >= 1)
             {

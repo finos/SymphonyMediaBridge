@@ -2,11 +2,11 @@
 
 #include "bridge/Barbell.h"
 #include "bridge/RecordingStream.h"
+#include "bridge/Stats.h"
 #include "bridge/engine/ActiveTalker.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/SimulcastLevel.h"
 #include "bridge/engine/SsrcRewrite.h"
-#include "bridge/Stats.h"
 #include "logger/Logger.h"
 #include "transport/Endpoint.h"
 #include "transport/dtls/SrtpClient.h"
@@ -114,7 +114,6 @@ public:
         const utils::Optional<ice::IceRole>& iceRole,
         bool rewriteSsrcs,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
-    void allocateAudioBuffer(uint32_t ssrc);
 
     bool addBundledAudioStream(std::string& outId,
         const std::string& endpointId,
@@ -320,7 +319,6 @@ private:
     utils::IdGenerator& _idGenerator;
     utils::SsrcGenerator& _ssrcGenerator;
 
-    std::unordered_map<uint32_t, std::unique_ptr<EngineMixer::AudioBuffer>> _audioBuffers;
     std::unordered_map<std::string, std::unique_ptr<AudioStream>> _audioStreams;
     std::unordered_map<std::string, std::unique_ptr<EngineAudioStream>> _audioEngineStreams;
     std::unordered_map<std::string, std::unique_ptr<VideoStream>> _videoStreams;

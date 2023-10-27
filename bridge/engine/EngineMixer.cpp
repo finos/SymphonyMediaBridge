@@ -19,9 +19,6 @@ using namespace bridge;
 namespace bridge
 {
 
-const size_t EngineMixer::samplesPerIteration;
-constexpr size_t EngineMixer::iterationDurationMs;
-
 EngineMixer::EngineMixer(const std::string& id,
     jobmanager::JobManager& jobManager,
     const concurrency::SynchronizationContext& engineSyncContext,
@@ -31,6 +28,7 @@ EngineMixer::EngineMixer(const std::string& id,
     const config::Config& config,
     memory::PacketPoolAllocator& sendAllocator,
     memory::AudioPacketPoolAllocator& audioAllocator,
+    memory::PacketPoolAllocator& mainAllocator,
     const std::vector<uint32_t>& audioSsrcs,
     const std::vector<api::SimulcastGroup>& videoSsrcs,
     const uint32_t lastN)
@@ -39,10 +37,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _jobManager(jobManager),
       _engineSyncContext(engineSyncContext),
       _messageListener(messageListener),
-      _mixerSsrcAudioBuffers(maxSsrcs),
       _incomingBarbellSctp(128),
       _incomingForwarderAudioRtp(maxPendingPackets),
-      _incomingMixerAudioRtp(maxPendingPackets),
       _incomingRtcp(maxPendingRtcpPackets),
       _incomingForwarderVideoRtp(maxPendingPackets),
       _engineAudioStreams(maxStreamsPerModality),
@@ -56,6 +52,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _audioSsrcToUserIdMap(ActiveMediaList::maxParticipants),
       _localVideoSsrc(localVideoSsrc),
       _rtpTimestampSource(1000),
+      _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator),
       _lastReceiveTime(utils::Time::getAbsoluteTime()),
@@ -84,7 +81,7 @@ EngineMixer::EngineMixer(const std::string& id,
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
-    memset(_mixedData, 0, samplesPerIteration * sizeof(int16_t));
+    memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
 }
 
 EngineMixer::~EngineMixer() {}
@@ -154,7 +151,6 @@ void EngineMixer::clear()
 void EngineMixer::flush()
 {
     logger::debug("flushing media from RTP queues", _loggableId.c_str());
-    _incomingMixerAudioRtp.clear();
     _incomingForwarderAudioRtp.clear();
     _incomingForwarderVideoRtp.clear();
     _incomingRtcp.clear();
@@ -191,8 +187,10 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     }
 
     // 4. Perform audio mixing
-    mixSsrcBuffers();
-    processAudioStreams();
+    if (_rtpTimestampSource % 20 == 0)
+    {
+        processAudioStreams();
+    }
 
     // 5. Check if Transports are alive
     removeIdleStreams(engineIterationStartTimestamp);
@@ -406,6 +404,10 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
     EngineStats::MixerStats stats;
     uint64_t idleTimestamp = iterationStartTime - utils::Time::sec * 2;
 
+    stats.audioInQueues = 0;
+    stats.audioInQueueSamples = 0;
+    stats.maxAudioInQueueSamples = 0;
+
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
         const auto* audioStream = audioStreamEntry.second;
@@ -436,6 +438,16 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
                 stats.audioLevelExtensionStreamCount += inboundSsrcContext->hasAudioLevelExtension.load() ? 1 : 0;
             }
         }
+
+        if (_numMixedAudioStreams > 0 && audioStream->remoteSsrc.isSet())
+        {
+            auto* ssrcContext = _ssrcInboundContexts.getItem(audioStream->remoteSsrc.get());
+            if (ssrcContext && ssrcContext->hasAudioReceivePipe.load())
+            {
+                ++stats.audioInQueues;
+                // fetching JB sizes would require more atomics in audio pipeline.
+            }
+        }
     }
 
     for (auto& videoStreamEntry : _engineVideoStreams)
@@ -455,23 +467,6 @@ EngineStats::MixerStats EngineMixer::gatherStats(const uint64_t iterationStartTi
             stats.outbound.transport.addLossGroup(videoSendCounters.getSendLossRatio());
             stats.pacingQueue += pacingQueueCount;
             stats.rtxPacingQueue += rtxPacingQueueCount;
-        }
-    }
-
-    {
-        stats.audioInQueues = 0;
-        stats.audioInQueueSamples = 0;
-        stats.maxAudioInQueueSamples = 0;
-        for (auto& audioBuffer : _mixerSsrcAudioBuffers)
-        {
-            if (!audioBuffer.second)
-            {
-                continue;
-            }
-            ++stats.audioInQueues;
-            uint32_t len = audioBuffer.second->getLength() / 2;
-            stats.audioInQueueSamples += len;
-            stats.maxAudioInQueueSamples = std::max(stats.maxAudioInQueueSamples, len);
         }
     }
 
@@ -970,6 +965,24 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 {
     uint32_t numRtpPackets = 0;
 
+    if (_numMixedAudioStreams > 0)
+    {
+        for (auto& audioStream : _engineAudioStreams)
+        {
+            if (audioStream.second->remoteSsrc.isSet())
+            {
+                auto ssrcContext = _ssrcInboundContexts.getItem(audioStream.second->remoteSsrc.get());
+                if (ssrcContext && ssrcContext->hasAudioReceivePipe.load() &&
+                    ssrcContext->audioReceivePipe->needProcess())
+                {
+                    auto& transport = audioStream.second->transport;
+                    transport.postOnQueue(
+                        [ssrcContext]() { ssrcContext->audioReceivePipe->process(utils::Time::getAbsoluteTime()); });
+                }
+            }
+        }
+    }
+
     for (IncomingPacketInfo packetInfo; _incomingForwarderAudioRtp.pop(packetInfo);)
     {
         ++numRtpPackets;
@@ -1005,13 +1018,6 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         forwardVideoRtpPacket(packetInfo, timestamp);
         forwardVideoRtpPacketOverBarbell(packetInfo, timestamp);
         forwardVideoRtpPacketRecording(packetInfo, timestamp);
-    }
-
-    bool overrunLogSpamGuard = false;
-    for (IncomingAudioPacketInfo packetInfo; _incomingMixerAudioRtp.pop(packetInfo);)
-    {
-        ++numRtpPackets;
-        addPacketToMixerBuffers(packetInfo, timestamp, overrunLogSpamGuard);
     }
 
     if (numRtpPackets == 0)

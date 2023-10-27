@@ -365,23 +365,6 @@ bool Mixer::addAudioStream(std::string& outId,
     return streamItr.first->second->transport->isInitialized();
 }
 
-void Mixer::allocateAudioBuffer(uint32_t ssrc)
-{
-    std::lock_guard<std::mutex> locker(_configurationLock);
-    auto findResult = _audioBuffers.find(ssrc);
-    if (findResult != _audioBuffers.cend())
-    {
-        return;
-    }
-
-    logger::info("Allocating audio buffer for ssrc %u", getLoggableId().c_str(), ssrc);
-
-    auto audioBuffer = std::make_unique<EngineMixer::AudioBuffer>();
-    auto* rawAudioBuffer = audioBuffer.get();
-    _audioBuffers.emplace(ssrc, std::move(audioBuffer));
-    _engineMixer->asyncAddAudioBuffer(ssrc, rawAudioBuffer);
-}
-
 bool Mixer::addVideoStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
@@ -719,11 +702,6 @@ void Mixer::engineAudioStreamRemoved(const EngineAudioStream& engineStream)
         return;
     }
 
-    if (engineStream.remoteSsrc.isSet() && _audioBuffers.find(engineStream.remoteSsrc.get()) != _audioBuffers.end())
-    {
-        _audioBuffers.erase(engineStream.remoteSsrc.get());
-    }
-
     const auto transport = streamItr->second->transport;
     logger::info("AudioStream id %s, endpointId %s deleted.",
         _loggableId.c_str(),
@@ -842,12 +820,17 @@ bridge::Stats::MixerBarbellStats Mixer::gatherBarbellStats(const uint64_t iterat
     bridge::Stats::MixerBarbellStats stats;
     uint64_t idleTimestamp = iterationStartTime - utils::Time::sec * 2;
 
-    for (const auto& itBb : _engineBarbells) {
+    for (const auto& itBb : _engineBarbells)
+    {
         bridge::Stats::BarbellStats barbellStats;
-        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::AUDIO_SEND] = fromPacketCounter(itBb.second->transport.getAudioSendCounters(idleTimestamp));
-        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::AUDIO_RECV] = fromPacketCounter(itBb.second->transport.getAudioReceiveCounters(idleTimestamp));
-        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::VIDEO_SEND] = fromPacketCounter(itBb.second->transport.getVideoSendCounters(idleTimestamp));
-        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::VIDEO_RECV] = fromPacketCounter(itBb.second->transport.getVideoReceiveCounters(idleTimestamp));
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::AUDIO_SEND] =
+            fromPacketCounter(itBb.second->transport.getAudioSendCounters(idleTimestamp));
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::AUDIO_RECV] =
+            fromPacketCounter(itBb.second->transport.getAudioReceiveCounters(idleTimestamp));
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::VIDEO_SEND] =
+            fromPacketCounter(itBb.second->transport.getVideoSendCounters(idleTimestamp));
+        barbellStats._stats[bridge::Stats::BarbellStats::PayloadType::VIDEO_RECV] =
+            fromPacketCounter(itBb.second->transport.getVideoReceiveCounters(idleTimestamp));
         stats._stats.emplace(itBb.second->id, barbellStats);
     }
 

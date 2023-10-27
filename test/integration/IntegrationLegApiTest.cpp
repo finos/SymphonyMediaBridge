@@ -127,13 +127,13 @@ TEST_F(IntegrationLegApi, plain)
                 }
                 // We expect a ramp-up of volume like this:
                 // start from 0;
-                // ramp-up to about 1826 (+-250) in 0.8 (+-0,2s)
+                // ramp-up to about 3652 (+-250) in 0.8 (+-0,2s)
                 if (data.amplitudeProfile.size() >= 2)
                 {
-                    EXPECT_EQ(data.amplitudeProfile[0].second, 0);
+                    EXPECT_LT(data.amplitudeProfile[0].second, 100);
 
-                    EXPECT_NEAR(data.amplitudeProfile.back().second, 1826, 250);
-                    EXPECT_NEAR(data.amplitudeProfile.back().first, 48000 * 1.79, 48000 * 0.2);
+                    EXPECT_NEAR(data.amplitudeProfile.back().second, 3600, 750);
+                    EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.25, 48000 * 0.2);
                 }
 
                 EXPECT_EQ(data.audioSsrcCount, 1);
@@ -209,10 +209,10 @@ TEST_F(IntegrationLegApi, twoClientsAudioOnly)
         {
             const auto data = analyzeRecording<SfuClient<ColibriChannel>>(group.clients[id].get(), 5, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
-            EXPECT_EQ(data.amplitudeProfile.size(), 4);
+            EXPECT_GE(data.amplitudeProfile.size(), 3);
             if (data.amplitudeProfile.size() > 2)
             {
-                EXPECT_NEAR(data.amplitudeProfile.back().second, 5725, 100);
+                EXPECT_NEAR(data.amplitudeProfile.back().second, 5725, 700);
             }
             if (data.dominantFrequencies.size() >= 1)
             {

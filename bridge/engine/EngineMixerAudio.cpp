@@ -7,12 +7,13 @@
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/FinalizeNonSsrcRewriteOutboundContextJob.h"
 #include "bridge/engine/SendRtcpJob.h"
+#include "codec/AudioTools.h"
 #include "codec/Opus.h"
 #include "config/Config.h"
 
 namespace
 {
-const int16_t mixSampleScaleFactor = 4;
+const double mixSampleScaleFactor = 0.5;
 }
 
 namespace bridge
@@ -97,6 +98,21 @@ void EngineMixer::removeStream(const EngineAudioStream* engineAudioStream)
     if (engineAudioStream->isMixed())
     {
         _numMixedAudioStreams--;
+        if (_numMixedAudioStreams == 0)
+        {
+            for (auto& audioStreamIt : _engineAudioStreams)
+            {
+                if (audioStreamIt.second->remoteSsrc.isSet())
+                {
+                    auto ssrcContext = _ssrcInboundContexts.getItem(audioStreamIt.second->remoteSsrc.get());
+                    if (ssrcContext && ssrcContext->hasAudioReceivePipe.load())
+                    {
+                        audioStreamIt.second->transport.postOnQueue(
+                            [ssrcContext]() { ssrcContext->audioReceivePipe->flush(); });
+                    }
+                }
+            }
+        }
     }
 
     logger::debug("Remove engineAudioStream, transport %s",
@@ -106,7 +122,6 @@ void EngineMixer::removeStream(const EngineAudioStream* engineAudioStream)
     if (engineAudioStream->remoteSsrc.isSet())
     {
         decommissionInboundContext(engineAudioStream->remoteSsrc.get());
-        _mixerSsrcAudioBuffers.erase(engineAudioStream->remoteSsrc.get());
 
         markAssociatedAudioOutboundContextsForDeletion(engineAudioStream);
         sendAudioStreamToRecording(*engineAudioStream, false);
@@ -144,12 +159,6 @@ void EngineMixer::reconfigureAudioStream(const transport::RtcTransport& transpor
     updateBandwidthFloor();
 }
 
-void EngineMixer::addAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer)
-{
-    _mixerSsrcAudioBuffers.erase(ssrc);
-    _mixerSsrcAudioBuffers.emplace(ssrc, audioBuffer);
-}
-
 void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
     transport::RtcTransport* sender,
     memory::UniquePacket packet,
@@ -179,16 +188,6 @@ void EngineMixer::onForwarderAudioRtpPacketDecrypted(SsrcInboundContext& inbound
             IncomingPacketInfo(std::move(packet), &inboundContext, extendedSequenceNumber)))
     {
         logger::error("Failed to push incoming forwarder audio packet onto queue", getLoggableId().c_str());
-        assert(false);
-    }
-}
-
-void EngineMixer::onMixerAudioRtpPacketDecoded(SsrcInboundContext& inboundContext, memory::UniqueAudioPacket packet)
-{
-    assert(packet);
-    if (!_incomingMixerAudioRtp.push(IncomingAudioPacketInfo(std::move(packet), &inboundContext)))
-    {
-        logger::error("Failed to push incoming mixer audio packet onto queue", getLoggableId().c_str());
         assert(false);
     }
 }
@@ -325,109 +324,46 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
     }
 }
 
-/**
- * Append RTP audio to pre-buffer for this ssrc in _mixerSsrcAudioBuffers
- */
-void EngineMixer::addPacketToMixerBuffers(const IncomingAudioPacketInfo& packetInfo,
-    const uint64_t timestamp,
-    bool overrunLogSpamGuard)
+namespace
 {
-    const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
-    if (!rtpHeader)
+bool isContributingToMix(const SsrcInboundContext* inboundAudioContext)
+{
+    return inboundAudioContext && inboundAudioContext->hasAudioReceivePipe.load() &&
+        inboundAudioContext->audioReceivePipe->getAudioSampleCount() > 0;
+}
+} // namespace
+
+void EngineMixer::processAudioStreams()
+{
+    if (_numMixedAudioStreams == 0)
     {
         return;
     }
 
-    const auto ssrc = rtpHeader->ssrc;
-    const auto sequenceNumber = rtpHeader->sequenceNumber;
-    const auto payloadStart = rtpHeader->getPayload();
-    const uint32_t payloadLength = packetInfo.packet()->getLength() - rtpHeader->headerLength();
+    const auto payloadBytesPerPacket =
+        samplesPerFrame20ms * codec::Opus::channelsPerFrame * codec::Opus::bytesPerSample;
 
-    const auto mixerAudioBufferItr = _mixerSsrcAudioBuffers.find(ssrc.get());
-    if (mixerAudioBufferItr == _mixerSsrcAudioBuffers.cend())
+    std::memset(_mixedData, 0, payloadBytesPerPacket);
+
+    for (auto& ssrcContext : _ssrcInboundContexts)
     {
-        logger::debug("New ssrc %u seen, sequence %u, sending request to add audio buffer",
-            _loggableId.c_str(),
-            ssrc.get(),
-            sequenceNumber.get());
-        _mixerSsrcAudioBuffers.emplace(ssrc, nullptr);
-        _messageListener.asyncAllocateAudioBuffer(*this, ssrc.get());
-    }
-    else if (!mixerAudioBufferItr->second)
-    {
-        logger::debug("new ssrc %u seen again, sequence %u, audio buffer is already requested",
-            _loggableId.c_str(),
-            ssrc.get(),
-            sequenceNumber.get());
-    }
-    else
-    {
-        const auto samples = payloadLength / bytesPerSample;
-        if (!mixerAudioBufferItr->second->write(reinterpret_cast<int16_t*>(payloadStart), samples))
+        if (ssrcContext.second->rtpMap.isAudio() && ssrcContext.second->hasAudioReceivePipe.load())
         {
-            if (!overrunLogSpamGuard)
+            auto& rcvPipe = *ssrcContext.second->audioReceivePipe;
+            const auto readySamples = rcvPipe.fetchStereo(samplesPerFrame20ms);
+            if (readySamples > 0)
             {
-                logger::debug("Failed to write packet, buffer overrun, ssrc %u, sequence %u",
-                    _loggableId.c_str(),
-                    ssrc.get(),
-                    sequenceNumber.get());
+                codec::addToMix(rcvPipe.getAudio(),
+                    _mixedData,
+                    readySamples * codec::Opus::channelsPerFrame,
+                    mixSampleScaleFactor);
             }
-            overrunLogSpamGuard = true;
         }
     }
-}
 
-void EngineMixer::mixSsrcBuffers()
-{
-    memset(_mixedData, 0, samplesPerIteration * codec::Opus::bytesPerSample);
-    for (auto& mixerAudioBufferEntry : _mixerSsrcAudioBuffers)
-    {
-        if (!mixerAudioBufferEntry.second)
-        {
-            continue;
-        }
-        if (mixerAudioBufferEntry.second->isPreBuffering())
-        {
-            continue;
-        }
-
-        if (mixerAudioBufferEntry.second->getLength() < samplesPerIteration)
-        {
-            logger::debug("mixerAudioBufferEntry underrun", _loggableId.c_str());
-            mixerAudioBufferEntry.second->setPreBuffering();
-            continue;
-        }
-        else if (mixerAudioBufferEntry.second->getLength() < minimumSamplesInBuffer)
-        {
-            mixerAudioBufferEntry.second->insertSilence(samplesPerIteration);
-        }
-
-        mixerAudioBufferEntry.second->addToMix(_mixedData, samplesPerIteration, mixSampleScaleFactor);
-    }
-}
-
-void EngineMixer::processAudioStreams()
-{
     for (auto& audioStreamEntry : _engineAudioStreams)
     {
         auto audioStream = audioStreamEntry.second;
-        auto isContributingToMix = false;
-        AudioBuffer* audioBuffer = nullptr;
-
-        if (audioStream->remoteSsrc.isSet())
-        {
-            audioBuffer = _mixerSsrcAudioBuffers.getItem(audioStream->remoteSsrc.get());
-            isContributingToMix = audioBuffer && !audioBuffer->isPreBuffering();
-
-            if (!audioStream->isMixed() || !audioStream->transport.isConnected())
-            {
-                if (isContributingToMix)
-                {
-                    audioBuffer->drop(samplesPerIteration);
-                }
-                continue;
-            }
-        }
 
         if (!audioStream->isMixed())
         {
@@ -443,38 +379,39 @@ void EngineMixer::processAudioStreams()
         auto rtpHeader = rtp::RtpHeader::create(*audioPacket);
         rtpHeader->ssrc = audioStream->localSsrc;
 
-        auto payloadStart = rtpHeader->getPayload();
+        auto payloadStart = reinterpret_cast<int16_t*>(rtpHeader->getPayload());
         const auto headerLength = rtpHeader->headerLength();
-        audioPacket->setLength(headerLength + samplesPerIteration * bytesPerSample);
-        memcpy(payloadStart, _mixedData, samplesPerIteration * bytesPerSample);
+        audioPacket->setLength(headerLength + payloadBytesPerPacket);
+        std::memcpy(payloadStart, _mixedData, payloadBytesPerPacket);
 
-        if (isContributingToMix && audioBuffer)
-        {
-            audioBuffer->removeFromMix(reinterpret_cast<int16_t*>(payloadStart),
-                samplesPerIteration,
-                mixSampleScaleFactor);
-            audioBuffer->drop(samplesPerIteration);
-        }
+        SsrcInboundContext* inboundAudioContext =
+            (audioStream->remoteSsrc.isSet() ? _ssrcInboundContexts.getItem(audioStream->remoteSsrc.get()) : nullptr);
 
         if (!audioStream->neighbours.empty())
         {
             for (auto& stream : _engineAudioStreams)
             {
                 auto& peerAudioStream = *stream.second;
-                if (stream.second->endpointIdHash != audioStream->endpointIdHash &&
-                    peerAudioStream.remoteSsrc.isSet() && peerAudioStream.transport.isConnected() &&
+                if (peerAudioStream.remoteSsrc.isSet() &&
                     areNeighbours(audioStream->neighbours, peerAudioStream.neighbours))
                 {
-                    auto* neighbourAudioBuffer = _mixerSsrcAudioBuffers.getItem(peerAudioStream.remoteSsrc.get());
-                    if (!neighbourAudioBuffer || neighbourAudioBuffer->isPreBuffering())
+                    auto neighbourContext = _ssrcInboundContexts.getItem(peerAudioStream.remoteSsrc.get());
+                    if (isContributingToMix(neighbourContext))
                     {
-                        continue;
+                        codec::subtractFromMix(neighbourContext->audioReceivePipe->getAudio(),
+                            payloadStart,
+                            neighbourContext->audioReceivePipe->getAudioSampleCount() * codec::Opus::channelsPerFrame,
+                            mixSampleScaleFactor);
                     }
-                    neighbourAudioBuffer->removeFromMix(reinterpret_cast<int16_t*>(payloadStart),
-                        samplesPerIteration,
-                        mixSampleScaleFactor);
                 }
             }
+        }
+        else if (inboundAudioContext && isContributingToMix(inboundAudioContext))
+        {
+            codec::subtractFromMix(inboundAudioContext->audioReceivePipe->getAudio(),
+                payloadStart,
+                inboundAudioContext->audioReceivePipe->getAudioSampleCount() * codec::Opus::channelsPerFrame,
+                mixSampleScaleFactor);
         }
 
         auto* ssrcContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
@@ -527,11 +464,6 @@ void EngineMixer::markAssociatedAudioOutboundContextsForDeletion(const EngineAud
                 feedbackSsrc);
         }
     }
-}
-
-bool EngineMixer::asyncAddAudioBuffer(const uint32_t ssrc, AudioBuffer* audioBuffer)
-{
-    return post(utils::bind(&EngineMixer::addAudioBuffer, this, ssrc, audioBuffer));
 }
 
 bool EngineMixer::asyncRemoveStream(const EngineAudioStream* engineAudioStream)

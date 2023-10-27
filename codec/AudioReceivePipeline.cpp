@@ -16,6 +16,16 @@
 namespace codec
 {
 
+namespace
+{
+bool isDiscardedPacket(const memory::Packet& packet)
+{
+    const auto* header = rtp::RtpHeader::fromPacket(packet);
+    // check if payload length is zero
+    return 0 == (packet.getLength() - header->headerLength());
+}
+} // namespace
+
 AudioReceivePipeline::ReceiveBox::ReceiveBox(size_t bufferSize)
     : underrunCount(0),
       audioBufferSize(bufferSize),
@@ -309,7 +319,7 @@ bool AudioReceivePipeline::onRtpPacket(uint32_t extendedSequenceNumber,
     else if (_jitterEmergency.counter > 0)
     {
         flush(); // reset and start over
-        logger::warn("%u RTP delay unrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
+        logger::warn("%u RTP delay irrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
         return false;
     }
 
@@ -324,34 +334,8 @@ bool AudioReceivePipeline::onSilencedRtpPacket(uint32_t extendedSequenceNumber,
     memory::UniquePacket packet,
     uint64_t receiveTime)
 {
-    const auto header = rtp::RtpHeader::fromPacket(*packet);
-    if (!header)
-    {
-        return false; // corrupt
-    }
-
-    if (_targetDelay == 0)
-    {
-        init(extendedSequenceNumber, *header, receiveTime);
-        _jitterBuffer.add(std::move(packet));
-        return true;
-    }
-
-    const auto delay = analysePacketJitter(extendedSequenceNumber, *header, receiveTime);
-    const auto posted = _jitterBuffer.add(std::move(packet));
-    if (posted)
-    {
-        updateTargetDelay(delay);
-    }
-    else if (_jitterEmergency.counter > 0)
-    {
-        flush(); // reset and start over
-        logger::warn("%u RTP delay unrecoverable. Jitter buffer is full. Resetting...", "AudioReceivePipeline", _ssrc);
-        return true;
-    }
-
-    process(receiveTime);
-    return posted;
+    assert(isDiscardedPacket(*packet));
+    return onRtpPacket(extendedSequenceNumber, std::move(packet), receiveTime);
 }
 
 // Fetch audio and suppress pops after underruns as well as resume
@@ -494,12 +478,12 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
 
         int16_t audioData[_samplesPerPacket * 4 * _config.channels];
         size_t decodedSamples = 0;
-        const size_t payloadLength = packet->getLength() - header->headerLength();
-        if (payloadLength == 0)
+
+        if (isDiscardedPacket(*packet))
         {
             decodedSamples = std::max(480u, _metrics.receivedRtpCyclesPerPacket);
-            _head.nextRtpTimestamp += decodedSamples;
             _decoder.onUnusedPacketReceived(extendedSequenceNumber);
+            std::memset(audioData, 0, decodedSamples);
         }
         else
         {

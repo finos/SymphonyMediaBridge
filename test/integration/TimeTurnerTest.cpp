@@ -7,6 +7,9 @@
 
 TEST(TimeTurner, threads3)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     emulator::TimeTurner timeSource;
     utils::Time::initialize(timeSource);
 

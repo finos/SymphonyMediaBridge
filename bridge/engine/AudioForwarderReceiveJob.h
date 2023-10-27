@@ -37,12 +37,6 @@ public:
     void run() override;
 
 private:
-    int decodeOpus(const memory::Packet& opusPacket, bool needAudioLevel);
-    memory::UniqueAudioPacket decodeOpusPacket(const memory::Packet& opusPacket);
-    void onPacketDecoded(const int32_t decodedFrames, const uint8_t* decodedData);
-    memory::UniqueAudioPacket makePcmPacket(const memory::Packet& opusPacket, uint32_t sequenceNumber);
-    void conceal(memory::AudioPacket& pcmPacket);
-    void conceal(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket);
     void decode(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket);
     bool unprotect(memory::Packet& opusPacket);
     int computeOpusAudioLevel(const memory::Packet& opusPacket);

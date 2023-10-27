@@ -148,6 +148,10 @@ public:
             reinterpret_cast<unsigned char*>(decodedData),
             memory::AudioPacket::size / codec::Opus::channelsPerFrame / codec::Opus::bytesPerSample);
 
+        if (extendedSequenceNumber % 50 == 0)
+        {
+            logger::debug("recorded %u, %d samples", _loggableId.c_str(), extendedSequenceNumber, count);
+        }
         for (int32_t i = 0; i < count; ++i)
         {
             _recording.push_back(decodedData[i * 2]);
@@ -158,6 +162,10 @@ public:
     {
         utils::StringBuilder<512> fileName;
         fileName.append(_loggableId.c_str()).append("-").append(_context.ssrc);
+        logger::info("storing recording %s, %zu samples, pcm16-mono",
+            _loggableId.c_str(),
+            fileName.get(),
+            _recording.size());
 
         FILE* logFile = ::fopen(fileName.get(), "wr");
         ::fwrite(_recording.data(), _recording.size(), 2, logFile);

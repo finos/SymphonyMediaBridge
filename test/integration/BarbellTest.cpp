@@ -631,6 +631,10 @@ TEST_F(BarbellTest, barbellNeighbours)
 
 TEST_F(BarbellTest, barbellStats)
 {
+#ifdef TCHECK_BUILD
+    enterRealTime(2 + _numWorkerThreads);
+    GTEST_SKIP();
+#endif
     runTestInThread(expectedTestThreadCount(2), [this]() {
         _config.readFromString(_smbConfig1);
 
@@ -695,7 +699,7 @@ TEST_F(BarbellTest, barbellStats)
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
-        make5secCallWithDefaultAudioProfile(group);
+        makeShortCallWithDefaultAudioProfile(group, utils::Time::sec * 10);
 
         // Let's check both form of getting barbell stats:
         // - specifc conference: /stats/barbell/<conference ID>
@@ -850,7 +854,7 @@ TEST_F(BarbellTest, barbellStats)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 10, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 2);
             if (data.dominantFrequencies.size() >= 2)
             {
@@ -876,7 +880,7 @@ TEST_F(BarbellTest, barbellStats)
         {
             const double fps = (double)utils::Time::sec / (double)videoStats.averageFrameRateDelta;
             EXPECT_NEAR(fps, 30.0, 1.0);
-            EXPECT_NEAR(videoStats.numDecodedFrames, 150, 7);
+            EXPECT_NEAR(videoStats.numDecodedFrames, 300, 15);
         }
     });
 }

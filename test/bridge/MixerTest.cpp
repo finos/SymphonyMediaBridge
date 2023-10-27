@@ -208,6 +208,7 @@ protected:
             _config,
             _testScope->packetAllocator,
             _testScope->audioPacketAllocator,
+            _testScope->packetAllocator,
             audioSsrc,
             videoSsrcs,
             LAST_N);
