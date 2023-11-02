@@ -61,17 +61,14 @@ bool JitterBufferList::add(memory::UniquePacket packet)
         return true;
     }
 
-    for (ListItem* item = _head; item; item = item->next)
+    for (ListItem** itemPtr = &_head; *itemPtr; itemPtr = &(*itemPtr)->next)
     {
-        const auto itemHeader = RtpHeader::fromPacket(*item->next->packet);
+        auto item = *itemPtr;
+        const auto itemHeader = RtpHeader::fromPacket(*item->packet);
         if (static_cast<int16_t>(itemHeader->sequenceNumber.get() - newHeader->sequenceNumber.get()) > 0)
         {
-            newItem->next = item->next;
-            item->next = newItem;
-            if (item == _head)
-            {
-                _head = newItem;
-            }
+            newItem->next = item;
+            *itemPtr = newItem;
             return true;
         }
     }
