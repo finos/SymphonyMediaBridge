@@ -12,6 +12,20 @@
 #define NETWORK_LOG(fmt, ...)
 #endif
 
+namespace std
+{
+template <>
+class hash<std::pair<transport::SocketAddress, transport::SocketAddress>>
+{
+public:
+    size_t operator()(const std::pair<transport::SocketAddress, transport::SocketAddress>& addresses) const
+    {
+        return utils::hash<transport::SocketAddress>()(addresses.first) +
+            utils::hash<transport::SocketAddress>()(addresses.second);
+    }
+};
+} // namespace std
+
 namespace fakenet
 {
 const char* toString(Protocol p)
@@ -299,6 +313,11 @@ void Firewall::process(const uint64_t timestamp)
         assert(!packet->source.empty());
         assert(!packet->target.empty());
 
+        if (isBlackListed(packet->source, packet->target))
+        {
+            continue;
+        }
+
         if (hasIp(packet->target))
         {
             dispatchNAT(*packet, timestamp);
@@ -376,6 +395,51 @@ bool Firewall::addPortMapping(const Protocol protocol, const transport::SocketAd
     portMappings.push_back(std::make_pair(source, publicAddress));
     logger::info("added NAT %s -> %s", "Firewall", source.toString().c_str(), publicAddress.toString().c_str());
     return true;
+}
+
+void Firewall::block(const transport::SocketAddress& source, const transport::SocketAddress& destination)
+{
+    if (isBlackListed(source, destination))
+    {
+        return;
+    }
+
+    _blackList.emplace(std::pair<transport::SocketAddress, transport::SocketAddress>(source, destination));
+}
+
+void Firewall::unblock(const transport::SocketAddress& source, const transport::SocketAddress& destination)
+{
+    auto it = _blackList.find(std::pair<transport::SocketAddress, transport::SocketAddress>(source, destination));
+    if (it != _blackList.end())
+    {
+        _blackList.erase(it->first);
+        return;
+    }
+}
+
+bool Firewall::isBlackListed(const transport::SocketAddress& source, const transport::SocketAddress& destination)
+{
+    if (_blackList.contains(std::pair<transport::SocketAddress, transport::SocketAddress>(source, destination)))
+    {
+        return true;
+    }
+
+    if (source.getFamily() == AF_INET6)
+    {
+        return _blackList.contains(std::pair<transport::SocketAddress, transport::SocketAddress>(
+                   transport::SocketAddress::createBroadcastIpv6(),
+                   destination)) ||
+            _blackList.contains(std::pair<transport::SocketAddress, transport::SocketAddress>(source,
+                transport::SocketAddress::createBroadcastIpv6()));
+    }
+    else
+    {
+        return _blackList.contains(std::pair<transport::SocketAddress, transport::SocketAddress>(
+                   transport::SocketAddress::createBroadcastIpv4(),
+                   destination)) ||
+            _blackList.contains(std::pair<transport::SocketAddress, transport::SocketAddress>(source,
+                transport::SocketAddress::createBroadcastIpv4()));
+    }
 }
 
 void Firewall::addPublicIp(const transport::SocketAddress& addr)

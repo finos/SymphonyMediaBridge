@@ -1,6 +1,7 @@
 #pragma once
 #include "NetworkLink.h"
 #include "concurrency/MpmcQueue.h"
+#include "memory/Map.h"
 #include "utils/SocketAddress.h"
 #include <atomic>
 #include <map>
@@ -144,11 +145,15 @@ public:
     std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
     std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
 
+    void block(const transport::SocketAddress& source, const transport::SocketAddress& destination);
+    void unblock(const transport::SocketAddress& source, const transport::SocketAddress& destination);
+
 private:
     void dispatchPublicly(const Packet& packet, uint64_t timestamp);
     void processEndpoints(const uint64_t timestamp);
     void dispatchNAT(const Packet& packet, const uint64_t timestamp);
     bool dispatchLocally(const Packet& packet, const uint64_t timestamp);
+    bool isBlackListed(const transport::SocketAddress& source, const transport::SocketAddress& destination);
 
     transport::SocketAddress acquirePortMapping(Protocol protocol, const transport::SocketAddress& source);
 
@@ -162,6 +167,7 @@ private:
     Gateway& _internet;
     int _portCount = 1000;
     mutable std::mutex _nodesMutex;
+    memory::Map<std::pair<transport::SocketAddress, transport::SocketAddress>, bool, 1024> _blackList;
 };
 
 class InternetRunner
