@@ -121,3 +121,99 @@ TEST_F(IceTransportEmuTest, plainNewApi)
         }
     });
 }
+
+TEST_F(IceTransportEmuTest, discardCandidate)
+{
+    runTestInThread(expectedTestThreadCount(1), [this]() {
+        _config.readFromString(_defaultSmbConfig);
+        _config.ice.tcp.enable = true;
+        _clientConfig.ice.tcp.enable = true;
+
+        initBridge(_config);
+        const auto baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_clientTransportFactory,
+            *_sslDtls,
+            3);
+
+        for (auto pairIt : this->_endpointNetworkLinkMap)
+        {
+            if (utils::startsWith("FakeUdp", pairIt.first))
+            {
+                pairIt.second.ptrLink->setStaticDelay(pairIt.second.address.getFamily() == AF_INET6 ? 325 : 15);
+            }
+        }
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        CallConfigBuilder cfgBuilder(conf.getId());
+        cfgBuilder.url(baseUrl).withOpus().withVideo();
+
+        auto cfgInitiator(cfgBuilder);
+        cfgInitiator.delayIpv6(500);
+
+        //   _firewall->block(transport::SocketAddress::parse(_ipv4.client), smbPort);
+
+        group.clients[0]->initiateCall(cfgInitiator.build());
+        group.clients[1]->joinCall(cfgBuilder.build());
+        group.clients[2]->initiateCall(cfgBuilder.mixed().build());
+
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        startCallWithDefaultAudioProfile(group, utils::Time::sec * 4);
+
+        auto localIce = group.clients[0]->_bundleTransport->getLocalCandidates();
+        for (auto& c : localIce)
+        {
+            if (c.address.getFamily() == AF_INET6 && c.transportType == ice::TransportType::UDP)
+            {
+                _firewall->block(c.address, transport::SocketAddress::createBroadcastIpv6());
+            }
+        }
+
+        group.run(utils::Time::sec * 25);
+
+        nlohmann::json responseBody;
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
+
+        group.clients[0]->stopTransports();
+        group.clients[1]->stopTransports();
+        group.clients[2]->stopTransports();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
+        size_t freqId = 0;
+        for (auto id : {0, 1, 2})
+        {
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            std::string clientName = "client_" + std::to_string(id);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
+
+            logVideoSent(clientName.c_str(), *group.clients[id]);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+        }
+    });
+}

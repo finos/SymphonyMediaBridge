@@ -1064,7 +1064,7 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
         }
 
         auto timeout = _rtpIceSession->nextTimeout(timestamp);
-        _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
         auto newTimeout = _rtpIceSession->nextTimeout(timestamp);
         if (newTimeout != timeout)
         {
@@ -1077,7 +1077,7 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
     }
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)
     {
-        _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
     }
 }
 
@@ -1514,7 +1514,7 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
     assert(_srtpClient);
     const auto timestamp = utils::Time::getAbsoluteTime();
 
-    if (!_srtpClient || !_selectedRtp || !isConnected())
+    if (!_srtpClient->isConnected() || !_selectedRtp)
     {
         logger::debug("dropping packet, not connected", _loggableId.c_str());
         return;
@@ -1939,6 +1939,18 @@ void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
         {
             DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
         }
+    }
+    else if (_selectedRtp && endpoint != _selectedRtp)
+    {
+        _selectedRtp = static_cast<transport::Endpoint*>(endpoint);
+        _peerRtpPort = sourcePort;
+
+        logger::info("switching ICE candidate pair to %s %s, %s - %s",
+            _loggableId.c_str(),
+            endpoint->getLocalPort().getFamilyString().c_str(),
+            ice::toString(endpoint->getTransportType()).c_str(),
+            endpoint->getLocalPort().toString().c_str(),
+            sourcePort.toString().c_str());
     }
 }
 
