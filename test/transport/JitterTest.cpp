@@ -970,3 +970,35 @@ TEST_F(JitterBufferTest, reorderedFull)
     EXPECT_EQ(_buffer.count(), _buffer.SIZE - 50);
     EXPECT_TRUE(_buffer.add(std::move(p)));
 }
+
+TEST_F(JitterBufferTest, reorderedOne)
+{
+    memory::Packet stageArea;
+    {
+        auto header = rtp::RtpHeader::create(stageArea);
+        header->ssrc = 4000;
+        stageArea.setLength(250);
+    }
+
+    EXPECT_EQ(_buffer.pop(), nullptr);
+
+    auto p = memory::makeUniquePacket(_allocator, stageArea);
+    auto header = rtp::RtpHeader::create(*p);
+    header->sequenceNumber = 100;
+    header->timestamp = 56000;
+    EXPECT_TRUE(_buffer.add(std::move(p)));
+
+    p = memory::makeUniquePacket(_allocator, stageArea);
+    header = rtp::RtpHeader::create(*p);
+    header->sequenceNumber = 98;
+    header->timestamp = 57000;
+    EXPECT_TRUE(_buffer.add(std::move(p)));
+
+    p = _buffer.pop();
+    header = rtp::RtpHeader::fromPacket(*p);
+    EXPECT_EQ(header->sequenceNumber.get(), 98);
+
+    p = _buffer.pop();
+    header = rtp::RtpHeader::fromPacket(*p);
+    EXPECT_EQ(header->sequenceNumber.get(), 100);
+}
