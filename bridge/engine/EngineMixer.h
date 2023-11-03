@@ -143,6 +143,7 @@ public:
     void onForwarderVideoRtpPacketDecrypted(SsrcInboundContext& inboundContext,
         memory::UniquePacket packet,
         const uint32_t extendedSequenceNumber);
+    void onIceReceived(transport::RtcTransport* transport, uint64_t timestamp) override;
 
     void onRtcpPacketDecoded(transport::RtcTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override;
     void onOutboundContextFinalized(size_t ownerEndpointHash, uint32_t ssrc, uint32_t feedbackSsrc, bool isVideo);
@@ -385,7 +386,7 @@ private:
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
     uint64_t _lastReceiveTime;
-
+    std::atomic_flag _iceReceived = ATOMIC_FLAG_INIT;
     uint64_t _lastCounterCheck;
 
     std::unique_ptr<EngineStreamDirector> _engineStreamDirector;
@@ -421,6 +422,8 @@ private:
     void forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInfo, uint64_t timestamp);
     void forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo, uint64_t timestamp);
+
+    void processIceActivity(uint64_t timestamp);
 
     void processIncomingRtcpPackets(const uint64_t timestamp);
     void processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,

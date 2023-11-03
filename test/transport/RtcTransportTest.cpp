@@ -221,6 +221,8 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
 
     void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override{};
 
+    void onIceReceived(transport::RtcTransport* sender, uint64_t timestamp) override {}
+
     logger::LoggableId _name;
     uint32_t _ssrc;
     memory::PacketPoolAllocator _sendAllocator;

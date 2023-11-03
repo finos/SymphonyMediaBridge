@@ -169,6 +169,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     processBarbellSctp(engineIterationStartTimestamp);
     forwardPackets(engineIterationStartTimestamp);
     processIncomingRtcpPackets(engineIterationStartTimestamp);
+    processIceActivity(engineIterationStartTimestamp);
 
     // 2. Check for stale streams
     checkPacketCounters(engineIterationStartTimestamp);
@@ -1064,6 +1065,15 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
     }
 }
 
+void EngineMixer::processIceActivity(const uint64_t timestamp)
+{
+    if (!_iceReceived.test_and_set())
+    {
+        // if it was cleared by any transport receiving ICE, we will now set the keep alive timestamp
+        _lastReceiveTime = timestamp;
+    }
+}
+
 void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSenderEndpointIdHash,
     const rtp::RtcpHeader& rtcpPacket,
     const uint64_t timestamp)
@@ -1578,4 +1588,8 @@ bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash, memory::Un
     return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(packet)));
 }
 
+void EngineMixer::onIceReceived(transport::RtcTransport* transport, uint64_t timestamp)
+{
+    _iceReceived.clear();
+}
 } // namespace bridge
