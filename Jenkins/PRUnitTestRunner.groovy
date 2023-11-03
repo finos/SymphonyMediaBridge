@@ -25,6 +25,16 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
             sh "docker/$platform/runtests.sh"
         }
     }
+    post {
+        failure {
+            emailext body: 'Test Message',
+            recipientProviders: [requestor()],
+            subject: 'Jenkins PR build failed',
+            to: ''
+            attachLog: true,
+            body: "Jenkins Build failed"
+        }
+    }
 }
 
 abortPreviousRunningBuilds()
