@@ -184,6 +184,7 @@ public:
 // previous events
 TEST(JitterTest, a10ms)
 {
+    EXPECT_TRUE(false);
     memory::PacketPoolAllocator allocator(3000, "TestAllocator");
     PacketJitterEmulator emulator(allocator, 5670);
     rtp::JitterEstimator jitt(48000);
