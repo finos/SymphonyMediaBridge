@@ -26,13 +26,19 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
         }
     }
     post {
-        failure {
-            emailext body: 'Test Message',
-            recipientProviders: [requestor()],
-            subject: 'Jenkins PR build failed',
-            to: ''
-            attachLog: true,
-            body: "Jenkins Build failed"
+        unsuccessful {
+            emailext (
+                recipientProviders: [requestor()],
+                subject: "Jenkins PR build failed",
+                body: """
+                    <p>
+                    <h2><a href=\"${env.BUILD_URL}\">Jenkins PR build failed #${env.BUILD_NUMBER} for SMB.</a></h2>
+                    </p>
+                    """,
+                to: "",
+                mimeType: 'text/html',
+                attachLog: true
+            )
         }
     }
 }
