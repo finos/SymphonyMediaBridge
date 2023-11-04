@@ -2,6 +2,7 @@
 #include "codec/AudioFader.h"
 #include "codec/AudioLevel.h"
 #include "codec/AudioTools.h"
+#include "codec/G711.h"
 #include "math/helpers.h"
 #include "memory/Allocator.h"
 #include "rtp/RtpHeader.h"
@@ -434,6 +435,15 @@ bool AudioReceivePipeline::dtxHandler(const int16_t sequenceAdvance,
     return false;
 }
 
+namespace
+{
+bool isG711(const memory::Packet& packet)
+{
+    auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
+    return rtpHeader->payloadType == codec::Pcma::payloadType || rtpHeader->payloadType == codec::Pcmu::payloadType;
+}
+} // namespace
+
 void AudioReceivePipeline::process(const uint64_t timestamp)
 {
     size_t bufferLevel = _pcmData.size() / _config.channels;
@@ -481,13 +491,23 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
 
         if (isDiscardedPacket(*packet))
         {
-            decodedSamples = std::max(480u, _metrics.receivedRtpCyclesPerPacket);
-            _decoder.onUnusedPacketReceived(extendedSequenceNumber);
+            if (!isG711(*packet))
+            {
+                decodedSamples = std::max(480u, _metrics.receivedRtpCyclesPerPacket);
+                _decoder.onUnusedPacketReceived(extendedSequenceNumber);
+            }
             std::memset(audioData, 0, decodedSamples);
         }
         else
         {
-            decodedSamples = decodePacket(extendedSequenceNumber, timestamp, *packet, audioData);
+            if (!isG711(*packet))
+            {
+                decodedSamples = decodePacket(extendedSequenceNumber, timestamp, *packet, audioData);
+            }
+            else
+            {
+                decodedSamples = decodeG711(extendedSequenceNumber, timestamp, *packet, audioData);
+            }
             if (decodedSamples > 0 && sequenceAdvance == 1)
             {
                 _metrics.receivedRtpCyclesPerPacket = decodedSamples;
@@ -541,11 +561,37 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
 void AudioReceivePipeline::flush()
 {
     _pcmData.clear();
-    while (_jitterBuffer.pop()) {}
+    while (_jitterBuffer.pop())
+    {
+    }
     _targetDelay = 0; // will cause start over on seqno, rtp timestamp and jitter assessment
     _jitterEmergency.counter = 0;
     _bufferAtTwoFrames = 0;
     _elimination = SampleElimination();
+}
+
+size_t AudioReceivePipeline::decodeG711(uint32_t extendedSequenceNumber,
+    const uint64_t timestamp,
+    const memory::Packet& packet,
+    int16_t* audioData)
+{
+    const auto header = rtp::RtpHeader::fromPacket(packet);
+    const int16_t* originalAudioStart = audioData;
+    const size_t sampleCount = packet.getLength() - header->headerLength();
+
+    if (header->payloadType == codec::Pcma::payloadType)
+    {
+        _pcmaDecoder.decode(header->getPayload(), audioData, sampleCount);
+        codec::makeStereo(audioData, sampleCount * 6);
+        return sampleCount * 6;
+    }
+
+    if (header->payloadType == codec::Pcmu::payloadType)
+    {
+        _pcmuDecoder.decode(header->getPayload(), audioData, sampleCount);
+        codec::makeStereo(audioData, sampleCount * 6);
+        return sampleCount * 6;
+    }
 }
 
 } // namespace codec
