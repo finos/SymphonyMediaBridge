@@ -122,7 +122,7 @@ TEST_F(IceTransportEmuTest, plainNewApi)
     });
 }
 
-TEST_F(IceTransportEmuTest, discardCandidate)
+TEST_F(IceTransportEmuTest, failOver)
 {
     runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(_defaultSmbConfig);
@@ -139,7 +139,7 @@ TEST_F(IceTransportEmuTest, discardCandidate)
             *_clientTransportFactory,
             *_clientTransportFactory,
             *_sslDtls,
-            3);
+            2);
 
         for (auto pairIt : this->_endpointNetworkLinkMap)
         {
@@ -166,7 +166,6 @@ TEST_F(IceTransportEmuTest, discardCandidate)
 
         group.clients[0]->initiateCall(cfgInitiator.build());
         group.clients[1]->joinCall(cfgBuilder.build());
-        group.clients[2]->initiateCall(cfgBuilder.mixed().build());
 
         ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
 
@@ -175,9 +174,9 @@ TEST_F(IceTransportEmuTest, discardCandidate)
         auto localIce = group.clients[0]->_bundleTransport->getLocalCandidates();
         for (auto& c : localIce)
         {
-            if (c.address.getFamily() == AF_INET6 && c.transportType == ice::TransportType::UDP)
+            if (c.address.getFamily() == AF_INET && c.transportType == ice::TransportType::UDP)
             {
-                _firewall->block(c.address, transport::SocketAddress::createBroadcastIpv6());
+                _firewall->block(c.address, transport::SocketAddress::createBroadcastIpv4());
             }
         }
 
@@ -198,14 +197,16 @@ TEST_F(IceTransportEmuTest, discardCandidate)
 
         group.clients[0]->stopTransports();
         group.clients[1]->stopTransports();
-        group.clients[2]->stopTransports();
 
         group.awaitPendingJobs(utils::Time::sec * 4);
+
         finalizeSimulation();
 
-        const double expectedFrequencies[3][2] = {{1300.0, 2100.0}, {600.0, 2100.0}, {600.0, 1300.0}};
-        size_t freqId = 0;
-        for (auto id : {0, 1, 2})
+        auto receiveCounters = group.clients[1]->_bundleTransport->getCumulativeAudioReceiveCounters();
+        EXPECT_LT(receiveCounters.lostPackets, 100);
+        auto sendCounters = group.clients[0]->_bundleTransport->getCumulativeAudioReceiveCounters();
+
+        for (auto id : {1})
         {
             std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
             std::string clientName = "client_" + std::to_string(id);
