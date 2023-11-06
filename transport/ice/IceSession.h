@@ -237,7 +237,6 @@ private:
         bool hasTransaction(const StunMessage& response) const;
         StunTransaction* findTransaction(const StunMessage& response);
         void onResponse(uint64_t now, const StunMessage& response);
-        void onRequest(uint64_t timestamp, const StunMessage& request);
         void onDisconnect();
         void nominate(uint64_t now);
         void freeze();
@@ -255,7 +254,7 @@ private:
         uint64_t startTime;
         uint64_t nextTransmission;
         bool nominated;
-        uint64_t receivedProbeTimestamp;
+
         uint64_t receptionTimestamp; // RTC+ICE traffic
 
         enum State
@@ -285,6 +284,7 @@ private:
         crypto::HMAC& _hmacComputer;
     };
 
+    CandidatePair* addRemoteTcpCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
     CandidatePair* addProbeForRemoteCandidate(EndpointInfo& localEndpoint, const IceCandidate& remoteCandidate);
     void sortCheckList();
 

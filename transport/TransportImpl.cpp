@@ -1043,6 +1043,7 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
         }
     }
 
+    auto dataReceiver = _dataReceiver.load();
     if (_rtpIceSession->isAttached(&endpoint))
     {
         if (ice::isResponse(packet->get()) && _rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
@@ -1065,6 +1066,10 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
 
         auto timeout = _rtpIceSession->nextTimeout(timestamp);
         _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        if (dataReceiver)
+        {
+            dataReceiver->onIceReceived(this, timestamp);
+        }
         auto newTimeout = _rtpIceSession->nextTimeout(timestamp);
         if (newTimeout != timeout)
         {
@@ -1078,6 +1083,10 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)
     {
         _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        if (dataReceiver)
+        {
+            dataReceiver->onIceReceived(this, timestamp);
+        }
     }
 }
 

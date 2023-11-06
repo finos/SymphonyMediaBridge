@@ -82,6 +82,7 @@ EngineMixer::EngineMixer(const std::string& id,
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
     memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
+    _iceReceived.test_and_set();
 }
 
 EngineMixer::~EngineMixer() {}
@@ -167,7 +168,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     // 1. Process all incoming packets
     processBarbellSctp(engineIterationStartTimestamp);
-    forwardPackets(engineIterationStartTimestamp);
+    processIncomingRtpPackets(engineIterationStartTimestamp);
     processIncomingRtcpPackets(engineIterationStartTimestamp);
     processIceActivity(engineIterationStartTimestamp);
 
@@ -198,6 +199,14 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     // 6. Maintain transports.
     runTransportTicks(engineIterationStartTimestamp);
+
+    const bool isIdle = utils::Time::diffGE(_lastReceiveTime,
+        engineIterationStartTimestamp,
+        _config.mixerInactivityTimeoutMs * utils::Time::ms);
+    if (isIdle && !_hasSentTimeout)
+    {
+        _hasSentTimeout = _messageListener.asyncMixerTimedOut(*this);
+    }
 }
 
 void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTimestamp)
@@ -1021,16 +1030,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         forwardVideoRtpPacketRecording(packetInfo, timestamp);
     }
 
-    if (numRtpPackets == 0)
-    {
-        const bool isIdle =
-            utils::Time::diffGE(_lastReceiveTime, timestamp, _config.mixerInactivityTimeoutMs * utils::Time::ms);
-        if (isIdle && !_hasSentTimeout)
-        {
-            _hasSentTimeout = _messageListener.asyncMixerTimedOut(*this);
-        }
-    }
-    else
+    if (numRtpPackets > 0)
     {
         _lastReceiveTime = timestamp;
     }
