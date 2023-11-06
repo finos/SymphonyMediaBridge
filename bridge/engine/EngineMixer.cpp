@@ -81,7 +81,7 @@ EngineMixer::EngineMixer(const std::string& id,
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
-    memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
+    std::memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
     _iceReceived.test_and_set();
 }
 

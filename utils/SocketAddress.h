@@ -91,11 +91,11 @@ public:
         compactAddress.port = address.getPort();
         if (address.getFamily() == AF_INET6)
         {
-            memcpy(&compactAddress.ip.v6, &address.getIpv6()->sin6_addr, sizeof(compactAddress.ip.v6));
+            std::memcpy(&compactAddress.ip.v6, &address.getIpv6()->sin6_addr, sizeof(compactAddress.ip.v6));
         }
         else if (address.getFamily() == AF_INET)
         {
-            memcpy(&compactAddress.ip.v4, &address.getIpv4()->sin_addr, sizeof(compactAddress.ip.v4));
+            std::memcpy(&compactAddress.ip.v4, &address.getIpv4()->sin_addr, sizeof(compactAddress.ip.v4));
         }
         else
         {
@@ -108,7 +108,7 @@ public:
 private:
     struct CompactIp
     {
-        CompactIp() { memset(this, 0, sizeof(CompactIp)); }
+        CompactIp() { std::memset(this, 0, sizeof(CompactIp)); }
         uint16_t port;
         union
         {

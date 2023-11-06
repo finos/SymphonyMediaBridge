@@ -743,19 +743,22 @@ void IceSession::onStunPacketReceived(IceEndpoint* localEndpoint,
 }
 
 // only call this with valid packets of RTC related protocols
-void IceSession::onPacketReceived(IceEndpoint* endpoint, const transport::SocketAddress& sender, uint64_t timestamp)
+void IceSession::onPacketReceived(IceEndpoint* localEndpoint,
+    const transport::SocketAddress& remotePort,
+    uint64_t timestamp)
 {
-    auto* candidatePair = _candidatePairIndex.getItem(CandidatePairKey{endpoint, sender});
+    auto* candidatePair = _candidatePairIndex.getItem(CandidatePairKey{localEndpoint, remotePort});
 
     if (!candidatePair)
     {
         for (auto& item : _candidatePairs)
         {
-            if (item->localEndpoint.endpoint == endpoint &&
-                (endpoint->getTransportType() == TransportType::TCP || item->remoteCandidate.address == sender))
+            if (item->localEndpoint.endpoint == localEndpoint &&
+                (localEndpoint->getTransportType() == TransportType::TCP ||
+                    item->remoteCandidate.address == remotePort))
             {
                 candidatePair = item.get();
-                _candidatePairIndex.emplace(CandidatePairKey{endpoint, sender}, candidatePair);
+                _candidatePairIndex.emplace(CandidatePairKey{localEndpoint, remotePort}, candidatePair);
                 break;
             }
         }

@@ -373,11 +373,11 @@ public:
         compactKey.endPoint = key.endPoint;
         if (key.remoteAddress.getFamily() == AF_INET6)
         {
-            memcpy(&compactKey.ip.v6, &key.remoteAddress.getIpv6()->sin6_addr, sizeof(compactKey.ip.v6));
+            std::memcpy(&compactKey.ip.v6, &key.remoteAddress.getIpv6()->sin6_addr, sizeof(compactKey.ip.v6));
         }
         else if (key.remoteAddress.getFamily() == AF_INET)
         {
-            memcpy(&compactKey.ip.v4, &key.remoteAddress.getIpv4()->sin_addr, sizeof(compactKey.ip.v4));
+            std::memcpy(&compactKey.ip.v4, &key.remoteAddress.getIpv4()->sin_addr, sizeof(compactKey.ip.v4));
         }
         else
         {
@@ -390,7 +390,7 @@ public:
 private:
     struct CompactKey
     {
-        CompactKey() { memset(this, 0, sizeof(CompactKey)); }
+        CompactKey() { std::memset(this, 0, sizeof(CompactKey)); }
         uint16_t port;
         union
         {

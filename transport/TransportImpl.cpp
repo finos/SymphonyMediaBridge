@@ -659,18 +659,32 @@ void TransportImpl::stop()
     }
     logger::debug("stopping jobcount %u, running%u", _loggableId.c_str(), _jobCounter.load(), _isRunning.load());
     _isRunning = false;
+
+    _jobQueue.post(_jobCounter, [this]() { internalShutdown(); });
+    _isInitialized = false;
+
+    _jobQueue.post(_jobCounter, [this]() { internalUnregisterEndpoints(); });
+}
+
+void TransportImpl::internalShutdown()
+{
     if (_rtpIceSession)
     {
         _rtpIceSession->stop();
+    }
+
+    if (_srtpClient)
+    {
+        _jobQueue.post(_jobCounter, [this]() {
+            _selectedRtp = nullptr;
+            _srtpClient->stop();
+        });
     }
 
     if (_sctpAssociation)
     {
         _sctpAssociation->close();
     }
-    _isInitialized = false;
-
-    _jobQueue.post(_jobCounter, [this]() { internalUnregisterEndpoints(); });
 }
 
 void TransportImpl::internalUnregisterEndpoints()
@@ -1525,7 +1539,10 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
 
     if (!_srtpClient->isConnected() || !_selectedRtp)
     {
-        logger::debug("dropping packet, not connected", _loggableId.c_str());
+        if (_isRunning)
+        {
+            logger::debug("dropping packet, not connected", _loggableId.c_str());
+        }
         return;
     }
 
