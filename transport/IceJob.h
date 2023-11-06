@@ -17,11 +17,10 @@ class IceJob : public jobmanager::CountedJob
 {
 public:
     static const uint32_t TIMER_ID = 0xFFFF7E00;
-    IceJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session);
+    IceJob(Transport& transport, ice::IceSession& session);
 
 protected:
     Transport& _transport;
-    jobmanager::JobQueue& _jobQueue;
     ice::IceSession& _session;
 };
 
@@ -29,10 +28,7 @@ protected:
 class IceTimerJob : public IceJob
 {
 public:
-    IceTimerJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session)
-        : IceJob(transport, jobQueue, session)
-    {
-    }
+    IceTimerJob(Transport& transport, ice::IceSession& session) : IceJob(transport, session) {}
     void run() override;
 };
 
@@ -40,20 +36,14 @@ public:
 class IceTimerTriggerJob : public IceJob
 {
 public:
-    IceTimerTriggerJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session)
-        : IceJob(transport, jobQueue, session)
-    {
-    }
+    IceTimerTriggerJob(Transport& transport, ice::IceSession& session) : IceJob(transport, session) {}
     void run() override;
 };
 
 class IceStartJob : public IceJob
 {
 public:
-    IceStartJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session)
-        : IceJob(transport, jobQueue, session)
-    {
-    }
+    IceStartJob(Transport& transport, ice::IceSession& session) : IceJob(transport, session) {}
     void run() override;
 };
 

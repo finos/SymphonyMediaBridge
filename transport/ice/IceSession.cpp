@@ -37,27 +37,27 @@ IceSession::IceSession(size_t sessionId,
 }
 
 // add most preferred UDP end point first. It will affect prioritization of candidates
-void IceSession::attachLocalEndpoint(IceEndpoint* endpoint)
+void IceSession::attachLocalEndpoint(IceEndpoint* localEndpoint)
 {
-    if (endpoint->getTransportType() != ice::TransportType::UDP)
+    if (localEndpoint->getTransportType() != ice::TransportType::UDP)
     {
         assert(false);
         return;
     }
 
     const int preference = 256 - _endpoints.size();
-    _endpoints.push_back(EndpointInfo(endpoint, preference));
+    _endpoints.push_back(EndpointInfo(localEndpoint, preference));
 
-    const auto address = endpoint->getLocalPort();
-    if (endpoint->getTransportType() == TransportType::UDP &&
+    const auto address = localEndpoint->getLocalPort();
+    if (localEndpoint->getTransportType() == TransportType::UDP &&
         !utils::contains(_localCandidates, [address](const ice::IceCandidate& c) { return c.baseAddress == address; }))
     {
         _localCandidates.emplace_back(IceCandidate(_component,
-            endpoint->getTransportType(),
+            localEndpoint->getTransportType(),
             ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::HOST,
                 preference,
                 _component,
-                endpoint->getTransportType()),
+                localEndpoint->getTransportType()),
             address,
             address,
             IceCandidate::Type::HOST));
@@ -326,18 +326,18 @@ void IceSession::addLocalTcpCandidate(IceCandidate::Type type,
     addLocalCandidate(candidate);
 }
 
-void IceSession::addLocalCandidate(const transport::SocketAddress& publicAddress, IceEndpoint* endpoint)
+void IceSession::addLocalCandidate(const transport::SocketAddress& publicAddress, IceEndpoint* localEndpoint)
 {
     for (auto& endpointInfo : _endpoints)
     {
-        if (endpointInfo.endpoint == endpoint)
+        if (endpointInfo.endpoint == localEndpoint)
         {
             addLocalCandidate(IceCandidate(_component,
-                endpoint->getTransportType(),
+                localEndpoint->getTransportType(),
                 ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::SRFLX,
                     endpointInfo.preference,
                     _component,
-                    endpoint->getTransportType()),
+                    localEndpoint->getTransportType()),
                 publicAddress,
                 endpointInfo.endpoint->getLocalPort(),
                 IceCandidate::Type::SRFLX));
@@ -439,8 +439,8 @@ bool IceSession::isResponseAuthentic(const void* data, size_t len) const
         stunMessage->isAuthentic(_hmacComputer.remote);
 }
 
-void IceSession::onRequestReceived(IceEndpoint* endpoint,
-    const transport::SocketAddress& sender,
+void IceSession::onRequestReceived(IceEndpoint* localEndpoint,
+    const transport::SocketAddress& remotePort,
     const StunMessage& msg,
     const uint64_t now)
 {
@@ -448,15 +448,15 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     if (!msg.isValid() || msg.getAttribute(StunAttribute::MESSAGE_INTEGRITY) == nullptr ||
         msg.getAttribute(StunAttribute::USERNAME) == nullptr)
     {
-        sendResponse(endpoint, sender, StunError::Code::BadRequest, msg, now, "Bad Request");
+        sendResponse(localEndpoint, remotePort, StunError::Code::BadRequest, msg, now, "Bad Request");
         return;
     }
 
     const auto userNames = msg.getAttribute<StunUserName>(StunAttribute::USERNAME)->getNames();
     if (userNames.first != _credentials.local.first)
     {
-        sendResponse(endpoint,
-            sender,
+        sendResponse(localEndpoint,
+            remotePort,
             StunError::Code::Unauthorized,
             msg,
             now,
@@ -465,7 +465,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     }
     if (!msg.isAuthentic(_hmacComputer.local))
     {
-        sendResponse(endpoint, sender, StunError::Code::Unauthorized, msg, now, "Unauthorized");
+        sendResponse(localEndpoint, remotePort, StunError::Code::Unauthorized, msg, now, "Unauthorized");
         return;
     }
     const auto* peerControlling = msg.getAttribute<StunAttribute64>(StunAttribute::ICE_CONTROLLING);
@@ -474,7 +474,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     {
         if (_credentials.tieBreaker >= peerControlling->get())
         {
-            sendResponse(endpoint, sender, StunError::Code::RoleConflict, msg, now, "Role Conflict");
+            sendResponse(localEndpoint, remotePort, StunError::Code::RoleConflict, msg, now, "Role Conflict");
             return;
         }
         else
@@ -486,7 +486,7 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     {
         if (_credentials.tieBreaker < peerControlled->get())
         {
-            sendResponse(endpoint, sender, StunError::Code::RoleConflict, msg, now, "Role Conflict");
+            sendResponse(localEndpoint, remotePort, StunError::Code::RoleConflict, msg, now, "Role Conflict");
             return;
         }
         else
@@ -497,11 +497,11 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
 
     logger::debug("%s probe from %s -> %s",
         _logId.c_str(),
-        ice::toString(endpoint->getTransportType()).c_str(),
-        sender.toString().c_str(),
-        endpoint->getLocalPort().toString().c_str());
+        ice::toString(localEndpoint->getTransportType()).c_str(),
+        remotePort.toString().c_str(),
+        localEndpoint->getLocalPort().toString().c_str());
 
-    sendResponse(endpoint, sender, 0, msg, now);
+    sendResponse(localEndpoint, remotePort, 0, msg, now);
 
     int remoteCandidatePriority = 0;
     const auto prioAttribute = msg.getAttribute<StunPriority>(StunAttribute::PRIORITY);
@@ -509,15 +509,15 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     {
         remoteCandidatePriority = prioAttribute->value;
     }
-    if (endpoint->getTransportType() == TransportType::TCP && !isAttached(endpoint))
+    if (localEndpoint->getTransportType() == TransportType::TCP && !isAttached(localEndpoint))
     {
         IceCandidate remoteCandidate(_component,
-            endpoint->getTransportType(),
+            localEndpoint->getTransportType(),
             remoteCandidatePriority,
-            sender,
-            sender,
+            remotePort,
+            remotePort,
             IceCandidate::Type::PRFLX);
-        addRemoteCandidate(remoteCandidate, endpoint);
+        addRemoteCandidate(remoteCandidate, localEndpoint);
         auto& candidatePair = _candidatePairs.back();
         if (_state == State::CONNECTING)
         {
@@ -532,19 +532,20 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
         logger::info("too many PRFLX candidates %u, %s",
             _logId.c_str(),
             _config.maxCandidateCount,
-            sender.toString().c_str());
+            remotePort.toString().c_str());
         return;
     }
 
-    if (endpoint->getTransportType() == TransportType::UDP && isValidSource(now, sender) &&
-        !utils::contains(_remoteCandidates,
-            [sender](const IceCandidate& x) { return x.address == sender && x.transportType == TransportType::UDP; }))
+    if (localEndpoint->getTransportType() == TransportType::UDP && isValidSource(now, remotePort) &&
+        !utils::contains(_remoteCandidates, [remotePort](const IceCandidate& x) {
+            return x.address == remotePort && x.transportType == TransportType::UDP;
+        }))
     {
         IceCandidate remoteCandidate(_component,
-            endpoint->getTransportType(),
+            localEndpoint->getTransportType(),
             remoteCandidatePriority,
-            sender,
-            sender,
+            remotePort,
+            remotePort,
             IceCandidate::Type::PRFLX);
         remoteCandidate = addRemoteCandidate(remoteCandidate);
         if (state == State::CONNECTING || state == State::CONNECTED)
@@ -565,7 +566,8 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     auto useCandidate = msg.getAttribute(StunAttribute::USE_CANDIDATE);
     for (auto& candidatePair : _candidatePairs)
     {
-        if (candidatePair->remoteCandidate.address == sender && candidatePair->localEndpoint.endpoint == endpoint)
+        if (candidatePair->remoteCandidate.address == remotePort &&
+            candidatePair->localEndpoint.endpoint == localEndpoint)
         {
             candidatePair->onRequest(now, msg);
             if (_credentials.role == IceRole::CONTROLLED && useCandidate)
@@ -582,8 +584,8 @@ void IceSession::onRequestReceived(IceEndpoint* endpoint,
     }
 }
 
-void IceSession::onResponseReceived(IceEndpoint* endpoint,
-    const transport::SocketAddress& sender,
+void IceSession::onResponseReceived(IceEndpoint* localEndpoint,
+    const transport::SocketAddress& remotePort,
     const StunMessage& msg,
     const uint64_t now)
 {
@@ -600,7 +602,7 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
         }
     }
 
-    const auto candidatePair = findCandidatePair(endpoint, msg, sender);
+    const auto candidatePair = findCandidatePair(localEndpoint, msg, remotePort);
     if (!candidatePair)
     {
         return; // not mine or old transaction. This happens after restartProbe as we clear transactions list.
@@ -650,7 +652,7 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
 
     logger::debug("response from %s, rtt %" PRIu64 "ms",
         _logId.c_str(),
-        sender.toString().c_str(),
+        remotePort.toString().c_str(),
         candidatePair->getRtt() / utils::Time::ms);
 
     if (candidatePair->localCandidate.address != mappedAddress)
@@ -658,11 +660,11 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
         if (candidatePair->gatheringProbe)
         {
             addLocalCandidate(IceCandidate(_component,
-                endpoint->getTransportType(),
+                localEndpoint->getTransportType(),
                 ice::IceCandidate::computeCandidatePriority(IceCandidate::Type::SRFLX,
                     candidatePair->localEndpoint.preference,
                     _component,
-                    endpoint->getTransportType()),
+                    localEndpoint->getTransportType()),
                 mappedAddress,
                 candidatePair->localCandidate.baseAddress,
                 IceCandidate::Type::SRFLX));
@@ -675,7 +677,7 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
             candidatePair->localCandidate.priority = ice::IceCandidate::computeCandidatePriority(candidateType,
                 candidatePair->localEndpoint.preference,
                 _component,
-                endpoint->getTransportType());
+                localEndpoint->getTransportType());
             if (candidateType == IceCandidate::Type::PRFLX)
             {
                 addLocalCandidate(candidatePair->localCandidate);
@@ -683,17 +685,17 @@ void IceSession::onResponseReceived(IceEndpoint* endpoint,
             sortCheckList();
         }
     }
-    // could add remote candidate if sender seems to be elsewhere, but unlikely
+    // could add remote candidate if remotePort seems to be elsewhere, but unlikely
 
     stateCheck(now);
     if (_eventSink)
     {
-        _eventSink->onIcePreliminary(this, endpoint, sender);
+        _eventSink->onIceCandidateChanged(this, localEndpoint, remotePort);
     }
 }
 
-void IceSession::onPacketReceived(IceEndpoint* socketEndpoint,
-    const transport::SocketAddress& sender,
+void IceSession::onPacketReceived(IceEndpoint* localEndpoint,
+    const transport::SocketAddress& remotePort,
     const void* data,
     size_t len,
     uint64_t timestamp)
@@ -717,50 +719,52 @@ void IceSession::onPacketReceived(IceEndpoint* socketEndpoint,
     {
         if (!msg->isValid())
         {
-            logger::debug("corrupt ICE response from %s", _logId.c_str(), sender.toString().c_str());
+            logger::debug("corrupt ICE response from %s", _logId.c_str(), remotePort.toString().c_str());
             return;
         }
-        onResponseReceived(socketEndpoint, sender, *msg, timestamp);
+        onResponseReceived(localEndpoint, remotePort, *msg, timestamp);
     }
     else if (method == StunHeader::BindingRequest)
     {
-        onRequestReceived(socketEndpoint, sender, *msg, timestamp);
+        onRequestReceived(localEndpoint, remotePort, *msg, timestamp);
     }
 }
 
-void IceSession::onTcpDisconnect(IceEndpoint* endpoint)
+void IceSession::onTcpDisconnect(IceEndpoint* localEndpoint)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     auto candidatePairIt = std::find_if(_candidatePairs.begin(),
         _candidatePairs.end(),
-        [endpoint](const std::unique_ptr<CandidatePair>& probe) { return probe->localEndpoint.endpoint == endpoint; });
+        [localEndpoint](
+            const std::unique_ptr<CandidatePair>& probe) { return probe->localEndpoint.endpoint == localEndpoint; });
     if (candidatePairIt != _candidatePairs.end())
     {
         candidatePairIt->get()->onDisconnect();
     }
 }
 
-void IceSession::onTcpRemoved(const IceEndpoint* endpoint)
+void IceSession::onTcpRemoved(const IceEndpoint* localEndpoint)
 {
     DBGCHECK_SINGLETHREADED(_mutexGuard);
     auto candidatePairIt = std::find_if(_candidatePairs.begin(),
         _candidatePairs.end(),
-        [endpoint](const std::unique_ptr<CandidatePair>& probe) { return probe->localEndpoint.endpoint == endpoint; });
+        [localEndpoint](
+            const std::unique_ptr<CandidatePair>& probe) { return probe->localEndpoint.endpoint == localEndpoint; });
     if (candidatePairIt != _candidatePairs.end())
     {
         _candidatePairs.erase(candidatePairIt);
     }
 
-    auto endpointIt = std::find_if(_endpoints.begin(), _endpoints.end(), [endpoint](const EndpointInfo& iceEndpoint) {
-        return iceEndpoint.endpoint == endpoint;
-    });
+    auto endpointIt = std::find_if(_endpoints.begin(),
+        _endpoints.end(),
+        [localEndpoint](const EndpointInfo& iceEndpoint) { return iceEndpoint.endpoint == localEndpoint; });
     if (endpointIt != _endpoints.end())
     {
         _endpoints.erase(endpointIt);
     }
 }
 
-void IceSession::sendResponse(IceEndpoint* endpoint,
+void IceSession::sendResponse(IceEndpoint* localEndpoint,
     const transport::SocketAddress& target,
     int code,
     const StunMessage& msg,
@@ -779,14 +783,14 @@ void IceSession::sendResponse(IceEndpoint* endpoint,
 
     response.addMessageIntegrity(_hmacComputer.local);
     response.addFingerprint();
-    endpoint->sendStunTo(target, response.header.transactionId.get(), &response, response.size(), timestamp);
+    localEndpoint->sendStunTo(target, response.header.transactionId.get(), &response, response.size(), timestamp);
 }
 
-bool IceSession::isAttached(const IceEndpoint* endpoint) const
+bool IceSession::isAttached(const IceEndpoint* localEndpoint) const
 {
     for (auto& endp : _endpoints)
     {
-        if (endp.endpoint == endpoint)
+        if (endp.endpoint == localEndpoint)
         {
             return true;
         }
@@ -794,15 +798,15 @@ bool IceSession::isAttached(const IceEndpoint* endpoint) const
     return false;
 }
 
-IceSession::CandidatePair* IceSession::findCandidatePair(const IceEndpoint* endpoint,
+IceSession::CandidatePair* IceSession::findCandidatePair(const IceEndpoint* localEndpoint,
     const StunMessage& msg,
-    const transport::SocketAddress& responder)
+    const transport::SocketAddress& remotePort)
 {
     for (auto& candidatePair : _candidatePairs)
     {
-        if (candidatePair->localEndpoint.endpoint == endpoint &&
-            (endpoint->getTransportType() == TransportType::TCP ||
-                candidatePair->remoteCandidate.address == responder) &&
+        if (candidatePair->localEndpoint.endpoint == localEndpoint &&
+            (localEndpoint->getTransportType() == TransportType::TCP ||
+                candidatePair->remoteCandidate.address == remotePort) &&
             candidatePair->hasTransaction(msg))
         {
             return candidatePair.get();
@@ -1420,16 +1424,6 @@ void IceSession::CandidatePair::cancelPendingTransactionsBefore(StunTransaction&
         localEndpoint.endpoint->cancelStunTransaction(_transactions.front().id.get());
         _transactions.pop_front();
     }
-}
-
-bool IceSession::CandidatePair::isRecent(uint64_t now) const
-{
-    if (gatheringProbe && state == InProgress)
-    {
-        return true;
-    }
-
-    return state == InProgress && utils::Time::diffLT(startTime, now, _config.hostProbeTimeout * utils::Time::ms / 2);
 }
 
 void IceSession::CandidatePair::processTimeout(const uint64_t now)
