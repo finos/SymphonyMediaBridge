@@ -197,7 +197,7 @@ private: // SslWriteBioListener
     /** Called from transport's serial jobmanager */
     void onIceStateChanged(ice::IceSession* session, ice::IceSession::State state) override;
     void onIceCompleted(ice::IceSession* session) override;
-    void onIcePreliminary(ice::IceSession* session,
+    void onIceCandidateChanged(ice::IceSession* session,
         ice::IceEndpoint* endpoint,
         const SocketAddress& sourcePort) override;
     void onIceDiscardCandidate(ice::IceSession* session,

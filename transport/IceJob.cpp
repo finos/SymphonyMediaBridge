@@ -4,10 +4,9 @@
 #include "jobmanager/JobQueue.h"
 namespace transport
 {
-IceJob::IceJob(Transport& transport, jobmanager::JobQueue& jobQueue, ice::IceSession& session)
+IceJob::IceJob(Transport& transport, ice::IceSession& session)
     : CountedJob(transport.getJobCounter()),
       _transport(transport),
-      _jobQueue(jobQueue),
       _session(session)
 {
 }
@@ -19,11 +18,10 @@ void IceTimerJob::run()
     if (timeoutNs >= 0 && _transport.isRunning() && _session.getState() > ice::IceSession::State::IDLE &&
         _session.getState() < ice::IceSession::State::FAILED)
     {
-        _jobQueue.getJobManager().replaceTimedJob<IceTimerTriggerJob>(_transport.getId(),
+        _transport.getJobQueue().getJobManager().replaceTimedJob<IceTimerTriggerJob>(_transport.getId(),
             TIMER_ID,
             timeoutNs / 1000,
             _transport,
-            _jobQueue,
             _session);
     }
     else
@@ -37,7 +35,7 @@ void IceTimerTriggerJob::run()
     if (_transport.isRunning() && _session.getState() > ice::IceSession::State::IDLE &&
         _session.getState() < ice::IceSession::State::FAILED)
     {
-        _jobQueue.addJob<IceTimerJob>(_transport, _jobQueue, _session);
+        _transport.getJobQueue().addJob<IceTimerJob>(_transport, _session);
     }
 }
 
@@ -50,11 +48,10 @@ void IceStartJob::run()
 
     auto timestamp = utils::Time::getAbsoluteTime();
     _session.probeRemoteCandidates(_session.getRole(), timestamp);
-    _jobQueue.getJobManager().replaceTimedJob<IceTimerTriggerJob>(_transport.getId(),
+    _transport.getJobQueue().getJobManager().replaceTimedJob<IceTimerTriggerJob>(_transport.getId(),
         TIMER_ID,
         _session.nextTimeout(timestamp) / 1000,
         _transport,
-        _jobQueue,
         _session);
 }
 } // namespace transport

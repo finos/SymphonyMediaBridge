@@ -107,12 +107,12 @@ public:
     public:
         virtual void onIceStateChanged(IceSession* session, State state) = 0;
         virtual void onIceCompleted(IceSession* session) = 0;
-        virtual void onIcePreliminary(IceSession* session,
-            IceEndpoint* endpoint,
-            const transport::SocketAddress& sourcePort) = 0;
+        virtual void onIceCandidateChanged(IceSession* session,
+            IceEndpoint* localEndpoint,
+            const transport::SocketAddress& remotePort) = 0;
         virtual void onIceDiscardCandidate(IceSession* session,
-            IceEndpoint* endpoint,
-            const transport::SocketAddress& sourcePort) = 0;
+            IceEndpoint* localEndpoint,
+            const transport::SocketAddress& remotePort) = 0;
     };
 
     IceSession(const IceSession&) = delete;
@@ -124,7 +124,7 @@ public:
 
     void attachLocalEndpoint(IceEndpoint* udpEndpoint);
 
-    bool isAttached(const IceEndpoint* endpoint) const;
+    bool isAttached(const IceEndpoint* localEndpoint) const;
     void gatherLocalCandidates(const std::vector<transport::SocketAddress>& stunServers, uint64_t timestamp);
     const std::pair<std::string, std::string>& getLocalCredentials() const;
     void setLocalCredentials(const std::pair<std::string, std::string>& credentials);
@@ -151,14 +151,14 @@ public:
     std::pair<IceCandidate, IceCandidate> getSelectedPair() const;
     uint64_t getSelectedPairRtt() const;
 
-    void onPacketReceived(IceEndpoint* endpoint,
-        const transport::SocketAddress& sender,
+    void onPacketReceived(IceEndpoint* localEndpoint,
+        const transport::SocketAddress& remotePort,
         const void* data,
         size_t len,
         uint64_t timestamp);
 
-    void onTcpDisconnect(IceEndpoint* endpoint);
-    void onTcpRemoved(const IceEndpoint* endpoint);
+    void onTcpDisconnect(IceEndpoint* localEndpoint);
+    void onTcpRemoved(const IceEndpoint* localEndpoint);
 
     bool isRequestAuthentic(const void* data, size_t len) const;
     bool isResponseAuthentic(const void* data, size_t len) const;
@@ -185,13 +185,13 @@ private:
     };
     struct EndpointInfo
     {
-        EndpointInfo(IceEndpoint* endpoint_, int preference_) : endpoint(endpoint_), preference(preference_) {}
+        EndpointInfo(IceEndpoint* iceEndpoint, int preference_) : endpoint(iceEndpoint), preference(preference_) {}
         EndpointInfo(const EndpointInfo&) = default;
 
         IceEndpoint* endpoint;
         int preference;
     };
-    EndpointInfo* findEndpoint(IceEndpoint* endpoint);
+    EndpointInfo* findEndpoint(IceEndpoint* localEndpoint);
 
     struct StunTransaction
     {
@@ -206,7 +206,7 @@ private:
     {
     public:
         CandidatePair(const IceConfig& config,
-            const EndpointInfo& endpoint,
+            const EndpointInfo& localEndpoint,
             const IceCandidate& local,
             const IceCandidate& remote,
             StunTransactionIdGenerator& idGenerator,
@@ -220,7 +220,6 @@ private:
         bool hasTimedout(uint64_t now) const { return state == InProgress && (now - nextTransmission > 0); }
         int64_t nextTimeout(uint64_t now) const;
         void processTimeout(uint64_t now);
-        bool isRecent(uint64_t now) const;
 
         void restartProbe(const uint64_t now);
         void send(uint64_t now);
@@ -278,13 +277,13 @@ private:
         crypto::HMAC& _hmacComputer;
     };
 
-    CandidatePair* addProbeForRemoteCandidate(EndpointInfo& endpoint, const IceCandidate& remoteCandidate);
+    CandidatePair* addProbeForRemoteCandidate(EndpointInfo& localEndpoint, const IceCandidate& remoteCandidate);
     void sortCheckList();
 
-    CandidatePair* findCandidatePair(const IceEndpoint* endpoint,
+    CandidatePair* findCandidatePair(const IceEndpoint* localEndpoint,
         const StunMessage& response,
-        const transport::SocketAddress& responder);
-    void sendResponse(IceEndpoint* endpoint,
+        const transport::SocketAddress& remotePort);
+    void sendResponse(IceEndpoint* localEndpoint,
         const transport::SocketAddress& target,
         int code,
         const StunMessage& msg,
@@ -300,12 +299,12 @@ private:
     uint64_t getMaxStunServerCandidateAge(uint64_t now) const;
     IceCandidate::Type inferCandidateType(const transport::SocketAddress& mappedAddress);
 
-    void onRequestReceived(IceEndpoint* endpoint,
-        const transport::SocketAddress& sender,
+    void onRequestReceived(IceEndpoint* localEndpoint,
+        const transport::SocketAddress& remotePort,
         const StunMessage& data,
         uint64_t now);
-    void onResponseReceived(IceEndpoint* endpoint,
-        const transport::SocketAddress& sender,
+    void onResponseReceived(IceEndpoint* localEndpoint,
+        const transport::SocketAddress& remotePort,
         const StunMessage& msg,
         uint64_t now);
 

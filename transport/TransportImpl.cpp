@@ -871,7 +871,7 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     {
         if (!_selectedRtp)
         {
-            onIcePreliminary(_rtpIceSession.get(), &endpoint, source);
+            onIceCandidateChanged(_rtpIceSession.get(), &endpoint, source);
         }
 
         logger::debug("received DTLS protocol message from %s, %zu",
@@ -1072,7 +1072,6 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
                 IceTimerTriggerJob::TIMER_ID,
                 newTimeout / 1000,
                 *this,
-                _jobQueue,
                 *_rtpIceSession);
         }
     }
@@ -1760,7 +1759,7 @@ void TransportImpl::doConnect()
 
     if (_rtpIceSession)
     {
-        _jobQueue.addJob<IceStartJob>(*this, _jobQueue, *_rtpIceSession);
+        _jobQueue.addJob<IceStartJob>(*this, *_rtpIceSession);
     }
     if (!_rtpIceSession && _srtpClient->getState() == SrtpClient::State::READY)
     {
@@ -1917,7 +1916,7 @@ void TransportImpl::setSctp(const uint16_t localPort, const uint16_t remotePort)
     }
 }
 
-void TransportImpl::onIcePreliminary(ice::IceSession* session,
+void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
     ice::IceEndpoint* endpoint,
     const SocketAddress& sourcePort)
 {
