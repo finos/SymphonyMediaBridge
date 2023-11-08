@@ -1108,7 +1108,10 @@ void IceSession::freezePendingProbes(uint64_t now)
                         candidatePair->remoteCandidate.address);
                 }
                 removeRemoteCandidate(candidatePair->remoteCandidate);
-                toRemove[count++] = candidatePair.get();
+                if (count < toRemove.size())
+                {
+                    toRemove[count++] = candidatePair.get();
+                }
             }
             else if (candidatePair->remoteCandidate.type == IceCandidate::Type::PRFLX)
             {
@@ -1182,6 +1185,8 @@ int64_t IceSession::processTimeout(const uint64_t now)
     }
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    std::array<CandidatePair*, 128> toRemove;
+    size_t count = 0;
     for (auto it = _candidatePairs.begin(); it != _candidatePairs.end(); ++it)
     {
         auto* candidatePair = it->get();
@@ -1198,7 +1203,10 @@ int64_t IceSession::processTimeout(const uint64_t now)
                         candidatePair->localEndpoint.endpoint,
                         candidatePair->remoteCandidate.address);
                 }
-                removeCandidatePair(it->get());
+                if (count < toRemove.size())
+                {
+                    toRemove[count++] = it->get();
+                }
             }
         }
         else if (_nomination == candidatePair && candidatePair->state != ProbeState::Succeeded)
@@ -1227,8 +1235,12 @@ int64_t IceSession::processTimeout(const uint64_t now)
         }
     }
 
+    for (auto i = 0u; i < count; ++i)
+    {
+        removeCandidatePair(toRemove[i]);
+    }
+
     stateCheck(now);
-    // TODO cleanup failed pairs
 
     return nextTimeout(now);
 }
