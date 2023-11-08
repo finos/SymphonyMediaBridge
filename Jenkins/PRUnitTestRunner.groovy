@@ -26,11 +26,9 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
                 sh "docker/$platform/runtests.sh"
             }
         }
-//#recipientProviders: [[$class: 'CulpritsRecipientProvider']]
-// maybe remove to
     } catch(Exception ex) {
         emailext (
-            recipientProviders: [requestor()],
+            recipientProviders: [[$class: 'CulpritsRecipientProvider']],
             subject: "Jenkins PR build failed",
             body: """
                 <p>
