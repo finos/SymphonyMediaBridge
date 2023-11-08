@@ -76,7 +76,7 @@ void FakeUdpEndpoint::sendStunTo(const transport::SocketAddress& target,
                 else
                 {
                     const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
-                    logger::debug("register ICE listener for %04x%04x%04x", _name.c_str(), id[1], id[2], id[3]);
+                    // logger::debug("register ICE listener for %04x%04x%04x", _name.c_str(), id[1], id[2], id[3]);
                 }
             }
             else
