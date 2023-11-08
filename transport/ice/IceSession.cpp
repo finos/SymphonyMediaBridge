@@ -827,7 +827,6 @@ void IceSession::onTcpRemoved(const IceEndpoint* localEndpoint)
         if (candidatePair->localEndpoint.endpoint == localEndpoint)
         {
             removeCandidatePair(it->get());
-            ++it;
         }
     }
 
@@ -1092,10 +1091,9 @@ void IceSession::stateCheck(const uint64_t now)
 
 void IceSession::freezePendingProbes(uint64_t now)
 {
-    std::array<CandidatePair*, 128> toRemove;
-    size_t count = 0;
-    for (auto& candidatePair : _candidatePairs)
+    for (auto it = _candidatePairs.rbegin(); it != _candidatePairs.rend(); ++it)
     {
+        auto* candidatePair = it->get();
         if (!candidatePair->nominated && candidatePair->state <= ProbeState::Succeeded)
         {
             candidatePair->freeze();
@@ -1108,10 +1106,7 @@ void IceSession::freezePendingProbes(uint64_t now)
                         candidatePair->remoteCandidate.address);
                 }
                 removeRemoteCandidate(candidatePair->remoteCandidate);
-                if (count < toRemove.size())
-                {
-                    toRemove[count++] = candidatePair.get();
-                }
+                removeCandidatePair(candidatePair);
             }
             else if (candidatePair->remoteCandidate.type == IceCandidate::Type::PRFLX)
             {
@@ -1120,11 +1115,6 @@ void IceSession::freezePendingProbes(uint64_t now)
                 removeRemoteCandidate(candidatePair->remoteCandidate);
             }
         }
-    }
-
-    for (auto i = 0u; i < count; ++i)
-    {
-        removeCandidatePair(toRemove[i]);
     }
 }
 
@@ -1185,9 +1175,7 @@ int64_t IceSession::processTimeout(const uint64_t now)
     }
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
-    std::array<CandidatePair*, 128> toRemove;
-    size_t count = 0;
-    for (auto it = _candidatePairs.begin(); it != _candidatePairs.end(); ++it)
+    for (auto it = _candidatePairs.rbegin(); it != _candidatePairs.rend(); ++it)
     {
         auto* candidatePair = it->get();
 
@@ -1203,10 +1191,7 @@ int64_t IceSession::processTimeout(const uint64_t now)
                         candidatePair->localEndpoint.endpoint,
                         candidatePair->remoteCandidate.address);
                 }
-                if (count < toRemove.size())
-                {
-                    toRemove[count++] = it->get();
-                }
+                removeCandidatePair(candidatePair);
             }
         }
         else if (_nomination == candidatePair && candidatePair->state != ProbeState::Succeeded)
@@ -1233,11 +1218,6 @@ int64_t IceSession::processTimeout(const uint64_t now)
                 }
             }
         }
-    }
-
-    for (auto i = 0u; i < count; ++i)
-    {
-        removeCandidatePair(toRemove[i]);
     }
 
     stateCheck(now);
