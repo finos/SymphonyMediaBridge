@@ -108,6 +108,14 @@ public:
         FAILED,
         LAST
     };
+    enum class ProbeState
+    {
+        Waiting,
+        InProgress,
+        Succeeded,
+        Failed,
+        Frozen
+    };
 
     class IEvents
     {
@@ -145,14 +153,22 @@ public:
         const transport::SocketAddress& publicAddress,
         TcpType tcpType);
 
+    void removeLocalCandidate(const IceCandidate& localCandidate);
+
     const IceCandidate& addRemoteCandidate(const IceCandidate& udpCandidate);
     void addRemoteCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
+    void removeRemoteCandidate(const IceCandidate& remoteCandidate);
 
     void setRemoteCredentials(const std::string& ufrag, const std::string& pwd);
     void setRemoteCredentials(const std::pair<std::string, std::string>& credentials);
 
     void probeRemoteCandidates(IceRole role, uint64_t timestamp);
-    IceCandidates getRemoteCandidates() const { return _remoteCandidates; }
+    IceCandidates getRemoteCandidates() const
+    {
+        DBGCHECK_SINGLETHREADED(_mutexGuard);
+        return _remoteCandidates;
+    }
+
     static void generateCredentialString(StunTransactionIdGenerator& idGenerator, char* targetBuffer, int length);
 
     std::pair<IceCandidate, IceCandidate> getSelectedPair() const;
@@ -175,12 +191,21 @@ public:
     int64_t nextTimeout(uint64_t timestamp) const;
     int64_t processTimeout(uint64_t timestamp);
 
-    State getState() const { return _state.load(); }
-    IceRole getRole() const { return _credentials.role; }
+    State getState() const
+    {
+        DBGCHECK_SINGLETHREADED(_mutexGuard);
+        return _state;
+    }
+
+    IceRole getRole() const
+    {
+        DBGCHECK_SINGLETHREADED(_mutexGuard);
+        return _credentials.role;
+    }
 
     void stop();
 
-    bool isValidSource(uint64_t timestamp, const transport::SocketAddress& address) const;
+    bool canAcceptNewRemoteCandidate(uint64_t timestamp, const transport::SocketAddress& address) const;
 
 private:
     class CandidatePair;
@@ -232,7 +257,7 @@ private:
         void restartProbe(const uint64_t now);
         void send(uint64_t now);
         uint64_t getPriority(IceRole role) const;
-        bool isFinished() const { return state == Succeeded || state == Failed; }
+        bool isFinished() const { return state == ProbeState::Succeeded || state == ProbeState::Failed; }
 
         bool hasTransaction(const StunMessage& response) const;
         StunTransaction* findTransaction(const StunMessage& response);
@@ -257,20 +282,15 @@ private:
 
         uint64_t receptionTimestamp; // RTC+ICE traffic
 
-        enum State
-        {
-            Waiting,
-            InProgress,
-            Succeeded,
-            Failed,
-            Frozen
-        } state;
+        ProbeState state;
 
         StunMessage original;
 
     private:
         void cancelPendingTransactions();
         void cancelPendingTransactionsBefore(StunTransaction& transaction);
+        uint64_t pendingRequestAge(uint64_t now) const;
+        size_t pendingTransactionCount() const;
 
         uint64_t _transmitInterval;
         int _replies;
@@ -338,7 +358,7 @@ private:
     uint32_t _tcpProbeCount;
 
     const IceConfig _config;
-    std::atomic<State> _state;
+    State _state;
     StunTransactionIdGenerator _idGenerator;
     IEvents* const _eventSink;
     SessionCredentials _credentials;

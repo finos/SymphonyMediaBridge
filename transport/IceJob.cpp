@@ -32,8 +32,7 @@ void IceTimerJob::run()
 
 void IceTimerTriggerJob::run()
 {
-    if (_transport.isRunning() && _session.getState() > ice::IceSession::State::IDLE &&
-        _session.getState() < ice::IceSession::State::FAILED)
+    if (_transport.isRunning())
     {
         _transport.getJobQueue().addJob<IceTimerJob>(_transport, _session);
     }

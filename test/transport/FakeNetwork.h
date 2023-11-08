@@ -141,6 +141,7 @@ public:
     void process(uint64_t timestamp) override;
 
     bool addPortMapping(Protocol protocol, const transport::SocketAddress& source, int publicPort);
+    void removePortMapping(Protocol protocol, transport::SocketAddress& lanAddress);
 
     std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
     std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };

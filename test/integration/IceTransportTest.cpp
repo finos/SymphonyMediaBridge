@@ -204,7 +204,6 @@ TEST_F(IceTransportEmuTest, failOver)
 
         auto receiveCounters = group.clients[1]->_bundleTransport->getCumulativeAudioReceiveCounters();
         EXPECT_LT(receiveCounters.lostPackets, 100);
-        auto sendCounters = group.clients[0]->_bundleTransport->getCumulativeAudioReceiveCounters();
 
         for (auto id : {1})
         {
@@ -217,4 +216,117 @@ TEST_F(IceTransportEmuTest, failOver)
             logVideoReceive(clientName.c_str(), *group.clients[id]);
         }
     });
+}
+
+TEST_F(IceTransportEmuTest, natRemoved)
+{
+    runTestInThread(
+        expectedTestThreadCount(1),
+        [this]() {
+            _config.readFromString(_defaultSmbConfig);
+            _config.ice.tcp.enable = true;
+            _clientConfig.ice.tcp.enable = true;
+
+            initBridge(_config);
+            const auto baseUrl = "http://127.0.0.1:8080";
+
+            GroupCall<SfuClient<Channel>> group(_httpd,
+                _instanceCounter,
+                *_mainPoolAllocator,
+                _audioAllocator,
+                *_clientTransportFactory,
+                *_clientTransportFactory,
+                *_sslDtls,
+                2);
+
+            for (auto pairIt : this->_endpointNetworkLinkMap)
+            {
+                if (utils::startsWith("FakeUdp", pairIt.first))
+                {
+                    pairIt.second.ptrLink->setStaticDelay(pairIt.second.address.getFamily() == AF_INET6 ? 325 : 15);
+                }
+            }
+
+            Conference conf(_httpd);
+
+            ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+            startSimulation();
+
+            group.startConference(conf, baseUrl);
+
+            CallConfigBuilder cfgBuilder(conf.getId());
+            cfgBuilder.url(baseUrl).withOpus().withVideo();
+
+            auto cfgInitiator(cfgBuilder);
+            cfgInitiator.delayIpv6(500);
+
+            //   _firewall->block(transport::SocketAddress::parse(_ipv4.client), smbPort);
+
+            group.clients[0]->initiateCall(cfgInitiator.build());
+            group.clients[1]->joinCall(cfgBuilder.build());
+
+            ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+            startCallWithDefaultAudioProfile(group, utils::Time::sec * 45);
+            auto localIce = group.clients[0]->_bundleTransport->getLocalCandidates();
+
+            for (auto& c : localIce)
+            {
+                if (c.address.getFamily() == AF_INET6)
+                {
+                    logger::info("removing port mapping %s", "Test", c.address.toString().c_str());
+                    _firewall->removePortMapping(fakenet::Protocol::UDP, c.address);
+                }
+            }
+
+            group.run(utils::Time::sec * 3);
+
+            for (auto& c : localIce)
+            {
+                if (c.address.getFamily() == AF_INET && c.transportType == ice::TransportType::UDP &&
+                    c.type == ice::IceCandidate::Type::HOST)
+                {
+                    logger::info("blocking firewall %s", "Test", c.baseAddress.toString().c_str());
+                    _firewall->block(c.baseAddress, transport::SocketAddress::createBroadcastIpv4());
+                }
+            }
+
+            group.run(utils::Time::sec * 45);
+
+            nlohmann::json responseBody;
+            auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+                std::string(baseUrl) + "/stats",
+                1500 * utils::Time::ms,
+                responseBody);
+            EXPECT_TRUE(statsSuccess);
+
+            auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+                std::string(baseUrl) + "/conferences",
+                1500 * utils::Time::ms,
+                responseBody);
+            EXPECT_TRUE(confRequest);
+
+            group.clients[0]->stopTransports();
+            group.clients[1]->stopTransports();
+
+            group.awaitPendingJobs(utils::Time::sec * 4);
+
+            finalizeSimulation();
+
+            auto audioReceiveCounters1 = group.clients[1]->_bundleTransport->getCumulativeAudioReceiveCounters();
+            auto audioReceiveCounters0 = group.clients[0]->_bundleTransport->getCumulativeAudioReceiveCounters();
+            EXPECT_NEAR(audioReceiveCounters1.packets + 5 * 50, audioReceiveCounters0.packets, 30);
+
+            for (auto id : {1})
+            {
+                std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+                std::string clientName = "client_" + std::to_string(id);
+                group.clients[id]->getReportSummary(transportSummary);
+                logTransportSummary(clientName.c_str(), transportSummary);
+
+                logVideoSent(clientName.c_str(), *group.clients[id]);
+                logVideoReceive(clientName.c_str(), *group.clients[id]);
+            }
+        },
+        500);
 }

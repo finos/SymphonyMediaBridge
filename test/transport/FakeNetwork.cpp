@@ -397,6 +397,19 @@ bool Firewall::addPortMapping(const Protocol protocol, const transport::SocketAd
     return true;
 }
 
+void Firewall::removePortMapping(Protocol protocol, transport::SocketAddress& lanAddress)
+{
+    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    for (auto it = portMappings.begin(); it != portMappings.end(); ++it)
+    {
+        if (it->first == lanAddress)
+        {
+            portMappings.erase(it);
+            return;
+        }
+    }
+}
+
 void Firewall::block(const transport::SocketAddress& source, const transport::SocketAddress& destination)
 {
     if (isBlackListed(source, destination))
