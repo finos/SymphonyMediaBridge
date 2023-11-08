@@ -1,46 +1,46 @@
 @Library('SFE-RTC-pipeline') _
 
 void prRunner(String cmakeBuildType, String platform, String dockerTag) {
-    stage("Checkout") {
-        checkout scm
-    }
+    try{
+        stage("Checkout") {
+            checkout scm
+        }
 
-    stage("Build\n[$cmakeBuildType $platform]") {
-        docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:$dockerTag").inside {
-            env.GIT_COMMITTER_NAME = "Jenkins deployment job"
-            env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-            sh "docker/$platform/buildscript.sh $cmakeBuildType"
-            sh "mkdir $platform/$cmakeBuildType"
-            sh "objdump -d $platform/smb/smb > $platform/$cmakeBuildType/smbobj.txt"
-            sh "cp $platform/smb/smb $platform/$cmakeBuildType"
+        stage("Build\n[$cmakeBuildType $platform]") {
+            docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:$dockerTag").inside {
+                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
+                sh "docker/$platform/buildscript.sh $cmakeBuildType"
+                sh "mkdir $platform/$cmakeBuildType"
+                sh "objdump -d $platform/smb/smb > $platform/$cmakeBuildType/smbobj.txt"
+                sh "cp $platform/smb/smb $platform/$cmakeBuildType"
+            }
         }
-    }
-    stage("store artifacts") {
-        archiveArtifacts artifacts: "$platform/$cmakeBuildType/smb, $platform/$cmakeBuildType/smbobj.txt", allowEmptyArchive: true
-    }
-    stage("Test\n[$cmakeBuildType $platform]") {
-        docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:$dockerTag").inside {
-            env.GIT_COMMITTER_NAME = "Jenkins deployment job"
-            env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-            sh "docker/$platform/runtests.sh"
+        stage("store artifacts") {
+            archiveArtifacts artifacts: "$platform/$cmakeBuildType/smb, $platform/$cmakeBuildType/smbobj.txt", allowEmptyArchive: true
         }
-    }
+        stage("Test\n[$cmakeBuildType $platform]") {
+            docker.image("gcr.io/sym-dev-rtc/buildsmb-$platform:$dockerTag").inside {
+                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
+                sh "docker/$platform/runtests.sh"
+            }
+        }
 //#recipientProviders: [[$class: 'CulpritsRecipientProvider']]
 // maybe remove to
-    post {
-        unsuccessful {
-            emailext (
-                recipientProviders: [requestor()],
-                subject: "Jenkins PR build failed",
-                body: """
-                    <p>
-                    <h2><a href=\"${env.BUILD_URL}\">Jenkins PR build failed #${env.BUILD_NUMBER} for SMB.</a></h2>
-                    </p>
-                    """,
-                mimeType: 'text/html',
-                attachLog: true
-            )
-        }
+    catch(Exception ex) {
+        emailext (
+            recipientProviders: [requestor()],
+            subject: "Jenkins PR build failed",
+            body: """
+                <p>
+                <h2><a href=\"${env.BUILD_URL}\">Jenkins PR build failed #${env.BUILD_NUMBER} for SMB.</a></h2>
+                </p>
+                """,
+            mimeType: 'text/html',
+            attachLog: true
+        )
+        throw ex
     }
 }
 
