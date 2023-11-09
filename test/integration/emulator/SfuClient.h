@@ -772,20 +772,20 @@ public:
             return false;
         }
 
-        bool connected = true;
-        if (_bundleTransport)
+        if (_bundleTransport && !_bundleTransport->isConnected())
         {
-            connected &= _bundleTransport->isConnected();
+            return false;
         }
-        if (_audioTransport)
+        if (_audioTransport && !_audioTransport->isConnected())
         {
-            connected &= _audioTransport->isConnected();
+            return false;
         }
-        if (_videoTransport)
+        if (_videoTransport && !_videoTransport->isConnected())
         {
-            connected &= _videoTransport->isConnected();
+            return false;
         }
-        return connected;
+
+        return true;
     }
 
     bool hasProcessedOffer() const { return ((_bundleTransport || _audioTransport) && _audioSource); }

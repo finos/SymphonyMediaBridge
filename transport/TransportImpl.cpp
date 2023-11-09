@@ -1976,6 +1976,8 @@ void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
         {
             DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
         }
+
+        _isConnected = (_selectedRtp && _srtpClient->isConnected());
     }
     else if (_selectedRtp && endpoint != _selectedRtp)
     {
@@ -2004,7 +2006,7 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = _selectedRtp && _srtpClient->isConnected();
+    _isConnected = (_selectedRtp && _srtpClient->isConnected());
 
     switch (state)
     {
@@ -2114,7 +2116,10 @@ void TransportImpl::onSrtpStateChange(SrtpClient*, const SrtpClient::State state
     _dtlsState = state;
     _isConnected = (_selectedRtp && _srtpClient->isConnected());
 
-    logger::info("SRTP %s", getLoggableId().c_str(), api::utils::toString(state));
+    logger::info("SRTP %s, transport connected%u",
+        getLoggableId().c_str(),
+        api::utils::toString(state),
+        _isConnected.load());
     if (state == SrtpClient::State::CONNECTED && isConnected())
     {
         onTransportConnected();
@@ -2456,4 +2461,5 @@ void TransportImpl::asyncSetRemoteSdesKey(const srtp::AesKey& key)
 {
     _jobQueue.post(_jobCounter, [this, key]() { _srtpClient->setRemoteKey(key); });
 }
+
 } // namespace transport
