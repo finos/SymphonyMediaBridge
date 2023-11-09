@@ -671,11 +671,8 @@ void TransportImpl::internalShutdown()
         _rtpIceSession->stop();
     }
 
-    if (_srtpClient)
-    {
-        _selectedRtp = nullptr;
-        _srtpClient->stop();
-    }
+    _selectedRtp = nullptr;
+    _srtpClient->stop();
 
     if (_sctpAssociation)
     {
@@ -1749,7 +1746,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
 
 bool TransportImpl::unprotect(memory::Packet& packet)
 {
-    if (_srtpClient && _srtpClient->isConnected())
+    if (_srtpClient->isConnected())
     {
         return _srtpClient->unprotect(packet);
     }
@@ -1758,7 +1755,7 @@ bool TransportImpl::unprotect(memory::Packet& packet)
 
 void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 {
-    if (_srtpClient && _srtpClient->isInitialized())
+    if (_srtpClient->isInitialized())
     {
         _srtpClient->removeLocalSsrc(ssrc);
     }
@@ -1766,7 +1763,7 @@ void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 
 bool TransportImpl::setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
-    if (_srtpClient && _srtpClient->isConnected())
+    if (_srtpClient->isConnected())
     {
         return _srtpClient->setRemoteRolloverCounter(ssrc, rolloverCounter);
     }
@@ -2226,7 +2223,7 @@ void TransportImpl::connectSctp()
 
 void TransportImpl::doConnectSctp()
 {
-    if (_srtpClient && _srtpClient->getMode() != srtp::Mode::DTLS)
+    if (_srtpClient->getMode() != srtp::Mode::DTLS)
     {
         return;
     }
@@ -2444,25 +2441,19 @@ void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
 
 void TransportImpl::getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const
 {
-    if (_srtpClient)
+    srtp::AesKey key;
+    for (uint32_t profile = 1; profile < srtp::PROFILE_LAST; ++profile)
     {
-        srtp::AesKey key;
-        for (uint32_t profile = 1; profile < srtp::PROFILE_LAST; ++profile)
+        _srtpClient->getLocalKey(static_cast<srtp::Profile>(profile), key);
+        if (key.getLength() > 0)
         {
-            _srtpClient->getLocalKey(static_cast<srtp::Profile>(profile), key);
-            if (key.getLength() > 0)
-            {
-                sdesKeys.push_back(key);
-            }
+            sdesKeys.push_back(key);
         }
     }
 }
 
 void TransportImpl::asyncSetRemoteSdesKey(const srtp::AesKey& key)
 {
-    if (_srtpClient)
-    {
-        _jobQueue.post(_jobCounter, [this, key]() { _srtpClient->setRemoteKey(key); });
-    }
+    _jobQueue.post(_jobCounter, [this, key]() { _srtpClient->setRemoteKey(key); });
 }
 } // namespace transport
