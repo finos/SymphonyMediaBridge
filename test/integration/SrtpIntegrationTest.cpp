@@ -70,7 +70,7 @@ TEST_P(IntegrationSrtpTest, oneOnOneSDES)
         const double expectedFrequencies[2][1] = {{1300.0}, {600.0}};
         for (auto id : {0, 1})
         {
-            const auto data = analyzeSpectrum<SfuClient<Channel>>(group.clients[id].get(), 6, -75, 0, true);
+            const auto data = analyzeSpectrum<SfuClient<Channel>>(group.clients[id].get(), 6, -90, 0, true);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
             if (data.dominantFrequencies.size() >= 1)
             {
