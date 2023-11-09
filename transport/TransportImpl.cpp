@@ -504,9 +504,14 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _rtxProbeSsrc(0),
       _rtxProbeSequenceCounter(nullptr),
       _pacingInUse(false),
+      _iceState(ice::IceSession::State::IDLE),
+      _dtlsState(SrtpClient::State::IDLE),
+      _isConnected(false),
       _rtcpProducer(_loggableId, _config, _outboundSsrcCounters, _inboundSsrcCounters, _mainAllocator, *this),
       _uplinkEstimationEnabled(enableUplinkEstimation && _config.rctl.enable),
-      _downlinkEstimationEnabled(enableDownlinkEstimation && _config.bwe.enable)
+      _downlinkEstimationEnabled(enableDownlinkEstimation && _config.bwe.enable),
+      _lastReceivedPacketTimestamp(0),
+      _lastTickJobStartTimestamp(0)
 {
     assert(endpointIdHash != 0);
     _tag[0] = 0;
