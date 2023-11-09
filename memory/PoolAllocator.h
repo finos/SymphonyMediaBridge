@@ -85,7 +85,7 @@ public:
 
     Deleter& getDeleter() { return _deleter; }
 
-    void logAllocatedElements()
+    __attribute__((no_sanitize("thread"))) void logAllocatedElements()
     {
 #if POOLALLOC_MEMGUARDS
         if (_originalElementCount != size())
