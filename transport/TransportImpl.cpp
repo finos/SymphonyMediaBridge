@@ -661,8 +661,6 @@ void TransportImpl::stop()
     _isRunning = false;
 
     _jobQueue.post(_jobCounter, [this]() { internalShutdown(); });
-    _isInitialized = false;
-
     _jobQueue.post(_jobCounter, [this]() { internalUnregisterEndpoints(); });
 }
 
@@ -675,16 +673,15 @@ void TransportImpl::internalShutdown()
 
     if (_srtpClient)
     {
-        _jobQueue.post(_jobCounter, [this]() {
-            _selectedRtp = nullptr;
-            _srtpClient->stop();
-        });
+        _selectedRtp = nullptr;
+        _srtpClient->stop();
     }
 
     if (_sctpAssociation)
     {
         _sctpAssociation->close();
     }
+    _isInitialized = false;
 }
 
 void TransportImpl::internalUnregisterEndpoints()
@@ -2010,7 +2007,7 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = _selectedRtp && (!_srtpClient || _srtpClient->isConnected());
+    _isConnected = _selectedRtp && _srtpClient->isConnected();
 
     switch (state)
     {

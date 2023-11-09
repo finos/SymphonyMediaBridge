@@ -49,7 +49,7 @@ TEST_F(IceTransportEmuTest, plainNewApi)
         cfgBuilder.url(baseUrl).withOpus().withVideo();
 
         auto cfgInitiator(cfgBuilder);
-        cfgInitiator.delayIpv6(2500);
+        cfgInitiator.delayIpv6(250);
 
         group.clients[0]->initiateCall(cfgInitiator.build());
         group.clients[1]->joinCall(cfgBuilder.build());
