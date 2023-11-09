@@ -99,6 +99,8 @@ struct TransportClientPair : public transport::DataReceiver
         memory::UniquePacket packet,
         uint64_t timestamp) override{};
 
+    void onIceReceived(transport::RtcTransport* sender, uint64_t timestamp) override {}
+
     uint32_t _ssrc;
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;

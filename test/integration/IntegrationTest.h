@@ -280,6 +280,12 @@ public:
                     return f2.second < f1.second;
                 });
 
+            for (int i = 0; i < 8; ++i)
+            {
+                auto& f = pwrFreq[i];
+                logger::debug("%s freq %.2f, pwr %.2f", "Test", client->getLoggableId().c_str(), f.first, f.second);
+            }
+
             auto peaks = SampleDataUtils::isolatePeaks(pwrFreq, inclusionThreshold, 48000);
             for (auto& p : peaks)
             {

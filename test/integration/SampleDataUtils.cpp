@@ -339,7 +339,7 @@ std::vector<std::pair<double, double>> SampleDataUtils::isolatePeaks(std::vector
     std::vector<std::pair<double, double>> v;
     for (auto m : powerFreq)
     {
-        if (m.second > threshold && !containsNear(v, m.first, freqDelta * 2))
+        if (m.second > threshold && !containsNear(v, m.first, freqDelta * 8))
         {
             v.push_back(m);
         }

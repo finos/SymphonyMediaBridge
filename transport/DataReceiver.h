@@ -35,6 +35,7 @@ public:
         size_t length) = 0;
 
     virtual void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) = 0;
+    virtual void onIceReceived(RtcTransport* transport, uint64_t timestamp) = 0;
 };
 
 } // namespace transport

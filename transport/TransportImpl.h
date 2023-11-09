@@ -283,6 +283,7 @@ private: // SslWriteBioListener
         memory::UniquePacket packet,
         uint64_t timestamp);
     void internalUnregisterEndpoints();
+    void internalShutdown();
 
     void onServerPortUnregistered(ServerEndpoint& endpoint) override;
 

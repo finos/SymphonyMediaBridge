@@ -66,7 +66,7 @@ public:
 
         logger::PruneSpam logPrune(1, 10);
         auto currTime = utils::Time::getAbsoluteTime();
-        while (currTime - start < timeout)
+        while (utils::Time::diffLT(start, currTime, timeout))
         {
             auto it = std::find_if_not(clients.begin(), clients.end(), [](auto& c) { return c->isConnected(); });
 
@@ -114,7 +114,7 @@ public:
         }
 
         auto currTime = utils::Time::getAbsoluteTime();
-        while (currTime - start < timeout)
+        while (utils::Time::diffLT(start, currTime, timeout))
         {
             if (client->isConnected())
             {

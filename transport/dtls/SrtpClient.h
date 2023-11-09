@@ -75,6 +75,8 @@ public:
 
     srtp::Mode getMode() const { return _mode; }
 
+    void stop();
+
 private:
     void dtlsHandShake();
     void logSslError(const char* msg, int sslCode);

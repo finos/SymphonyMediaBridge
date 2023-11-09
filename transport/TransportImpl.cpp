@@ -504,9 +504,14 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _rtxProbeSsrc(0),
       _rtxProbeSequenceCounter(nullptr),
       _pacingInUse(false),
+      _iceState(ice::IceSession::State::IDLE),
+      _dtlsState(SrtpClient::State::IDLE),
+      _isConnected(false),
       _rtcpProducer(_loggableId, _config, _outboundSsrcCounters, _inboundSsrcCounters, _mainAllocator, *this),
       _uplinkEstimationEnabled(enableUplinkEstimation && _config.rctl.enable),
-      _downlinkEstimationEnabled(enableDownlinkEstimation && _config.bwe.enable)
+      _downlinkEstimationEnabled(enableDownlinkEstimation && _config.bwe.enable),
+      _lastReceivedPacketTimestamp(0),
+      _lastTickJobStartTimestamp(0)
 {
     assert(endpointIdHash != 0);
     _tag[0] = 0;
@@ -659,18 +664,26 @@ void TransportImpl::stop()
     }
     logger::debug("stopping jobcount %u, running%u", _loggableId.c_str(), _jobCounter.load(), _isRunning.load());
     _isRunning = false;
+
+    _jobQueue.post(_jobCounter, [this]() { internalShutdown(); });
+    _jobQueue.post(_jobCounter, [this]() { internalUnregisterEndpoints(); });
+}
+
+void TransportImpl::internalShutdown()
+{
     if (_rtpIceSession)
     {
         _rtpIceSession->stop();
     }
+
+    _selectedRtp = nullptr;
+    _srtpClient->stop();
 
     if (_sctpAssociation)
     {
         _sctpAssociation->close();
     }
     _isInitialized = false;
-
-    _jobQueue.post(_jobCounter, [this]() { internalUnregisterEndpoints(); });
 }
 
 void TransportImpl::internalUnregisterEndpoints()
@@ -762,6 +775,11 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     {
         logger::debug("RTP received, dtls not connected yet", _loggableId.c_str());
         return;
+    }
+
+    if (_rtpIceSession)
+    {
+        _rtpIceSession->onPacketReceived(&endpoint, source, timestamp);
     }
 
     DataReceiver* const dataReceiver = _dataReceiver.load();
@@ -858,6 +876,12 @@ void TransportImpl::internalDtlsReceived(Endpoint& endpoint,
     _lastReceivedPacketTimestamp = timestamp;
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
+
+    if (_rtpIceSession)
+    {
+        _rtpIceSession->onPacketReceived(&endpoint, source, timestamp);
+    }
+
     if (packet->get()[0] == DTLSContentType::applicationData)
     {
         DataReceiver* const dataReceiver = _dataReceiver.load();
@@ -908,6 +932,12 @@ void TransportImpl::internalRtcpReceived(Endpoint& endpoint,
     _lastReceivedPacketTimestamp = timestamp;
     ++_inboundMetrics.packetCount;
     _inboundMetrics.bytesCount += packet->getLength();
+
+    if (_rtpIceSession)
+    {
+        _rtpIceSession->onPacketReceived(&endpoint, source, timestamp);
+    }
+
     if (!_srtpClient->isConnected())
     {
         logger::debug("RTCP received, dtls not connected yet", _loggableId.c_str());
@@ -1043,6 +1073,7 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
         }
     }
 
+    auto dataReceiver = _dataReceiver.load();
     if (_rtpIceSession->isAttached(&endpoint))
     {
         if (ice::isResponse(packet->get()) && _rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
@@ -1058,13 +1089,17 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
             return;
         }
 
-        if (_rtpIceSession->isValidSource(timestamp, source))
+        if (_rtpIceSession->canAcceptNewRemoteCandidate(timestamp, source))
         {
             endpoint.registerListener(source, this);
         }
 
         auto timeout = _rtpIceSession->nextTimeout(timestamp);
-        _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        if (dataReceiver)
+        {
+            dataReceiver->onIceReceived(this, timestamp);
+        }
         auto newTimeout = _rtpIceSession->nextTimeout(timestamp);
         if (newTimeout != timeout)
         {
@@ -1077,7 +1112,11 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
     }
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)
     {
-        _rtpIceSession->onPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+        if (dataReceiver)
+        {
+            dataReceiver->onIceReceived(this, timestamp);
+        }
     }
 }
 
@@ -1514,9 +1553,12 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
     assert(_srtpClient);
     const auto timestamp = utils::Time::getAbsoluteTime();
 
-    if (!_srtpClient || !_selectedRtp || !isConnected())
+    if (!_srtpClient->isConnected() || !_selectedRtp)
     {
-        logger::debug("dropping packet, not connected", _loggableId.c_str());
+        if (_isRunning)
+        {
+            logger::debug("dropping packet, not connected", _loggableId.c_str());
+        }
         return;
     }
 
@@ -1709,7 +1751,7 @@ void TransportImpl::onSendingRtcp(const memory::Packet& rtcpPacket, const uint64
 
 bool TransportImpl::unprotect(memory::Packet& packet)
 {
-    if (_srtpClient && _srtpClient->isConnected())
+    if (_srtpClient->isConnected())
     {
         return _srtpClient->unprotect(packet);
     }
@@ -1718,7 +1760,7 @@ bool TransportImpl::unprotect(memory::Packet& packet)
 
 void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 {
-    if (_srtpClient && _srtpClient->isInitialized())
+    if (_srtpClient->isInitialized())
     {
         _srtpClient->removeLocalSsrc(ssrc);
     }
@@ -1726,7 +1768,7 @@ void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 
 bool TransportImpl::setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter)
 {
-    if (_srtpClient && _srtpClient->isConnected())
+    if (_srtpClient->isConnected())
     {
         return _srtpClient->setRemoteRolloverCounter(ssrc, rolloverCounter);
     }
@@ -1920,13 +1962,13 @@ void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
     ice::IceEndpoint* endpoint,
     const SocketAddress& sourcePort)
 {
-    if (_selectedRtp == nullptr &&
-        (session->getState() == ice::IceSession::State::READY ||
-            session->getState() == ice::IceSession::State::CONNECTING))
+    if (_selectedRtp == nullptr && session->getState() > ice::IceSession::State::READY)
     {
-
         _selectedRtp = static_cast<transport::Endpoint*>(endpoint); // temporary selection
+        _selectedRtcp = _selectedRtp;
         _peerRtpPort = sourcePort;
+        _peerRtcpPort = sourcePort;
+        _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
 
         logger::info("temporary candidate selected %s %s, %s - %s",
             _loggableId.c_str(),
@@ -1939,6 +1981,23 @@ void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
         {
             DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
         }
+
+        _isConnected = (_selectedRtp && _srtpClient->isConnected());
+    }
+    else if (_selectedRtp && endpoint != _selectedRtp)
+    {
+        _selectedRtp = static_cast<transport::Endpoint*>(endpoint);
+        _selectedRtcp = _selectedRtp;
+        _peerRtpPort = sourcePort;
+        _peerRtcpPort = sourcePort;
+        _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
+
+        logger::info("switching ICE candidate pair to %s %s, %s - %s",
+            _loggableId.c_str(),
+            endpoint->getLocalPort().getFamilyString().c_str(),
+            ice::toString(endpoint->getTransportType()).c_str(),
+            endpoint->getLocalPort().toString().c_str(),
+            sourcePort.toString().c_str());
     }
 }
 
@@ -1952,7 +2011,7 @@ void TransportImpl::onIceCompleted(ice::IceSession* session)
 void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSession::State state)
 {
     _iceState = state;
-    _isConnected = (state == ice::IceSession::State::CONNECTED) && (!_srtpClient || _srtpClient->isConnected());
+    _isConnected = (_selectedRtp && _srtpClient->isConnected());
 
     switch (state)
     {
@@ -1970,28 +2029,17 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
             candidatePair.second.address.toString().c_str(),
             rtt / utils::Time::us);
 
-        for (auto& endpoint : _rtpEndpoints)
+        if (_selectedRtp)
         {
-            if (endpoint->getState() == Endpoint::State::CONNECTED &&
-                endpoint->getLocalPort() == candidatePair.first.baseAddress)
+            logger::info("candidate selected %s %s, %s",
+                _loggableId.c_str(),
+                _peerRtpPort.getFamilyString().c_str(),
+                ice::toString(_selectedRtp->getTransportType()).c_str(),
+                ice::toString(candidatePair.second.type).c_str());
+
+            if (_srtpClient->getState() == SrtpClient::State::READY)
             {
-                _selectedRtp = endpoint.get();
-                _selectedRtcp = endpoint.get();
-                _peerRtpPort = candidatePair.second.address;
-                _peerRtcpPort = candidatePair.second.address;
-
-                _transportType.store(utils::Optional<ice::TransportType>(endpoint->getTransportType()));
-
-                logger::info("candidate selected %s %s, %s",
-                    _loggableId.c_str(),
-                    _peerRtpPort.getFamilyString().c_str(),
-                    ice::toString(endpoint->getTransportType()).c_str(),
-                    ice::toString(candidatePair.second.type).c_str());
-
-                if (_srtpClient->getState() == SrtpClient::State::READY)
-                {
-                    DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
-                }
+                DtlsTimerJob::start(_jobQueue, *this, *_srtpClient, 1);
             }
         }
 
@@ -2071,10 +2119,12 @@ void TransportImpl::setDataReceiver(DataReceiver* dataReceiver)
 void TransportImpl::onSrtpStateChange(SrtpClient*, const SrtpClient::State state)
 {
     _dtlsState = state;
-    _isConnected = (!_rtpIceSession || _iceState == ice::IceSession::State::CONNECTED) &&
-        (_dtlsState == SrtpClient::State::CONNECTED);
+    _isConnected = (_selectedRtp && _srtpClient->isConnected());
 
-    logger::info("SRTP %s", getLoggableId().c_str(), api::utils::toString(state));
+    logger::info("SRTP %s, transport connected%u",
+        getLoggableId().c_str(),
+        api::utils::toString(state),
+        _isConnected.load());
     if (state == SrtpClient::State::CONNECTED && isConnected())
     {
         onTransportConnected();
@@ -2183,7 +2233,7 @@ void TransportImpl::connectSctp()
 
 void TransportImpl::doConnectSctp()
 {
-    if (_srtpClient && _srtpClient->getMode() != srtp::Mode::DTLS)
+    if (_srtpClient->getMode() != srtp::Mode::DTLS)
     {
         return;
     }
@@ -2401,25 +2451,20 @@ void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
 
 void TransportImpl::getSdesKeys(std::vector<srtp::AesKey>& sdesKeys) const
 {
-    if (_srtpClient)
+    srtp::AesKey key;
+    for (uint32_t profile = 1; profile < srtp::PROFILE_LAST; ++profile)
     {
-        srtp::AesKey key;
-        for (uint32_t profile = 1; profile < srtp::PROFILE_LAST; ++profile)
+        _srtpClient->getLocalKey(static_cast<srtp::Profile>(profile), key);
+        if (key.getLength() > 0)
         {
-            _srtpClient->getLocalKey(static_cast<srtp::Profile>(profile), key);
-            if (key.getLength() > 0)
-            {
-                sdesKeys.push_back(key);
-            }
+            sdesKeys.push_back(key);
         }
     }
 }
 
 void TransportImpl::asyncSetRemoteSdesKey(const srtp::AesKey& key)
 {
-    if (_srtpClient)
-    {
-        _jobQueue.post(_jobCounter, [this, key]() { _srtpClient->setRemoteKey(key); });
-    }
+    _jobQueue.post(_jobCounter, [this, key]() { _srtpClient->setRemoteKey(key); });
 }
+
 } // namespace transport

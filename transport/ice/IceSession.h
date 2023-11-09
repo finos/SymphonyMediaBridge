@@ -3,6 +3,7 @@
 #include "Stun.h"
 #include "concurrency/ScopedMutexGuard.h"
 #include "crypto/SslHelper.h"
+#include "memory/Map.h"
 #include "utils/SocketAddress.h"
 #include <deque>
 
@@ -83,10 +84,16 @@ enum class IceError
     FailedCreateTcpEndpoint = 515
 };
 
+struct CandidatePairKey
+{
+    const IceEndpoint* endPoint;
+    transport::SocketAddress remoteAddress;
+};
+
 typedef std::vector<IceCandidate> IceCandidates;
 // Establishes connectivity over one or more sockets
 // You will need one IceSession per ice component
-// You drive the session by calling onPacketReceived and processTimeout
+// You drive the session by calling onStunPacketReceived and processTimeout
 // It is not thread safe
 class IceSession
 {
@@ -100,6 +107,14 @@ public:
         CONNECTED,
         FAILED,
         LAST
+    };
+    enum class ProbeState
+    {
+        Waiting,
+        InProgress,
+        Succeeded,
+        Failed,
+        Frozen
     };
 
     class IEvents
@@ -138,20 +153,30 @@ public:
         const transport::SocketAddress& publicAddress,
         TcpType tcpType);
 
+    void removeLocalCandidate(const IceCandidate& localCandidate);
+
     const IceCandidate& addRemoteCandidate(const IceCandidate& udpCandidate);
     void addRemoteCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
+    void removeRemoteCandidate(const IceCandidate& remoteCandidate);
 
     void setRemoteCredentials(const std::string& ufrag, const std::string& pwd);
     void setRemoteCredentials(const std::pair<std::string, std::string>& credentials);
-    bool hasRemoteCredentials() const { return !_credentials.remote.first.empty(); }
+
     void probeRemoteCandidates(IceRole role, uint64_t timestamp);
-    IceCandidates getRemoteCandidates() const { return _remoteCandidates; }
+    IceCandidates getRemoteCandidates() const
+    {
+        DBGCHECK_SINGLETHREADED(_mutexGuard);
+        return _remoteCandidates;
+    }
+
     static void generateCredentialString(StunTransactionIdGenerator& idGenerator, char* targetBuffer, int length);
 
     std::pair<IceCandidate, IceCandidate> getSelectedPair() const;
     uint64_t getSelectedPairRtt() const;
 
-    void onPacketReceived(IceEndpoint* localEndpoint,
+    void onPacketReceived(IceEndpoint* localEndpoint, const transport::SocketAddress& remotePort, uint64_t timestamp);
+
+    void onStunPacketReceived(IceEndpoint* localEndpoint,
         const transport::SocketAddress& remotePort,
         const void* data,
         size_t len,
@@ -166,14 +191,24 @@ public:
     int64_t nextTimeout(uint64_t timestamp) const;
     int64_t processTimeout(uint64_t timestamp);
 
-    State getState() const { return _state.load(); }
-    IceRole getRole() const { return _credentials.role; }
+    State getState() const
+    {
+        DBGCHECK_SINGLETHREADED(_mutexGuard);
+        return _state;
+    }
+
+    IceRole getRole() const
+    {
+        DBGCHECK_SINGLETHREADED(_mutexGuard);
+        return _credentials.role;
+    }
 
     void stop();
 
-    bool isValidSource(uint64_t timestamp, const transport::SocketAddress& address) const;
+    bool canAcceptNewRemoteCandidate(uint64_t timestamp, const transport::SocketAddress& address) const;
 
 private:
+    class CandidatePair;
     struct SessionCredentials
     {
         SessionCredentials(ice::IceRole role_, uint64_t tieBreaker_) : role(role_), tieBreaker(tieBreaker_) {}
@@ -191,7 +226,6 @@ private:
         IceEndpoint* endpoint;
         int preference;
     };
-    EndpointInfo* findEndpoint(IceEndpoint* localEndpoint);
 
     struct StunTransaction
     {
@@ -217,19 +251,17 @@ private:
 
         CandidatePair& operator=(const CandidatePair&) = delete;
 
-        bool hasTimedout(uint64_t now) const { return state == InProgress && (now - nextTransmission > 0); }
         int64_t nextTimeout(uint64_t now) const;
         void processTimeout(uint64_t now);
 
         void restartProbe(const uint64_t now);
         void send(uint64_t now);
         uint64_t getPriority(IceRole role) const;
-        bool isFinished() const { return state == Succeeded || state == Failed; }
+        bool isFinished() const { return state == ProbeState::Succeeded || state == ProbeState::Failed; }
 
         bool hasTransaction(const StunMessage& response) const;
         StunTransaction* findTransaction(const StunMessage& response);
         void onResponse(uint64_t now, const StunMessage& response);
-        void onRequest(uint64_t timestamp, const StunMessage& request);
         void onDisconnect();
         void nominate(uint64_t now);
         void freeze();
@@ -239,7 +271,6 @@ private:
 
         // ns
         uint64_t getRtt() const { return _minRtt; }
-        std::string getLoggableId() const;
 
         IceCandidate localCandidate;
         const IceCandidate remoteCandidate;
@@ -248,22 +279,18 @@ private:
         uint64_t startTime;
         uint64_t nextTransmission;
         bool nominated;
-        uint64_t receivedProbeTimestamp;
 
-        enum State
-        {
-            Waiting,
-            InProgress,
-            Succeeded,
-            Failed,
-            Frozen
-        } state;
+        uint64_t receptionTimestamp; // RTC+ICE traffic
+
+        ProbeState state;
 
         StunMessage original;
 
     private:
         void cancelPendingTransactions();
         void cancelPendingTransactionsBefore(StunTransaction& transaction);
+        uint64_t pendingRequestAge(uint64_t now) const;
+        size_t pendingTransactionCount() const;
 
         uint64_t _transmitInterval;
         int _replies;
@@ -277,12 +304,16 @@ private:
         crypto::HMAC& _hmacComputer;
     };
 
+    CandidatePair* addRemoteTcpCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
     CandidatePair* addProbeForRemoteCandidate(EndpointInfo& localEndpoint, const IceCandidate& remoteCandidate);
     void sortCheckList();
 
     CandidatePair* findCandidatePair(const IceEndpoint* localEndpoint,
         const StunMessage& response,
         const transport::SocketAddress& remotePort);
+    CandidatePair* findCandidatePair(const IceEndpoint* localEndpoint, const transport::SocketAddress& remotePort);
+
+    void removeCandidatePair(const CandidatePair* candidatePair);
     void sendResponse(IceEndpoint* localEndpoint,
         const transport::SocketAddress& target,
         int code,
@@ -295,6 +326,7 @@ private:
     void stateCheck(uint64_t now);
     void nominate(uint64_t now);
     void freezePendingProbes(uint64_t now);
+    void releaseFrozenProbes(uint64_t now);
     bool hasNomination() const;
     uint64_t getMaxStunServerCandidateAge(uint64_t now) const;
     IceCandidate::Type inferCandidateType(const transport::SocketAddress& mappedAddress);
@@ -313,6 +345,9 @@ private:
     const std::string _logId;
     std::vector<std::unique_ptr<CandidatePair>> _candidatePairs;
     std::vector<CandidatePair*> _checklist;
+    memory::Map<CandidatePairKey, CandidatePair*, 256> _candidatePairIndex; // after reception from remote
+    CandidatePair* _nomination;
+    CandidatePair* _preliminaryCandidate;
 
     const ice::IceComponent _component;
 
@@ -323,7 +358,7 @@ private:
     uint32_t _tcpProbeCount;
 
     const IceConfig _config;
-    std::atomic<State> _state;
+    State _state;
     StunTransactionIdGenerator _idGenerator;
     IEvents* const _eventSink;
     SessionCredentials _credentials;
@@ -339,3 +374,52 @@ private:
 };
 
 } // namespace ice
+
+namespace std
+{
+template <>
+class hash<ice::CandidatePairKey>
+{
+public:
+    size_t operator()(const ice::CandidatePairKey& key) const
+    {
+        if (key.endPoint->getTransportType() == ice::TransportType::TCP)
+        {
+            return utils::FowlerNollVoHash(&key.endPoint, sizeof(key.endPoint));
+        }
+
+        CompactKey compactKey;
+        compactKey.port = key.remoteAddress.getPort();
+        compactKey.endPoint = key.endPoint;
+        if (key.remoteAddress.getFamily() == AF_INET6)
+        {
+            std::memcpy(&compactKey.ip.v6, &key.remoteAddress.getIpv6()->sin6_addr, sizeof(compactKey.ip.v6));
+        }
+        else if (key.remoteAddress.getFamily() == AF_INET)
+        {
+            std::memcpy(&compactKey.ip.v4, &key.remoteAddress.getIpv4()->sin_addr, sizeof(compactKey.ip.v4));
+        }
+        else
+        {
+            assert(false);
+        }
+
+        return utils::FowlerNollVoHash(&compactKey, sizeof(compactKey));
+    }
+
+private:
+    struct CompactKey
+    {
+        CompactKey() { std::memset(this, 0, sizeof(CompactKey)); }
+        uint16_t port;
+        union
+        {
+            in_addr v4;
+            in6_addr v6;
+        } ip;
+
+        const ice::IceEndpoint* endPoint;
+    };
+};
+
+} // namespace std

@@ -455,6 +455,7 @@ TEST_F(IntegrationTest, endpointAutoRemove)
         auto endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());
         EXPECT_EQ(3, endpoints.size());
 
+        logger::info("stopping endpoint 2", "Test");
         group.clients[2]->stopTransports();
         group.run(utils::Time::sec * 11);
         endpoints = getConferenceEndpointsInfo(_httpd, baseUrl.c_str());

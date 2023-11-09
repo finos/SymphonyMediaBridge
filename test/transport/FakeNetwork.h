@@ -1,6 +1,8 @@
 #pragma once
 #include "NetworkLink.h"
+#include "concurrency/MpmcHashmap.h"
 #include "concurrency/MpmcQueue.h"
+#include "memory/Map.h"
 #include "utils/SocketAddress.h"
 #include <atomic>
 #include <map>
@@ -139,29 +141,42 @@ public:
     transport::SocketAddress getPublicIpv6() const { return _publicIpv6; }
     void process(uint64_t timestamp) override;
 
-    bool addPortMapping(Protocol protocol, const transport::SocketAddress& source, int publicPort);
+    transport::SocketAddress addPortMapping(Protocol protocol, const transport::SocketAddress& source, int publicPort);
+    void removePortMapping(Protocol protocol, transport::SocketAddress& lanAddress);
 
     std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
     std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
+
+    void block(const transport::SocketAddress& source, const transport::SocketAddress& destination);
+    void unblock(const transport::SocketAddress& source, const transport::SocketAddress& destination);
 
 private:
     void dispatchPublicly(const Packet& packet, uint64_t timestamp);
     void processEndpoints(const uint64_t timestamp);
     void dispatchNAT(const Packet& packet, const uint64_t timestamp);
     bool dispatchLocally(const Packet& packet, const uint64_t timestamp);
+    bool isBlackListed(const transport::SocketAddress& source, const transport::SocketAddress& destination);
 
     transport::SocketAddress acquirePortMapping(Protocol protocol, const transport::SocketAddress& source);
 
     transport::SocketAddress _publicIpv4;
     transport::SocketAddress _publicIpv6;
-    using PortMapping = std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>>;
-    PortMapping _portMappingsUdp;
-    PortMapping _portMappingsTcp;
+    struct PortPair
+    {
+        transport::SocketAddress lanPort;
+        transport::SocketAddress wanPort;
+    };
+
+    using PortMap = concurrency::MpmcHashmap32<transport::SocketAddress, PortPair>;
+
+    PortMap _portMappingsUdp;
+    PortMap _portMappingsTcp;
     std::vector<NetworkNode*> _endpoints;
     std::vector<NetworkNode*> _publicEndpoints;
     Gateway& _internet;
     int _portCount = 1000;
     mutable std::mutex _nodesMutex;
+    memory::Map<std::pair<transport::SocketAddress, transport::SocketAddress>, bool, 1024> _blackList;
 };
 
 class InternetRunner

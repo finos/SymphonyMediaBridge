@@ -200,7 +200,9 @@ struct ClientPair : public transport::DataReceiver
         }
     };
 
-    void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override{};
+    void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override {}
+
+    void onIceReceived(transport::RtcTransport* sender, uint64_t timestamp) override {}
 
     uint32_t _ssrc;
     memory::PacketPoolAllocator& _sendAllocator;

@@ -506,7 +506,7 @@ public:
             logger::warn("cannot find video ssrc for PLI %u", _loggableId.c_str(), rtcpFeedback->mediaSsrc.get());
             for (auto& it : _videoSources)
             {
-                logger::debug("vsssrc %u", _loggableId.c_str(), it.second->getSsrc());
+                logger::debug("video ssrc %u", _loggableId.c_str(), it.second->getSsrc());
             }
         }
     }
@@ -667,6 +667,8 @@ public:
     {
     }
 
+    void onIceReceived(transport::RtcTransport* sender, uint64_t timesetamp) override {}
+
     bool isRemoteVideoSsrc(uint32_t ssrc) const { return _remoteVideoSsrc.find(ssrc) != _remoteVideoSsrc.end(); }
 
     void stopRecording() { _recordingActive = false; }
@@ -770,20 +772,20 @@ public:
             return false;
         }
 
-        bool connected = true;
-        if (_bundleTransport)
+        if (_bundleTransport && !_bundleTransport->isConnected())
         {
-            connected &= _bundleTransport->isConnected();
+            return false;
         }
-        if (_audioTransport)
+        if (_audioTransport && !_audioTransport->isConnected())
         {
-            connected &= _audioTransport->isConnected();
+            return false;
         }
-        if (_videoTransport)
+        if (_videoTransport && !_videoTransport->isConnected())
         {
-            connected &= _videoTransport->isConnected();
+            return false;
         }
-        return connected;
+
+        return true;
     }
 
     bool hasProcessedOffer() const { return ((_bundleTransport || _audioTransport) && _audioSource); }

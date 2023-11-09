@@ -81,7 +81,8 @@ EngineMixer::EngineMixer(const std::string& id,
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
-    memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
+    std::memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
+    _iceReceived.test_and_set();
 }
 
 EngineMixer::~EngineMixer() {}
@@ -167,8 +168,9 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     // 1. Process all incoming packets
     processBarbellSctp(engineIterationStartTimestamp);
-    forwardPackets(engineIterationStartTimestamp);
+    processIncomingRtpPackets(engineIterationStartTimestamp);
     processIncomingRtcpPackets(engineIterationStartTimestamp);
+    processIceActivity(engineIterationStartTimestamp);
 
     // 2. Check for stale streams
     checkPacketCounters(engineIterationStartTimestamp);
@@ -197,6 +199,14 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 
     // 6. Maintain transports.
     runTransportTicks(engineIterationStartTimestamp);
+
+    const bool isIdle = utils::Time::diffGE(_lastReceiveTime,
+        engineIterationStartTimestamp,
+        _config.mixerInactivityTimeoutMs * utils::Time::ms);
+    if (isIdle && !_hasSentTimeout)
+    {
+        _hasSentTimeout = _messageListener.asyncMixerTimedOut(*this);
+    }
 }
 
 void EngineMixer::runDominantSpeakerCheck(const uint64_t engineIterationStartTimestamp)
@@ -1020,16 +1030,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         forwardVideoRtpPacketRecording(packetInfo, timestamp);
     }
 
-    if (numRtpPackets == 0)
-    {
-        const bool isIdle =
-            utils::Time::diffGE(_lastReceiveTime, timestamp, _config.mixerInactivityTimeoutMs * utils::Time::ms);
-        if (isIdle && !_hasSentTimeout)
-        {
-            _hasSentTimeout = _messageListener.asyncMixerTimedOut(*this);
-        }
-    }
-    else
+    if (numRtpPackets > 0)
     {
         _lastReceiveTime = timestamp;
     }
@@ -1060,6 +1061,15 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
             }
         }
 
+        _lastReceiveTime = timestamp;
+    }
+}
+
+void EngineMixer::processIceActivity(const uint64_t timestamp)
+{
+    if (!_iceReceived.test_and_set())
+    {
+        // if it was cleared by any transport receiving ICE, we will now set the keep alive timestamp
         _lastReceiveTime = timestamp;
     }
 }
@@ -1578,4 +1588,8 @@ bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash, memory::Un
     return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(packet)));
 }
 
+void EngineMixer::onIceReceived(transport::RtcTransport* transport, uint64_t timestamp)
+{
+    _iceReceived.clear();
+}
 } // namespace bridge

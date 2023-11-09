@@ -887,4 +887,8 @@ void SrtpClient::setRemoteKey(const srtp::AesKey& key)
     }
 }
 
+void SrtpClient::stop()
+{
+    _state = State::IDLE;
+}
 } // namespace transport

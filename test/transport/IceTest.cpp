@@ -489,7 +489,7 @@ public:
                 {
                     if (s->_ip == packet.target)
                     {
-                        session.onPacketReceived(s.get(), packet.source, packet.data, packet.length, timestamp);
+                        session.onStunPacketReceived(s.get(), packet.source, packet.data, packet.length, timestamp);
                     }
                 }
             }
@@ -636,7 +636,7 @@ void FakeEndpoint::onReceive(fakenet::Protocol protocol,
     if (_address.equalsIp(target))
     {
         logger::debug("received from %s -> %s", "FakeEndpoint", source.toString().c_str(), target.toString().c_str());
-        _session->onPacketReceived(this, source, data, length, timestamp);
+        _session->onStunPacketReceived(this, source, data, length, timestamp);
     }
     else if (_gateway)
     {
