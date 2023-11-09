@@ -1,5 +1,6 @@
 #pragma once
 #include "NetworkLink.h"
+#include "concurrency/MpmcHashmap.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/Map.h"
 #include "utils/SocketAddress.h"
@@ -140,7 +141,7 @@ public:
     transport::SocketAddress getPublicIpv6() const { return _publicIpv6; }
     void process(uint64_t timestamp) override;
 
-    bool addPortMapping(Protocol protocol, const transport::SocketAddress& source, int publicPort);
+    transport::SocketAddress addPortMapping(Protocol protocol, const transport::SocketAddress& source, int publicPort);
     void removePortMapping(Protocol protocol, transport::SocketAddress& lanAddress);
 
     std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
@@ -160,9 +161,16 @@ private:
 
     transport::SocketAddress _publicIpv4;
     transport::SocketAddress _publicIpv6;
-    using PortMapping = std::vector<std::pair<transport::SocketAddress, transport::SocketAddress>>;
-    PortMapping _portMappingsUdp;
-    PortMapping _portMappingsTcp;
+    struct PortPair
+    {
+        transport::SocketAddress lanPort;
+        transport::SocketAddress wanPort;
+    };
+
+    using PortMap = concurrency::MpmcHashmap32<transport::SocketAddress, PortPair>;
+
+    PortMap _portMappingsUdp;
+    PortMap _portMappingsTcp;
     std::vector<NetworkNode*> _endpoints;
     std::vector<NetworkNode*> _publicEndpoints;
     Gateway& _internet;

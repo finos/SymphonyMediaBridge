@@ -157,7 +157,10 @@ void Internet::process(const uint64_t timestamp)
     }
 }
 
-Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet) : _internet(internet)
+Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet)
+    : _portMappingsUdp(512),
+      _portMappingsTcp(512),
+      _internet(internet)
 {
     addPublicIp(publicIp);
     internet.addLocal(this);
@@ -166,7 +169,9 @@ Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet) 
 Firewall::Firewall(const transport::SocketAddress& publicIpv4,
     const transport::SocketAddress& publicIpv6,
     Gateway& internet)
-    : _internet(internet)
+    : _portMappingsUdp(512),
+      _portMappingsTcp(512),
+      _internet(internet)
 {
     addPublicIp(publicIpv4);
     addPublicIp(publicIpv6);
@@ -258,29 +263,27 @@ void Firewall::processEndpoints(const uint64_t timestamp)
 
 void Firewall::dispatchNAT(const Packet& packet, const uint64_t timestamp)
 {
-    auto& portMappings = (packet.protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
-    for (auto mapping : portMappings)
+    auto& portMap = (packet.protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    auto* portPair = portMap.getItem(packet.target);
+    if (portPair && portPair->wanPort == packet.target)
     {
-        if (mapping.second == packet.target)
+        for (auto endpoint : _endpoints)
         {
-            for (auto endpoint : _endpoints)
+            if (endpoint->hasIp(portPair->lanPort))
             {
-                if (endpoint->hasIp(mapping.first))
-                {
-                    NETWORK_LOG("NAT %s, %s -> %s -> %s",
-                        "Firewall",
-                        toString(packet.protocol),
-                        packet.source.toString().c_str(),
-                        packet.target.toString().c_str(),
-                        mapping.first.toString().c_str());
-                    endpoint->onReceive(packet.protocol,
-                        packet.source,
-                        mapping.first,
-                        packet.data,
-                        packet.length,
-                        timestamp);
-                    return;
-                }
+                NETWORK_LOG("NAT %s, %s -> %s -> %s",
+                    "Firewall",
+                    toString(packet.protocol),
+                    packet.source.toString().c_str(),
+                    packet.target.toString().c_str(),
+                    mapping.first.toString().c_str());
+                endpoint->onReceive(packet.protocol,
+                    packet.source,
+                    portPair->lanPort,
+                    packet.data,
+                    packet.length,
+                    timestamp);
+                return;
             }
         }
     }
@@ -362,51 +365,62 @@ void Firewall::dispatchPublicly(const Packet& packet, const uint64_t timestamp)
 
 transport::SocketAddress Firewall::acquirePortMapping(const Protocol protocol, const transport::SocketAddress& source)
 {
-    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
-    for (auto mapping : portMappings)
+    auto& portMap = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    auto it = portMap.find(source);
+    if (it != portMap.end())
     {
-        if (mapping.first == source)
-        {
-            return mapping.second;
-        }
+        return it->second.wanPort;
     }
 
-    while (!addPortMapping(protocol, source, _portCount++)) {}
+    auto publicAddress = (source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4);
+    while (portMap.contains(transport::SocketAddress(publicAddress, ++_portCount))) {}
 
-    return portMappings.back().second;
+    return addPortMapping(protocol, source, _portCount);
 }
 
-bool Firewall::addPortMapping(const Protocol protocol, const transport::SocketAddress& source, int publicPort)
+transport::SocketAddress Firewall::addPortMapping(const Protocol protocol,
+    const transport::SocketAddress& source,
+    int publicPort)
 {
-    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
-    assert(!source.empty());
-    if (portMappings.cend() !=
-        std::find_if(portMappings.cbegin(),
-            portMappings.cend(),
-            [publicPort](const std::pair<const transport::SocketAddress&, const transport::SocketAddress&>& p) {
-                return p.second.getPort() == publicPort;
-            }))
-    {
-        return false;
-    }
-    auto publicAddress = (source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4);
+    auto& portMap = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    const transport::SocketAddress wanPort(source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4, publicPort);
 
-    publicAddress.setPort(publicPort);
-    portMappings.push_back(std::make_pair(source, publicAddress));
-    logger::info("added NAT %s -> %s", "Firewall", source.toString().c_str(), publicAddress.toString().c_str());
-    return true;
+    assert(!source.empty());
+    auto itLan = portMap.find(source);
+    if (itLan != portMap.end())
+    {
+        return itLan->second.wanPort;
+    }
+
+    auto itWan = portMap.find(wanPort);
+    if (itWan != portMap.end())
+    {
+        if (source == itWan->second.lanPort)
+        {
+            return itWan->second.wanPort;
+        }
+        return transport::SocketAddress();
+    }
+
+    PortPair pp{source, wanPort};
+    portMap.emplace(source, pp);
+    portMap.emplace(wanPort, pp);
+
+    logger::info("added NAT %s -> %s", "Firewall", pp.lanPort.toString().c_str(), pp.wanPort.toString().c_str());
+    return pp.wanPort;
 }
 
 void Firewall::removePortMapping(Protocol protocol, transport::SocketAddress& lanAddress)
 {
-    auto& portMappings = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
-    for (auto it = portMappings.begin(); it != portMappings.end(); ++it)
+    auto& portMap = (protocol == Protocol::UDP ? _portMappingsUdp : _portMappingsTcp);
+    auto itLan = portMap.find(lanAddress);
+    if (itLan != portMap.end())
     {
-        if (it->first == lanAddress)
+        if (portMap.contains(itLan->second.wanPort))
         {
-            portMappings.erase(it);
-            return;
+            portMap.erase(itLan->second.wanPort);
         }
+        portMap.erase(lanAddress);
     }
 }
 
