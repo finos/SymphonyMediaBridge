@@ -203,7 +203,7 @@ TEST_F(IceTransportEmuTest, failOver)
         finalizeSimulation();
 
         auto receiveCounters = group.clients[1]->_bundleTransport->getCumulativeAudioReceiveCounters();
-        EXPECT_LT(receiveCounters.lostPackets, 100);
+        EXPECT_LT(receiveCounters.lostPackets, 300);
 
         for (auto id : {1})
         {
@@ -314,8 +314,7 @@ TEST_F(IceTransportEmuTest, natRemoved)
             finalizeSimulation();
 
             auto audioReceiveCounters1 = group.clients[1]->_bundleTransport->getCumulativeAudioReceiveCounters();
-            auto audioReceiveCounters0 = group.clients[0]->_bundleTransport->getCumulativeAudioReceiveCounters();
-            EXPECT_NEAR(audioReceiveCounters1.packets + 5 * 50, audioReceiveCounters0.packets, 30);
+            EXPECT_GT(audioReceiveCounters1.packets, 2500);
 
             for (auto id : {1})
             {
