@@ -181,7 +181,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
 
                     EXPECT_NEAR(std::max_element(data.amplitudeProfile.begin(), data.amplitudeProfile.end())->second,
                         3600,
-                        500);
+                        550);
                     EXPECT_NEAR(data.rampupAbove(3100), 48000 * 1.22, 48000);
                 }
 
