@@ -24,6 +24,7 @@ public:
         uint32_t* videoSsrcs) override
     {
         assert(false);
+        return true;
     }
 
     void configureTransport(transport::RtcTransport& transport, memory::AudioPacketPoolAllocator& allocator) override;
