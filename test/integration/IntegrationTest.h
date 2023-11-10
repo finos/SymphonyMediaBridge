@@ -187,6 +187,11 @@ public:
                 continue;
             }
 
+            if (dumpPcmData)
+            {
+                item.second->dumpPcmData();
+            }
+
             result.audioSsrcCount++;
 
             std::vector<double> freqVector;
@@ -232,10 +237,6 @@ public:
             result.amplitudeProfile.insert(result.amplitudeProfile.begin(),
                 amplitudeProfile.begin(),
                 amplitudeProfile.end());
-            if (dumpPcmData)
-            {
-                item.second->dumpPcmData();
-            }
         }
 
         std::sort(result.dominantFrequencies.begin(), result.dominantFrequencies.end());

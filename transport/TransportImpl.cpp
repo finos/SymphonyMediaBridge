@@ -1962,7 +1962,7 @@ void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
     ice::IceEndpoint* endpoint,
     const SocketAddress& sourcePort)
 {
-    if (_selectedRtp == nullptr && session->getState() > ice::IceSession::State::READY)
+    if (_selectedRtp == nullptr && session->getState() >= ice::IceSession::State::READY)
     {
         _selectedRtp = static_cast<transport::Endpoint*>(endpoint); // temporary selection
         _selectedRtcp = _selectedRtp;
