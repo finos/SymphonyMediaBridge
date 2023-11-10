@@ -1,6 +1,8 @@
+#include "logger/Logger.h"
 #include "math/Matrix.h"
 #include <cmath>
 #include <gtest/gtest.h>
+
 using namespace math;
 TEST(MatrixTest, mul)
 {
@@ -18,7 +20,7 @@ TEST(MatrixTest, mul)
     auto m3 = m * transpose(m2);
     EXPECT_EQ(m3.columns(), m2.rows());
 
-    Matrix<double, 4, 1> v({5.2, 3.5, 2.6, 1.2});
+    Matrix<double, 4> v({5.2, 3.5, 2.6, 1.2});
     auto m4 = v * transpose(v);
     EXPECT_EQ(m4.columns(), m4.rows());
     EXPECT_EQ(m4.columns(), v.rows());
@@ -32,12 +34,9 @@ TEST(MatrixTest, cholesky)
     math::Matrix<double, 3> v({5.6, -156000.0, 19.9});
     const auto m = math::outerProduct(v);
 
-    EXPECT_EQ(det2(math::principalSubMatrix<double, 3, 3, 2>(m)), 0.0);
     EXPECT_EQ(det(math::principalSubMatrix<double, 3, 3, 2>(m)), 0.0);
     EXPECT_EQ(det(m), 0.0);
-    EXPECT_EQ(det2(m), 0.0);
 
-    EXPECT_TRUE(math::isPositiveSemiDefinite2(m));
     EXPECT_TRUE(math::isPositiveSemiDefinite(m));
     auto L = choleskyDecompositionLL(m);
     EXPECT_EQ(L.getColumn(0), v);
@@ -54,35 +53,16 @@ TEST(MatrixTest, choleskyStability)
         {-3.9095946203353344E-29, -3.4396659613292905E-20, 2.443496637709584E-30}});
 
     ASSERT_TRUE(math::isSymmetric(m));
-    EXPECT_TRUE(isPositiveSemiDefinite2(m));
-    auto mine = std::abs(math::min(m));
-    auto maxe = std::abs(math::max(m));
+    EXPECT_TRUE(isPositiveSemiDefinite(m));
 
-    auto mf = 0.001000;
-    double detti = math::det(m);
-    auto d2 = math::det2(m);
     ASSERT_GE(math::det(m), 0);
     auto L = choleskyDecompositionLL(m);
     auto c = L * transpose(L);
     EXPECT_FALSE(m == c);
-    auto d = m - c;
-    auto nrm = math::norm(m - c);
     EXPECT_LT(math::norm(m - c), 1.E-10);
     EXPECT_TRUE(math::isValid(L));
     // should check determinant of m - c
 }
-
-#define EXPECT_ERROR_LT(a, b, relativeError)                                                                           \
-    {                                                                                                                  \
-        if (std::min(std::abs(a), std::abs(b)) == 0)                                                                   \
-        {                                                                                                              \
-            EXPECT_LT(std::max(std::abs(a), std::abs(b)), relativeError);                                              \
-        }                                                                                                              \
-        else                                                                                                           \
-        {                                                                                                              \
-            EXPECT_GT(std::min(std::abs(a), std::abs(b)) / std::max(std::abs(a), std::abs(b)), 1.0 - relativeError);   \
-        }                                                                                                              \
-    }
 
 TEST(MatrixTest, determinant)
 {
@@ -91,36 +71,14 @@ TEST(MatrixTest, determinant)
     const auto acceptableRelativeError = 0.000000001;
     for (auto k = 0u; k < 15000; ++k)
     {
-        randomize(m, 10000.0);
+        randomize(m, 1000.0);
 
-        const auto d1 = det2(m);
-        const auto d2 = det2(transpose(m));
-        const auto d3 = det(m);
-        const auto d4 = det(transpose(m));
+        const auto d1 = det(m);
+        const auto d2 = det(transpose(m));
 
-        if (d2 != d4)
+        if (d2 != d1)
         {
-            if (det(m) == 0 || det(transpose(m)) == 0)
-            {
-            }
-            EXPECT_ERROR_LT(det(m), det(transpose(m)), acceptableRelativeError);
-        }
-        if (d3 != d2)
-        {
-            EXPECT_ERROR_LT(det(m), det2(transpose(m)), acceptableRelativeError);
-        }
-        if (d1 != d4)
-        {
-            EXPECT_ERROR_LT(det2(m), det(transpose(m)), acceptableRelativeError);
-        }
-        if (d1 != d2)
-        {
-            const auto a1 = det2(m);
-            const auto a2 = det2(transpose(m));
-            const auto a3 = det(m);
-            const auto a4 = det(transpose(m));
-            const auto nd1 = std::nextafter(d1, d2);
-            EXPECT_ERROR_LT(d1, d2, acceptableRelativeError);
+            EXPECT_NEAR(det(m), det(transpose(m)), acceptableRelativeError * std::abs(d1 + d2) / 2);
         }
     }
 }
@@ -159,16 +117,77 @@ TEST(MatrixTest, cholesky3)
 
 TEST(MatrixTest, choleskyOuterProduct)
 {
+    const auto seed = math::Matrix<double, 3, 3>::I() * 0.0000001;
+
     for (auto i = 0u; i < 10000; ++i)
     {
         math::Matrix<double, 3> v({10, 5, 3});
         math::randomize(v, 10000.0);
         auto m = math::outerProduct(v);
 
-        const auto pd = isPositiveDefinite2(m);
-        const auto psd = isPositiveSemiDefinite2(m);
-        EXPECT_TRUE(psd);
-        EXPECT_FALSE(pd);
+        EXPECT_TRUE(isPositiveSemiDefinite(m));
+        EXPECT_TRUE(isPositiveDefinite(m + seed));
+
+        const auto L = choleskyDecompositionLL(m);
+        EXPECT_TRUE(math::isLowerTriangular(L));
+        EXPECT_EQ(m, L * transpose(L));
+    }
+}
+
+TEST(MatrixTest, PDtest)
+{
+    const auto seed = math::Matrix<double, 3, 3>::I() * 0.0000001;
+    double data[][3] = {//
+        {-2418.000000, 2019.000000, 471.000000},
+        {2778.000000, 4342.000000, 4969.000000},
+        {-4223.000000, 2884.000000, 2390.000000},
+        {3809.000000, -2757.000000, -1085.000000},
+        {2697.000000, -1958.000000, -3622.000000},
+        {2514.000000, 3210.000000, -3374.000000},
+        {3206.000000, 4751.000000, 2886.000000},
+        {-1684.000000, -2378.000000, -4991.000000},
+        {3262.000000, 4944.000000, -1311.000000},
+        {2779.000000, -2046.000000, 1061.000000},
+        {-3189.000000, -4757.000000, -1653.000000},
+        {3566.000000, -2718.000000, -2750.000000},
+        {-3384.000000, -4629.000000, -4016.000000},
+        {3425.000000, 4602.000000, 2874.000000},
+        {-1459.000000, -2307.000000, -3262.000000},
+        {-3847.000000, 2437.000000, -3798.000000},
+        {-2956.000000, 1891.000000, 522.000000},
+        {2725.000000, -2023.000000, -3784.000000},
+        {3499.000000, -2884.000000, -1906.000000},
+        {-2841.000000, -4542.000000, 593.000000},
+        {-2549.000000, 1967.000000, 752.000000},
+        {-3158.000000, -4790.000000, -4507.000000},
+        {1907.000000, -1366.000000, 2179.000000},
+        {-903.000000, -1092.000000, 4329.000000},
+        {-1388.000000, 983.000000, -1764.000000},
+        {2166.000000, 3134.000000, 1795.000000},
+        {-3913.000000, 2419.000000, -3397.000000},
+        {2609.000000, 4471.000000, 2350.000000},
+        {-2440.000000, -3375.000000, 4311.000000},
+        {2928.000000, 4678.000000, -4407.000000},
+        {1193.000000, 1756.000000, -1151.000000},
+        {-3619.000000, -4628.000000, 3646.000000},
+        {-3212.000000, -4704.000000, 4656.000000},
+        {-1650.000000, -2381.000000, 4462.000000},
+        {-2269.000000, -3327.000000, 2056.000000},
+        {3430.000000, 4589.000000, -4473.000000},
+        {-1006.000000, 660.000000, 1035.000000},
+        {-3533.000000, -4649.000000, 1754.000000},
+        {3747.000000, -2536.000000, 3672.000000},
+        {-2988.000000, -4716.000000, -2542.000000},
+        {3294.000000, 4731.000000, -4378.000000}};
+
+    for (auto rawVector : data)
+    {
+        math::Matrix<double, 3> v({rawVector[0], rawVector[1], rawVector[2]});
+        auto m = math::outerProduct(v);
+
+        EXPECT_TRUE(isPositiveSemiDefinite(m));
+        EXPECT_TRUE(isPositiveDefinite(m + seed));
+
         const auto L = choleskyDecompositionLL(m);
         EXPECT_TRUE(math::isLowerTriangular(L));
         EXPECT_EQ(m, L * transpose(L));
@@ -183,16 +202,28 @@ TEST(MatrixTest, choleskyOnSum)
         math::randomize(v, 10000.0);
         auto m = math::outerProduct(v);
 
+        EXPECT_FALSE(math::isPositiveDefinite(m));
+        EXPECT_TRUE(math::isPositiveSemiDefinite(m));
+
         auto sum = m;
-        for (int j = 0; j < 100; ++j)
+        for (int j = 0; j < 15; ++j)
         {
             math::Matrix<double, 3> w;
             math::randomize(w, 10.0);
             auto smallDiff = math::outerProduct(w);
             sum += smallDiff;
         }
+        mulDiagonal(sum, 1.000001);
+        if (!math::isPositiveDefinite(sum))
+        {
+            EXPECT_TRUE(math::isPositiveDefinite(sum));
+        }
 
-        EXPECT_TRUE(math::isPositiveSemiDefinite2(sum));
+        if (!math::isPositiveSemiDefinite(sum))
+        {
+            EXPECT_TRUE(math::isPositiveSemiDefinite(sum));
+        }
+
         auto L = math::choleskyDecompositionLL(sum);
         EXPECT_TRUE(math::isLowerTriangular(L));
         EXPECT_TRUE(math::isSymmetric(sum));
@@ -203,4 +234,68 @@ TEST(MatrixTest, choleskyOnSum)
             EXPECT_LT(nrm, 1.E-8);
         }
     }
+}
+
+// Assume two symetric matrices A' and B' created from outer products of vector A and B
+// Both A' and B are positive semi definite
+// But (A' + B') is positive definite as long as vector elements a1*b2 != a2*b1
+// det(A'+ B') = (a1*b2 - b1*a2)^2, which is always positive as long as inequality above is true
+TEST(MatrixTest, semiDefSum2x2)
+{
+    {
+        math::Matrix<double, 2> a({4, 3});
+        math::Matrix<double, 2> b({8, 6});
+
+        auto h = math::outerProduct(a) + math::outerProduct(b);
+        EXPECT_FALSE(math::isPositiveDefinite(h));
+    }
+
+    {
+        math::Matrix<double, 2> a({4, 3});
+        math::Matrix<double, 2> b({7, 5});
+
+        auto h = math::outerProduct(a) + math::outerProduct(b);
+        EXPECT_TRUE(math::isPositiveDefinite(h));
+    }
+}
+
+// For sum of two symmetric 3x3 matrices, the sum is positive semi definite always
+// if matrices are produced by outer product
+TEST(MatrixTest, semiDefSum3x3)
+{
+    math::Matrix<double, 3> a({4, 3, 1});
+    math::Matrix<double, 3> b({8, 6, 8});
+
+    auto h = math::outerProduct(a) + math::outerProduct(b);
+    EXPECT_TRUE(math::isPositiveSemiDefinite(h));
+}
+
+TEST(MatrixTest, semiDefSum4x4)
+{
+    math::Matrix<double, 4> a({4, 3, 1, 13});
+    math::Matrix<double, 4> b({81, 6, 8, 6});
+
+    auto h = math::outerProduct(a) + math::outerProduct(b);
+    auto d = det(h);
+    EXPECT_TRUE(math::isSymmetric(h));
+    EXPECT_EQ(d, 0);
+    EXPECT_TRUE(math::isPositiveSemiDefinite(h));
+    auto L = math::choleskyDecompositionLL(h);
+    auto ll = L * transpose(L);
+    EXPECT_LT(math::norm(h - ll), 1e-7);
+}
+
+TEST(MatrixTest, semiDefSumHuge)
+{
+    math::Matrix<double, 14> a({4, 3, 1, 13, 56, 1, 2, 5, 4, 2, 4, 8, 3, 6});
+    math::Matrix<double, 14> b({81, 6, 8, 6, 3, 8, 1, 9, 4, 2, 6, 23, 6, 4});
+
+    auto h = math::outerProduct(a) + math::outerProduct(b);
+    auto d = det(h);
+    EXPECT_TRUE(math::isSymmetric(h));
+    EXPECT_EQ(d, 0);
+    EXPECT_TRUE(math::isPositiveSemiDefinite(h));
+    auto L = math::choleskyDecompositionLL(h);
+    auto ll = L * transpose(L);
+    EXPECT_LT(math::norm(h - ll), 1e-7);
 }

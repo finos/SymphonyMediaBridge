@@ -1,5 +1,4 @@
 #pragma once
-#include "math/Matrix.h"
 #include "math/WelfordVariance.h"
 #include "rtp/RtpDelayTracker.h"
 #include "utils/Trackers.h"
