@@ -129,6 +129,16 @@ public:
         return v;
     }
 
+    Matrix<T, 1, N> getRow(uint32_t i) const
+    {
+        Matrix<T, 1, N> v;
+        for (uint32_t k = 0; k < N; ++k)
+        {
+            v(0, k) = _m[i][k];
+        }
+        return v;
+    }
+
     void setColumn(uint32_t j, const Matrix<T, M, 1>& v)
     {
         for (uint32_t k = 0; k < M; ++k)
@@ -140,9 +150,36 @@ public:
     constexpr int columns() const { return N; }
     constexpr int rows() const { return M; }
 
+    static Matrix I()
+    {
+        static_assert(M == N);
+        Matrix m;
+        for (auto i = 0u; i < M; ++i)
+        {
+            m(i, i) = 1.0;
+        }
+        return m;
+    }
+
+    T absSum() const
+    {
+        T s = 0;
+        for (auto i = 0u; i < M; ++i)
+        {
+            for (auto j = 0u; j < M; ++j)
+            {
+                s += std::abs(_m[i][j]);
+            }
+        }
+        return s;
+    }
+
 private:
     T _m[M][N];
 };
+
+template <typename T, uint32_t M>
+using Vector = Matrix<T, M, 1>;
 
 template <typename T, uint32_t M, uint32_t N, uint32_t P>
 Matrix<T, M, P> operator*(const Matrix<T, M, N>& m1, const Matrix<T, N, P>& m2)
@@ -265,14 +302,14 @@ Matrix<T, M, M> choleskyDecompositionLL(const Matrix<T, M, M>& m)
                     sum += lowerTriangular(i, k) * lowerTriangular(j, k);
                 }
                 const auto d = m(i, j) - sum;
-                if (lowerTriangular(j, j) == 0)
+                if (lowerTriangular(j, j) != 0)
                 {
-                    assert(std::abs(d) < 1E-20);
-                    lowerTriangular(i, j) = 0;
+                    lowerTriangular(i, j) = d / lowerTriangular(j, j);
                 }
                 else
                 {
-                    lowerTriangular(i, j) = d / lowerTriangular(j, j);
+                    assert(std::abs(d) < 1E-10);
+                    lowerTriangular(i, j) = 0;
                 }
             }
         }
@@ -382,9 +419,12 @@ void makeSymmetric(Matrix<T, M, M>& m)
     {
         for (auto j = 0u; j < i; ++j)
         {
-            const auto v = (m(i, j) + m(j, i)) / 2.0;
-            m(i, j) = v;
-            m(j, i) = v;
+            if (m(i, j) != m(j, i))
+            {
+                const auto v = (m(i, j) + m(j, i)) / 2.0;
+                m(i, j) = v;
+                m(j, i) = v;
+            }
         }
     }
 }
@@ -401,7 +441,7 @@ void pivotRows(Matrix<T, M, N>& m, uint32_t cr)
     for (auto i = cr + 1; i < M; ++i)
     {
         auto v = std::abs(m(i, cr));
-        if (v > 0 && (v < candidateValue || candidateValue == 0))
+        if (v > candidateValue)
         {
             candidatePos = i;
             candidateValue = v;
@@ -431,47 +471,20 @@ void pivotRows(Matrix<T, M, N>& m, uint32_t cr)
 }
 
 template <typename T, uint32_t M, uint32_t N>
-bool gaussianElimination(Matrix<T, M, N>& original)
-{
-    Matrix<T, M, N> m = original;
-    // along diagonal
-    for (auto i = 0u; i < M; ++i)
-    {
-        for (auto r = i + 1; r < M; ++r)
-        {
-            if (m(r, i) == 0 || m(i, i) == 0)
-            {
-                return false;
-            }
-
-            const auto f = m(r, i) / m(i, i);
-            m(r, i) = 0;
-            for (auto j = i + 1; j < N; ++j)
-            {
-                m(r, j) -= m(i, j) * f;
-            }
-        }
-    }
-
-    original = m;
-    return true;
-}
-
-template <typename T, uint32_t M, uint32_t N>
-void gaussianEliminationPivot(Matrix<T, M, N>& m)
+void gaussianElimination(Matrix<T, M, N>& m)
 {
     // along diagonal
-    for (auto i = 0u; i < M; ++i)
+    for (auto i = 0u; i < M - 1; ++i)
     {
         pivotRows(m, i);
 
+        if (m(i, i) == 0)
+        {
+            continue;
+        }
+
         for (auto r = i + 1; r < M; ++r)
         {
-            if (m(r, i) == 0 || m(i, i) == 0)
-            {
-                continue;
-            }
-
             const auto f = m(r, i) / m(i, i);
             m(r, i) = 0;
             for (auto j = i + 1; j < N; ++j)
@@ -522,66 +535,23 @@ T det(const Matrix<T, 2, 2>& m)
 {
     const auto a = m(0, 0) * m(1, 1);
     const auto b = m(0, 1) * m(1, 0);
-    if (std::nextafter(a, b) == b || std::nextafter(b, a) == a)
-    {
-        return 0;
-    }
 
     return a - b;
 }
 
-// determinant using Gaussian elemination
+// determinant using Gaussian elemination, O(n2)
 template <typename T, uint32_t M>
 T det(Matrix<T, M, M> m)
 {
-    gaussianEliminationPivot(m);
-    T a = m(0, 0);
+    gaussianElimination(m);
+
+    T a = 1;
     for (auto i = 1u; i < M; ++i)
     {
         a *= m(i, i);
     }
 
     return a;
-}
-
-template <typename T>
-T det2(const Matrix<T, 1, 1>& m)
-{
-    return det(m);
-}
-
-template <typename T>
-T det2(const Matrix<T, 2, 2>& m)
-{
-    return det(m);
-}
-
-// slower but more accurate since there is no Gaussian elimination
-// that may introduce calculation errors
-template <typename T, uint32_t M>
-T det2(const Matrix<T, M, M>& m)
-{
-    T d = 0;
-    T sgn = 1; // start at (0,0) is (-1)^(1+1)
-    for (auto i = 0u; i < M; ++i)
-    {
-        if (m(0, i) != 0)
-        {
-            const auto subDeterminant = det2(eleminateRowColumn(m, 0, i));
-            const auto p = sgn * m(0, i) * subDeterminant;
-
-            if (std::signbit(p) != std::signbit(d) && (std::nextafter(d, -p) == p || std::nextafter(-p, d) == d))
-            {
-                d = 0;
-            }
-            else
-            {
-                d += p;
-            }
-        }
-        sgn = sgn > 0 ? -1. : 1.;
-    }
-    return d;
 }
 
 template <typename T, uint32_t M, uint32_t N, uint32_t R>
@@ -599,8 +569,31 @@ Matrix<T, R, R> principalSubMatrix(const Matrix<T, M, N>& m)
     return psm;
 }
 
-// M is positive definite if determinants of each principal sub matrix
-// are positive. This is true if diagonal elements are all positive after gaussaian elimination
+template <typename T, uint32_t M, uint32_t R>
+T leadingPrincipalMinor(const Matrix<T, M, M>& m)
+{
+    return det(principalSubMatrix<T, M, M, R>(m));
+}
+
+namespace
+{
+
+} // namespace
+
+template <typename T>
+bool isPositiveDefinite(const Matrix<T, 1, 1>& m)
+{
+    return m(0, 0) > 0;
+}
+
+template <typename T>
+bool isPositiveDefinite(const Matrix<T, 2, 2>& m)
+{
+    return m(0, 0) * m(1, 1) - m(0, 1) * m(1, 0) > 0;
+}
+
+// m is positive definite if all leading principal minors are positive
+// If we do Gaussian elimination first, all principal minors are positive if diagonal elements are positive
 template <typename T, uint32_t M>
 bool isPositiveDefinite(const Matrix<T, M, M>& m)
 {
@@ -608,16 +601,41 @@ bool isPositiveDefinite(const Matrix<T, M, M>& m)
     {
         return false;
     }
-    auto b(m);
-    gaussianElimination(b);
-    for (auto i = 0u; i < M; ++i)
+
+    if (isPositiveDefinite(principalSubMatrix<T, M, M, M - 1>(m)))
     {
-        if (b(i, i) <= 0)
+        auto d = m;
+        gaussianElimination(d);
+        auto p = d(0, 0);
+        for (auto i = 1u; i < M; ++i)
         {
-            return false;
+            p *= d(i, i);
         }
+
+        return p > 0;
     }
-    return true;
+
+    return false;
+}
+
+template <typename T>
+bool isPositiveSemiDefinite(const Matrix<T, 1, 1>& m)
+{
+    return m(0, 0) >= 0;
+}
+
+template <typename T>
+bool isPositiveSemiDefinite(const Matrix<T, 2, 2>& m)
+{
+    if (!isSymmetric(m) || m(0, 0) < 0)
+    {
+        return false;
+    }
+    auto d1 = m(0, 0) * m(1, 1);
+    auto d2 = m(0, 1) * m(1, 0);
+
+    auto dt = d1 - d2;
+    return dt >= 0;
 }
 
 // check is positive semi definite by Gaussian elimination
@@ -628,54 +646,21 @@ bool isPositiveSemiDefinite(const Matrix<T, M, M>& m)
     {
         return false;
     }
-    auto b(m);
-    gaussianElimination(b);
-    for (auto i = 0u; i < M; ++i)
+
+    if (isPositiveSemiDefinite(principalSubMatrix<T, M, M, M - 1>(m)))
     {
-        if (b(i, i) < 0)
+        auto d = m;
+        gaussianElimination(d);
+        auto p = d(0, 0);
+        for (auto i = 1u; i < M; ++i)
         {
-            return false;
+            p *= d(i, i);
         }
+
+        return p >= 0;
     }
-    return true;
-}
 
-// check if positive definite by calculating all principal sub matrix determinants
-template <typename T, uint32_t M>
-bool isPositiveDefinite2(const Matrix<T, M, M>& m)
-{
-    return isPositiveDefinite2(principalSubMatrix<T, M, M, M - 1>(m)) && det2(m) > 0;
-}
-
-template <typename T>
-bool isPositiveDefinite2(const Matrix<T, 2, 2>& m)
-{
-    return m(0, 0) > 0 && det(m) > 0;
-}
-
-template <typename T>
-bool isPositiveDefinite2(const Matrix<T, 1, 1>& m)
-{
-    return m(0, 0) > 0;
-}
-
-// check if positive semi definite by calculating all principal sub matrix determinants
-template <typename T, uint32_t M>
-bool isPositiveSemiDefinite2(const Matrix<T, M, M>& m)
-{
-    return isPositiveSemiDefinite2(principalSubMatrix<T, M, M, M - 1>(m)) && det2(m) >= 0;
-}
-
-template <typename T>
-bool isPositiveSemiDefinite2(const Matrix<T, 2, 2>& m)
-{
-    return m(0, 0) >= 0 && det(m) >= 0;
-}
-
-template <typename T>
-bool isPositiveSemiDefinite2(const Matrix<T, 1, 1>& m)
-{
-    return m(0, 0) >= 0;
+    return false;
 }
 
 template <typename T, uint32_t M, uint32_t N>
@@ -716,5 +701,14 @@ bool isLowerTriangular(const Matrix<T, M, M>& m)
         }
     }
     return true;
+}
+
+template <typename T, uint32_t M>
+void mulDiagonal(Matrix<T, M, M>& m, T scalar)
+{
+    for (auto i = 0u; i < M; ++i)
+    {
+        m(i, i) *= scalar;
+    }
 }
 } // namespace math
