@@ -174,6 +174,45 @@ public:
         return s;
     }
 
+    void swapRows(uint32_t a, uint32_t b)
+    {
+        for (auto i = 0u; i < N; ++i)
+        {
+            std::swap(_m[a][i], _m[b][i]);
+        }
+    }
+
+    // return which row was swapped, or same rowColumn if not swapped
+    uint32_t pivot(uint32_t rowColumn)
+    {
+        if (rowColumn >= M - 1 || rowColumn >= N - 1)
+        {
+            return rowColumn;
+        }
+
+        T maxElementValue = std::abs(_m[rowColumn][rowColumn]);
+        uint32_t maxElementRow = rowColumn;
+
+        for (auto k = rowColumn + 1; k < M; k++)
+        {
+            auto value = std::abs(_m[k][rowColumn]);
+
+            if (value > maxElementValue)
+            {
+                maxElementValue = value;
+                maxElementRow = k;
+            }
+        }
+
+        if (maxElementRow != rowColumn)
+        {
+            swapRows(rowColumn, maxElementRow);
+            return maxElementRow;
+        }
+
+        return rowColumn;
+    }
+
 private:
     T _m[M][N];
 };
@@ -353,7 +392,7 @@ bool isValid(const Matrix<T, M, N>& m)
     return true;
 }
 
-// Frobenius norm ov matrix, and "norm" of vector
+// Frobenius norm of matrix, and "norm" of vector
 template <typename T, uint32_t M, uint32_t N>
 T norm(const Matrix<T, M, N>& m)
 {
@@ -432,22 +471,12 @@ void makeSymmetric(Matrix<T, M, M>& m)
 // swaps selected row with a lower row to make sure smallest absolute value is at row cr column cr.
 // Multiplies the swapped row with -1 to preserve determinant
 template <typename T, uint32_t M, uint32_t N>
-void pivotRows(Matrix<T, M, N>& m, uint32_t cr)
+void pivotRow(Matrix<T, M, N>& m, uint32_t cr)
 {
     static_assert(std::is_signed<T>::value);
     static_assert(N >= M);
-    T candidateValue = std::abs(m(cr, cr));
-    auto candidatePos = cr;
-    for (auto i = cr + 1; i < M; ++i)
-    {
-        auto v = std::abs(m(i, cr));
-        if (v > candidateValue)
-        {
-            candidatePos = i;
-            candidateValue = v;
-        }
-    }
 
+    auto candidatePos = m.pivot(cr);
     if (candidatePos == cr)
     {
         return;
@@ -456,7 +485,6 @@ void pivotRows(Matrix<T, M, N>& m, uint32_t cr)
     bool signIsDifferent = std::signbit(m(cr, cr)) != std::signbit(m(candidatePos, cr));
     for (auto j = 0u; j < N; ++j)
     {
-        std::swap(m(cr, j), m(candidatePos, j));
         if (signIsDifferent)
         {
             m(cr, j) *= -1;
@@ -476,7 +504,7 @@ void gaussianElimination(Matrix<T, M, N>& m)
     // along diagonal
     for (auto i = 0u; i < M - 1; ++i)
     {
-        pivotRows(m, i);
+        pivotRow(m, i);
 
         if (m(i, i) == 0)
         {
@@ -545,7 +573,7 @@ T det(Matrix<T, M, M> m)
 {
     gaussianElimination(m);
 
-    T a = 1;
+    T a = m(0, 0);
     for (auto i = 1u; i < M; ++i)
     {
         a *= m(i, i);
@@ -580,18 +608,6 @@ namespace
 
 } // namespace
 
-template <typename T>
-bool isPositiveDefinite(const Matrix<T, 1, 1>& m)
-{
-    return m(0, 0) > 0;
-}
-
-template <typename T>
-bool isPositiveDefinite(const Matrix<T, 2, 2>& m)
-{
-    return m(0, 0) * m(1, 1) - m(0, 1) * m(1, 0) > 0;
-}
-
 // m is positive definite if all leading principal minors are positive
 // If we do Gaussian elimination first, all principal minors are positive if diagonal elements are positive
 template <typename T, uint32_t M>
@@ -602,65 +618,63 @@ bool isPositiveDefinite(const Matrix<T, M, M>& m)
         return false;
     }
 
-    if (isPositiveDefinite(principalSubMatrix<T, M, M, M - 1>(m)))
+    auto pminors = principalMinors(m);
+
+    for (auto i = 0u; i < M; ++i)
     {
-        auto d = m;
-        gaussianElimination(d);
-        auto p = d(0, 0);
-        for (auto i = 1u; i < M; ++i)
+        T v = pminors(i);
+        if (v <= 0)
         {
-            p *= d(i, i);
+            return false;
         }
-
-        return p > 0;
     }
 
-    return false;
-}
-
-template <typename T>
-bool isPositiveSemiDefinite(const Matrix<T, 1, 1>& m)
-{
-    return m(0, 0) >= 0;
-}
-
-template <typename T>
-bool isPositiveSemiDefinite(const Matrix<T, 2, 2>& m)
-{
-    if (!isSymmetric(m) || m(0, 0) < 0)
-    {
-        return false;
-    }
-    auto d1 = m(0, 0) * m(1, 1);
-    auto d2 = m(0, 1) * m(1, 0);
-
-    auto dt = d1 - d2;
-    return dt >= 0;
+    return true;
 }
 
 // check is positive semi definite by Gaussian elimination
 template <typename T, uint32_t M>
-bool isPositiveSemiDefinite(const Matrix<T, M, M>& m)
+bool isPositiveSemiDefinite(const Matrix<T, M, M>& m, T tolerance = 1e-14)
 {
     if (!isSymmetric(m))
     {
         return false;
     }
 
-    if (isPositiveSemiDefinite(principalSubMatrix<T, M, M, M - 1>(m)))
+    auto pminors = principalMinors(m);
+    for (auto i = 0u; i < M; ++i)
     {
-        auto d = m;
-        gaussianElimination(d);
-        auto p = d(0, 0);
-        for (auto i = 1u; i < M; ++i)
+        T v = pminors(i);
+        if (v < 0 && -v > tolerance)
         {
-            p *= d(i, i);
+            return false;
         }
-
-        return p >= 0;
     }
 
-    return false;
+    return true;
+}
+
+template <typename T>
+math::Matrix<T, 1, 1> principalMinors(const math::Matrix<T, 1, 1>& m)
+{
+    return m;
+}
+
+template <typename T, uint32_t M>
+math::Matrix<T, M, 1> principalMinors(const math::Matrix<T, M, M>& m)
+{
+    math::Matrix<T, M, 1> x;
+
+    auto xs = principalMinors(principalSubMatrix<T, M, M, M - 1>(m));
+
+    for (auto i = 0u; i < xs.rows(); ++i)
+    {
+        x(i) = xs(i);
+    }
+
+    x(M - 1) = det(m);
+
+    return x;
 }
 
 template <typename T, uint32_t M, uint32_t N>
@@ -710,5 +724,232 @@ void mulDiagonal(Matrix<T, M, M>& m, T scalar)
     {
         m(i, i) *= scalar;
     }
+}
+
+// Bread and butter for Matrix operations. This output can be used to calculate determinant, invert matrix or solve
+// linear equation system.
+// Returns (L-E)+U such that P*A=L*U.
+template <typename T, uint32_t M>
+math::Matrix<T, M, M> decomposePLU(math::Matrix<T, M, M> m,
+    math::Matrix<T, M, M>& P,
+    uint32_t& rowSwaps,
+    const T tolerance = 1e-16)
+{
+    rowSwaps = 0;
+
+    P = P.I();
+
+    // iterate rows
+    for (auto i = 0u; i < M; ++i)
+    {
+        auto pivotRow = m.pivot(i);
+        if (pivotRow != i)
+        {
+            P.swapRows(i, pivotRow);
+            ++rowSwaps;
+        }
+
+        if (std::abs(m(i, i)) < tolerance)
+        {
+            return math::Matrix<T, M, M>(); // bad matrix
+        }
+
+        for (auto j = i + 1; j < M; ++j)
+        {
+            if (m(i, i) != 0)
+            {
+                m(j, i) /= m(i, i);
+            }
+            else
+            {
+                m(j, i) = 0;
+            }
+
+            for (auto k = i + 1; k < M; ++k)
+            {
+                m(j, k) -= m(j, i) * m(i, k);
+            }
+        }
+    }
+    return m;
+}
+
+template <typename T, uint32_t M>
+math::Matrix<T, M, M> decomposePLU(const math::Matrix<T, M, M>& m, math::Matrix<T, M, M>& P)
+{
+    uint32_t dummy;
+    return decomposePLU(m, P, dummy);
+}
+
+template <typename T, uint32_t M>
+void splitPLU(const math::Matrix<T, M, M>& lue, math::Matrix<T, M, M>& L, math::Matrix<T, M, M>& U)
+{
+    L = math::Matrix<T, M, M>();
+    U = math::Matrix<T, M, M>();
+
+    for (auto i = 0u; i < M; ++i)
+    {
+        L(i, i) = 1.0;
+        U(i, i) = lue(i, i);
+        for (auto j = 0u; j < i; ++j)
+        {
+            L(i, j) = lue(i, j);
+        }
+        for (auto j = i + 1; j < M; ++j)
+        {
+            U(i, j) = lue(i, j);
+        }
+    }
+}
+
+template <typename T, uint32_t M>
+T detLU(const Matrix<T, M, M>& m)
+{
+    Matrix<T, M, M> P;
+    uint32_t swaps = 0;
+    auto lu = decomposePLU(m, P, swaps);
+
+    T d = lu(0, 0);
+    for (auto i = 1u; i < M; i++)
+        d *= lu(i, i);
+
+    return (swaps % 2) == 0 ? d : -d;
+}
+
+template <typename T>
+T detByCoFactors(const Matrix<T, 1, 1>& m)
+{
+    return det(m);
+}
+
+template <typename T>
+T detByCoFactors(const Matrix<T, 2, 2>& m)
+{
+    return det(m);
+}
+
+// O(n!) calculation with cofactors and minors along first row
+template <typename T, uint32_t M>
+T detByCoFactors(const Matrix<T, M, M>& m)
+{
+    T d = 0;
+    T sgn = 1; // start at (0,0) is (-1)^(1+1)
+    for (auto i = 0u; i < M; ++i)
+    {
+        if (m(0, i) != 0)
+        {
+            const auto subDeterminant = detByCoFactors(eleminateRowColumn(m, 0, i));
+            const auto p = sgn * m(0, i) * subDeterminant;
+
+            if (std::signbit(p) != std::signbit(d) && (std::nextafter(d, -p) == p || std::nextafter(-p, d) == d))
+            {
+                d = 0;
+            }
+            else
+            {
+                d += p;
+            }
+        }
+        sgn = sgn > 0 ? -1. : 1.;
+    }
+    return d;
+}
+
+template <typename T, uint32_t N>
+math::Matrix<T, N, N> invertLU(const math::Matrix<T, N, N>& LUe, const math::Matrix<T, N, N>& P)
+{
+    math::Matrix<T, N, N> iMatrix = P;
+
+    for (auto col = 0u; col < N; ++col)
+    {
+        for (auto i = 0u; i < N; ++i)
+        {
+            for (auto k = 0u; k < i; ++k)
+            {
+                iMatrix(i, col) -= LUe(i, k) * iMatrix(k, col);
+            }
+        }
+
+        for (auto i = N - 1; i != (0u - 1); --i)
+        {
+            for (auto k = i + 1; k < N; ++k)
+            {
+                iMatrix(i, col) -= LUe(i, k) * iMatrix(k, col);
+            }
+
+            iMatrix(i, col) /= LUe(i, i);
+        }
+    }
+    return iMatrix;
+}
+
+template <typename T, uint32_t M>
+math::Matrix<T, M, 1> solveLU(const math::Matrix<T, M, M>& lue,
+    const math::Matrix<T, M, M>& P,
+    const math::Matrix<T, M, 1>& b)
+{
+    math::Matrix<T, M, 1> x;
+    auto pb = P * b;
+    for (auto i = 0u; i < M; ++i)
+    {
+        x(i) = pb(i);
+
+        for (auto k = 0u; k < i; ++k)
+        {
+            x(i) -= lue(i, k) * x(k);
+        }
+    }
+
+    for (auto i = 1u; i <= M; ++i)
+    {
+        for (auto k = M - i + 1; k < M; ++k)
+        {
+            x(M - i) -= lue(M - i, k) * x(k);
+        }
+        x(M - i) /= lue(M - i, M - i);
+    }
+
+    return x;
+}
+
+template <typename T, uint32_t M>
+math::Matrix<T, M, 1> solve(math::Matrix<T, M, M> a, const math::Matrix<T, M, 1>& b)
+{
+    auto ab = augment(a, b);
+    gaussianElimination(ab);
+
+    math::Matrix<T, M, 1> x;
+    for (auto k = 1u; k <= M; ++k)
+    {
+        const auto i = M - k;
+        T v = ab(i, M);
+        for (auto j = i + 1; j < M; ++j)
+        {
+            v -= ab(i, j) * x(j);
+        }
+        x(i) = v / ab(i, i);
+    }
+
+    return x;
+}
+
+template <typename T, uint32_t M, uint32_t N, uint32_t W>
+math::Matrix<T, M, N + W> augment(const math::Matrix<T, M, N>& m, const math::Matrix<T, M, W>& b)
+{
+    math::Matrix<T, M, N + W> a;
+    for (auto i = 0u; i < M; ++i)
+    {
+        for (auto j = 0u; j < N; ++j)
+        {
+            a(i, j) = m(i, j);
+        }
+
+        for (auto j = 0u; j < W; ++j)
+        {
+            a(i, j + N) = b(i, j);
+        }
+    }
+
+    return a;
 }
 } // namespace math
