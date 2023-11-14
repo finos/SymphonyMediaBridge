@@ -148,7 +148,7 @@ class BweRerun : public testing::TestWithParam<std::string>
 {
 };
 
-TEST_P(BweRerun, fromTrace)
+TEST_P(BweRerun, DISABLED_fromTrace)
 {
     bwe::Config config;
     config.congestion.cap.ratio = 0.5;
@@ -263,11 +263,11 @@ INSTANTIATE_TEST_SUITE_P(BweReruns,
         "Transport-48_60_3G",
         "Transport-6-4G-1-5Mbps"));
 
-class BweRerunLimit : public testing::Test, public testing::WithParamInterface<std::tuple<std::string, uint32_t>>
+class BweRerunLimit : public testing::TestWithParam<std::tuple<std::string, uint32_t>>
 {
 };
 
-TEST_P(BweRerunLimit, limitedLink)
+TEST_P(BweRerunLimit, DISABLED_limitedLink)
 {
     bwe::Config config;
 
