@@ -1,10 +1,14 @@
-# Tuning the filter
+# Tuning the bandwidth estimation filter
 
 The Unscented Kalman Filter has a state of current queue length Q, bandwidth BW, and clock offset CO. 
 These three values evolve over time to predict the observed absolute difference between local receive time
 and remote transmit time of packets. What makes this a bit sensitive is that higher delay can be explained 
-by lower BW, higher CO or larger Q. If any of process noise values have a bad setting, the state 
+by lower BW, higher CO or larger Q. If any of process noise values has a bad setting, the state 
 may start to drift in the wrong direction.
+
+The state units are bits, kbps, ms.
+The reason for this is to condition the matrix into having comparable magnitudes in the elements.
+There are matrix addition, multiplcation and decomposition that will cause 
 
 ## Parameter tuning experiments
 
