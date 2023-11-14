@@ -144,16 +144,16 @@ uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
 }
 } // namespace
 
-class BweRerunTrace : public testing::TestWithParam<std::string>
+class BweRerun : public testing::TestWithParam<std::string>
 {
 };
 
-TEST_P(BweRerunTrace, fromTrace)
+TEST_P(BweRerun, DISABLED_fromTrace)
 {
     bwe::Config config;
     config.congestion.cap.ratio = 0.5;
 
-    std::string trace = GetParam();
+    auto trace = GetParam();
 
     if (trace.empty())
     {
@@ -237,33 +237,33 @@ TEST_P(BweRerunTrace, fromTrace)
     logger::info("%" PRIu64 "s finished at %.3fkbps", "", (item.receiveTimestamp - start) / utils::Time::sec, prevBw);
 }
 
-INSTANTIATE_TEST_SUITE_P(DISABLED_BweRerun,
-    BweRerunTrace,
-    testing::Values("Transport-39_tcp",
+INSTANTIATE_TEST_SUITE_P(BweReruns,
+    BweRerun,
+    testing::Values("Transport-4-wifi",
+        "Transport-105_tcp_1ploss",
+        "Transport-22-3G",
+        "Transport-30_oka",
+        "Transport-3644-wifi",
+        "Transport-39_tcp",
+        "Transport-4735-4G",
+        "Transport-48_80_3G",
+        "Transport-62-4G",
+        "Transport-1094-4G",
+        "Transport-22-4G-2.3Mbps",
+        "Transport-32_Idre",
+        "Transport-37",
+        "Transport-48_50_3G",
         "Transport-58_tcp",
         "Transport-86_tcp_1ploss",
-        "Transport-105_tcp_1ploss",
-        "Transport-22-4G-2.3Mbps",
-        "Transport-1094-4G",
-        "Transport-3644-wifi",
-        "Transport-62-4G",
-        "Transport-3887-wifi",
-        "Transport-3629",
         "Transport-14-wifi",
-        "Transport-4-wifi",
-        "Transport-6-4G-1-5Mbps",
         "Transport-30-3G-1Mbps",
-        "Transport-32_Idre",
-        "Transport-30_oka",
-        "Transport-48_50_3G",
+        "Transport-3629",
+        "Transport-3887-wifi",
+        "Transport-44-clkdrift",
         "Transport-48_60_3G",
-        "Transport-48_80_3G",
-        "Transport-22-3G",
-        "Transport-62-4G",
-        "Transport-4735-4G",
-        "Transport-44-clkdrift"));
+        "Transport-6-4G-1-5Mbps"));
 
-class BweRerunLimit : public testing::TestWithParam<uint32_t>
+class BweRerunLimit : public testing::TestWithParam<std::tuple<std::string, uint32_t>>
 {
 };
 
@@ -271,116 +271,137 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
 {
     bwe::Config config;
 
-    std::array<std::string, 56> trace = {"Transport-5", "Transport-20", "Transport-17"};
+    auto trace = std::get<0>(GetParam());
+    auto linkCapacity = std::get<1>(GetParam());
+
     memory::PacketPoolAllocator allocator(8092, "rerun");
-    fakenet::NetworkLink link("EstimatorReRunLink", GetParam(), 1950 * 1024, 3000);
+    fakenet::NetworkLink link("EstimatorReRunLink", linkCapacity, 1950 * 1024, 3000);
     link.setLossRate(0);
     uint64_t wallClock = 0;
     const char* formatLine = "%u, %.1f,%.1f,%.f,%.3f,%.3f,%u,%u,%.6f, %.2f";
     const char* legend = "time, bwo, bw, q, co, delay, size, seqno, stime, rate";
 
-    for (size_t t = 0; t < trace.size() && !trace[t].empty(); ++t)
+    bwe::BandwidthEstimator estimator(config);
+    rtp::SendTimeDial sendTimeDial;
+    std::string path = "./_bwelogs";
+    logger::PacketLogReader reader(::fopen((path + "/" + trace).c_str(), "r"));
+    logger::PacketLogItem item;
+
+    CsvWriter csvLog(("./_ssdata/" + trace + std::to_string(linkCapacity) + "All.csv").c_str());
+
+    csvLog.writeLine("%s", legend);
+
+    logger::info("processing %s", "bweRerun", trace.c_str());
+    for (int i = 0; reader.getNext(item); ++i)
     {
-        bwe::BandwidthEstimator estimator(config);
-        rtp::SendTimeDial sendTimeDial;
-        std::string path = "./_bwelogs";
-        logger::PacketLogReader reader(::fopen((path + "/" + trace[t]).c_str(), "r"));
-        logger::PacketLogItem item;
-
-        CsvWriter csvLog(("./_ssdatall/" + trace[t] + std::to_string(GetParam()) + ".csv").c_str());
-
-        csvLog.writeLine("%s", legend);
-
-        logger::info("processing %s", "bweRerun", trace[t].c_str());
-        for (int i = 0; reader.getNext(item); ++i)
+        if (i == 0)
         {
-            if (i == 0)
+            wallClock = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, utils::Time::minute);
+            auto packet = memory::makeUniquePacket(allocator, &item, sizeof(item));
+            packet->setLength(item.size);
+
+            link.push(std::move(packet), wallClock);
+            continue;
+        }
+
+        auto sendTime = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, wallClock + utils::Time::sec * 10);
+        assert(sendTime >= wallClock);
+        for (;;)
+        {
+            auto minAdvance = std::min(utils::Time::diff(wallClock, sendTime), link.timeToRelease(wallClock));
+            assert(minAdvance >= 0);
+            wallClock += minAdvance;
+            for (auto packet = link.pop(wallClock); packet; packet = link.pop(wallClock))
             {
-                wallClock = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, utils::Time::minute);
+                if (packet->getLength() < 1500)
+                {
+                    auto* packetItem = reinterpret_cast<logger::PacketLogItem*>(packet->get());
+
+                    auto packetSendTime =
+                        sendTimeDial.toAbsoluteTime(packetItem->transmitTimestamp, wallClock + utils::Time::sec * 10);
+                    estimator.update(packetItem->size, packetSendTime, wallClock);
+
+                    auto bw = estimator.getEstimate(item.receiveTimestamp);
+                    auto state = estimator.getState();
+                    auto delay = estimator.getDelay();
+                    csvLog.writeLine(formatLine,
+                        wallClock / utils::Time::ms,
+                        bw,
+                        state(1),
+                        state(0) / 8,
+                        state(2),
+                        delay,
+                        packetItem->size,
+                        packetItem->sequenceNumber,
+                        double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
+                        std::min(9000.0, estimator.getReceiveRate(wallClock)));
+                }
+            }
+            if (wallClock == sendTime)
+            {
                 auto packet = memory::makeUniquePacket(allocator, &item, sizeof(item));
                 packet->setLength(item.size);
-
                 link.push(std::move(packet), wallClock);
-                continue;
-            }
 
-            auto sendTime = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, wallClock + utils::Time::sec * 10);
-            assert(sendTime >= wallClock);
-            for (;;)
-            {
-                auto minAdvance = std::min(utils::Time::diff(wallClock, sendTime), link.timeToRelease(wallClock));
-                assert(minAdvance >= 0);
-                wallClock += minAdvance;
-                for (auto packet = link.pop(wallClock); packet; packet = link.pop(wallClock))
-                {
-                    if (packet->getLength() < 1500)
-                    {
-                        auto* packetItem = reinterpret_cast<logger::PacketLogItem*>(packet->get());
-
-                        auto packetSendTime = sendTimeDial.toAbsoluteTime(packetItem->transmitTimestamp,
-                            wallClock + utils::Time::sec * 10);
-                        estimator.update(packetItem->size, packetSendTime, wallClock);
-
-                        auto bw = estimator.getEstimate(item.receiveTimestamp);
-                        auto state = estimator.getState();
-                        auto delay = estimator.getDelay();
-                        csvLog.writeLine(formatLine,
-                            wallClock / utils::Time::ms,
-                            bw,
-                            state(1),
-                            state(0) / 8,
-                            state(2),
-                            delay,
-                            packetItem->size,
-                            packetItem->sequenceNumber,
-                            double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
-                            std::min(9000.0, estimator.getReceiveRate(wallClock)));
-                    }
-                }
-                if (wallClock == sendTime)
-                {
-                    auto packet = memory::makeUniquePacket(allocator, &item, sizeof(item));
-                    packet->setLength(item.size);
-                    link.push(std::move(packet), wallClock);
-
-                    break;
-                }
-            }
-        }
-
-        double lastEstimate = estimator.getEstimate(wallClock);
-        for (wallClock += link.timeToRelease(wallClock);; wallClock += link.timeToRelease(wallClock))
-        {
-            auto packet = link.pop(wallClock);
-            if (!packet)
-            {
                 break;
             }
-            auto* packetItem = reinterpret_cast<logger::PacketLogItem*>(packet->get());
-            auto sendTime =
-                sendTimeDial.toAbsoluteTime(packetItem->transmitTimestamp, wallClock + utils::Time::sec * 10);
-            estimator.update(packetItem->size, sendTime, wallClock);
-            auto bw = estimator.getEstimate(item.receiveTimestamp);
-            auto state = estimator.getState();
-            auto delay = estimator.getDelay();
-            csvLog.writeLine(formatLine,
-                wallClock / utils::Time::ms,
-                bw,
-                state(1),
-                state(0) / 8,
-                state(2),
-                delay,
-                packetItem->size,
-                packetItem->sequenceNumber,
-                double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
-                std::min(9000.0, estimator.getReceiveRate(wallClock)));
-
-            lastEstimate = estimator.getEstimate(wallClock);
         }
-        logger::info("finished at %.3fkbps", "", lastEstimate);
     }
+
+    double lastEstimate = estimator.getEstimate(wallClock);
+    for (wallClock += link.timeToRelease(wallClock);; wallClock += link.timeToRelease(wallClock))
+    {
+        auto packet = link.pop(wallClock);
+        if (!packet)
+        {
+            break;
+        }
+        auto* packetItem = reinterpret_cast<logger::PacketLogItem*>(packet->get());
+        auto sendTime = sendTimeDial.toAbsoluteTime(packetItem->transmitTimestamp, wallClock + utils::Time::sec * 10);
+        estimator.update(packetItem->size, sendTime, wallClock);
+        auto bw = estimator.getEstimate(item.receiveTimestamp);
+        auto state = estimator.getState();
+        auto delay = estimator.getDelay();
+        csvLog.writeLine(formatLine,
+            wallClock / utils::Time::ms,
+            bw,
+            state(1),
+            state(0) / 8,
+            state(2),
+            delay,
+            packetItem->size,
+            packetItem->sequenceNumber,
+            double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
+            std::min(9000.0, estimator.getReceiveRate(wallClock)));
+
+        lastEstimate = estimator.getEstimate(wallClock);
+    }
+    logger::info("finished at %.3fkbps", "", lastEstimate);
 }
 
 INSTANTIATE_TEST_SUITE_P(BwessRerun,
     BweRerunLimit,
-    testing::Values(4500, 4800, 4900, 5000, 5100, 5200, 5600, 6500, 7000, 10000, 20000));
+    testing::Combine(testing::Values("Transport-4-wifi",
+                         "Transport-105_tcp_1ploss",
+                         "Transport-22-3G",
+                         "Transport-30_oka",
+                         "Transport-3644-wifi",
+                         "Transport-39_tcp",
+                         "Transport-4735-4G",
+                         "Transport-48_80_3G",
+                         "Transport-62-4G",
+                         "Transport-1094-4G",
+                         "Transport-22-4G-2.3Mbps",
+                         "Transport-32_Idre",
+                         "Transport-37",
+                         "Transport-48_50_3G",
+                         "Transport-58_tcp",
+                         "Transport-86_tcp_1ploss",
+                         "Transport-14-wifi",
+                         "Transport-30-3G-1Mbps",
+                         "Transport-3629",
+                         "Transport-3887-wifi",
+                         "Transport-44-clkdrift",
+                         "Transport-48_60_3G",
+                         "Transport-6-4G-1-5Mbps"),
+        testing::Values(4500, 4800, 4900, 5000, 5100, 5200, 5600, 6500, 7000, 10000, 20000)));

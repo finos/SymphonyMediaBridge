@@ -133,7 +133,10 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
     const auto kalmanGain = crossCovariance * (1.0 / covDelay);
     _state = predictedMeanState + kalmanGain * (observedDelay - predictedMeanDelay);
     _covarianceP = statePredictionCovariance - kalmanGain * covDelay * math::transpose(kalmanGain);
+    math::makeSymmetric(_covarianceP);
+    assert(math::isSymmetric(_covarianceP));
     assert(math::isValid(_covarianceP));
+
     _observedDelay = observedDelay;
     _state(0) = std::max(0.0, std::min(_state(0), _config.maxNetworkQueue * 8));
 
@@ -257,7 +260,8 @@ void BandwidthEstimator::generateSigmaPoints(const math::Matrix<double, 3>& stat
     const math::Matrix<double, 3>& processNoise,
     std::array<math::Matrix<double, 3>, SIGMA_POINTS>& sigmaPoints)
 {
-    auto squareRoot = math::choleskyDecompositionLL(covP);
+    static const auto seed = covP.I() * 0.0000001; // will make it positive definite
+    const auto squareRoot = math::choleskyDecompositionLL(covP + seed);
     sigmaPoints[0] = _state;
 
     int startIndex = 1;
