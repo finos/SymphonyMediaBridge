@@ -24,7 +24,6 @@ Written as a high performance native application with efficient resource managem
 The Supported platforms for the release builds are
 
 -   Ubuntu Server 20.04 LTS
--   Ubuntu Server 21.10
 
 The following additional dependencies have to be installed:
 
@@ -58,11 +57,11 @@ The following additional dependencies have to be installed:
 
 The Symphony Media Bridge is a cmake based project that can be built and run for development purposes on Linux as well as MacOSX. Here are instruction on what dependencies are needed to build and run locally. SMB currently only supports compiling with clang/llvm and linking with libc++ on both Linux and MacOSX.
 
-### Building for Ubuntu Linux 21.10
+### Building for Ubuntu Linux 20.04
 
 #### 1. Install the required dependencies
 
-`apt-get install cmake llvm clang lldb libc++-dev libc++abi-dev libssl-dev libsrtp2-dev libmicrohttpd-dev libopus-dev libunwind-13-dev`
+`apt-get install cmake llvm lld clang lldb python3 git libc++-dev libc++abi-dev libssl-dev libsrtp2-dev libmicrohttpd-dev libopus-dev libunwind-dev`
 
 #### 2. Set Clang as compiler
 
@@ -70,7 +69,7 @@ The Symphony Media Bridge is a cmake based project that can be built and run for
 
 #### 3. Generate the Makefile
 
-`cmake -DCMAKE_BUILD_TYPE=Debug -G "Unix Makefiles" .`
+`cmake -DCMAKE_BUILD_TYPE=Debug .`
 
 ### Building for MacOSX
 

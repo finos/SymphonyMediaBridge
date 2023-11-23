@@ -11,6 +11,8 @@ function pr() {
   echo -e ${GREEN}$1${NC}
 }
 
+git config --global --add safe.directory ${PWD}
+
 mkdir -p ubuntu-focal-deb/smb
 pushd ubuntu-focal-deb/smb
 
