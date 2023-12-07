@@ -78,6 +78,7 @@ void EngineMixer::removeBarbell(size_t idHash)
         if (audioStream.endpointIdHash.isSet())
         {
             _activeMediaList->removeAudioParticipant(audioStream.endpointIdHash.get());
+            _neighbourMemberships.erase(audioStream.endpointIdHash.get());
         }
     }
 

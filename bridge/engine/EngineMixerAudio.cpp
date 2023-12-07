@@ -71,6 +71,7 @@ void EngineMixer::removeStream(const EngineAudioStream* engineAudioStream)
 
     const auto mapRevision = _activeMediaList->getMapRevision();
     _activeMediaList->removeAudioParticipant(endpointIdHash);
+    _neighbourMemberships.erase(endpointIdHash);
 
     if (mapRevision != _activeMediaList->getMapRevision())
     {
