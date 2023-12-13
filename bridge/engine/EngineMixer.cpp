@@ -82,7 +82,8 @@ EngineMixer::EngineMixer(const std::string& id,
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
     std::memset(_mixedData, 0, samplesPerFrame20ms * channelsPerFrame);
-    _iceReceived.test_and_set();
+    _iceReceivedOnRegularTransport.test_and_set();
+    _iceReceivedOnBarbellTransport.test_and_set();
 }
 
 EngineMixer::~EngineMixer() {}
@@ -1067,7 +1068,10 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
 
 void EngineMixer::processIceActivity(const uint64_t timestamp)
 {
-    if (!_iceReceived.test_and_set())
+    bool needToUpdate = !_iceReceivedOnBarbellTransport.test_and_set() && !_config.deleteEmptyConferencesWithBarbells;
+    needToUpdate |= !_iceReceivedOnRegularTransport.test_and_set();
+
+    if (needToUpdate)
     {
         // if it was cleared by any transport receiving ICE, we will now set the keep alive timestamp
         _lastReceiveTime = timestamp;
@@ -1590,6 +1594,10 @@ bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash, memory::Un
 
 void EngineMixer::onIceReceived(transport::RtcTransport* transport, uint64_t timestamp)
 {
-    _iceReceived.clear();
+    if (EngineBarbell::isFromBarbell(transport->getTag())) {
+        _iceReceivedOnBarbellTransport.clear();
+    } else {
+         _iceReceivedOnRegularTransport.clear();
+    }
 }
 } // namespace bridge

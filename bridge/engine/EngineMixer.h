@@ -385,7 +385,8 @@ private:
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
     uint64_t _lastReceiveTime;
-    std::atomic_flag _iceReceived = ATOMIC_FLAG_INIT;
+    std::atomic_flag _iceReceivedOnRegularTransport = ATOMIC_FLAG_INIT;
+    std::atomic_flag _iceReceivedOnBarbellTransport = ATOMIC_FLAG_INIT;
     uint64_t _lastCounterCheck;
 
     std::unique_ptr<EngineStreamDirector> _engineStreamDirector;

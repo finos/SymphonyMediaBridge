@@ -16,8 +16,10 @@ public:
     CFG_PROP(std::string, logLevel, "INFO");
     CFG_PROP(bool, enableSrtpNullCipher, false);
 
-    // If mixer does not receive any packets during this timeout, it's considered abandoned and is garbage collected.
+    // If mixer does not receive any packets during this timeout, it's considered abandoned and is garbage collected...
     CFG_PROP(int, mixerInactivityTimeoutMs, 2 * 60 * 1000);
+    // ...unless it has barbell connections, and 'deleteEmptyConferencesWithBarbells' is false.
+    CFG_PROP(bool, deleteEmptyConferencesWithBarbells, false);
     CFG_PROP(int, numWorkerTreads, 0);
     CFG_PROP(std::string, logFile, "/tmp/smb.log");
 
