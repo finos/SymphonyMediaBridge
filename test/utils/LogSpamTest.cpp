@@ -3,6 +3,7 @@
 #include "logger/PruneSpam.h"
 #include "logger/SuspendSpam.h"
 #include <gtest/gtest.h>
+#include <signal.h>
 #include <unordered_map>
 
 TEST(LogSpam, prune)
