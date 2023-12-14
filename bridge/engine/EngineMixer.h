@@ -384,7 +384,8 @@ private:
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
-    uint64_t _lastReceiveTime;
+    uint64_t _lastReceiveTimeOnRegularTransports;
+    uint64_t _lastReceiveTimeOnBarbellTransports;
     std::atomic_flag _iceReceivedOnRegularTransport = ATOMIC_FLAG_INIT;
     std::atomic_flag _iceReceivedOnBarbellTransport = ATOMIC_FLAG_INIT;
     uint64_t _lastCounterCheck;
@@ -407,6 +408,8 @@ private:
 
     uint64_t _lastRecordingAckProcessed;
     bool _slidesPresent;
+
+    bool isIdle(uint16_t timestamp) const;
 
     uint32_t getMinRemoteClientDownlinkBandwidth() const;
     void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;

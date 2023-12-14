@@ -55,7 +55,8 @@ EngineMixer::EngineMixer(const std::string& id,
       _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator),
-      _lastReceiveTime(utils::Time::getAbsoluteTime()),
+      _lastReceiveTimeOnRegularTransports(utils::Time::getAbsoluteTime()),
+      _lastReceiveTimeOnBarbellTransports(utils::Time::getAbsoluteTime()),
       _engineStreamDirector(std::make_unique<EngineStreamDirector>(_loggableId.getInstanceId(), config, lastN)),
       _activeMediaList(std::make_unique<ActiveMediaList>(_loggableId.getInstanceId(),
           audioSsrcs,
@@ -87,6 +88,21 @@ EngineMixer::EngineMixer(const std::string& id,
 }
 
 EngineMixer::~EngineMixer() {}
+
+bool EngineMixer::isIdle(const uint16_t timestamp) const
+{
+    if (!utils::Time::diffGE(_lastReceiveTimeOnRegularTransports,
+            timestamp,
+            _config.mixerInactivityTimeoutMs * utils::Time::ms))
+    {
+        return false;
+    }
+
+    return _config.deleteEmptyConferencesWithBarbells ||
+        utils::Time::diffGE(_lastReceiveTimeOnBarbellTransports,
+            timestamp,
+            _config.mixerInactivityTimeoutMs * utils::Time::ms);
+}
 
 memory::UniquePacket EngineMixer::createGoodBye(uint32_t ssrc, memory::PacketPoolAllocator& allocator)
 {
@@ -201,10 +217,7 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     // 6. Maintain transports.
     runTransportTicks(engineIterationStartTimestamp);
 
-    const bool isIdle = utils::Time::diffGE(_lastReceiveTime,
-        engineIterationStartTimestamp,
-        _config.mixerInactivityTimeoutMs * utils::Time::ms);
-    if (isIdle && !_hasSentTimeout)
+    if (!_hasSentTimeout && isIdle(engineIterationStartTimestamp))
     {
         _hasSentTimeout = _messageListener.asyncMixerTimedOut(*this);
     }
@@ -975,6 +988,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
 void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
 {
     uint32_t numRtpPackets = 0;
+    uint32_t numBarbellRtpPackets = 0;
 
     if (_numMixedAudioStreams > 0)
     {
@@ -997,6 +1011,10 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     for (IncomingPacketInfo packetInfo; _incomingForwarderAudioRtp.pop(packetInfo);)
     {
         ++numRtpPackets;
+        if (EngineBarbell::isFromBarbell(packetInfo.transport()->getTag()))
+        {
+            ++numBarbellRtpPackets;
+        }
 
         const auto rtpHeader = rtp::RtpHeader::fromPacket(*packetInfo.packet());
         if (!rtpHeader)
@@ -1017,6 +1035,11 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
     for (IncomingPacketInfo packetInfo; _incomingForwarderVideoRtp.pop(packetInfo);)
     {
         ++numRtpPackets;
+        if (EngineBarbell::isFromBarbell(packetInfo.transport()->getTag()))
+        {
+            ++numBarbellRtpPackets;
+        }
+
         auto ssrcContext = packetInfo.inboundContext();
         if (ssrcContext && !ssrcContext->activeMedia)
         {
@@ -1031,9 +1054,14 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         forwardVideoRtpPacketRecording(packetInfo, timestamp);
     }
 
-    if (numRtpPackets > 0)
+    if (numBarbellRtpPackets > 0)
     {
-        _lastReceiveTime = timestamp;
+        _lastReceiveTimeOnBarbellTransports = timestamp;
+    }
+
+    if (numBarbellRtpPackets != numRtpPackets)
+    {
+        _lastReceiveTimeOnRegularTransports = timestamp;
     }
 }
 
@@ -1062,19 +1090,27 @@ void EngineMixer::processIncomingRtcpPackets(const uint64_t timestamp)
             }
         }
 
-        _lastReceiveTime = timestamp;
+        if (EngineBarbell::isFromBarbell(packetInfo.transport()->getTag()))
+        {
+            _lastReceiveTimeOnBarbellTransports = timestamp;
+        }
+        else
+        {
+            _lastReceiveTimeOnRegularTransports = timestamp;
+        }
     }
 }
 
 void EngineMixer::processIceActivity(const uint64_t timestamp)
 {
-    bool needToUpdate = !_iceReceivedOnBarbellTransport.test_and_set() && !_config.deleteEmptyConferencesWithBarbells;
-    needToUpdate |= !_iceReceivedOnRegularTransport.test_and_set();
-
-    if (needToUpdate)
+    if (!_iceReceivedOnBarbellTransport.test_and_set())
     {
-        // if it was cleared by any transport receiving ICE, we will now set the keep alive timestamp
-        _lastReceiveTime = timestamp;
+        _lastReceiveTimeOnBarbellTransports = timestamp;
+    }
+
+    if (!_iceReceivedOnRegularTransport.test_and_set())
+    {
+        _lastReceiveTimeOnRegularTransports = timestamp;
     }
 }
 
@@ -1594,10 +1630,13 @@ bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash, memory::Un
 
 void EngineMixer::onIceReceived(transport::RtcTransport* transport, uint64_t timestamp)
 {
-    if (EngineBarbell::isFromBarbell(transport->getTag())) {
+    if (EngineBarbell::isFromBarbell(transport->getTag()))
+    {
         _iceReceivedOnBarbellTransport.clear();
-    } else {
-         _iceReceivedOnRegularTransport.clear();
+    }
+    else
+    {
+        _iceReceivedOnRegularTransport.clear();
     }
 }
 } // namespace bridge

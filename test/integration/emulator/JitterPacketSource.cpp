@@ -18,7 +18,7 @@ uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
 {
     logger::PacketLogItem item;
     std::map<uint32_t, SsrcTrack> ssrcs;
-    for (int i = 0; reader.getNext(item); ++i)
+    while (reader.getNext(item))
     {
         if (item.size >= 300)
         {
