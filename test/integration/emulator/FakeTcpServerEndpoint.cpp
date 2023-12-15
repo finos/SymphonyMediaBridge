@@ -69,12 +69,10 @@ bool FakeTcpServerEndpoint::hasIp(const transport::SocketAddress& target)
 void FakeTcpServerEndpoint::process(uint64_t timestamp)
 {
     const auto start = utils::Time::getAbsoluteTime();
-    uint32_t packetCounter = 0;
 
     size_t byteCount = 0;
     for (OutboundPacket packetInfo; _sendQueue.pop(packetInfo);)
     {
-        ++packetCounter;
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 

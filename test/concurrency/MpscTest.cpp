@@ -372,7 +372,7 @@ TEST(MpscMemQueue, basic)
     EXPECT_NE(nullptr, q.allocate(819));
 }
 
-struct ComplxEntry
+struct ComplexEntry
 {
     bool g;
     char data[120];
@@ -380,16 +380,16 @@ struct ComplxEntry
 
 TEST(MpscMemQueue, scope)
 {
-    MpscQueue<ComplxEntry> q(32 * 1024);
+    MpscQueue<ComplexEntry> q(32 * 1024);
 
     {
-        ScopedAllocCommit<ComplxEntry> a1(q, sizeof(ComplxEntry));
+        ScopedAllocCommit<ComplexEntry> a1(q, sizeof(ComplexEntry));
         auto& obj = *a1;
         obj.g = false;
-        std::sprintf(obj.data, "test %d", 56);
+        std::snprintf(obj.data, sizeof(obj.data), "test %d", 56);
     }
 
-    EXPECT_GE(q.frontSize(), sizeof(ComplxEntry));
+    EXPECT_GE(q.frontSize(), sizeof(ComplexEntry));
     auto e = q.front();
     EXPECT_EQ(e->g, false);
     EXPECT_EQ(std::strcmp(e->data, "test 56"), 0);
@@ -414,7 +414,7 @@ void itemProducerRun(int id, MpscQueue<FakeLogItem>* q)
         }
         auto& item = *c;
         item.id = id;
-        std::sprintf(item.s, "log from runner %d", id);
+        std::snprintf(item.s, sizeof(item.s), "log from runner %d", id);
     }
 }
 

@@ -356,7 +356,6 @@ bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
 void FakeUdpEndpoint::process(uint64_t timestamp)
 {
     const auto start = utils::Time::getAbsoluteTime();
-    uint32_t packetCounter = 0;
 
     if (_state != Endpoint::CONNECTED)
     {
@@ -383,7 +382,6 @@ void FakeUdpEndpoint::process(uint64_t timestamp)
     size_t byteCount = 0;
     for (OutboundPacket packetInfo; _sendQueue.pop(packetInfo);)
     {
-        ++packetCounter;
         auto& packet = packetInfo.packet;
         byteCount += packet->getLength();
 
