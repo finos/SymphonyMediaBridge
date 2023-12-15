@@ -89,7 +89,7 @@ EngineMixer::EngineMixer(const std::string& id,
 
 EngineMixer::~EngineMixer() {}
 
-bool EngineMixer::isIdle(const uint16_t timestamp) const
+bool EngineMixer::isIdle(const uint64_t timestamp) const
 {
     if (!utils::Time::diffGE(_lastReceiveTimeOnRegularTransports,
             timestamp,
