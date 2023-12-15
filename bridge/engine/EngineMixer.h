@@ -409,7 +409,7 @@ private:
     uint64_t _lastRecordingAckProcessed;
     bool _slidesPresent;
 
-    bool isIdle(uint16_t timestamp) const;
+    bool isIdle(uint64_t timestamp) const;
 
     uint32_t getMinRemoteClientDownlinkBandwidth() const;
     void reportMinRemoteClientDownlinkBandwidthToBarbells(const uint32_t minUplinkEstimate) const;
