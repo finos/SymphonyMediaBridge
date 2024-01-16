@@ -1276,7 +1276,7 @@ bool Mixer::reconfigureAudioStream(const std::string& endpointId, const utils::O
 
 bool Mixer::reconfigureAudioStreamNeighbours(const std::string& endpointId, const std::vector<uint32_t>& neighbours)
 {
-     std::lock_guard<std::mutex> locker(_configurationLock);
+    std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
     if (audioStreamItr == _audioStreams.end())
     {
