@@ -1274,6 +1274,19 @@ bool Mixer::reconfigureAudioStream(const std::string& endpointId, const utils::O
         audioStream->remoteSsrc.isSet() ? audioStream->remoteSsrc.get() : 0u);
 }
 
+bool Mixer::reconfigureAudioStreamNeighbours(const std::string& endpointId, const std::vector<uint32_t>& neighbours)
+{
+    std::lock_guard<std::mutex> locker(_configurationLock);
+    auto audioStreamItr = _audioStreams.find(endpointId);
+    if (audioStreamItr == _audioStreams.end())
+    {
+        return false;
+    }
+    auto audioStream = audioStreamItr->second.get();
+    audioStream->neighbours = neighbours;
+    return _engineMixer->asyncReconfigureNeighbours(*audioStream->transport, neighbours);
+}
+
 bool Mixer::configureVideoStream(const std::string& endpointId,
     const RtpMap& rtpMap,
     const RtpMap& feedbackRtpMap,

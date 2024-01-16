@@ -836,11 +836,18 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
 
     const bool isAudioSet = endpointDescription.audio.isSet();
     const bool isVideoSet = endpointDescription.video.isSet();
+    const bool isNeighboursSet = !endpointDescription.neighbours.empty();
 
     if (isAudioSet && !mixer->isAudioStreamConfigured(endpointId))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             "Can't reconfigure audio because it was not configured in first place");
+    }
+
+    if (isNeighboursSet && !mixer->isAudioStreamConfigured(endpointId))
+    {
+        throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
+            "Can't reconfigure neighbours because audio stream was not configured in first place");
     }
 
     if (isVideoSet && !mixer->isVideoStreamConfigured(endpointId))
@@ -862,6 +869,16 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
         {
             throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                 "Fail to reconfigure audio stream");
+        }
+    }
+
+    if (isNeighboursSet)
+    {
+        auto neighbours = convertGroupIds(endpointDescription.neighbours);
+        if (!mixer->reconfigureAudioStreamNeighbours(endpointId, neighbours))
+        {
+            throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
+                "Fail to reconfigure audio stream's neighbours setting");
         }
     }
 

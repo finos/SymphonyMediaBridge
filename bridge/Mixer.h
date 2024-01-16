@@ -149,6 +149,7 @@ public:
         const std::vector<uint32_t>& neighbours);
 
     bool reconfigureAudioStream(const std::string& endpointId, const utils::Optional<uint32_t>& remoteSsrc);
+    bool reconfigureAudioStreamNeighbours(const std::string& endpointId, const std::vector<uint32_t>& neighbours);
 
     bool configureVideoStream(const std::string& endpointId,
         const RtpMap& rtpMap,

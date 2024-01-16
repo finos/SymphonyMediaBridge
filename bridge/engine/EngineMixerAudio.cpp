@@ -160,6 +160,38 @@ void EngineMixer::reconfigureAudioStream(const transport::RtcTransport& transpor
     updateBandwidthFloor();
 }
 
+void EngineMixer::reconfigureNeighbours(const transport::RtcTransport& transport,
+    const std::vector<uint32_t>& neighbourList)
+{
+    auto* engineAudioStream = _engineAudioStreams.getItem(transport.getEndpointIdHash());
+    if (!engineAudioStream)
+    {
+        return;
+    }
+
+    engineAudioStream->neighbours.clear();
+
+    for (auto& neighbour : neighbourList)
+    {
+        engineAudioStream->neighbours.add(neighbour, true);
+    }
+
+    const auto endpointIdHash = engineAudioStream->endpointIdHash;
+    auto neighbourIt = _neighbourMemberships.find(endpointIdHash);
+    if (neighbourIt != _neighbourMemberships.end())
+    {
+        auto& neighbourList = neighbourIt->second.memberships;
+        for (auto& it : engineAudioStream->neighbours)
+        {
+            neighbourList.push_back(it.first);
+        }
+    }
+    else
+    {
+        logger::error("Failed to update neighbour list for audio stream %zu", _loggableId.c_str(), endpointIdHash);
+    }
+}
+
 void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
     transport::RtcTransport* sender,
     memory::UniquePacket packet,
@@ -475,6 +507,12 @@ bool EngineMixer::asyncRemoveStream(const EngineAudioStream* engineAudioStream)
 bool EngineMixer::asyncReconfigureAudioStream(const transport::RtcTransport& transport, const uint32_t remoteSsrc)
 {
     return post(utils::bind(&EngineMixer::reconfigureAudioStream, this, std::cref(transport), remoteSsrc));
+}
+
+bool EngineMixer::asyncReconfigureNeighbours(const transport::RtcTransport& transport,
+    const std::vector<uint32_t>& neighbours)
+{
+    return post(utils::bind(&EngineMixer::reconfigureNeighbours, this, std::cref(transport), neighbours));
 }
 
 bool EngineMixer::asyncAddAudioStream(EngineAudioStream* engineAudioStream)

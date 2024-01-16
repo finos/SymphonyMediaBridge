@@ -165,6 +165,7 @@ public: // EngineMixer async interface. Will execute on engine thread
     bool asyncRemoveStream(const EngineDataStream* stream);
     bool asyncAddVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
     bool asyncReconfigureAudioStream(const transport::RtcTransport& transport, const uint32_t remoteSsrc);
+    bool asyncReconfigureNeighbours(const transport::RtcTransport& transport, const std::vector<uint32_t>& neighbours);
     bool asyncStartTransport(transport::RtcTransport& transport);
     bool asyncAddAudioStream(EngineAudioStream* engineAudioStream);
     bool asyncAddVideoStream(EngineVideoStream* engineVideoStream);
@@ -206,6 +207,7 @@ private: // impl async interface
     void startTransport(transport::RtcTransport& transport);
     void startRecordingTransport(transport::RecordingTransport& transport);
     void reconfigureAudioStream(const transport::RtcTransport& transport, const uint32_t remoteSsrc);
+    void reconfigureNeighbours(const transport::RtcTransport& transport, const std::vector<uint32_t>& neighbours);
     void addVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash, PacketCache* videoPacketCache);
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     void sendEndpointMessage(const size_t toEndpointIdHash,

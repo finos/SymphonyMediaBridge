@@ -723,6 +723,114 @@ TEST_F(IntegrationTest, neighbours)
     });
 }
 
+TEST_F(IntegrationTest, dynamicNeighbours)
+{
+    runTestInThread(expectedTestThreadCount(1), [this]() {
+        _config.readFromString(_defaultSmbConfig);
+
+        initBridge(_config);
+        const auto baseUrl = "http://127.0.0.1:8080";
+
+        GroupCall<SfuClient<Channel>> group(_httpd,
+            _instanceCounter,
+            *_mainPoolAllocator,
+            _audioAllocator,
+            *_clientTransportFactory,
+            *_publicTransportFactory,
+            *_sslDtls,
+            4);
+
+        Conference conf(_httpd);
+
+        ScopedFinalize finalize(std::bind(&IntegrationTest::finalizeSimulation, this));
+        startSimulation();
+
+        group.startConference(conf, baseUrl);
+
+        std::string neighbourGroupName = "gid1";
+        auto neighbourGroups = nlohmann::json::array();
+        neighbourGroups.push_back(neighbourGroupName);
+
+        CallConfigBuilder cfgBuilder(conf.getId());
+        cfgBuilder.url(baseUrl).withOpus().withVideo();
+
+        group.clients[0]->initiateCall(cfgBuilder.build());
+        group.clients[1]->joinCall(cfgBuilder.build());
+        group.clients[2]->joinCall(cfgBuilder.build());
+        group.clients[3]->joinCall(cfgBuilder.mixed().build());
+
+        // 600, 1300, 2100, 3200
+        ASSERT_TRUE(group.connectAll(utils::Time::sec * _clientsConnectionTimeout));
+
+        nlohmann::json responseBody;
+        const auto conferenceId = conf.getId();
+
+        for (int i = 1; i < 4; i++)
+        {
+            auto endpointId = group.clients[i]->getEndpointId();
+
+            nlohmann::json body = {{"action", "reconfigure"}};
+            body["neighbours"] = {{"groups", neighbourGroups}};
+
+            auto neighboursSet = emulator::awaitResponse<HttpPutRequest>(_httpd,
+                std::string(baseUrl) + "/conferences/" + conferenceId + "/" + endpointId,
+                body.dump(),
+                1.5 * utils::Time::sec,
+                responseBody);
+            EXPECT_TRUE(neighboursSet);
+        }
+
+        make5secCallWithDefaultAudioProfile(group);
+
+        auto statsSuccess = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/stats",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(statsSuccess);
+
+        auto confRequest = emulator::awaitResponse<HttpGetRequest>(_httpd,
+            std::string(baseUrl) + "/conferences",
+            1500 * utils::Time::ms,
+            responseBody);
+        EXPECT_TRUE(confRequest);
+
+        group.stopTransports();
+
+        group.awaitPendingJobs(utils::Time::sec * 4);
+        finalizeSimulation();
+
+        const size_t chMixed[] = {0, 0, 0, 1};
+        AudioAnalysisData results[4];
+        for (size_t id = 0; id < 4; ++id)
+        {
+            results[id] = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true, chMixed[id]);
+
+            std::unordered_map<uint32_t, transport::ReportSummary> transportSummary;
+            std::string clientName = "client_" + std::to_string(id);
+            group.clients[id]->getReportSummary(transportSummary);
+            logTransportSummary(clientName.c_str(), transportSummary);
+
+            logVideoSent(clientName.c_str(), *group.clients[id]);
+            logVideoReceive(clientName.c_str(), *group.clients[id]);
+        }
+
+        EXPECT_EQ(results[0].audioSsrcCount, 3u);
+        EXPECT_EQ(results[1].audioSsrcCount, 1u);
+        EXPECT_EQ(results[2].audioSsrcCount, 1u);
+        EXPECT_EQ(results[3].audioSsrcCount, 1u);
+
+        EXPECT_EQ(results[0].dominantFrequencies.size(), 3);
+        EXPECT_EQ(results[1].dominantFrequencies.size(), 1);
+        EXPECT_EQ(results[2].dominantFrequencies.size(), 1);
+        EXPECT_EQ(results[3].dominantFrequencies.size(), 1);
+
+        if (results[3].dominantFrequencies.size() > 0)
+        {
+            EXPECT_NEAR(results[3].dominantFrequencies[0], 600.0, 50.0);
+        }
+    });
+}
+
 class WebRtcListenerMock : public webrtc::WebRtcDataStream::Listener
 {
 public:
