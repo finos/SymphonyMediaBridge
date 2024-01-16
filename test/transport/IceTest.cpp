@@ -1436,10 +1436,9 @@ TEST_F(IceRobustness, earlyProbes)
     logger::info("probing from session %u", "", 0);
     sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource.getAbsoluteTime());
 
-    int iterations = 0;
     const auto startTimeNoCredentials = timeSource.getAbsoluteTime();
-    for (bool running = true; running && timeSource.getAbsoluteTime() - startTimeNoCredentials < utils::Time::sec * 5;
-         iterations++)
+    bool running = true;
+    while (running && timeSource.getAbsoluteTime() - startTimeNoCredentials < utils::Time::sec * 5)
     {
         internet.process(timeSource.getAbsoluteTime());
         int64_t timeout = std::numeric_limits<int64_t>::max();
@@ -1474,7 +1473,7 @@ TEST_F(IceRobustness, earlyProbes)
     sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
     setRemoteCandidates(*sessions[0], *sessions[1]);
     sessions[0]->probeRemoteCandidates(sessions[1]->getRole(), timeSource.getAbsoluteTime());
-    for (bool running = true; running; iterations++)
+    for (bool running = true; running;)
     {
         internet.process(timeSource.getAbsoluteTime());
         int64_t timeout = std::numeric_limits<int64_t>::max();

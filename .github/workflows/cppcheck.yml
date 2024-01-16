@@ -11,5 +11,5 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - run: cppcheck --version
-      - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -i test/ -i external/ --suppressions-list=.cppcheck-suppressions --inline-suppr .
-      - run: cppcheck --error-exitcode=1 --std=c++14 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -I test/include --suppressions-list=.cppcheck-suppressions --inline-suppr ./test
+      - run: cppcheck --error-exitcode=1 --std=c++17 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -i test/ -i external/ -i build/ --suppressions-list=.cppcheck-suppressions --inline-suppr .
+      - run: cppcheck --error-exitcode=1 --std=c++17 --language=c++ -j$(getconf _NPROCESSORS_ONLN) -I . -I test/include --suppressions-list=.cppcheck-suppressions --inline-suppr ./test

@@ -72,6 +72,8 @@ TEST(Logger, flush)
     EXPECT_TRUE(true);
 }
 
+#if 0 // Test will cause segfault. Useful for testing signals but should not be enabled by default
+
 namespace
 {
 std::unordered_map<int32_t, struct sigaction> oldSignalHandlers;
@@ -104,7 +106,6 @@ void fatalSignalHandler(int32_t signalId)
 
 TEST(Logger, crash)
 {
-    GTEST_SKIP();
     struct sigaction sigactionData = {};
     sigactionData.sa_handler = fatalSignalHandler;
     sigactionData.sa_flags = 0;
@@ -124,4 +125,6 @@ TEST(Logger, crash)
 
     int* p = nullptr;
     auto h = p[9];
+    (void)h; // silence warning
 }
+#endif

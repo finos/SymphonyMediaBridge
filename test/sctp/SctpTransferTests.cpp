@@ -159,7 +159,7 @@ TEST_F(SctpTransferTestFixture, withLoss20)
         DATA_SIZE,
         _timestamp);
     const auto endTime = _timestamp + 4 * utils::Time::sec;
-    for (int i = 0; static_cast<int64_t>(endTime - _timestamp) > 0 && B.getReceivedSize() == 0; ++i)
+    while (static_cast<int64_t>(endTime - _timestamp) > 0 && B.getReceivedSize() == 0)
     {
         _timestamp += 100 * utils::Time::us;
         A.process();

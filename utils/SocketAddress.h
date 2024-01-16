@@ -66,7 +66,7 @@ public:
     static std::vector<SocketAddress> activeInterfaces(bool includeLoopback, bool includeLinkLocal);
     static SocketAddress parse(const std::string& ip, uint16_t port = 0);
     static SocketAddress createBroadcastIpv6() { return SocketAddress::parse("::1"); }
-    static SocketAddress createBroadcastIpv4() { return SocketAddress(0u, 0u); }
+    static SocketAddress createBroadcastIpv4() { return SocketAddress(0u, static_cast<uint16_t>(0u)); }
 
 private:
     RawSockAddress _address;

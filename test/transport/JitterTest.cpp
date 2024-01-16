@@ -33,6 +33,7 @@ template <typename T, size_t S>
 class Backlog
 {
 public:
+    Backlog() : _index(0) {}
     T add(T value)
     {
         _index = (_index + 1) % S;
