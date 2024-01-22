@@ -3,32 +3,35 @@
 node {
     cleanWs()
     checkout scm
-    scmVars = checkout scm
-    git_hash = scmVars.GIT_COMMIT.substring(0,7)
+    def scmVars = checkout scm
+    def gitHash = scmVars.GIT_COMMIT.substring(0,7)
+    // Defaults to https://console.cloud.google.com/artifacts/docker/sym-dev-rtc/europe-west1/rtc-jenkins-tools?project=sym-dev-rtc
+    def gcpArtifactsProject = params.GCP_ARTIFACTS_PROJECT ?: "sym-dev-rtc"
+    def gcpArtifactsRegistry = params.GCP_ARTIFACTS_REGISTRY ?: "europe-west1-docker.pkg.dev"
+    def gcpArtifactsRepo = params.GCP_ARTIFACTS_REPOSITORY ?: "rtc-jenkins-tools"
 
-    dir("./") {
-        try {
-            stage("Build") {
-                sh "./docker/build_loadtest_container.sh"
+    def imageName = params.IMAGE_NAME ?: "buildsmb-loadtests"
+    def gcpImageName="${gcpArtifactsRegistry}/${gcpArtifactsProject}/${gcpArtifactsRepo}/${imageName}"
+    def gcpImageNameWithVer="${gcpImageName}:${gitHash}"
+
+    try {
+        stage("Build") {
+            sh "./docker/build_loadtest_container.sh"
+        }
+        stage("Push") {
+            sh "docker tag ${imageName}:latest ${gcpImageNameWithVer}"
+            if (params.GCP_KEY_FILE_PATH != null) {
+                sh "gcloud auth activate-service-account --key-file=${params.GCP_KEY_FILE_PATH}"
             }
-            stage("Push") {
-                gcloud_image_name="gcr.io/$params.GCE_PROJECT_ID/buildsmb-loadtests"
-                gcloud_image_name_with_ver="$gcloud_image_name:$git_hash"
-                sh "docker tag buildsmb-loadtests:latest $gcloud_image_name_with_ver"
-                if (params.GCE_KEY_FILE_PATH != null) {
-                    sh "gcloud auth activate-service-account --key-file=$params.GCE_KEY_FILE_PATH"
-                }
-                // TODO: Remove the call for gcloud beta when https://warpdrive-lab.dev.symphony.com/jenkins has up to date gcloud tools
-                sh "gcloud auth configure-docker || gcloud beta auth configure-docker"
-                sh "docker push $gcloud_image_name_with_ver"
-                sh "gcloud container images add-tag -q $gcloud_image_name_with_ver '$gcloud_image_name:latest'"
-                sh "echo $gcloud_image_name_with_ver successfully uploaded"
-            }
-        } finally {
-            stage("Cleanup") {
-                sh "docker rmi buildsmb-loadtests || true"
-                cleanWs()
-            }
+            sh "gcloud auth configure-docker ${gcpArtifactsRegistry} --quiet"
+            sh "docker push ${gcpImageNameWithVer}"
+            sh "gcloud container images add-tag -q ${gcpImageNameWithVer} '${gcpImageName}:latest'"
+            println "${gcpImageNameWithVer} successfully uploaded"
+        }
+    } finally {
+        stage("Cleanup") {
+            sh "docker rmi ${imageName}"
+            cleanWs()
         }
     }
 }
