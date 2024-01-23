@@ -5,6 +5,7 @@ node {
     checkout scm
     def scmVars = checkout scm
     def gitHash = scmVars.GIT_COMMIT.substring(0,7)
+    def gitBranch = scmVars.GIT_BRANCH.split('/')[-1]
     // Defaults to https://console.cloud.google.com/artifacts/docker/sym-dev-rtc/europe-west1/rtc-jenkins-tools?project=sym-dev-rtc
     def gcpArtifactsProject = params.GCP_ARTIFACTS_PROJECT ?: "sym-dev-rtc"
     def gcpArtifactsRegistry = params.GCP_ARTIFACTS_REGISTRY ?: "europe-west1-docker.pkg.dev"
@@ -14,7 +15,7 @@ node {
     def gcpImageName="${gcpArtifactsRegistry}/${gcpArtifactsProject}/${gcpArtifactsRepo}/${imageName}"
     def gcpImageNameWithVer="${gcpImageName}:${gitHash}"
 
-    currentBuild.displayName = "${params.OSVERSION}-${env.BRANCH_NAME}"
+    currentBuild.displayName = "${params.OSVERSION}-${gitBranch}"
 
     dir("./docker") {
         try {
