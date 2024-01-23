@@ -14,26 +14,24 @@ node {
     def gcpImageName="${gcpArtifactsRegistry}/${gcpArtifactsProject}/${gcpArtifactsRepo}/${imageName}"
     def gcpImageNameWithVer="${gcpImageName}:${gitHash}"
 
-    dir("./") {
-        try {
-            stage("Build") {
-                sh "./docker/build_loadtest_container.sh"
+    try {
+        stage("Build") {
+            sh "./docker/build_loadtest_container.sh"
+        }
+        stage("Push") {
+            sh "docker tag ${imageName}:latest ${gcpImageNameWithVer}"
+            if (params.GCP_KEY_FILE_PATH != null) {
+                sh "gcloud auth activate-service-account --key-file=${params.GCP_KEY_FILE_PATH}"
             }
-            stage("Push") {
-                sh "docker tag ${imageName}:latest ${gcpImageNameWithVer}"
-                if (params.GCP_KEY_FILE_PATH != null) {
-                    sh "gcloud auth activate-service-account --key-file=${params.GCP_KEY_FILE_PATH}"
-                }
-                sh "gcloud auth configure-docker ${gcpArtifactsRegistry} --quiet"
-                sh "docker push ${gcpImageNameWithVer}"
-                sh "gcloud container images add-tag -q ${gcpImageNameWithVer} '${gcpImageName}:latest'"
-                println "${gcpImageNameWithVer} successfully uploaded"
-            }
-        } finally {
-            stage("Cleanup") {
-                sh "docker rmi ${imageName}"
-                cleanWs()
-            }
+            sh "gcloud auth configure-docker ${gcpArtifactsRegistry} --quiet"
+            sh "docker push ${gcpImageNameWithVer}"
+            sh "gcloud container images add-tag -q ${gcpImageNameWithVer} '${gcpImageName}:latest'"
+            println "${gcpImageNameWithVer} successfully uploaded"
+        }
+    } finally {
+        stage("Cleanup") {
+            sh "docker rmi ${imageName}"
+            cleanWs()
         }
     }
 }
