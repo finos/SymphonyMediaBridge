@@ -14,6 +14,8 @@ node {
     def gcpImageName="${gcpArtifactsRegistry}/${gcpArtifactsProject}/${gcpArtifactsRepo}/${imageName}"
     def gcpImageNameWithVer="${gcpImageName}:${gitHash}"
 
+    currentBuild.displayName = "${params.OSVERSION}-${env.BRANCH_NAME}"
+
     dir("./docker") {
         try {
             lock("jenkins-smb-image-build") {
