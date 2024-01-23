@@ -36,6 +36,8 @@ node('be-integration') {
             env.VERSION=version
         }
 
+        sh "gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet"
+
         docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-el7:latest').inside {
             stage('Build Centos 7') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
