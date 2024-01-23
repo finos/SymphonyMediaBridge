@@ -2,7 +2,7 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.163.1/containers/docker-existing-dockerfile
 {
 	"name": "Docker from Image",
-	"image": "gcr.io/sym-dev-rtc/buildsmb-el7:latest",
+	"image": "europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-el7:latest",
 	"runArgs": [
 		"--security-opt",
 		"seccomp=unconfined"
