@@ -92,17 +92,26 @@ POST /conferences/{conferenceId}/{endpointId}
         }
     },
     "audio": {
-        "payload-type": {
-            "id": 111,
-            "parameters": {
-                "minptime": "10",
-                "useinbandfec": "1"
+        "payload-types": [
+            {
+                "id": 111,
+                "parameters": {
+                    "minptime": "10",
+                    "useinbandfec": "1"
+                },
+                "rtcp-fbs": [],
+                "name": "opus",
+                "clockrate": 48000,
+                "channels": 2
             },
-            "rtcp-fbs": [],
-            "name": "opus",
-            "clockrate": 48000,
-            "channels": 2
-        },
+            {
+                "id": 110,
+                "parameters": {},
+                "rtcp-fbs": [],
+                "name": "telephone-events",
+                "clockrate": 48000
+            }
+        ],
         "ssrcs": [1234, 355667],
         "rtp-hdrexts": [
             {
@@ -223,17 +232,26 @@ POST /conferences/{conferenceId}/{endpointId}
 200 OK
 {
     "audio": {
-        "payload-type": {
-            "id": 111,
-            "parameters": {
-                "minptime": "10",
-                "useinbandfec": "1"
+        "payload-types": [
+            {
+                "id": 111,
+                "parameters": {
+                    "minptime": "10",
+                    "useinbandfec": "1"
+                },
+                "rtcp-fbs": [],
+                "name": "opus",
+                "clockrate": 48000,
+                "channels": 2
             },
-            "rtcp-fbs": [],
-            "name": "opus",
-            "clockrate": 48000,
-            "channels": 2
-        },
+            {
+                "id": 110,
+                "parameters": {},
+                "rtcp-fbs": [],
+                "name": "telephone-events",
+                "clockrate": 48000
+            }
+        ],
         "ssrcs": [122312, 44634783],
         "rtp-hdrexts": [
             {
@@ -304,17 +322,26 @@ PUT /conferences/{conferenceId}/{endpointId}
         }
     },
     "audio": {
-        "payload-type": {
-            "id": 111,
-            "parameters": {
-                "minptime": "10",
-                "useinbandfec": "1"
+        "payload-types": [
+            {
+                "id": 111,
+                "parameters": {
+                    "minptime": "10",
+                    "useinbandfec": "1"
+                },
+                "rtcp-fbs": [],
+                "name": "opus",
+                "clockrate": 48000,
+                "channels": 2
             },
-            "rtcp-fbs": [],
-            "name": "opus",
-            "clockrate": 48000,
-            "channels": 2
-        },
+            {
+                "id": 110,
+                "parameters": {},
+                "rtcp-fbs": [],
+                "name": "telephone-events",
+                "clockrate": 48000
+            }
+        ],
         "ssrcs": [Integer, ...],
         "rtp-hdrexts": [
             {
@@ -869,7 +896,7 @@ GET /stats
 
 ## Detailed Barbell Metrics
 
-Barbell Metrics allows live monitoring and troubleshooing of barbell connections.
+Barbell Metrics allows live monitoring and troubleshooting of barbell connections.
 
 Detailed barbell Metrics are:
 
@@ -897,7 +924,7 @@ GET /stats/barbell/<conference ID>
 Returns:
 
 -   see [Barbell Metrics Response](#Barbell-Metrics-Response);
--   HTTP 404 if the confernce is not found.
+-   HTTP 404 if the conference is not found.
 
 ### Barbell Metrics Response
 
