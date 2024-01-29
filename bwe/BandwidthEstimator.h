@@ -66,6 +66,8 @@ class BandwidthEstimator : public Estimator
 public:
     explicit BandwidthEstimator(const Config& config);
 
+    void init(double clockOffset);
+
     void update(uint32_t packetSize, uint64_t transmitTimeNs, uint64_t receiveTimeNs) override;
     void onUnmarkedTraffic(uint32_t packetSize, uint64_t receiveTimeNs) override;
 
@@ -73,6 +75,7 @@ public:
     math::Matrix<double, 3> getCovariance() const;
     double getEstimate(uint64_t timestamp) const override;
     double getDelay() const override;
+    double predictDelay() const;
 
     // kbps
     double getReceiveRate(uint64_t timestamp) const override
@@ -95,7 +98,7 @@ private:
     math::Matrix<double, 3> sanitizeState(const math::Matrix<double, 1>& state,
         double observedDelay,
         uint32_t packetSize);
-    double predictDelay(const math::Matrix<double, 3>& state);
+    double predictDelay(const math::Matrix<double, 3>& state) const;
 
     void updateCongestionMargin(double packetIntervalMs);
     double analyseCongestion(double actualDelay, uint32_t packetSize, uint64_t timestamp);
