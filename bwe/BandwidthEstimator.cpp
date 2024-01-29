@@ -58,9 +58,19 @@ void BandwidthEstimator::onUnmarkedTraffic(uint32_t packetSize, uint64_t receive
     _receiveBandwidth.update(packetSize * 8, receiveTimeNs);
 }
 
+double BandwidthEstimator::predictDelay() const
+{
+    return predictDelay(_state) - _state(2);
+}
+
+void BandwidthEstimator::init(double clockOffset)
+{
+    _state(2) = clockOffset;
+}
+
 void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, uint64_t receiveTimeNs)
 {
-    if (_baseClockOffset == 0 && _state(2) == 0 && _state(0) == 0 && _previousTransmitTime == 0)
+    if (_baseClockOffset == 0 && _state(0) == 0 && _previousTransmitTime == 0)
     {
         // base Offset is very sensitive, if you start 5ms behind it will create a lower estimate, assuming higher delay
         // and longer queue. Starting with a long queue is also a bad start
@@ -74,12 +84,46 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
         static_cast<double>(static_cast<int64_t>(receiveTimeNs - transmitTimeNs - _baseClockOffset)) / utils::Time::ms;
 
     const auto actualDelay = (observedDelay - _state(2));
-    const double congestionScale = analyseCongestion(actualDelay, packetSize, receiveTimeNs);
+    if (actualDelay < 0)
+    {
+        _state(1) = 0; // queue must be empty before this packet
+    }
+
+    const auto currentState = transitionState(packetSize, tau, _state, observedDelay);
+    if (currentState(0) <= packetSize * 8 && actualDelay * currentState(1) > packetSize * 3 &&
+        receiveTimeNs - _previousReceiveTime > utils::Time::ms * 20)
+    {
+        // should check if we think we are on mobile. Multiple burst deliveries and typical delay before receiving
+        // packets
+        _state(0) += packetSize * 8;
+    }
+
+    auto processNoise = _processNoise;
+
+    double burstObeservationScale = 0;
+    if (actualDelay * currentState(1) < currentState(0) && currentState(0) > _config.mtu * 2 * 8)
+    {
+        // processNoise(1) = 200;
+        burstObeservationScale = 0.5;
+        if (actualDelay != 0)
+        {
+            //    _state(1) = currentState(0) / actualDelay;
+            processNoise(1) = 200;
+        }
+        else
+        {
+            processNoise(1) = 200;
+        }
+    }
+
+    const double congestionScale =
+        (burstObeservationScale != 0 ? burstObeservationScale
+                                     : analyseCongestion(actualDelay, packetSize, receiveTimeNs));
 
     _receiveBandwidth.update(packetSize * 8, receiveTimeNs);
     // predict mean state
     std::array<math::Matrix<double, 3>, SIGMA_POINTS> sigmaPoints;
-    generateSigmaPoints(_state, _covarianceP, _processNoise, sigmaPoints);
+    generateSigmaPoints(_state, _covarianceP, processNoise, sigmaPoints);
 
     std::array<double, SIGMA_POINTS> predictedDelays;
     for (size_t i = 0; i < sigmaPoints.size(); ++i)
@@ -331,7 +375,7 @@ void BandwidthEstimator::updateCongestionMargin(double packetIntervalMs)
     }
 }
 
-double BandwidthEstimator::predictDelay(const math::Matrix<double, 3>& state)
+double BandwidthEstimator::predictDelay(const math::Matrix<double, 3>& state) const
 {
     return (state(0) / state(1)) + state(2);
 }
