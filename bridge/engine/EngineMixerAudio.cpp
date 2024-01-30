@@ -181,6 +181,7 @@ void EngineMixer::reconfigureNeighbours(const transport::RtcTransport& transport
     if (neighbourIt != _neighbourMemberships.end())
     {
         auto& neighbourList = neighbourIt->second.memberships;
+        neighbourList.clear();
         for (auto& it : engineAudioStream->neighbours)
         {
             neighbourList.push_back(it.first);
