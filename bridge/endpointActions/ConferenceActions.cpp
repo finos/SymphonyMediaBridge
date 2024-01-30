@@ -533,7 +533,12 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         remoteSsrc.set(audio.ssrcs.front());
     }
 
-    auto neighbours = convertGroupIds(endpointDescription.neighbours);
+    std::vector<uint32_t> neighbours;
+    if (endpointDescription.neighbours.isSet())
+    {
+        neighbours = convertGroupIds(endpointDescription.neighbours.get());
+    }
+
     if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, neighbours))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
@@ -836,7 +841,7 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
 
     const bool isAudioSet = endpointDescription.audio.isSet();
     const bool isVideoSet = endpointDescription.video.isSet();
-    const bool isNeighboursSet = !endpointDescription.neighbours.empty();
+    const bool isNeighboursSet = endpointDescription.neighbours.isSet();
 
     if (isAudioSet && !mixer->isAudioStreamConfigured(endpointId))
     {
@@ -874,7 +879,7 @@ httpd::Response reconfigureEndpoint(ActionContext* context,
 
     if (isNeighboursSet)
     {
-        auto neighbours = convertGroupIds(endpointDescription.neighbours);
+        auto neighbours = convertGroupIds(endpointDescription.neighbours.get());
         if (!mixer->reconfigureAudioStreamNeighbours(endpointId, neighbours))
         {
             throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,

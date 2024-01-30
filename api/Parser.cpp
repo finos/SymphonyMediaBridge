@@ -422,10 +422,12 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
 
     if (data.find("neighbours") != data.end())
     {
+        std::vector<std::string> neighbours;
         for (auto& group : requiredJsonArray(data["neighbours"], "groups"))
         {
-            endpointDescription.neighbours.push_back(group);
+            neighbours.push_back(group);
         }
+        endpointDescription.neighbours.set(neighbours);
     }
     return endpointDescription;
 }
