@@ -55,8 +55,10 @@ EngineMixer::EngineMixer(const std::string& id,
       _mainAllocator(mainAllocator),
       _sendAllocator(sendAllocator),
       _audioAllocator(audioAllocator),
-      _lastReceiveTimeOnRegularTransports(utils::Time::getAbsoluteTime()),
-      _lastReceiveTimeOnBarbellTransports(utils::Time::getAbsoluteTime()),
+      _lastStartedIterationTimestamp(utils::Time::getAbsoluteTime()),
+      _lastReceiveTimeOnRegularTransports(_lastStartedIterationTimestamp),
+      _lastReceiveTimeOnBarbellTransports(_lastStartedIterationTimestamp),
+      _lastSendTimeOfUserMediaMapMessageOverBarbells(_lastStartedIterationTimestamp),
       _engineStreamDirector(std::make_unique<EngineStreamDirector>(_loggableId.getInstanceId(), config, lastN)),
       _activeMediaList(std::make_unique<ActiveMediaList>(_loggableId.getInstanceId(),
           audioSsrcs,
@@ -76,7 +78,7 @@ EngineMixer::EngineMixer(const std::string& id,
       _probingVideoStreams(false),
       _minUplinkEstimate(0),
       _backgroundJobQueue(backgroundJobQueue),
-      _lastRecordingAckProcessed(utils::Time::getAbsoluteTime()),
+      _lastRecordingAckProcessed(_lastStartedIterationTimestamp),
       _slidesPresent(false)
 {
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
@@ -182,6 +184,7 @@ void EngineMixer::forwardPackets(const uint64_t engineTimestamp)
 void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
 {
     _rtpTimestampSource += framesPerIteration1kHz;
+    _lastStartedIterationTimestamp = engineIterationStartTimestamp;
 
     // 1. Process all incoming packets
     processBarbellSctp(engineIterationStartTimestamp);
@@ -196,6 +199,8 @@ void EngineMixer::run(const uint64_t engineIterationStartTimestamp)
     sendMessagesToNewDataStreams();
     markSsrcsInUse(engineIterationStartTimestamp);
     processMissingPackets(engineIterationStartTimestamp); // must run after checkPacketCounters
+
+    sendPeriodicUserMediaMapMessageOverBarbells(engineIterationStartTimestamp);
 
     // 3. Update bandwidth estimates
     if (_config.rctl.useUplinkEstimate)
@@ -1303,9 +1308,8 @@ void EngineMixer::sendLastNListMessageToAll()
 
 void EngineMixer::sendMessagesToNewDataStreams()
 {
+    bool isDominantSpeakerMessageBuild = false;
     utils::StringBuilder<256> dominantSpeakerMessage;
-    _activeMediaList->makeDominantSpeakerMessage(dominantSpeakerMessage);
-
     utils::StringBuilder<1024> lastNListMessage;
     utils::StringBuilder<1024> userMediaMapMessage;
 
@@ -1316,6 +1320,12 @@ void EngineMixer::sendMessagesToNewDataStreams()
         if (dataStream->hasSeenInitialSpeakerList || !dataStream->stream.isOpen())
         {
             continue;
+        }
+
+        if (!isDominantSpeakerMessageBuild)
+        {
+            _activeMediaList->makeDominantSpeakerMessage(dominantSpeakerMessage);
+            isDominantSpeakerMessageBuild = true;
         }
 
         if (!dominantSpeakerMessage.empty())

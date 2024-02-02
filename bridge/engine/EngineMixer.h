@@ -386,8 +386,12 @@ private:
     memory::PacketPoolAllocator& _sendAllocator;
     memory::AudioPacketPoolAllocator& _audioAllocator;
 
+    // Useful to avoid get time when a precise time is not needed and we can rely on last/current iteration start time
+    uint64_t _lastStartedIterationTimestamp;
+
     uint64_t _lastReceiveTimeOnRegularTransports;
     uint64_t _lastReceiveTimeOnBarbellTransports;
+    uint64_t _lastSendTimeOfUserMediaMapMessageOverBarbells;
     std::atomic_flag _iceReceivedOnRegularTransport = ATOMIC_FLAG_INIT;
     std::atomic_flag _iceReceivedOnBarbellTransport = ATOMIC_FLAG_INIT;
     uint64_t _lastCounterCheck;
@@ -465,6 +469,7 @@ private:
     void sendUserMediaMapMessage(const size_t endpointIdHash);
     void sendUserMediaMapMessageToAll();
     void sendUserMediaMapMessageOverBarbells();
+    void sendPeriodicUserMediaMapMessageOverBarbells(const uint64_t engineIterationStartTimestamp);
     void sendDominantSpeakerToRecordingStream(EngineRecordingStream& recordingStream,
         const size_t dominantSpeaker,
         const std::string& dominantSpeakerEndpoint);
