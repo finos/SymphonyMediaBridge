@@ -17,6 +17,7 @@ struct RtpMap
         H264,
         RTX,
         OPUS,
+        TELEPHONE_EVENT,
         EMPTY
     };
 
@@ -49,6 +50,10 @@ struct RtpMap
             sampleRate = 48000;
             channels.set(2);
             break;
+        case Format::TELEPHONE_EVENT:
+            payloadType = 110;
+            sampleRate = 48000;
+            break;
         default:
             assert(false);
             payloadType = 0x7F;
@@ -80,7 +85,7 @@ struct RtpMap
     RtpMap(const RtpMap& rtpMap) = default;
 
     bool isEmpty() const { return format == Format::EMPTY; }
-    bool isAudio() const { return format == Format::OPUS; }
+    bool isAudio() const { return format == Format::OPUS || format == Format::TELEPHONE_EVENT; }
     bool isVideo() const { return format == Format::VP8 || format == Format::RTX || format == Format::H264; }
 
     // @return 15 if none found

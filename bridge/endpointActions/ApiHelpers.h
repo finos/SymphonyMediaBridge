@@ -23,14 +23,12 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext*,
     const std::string& conferenceId,
     bridge::Mixer*& outMixer);
 api::Candidate iceCandidateToApi(const ice::IceCandidate&);
-void addDefaultAudioProperties(api::Audio& audio);
+void addDefaultAudioProperties(api::Audio& audio, bool includeTelephoneEvent);
 void addVp8VideoProperties(api::Video& video);
-void addH264VideoProperties(api::Video& video,
-    const std::string& profileLevelId,
-    const uint32_t packetizationMode);
+void addH264VideoProperties(api::Video& video, const std::string& profileLevelId, const uint32_t packetizationMode);
 void addDefaultVideoProperties(api::Video& video);
 
-bridge::RtpMap makeRtpMap(const api::Audio& audio);
+bridge::RtpMap makeRtpMap(const api::Audio& audio, const api::PayloadType& payloadType);
 bridge::RtpMap makeRtpMap(const api::Video& video, const api::PayloadType& payloadType);
 
 utils::Optional<uint8_t> findAbsSendTimeExtensionId(

@@ -155,9 +155,11 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
         {
             audioJson["ssrcs"].push_back(ssrc);
         }
-        if (audio.payloadType.isSet())
+
+        audioJson["payload-types"] = nlohmann::json::array();
+        for (const auto& payloadType : audio.payloadTypes)
         {
-            audioJson["payload-type"] = generatePayloadType(audio.payloadType.get());
+            audioJson["payload-types"].push_back(generatePayloadType(payloadType));
         }
         audioJson["rtp-hdrexts"] = generateRtpHeaderExtensions(audio.rtpHeaderExtensions);
 
@@ -278,10 +280,12 @@ nlohmann::json generateAllocateBarbellResponse(const BarbellDescription& channel
     {
         audioJson["ssrcs"].push_back(ssrc);
     }
-    if (audio.payloadType.isSet())
+    audioJson["payload-types"] = nlohmann::json::array();
+    for (const auto& payloadType : audio.payloadTypes)
     {
-        audioJson["payload-type"] = generatePayloadType(audio.payloadType.get());
+        audioJson["payload-types"].push_back(generatePayloadType(payloadType));
     }
+
     audioJson["rtp-hdrexts"] = generateRtpHeaderExtensions(audio.rtpHeaderExtensions);
 
     responseJson["audio"] = audioJson;

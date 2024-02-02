@@ -1201,6 +1201,7 @@ Mixer::Stats Mixer::getStats()
 
 bool Mixer::configureAudioStream(const std::string& endpointId,
     const RtpMap& rtpMap,
+    const RtpMap& telephoneEventRtpMap,
     const utils::Optional<uint32_t>& remoteSsrc,
     const std::vector<uint32_t>& neighbours)
 {
@@ -1231,7 +1232,7 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
     }
 
     audioStream->rtpMap = rtpMap;
-    audioStream->remoteSsrc = remoteSsrc;
+    audioStream->telephoneEventMap = telephoneEventRtpMap;
     audioStream->transport->setAudioPayloadType(rtpMap.payloadType, rtpMap.sampleRate);
 
     if (audioStream->rtpMap.absSendTimeExtId.isSet())

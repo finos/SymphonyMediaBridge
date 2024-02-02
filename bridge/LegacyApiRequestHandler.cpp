@@ -27,6 +27,8 @@ namespace
 const uint32_t gatheringCompleteMaxWaitMs = 5000;
 const uint32_t gatheringCompleteWaitMs = 100;
 
+const bridge::RtpMap kEmptyRtpMap;
+
 bool contentNameToType(const std::string& contentName, bridge::LegacyApiRequestHandler::ContentType& outStreamType)
 {
     if (contentName.compare("audio") == 0)
@@ -1130,7 +1132,7 @@ bool LegacyApiRequestHandler::configureChannel(const std::string& contentName,
             }
 
             std::vector<uint32_t> noNeighbours;
-            if (!mixer.configureAudioStream(endpointId, rtpMaps.front(), remoteSsrc, noNeighbours))
+            if (!mixer.configureAudioStream(endpointId, rtpMaps.front(), kEmptyRtpMap, remoteSsrc, noNeighbours))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
