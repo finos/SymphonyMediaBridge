@@ -118,7 +118,7 @@ public:
     CFG_GROUP_END(capabilities)
 
     CFG_GROUP()
-    CFG_PROP(int64_t, userMapPeriodicSendingInterval, 30); // in seconds. Disabled by default
+    CFG_PROP(int64_t, userMapPeriodicSendingInterval, -1); // in seconds. Disabled by default
     CFG_GROUP_END(barbell)
 
     CFG_GROUP()
