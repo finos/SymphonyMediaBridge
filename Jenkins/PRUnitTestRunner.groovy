@@ -5,6 +5,8 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
         checkout scm
     }
 
+    sh "gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet"
+
     stage("Build\n[$cmakeBuildType $platform]") {
         docker.image("europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-$platform:$dockerTag").inside {
             env.GIT_COMMITTER_NAME = "Jenkins deployment job"
@@ -30,7 +32,7 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
 abortPreviousRunningBuilds()
 parallel "Release el7": {
     node('be-integration') {
-        prRunner("Release", "el7", "1f7ef85")
+        prRunner("Release", "el7", "latest")
     }
 }, "Release AWS-linux": {
     node('be-integration') {
