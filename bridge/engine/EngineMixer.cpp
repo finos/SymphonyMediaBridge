@@ -693,6 +693,13 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
     case bridge::RtpMap::Format::OPUS:
         onAudioRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
+    case bridge::RtpMap::Format::TELEPHONE_EVENT:
+        onAudioTelephoneEventRtpPacketReceived(*ssrcContext,
+            sender,
+            std::move(packet),
+            extendedSequenceNumber,
+            timestamp);
+        break;
     case bridge::RtpMap::Format::VP8:
     case bridge::RtpMap::Format::H264:
         onVideoRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
@@ -722,7 +729,8 @@ void EngineMixer::onRtcpPacketDecoded(transport::RtcTransport* sender,
 SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHash,
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
     const uint32_t ssrc,
-    const RtpMap& rtpMap)
+    const RtpMap& rtpMap,
+    const RtpMap& telephoneEventRtpMap)
 {
     auto* ssrcOutboundContext = ssrcOutboundContexts.getItem(ssrc);
     if (ssrcOutboundContext)
@@ -730,13 +738,13 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHas
         return ssrcOutboundContext;
     }
 
-    auto emplaceResult = ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap);
+    auto emplaceResult = ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap, telephoneEventRtpMap);
 
     if (!emplaceResult.second && emplaceResult.first == ssrcOutboundContexts.end())
     {
         logger::error("Failed to create %s outbound context for ssrc %u, endpointIdHash %zu",
             _loggableId.c_str(),
-            rtpMap.format == RtpMap::Format::OPUS ? "audio" : "video",
+            rtpMap.isAudio() ? "audio" : "video",
             ssrc,
             endpointIdHash);
         return nullptr;
@@ -744,7 +752,7 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHas
 
     logger::info("Created new %s outbound context for stream, endpointIdHash %zu, ssrc %u",
         _loggableId.c_str(),
-        rtpMap.format == RtpMap::Format::OPUS ? "audio" : "video",
+        rtpMap.isAudio() ? "audio" : "video",
         endpointIdHash,
         ssrc);
 
@@ -754,7 +762,8 @@ SsrcOutboundContext* EngineMixer::obtainOutboundSsrcContext(size_t endpointIdHas
 SsrcOutboundContext* EngineMixer::obtainOutboundForwardSsrcContext(size_t endpointIdHash,
     concurrency::MpmcHashmap32<uint32_t, SsrcOutboundContext>& ssrcOutboundContexts,
     const uint32_t ssrc,
-    const RtpMap& rtpMap)
+    const RtpMap& rtpMap,
+    const RtpMap& telephoneEventRtpMap)
 {
     auto ssrcOutboundContext = ssrcOutboundContexts.getItem(ssrc);
     if (ssrcOutboundContext)
@@ -776,7 +785,7 @@ SsrcOutboundContext* EngineMixer::obtainOutboundForwardSsrcContext(size_t endpoi
         return nullptr;
     }
 
-    auto emplaceResult = ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap);
+    auto emplaceResult = ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, rtpMap, telephoneEventRtpMap);
 
     if (!emplaceResult.second && emplaceResult.first == ssrcOutboundContexts.end())
     {
@@ -849,7 +858,9 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     }
 
     auto* audioStream = _engineAudioStreams.getItem(endpointIdHash);
-    if (audioStream && audioStream->rtpMap.payloadType == payloadType)
+    if (audioStream &&
+        (audioStream->rtpMap.payloadType == payloadType ||
+            audioStream->telephoneEventRtpMap.payloadType == payloadType))
     {
         if (!audioStream->remoteSsrc.isSet())
         {
@@ -861,17 +872,21 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
             return nullptr;
         }
 
-        auto rtpMap = audioStream->rtpMap;
-        if (!rtpMap.audioLevelExtId.isSet())
+        auto* rtpMap = &audioStream->rtpMap;
+        bridge::RtpMap rtpMapCopy;
+        if (!rtpMap->audioLevelExtId.isSet())
         {
-            auto id = rtpMap.suggestAudioLevelExtensionId();
+            auto id = rtpMap->suggestAudioLevelExtensionId();
             if (id != RtpMap::ExtHeaderIdentifiers::EOL)
             {
-                rtpMap.audioLevelExtId.set(id);
+                rtpMapCopy = *rtpMap;
+                rtpMapCopy.audioLevelExtId.set(id);
+                rtpMap = &rtpMapCopy;
             }
         }
 
-        auto emplaceResult = _allSsrcInboundContexts.emplace(ssrc, ssrc, rtpMap, sender, timestamp);
+        auto emplaceResult =
+            _allSsrcInboundContexts.emplace(ssrc, ssrc, *rtpMap, audioStream->telephoneEventRtpMap, sender, timestamp);
 
         if (!emplaceResult.second && emplaceResult.first == _allSsrcInboundContexts.end())
         {
@@ -957,7 +972,7 @@ SsrcInboundContext* EngineMixer::emplaceInboundSsrcContext(const uint32_t ssrc,
     else if (payloadType == videoStream->feedbackRtpMap.payloadType)
     {
         auto emplaceResult =
-            _allSsrcInboundContexts.emplace(ssrc, ssrc, videoStream->feedbackRtpMap, sender, timestamp);
+            _allSsrcInboundContexts.emplace(ssrc, ssrc, videoStream->feedbackRtpMap, sender, timestamp, 0, 0);
         if (!emplaceResult.second && emplaceResult.first == _allSsrcInboundContexts.end())
         {
             logger::error("failed to create inbound ssrc context for video rtx. ssrc %u", _loggableId.c_str(), ssrc);
@@ -1027,6 +1042,7 @@ void EngineMixer::processIncomingRtpPackets(const uint64_t timestamp)
         {
             ssrcContext->activeMedia = true;
         }
+
         forwardAudioRtpPacket(packetInfo, timestamp);
         forwardAudioRtpPacketRecording(packetInfo, timestamp);
         forwardAudioRtpPacketOverBarbell(packetInfo, timestamp);
@@ -1151,7 +1167,7 @@ void EngineMixer::processIncomingPayloadSpecificRtcpPacket(const size_t rtcpSend
         return;
     }
 
-    auto* inboundContext = _ssrcInboundContexts.getItem(outboundContext->originalSsrc.load());
+    auto* inboundContext = _ssrcInboundContexts.getItem(outboundContext->getOriginalSsrc());
     if (inboundContext)
     {
         logger::info("PLI request handled from %zu on %u",
@@ -1211,14 +1227,16 @@ void EngineMixer::processIncomingTransportFbRtcpPacket(const transport::RtcTrans
         rtxSsrcOutboundContext = obtainOutboundSsrcContext(rtcpSenderVideoStream->endpointIdHash,
             rtcpSenderVideoStream->ssrcOutboundContexts,
             feedbackSsrc,
-            rtcpSenderVideoStream->feedbackRtpMap);
+            rtcpSenderVideoStream->feedbackRtpMap,
+            bridge::RtpMap::EMPTY);
     }
     else
     {
         rtxSsrcOutboundContext = obtainOutboundForwardSsrcContext(rtcpSenderVideoStream->endpointIdHash,
             rtcpSenderVideoStream->ssrcOutboundContexts,
             feedbackSsrc,
-            rtcpSenderVideoStream->feedbackRtpMap);
+            rtcpSenderVideoStream->feedbackRtpMap,
+            bridge::RtpMap::EMPTY);
     }
 
     if (!rtxSsrcOutboundContext)

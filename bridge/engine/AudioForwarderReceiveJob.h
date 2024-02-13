@@ -1,6 +1,6 @@
 #pragma once
 
-#include "jobmanager/Job.h"
+#include "bridge/engine/RtpForwarderReceiveBaseJob.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/PacketPoolAllocator.h"
 
@@ -17,11 +17,9 @@ class RtcTransport;
 namespace bridge
 {
 
-class EngineMixer;
-class SsrcInboundContext;
 class ActiveMediaList;
 
-class AudioForwarderReceiveJob : public jobmanager::CountedJob
+class AudioForwarderReceiveJob : public RtpForwarderReceiveBaseJob
 {
 public:
     AudioForwarderReceiveJob(memory::UniquePacket packet,
@@ -38,17 +36,11 @@ public:
 
 private:
     void decode(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket);
-    bool unprotect(memory::Packet& opusPacket);
     int computeOpusAudioLevel(const memory::Packet& opusPacket);
 
-    memory::UniquePacket _packet;
-    EngineMixer& _engineMixer;
-    transport::RtcTransport* _sender;
-    SsrcInboundContext& _ssrcContext;
     ActiveMediaList& _activeMediaList;
     const uint8_t _silenceThresholdLevel;
     const bool _hasMixedAudioStreams;
-    const uint32_t _extendedSequenceNumber;
     const bool _needAudioLevel;
 };
 

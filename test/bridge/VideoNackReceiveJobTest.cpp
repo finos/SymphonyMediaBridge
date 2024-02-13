@@ -14,6 +14,9 @@ namespace
 static const uint32_t mediaSsrc = 12345;
 static const uint32_t rtxSsrc = 54321;
 
+const bridge::RtpMap VP8_RTP_MAP(bridge::RtpMap::Format::VP8);
+const bridge::RtpMap RTX_RTP_MAP(bridge::RtpMap::Format::VP8);
+
 } // namespace
 
 class VideoNackReceiveJobTest : public ::testing::Test
@@ -26,13 +29,11 @@ class VideoNackReceiveJobTest : public ::testing::Test
         _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
 
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "VideoNackReceiveJobTest");
-        _mainOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(mediaSsrc,
-            *_allocator,
-            bridge::RtpMap(bridge::RtpMap::Format::VP8));
+        _mainOutboundContext =
+            std::make_unique<bridge::SsrcOutboundContext>(mediaSsrc, *_allocator, VP8_RTP_MAP, bridge::RtpMap::EMPTY);
 
-        _rtxOutboundContext = std::make_unique<bridge::SsrcOutboundContext>(rtxSsrc,
-            *_allocator,
-            bridge::RtpMap(bridge::RtpMap::Format::RTX));
+        _rtxOutboundContext =
+            std::make_unique<bridge::SsrcOutboundContext>(rtxSsrc, *_allocator, RTX_RTP_MAP, bridge::RtpMap::EMPTY);
 
         _packetCache = std::make_unique<bridge::PacketCache>("VideoNackReceiveJobTest", mediaSsrc);
         _mainOutboundContext->packetCache.set(_packetCache.get());

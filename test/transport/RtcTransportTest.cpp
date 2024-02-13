@@ -107,8 +107,8 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
         _transport2->asyncSetRemoteDtlsFingerprint("sha-256", sslDtls.getLocalFingerprint(), false);
         _transport1->setAbsSendTimeExtensionId(3); // from FakeVideoSource
         _transport2->setAbsSendTimeExtensionId(3);
-        _transport1->setAudioPayloadType(_media2.audio.getPayloadType(), 16000);
-        _transport2->setAudioPayloadType(_media1.audio.getPayloadType(), 16000);
+        _transport1->setAudioPayloads(_media2.audio.getPayloadType(), utils::NullOpt, 16000);
+        _transport2->setAudioPayloads(_media1.audio.getPayloadType(), utils::NullOpt, 16000);
         _transport1->connect();
         _transport2->connect();
     }

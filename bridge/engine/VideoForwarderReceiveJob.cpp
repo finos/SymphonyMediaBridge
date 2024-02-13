@@ -39,48 +39,20 @@ VideoForwarderReceiveJob::VideoForwarderReceiveJob(memory::UniquePacket packet,
     const uint32_t localVideoSsrc,
     const uint32_t extendedSequenceNumber,
     const uint64_t timestamp)
-    : CountedJob(sender->getJobCounter()),
-      _packet(std::move(packet)),
+    : RtpForwarderReceiveBaseJob(std::move(packet), sender, engineMixer, ssrcContext, extendedSequenceNumber),
       _allocator(allocator),
-      _engineMixer(engineMixer),
-      _sender(sender),
-      _ssrcContext(ssrcContext),
       _localVideoSsrc(localVideoSsrc),
-      _extendedSequenceNumber(extendedSequenceNumber),
       _timestamp(timestamp)
 {
-    assert(_packet);
-    assert(_packet->getLength() > 0);
 }
 
 void VideoForwarderReceiveJob::run()
 {
-    if (transport::SrtpClient::shouldSetRolloverCounter(_ssrcContext.lastUnprotectedExtendedSequenceNumber,
-            _extendedSequenceNumber))
-    {
-        const uint32_t newRolloverCounter = _extendedSequenceNumber >> 16;
-        logger::info("Setting rollover counter for %s, ssrc %u, seqno %u",
-            "VideoForwarderReceiveJob",
-            _sender->getLoggableId().c_str(),
-            _ssrcContext.ssrc,
-            _extendedSequenceNumber);
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
-        {
-            logger::error("Failed to set rollover counter srtp %s, ssrc %u, mixer %s",
-                "VideoForwarderReceiveJob",
-                _sender->getLoggableId().c_str(),
-                _ssrcContext.ssrc,
-                _engineMixer.getLoggableId().c_str());
-            return;
-        }
-    }
-
-    if (!_sender->unprotect(*_packet))
+    if (!tryUnprotectRtpPacket("VideoForwarderReceiveJob"))
     {
         return;
     }
 
-    _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
     auto rtpHeader = rtp::RtpHeader::fromPacket(*_packet);
     if (!rtpHeader)
     {

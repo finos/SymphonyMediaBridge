@@ -39,6 +39,7 @@ constexpr const uint32_t REWRITE_AUDIO_SRC_3 = 220006;
 constexpr const uint32_t REWRITE_AUDIO_SRC_4 = 220008;
 
 const bridge::RtpMap AUDIO_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::OPUS);
+const bridge::RtpMap TELEPHONE_EVENT_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::TELEPHONE_EVENT);
 const bridge::RtpMap VIDEO_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::VP8);
 const bridge::RtpMap FEEDBACK_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::RTX);
 
@@ -238,7 +239,11 @@ protected:
         CHECK(mixer.addBundledAudioStream(outId, endpointId, MediaMode::SSRC_REWRITE));
         CHECK(mixer.addBundledVideoStream(outId, endpointId, true));
         CHECK(mixer.addBundledDataStream(outId, endpointId));
-        CHECK(mixer.configureAudioStream(endpointId, AUDIO_RTP_MAP, utils::Optional<uint32_t>(), {}));
+        CHECK(mixer.configureAudioStream(endpointId,
+            AUDIO_RTP_MAP,
+            TELEPHONE_EVENT_RTP_MAP,
+            utils::Optional<uint32_t>(),
+            {}));
 
         CHECK(mixer.configureVideoStream(endpointId,
             VIDEO_RTP_MAP,

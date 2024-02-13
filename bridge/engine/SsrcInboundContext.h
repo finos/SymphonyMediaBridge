@@ -31,15 +31,16 @@ struct RtpMap;
  */
 class SsrcInboundContext
 {
-public:
     SsrcInboundContext(const uint32_t ssrc,
         const bridge::RtpMap& rtpMap,
+        const bridge::RtpMap& telephoneEventRtpMap,
         transport::RtcTransport* sender,
         uint64_t timestamp,
         uint32_t simulcastLevel,
         uint32_t defaultLevelSsrc)
         : ssrc(ssrc),
           rtpMap(rtpMap),
+          telephoneEventRtpMap(telephoneEventRtpMap),
           sender(sender),
           simulcastLevel(simulcastLevel),
           defaultLevelSsrc(defaultLevelSsrc),
@@ -59,13 +60,29 @@ public:
     {
     }
 
+public:
     SsrcInboundContext(const uint32_t ssrc,
         const bridge::RtpMap& rtpMap,
         transport::RtcTransport* sender,
-        uint64_t timestamp)
-        : SsrcInboundContext(ssrc, rtpMap, sender, timestamp, 0, 0)
+        uint64_t timestamp,
+        uint32_t simulcastLevel,
+        uint32_t defaultLevelSsrc)
+        : SsrcInboundContext(ssrc, rtpMap, bridge::RtpMap(), sender, timestamp, simulcastLevel, defaultLevelSsrc)
     {
     }
+
+    SsrcInboundContext(const uint32_t ssrc,
+        const bridge::RtpMap& rtpMap,
+        const bridge::RtpMap& telephoneEventRtpMap,
+        transport::RtcTransport* sender,
+        uint64_t timestamp)
+        : SsrcInboundContext(ssrc, rtpMap, telephoneEventRtpMap, sender, timestamp, 0, 0)
+    {
+    }
+
+    // ensure no copies on engine thread
+    SsrcInboundContext(const SsrcInboundContext&) = delete;
+    SsrcInboundContext& operator=(const SsrcInboundContext&) = delete;
 
     void onRtpPacketReceived(const uint64_t timestamp) { _lastRtpReceiveTime = timestamp; }
     bool hasRecentActivity(const uint64_t intervalNs, const uint64_t timestamp)
@@ -84,6 +101,7 @@ public:
 
     const uint32_t ssrc;
     const bridge::RtpMap rtpMap;
+    const bridge::RtpMap telephoneEventRtpMap;
     transport::RtcTransport* const sender;
     const uint32_t simulcastLevel;
     const uint32_t defaultLevelSsrc; // default level for simulcast stream

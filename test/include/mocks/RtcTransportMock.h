@@ -39,7 +39,10 @@ class RtcTransportMock : public TransportMock<transport::RtcTransport>
 
     MOCK_METHOD(bool, isDtlsClient, (), (override));
 
-    MOCK_METHOD(void, setAudioPayloadType, (uint8_t payloadType, uint32_t rtpFrequency), (override));
+    MOCK_METHOD(void,
+        setAudioPayloads,
+        (uint8_t payloadType, utils::Optional<uint8_t> telephoneEventPayloadType, uint32_t rtpFrequency),
+        (override));
     MOCK_METHOD(void, setAbsSendTimeExtensionId, (uint8_t extensionId), (override));
 
     MOCK_METHOD(bool, isIceEnabled, (), (const override));

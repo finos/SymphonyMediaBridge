@@ -1231,9 +1231,12 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
             rtpMap.payloadType);
     }
 
+    const utils::Optional<uint8_t> telephoneEventPayloadType =
+        telephoneEventRtpMap.isEmpty() ? utils::NullOpt : utils::Optional<uint8_t>(telephoneEventRtpMap.payloadType);
+
     audioStream->rtpMap = rtpMap;
     audioStream->telephoneEventMap = telephoneEventRtpMap;
-    audioStream->transport->setAudioPayloadType(rtpMap.payloadType, rtpMap.sampleRate);
+    audioStream->transport->setAudioPayloads(rtpMap.payloadType, telephoneEventPayloadType, rtpMap.sampleRate);
 
     if (audioStream->rtpMap.absSendTimeExtId.isSet())
     {
@@ -1666,6 +1669,7 @@ bool Mixer::addAudioStreamToEngine(const std::string& endpointId)
             *audioStream->transport,
             audioStream->mediaMode,
             audioStream->rtpMap,
+            audioStream->telephoneEventMap,
             audioStream->idleTimeoutSeconds,
             audioStream->neighbours));
 
@@ -2371,7 +2375,8 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     barbell->videoSsrcs = videoSsrcs;
 
     barbell->audioRtpMap = audioRtpMap;
-    barbell->transport->setAudioPayloadType(audioRtpMap.payloadType, audioRtpMap.sampleRate);
+    // TODO: support telephone-events over barbells
+    barbell->transport->setAudioPayloads(audioRtpMap.payloadType, utils::NullOpt, audioRtpMap.sampleRate);
 
     barbell->videoRtpMap = videoRtpMap;
     barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;

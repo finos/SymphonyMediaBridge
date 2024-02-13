@@ -1,10 +1,16 @@
 #include "bridge/engine/VideoForwarderRtxReceiveJob.h"
 #include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineMixer.h"
-#include "bridge/engine/RtpVideoRewriter.h"
 #include "logger/Logger.h"
 #include "memory/Packet.h"
 #include "rtp/RtpHeader.h"
+
+#define DEBUG_REWRITER 0
+#if DEBUG_REWRITER
+#define REWRITER_LOG(fmt, ...) logger::debug(fmt, ##__VA_ARGS__)
+#else
+#define REWRITER_LOG(fmt, ...) void(0)
+#endif
 
 namespace bridge
 {
@@ -13,20 +19,13 @@ VideoForwarderRtxReceiveJob::VideoForwarderRtxReceiveJob(memory::UniquePacket pa
     transport::RtcTransport* sender,
     bridge::EngineMixer& engineMixer,
     bridge::SsrcInboundContext& rtxSsrcContext,
-    bridge::SsrcInboundContext& ssrcContext,
+    bridge::SsrcInboundContext& mainSsrcContext,
     const uint32_t mainSsrc,
     const uint32_t extendedSequenceNumber)
-    : CountedJob(sender->getJobCounter()),
-      _packet(std::move(packet)),
-      _engineMixer(engineMixer),
-      _sender(sender),
-      _rtxSsrcContext(rtxSsrcContext),
-      _ssrcContext(ssrcContext),
-      _mainSsrc(mainSsrc),
-      _extendedSequenceNumber(extendedSequenceNumber)
+    : RtpForwarderReceiveBaseJob(std::move(packet), sender, engineMixer, rtxSsrcContext, extendedSequenceNumber),
+      _mainSsrcContext(mainSsrcContext),
+      _mainSsrc(mainSsrc)
 {
-    assert(_packet);
-    assert(_packet->getLength() > 0);
 }
 
 void VideoForwarderRtxReceiveJob::run()
@@ -43,50 +42,47 @@ void VideoForwarderRtxReceiveJob::run()
         return;
     }
 
-    if (!_ssrcContext.videoMissingPacketsTracker)
+    if (!_mainSsrcContext.videoMissingPacketsTracker)
     {
         return;
     }
 
-    if (transport::SrtpClient::shouldSetRolloverCounter(_rtxSsrcContext.lastUnprotectedExtendedSequenceNumber,
-            _extendedSequenceNumber))
-    {
-        const uint32_t newRolloverCounter = _extendedSequenceNumber >> 16;
-        logger::debug("Setting rollover counter for ssrc %u, extSeq %u",
-            "VideoForwarderRtxReceiveJob",
-            _rtxSsrcContext.ssrc,
-            _extendedSequenceNumber);
-        if (!_sender->setSrtpRemoteRolloverCounter(_rtxSsrcContext.ssrc, newRolloverCounter))
-        {
-            logger::error("Failed to set rollover counter srtp %u, mixer %s",
-                "VideoForwarderRtxReceiveJob",
-                _rtxSsrcContext.ssrc,
-                _engineMixer.getLoggableId().c_str());
-            return;
-        }
-    }
-
-    if (!_sender->unprotect(*_packet))
+    if (!tryUnprotectRtpPacket("VideoForwarderRtxReceiveJob"))
     {
         return;
     }
 
-    _rtxSsrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
-    RtpVideoRewriter::rewriteRtxPacket(*_packet,
-        _mainSsrc,
-        _ssrcContext.rtpMap.payloadType,
-        _sender->getLoggableId().c_str());
+    const auto headerLength = rtpHeader->headerLength();
+    const auto payload = rtpHeader->getPayload();
+
+    const auto originalSequenceNumber =
+        (static_cast<uint16_t>(payload[0]) << 8) | (static_cast<uint16_t>(payload[1]) & 0xFF);
+
+    memmove(payload, payload + sizeof(uint16_t), _packet->getLength() - headerLength - sizeof(uint16_t));
+    _packet->setLength(_packet->getLength() - sizeof(uint16_t));
+
+    REWRITER_LOG("%s rewriteRtxPacket ssrc %u -> %u, seq %u -> %u",
+        "VideoForwarderRtxReceiveJob",
+        transportName,
+        rtpHeader->ssrc.get(),
+        mainSsrc,
+        rtpHeader->sequenceNumber.get(),
+        originalSequenceNumber);
+
+    rtpHeader->sequenceNumber = originalSequenceNumber;
+    rtpHeader->ssrc = _mainSsrc;
+    rtpHeader->payloadType = _mainSsrcContext.rtpMap.payloadType;
 
     // Missing packet tracker will know which extended sequence number this packet is referring to and if this packet
     // has already been received and forwarded.
     uint32_t extendedSequenceNumber = 0;
-    if (!_ssrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
+    if (!_mainSsrcContext.videoMissingPacketsTracker->onPacketArrived(rtpHeader->sequenceNumber.get(),
             extendedSequenceNumber))
     {
         return;
     }
 
-    _engineMixer.onForwarderVideoRtpPacketDecrypted(_ssrcContext, std::move(_packet), extendedSequenceNumber);
+    _engineMixer.onForwarderVideoRtpPacketDecrypted(_mainSsrcContext, std::move(_packet), extendedSequenceNumber);
 }
 
 } // namespace bridge

@@ -132,7 +132,7 @@ void VideoNackReceiveJob::sendIfCached(const uint16_t sequenceNumber)
 
     rtpHeader->ssrc = _rtxSsrcOutboundContext.ssrc;
     rtpHeader->payloadType = _rtxSsrcOutboundContext.rtpMap.payloadType;
-    rtpHeader->sequenceNumber = ++_rtxSsrcOutboundContext.rewrite.lastSent.sequenceNumber & 0xFFFF;
+    rtpHeader->sequenceNumber = ++_rtxSsrcOutboundContext.getSequenceNumberReference() & 0xFFFF;
 
     _sender.protectAndSend(std::move(packet));
 }

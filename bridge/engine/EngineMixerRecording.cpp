@@ -400,7 +400,8 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
             continue;
         }
 
-        const auto ssrc = packetInfo.inboundContext()->ssrc;
+        const bridge::SsrcInboundContext* senderInboundContext = packetInfo.inboundContext();
+        const auto ssrc = senderInboundContext->ssrc;
         auto* ssrcOutboundContext = recordingStream->ssrcOutboundContexts.getItem(ssrc);
         if (!ssrcOutboundContext || ssrcOutboundContext->recordingOutboundDecommissioned)
         {
@@ -416,6 +417,7 @@ void EngineMixer::forwardAudioRtpPacketRecording(IncomingPacketInfo& packetInfo,
                 transportEntry.second.getJobQueue().addJob<RecordingAudioForwarderSendJob>(*ssrcOutboundContext,
                     std::move(packet),
                     transportEntry.second,
+                    *senderInboundContext,
                     packetInfo.extendedSequenceNumber(),
                     _messageListener,
                     transportEntry.first,
@@ -597,8 +599,11 @@ void EngineMixer::sendRecordingAudioStream(EngineRecordingStream& targetStream,
         }
         else
         {
-            auto emplaceResult =
-                targetStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, audioStream.rtpMap);
+            auto emplaceResult = targetStream.ssrcOutboundContexts.emplace(ssrc,
+                ssrc,
+                _sendAllocator,
+                audioStream.rtpMap,
+                audioStream.telephoneEventRtpMap);
 
             if (!emplaceResult.second && emplaceResult.first == targetStream.ssrcOutboundContexts.end())
             {
@@ -766,8 +771,11 @@ void EngineMixer::sendRecordingSimulcast(EngineRecordingStream& targetStream,
         }
         else
         {
-            auto emplaceResult =
-                targetStream.ssrcOutboundContexts.emplace(ssrc, ssrc, _sendAllocator, videoStream.rtpMap);
+            auto emplaceResult = targetStream.ssrcOutboundContexts.emplace(ssrc,
+                ssrc,
+                _sendAllocator,
+                videoStream.rtpMap,
+                bridge::RtpMap::EMPTY);
 
             if (!emplaceResult.second && emplaceResult.first == targetStream.ssrcOutboundContexts.end())
             {

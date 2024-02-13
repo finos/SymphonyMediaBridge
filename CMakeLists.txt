@@ -131,6 +131,7 @@ set(FILES
         bridge/RequestLogger.h
         bridge/RequestLogger.cpp
         bridge/RtpMap.h
+        bridge/RtpMap.cpp
         bridge/Stats.cpp
         bridge/Stats.h
         bridge/AudioStreamDescription.h
@@ -165,6 +166,8 @@ set(FILES
         bridge/engine/FinalizeNonSsrcRewriteOutboundContextJob.cpp
         bridge/engine/RemovePacketCacheJob.cpp
         bridge/engine/RemovePacketCacheJob.h
+        bridge/engine/RtpForwarderReceiveBaseJob.cpp
+        bridge/engine/RtpForwarderReceiveBaseJob.h
         bridge/engine/Engine.cpp
         bridge/engine/Engine.h
         bridge/engine/EngineAudioStream.h
@@ -196,7 +199,6 @@ set(FILES
         bridge/engine/RecordingRtpNackReceiveJob.cpp
         bridge/engine/RecordingRtpNackReceiveJob.h
         bridge/engine/RecordingSendEventJob.cpp
-        bridge/engine/RtpVideoRewriter.h
         bridge/engine/SendPliJob.cpp
         bridge/engine/SendPliJob.h
         bridge/engine/SendRtcpJob.cpp
@@ -208,6 +210,8 @@ set(FILES
         bridge/engine/SsrcOutboundContext.cpp
         bridge/engine/SsrcRewrite.h
         bridge/engine/SsrcWhitelist.h
+        bridge/engine/TelephoneEventForwardReceiveJob.h
+        bridge/engine/TelephoneEventForwardReceiveJob.cpp
         bridge/engine/UnackedPacketsTracker.h
         bridge/engine/VideoForwarderReceiveJob.cpp
         bridge/engine/VideoForwarderReceiveJob.h
@@ -610,14 +614,15 @@ set(TEST_FILES
     test/utils/SimpleJsonTest.cpp
     test/legacyapi/ParserTest.cpp
     test/legacyapi/GeneratorTest.cpp
+    test/math/FieldsTest.cpp
     test/bridge/EngineStreamDirectorTest.cpp
     test/codec/H264HeaderTest.cpp
     test/codec/Vp8HeaderTest.cpp
     test/bridge/ActiveMediaListTest.cpp
     test/bridge/BarbellMessagesTest.cpp
-    test/bridge/RtpVideoRewriterTest.cpp
     test/rtp/RtcpFeedbackTest.cpp
     test/bridge/PacketCacheTest.cpp
+    test/bridge/SsrcOutboundContextTest.cpp
     test/rtp/RtcpNackBuilderTest.cpp
     test/rtp/SendTimeTest.cpp
     test/bridge/VideoMissingPacketsTrackerTest.cpp
@@ -631,6 +636,7 @@ set(TEST_FILES
     test/transport/recp/RecStartStopEventBuilderTest.cpp
     test/transport/recp/RecStreamAddedEventBuilderTest.cpp
     test/bridge/UnackedPacketsTrackerTest.cpp
+    test/bridge/VideoForwarderRtxReceiveJobTest.cpp
     test/memory/PriorityQueueTest.cpp
     test/memory/BacklogTest.cpp
     test/memory/StackMapTest.cpp
@@ -639,7 +645,6 @@ set(TEST_FILES
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp
-    test/bridge/RtpAudioRewriterTest.cpp
     test/transport/JitterTest.cpp)
 
 

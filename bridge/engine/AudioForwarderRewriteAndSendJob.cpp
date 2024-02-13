@@ -1,54 +1,9 @@
 #include "bridge/engine/AudioForwarderRewriteAndSendJob.h"
-#include "bridge/engine/AudioRewriter.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "codec/Opus.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
-
-namespace
-{
-
-inline void rewriteHeaderExtensions(rtp::RtpHeader& rtpHeader,
-    const bridge::SsrcInboundContext& senderInboundContext,
-    const bridge::SsrcOutboundContext& receiverOutboundContext)
-{
-    const auto headerExtensions = rtpHeader.getExtensionHeader();
-    if (!headerExtensions)
-    {
-        return;
-    }
-
-    for (auto& rtpHeaderExtension : headerExtensions->extensions())
-    {
-        if (senderInboundContext.rtpMap.audioLevelExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext.rtpMap.audioLevelExtId.get())
-        {
-            if (receiverOutboundContext.rtpMap.audioLevelExtId.isSet())
-            {
-                rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.audioLevelExtId.get());
-            }
-            else
-            {
-                rtpHeaderExtension.fillWithPadding();
-            }
-        }
-        else if (senderInboundContext.rtpMap.absSendTimeExtId.isSet() &&
-            rtpHeaderExtension.getId() == senderInboundContext.rtpMap.absSendTimeExtId.get())
-        {
-            if (receiverOutboundContext.rtpMap.absSendTimeExtId.isSet())
-            {
-                rtpHeaderExtension.setId(receiverOutboundContext.rtpMap.absSendTimeExtId.get());
-            }
-            else
-            {
-                rtpHeaderExtension.fillWithPadding();
-            }
-        }
-    }
-}
-
-} // namespace
 
 namespace bridge
 {
@@ -79,7 +34,17 @@ void AudioForwarderRewriteAndSendJob::run()
         return;
     }
 
-    if (!_outboundContext.shouldSend(header->ssrc.get(), _extendedSequenceNumber))
+    const bool isTelephoneEvent = !_senderInboundContext.telephoneEventRtpMap.isEmpty() &&
+        header->payloadType == _senderInboundContext.telephoneEventRtpMap.payloadType;
+
+    if (isTelephoneEvent && _outboundContext.telephoneEventRtpMap.isEmpty())
+    {
+        _outboundContext.dropTelephoneEvent(_extendedSequenceNumber, header->ssrc);
+        return;
+    }
+
+    if (!_outboundContext
+             .rewriteAudio(*header, _senderInboundContext, _extendedSequenceNumber, _timestamp, isTelephoneEvent))
     {
         logger::warn("%s dropping packet ssrc %u, seq %u, timestamp %u, last sent seq %u, offset %d",
             "AudioForwarderRewriteAndSendJob",
@@ -87,14 +52,11 @@ void AudioForwarderRewriteAndSendJob::run()
             header->ssrc.get(),
             _extendedSequenceNumber,
             header->timestamp.get(),
-            _outboundContext.rewrite.lastSent.sequenceNumber,
-            _outboundContext.rewrite.offset.sequenceNumber);
+            _outboundContext.getLastSentSequenceNumber(),
+            _outboundContext.getSequenceNumberOffset());
         return;
     }
 
-    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *header, _timestamp);
-
-    rewriteHeaderExtensions(*header, _senderInboundContext, _outboundContext);
     _transport.protectAndSend(std::move(_packet));
 }
 

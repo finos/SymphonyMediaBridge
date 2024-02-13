@@ -1,6 +1,6 @@
 #pragma once
 
-#include "jobmanager/Job.h"
+#include "bridge/engine/RtpForwarderReceiveBaseJob.h"
 #include "memory/PacketPoolAllocator.h"
 
 namespace memory
@@ -16,10 +16,7 @@ class RtcTransport;
 namespace bridge
 {
 
-class EngineMixer;
-class SsrcInboundContext;
-
-class VideoForwarderReceiveJob : public jobmanager::CountedJob
+class VideoForwarderReceiveJob : public RtpForwarderReceiveBaseJob
 {
 public:
     VideoForwarderReceiveJob(memory::UniquePacket packet,
@@ -34,13 +31,8 @@ public:
     void run() override;
 
 private:
-    memory::UniquePacket _packet;
     memory::PacketPoolAllocator& _allocator;
-    bridge::EngineMixer& _engineMixer;
-    transport::RtcTransport* _sender;
-    bridge::SsrcInboundContext& _ssrcContext;
     uint32_t _localVideoSsrc;
-    uint32_t _extendedSequenceNumber;
     uint64_t _timestamp;
 };
 

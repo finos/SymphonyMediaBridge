@@ -11,6 +11,8 @@ namespace bridge
 
 struct RtpMap
 {
+    static const RtpMap EMPTY;
+
     enum class Format
     {
         VP8,
@@ -27,7 +29,7 @@ struct RtpMap
         EOL = 15
     };
 
-    RtpMap() : format(Format::EMPTY), payloadType(0x7F), sampleRate(0) {}
+    RtpMap() noexcept : format(Format::EMPTY), payloadType(0x7F), sampleRate(0) {}
 
     explicit RtpMap(const Format format) : format(format)
     {

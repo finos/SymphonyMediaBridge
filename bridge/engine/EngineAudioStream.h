@@ -26,6 +26,7 @@ struct EngineAudioStream
         transport::RtcTransport& transport,
         MediaMode mediaMode,
         const bridge::RtpMap& rtpMap,
+        const bridge::RtpMap& telephoneEventRtpMap,
         const uint32_t idleTimeoutSeconds,
         const std::vector<uint32_t>& neighbourList)
         : endpointId(endpointId),
@@ -36,6 +37,7 @@ struct EngineAudioStream
           transport(transport),
           mediaMode(mediaMode),
           rtpMap(rtpMap),
+          telephoneEventRtpMap(telephoneEventRtpMap),
           idleTimeoutSeconds(idleTimeoutSeconds),
           createdAt(utils::Time::getAbsoluteTime())
     {
@@ -57,6 +59,7 @@ struct EngineAudioStream
     MediaMode mediaMode;
 
     bridge::RtpMap rtpMap;
+    bridge::RtpMap telephoneEventRtpMap;
     const uint32_t idleTimeoutSeconds;
     const uint64_t createdAt;
 
