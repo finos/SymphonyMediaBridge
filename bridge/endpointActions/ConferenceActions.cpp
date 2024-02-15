@@ -530,7 +530,7 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
     for (const auto& payloadType : audio.payloadTypes)
     {
         RtpMap rtpMap = makeRtpMap(audio, payloadType);
-        if (telephoneEventRtpMap.format == bridge::RtpMap::Format::TELEPHONE_EVENT)
+        if (rtpMap.format == bridge::RtpMap::Format::TELEPHONE_EVENT)
         {
             if (!telephoneEventRtpMap.isEmpty())
             {
