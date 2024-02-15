@@ -28,6 +28,7 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext* context,
 
 void addDefaultAudioProperties(api::Audio& audio, bool includeTelephoneEvent)
 {
+    audio.payloadTypes.reserve(2);
     api::PayloadType& opus = audio.payloadTypes.emplace_back();
     opus.id = codec::Opus::payloadType;
     opus.name = "opus";
@@ -41,7 +42,7 @@ void addDefaultAudioProperties(api::Audio& audio, bool includeTelephoneEvent)
         api::PayloadType& telephoneEvent = audio.payloadTypes.emplace_back();
         telephoneEvent.id = 110;
         telephoneEvent.name = "telephone-event";
-        telephoneEvent.clockRate = opus.clockRate; // same clock rate of opus
+        telephoneEvent.clockRate = audio.payloadTypes.front().clockRate; // same clock rate of opus
     }
 
     audio.rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
