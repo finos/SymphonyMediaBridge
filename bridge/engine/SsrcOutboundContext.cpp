@@ -217,6 +217,9 @@ bool SsrcOutboundContext::rewriteAudio(rtp::RtpHeader& header,
         _rewrite.offset.timestamp = projectedRtpTimestamp - header.timestamp.get();
         _rewrite.offset.sequenceNumber = _rewrite.lastSent.sequenceNumber + 1 - sequenceNumber;
         _rewrite.sequenceNumberStart = sequenceNumber;
+
+        // mark each time the ssrc as there was an disruption on transmission on this ssrc
+        header.marker = 1;
     }
     else if (seqAdvance > MAX_AUDIO_SEQ_GAP)
     {

@@ -688,17 +688,22 @@ void EngineMixer::onRtpPacketReceived(transport::RtcTransport* sender,
         ssrcContext->endpointIdHash = packet->endpointIdHash;
     }
 
-    switch (ssrcContext->rtpMap.format)
+    // telephone event is a special case as the inbound context is the same of the audio codec.
+    if (!ssrcContext->telephoneEventRtpMap.isEmpty() &&
+        ssrcContext->telephoneEventRtpMap.payloadType == rtpHeader->payloadType)
     {
-    case bridge::RtpMap::Format::OPUS:
-        onAudioRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
-        break;
-    case bridge::RtpMap::Format::TELEPHONE_EVENT:
         onAudioTelephoneEventRtpPacketReceived(*ssrcContext,
             sender,
             std::move(packet),
             extendedSequenceNumber,
             timestamp);
+        return;
+    }
+
+    switch (ssrcContext->rtpMap.format)
+    {
+    case bridge::RtpMap::Format::OPUS:
+        onAudioRtpPacketReceived(*ssrcContext, sender, std::move(packet), extendedSequenceNumber, timestamp);
         break;
     case bridge::RtpMap::Format::VP8:
     case bridge::RtpMap::Format::H264:

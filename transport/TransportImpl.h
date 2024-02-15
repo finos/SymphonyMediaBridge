@@ -409,7 +409,7 @@ private:
 
     struct
     {
-        bool constainsPayload(uint8_t pt) const
+        bool containsPayload(uint8_t pt) const
         {
             return pt == payloadType || (telephoneEventPayloadType.isSet() && telephoneEventPayloadType.get() == pt);
         }
