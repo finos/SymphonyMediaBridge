@@ -784,12 +784,23 @@ void EngineMixer::checkVideoBandwidth(const uint64_t timestamp)
     // Local presenter. Sending TMBBR to restrict slides.
     if (presenterStream)
     {
-        const uint32_t slidesLimit = minUplinkEstimate * _config.slides.allocFactor;
+        const uint32_t thumbnailsBitRate = _engineStreamDirector->getBitrateForAllThumbnails();
+        uint32_t slidesLimit = minUplinkEstimate;
+        if (minUplinkEstimate > _config.slides.borrowBandwidthThreshold.get())
+        {
+            // Reserve space for thumbnails and give a margin so not disable the thumbnails if
+            // a participants starts to estimate slight lower bandwidth.
+            // Never goes bellow the borrowBandwidthThreshold so we don't degrade slides too much
+            slidesLimit = std::max(_config.slides.borrowBandwidthThreshold.get(),
+                static_cast<uint32_t>(0.85 * (minUplinkEstimate - thumbnailsBitRate)));
+        }
 
-        logger::info("limiting bitrate for ssrc %u, at %u",
+        logger::info("limiting slides bitrate for ssrc %u at %u, minUplinkEstimate %u, thumbnailsBitRate %u",
             _loggableId.c_str(),
             presenterSimulcastLevel->ssrc,
-            slidesLimit);
+            slidesLimit,
+            minUplinkEstimate,
+            thumbnailsBitRate);
 
         presenterStream->transport.getJobQueue().addJob<SetMaxMediaBitrateJob>(presenterStream->transport,
             presenterStream->localSsrc,

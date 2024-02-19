@@ -23,6 +23,10 @@ namespace bridge
 class EngineStreamDirector
 {
 public:
+    static const uint32_t LOW_QUALITY_BITRATE;
+    static const uint32_t MID_QUALITY_BITRATE;
+    static const uint32_t HIGH_QUALITY_BITRATE;
+
     enum QualityLevel : uint32_t
     {
         lowQuality = 0,
@@ -686,16 +690,23 @@ public:
 
     bool needsSlidesBitrateAllocation() const { return _slidesSsrc != 0 && _slidesBitrateKbps == 0; }
 
+    uint32_t getBitrateForAllThumbnails() const
+    {
+        const uint32_t slidesCount = _slidesSsrc == 0 ? 0 : 1;
+        return (std::max(slidesCount, std::min(_lastN, static_cast<uint32_t>(_lowQualitySsrcs.size()))) - slidesCount) *
+            LOW_QUALITY_BITRATE;
+    }
+
 private:
     /** All bandwidth values are in kbps. */
     struct ConfigRow
     {
-        const size_t BaseRate;
-        const QualityLevel PinnedQuality;
-        const QualityLevel UnpinnedQuality;
-        const size_t OverheadBitrate;
-        const size_t MinBitrateMargin;
-        const size_t MaxBitrateMargin;
+        const size_t baseRate;
+        const QualityLevel pinnedQuality;
+        const QualityLevel unpinnedQuality;
+        const size_t overheadBitrate;
+        const size_t minBitrateMargin;
+        const size_t maxBitrateMargin;
     };
 
     static const ConfigRow configLadder[6];
@@ -973,9 +984,14 @@ private:
         // "maxReceivingVideoStreams" can be 0, if we are the only one sending video, or the very first one in that case
         // quality limits will be initially overestimated (but would be periodically updated with each uplink estimation
         // anyway). To lookup "configLadder" we need at least one stream, thus capping to 1 from below.
+        // We will also not include the _slidesBitrateKbps on the cost calculation for the participant that is sending
+        // the slides
 
-        bool sendingVideo = participantStreams.primary.isSendingVideo() ||
+        const bool sendingVideo = participantStreams.primary.isSendingVideo() ||
             (participantStreams.secondary.isSet() && participantStreams.secondary.get().isSendingVideo());
+
+        const bool sendingSlides = participantStreams.primary.isSendingSlides() ||
+            (participantStreams.secondary.isSet() && participantStreams.secondary.get().isSendingSlides());
 
         const auto maxReceivingVideoStreams = std::max(1ul,
             std::min(std::max(1ul, _lowQualitySsrcs.size()), (unsigned long)_lastN) - (sendingVideo ? 1 : 0));
@@ -988,13 +1004,15 @@ private:
             (participantStreams.estimatedUplinkBandwidth != 0 ? participantStreams.estimatedUplinkBandwidth
                                                               : _maxDefaultLevelBandwidthKbps);
 
+        const uint32_t allocationBitrateKbpsForSlides = (sendingSlides ? 0 : _slidesBitrateKbps);
+
         for (const auto& config : configLadder)
         {
             const auto configCost =
-                config.BaseRate + maxReceivingVideoStreams * config.OverheadBitrate + _slidesBitrateKbps;
+                config.baseRate + maxReceivingVideoStreams * config.overheadBitrate + allocationBitrateKbpsForSlides;
 
-            assert(configCost >= config.MinBitrateMargin + _slidesBitrateKbps);
-            assert(configCost <= config.MaxBitrateMargin + _slidesBitrateKbps);
+            assert(configCost >= config.minBitrateMargin + allocationBitrateKbpsForSlides);
+            assert(configCost <= config.maxBitrateMargin + allocationBitrateKbpsForSlides);
 
             const auto configIsBetter = bestConfigCost == 0 || configCost > bestConfigCost;
             if (configIsBetter && configCost <= estimatedUplinkBandwidth)
@@ -1005,8 +1023,8 @@ private:
             configId++;
         }
         assert(configId == 6);
-        outPinnedQuality = configLadder[bestConfigId].PinnedQuality;
-        outUnpinnedQuality = configLadder[bestConfigId].UnpinnedQuality;
+        outPinnedQuality = configLadder[bestConfigId].pinnedQuality;
+        outUnpinnedQuality = configLadder[bestConfigId].unpinnedQuality;
 
         DIRECTOR_LOG("VQ pinned: %c, unpinned %c, max streams %ld, estimated uplink %d, reserve for slides: %d "
                      "(endpoint %zu)",
