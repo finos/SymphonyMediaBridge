@@ -36,8 +36,8 @@ public:
 
     CFG_GROUP()
     // Value between 0 and 127, where 127 is the lowest audio level and 0 the highest.
-    // Default is 126 to make possible simiulate silence with 127.
-    // If procecessing of silent packet is still desired - set it to 127.
+    // Default is 126 to make possible simulate silence with 127.
+    // If processing of silent packet is still desired - set it to 127.
     CFG_PROP(uint8_t, silenceThresholdLevel, 126);
     CFG_PROP(uint32_t, lastN, 3);
     CFG_PROP(uint32_t, lastNextra, 2);
@@ -95,7 +95,10 @@ public:
 
     CFG_GROUP()
     CFG_PROP(uint32_t, minBitrate, 900);
-    CFG_PROP(double, allocFactor, 1.0);
+    // CFG_PROP(uint32_t, maxBitrate, 7500);
+    CFG_PROP(uint32_t,
+        borrowBandwidthThreshold,
+        2500); // value from which we can borrow slides bandwidth for sending video thumbnails
     CFG_GROUP_END(slides)
 
     CFG_GROUP()
