@@ -1236,6 +1236,7 @@ bool Mixer::configureAudioStream(const std::string& endpointId,
 
     audioStream->rtpMap = rtpMap;
     audioStream->telephoneEventMap = telephoneEventRtpMap;
+    audioStream->remoteSsrc = remoteSsrc;
     audioStream->transport->setAudioPayloads(rtpMap.payloadType, telephoneEventPayloadType, rtpMap.sampleRate);
 
     if (audioStream->rtpMap.absSendTimeExtId.isSet())

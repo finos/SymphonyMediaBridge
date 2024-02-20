@@ -157,14 +157,21 @@ nlohmann::json Channel::buildAudioContent(uint32_t audioSsrc) const
 {
     using namespace nlohmann;
     assert(audioSsrc != 0);
+    auto payloadTypes = json::array();
+    payloadTypes.push_back(json::object({{"id", 111},
+        {"name", "opus"},
+        {"clockrate", 48000},
+        {"channels", 2},
+        {"parameters", json::object()},
+        {"rtcp-fbs", json::array()}}));
+
     json body =
         json::object({{"rtp-hdrexts",
                           json::array({{{"id", 1}, {"uri", "urn:ietf:params:rtp-hdrext:ssrc-audio-level"}},
                               {{"id", 3}, {"uri", "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time"}},
                               {{"id", 8}, {"uri", "c9:params:rtp-hdrext:info"}}})},
             {"ssrcs", json::array({audioSsrc})},
-            {"payload-type",
-                {{"id", 111}, {"name", "opus"}, {"clockrate", 48000}, {"channels", 2}, {"rtcp-fbs", json::array()}}}});
+            {"payload-types", payloadTypes}});
 
     return body;
 }
