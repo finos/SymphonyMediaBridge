@@ -77,7 +77,11 @@ void analyzeRecording(const std::vector<int16_t>& recording,
 
     for (size_t threadId = 0; threadId < numThreads; threadId++)
     {
-        frequencies.push_back(std::vector<double>());
+        frequencies.emplace_back();
+    }
+
+    for (size_t threadId = 0; threadId < numThreads; threadId++)
+    {
         workers.push_back(std::thread(fftThreadRun,
             std::ref(recording),
             std::ref(frequencies[threadId]),
