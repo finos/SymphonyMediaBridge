@@ -536,6 +536,12 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniqueP
             sendUserMediaMapMessage(endpointIdHash);
         }
     }
+    else
+    {
+        logger::warn("Data stream not found to handle sctp control for endpoint %lu",
+            _loggableId.c_str(),
+            endpointIdHash);
+    }
 }
 
 void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,

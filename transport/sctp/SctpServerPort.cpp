@@ -107,13 +107,13 @@ void SctpServerPort::onPacketReceived(const void* data, size_t length, uint64_t 
     SctpPacket sctpPacket(data, length);
     if (!sctpPacket.isValid())
     {
-        logger::warn("received malformed SCTP", "sctp");
+        logger::warn("received malformed SCTP", _loggableId.c_str());
         return; // ignore it
     }
     auto& header = sctpPacket.getHeader();
     if (header.destinationPort != _localPort)
     {
-        logger::warn("SCTP destination port invalid %u", "sctp", header.destinationPort.get());
+        logger::warn("SCTP destination port invalid %u", _loggableId.c_str(), header.destinationPort.get());
         return;
     }
     if (sctpPacket.getChunk(ChunkType::INIT))
@@ -143,14 +143,14 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
                 auto& supportedParam = reinterpret_cast<const SupportedExtensionsParameter&>(param);
                 for (size_t i = 0; i < supportedParam.getCount(); ++i)
                 {
-                    logger::debug("supported chunk type %u", "sctp", supportedParam.data()[i]);
+                    logger::debug("supported chunk type %u", _loggableId.c_str(), supportedParam.data()[i]);
                 }
             }
             else if (param.type == ChunkParameterType::AuthChunkList)
             {
                 for (size_t i = 0; i < param.dataSize(); ++i)
                 {
-                    logger::debug("chunk type %u must be signed", "sctp", param.data()[i]);
+                    logger::debug("chunk type %u must be signed", _loggableId.c_str(), param.data()[i]);
                 }
             }
             else if (param.type == ChunkParameterType::HMACAlgorithm)
@@ -158,10 +158,10 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
                 for (size_t i = 0; i < param.dataSize(); ++i)
                 {
                     const uint16_t algo = param.data()[i];
-                    logger::debug("use HMAC algorithm %u", "sctp", algo);
+                    logger::debug("use HMAC algorithm %u", _loggableId.c_str(), algo);
                 }
             }
-            logger::debug("INIT contains param %x, %u", "sctp", param.type.get(), param.length.get());
+            logger::debug("INIT contains param %x, %u", _loggableId.c_str(), param.type.get(), param.length.get());
         }
         auto localTag = _randomGenerator.next();
         uint16_t inboundStreams = 0;
@@ -171,7 +171,7 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
         {
             if (inboundStreams == 0 && outboundStreams == 0)
             {
-                logger::warn("SCTP INIT rejected. Stream count 0,0", "sctp");
+                logger::warn("SCTP INIT rejected. Stream count 0,0", _loggableId.c_str());
                 return; // no streams to add
             }
 
@@ -196,26 +196,26 @@ void SctpServerPort::onInitReceived(const SctpPacket& sctpPacket, uint64_t times
             initAck.commitAppendedParameter();
             packet.commitAppendedChunk();
 
-            logger::debug("sending INIT_ACK", "sctp");
+            logger::debug("sending INIT_ACK", _loggableId.c_str());
             send(packet);
         }
         else
         {
-            logger::warn("SCTP not accepted %u...", "sctp", header.sourcePort.get());
+            logger::warn("SCTP not accepted %u...", _loggableId.c_str(), header.sourcePort.get());
         }
     }
 }
 
 void SctpServerPort::onCookieEchoReceived(const SctpPacket& packet, uint64_t timestamp)
 {
-    logger::debug("SCTP COOKIE ECHO received", "sctp");
+    logger::debug("SCTP COOKIE ECHO received", _loggableId.c_str());
 
     auto* echoChunk = packet.getChunk<CookieEchoChunk>(ChunkType::COOKIE_ECHO);
     if (echoChunk)
     {
         if (echoChunk->header.length != CookieEchoChunk::BASE_HEADER_SIZE + sizeof(SctpCookie))
         {
-            logger::error("cookie echoed is invalid size %u", "sctp", echoChunk->header.length.get());
+            logger::error("cookie echoed is invalid size %u", _loggableId.c_str(), echoChunk->header.length.get());
             return;
         }
         auto& header = packet.getHeader();
@@ -225,7 +225,11 @@ void SctpServerPort::onCookieEchoReceived(const SctpPacket& packet, uint64_t tim
             (!cookie.verifySignature(_key1, sizeof(_key1), header.sourcePort) &&
                 !cookie.verifySignature(_key2, sizeof(_key2), header.sourcePort)))
         {
-            logger::error("cookie echo did not pass validation", "sctp");
+            const uint64_t timeDiff = (timestamp - cookie.timestamp) / timer::ms;
+            logger::error("cookie echo did not pass validation, time diff %" PRIu64 "ms, source port %u",
+                _loggableId.c_str(),
+                timeDiff,
+                header.sourcePort.get());
             return;
         }
         _listener->onSctpCookieEchoReceived(this, header.sourcePort.get(), packet, timestamp);
