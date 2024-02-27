@@ -45,7 +45,11 @@ public:
     void setDataReceiver(transport::DataReceiver* dataReceiver) override {}
     bool isConnected() override { return true; }
     bool isDtlsClient() override { return true; }
-    void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) override {}
+    void setAudioPayloads(uint8_t payloadType,
+        utils::Optional<uint8_t> telephoneEventPayloadType,
+        uint32_t rtpFrequency) override
+    {
+    }
     void setAbsSendTimeExtensionId(uint8_t extensionId) override {}
     bool start() override { return true; }
     bool isIceEnabled() const override { return true; }

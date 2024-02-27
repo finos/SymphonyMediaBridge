@@ -1,7 +1,7 @@
 #include "bridge/engine/RecordingAudioForwarderSendJob.h"
 #include "bridge/MixerManagerAsync.h"
-#include "bridge/engine/AudioRewriter.h"
 #include "bridge/engine/PacketCache.h"
+#include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
 #include "rtp/RtpHeader.h"
 #include "transport/RecordingTransport.h"
@@ -12,6 +12,7 @@ namespace bridge
 RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundContext& outboundContext,
     memory::UniquePacket packet,
     transport::RecordingTransport& transport,
+    const SsrcInboundContext& ssrcSenderInboundContext,
     const uint32_t extendedSequenceNumber,
     MixerManagerAsync& mixerManager,
     size_t endpointIdHash,
@@ -21,6 +22,7 @@ RecordingAudioForwarderSendJob::RecordingAudioForwarderSendJob(SsrcOutboundConte
       _outboundContext(outboundContext),
       _packet(std::move(packet)),
       _transport(transport),
+      _ssrcSenderInboundContext(ssrcSenderInboundContext),
       _extendedSequenceNumber(extendedSequenceNumber),
       _mixerManager(mixerManager),
       _endpointIdHash(endpointIdHash),
@@ -47,21 +49,32 @@ void RecordingAudioForwarderSendJob::run()
         return;
     }
 
-    uint16_t nextSequenceNumber = 0; // TODO never set
-    if (!_outboundContext.shouldSend(rtpHeader->ssrc, _extendedSequenceNumber))
+    const bool isTelephoneEvent = !_ssrcSenderInboundContext.telephoneEventRtpMap.isEmpty() &&
+        rtpHeader->payloadType == _ssrcSenderInboundContext.telephoneEventRtpMap.payloadType;
+
+    // Telephone events can carry sensitive information and they must not be recorded
+    if (isTelephoneEvent)
     {
-        logger::debug("Dropping rec audio packet - sequence number...", "RecordingAudioForwarderSendJob");
+        _outboundContext.dropTelephoneEvent(_extendedSequenceNumber, _ssrcSenderInboundContext.ssrc);
         return;
     }
 
-    bridge::AudioRewriter::rewrite(_outboundContext, _extendedSequenceNumber, *rtpHeader, _timestamp);
+    if (!_outboundContext.rewriteAudio(*rtpHeader,
+            _ssrcSenderInboundContext,
+            _extendedSequenceNumber,
+            _timestamp,
+            isTelephoneEvent))
+    {
+        logger::warn("Dropping rec audio packet - sequence number...", "RecordingAudioForwarderSendJob");
+        return;
+    }
 
     if (_outboundContext.packetCache.isSet())
     {
         auto packetCache = _outboundContext.packetCache.get();
         if (packetCache)
         {
-            if (!packetCache->add(*_packet, nextSequenceNumber))
+            if (!packetCache->add(*_packet, rtpHeader->sequenceNumber.get()))
             {
                 logger::warn("Failed to cache rec audio packet", "RecordingAudioForwarderSendJob");
             }

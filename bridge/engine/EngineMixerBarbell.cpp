@@ -480,7 +480,8 @@ SsrcInboundContext* EngineMixer::emplaceBarbellInboundSsrcContext(const uint32_t
 
     if (barbell->audioSsrcMap.contains(ssrc))
     {
-        auto emplaceResult = _allSsrcInboundContexts.emplace(ssrc, ssrc, barbell->audioRtpMap, sender, timestamp);
+        auto emplaceResult =
+            _allSsrcInboundContexts.emplace(ssrc, ssrc, barbell->audioRtpMap, bridge::RtpMap::EMPTY, sender, timestamp);
 
         if (!emplaceResult.second && emplaceResult.first == _allSsrcInboundContexts.end())
         {
@@ -578,15 +579,21 @@ void EngineMixer::processIncomingBarbellFbRtcpPacket(EngineBarbell& barbell,
     _activeMediaList->getFeedbackSsrc(mediaSsrc, rtxSsrc);
 
     auto& bbTransport = barbell.transport;
-    auto* mediaSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, mediaSsrc, barbell.videoRtpMap);
+    auto* mediaSsrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+        barbell.ssrcOutboundContexts,
+        mediaSsrc,
+        barbell.videoRtpMap,
+        bridge::RtpMap::EMPTY);
     if (!mediaSsrcOutboundContext)
     {
         return;
     }
 
-    auto* rtxSsrcOutboundContext =
-        obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, rtxSsrc, barbell.videoFeedbackRtpMap);
+    auto* rtxSsrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+        barbell.ssrcOutboundContexts,
+        rtxSsrc,
+        barbell.videoFeedbackRtpMap,
+        bridge::RtpMap::EMPTY);
 
     if (!rtxSsrcOutboundContext)
     {
@@ -692,8 +699,11 @@ void EngineMixer::forwardAudioRtpPacketOverBarbell(IncomingPacketInfo& packetInf
         }
         uint32_t ssrc = rewriteMapItr->second;
 
-        auto* ssrcOutboundContext =
-            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, ssrc, barbell.audioRtpMap);
+        auto* ssrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+            barbell.ssrcOutboundContexts,
+            ssrc,
+            barbell.audioRtpMap,
+            bridge::RtpMap::EMPTY);
 
         if (!ssrcOutboundContext)
         {
@@ -751,7 +761,7 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
         }
 
         auto* ssrcOutboundContext =
-            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, targetSsrc, barbell.videoRtpMap);
+            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, targetSsrc, barbell.videoRtpMap, bridge::RtpMap::EMPTY);
 
         if (!ssrcOutboundContext)
         {

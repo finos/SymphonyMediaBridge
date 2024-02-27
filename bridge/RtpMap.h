@@ -11,12 +11,15 @@ namespace bridge
 
 struct RtpMap
 {
+    static const RtpMap EMPTY;
+
     enum class Format
     {
         VP8,
         H264,
         RTX,
         OPUS,
+        TELEPHONE_EVENT,
         EMPTY
     };
 
@@ -26,7 +29,7 @@ struct RtpMap
         EOL = 15
     };
 
-    RtpMap() : format(Format::EMPTY), payloadType(0x7F), sampleRate(0) {}
+    RtpMap() noexcept : format(Format::EMPTY), payloadType(0x7F), sampleRate(0) {}
 
     explicit RtpMap(const Format format) : format(format)
     {
@@ -48,6 +51,10 @@ struct RtpMap
             payloadType = 111;
             sampleRate = 48000;
             channels.set(2);
+            break;
+        case Format::TELEPHONE_EVENT:
+            payloadType = 110;
+            sampleRate = 48000;
             break;
         default:
             assert(false);
@@ -80,7 +87,7 @@ struct RtpMap
     RtpMap(const RtpMap& rtpMap) = default;
 
     bool isEmpty() const { return format == Format::EMPTY; }
-    bool isAudio() const { return format == Format::OPUS; }
+    bool isAudio() const { return format == Format::OPUS || format == Format::TELEPHONE_EVENT; }
     bool isVideo() const { return format == Format::VP8 || format == Format::RTX || format == Format::H264; }
 
     // @return 15 if none found

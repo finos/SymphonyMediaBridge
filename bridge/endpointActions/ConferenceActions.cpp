@@ -149,7 +149,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             responseAudio.transport.set(responseTransport);
         }
 
-        addDefaultAudioProperties(responseAudio);
+        addDefaultAudioProperties(responseAudio, true);
         channelsDescription.audio.set(responseAudio);
     }
 
@@ -520,12 +520,35 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Audio stream was configured already");
     }
 
-    if (!audio.payloadType.isSet())
+    if (audio.payloadTypes.empty())
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Audio payload type is required");
     }
 
-    const auto rtpMap = makeRtpMap(audio);
+    RtpMap audioRtpMap;
+    RtpMap telephoneEventRtpMap;
+    for (const auto& payloadType : audio.payloadTypes)
+    {
+        RtpMap rtpMap = makeRtpMap(audio, payloadType);
+        if (rtpMap.format == bridge::RtpMap::Format::TELEPHONE_EVENT)
+        {
+            if (!telephoneEventRtpMap.isEmpty())
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Multiple telephone-event payload");
+            }
+
+            telephoneEventRtpMap = std::move(rtpMap);
+        }
+        else
+        {
+            if (!audioRtpMap.isEmpty())
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Multiple audio codecs");
+            }
+
+            audioRtpMap = std::move(rtpMap);
+        }
+    }
 
     utils::Optional<uint32_t> remoteSsrc;
     if (!audio.ssrcs.empty())
@@ -539,7 +562,7 @@ void configureAudioEndpoint(const api::EndpointDescription& endpointDescription,
         neighbours = convertGroupIds(endpointDescription.neighbours.get());
     }
 
-    if (!mixer.configureAudioStream(endpointId, rtpMap, remoteSsrc, neighbours))
+    if (!mixer.configureAudioStream(endpointId, audioRtpMap, telephoneEventRtpMap, remoteSsrc, neighbours))
     {
         throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST,
             utils::format("Audio stream not found for endpoint '%s'", endpointId.c_str()));

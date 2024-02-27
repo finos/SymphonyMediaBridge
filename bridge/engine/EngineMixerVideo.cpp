@@ -623,7 +623,8 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             ssrcOutboundContext = obtainOutboundSsrcContext(videoStream->endpointIdHash,
                 videoStream->ssrcOutboundContexts,
                 ssrc,
-                videoStream->rtpMap);
+                videoStream->rtpMap,
+                bridge::RtpMap::EMPTY);
         }
         else
         {
@@ -632,7 +633,8 @@ void EngineMixer::forwardVideoRtpPacket(IncomingPacketInfo& packetInfo, const ui
             ssrcOutboundContext = obtainOutboundForwardSsrcContext(videoStream->endpointIdHash,
                 videoStream->ssrcOutboundContexts,
                 ssrc,
-                videoStream->rtpMap);
+                videoStream->rtpMap,
+                bridge::RtpMap::EMPTY);
         }
 
         if (!ssrcOutboundContext)
@@ -866,14 +868,15 @@ void EngineMixer::startProbingVideoStream(EngineVideoStream& engineVideoStream)
     auto* outboundContext = obtainOutboundSsrcContext(engineVideoStream.endpointIdHash,
         engineVideoStream.ssrcOutboundContexts,
         engineVideoStream.localSsrc,
-        engineVideoStream.feedbackRtpMap);
+        engineVideoStream.feedbackRtpMap,
+        bridge::RtpMap::EMPTY);
 
     if (outboundContext)
     {
         engineVideoStream.transport.postOnQueue(utils::bind(&transport::RtcTransport::setRtxProbeSource,
             &engineVideoStream.transport,
             engineVideoStream.localSsrc,
-            &outboundContext->rewrite.lastSent.sequenceNumber,
+            &outboundContext->getSequenceNumberReference(),
             outboundContext->rtpMap.payloadType));
     }
     _probingVideoStreams = true;

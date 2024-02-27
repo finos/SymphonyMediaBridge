@@ -43,6 +43,7 @@ struct AudioStream
     MediaMode mediaMode;
 
     bridge::RtpMap rtpMap;
+    bridge::RtpMap telephoneEventMap;
 
     bool markedForDeletion;
     bool isConfigured;

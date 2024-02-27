@@ -182,11 +182,11 @@ public:
 
             if (_bundleTransport)
             {
-                _bundleTransport->setAudioPayloadType(111, codec::Opus::sampleRate);
+                _bundleTransport->setAudioPayloads(111, utils::NullOpt, codec::Opus::sampleRate);
             }
             else if (_audioTransport)
             {
-                _audioTransport->setAudioPayloadType(111, codec::Opus::sampleRate);
+                _audioTransport->setAudioPayloads(111, utils::NullOpt, codec::Opus::sampleRate);
             }
         }
 
@@ -431,12 +431,14 @@ public:
             {
                 logger::info("audio RTP received %u", _loggableId.c_str(), rtpHeader->sequenceNumber.get());
                 bridge::RtpMap rtpMap(bridge::RtpMap::Format::OPUS);
+                bridge::RtpMap telephoneEventRtpMap(bridge::RtpMap::Format::TELEPHONE_EVENT);
                 rtpMap.audioLevelExtId.set(1);
                 rtpMap.c9infoExtId.set(8);
                 _audioReceivers.emplace(rtpHeader->ssrc.get(),
                     new RtpAudioReceiver(_loggableId.getInstanceId(),
                         rtpHeader->ssrc.get(),
                         rtpMap,
+                        telephoneEventRtpMap,
                         sender,
                         _expectedReceiveAudioType == Audio::None ? _callConfig.audio : _expectedReceiveAudioType,
                         timestamp));

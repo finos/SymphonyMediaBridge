@@ -13,7 +13,7 @@ inline bool exists(const nlohmann::json& json, const char* key1, Args&&... keys)
     auto it = json.find(key1);
     if (it != json.end())
     {
-        return exists(*it, keys...);
+        return exists(*it, std::forward<Args>(keys)...);
     }
 
     return false;

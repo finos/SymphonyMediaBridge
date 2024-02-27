@@ -124,9 +124,12 @@ void ProbeServer::onUnregistered(Endpoint& endpoint)
 
     if (endpoint.getTransportType() == ice::TransportType::UDP)
     {
-        std::remove_if(_iceCandidates.begin(), _iceCandidates.end(), [address](const ice::IceCandidate& c) {
-            return c.transportType == ice::TransportType::UDP && c.baseAddress == address;
-        });
+        auto newEnd =
+            std::remove_if(_iceCandidates.begin(), _iceCandidates.end(), [address](const ice::IceCandidate& c) {
+                return c.transportType == ice::TransportType::UDP && c.baseAddress == address;
+            });
+
+        _iceCandidates.erase(newEnd, _iceCandidates.end());
     }
 }
 
@@ -310,7 +313,7 @@ void ProbeServer::run()
 
         auto now = utils::Time::getAbsoluteTime();
 
-        for (auto it = _tcpConnections.begin(); it != _tcpConnections.end(); )
+        for (auto it = _tcpConnections.begin(); it != _tcpConnections.end();)
         {
             if (utils::Time::diffGT(it->timestamp, now, _iceConfig.probeConnectionExpirationTimeout * utils::Time::sec))
             {

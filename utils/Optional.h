@@ -6,11 +6,20 @@
 namespace utils
 {
 
+struct NullOptType
+{
+    constexpr explicit NullOptType() {}
+};
+
+inline constexpr NullOptType NullOpt{};
+
 template <typename T>
 class Optional
 {
 public:
-    Optional() : _isSet(false), _data() {}
+    constexpr Optional() noexcept : _isSet(false), _data() {}
+
+    constexpr Optional(NullOptType) noexcept : _isSet(false), _data() {}
 
     template <typename... U>
     explicit Optional(U&&... args) : _isSet(true),
@@ -56,6 +65,8 @@ public:
 
         return _data == other._data;
     }
+
+    constexpr Optional<T>& operator=(NullOptType) noexcept { clear(); }
 
     void clear() { _isSet = false; }
 

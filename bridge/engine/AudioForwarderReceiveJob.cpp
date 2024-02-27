@@ -14,6 +14,23 @@
 namespace bridge
 {
 
+AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
+    transport::RtcTransport* sender,
+    bridge::EngineMixer& engineMixer,
+    bridge::SsrcInboundContext& ssrcContext,
+    ActiveMediaList& activeMediaList,
+    const uint8_t silenceThresholdLevel,
+    const bool hasMixedAudioStreams,
+    const bool needAudioLevel,
+    const uint32_t extendedSequenceNumber)
+    : RtpForwarderReceiveBaseJob(std::move(packet), sender, engineMixer, ssrcContext, extendedSequenceNumber),
+      _activeMediaList(activeMediaList),
+      _silenceThresholdLevel(silenceThresholdLevel),
+      _hasMixedAudioStreams(hasMixedAudioStreams),
+      _needAudioLevel(needAudioLevel)
+{
+}
+
 void AudioForwarderReceiveJob::decode(const memory::Packet& opusPacket, memory::AudioPacket& pcmPacket)
 {
     const auto framesInPacketBuffer =
@@ -37,48 +54,6 @@ void AudioForwarderReceiveJob::decode(const memory::Packet& opusPacket, memory::
     {
         pcmPacket.setLength(0);
     }
-}
-
-bool AudioForwarderReceiveJob::unprotect(memory::Packet& opusPacket)
-{
-    if (transport::SrtpClient::shouldSetRolloverCounter(_ssrcContext.lastUnprotectedExtendedSequenceNumber,
-            _extendedSequenceNumber))
-    {
-        const uint32_t oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
-        const uint32_t newRolloverCounter = _extendedSequenceNumber >> 16;
-
-        logger::info("Setting rollover counter for ssrc %u, extseqno %u->%u, seqno %u->%u, roc %u->%u, %s",
-            "AudioForwarderReceiveJob",
-            _ssrcContext.ssrc,
-            _ssrcContext.lastUnprotectedExtendedSequenceNumber,
-            _extendedSequenceNumber,
-            _ssrcContext.lastUnprotectedExtendedSequenceNumber & 0xFFFFu,
-            _extendedSequenceNumber & 0xFFFFu,
-            oldRolloverCounter,
-            newRolloverCounter,
-            _sender->getLoggableId().c_str());
-        if (!_sender->setSrtpRemoteRolloverCounter(_ssrcContext.ssrc, newRolloverCounter))
-        {
-            logger::error("Failed to set rollover counter srtp %u, seqno %u->%u, roc %u->%u, %s, %s",
-                "AudioForwarderReceiveJob",
-                _ssrcContext.ssrc,
-                _ssrcContext.lastUnprotectedExtendedSequenceNumber & 0xFFFFu,
-                _extendedSequenceNumber & 0xFFFFu,
-                oldRolloverCounter,
-                newRolloverCounter,
-                _engineMixer.getLoggableId().c_str(),
-                _sender->getLoggableId().c_str());
-            return false;
-        }
-    }
-
-    if (!_sender->unprotect(opusPacket))
-    {
-        return false;
-    }
-    _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
-
-    return true;
 }
 
 int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPacket)
@@ -106,30 +81,6 @@ int AudioForwarderReceiveJob::computeOpusAudioLevel(const memory::Packet& opusPa
 
     _ssrcContext.opusPacketRate->update(1, utils::Time::getAbsoluteTime());
     return codec::computeAudioLevel(pcmPacket);
-}
-
-AudioForwarderReceiveJob::AudioForwarderReceiveJob(memory::UniquePacket packet,
-    transport::RtcTransport* sender,
-    bridge::EngineMixer& engineMixer,
-    bridge::SsrcInboundContext& ssrcContext,
-    ActiveMediaList& activeMediaList,
-    const uint8_t silenceThresholdLevel,
-    const bool hasMixedAudioStreams,
-    const bool needAudioLevel,
-    const uint32_t extendedSequenceNumber)
-    : CountedJob(sender->getJobCounter()),
-      _packet(std::move(packet)),
-      _engineMixer(engineMixer),
-      _sender(sender),
-      _ssrcContext(ssrcContext),
-      _activeMediaList(activeMediaList),
-      _silenceThresholdLevel(silenceThresholdLevel),
-      _hasMixedAudioStreams(hasMixedAudioStreams),
-      _extendedSequenceNumber(extendedSequenceNumber),
-      _needAudioLevel(needAudioLevel)
-{
-    assert(_packet);
-    assert(_packet->getLength() > 0);
 }
 
 void AudioForwarderReceiveJob::run()
@@ -209,7 +160,7 @@ void AudioForwarderReceiveJob::run()
         _ssrcContext.hasAudioLevelExtension = false;
     }
 
-    if (!unprotect(*_packet))
+    if (!tryUnprotectRtpPacket("AudioForwarderReceiveJob"))
     {
         return;
     }

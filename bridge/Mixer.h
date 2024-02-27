@@ -145,6 +145,7 @@ public:
 
     bool configureAudioStream(const std::string& endpointId,
         const RtpMap& rtpMap,
+        const RtpMap& telephoneEventRtpMap,
         const utils::Optional<uint32_t>& remoteSsrc,
         const std::vector<uint32_t>& neighbours);
 

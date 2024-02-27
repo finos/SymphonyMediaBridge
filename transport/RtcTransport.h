@@ -74,7 +74,9 @@ public:
 
     virtual bool isDtlsClient() = 0;
 
-    virtual void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) = 0;
+    virtual void setAudioPayloads(uint8_t payloadType,
+        utils::Optional<uint8_t> telephoneEventPayloadType,
+        uint32_t rtpFrequency) = 0;
     virtual void setAbsSendTimeExtensionId(uint8_t extensionId) = 0;
 
     virtual bool isIceEnabled() const = 0;

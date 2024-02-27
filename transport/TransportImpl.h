@@ -169,7 +169,9 @@ public: // Transport
     void getReportSummary(std::unordered_map<uint32_t, ReportSummary>& outReportSummary) const override;
     uint64_t getInboundPacketCount() const override;
 
-    void setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency) override;
+    void setAudioPayloads(uint8_t payloadType,
+        utils::Optional<uint8_t> telephoneEventPayloadType,
+        uint32_t rtpFrequency) override;
     void setAbsSendTimeExtensionId(uint8_t extensionId) override;
 
     bool sendSctp(uint16_t streamId, uint32_t protocolId, const void* data, uint16_t length) override;
@@ -407,7 +409,13 @@ private:
 
     struct
     {
+        bool containsPayload(uint8_t pt) const
+        {
+            return pt == payloadType || (telephoneEventPayloadType.isSet() && telephoneEventPayloadType.get() == pt);
+        }
+
         uint8_t payloadType;
+        utils::Optional<uint8_t> telephoneEventPayloadType;
         uint32_t rtpFrequency;
     } _audio;
     uint8_t _absSendTimeExtensionId;

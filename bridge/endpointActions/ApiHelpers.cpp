@@ -26,9 +26,10 @@ std::unique_lock<std::mutex> getConferenceMixer(ActionContext* context,
     return scopedMixerLock;
 }
 
-void addDefaultAudioProperties(api::Audio& audio)
+void addDefaultAudioProperties(api::Audio& audio, bool includeTelephoneEvent)
 {
-    api::PayloadType opus;
+    audio.payloadTypes.reserve(2);
+    api::PayloadType& opus = audio.payloadTypes.emplace_back();
     opus.id = codec::Opus::payloadType;
     opus.name = "opus";
     opus.clockRate = codec::Opus::sampleRate;
@@ -36,7 +37,14 @@ void addDefaultAudioProperties(api::Audio& audio)
     opus.parameters.emplace_back("minptime", "10");
     opus.parameters.emplace_back("useinbandfec", "1");
 
-    audio.payloadType.set(opus);
+    if (includeTelephoneEvent)
+    {
+        api::PayloadType& telephoneEvent = audio.payloadTypes.emplace_back();
+        telephoneEvent.id = 110;
+        telephoneEvent.name = "telephone-event";
+        telephoneEvent.clockRate = audio.payloadTypes.front().clockRate; // same clock rate of opus
+    }
+
     audio.rtpHeaderExtensions.emplace_back(1, "urn:ietf:params:rtp-hdrext:ssrc-audio-level");
     audio.rtpHeaderExtensions.emplace_back(3, "http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time");
     audio.rtpHeaderExtensions.emplace_back(8, "c9:params:rtp-hdrext:info");
@@ -216,15 +224,18 @@ std::pair<std::vector<ice::IceCandidate>, std::pair<std::string, std::string>> g
     return std::make_pair(candidates, std::make_pair(ice.ufrag, ice.pwd));
 }
 
-bridge::RtpMap makeRtpMap(const api::Audio& audio)
+bridge::RtpMap makeRtpMap(const api::Audio& audio, const api::PayloadType& payloadType)
 {
     bridge::RtpMap rtpMap;
 
-    auto& payloadType = audio.payloadType.get();
     if (payloadType.name.compare("opus") == 0)
     {
         rtpMap =
             bridge::RtpMap(bridge::RtpMap::Format::OPUS, payloadType.id, payloadType.clockRate, payloadType.channels);
+    }
+    else if (payloadType.name.compare("telephone-event") == 0)
+    {
+        rtpMap = bridge::RtpMap(bridge::RtpMap::Format::TELEPHONE_EVENT, payloadType.id, payloadType.clockRate);
     }
     else
     {

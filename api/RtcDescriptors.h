@@ -109,7 +109,7 @@ struct Audio
     utils::Optional<Transport> transport;
 
     std::vector<uint32_t> ssrcs;
-    utils::Optional<PayloadType> payloadType;
+    std::vector<PayloadType> payloadTypes;
     std::vector<std::pair<uint32_t, std::string>> rtpHeaderExtensions;
 };
 

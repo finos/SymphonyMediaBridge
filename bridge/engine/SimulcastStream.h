@@ -16,7 +16,7 @@ namespace bridge
  */
 struct SimulcastStream
 {
-    static constexpr size_t maxLevels = 3;
+    constexpr static size_t maxLevels = 3;
 
     enum class VideoContentType
     {

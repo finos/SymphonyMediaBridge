@@ -71,7 +71,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
         mixer.getAudioStreamDescription(streamDescription);
         responseAudio.ssrcs = streamDescription.ssrcs;
 
-        addDefaultAudioProperties(responseAudio);
+        addDefaultAudioProperties(responseAudio, false);
         channelsDescription.audio = responseAudio;
     }
 
@@ -186,7 +186,26 @@ httpd::Response configureBarbell(ActionContext* context,
         videoDescriptions.push_back(barbellGroup);
     }
 
-    const auto audioRtpMap = makeRtpMap(barbellDescription.audio);
+    bridge::RtpMap audioRtpMap;
+    for (auto& payloadDescription : barbellDescription.audio.payloadTypes)
+    {
+        auto rtpMap = makeRtpMap(barbellDescription.audio, payloadDescription);
+        if (rtpMap.format == bridge::RtpMap::Format::TELEPHONE_EVENT)
+        {
+            logger::warn("telephone-event configured but not supported on this version. It will be ignored",
+                "BarbellActions");
+        }
+        else
+        {
+            if (!audioRtpMap.isEmpty())
+            {
+                throw httpd::RequestErrorException(httpd::StatusCode::BAD_REQUEST, "Multiple audio codecs");
+            }
+
+            audioRtpMap = std::move(rtpMap);
+        }
+    }
+
     bridge::RtpMap videoRtpMap;
     bridge::RtpMap videoFeedbackRtpMap;
     for (auto& payloadDescription : barbellDescription.video.payloadTypes)

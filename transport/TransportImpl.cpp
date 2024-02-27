@@ -816,7 +816,7 @@ void TransportImpl::internalRtpReceived(Endpoint& endpoint,
     }
 
     const uint32_t ssrc = rtpHeader->ssrc;
-    const auto rtpFrequency = rtpHeader->payloadType == _audio.payloadType ? _audio.rtpFrequency : 90000;
+    const auto rtpFrequency = _audio.containsPayload(rtpHeader->payloadType) ? _audio.rtpFrequency : 90000;
     auto& ssrcState = getInboundSsrc(ssrc, rtpFrequency);
 
     ssrcState.onRtpReceived(*packet, timestamp);
@@ -1567,7 +1567,7 @@ void TransportImpl::protectAndSend(memory::UniquePacket packet)
         sendReports(timestamp);
         const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
         const auto payloadType = rtpHeader->payloadType;
-        const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
+        const auto isAudio = (payloadType <= 8 || _audio.containsPayload(payloadType));
 
         clearPacingQueueIfFull(_pacingQueue);
         clearPacingQueueIfFull(_rtxPacingQueue);
@@ -1648,12 +1648,17 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
 {
     const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     const auto payloadType = rtpHeader->payloadType;
-    const auto isAudio = (payloadType <= 8 || payloadType == _audio.payloadType);
+    const auto isAudio = (payloadType <= 8 || _audio.containsPayload(payloadType));
     const uint32_t rtpFrequency = isAudio ? _audio.rtpFrequency : 90000;
 
     if (_absSendTimeExtensionId)
     {
-        rtp::setTransmissionTimestamp(*packet, _absSendTimeExtensionId, timestamp);
+        // telephone events does not have transmission timestamp
+        if (!_audio.telephoneEventPayloadType.isSet() ||
+            _audio.telephoneEventPayloadType.get() != rtpHeader->payloadType)
+        {
+            rtp::setTransmissionTimestamp(*packet, _absSendTimeExtensionId, timestamp);
+        }
     }
 
     auto& ssrcState = getOutboundSsrc(rtpHeader->ssrc, rtpFrequency);
@@ -2176,9 +2181,12 @@ int32_t TransportImpl::sendDtls(const char* buffer, const uint32_t length)
     }
 }
 
-void TransportImpl::setAudioPayloadType(uint8_t payloadType, uint32_t rtpFrequency)
+void TransportImpl::setAudioPayloads(uint8_t payloadType,
+    utils::Optional<uint8_t> telephoneEventPayloadType,
+    uint32_t rtpFrequency)
 {
     _audio.payloadType = payloadType;
+    _audio.telephoneEventPayloadType = telephoneEventPayloadType;
     _audio.rtpFrequency = rtpFrequency;
 }
 

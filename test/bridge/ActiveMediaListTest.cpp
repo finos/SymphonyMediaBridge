@@ -169,6 +169,7 @@ protected:
             *_transport,
             bridge::MediaMode::SSRC_REWRITE,
             bridge::RtpMap(),
+            bridge::RtpMap(),
             0,
             neighbours);
 

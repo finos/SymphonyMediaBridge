@@ -104,7 +104,7 @@ private:
 using SimulcastGroup = SimulcastLevelArray<3>;
 
 template <size_t N>
-SimulcastGroup makeSsrcGroup(SsrcPair (&levels)[N])
+SimulcastGroup makeSsrcGroup(const SsrcPair (&levels)[N])
 {
     SimulcastGroup result;
     for (size_t i = 0; i < N; ++i)

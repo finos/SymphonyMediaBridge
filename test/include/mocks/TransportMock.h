@@ -3,6 +3,16 @@
 #include "logger/Logger.h"
 #include <gmock/gmock.h>
 
+namespace transport
+{
+class DataReceiver;
+}
+
+namespace jobmanager
+{
+class JobQueue;
+}
+
 namespace test
 {
 
@@ -15,6 +25,8 @@ public:
         ON_CALL(*this, isInitialized()).WillByDefault(testing::Return(true));
         ON_CALL(*this, isRunning()).WillByDefault(testing::Return(true));
         ON_CALL(*this, hasPendingJobs()).WillByDefault(testing::Return(true));
+        ON_CALL(*this, getJobCounter()).WillByDefault(testing::ReturnRef(_jobCounter));
+        ON_CALL(*this, unprotect(testing::_)).WillByDefault(testing::Return(true));
     }
 
     MOCK_METHOD(bool, isInitialized, (), (const override));
@@ -36,6 +48,7 @@ public:
 
 private:
     logger::LoggableId _loggableId;
+    std::atomic_uint32_t _jobCounter;
 };
 
 } // namespace test

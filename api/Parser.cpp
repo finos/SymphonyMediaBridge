@@ -128,7 +128,7 @@ void setIfExists(utils::Optional<std::string>& target, const nlohmann::json& dat
 template <typename... Args>
 void throwIfNotExists(const nlohmann::json& json, Args&&... keys)
 {
-    if (!exists(json, keys...))
+    if (!exists(json, std::forward<Args>(keys)...))
     {
         const char* vec[sizeof...(keys)] = {keys...};
         const auto sb = std::string().append("Missing required under property: ").append(vec[0]);
@@ -342,9 +342,17 @@ EndpointDescription parsePatchEndpoint(const nlohmann::json& data, const std::st
             audioChannel.ssrcs.push_back(ssrc);
         }
 
-        if (audioJson.find("payload-type") != audioJson.end())
+        if (audioJson.find("payload-types") != audioJson.end())
         {
-            audioChannel.payloadType.set(parsePatchEndpointPayloadType(audioJson["payload-type"]));
+            for (const auto& payloadTypeJson : audioJson["payload-types"])
+            {
+                audioChannel.payloadTypes.emplace_back(parsePatchEndpointPayloadType(payloadTypeJson));
+            }
+        }
+        else if (audioJson.find("payload-type") !=
+            audioJson.end()) // payload-type is deprecated and it will be removed in a future version
+        {
+            audioChannel.payloadTypes.push_back(parsePatchEndpointPayloadType(audioJson["payload-type"]));
         }
 
         for (const auto& rtpHdrExtJson : optionalJsonArray(audioJson, "rtp-hdrexts"))
@@ -583,9 +591,9 @@ BarbellDescription parsePatchBarbell(const nlohmann::json& data, const std::stri
             audioChannel.ssrcs.push_back(ssrc);
         }
 
-        if (audioJson.find("payload-type") != audioJson.end())
+        for (const auto& payloadTypeJson : optionalJsonArray(audioJson, "payload-types"))
         {
-            audioChannel.payloadType.set(parsePatchEndpointPayloadType(audioJson["payload-type"]));
+            audioChannel.payloadTypes.emplace_back(parsePatchEndpointPayloadType(payloadTypeJson));
         }
 
         for (const auto& rtpHdrExtJson : optionalJsonArray(audioJson, "rtp-hdrexts"))

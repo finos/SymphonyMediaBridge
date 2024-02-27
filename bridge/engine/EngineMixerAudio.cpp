@@ -7,6 +7,7 @@
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/FinalizeNonSsrcRewriteOutboundContextJob.h"
 #include "bridge/engine/SendRtcpJob.h"
+#include "bridge/engine/TelephoneEventForwardReceiveJob.h"
 #include "codec/AudioTools.h"
 #include "codec/Opus.h"
 #include "config/Config.h"
@@ -14,7 +15,54 @@
 namespace
 {
 const double mixSampleScaleFactor = 0.5;
+
+template <class V, class T>
+bool isNeighbour(const V& groupList, const T& lookupTable)
+{
+    for (auto& entry : groupList)
+    {
+        if (lookupTable.contains(entry))
+        {
+            return true;
+        }
+    }
+    return false;
 }
+
+template <class TMap>
+bool areNeighbours(const TMap& table1, const TMap& table2)
+{
+    if (table1.size() < table2.size())
+    {
+        for (auto& entry : table1)
+        {
+            if (table2.contains(entry.first))
+            {
+                return true;
+            }
+        }
+    }
+    else
+    {
+        for (auto& entry : table2)
+        {
+            if (table1.contains(entry.first))
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool isContributingToMix(const bridge::SsrcInboundContext* inboundAudioContext)
+{
+    return inboundAudioContext && inboundAudioContext->hasAudioReceivePipe.load() &&
+        inboundAudioContext->audioReceivePipe->getAudioSampleCount() > 0;
+}
+
+} // namespace
 
 namespace bridge
 {
@@ -213,6 +261,22 @@ void EngineMixer::onAudioRtpPacketReceived(SsrcInboundContext& ssrcContext,
     }
 }
 
+void EngineMixer::onAudioTelephoneEventRtpPacketReceived(SsrcInboundContext& ssrcContext,
+    transport::RtcTransport* sender,
+    memory::UniquePacket packet,
+    const uint32_t extendedSequenceNumber,
+    const uint64_t timestamp)
+{
+    if (!_engineAudioStreams.empty())
+    {
+        sender->getJobQueue().addJob<bridge::TelephoneEventForwardReceiveJob>(std::move(packet),
+            sender,
+            *this,
+            ssrcContext,
+            extendedSequenceNumber);
+    }
+}
+
 void EngineMixer::onForwarderAudioRtpPacketDecrypted(SsrcInboundContext& inboundContext,
     memory::UniquePacket packet,
     const uint32_t extendedSequenceNumber)
@@ -225,50 +289,6 @@ void EngineMixer::onForwarderAudioRtpPacketDecrypted(SsrcInboundContext& inbound
         assert(false);
     }
 }
-
-namespace
-{
-template <class V, class T>
-bool isNeighbour(const V& groupList, const T& lookupTable)
-{
-    for (auto& entry : groupList)
-    {
-        if (lookupTable.contains(entry))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-template <class TMap>
-bool areNeighbours(const TMap& table1, const TMap& table2)
-{
-    if (table1.size() < table2.size())
-    {
-        for (auto& entry : table1)
-        {
-            if (table2.contains(entry.first))
-            {
-                return true;
-            }
-        }
-    }
-    else
-    {
-        for (auto& entry : table2)
-        {
-            if (table1.contains(entry.first))
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-} // namespace
 
 void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t timestamp)
 {
@@ -326,14 +346,16 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
             ssrcOutboundContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
                 rewriteMapItr->second,
-                audioStream->rtpMap);
+                audioStream->rtpMap,
+                audioStream->telephoneEventRtpMap);
         }
         else
         {
             ssrcOutboundContext = obtainOutboundForwardSsrcContext(audioStream->endpointIdHash,
                 audioStream->ssrcOutboundContexts,
                 originalSsrc,
-                audioStream->rtpMap);
+                audioStream->rtpMap,
+                audioStream->telephoneEventRtpMap);
         }
 
         if (!ssrcOutboundContext)
@@ -357,15 +379,6 @@ void EngineMixer::forwardAudioRtpPacket(IncomingPacketInfo& packetInfo, uint64_t
         }
     }
 }
-
-namespace
-{
-bool isContributingToMix(const SsrcInboundContext* inboundAudioContext)
-{
-    return inboundAudioContext && inboundAudioContext->hasAudioReceivePipe.load() &&
-        inboundAudioContext->audioReceivePipe->getAudioSampleCount() > 0;
-}
-} // namespace
 
 void EngineMixer::processAudioStreams()
 {
@@ -451,7 +464,8 @@ void EngineMixer::processAudioStreams()
         auto* ssrcContext = obtainOutboundSsrcContext(audioStream->endpointIdHash,
             audioStream->ssrcOutboundContexts,
             audioStream->localSsrc,
-            audioStream->rtpMap);
+            audioStream->rtpMap,
+            audioStream->telephoneEventRtpMap);
 
         if (ssrcContext)
         {

@@ -107,11 +107,13 @@ public:
     RtpAudioReceiver(size_t instanceId,
         uint32_t ssrc,
         const bridge::RtpMap& rtpMap,
+        const bridge::RtpMap& telephoneEventRtpMap,
         transport::RtcTransport* transport,
         emulator::Audio emulatedAudioType,
         uint64_t timestamp)
         : _rtpMap(rtpMap),
-          _context(ssrc, _rtpMap, transport, timestamp),
+          _telephoneEventRtpMap(telephoneEventRtpMap),
+          _context(ssrc, _rtpMap, _telephoneEventRtpMap, transport, timestamp),
           _loggableId("rtprcv", instanceId),
           _emulatedAudioType(emulatedAudioType)
     {
@@ -177,6 +179,7 @@ public:
 
 private:
     bridge::RtpMap _rtpMap;
+    bridge::RtpMap _telephoneEventRtpMap;
     bridge::SsrcInboundContext _context;
     codec::OpusDecoder _decoder;
     logger::LoggableId _loggableId;
@@ -253,7 +256,8 @@ public:
         if (it == contexts.end())
         {
             // we should perhaps figure out which simulcastLevel this is among the 3
-            auto result = contexts.emplace(rtpHeader->ssrc.get(), rtpHeader->ssrc.get(), _rtpMap, sender, timestamp);
+            auto result =
+                contexts.emplace(rtpHeader->ssrc.get(), rtpHeader->ssrc.get(), _rtpMap, sender, timestamp, 0, 0);
             it = result.first;
         }
 
