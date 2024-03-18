@@ -234,6 +234,8 @@ void EngineMixer::reconfigureNeighbours(const transport::RtcTransport& transport
         {
             neighbourList.push_back(it.first);
         }
+
+        sendUserMediaMapMessageOverBarbells();
     }
     else
     {
