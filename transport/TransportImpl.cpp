@@ -1,6 +1,7 @@
 #include "TransportImpl.h"
 #include "api/utils.h"
 #include "bwe/BandwidthEstimator.h"
+#include "codec/G711.h"
 #include "config/Config.h"
 #include "dtls/SrtpClient.h"
 #include "dtls/SrtpClientFactory.h"
@@ -1649,7 +1650,11 @@ void TransportImpl::protectAndSendRtp(uint64_t timestamp, memory::UniquePacket p
     const auto* rtpHeader = rtp::RtpHeader::fromPacket(*packet);
     const auto payloadType = rtpHeader->payloadType;
     const auto isAudio = (payloadType <= 8 || _audio.containsPayload(payloadType));
-    const uint32_t rtpFrequency = isAudio ? _audio.rtpFrequency : 90000;
+    uint32_t rtpFrequency = isAudio ? _audio.rtpFrequency : 90000;
+    if (rtpHeader->payloadType == codec::Pcma::payloadType || rtpHeader->payloadType == codec::Pcmu::payloadType)
+    {
+        rtpFrequency = 8000;
+    }
 
     if (_absSendTimeExtensionId)
     {

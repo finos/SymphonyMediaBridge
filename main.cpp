@@ -1,4 +1,5 @@
 #include "bridge/Bridge.h"
+#include "codec/G711codec.h"
 #include "concurrency/Semaphore.h"
 #include "concurrency/ThreadUtils.h"
 #include "config/Config.h"
@@ -148,6 +149,9 @@ int main(int argc, char** argv)
 
     utils::Time::initialize();
     logger::setup(config->logFile.get().c_str(), config->logStdOut, parseLogLevel(config->logLevel), 4 * 1024 * 1024);
+
+    codec::PcmaCodec::initialize();
+    codec::PcmuCodec::initialize();
     logger::info("Starting httpd on port %u", "main", config->port.get());
     logger::info("Configured udp port range: %s  %u - %u",
         "main",

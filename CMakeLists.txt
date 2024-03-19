@@ -251,7 +251,13 @@ set(FILES
         codec/NoiseFloor.cpp
         codec/AudioReceivePipeline.h
         codec/AudioReceivePipeline.cpp
+        codec/G711.h
+        codec/G711codec.h
+        codec/G711codec.cpp
         codec/SpscAudioBuffer.h
+        codec/SpeexResampler.cpp
+        codec/PcmResampler.h
+        codec/PcmResampler.cpp
         concurrency/EventSemaphore.cpp
         concurrency/EventSemaphore.h
         concurrency/LockFreeList.cpp
@@ -546,6 +552,10 @@ set(TEST_LIB_FILES
     test/integration/emulator/Httpd.cpp
     test/integration/emulator/JitterPacketSource.h
     test/integration/emulator/JitterPacketSource.cpp
+    test/config/ConfigTest.cpp
+    test/codec/AudioProcessingTest.cpp
+    test/codec/G711CodecTest.cpp
+    test/codec/OpusCodecTest.cpp
     test/CsvWriter.h
     test/CsvWriter.cpp
     test/ResourceLoader.cpp

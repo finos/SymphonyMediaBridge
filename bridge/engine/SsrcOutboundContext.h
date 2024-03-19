@@ -2,6 +2,7 @@
 
 #include "bridge/RtpMap.h"
 #include "codec/OpusEncoder.h"
+#include "codec/PcmResampler.h"
 #include "memory/PacketPoolAllocator.h"
 #include "utils/Optional.h"
 #include "utils/Time.h"
@@ -84,6 +85,7 @@ public:
     uint64_t lastRespondedNackTimestamp;
 
     utils::Optional<PacketCache*> packetCache;
+    std::unique_ptr<codec::PcmResampler> resampler;
 
     /// ==== Accessed from Engine only!
     uint64_t lastSendTime;

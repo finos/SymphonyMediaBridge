@@ -18,6 +18,8 @@ struct RtpMap
         VP8,
         H264,
         RTX,
+        PCMU,
+        PCMA,
         OPUS,
         TELEPHONE_EVENT,
         EMPTY
@@ -51,6 +53,14 @@ struct RtpMap
             payloadType = 111;
             sampleRate = 48000;
             channels.set(2);
+            break;
+        case Format::PCMU:
+            payloadType = 0;
+            sampleRate = 8000;
+            break;
+        case Format::PCMA:
+            payloadType = 8;
+            sampleRate = 8000;
             break;
         case Format::TELEPHONE_EVENT:
             payloadType = 110;

@@ -1,6 +1,7 @@
 #include "bridge/engine/AudioForwarderRewriteAndSendJob.h"
 #include "bridge/engine/SsrcInboundContext.h"
 #include "bridge/engine/SsrcOutboundContext.h"
+#include "codec/G711.h"
 #include "codec/Opus.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"

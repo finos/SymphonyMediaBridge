@@ -11,14 +11,11 @@ namespace codec
 int computeAudioLevel(const int16_t* payload, int samples);
 }
 
-namespace
-{
-static const double sampleFrequency = 48000;
-static const int samples = sampleFrequency / 50;
-
-} // namespace
 struct OpusTest : testing::Test
 {
+    static constexpr double sampleFrequency = 48000;
+    static constexpr int32_t samples = 48000 / 50;
+
     void SetUp() override
     {
         for (int i = 0; i < samples; ++i)
