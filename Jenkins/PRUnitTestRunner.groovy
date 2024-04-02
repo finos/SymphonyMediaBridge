@@ -44,7 +44,7 @@ parallel "Release el7": {
     }
 }, "Release Ubuntu-22.04 (Jammy)": {
     node('be-integration') {
-        prRunner("Release", "jammy", "latest")
+        prRunner("Release", "ubuntu-jammy", "latest")
     }
 }, "LCheck": {
     node('be-integration') {
