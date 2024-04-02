@@ -10,7 +10,7 @@ function pr() {
 
 git config --global --add safe.directory ${PWD}
 
-mkdir -p ubuntu-jammyfocal/smb
+mkdir -p ubuntu-jammy/smb
 pushd ubuntu-jammy/smb
 
 pr "Generating versioninfo"
