@@ -47,4 +47,4 @@ cp /usr/local/lib/libmicrohttpd.so.12 libs
 cp /usr/local/lib/libopus.so.0 libs
 
 popd
-pr "Done building for Ubuntu Focal! Ready for packaging"
+pr "Done building for Ubuntu Jammy! Ready for packaging"
