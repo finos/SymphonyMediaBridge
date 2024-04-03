@@ -42,6 +42,10 @@ parallel "Release el7": {
     node('be-integration') {
         prRunner("Release", "el8", "latest")
     }
+}, "Release Ubuntu-22.04 (Jammy)": {
+    node('be-integration') {
+        prRunner("Release", "ubuntu-jammy", "latest")
+    }
 }, "LCheck": {
     node('be-integration') {
         prRunner("LCheck", "el8", "latest")

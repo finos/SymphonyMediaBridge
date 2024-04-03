@@ -62,15 +62,15 @@ node('be-integration') {
             }
         }
 
-        docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-ubuntu-focal:latest').inside {
-            stage('Build Ubuntu Focal') {
+        docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-ubuntu-jammy:latest').inside {
+            stage('Build Ubuntu Jammy') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
                 env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-                sh "docker/ubuntu-focal/buildscript.sh Release"
+                sh "docker/ubuntu-jammy/buildscript.sh Release"
             }
 
-            stage('Run tests Ubuntu Focal') {
-                sh "docker/ubuntu-focal/runtests.sh"
+            stage('Run tests Ubuntu Jammy') {
+                sh "docker/ubuntu-Jammy/runtests.sh"
             }
         }
 
@@ -100,7 +100,7 @@ node('be-integration') {
 
         docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-el7:latest').inside {
             stage('Create archive') {
-                sh "zip -r ${baseName}-${version}.zip el7/smb/smb el7/smb/versioninfo.txt el7/smb/libs/ el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-focal/smb/smb ubuntu-focal/smb/versioninfo.txt ubuntu-focal/smb/libs/ ubuntu-focal-deb/smb/*.tar.gz ubuntu-focal-deb/smb/*.deb aws-linux/smb/versioninfo.txt aws-linux/smb/libs/ aws-linux/smb/smb"
+                sh "zip -r ${baseName}-${version}.zip el7/smb/smb el7/smb/versioninfo.txt el7/smb/libs/ el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-jammy/smb/smb ubuntu-jammy/smb/versioninfo.txt ubuntu-jammy/smb/libs/ ubuntu-focal-deb/smb/*.tar.gz ubuntu-focal-deb/smb/*.deb aws-linux/smb/versioninfo.txt aws-linux/smb/libs/ aws-linux/smb/smb"
             }
         }
 
