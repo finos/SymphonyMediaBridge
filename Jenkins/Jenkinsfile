@@ -70,7 +70,7 @@ node('be-integration') {
             }
 
             stage('Run tests Ubuntu Jammy') {
-                sh "docker/ubuntu-Jammy/runtests.sh"
+                sh "docker/ubuntu-jammy/runtests.sh"
             }
         }
 
