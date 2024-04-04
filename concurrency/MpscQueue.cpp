@@ -4,6 +4,7 @@
 namespace concurrency
 {
 
+#ifdef DEBUG
 MpscQueueBase::Guard::Guard(bool allocated)
 {
     if (allocated)
@@ -11,6 +12,7 @@ MpscQueueBase::Guard::Guard(bool allocated)
         std::memcpy(pattern, "ABXYGAHAERLKBOSP", 16);
     }
 }
+#endif
 
 void MpscQueueBase::Entry::checkGuards() const
 {
@@ -94,7 +96,7 @@ void* MpscQueueBase::allocate(uint32_t size)
 
     const auto entrySize = size + Entry::entryOverHead();
 
-    for (auto state = _queuestate.load(); entrySize + state.size <= _capacity;)
+    for (auto state = _queuestate.load(); entrySize + state.size <= _capacity;) //
     {
         if (isPaddingNeeded(state, entrySize))
         {
