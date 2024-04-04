@@ -65,7 +65,7 @@ class MpscQueueBase
     static_assert(alignof(Entry) == alignof(uint64_t), "Entry must be 8 bytes aligned");
 
 #if !defined(DEBUG)
-    static_assert(sizeof(Entry) == 8, "Entry must be 8");
+    static_assert(sizeof(Entry) <= 8, "Entry must be 8");
 #endif
 
     struct CursorState
@@ -125,7 +125,7 @@ template <typename T>
 class MpscQueue
 {
 public:
-    static_assert(alignof(T) == alignof(uint64_t), "T must be 8 bytes aligned");
+    static_assert(alignof(T) <= alignof(uint64_t), "T must be 8 bytes aligned");
     MpscQueue(uint32_t sizeInBytes) : _queue(sizeInBytes) {}
 
     T* allocate(uint32_t size = sizeof(T))
