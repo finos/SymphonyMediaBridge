@@ -49,8 +49,8 @@ class MpscQueueBase
             return reinterpret_cast<Entry*>(reinterpret_cast<uint8_t*>(p) - sizeof(Entry)); // mistake
         }
         void clear();
-#ifdef DEBUG
         void checkGuards() const;
+#ifdef DEBUG
         Guard& tailGuard() { return *reinterpret_cast<Guard*>(data + size); }
         const Guard& tailGuard() const { return *reinterpret_cast<const Guard*>(data + size); }
 
