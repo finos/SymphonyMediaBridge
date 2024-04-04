@@ -46,21 +46,27 @@ class MpscQueueBase
 
         static Entry* fromPtr(void* p)
         {
-            return reinterpret_cast<Entry*>(reinterpret_cast<uint8_t*>(p) - sizeof(Entry));
+            return reinterpret_cast<Entry*>(reinterpret_cast<uint8_t*>(p) - sizeof(Entry)); // mistake
         }
         void clear();
+#ifdef DEBUG
         void checkGuards() const;
         Guard& tailGuard() { return *reinterpret_cast<Guard*>(data + size); }
         const Guard& tailGuard() const { return *reinterpret_cast<const Guard*>(data + size); }
-#ifdef DEBUG
+
         Guard frontGuard;
 #endif
         std::atomic<State> state;
         uint32_t size;
         alignas(alignof(uint64_t)) uint8_t data[];
     };
+
     static_assert(sizeof(Entry) % alignof(uint64_t) == 0, "Entry must allow 64bit alignment of data");
     static_assert(alignof(Entry) == alignof(uint64_t), "Entry must be 8 bytes aligned");
+
+#if !defined(DEBUG)
+    static_assert(sizeof(Entry) == 8, "Entry must be 8");
+#endif
 
     struct CursorState
     {
