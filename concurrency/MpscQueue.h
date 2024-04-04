@@ -7,9 +7,9 @@
 
 namespace concurrency
 {
-
 class MpscQueueBase
 {
+#ifdef DEBUG
     struct Guard
     {
         Guard() {}
@@ -21,6 +21,7 @@ class MpscQueueBase
     };
     static_assert(sizeof(Guard) % alignof(std::max_align_t) == 0,
         "MpscQueueBase::Guard must allow proper alignment of data");
+#endif
 
     struct Entry
     {
@@ -59,6 +60,7 @@ class MpscQueueBase
         alignas(alignof(uint64_t)) uint8_t data[];
     };
     static_assert(sizeof(Entry) % alignof(uint64_t) == 0, "Entry must allow 64bit alignment of data");
+    static_assert(alignof(Entry) == alignof(uint64_t), "Entry must be 8 bytes aligned");
 
     struct CursorState
     {
@@ -117,6 +119,7 @@ template <typename T>
 class MpscQueue
 {
 public:
+    static_assert(alignof(T) == alignof(uint64_t), "T must be 8 bytes aligned");
     MpscQueue(uint32_t sizeInBytes) : _queue(sizeInBytes) {}
 
     T* allocate(uint32_t size = sizeof(T))
@@ -147,7 +150,7 @@ private:
 
 /**
  * This is similar to a smart pointer but the purpose is to assure allocate and commit phase of an item in
- * MpscQueue. An allocated item must be commited or the queue popping will halt.
+ * MpscQueue. An allocated item must be committed or the queue popping will halt.
  */
 template <typename T>
 class ScopedAllocCommit
