@@ -95,28 +95,28 @@ void LoggerThread::run()
                 break;
             }
             utils::Time::rawNanoSleep(50 * utils::Time::ms);
-        }
 
-        // Periodically (every 10s) flush log file and re-open if change of i-node is detected.
-        if (isTimeForMaintenance())
-        {
-            auto threadId = (void*)pthread_self();
-            formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance");
-            if (_logFile)
+            // Periodically (every 10s) flush log file and re-open if change of i-node is detected.
+            if (isTimeForMaintenance())
             {
-                fflush(_logFile);
-            }
+                auto threadId = (void*)pthread_self();
+                formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance");
+                if (_logFile)
+                {
+                    fflush(_logFile);
+                }
 
-            if (isLogFileReopenNeeded())
-            {
-                reopenLogFile();
-                std::string logLine = "SMB logfile maintenance: reopen was needed and " +
-                    std::string(_logFile == nullptr ? "failed." : "succeeded.");
-                formatTo(stdout, localTime, "WARN", threadId, logLine.c_str());
-            }
-            else
-            {
-                formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance: reopen was not needed.");
+                if (isLogFileReopenNeeded())
+                {
+                    reopenLogFile();
+                    std::string logLine = "SMB logfile maintenance: reopen was needed and " +
+                        std::string(_logFile == nullptr ? "failed." : "succeeded.");
+                    formatTo(stdout, localTime, "WARN", threadId, logLine.c_str());
+                }
+                else
+                {
+                    formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance: reopen was not needed.");
+                }
             }
         }
     }
@@ -133,15 +133,15 @@ bool LoggerThread::isTimeForMaintenance()
     bool maintenanceIsDue = false;
     if (0 == _lastMaintenanceTime)
     {
-        _lastMaintenanceTime = utils::Time::getAbsoluteTime();
+        _lastMaintenanceTime = utils::Time::getRawAbsoluteTime();
     }
     else
     {
         maintenanceIsDue =
-            utils::Time::diffGT(_lastMaintenanceTime, utils::Time::getRawAbsoluteTime(), utils::Time::sec * 10);
+            utils::Time::diffGT(_lastMaintenanceTime, utils::Time::getRawAbsoluteTime(), utils::Time::sec * 60);
         if (maintenanceIsDue)
         {
-            _lastMaintenanceTime = utils::Time::getAbsoluteTime();
+            _lastMaintenanceTime = utils::Time::getRawAbsoluteTime();
         }
     }
     return maintenanceIsDue;
