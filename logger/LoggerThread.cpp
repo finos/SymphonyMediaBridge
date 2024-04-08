@@ -4,6 +4,7 @@
 #include <execinfo.h>
 #include <filesystem>
 #include <fstream>
+#include <sys/stat.h>
 
 namespace logger
 {
@@ -17,6 +18,7 @@ LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backl
       _logStdOut(logStdOut),
       _logFileName(logFileName && std::strlen(logFileName) > 0 ? logFileName : ""),
       _droppedLogs(0),
+      _lastMaintenanceTime(0),
       _thread(new std::thread([this] { this->run(); }))
 {
     _reOpenLog.test_and_set();
@@ -30,6 +32,8 @@ void LoggerThread::reopenLogFile()
         ::fclose(_logFile);
     }
     _logFile = _logFileName.size() ? fopen(_logFileName.c_str(), "a+") : nullptr;
+    struct stat logFileStat;
+    _logFileINode = (0 == stat(_logFileName.c_str(), &logFileStat)) ? logFileStat.st_ino : 0;
 }
 
 namespace
@@ -58,7 +62,8 @@ void LoggerThread::run()
             if (_logStdOut)
             {
                 formatTo(stdout, localTime, item->logLevel, item->threadId, item->message);
-                if (!std::strcmp(item->logLevel, "ERROR")) {
+                if (!std::strcmp(item->logLevel, "ERROR"))
+                {
                     formatTo(stderr, localTime, item->logLevel, item->threadId, item->message);
                 }
             }
@@ -91,6 +96,29 @@ void LoggerThread::run()
             }
             utils::Time::rawNanoSleep(50 * utils::Time::ms);
         }
+
+        // Periodically (every 10s) flush log file and re-open if change of i-node is detected.
+        if (isTimeForMaintenance())
+        {
+            auto threadId = (void*)pthread_self();
+            formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance");
+            if (_logFile)
+            {
+                fflush(_logFile);
+            }
+
+            if (isLogFileReopenNeeded())
+            {
+                reopenLogFile();
+                std::string logLine = "SMB logfile maintenance: reopen was needed and " +
+                    std::string(_logFile == nullptr ? "failed." : "succeeded.");
+                formatTo(stdout, localTime, "WARN", threadId, logLine.c_str());
+            }
+            else
+            {
+                formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance: reopen was not needed.");
+            }
+        }
     }
 
     if (_logFile)
@@ -98,6 +126,36 @@ void LoggerThread::run()
         fclose(_logFile);
         _logFile = nullptr;
     }
+}
+
+bool LoggerThread::isTimeForMaintenance()
+{
+    bool maintenanceIsDue = false;
+    if (0 == _lastMaintenanceTime)
+    {
+        _lastMaintenanceTime = utils::Time::getAbsoluteTime();
+    }
+    else
+    {
+        maintenanceIsDue =
+            utils::Time::diffGT(_lastMaintenanceTime, utils::Time::getRawAbsoluteTime(), utils::Time::sec * 10);
+        if (maintenanceIsDue)
+        {
+            _lastMaintenanceTime = utils::Time::getAbsoluteTime();
+        }
+    }
+    return maintenanceIsDue;
+}
+
+bool LoggerThread::isLogFileReopenNeeded()
+{
+    if (0 == _logFileName.length())
+    {
+        return false;
+    }
+
+    struct stat logFileStat;
+    return (!_logFile || (_logFileName.c_str(), &logFileStat) != 0 || logFileStat.st_ino != _logFileINode);
 }
 
 /**
@@ -176,7 +234,8 @@ void LoggerThread::immediate(std::chrono::system_clock::time_point timestamp,
 
     if (_logStdOut)
     {
-        if (!std::strcmp(logLevel, "ERROR")) {
+        if (!std::strcmp(logLevel, "ERROR"))
+        {
             formatTo(stderr, localTime, logLevel, threadId, message);
             fflush(stderr);
         }

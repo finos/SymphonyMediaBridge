@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <string>
+#include <sys/types.h>
 #include <thread>
 
 namespace logger
@@ -48,14 +49,18 @@ private:
     void run();
     void reopenLogFile();
     void ensureLogFileExists();
+    bool isTimeForMaintenance();
+    bool isLogFileReopenNeeded();
 
     std::atomic_bool _running;
     std::atomic_flag _reOpenLog = ATOMIC_FLAG_INIT;
     concurrency::MpscQueue<LogItem> _logQueue;
     FILE* _logFile;
+    ino_t _logFileINode;
     bool _logStdOut;
     std::string _logFileName;
     uint32_t _droppedLogs;
+    uint64_t _lastMaintenanceTime;
     std::unique_ptr<std::thread> _thread; // must be last
 };
 } // namespace logger
