@@ -155,7 +155,7 @@ bool LoggerThread::isLogFileReopenNeeded()
     }
 
     struct stat logFileStat;
-    return (!_logFile || (_logFileName.c_str(), &logFileStat) != 0 || logFileStat.st_ino != _logFileINode);
+    return (!_logFile || stat(_logFileName.c_str(), &logFileStat) != 0 || logFileStat.st_ino != _logFileINode);
 }
 
 /**
