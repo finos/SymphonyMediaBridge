@@ -31,15 +31,17 @@ BandwidthEstimator::BandwidthEstimator(const Config& config)
     : _config(config),
       _baseClockOffset(0),
       _lambda(_config.alpha * _config.alpha * (DIMENSIONALITY + _config.kappa)),
-      _processNoise({20, 20, 0.0001}),
+      _processNoise({0, 40, 0.001}),
       _weightCovariance0((_lambda / (DIMENSIONALITY + _lambda)) + (1 + _config.beta - _config.alpha * _config.alpha)),
-      _weightMeanCovariance(1.0 / (2.0 * (DIMENSIONALITY + _lambda))),
-      _weightMean0(1.0 - _weightMeanCovariance * DIMENSIONALITY * 2.0),
+      _weightCovariance(1.0 / (2.0 * (DIMENSIONALITY + _lambda))),
+      _weightMean(_weightCovariance),
+      _weightMean0(1.0 - _weightMean * DIMENSIONALITY * 2.0),
       _sigmaWeight(sqrt(DIMENSIONALITY + _lambda)),
       _receiveBandwidth(20 * utils::Time::ms),
       _previousTransmitTime(0),
       _previousReceiveTime(0),
       _observedDelay(0),
+      _packetSize0(0),
       _congestion(0.0)
 {
     _state(1) = _config.estimate.initialKbpsDownlink;
@@ -77,43 +79,35 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
         _baseClockOffset = receiveTimeNs - transmitTimeNs;
         _previousTransmitTime = transmitTimeNs - 5 * utils::Time::sec;
         _previousReceiveTime = receiveTimeNs - 5 * utils::Time::ms;
+        _packetSize0 = packetSize;
     }
 
     const double tau = std::max(0.0, static_cast<double>(transmitTimeNs - _previousTransmitTime) / utils::Time::ms);
     const double observedDelay =
         static_cast<double>(static_cast<int64_t>(receiveTimeNs - transmitTimeNs - _baseClockOffset)) / utils::Time::ms;
 
-    const auto actualDelay = (observedDelay - _state(2));
+    auto actualDelay = (observedDelay - _state(2));
     if (actualDelay < 0)
     {
-        _state(1) = 0; // queue must be empty before this packet
+        _state(0) = 0; // queue must be empty before this packet
+        _state(2) = observedDelay;
+        actualDelay = 0;
+        _packetSize0 = packetSize;
     }
-
-    const auto currentState = transitionState(packetSize, tau, _state, observedDelay);
-    if (currentState(0) <= packetSize * 8 && actualDelay * currentState(1) > packetSize * 3 &&
-        receiveTimeNs - _previousReceiveTime > utils::Time::ms * 20)
+    else if (actualDelay == 0)
     {
-        // should check if we think we are on mobile. Multiple burst deliveries and typical delay before receiving
-        // packets
-        _state(0) += packetSize * 8;
+        _packetSize0 = std::max<double>(packetSize, _packetSize0);
     }
 
+    const auto currentState = transitionState(packetSize, tau, _state);
     auto processNoise = _processNoise;
 
     double burstObeservationScale = 0;
     if (actualDelay * currentState(1) < currentState(0) && currentState(0) > _config.mtu * 2 * 8)
     {
-        // processNoise(1) = 200;
+        // queue is longer than expected and > 2pkts. Trust observation more and adjust bw more
         burstObeservationScale = 0.5;
-        if (actualDelay != 0)
-        {
-            //    _state(1) = currentState(0) / actualDelay;
-            processNoise(1) = 200;
-        }
-        else
-        {
-            processNoise(1) = 200;
-        }
+        processNoise(1) = 200;
     }
 
     const double congestionScale =
@@ -121,46 +115,46 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
                                      : analyseCongestion(actualDelay, packetSize, receiveTimeNs));
 
     _receiveBandwidth.update(packetSize * 8, receiveTimeNs);
-    // predict mean state
+
+    // generate alternative current positions
     std::array<math::Matrix<double, 3>, SIGMA_POINTS> sigmaPoints;
     generateSigmaPoints(_state, _covarianceP, processNoise, sigmaPoints);
 
+    // calculate where we would have transitioned from alternative positions, and what the delay would be then
     std::array<double, SIGMA_POINTS> predictedDelays;
     for (size_t i = 0; i < sigmaPoints.size(); ++i)
     {
-        sigmaPoints[i] = transitionState(packetSize, tau, sigmaPoints[i], observedDelay);
+        sigmaPoints[i] = transitionState(packetSize, tau, sigmaPoints[i]);
         predictedDelays[i] = predictDelay(sigmaPoints[i]);
     }
+    const double predictedMeanDelay = predictedDelays[0]; // delay of mean state, because 1/bw is non-linear
 
     const double measurementNoise = _config.measurementNoise * congestionScale;
     predictedDelays[SIGMA_POINTS - 2] += measurementNoise;
     predictedDelays[SIGMA_POINTS - 1] -= measurementNoise;
 
-    math::Matrix<double, 3> predictedMeanState(sigmaPoints[0] * _weightMean0);
+    math::Matrix<double, 3> predictedMeanState;
     for (size_t i = 1; i < sigmaPoints.size(); ++i)
     {
-        predictedMeanState += _weightMeanCovariance * sigmaPoints[i];
+        predictedMeanState += sigmaPoints[i];
     }
+    predictedMeanState *= _weightMean;
+    predictedMeanState += sigmaPoints[0] * _weightMean0;
 
+    // calculate variance
+    math::Matrix<double, 3, 3> statePredictionCovariance;
     for (auto& point : sigmaPoints)
     {
         point = (point - predictedMeanState);
     }
 
-    math::Matrix<double, 3, 3> statePredictionCovariance;
     for (size_t i = 1; i < sigmaPoints.size(); ++i)
     {
         statePredictionCovariance += math::outerProduct(sigmaPoints[i]);
     }
-    statePredictionCovariance *= _weightMeanCovariance;
+    statePredictionCovariance *= _weightCovariance;
     statePredictionCovariance += (_weightCovariance0 * math::outerProduct(sigmaPoints[0]));
     assert(math::isValid(statePredictionCovariance));
-
-    double predictedMeanDelay = predictedDelays[0] * _weightMean0;
-    for (size_t i = 1; i < predictedDelays.size(); ++i)
-    {
-        predictedMeanDelay += predictedDelays[i] * _weightMeanCovariance;
-    }
 
     const auto residual0 = predictedDelays[0] - predictedMeanDelay;
     double covDelay = _weightCovariance0 * residual0 * residual0;
@@ -168,15 +162,17 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
     for (size_t i = 1; i < predictedDelays.size(); ++i)
     {
         const auto residual = predictedDelays[i] - predictedMeanDelay;
-        covDelay += _weightMeanCovariance * residual * residual;
+        covDelay += _weightCovariance * residual * residual;
         crossCovariance += residual * sigmaPoints[i];
     }
-    crossCovariance *= _weightMeanCovariance;
+    crossCovariance *= _weightCovariance;
     crossCovariance += _weightCovariance0 * residual0 * sigmaPoints[0];
 
+    // update position towards mean position
     const auto kalmanGain = crossCovariance * (1.0 / covDelay);
     _state = predictedMeanState + kalmanGain * (observedDelay - predictedMeanDelay);
-    _covarianceP = statePredictionCovariance - kalmanGain * covDelay * math::transpose(kalmanGain);
+    _covarianceP = statePredictionCovariance - crossCovariance * math::transpose(kalmanGain);
+    assert(math::isValid(_covarianceP));
     math::makeSymmetric(_covarianceP);
     assert(math::isSymmetric(_covarianceP));
     assert(math::isValid(_covarianceP));
@@ -286,7 +282,7 @@ double BandwidthEstimator::getEstimate(uint64_t timestamp) const
 // in ms
 double BandwidthEstimator::getDelay() const
 {
-    return (_observedDelay - _state(2));
+    return (_observedDelay - _state(2) + (_packetSize0 * 8 / _state(1)));
 }
 
 math::Matrix<double, 3> BandwidthEstimator::getCovariance() const
@@ -299,6 +295,7 @@ math::Matrix<double, 3> BandwidthEstimator::getCovariance() const
     return r;
 }
 
+// generate alternative current positions based on noise in model and process
 void BandwidthEstimator::generateSigmaPoints(const math::Matrix<double, 3>& state,
     const math::Matrix<double, 3, 3>& covP,
     const math::Matrix<double, 3>& processNoise,
@@ -306,14 +303,15 @@ void BandwidthEstimator::generateSigmaPoints(const math::Matrix<double, 3>& stat
 {
     static const auto seed = covP.I() * 0.0000001; // will make it positive definite
     const auto squareRoot = math::choleskyDecompositionLL(covP + seed);
-    sigmaPoints[0] = _state;
+    sigmaPoints[0] = state;
 
     int startIndex = 1;
     for (int c = 0; c < squareRoot.columns(); ++c)
     {
         auto sigmaOffset = _sigmaWeight * squareRoot.getColumn(c);
-        sigmaPoints[startIndex + 2 * c] = _state + sigmaOffset;
-        sigmaPoints[startIndex + 2 * c + 1] = _state - sigmaOffset;
+
+        sigmaPoints[startIndex + 2 * c] = state + sigmaOffset;
+        sigmaPoints[startIndex + 2 * c + 1] = state - sigmaOffset;
     }
 
     startIndex += 2 * squareRoot.columns();
@@ -321,10 +319,14 @@ void BandwidthEstimator::generateSigmaPoints(const math::Matrix<double, 3>& stat
     {
         math::Matrix<double, 3> noise;
         noise(i) = processNoise(i) * _sigmaWeight;
-        sigmaPoints[startIndex + i * 2] = _state + noise;
-        // Offset the positive clock offset sigma point. Better catch up to clock drift.
-        // CO is easily pushed down by packets with short delay.
-        sigmaPoints[startIndex + i * 2 + 1] = _state - (i == 2 ? noise * 0.001 : noise);
+
+        sigmaPoints[startIndex + i * 2] = state + noise;
+        sigmaPoints[startIndex + i * 2 + 1] = state - noise;
+
+        // sigmaPoints[startIndex + i * 2] = state + noise;
+        //  Offset the positive clock offset sigma point. Better catch up to clock drift.
+        //  CO is easily pushed down by packets with short delay.
+        // sigmaPoints[startIndex + i * 2 + 1] = state - (i == 2 ? noise : noise);
     }
 
     // add two points for measurement noise
@@ -332,30 +334,20 @@ void BandwidthEstimator::generateSigmaPoints(const math::Matrix<double, 3>& stat
     sigmaPoints[startIndex] = sigmaPoints[0];
     sigmaPoints[startIndex + 1] = sigmaPoints[0];
 
+    const double maxBw = std::max(state(1), _config.modelMinBandwidth) * 2 - _config.modelMinBandwidth;
     for (auto& point : sigmaPoints)
     {
-        point(0) = std::max(0.0, point(0)); // no magic Q reduction
-        point(1) = std::max(_config.estimate.minKbps, std::min(_config.estimate.maxKbps, point(1)));
+        point(0) = state(0); // std::max(0.0, point(0)); // no magic Q reduction varying the Q causes bw overshoot
+        point(1) = std::max(_config.modelMinBandwidth, std::min(maxBw, point(1)));
     }
 }
 
-math::Matrix<double, 3> BandwidthEstimator::transitionState(uint32_t packetSize,
-    double tau,
-    const math::Matrix<double, 3>& prevState,
-    double observedDelay)
+math::Matrix<double, 3> BandwidthEstimator::transitionState(const uint32_t packetSize,
+    const double tau,
+    const math::Matrix<double, 3>& prevState)
 {
-    const auto bw = std::max(_config.estimate.minKbps, std::min(_config.estimate.maxKbps, prevState(1)));
-    return math::Matrix<double, 3>(
-        {std::max(0.0, std::max(0.0, prevState(0)) - bw * tau) + packetSize * 8, bw, prevState(2)});
-}
-
-math::Matrix<double, 3> BandwidthEstimator::sanitizeState(const math::Matrix<double, 1>& state,
-    double observedDelay,
-    uint32_t packetSize)
-{
-    return math::Matrix<double, 3>({std::max(static_cast<double>(packetSize * 8), state(0)),
-        std::max(_config.estimate.minKbps, std::min(_config.estimate.maxKbps, state(1))),
-        std::min(state(2), observedDelay)});
+    const auto bw = std::max(0.0, std::min(_config.estimate.maxKbps, prevState(1)));
+    return math::Matrix<double, 3>({std::max(0.0, prevState(0) - bw * tau) + packetSize * 8, bw, prevState(2)});
 }
 
 void BandwidthEstimator::updateCongestionMargin(double packetIntervalMs)
@@ -377,7 +369,10 @@ void BandwidthEstimator::updateCongestionMargin(double packetIntervalMs)
 
 double BandwidthEstimator::predictDelay(const math::Matrix<double, 3>& state) const
 {
-    return (state(0) / state(1)) + state(2);
+    assert(state(1) > 0.0);
+    assert(math::isValid(state));
+    const double offsetAdjustment = _packetSize0 * 8 / state(1);
+    return (state(0) / state(1)) + state(2) - offsetAdjustment;
 }
 
 void BandwidthEstimator::reset()

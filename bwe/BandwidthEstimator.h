@@ -16,6 +16,7 @@ struct Config
     double beta = 2.0;
     double measurementNoise = 100.1 * 3;
     double maxNetworkQueue = 500 * 1024;
+    const double modelMinBandwidth = 25.0;
 
     struct Estimate
     {
@@ -91,13 +92,7 @@ private:
         const math::Matrix<double, 3>& processNoise,
         std::array<math::Matrix<double, 3>, SIGMA_POINTS>& sigmaPoints);
 
-    math::Matrix<double, 3> transitionState(uint32_t packetSize,
-        double tau,
-        const math::Matrix<double, 3>& prevState,
-        double observedDelay);
-    math::Matrix<double, 3> sanitizeState(const math::Matrix<double, 1>& state,
-        double observedDelay,
-        uint32_t packetSize);
+    math::Matrix<double, 3> transitionState(uint32_t packetSize, double tau, const math::Matrix<double, 3>& prevState);
     double predictDelay(const math::Matrix<double, 3>& state) const;
 
     void updateCongestionMargin(double packetIntervalMs);
@@ -111,7 +106,8 @@ private:
     const math::Matrix<double, 3> _processNoise; // Q, Bw, offset  to control the filter
 
     const double _weightCovariance0;
-    const double _weightMeanCovariance;
+    const double _weightCovariance;
+    const double _weightMean;
     const double _weightMean0;
     const double _sigmaWeight;
     // in bits per nanosecond
@@ -119,6 +115,7 @@ private:
     uint64_t _previousTransmitTime;
     uint64_t _previousReceiveTime;
     double _observedDelay;
+    double _packetSize0; // packet size at clock offset reset
 
     struct CongestionDips
     {
