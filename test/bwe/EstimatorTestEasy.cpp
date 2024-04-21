@@ -3,6 +3,7 @@
 #include "math/Matrix.h"
 #include "memory/PacketPoolAllocator.h"
 #include "rtp/RtpHeader.h"
+#include "test/CsvWriter.h"
 #include "test/bwe/FakeCall.h"
 #include "test/bwe/FakeCrossTraffic.h"
 #include "test/bwe/FakeVideoSource.h"
@@ -70,9 +71,11 @@ TEST(BweTest, basic)
     memory::PacketPoolAllocator allocator(512, "test");
 
     bwe::BandwidthEstimator estimator(config);
-    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec);
+    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec, "_ssdata/basic.csv");
     call.addSource(new fakenet::FakeCrossTraffic(allocator, 1400, 150));
-    while (call.run(utils::Time::sec)) {}
+    while (call.run(utils::Time::sec))
+    {
+    }
 }
 
 TEST(BweTest, burstDelivery)
@@ -84,9 +87,11 @@ TEST(BweTest, burstDelivery)
 
     link->setBurstDeliveryInterval(45);
 
-    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec);
+    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec, "_ssdata/burstDelivery.csv");
     call.addSource(new fakenet::FakeCrossTraffic(allocator, 1400, 50));
-    while (call.run(utils::Time::sec)) {}
+    while (call.run(utils::Time::sec))
+    {
+    }
 }
 
 TEST(BweTest, plainVideo)
@@ -100,7 +105,7 @@ TEST(BweTest, plainVideo)
     // link->setBurstDeliveryInterval(45);
 
     auto* video = new fakenet::FakeVideoSource(allocator, 1220, 1);
-    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec);
+    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec, "_ssdata/plainVideo.csv");
     // call.addSource(new fakenet::FakeCrossTraffic(allocator, 1400, 2750));
     call.addSource(video);
     while (call.run(utils::Time::sec))
@@ -142,7 +147,7 @@ TEST(BweTest, plainVideoStartLow)
 
     auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);
 
-    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec);
+    fakenet::Call call(allocator, estimator, link, true, 60 * utils::Time::sec, "_ssdata/plainStartLow.csv");
     // call.addSource(new fakenet::FakeCrossTraffic(allocator, 1400, 2750));
     call.addSource(video);
     while (call.run(utils::Time::sec))
@@ -162,7 +167,7 @@ TEST(BweTest, plainVideoBwDrop)
 
     auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);
 
-    fakenet::Call call(allocator, estimator, link, true, 300 * utils::Time::sec);
+    fakenet::Call call(allocator, estimator, link, true, 300 * utils::Time::sec, "_ssdata/videoBwDrop.csv");
     // call.addSource(new fakenet::FakeCrossTraffic(allocator, 1400, 2750));
     call.addSource(video);
     int count = 0;
@@ -188,7 +193,7 @@ TEST(BweTest, startCongested)
     auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);
     video->setBandwidth(1200.0);
 
-    fakenet::Call call(allocator, estimator, link, true, 100 * utils::Time::sec);
+    fakenet::Call call(allocator, estimator, link, true, 500 * utils::Time::sec, "_ssdata/startCongested.csv");
     call.addSource(video);
     int count = 0;
     while (call.run(utils::Time::sec))
@@ -229,7 +234,7 @@ TEST(BweTest, networkPause)
     auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);
     video->setBandwidth(300);
 
-    fakenet::Call call(allocator, estimator, link, true, 100 * utils::Time::sec);
+    fakenet::Call call(allocator, estimator, link, true, 100 * utils::Time::sec, "_ssdata/networkPause.csv");
     call.addSource(video);
     int count = 0;
     while (call.run(utils::Time::sec))
@@ -257,6 +262,86 @@ TEST(BweTest, networkPause)
             EXPECT_GE(call.getEstimate(), 1100);
         }
 
+        count++;
+    }
+}
+
+TEST(BweTest, lowBandwidth)
+{
+    const double IPOH_MARGIN = 200.0 * 34 * 8 / 1000;
+    bwe::Config config;
+    config.measurementNoise *= 1.0;
+    config.estimate.minReportedKbps = 200;
+
+    bwe::BandwidthEstimator estimator(config);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 800, 256 * 1024, 1500);
+    memory::PacketPoolAllocator allocator(1024, "test");
+
+    auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);
+    video->setBandwidth(200.0);
+
+    // audio consuming 100kbps
+    fakenet::Call call(allocator, estimator, link, true, 500 * utils::Time::sec, "_ssdata/estLowBw.csv");
+    call.addSource(video);
+    int count = 0;
+
+    while (call.run(utils::Time::sec / 8))
+    {
+        const auto state = estimator.getState();
+        logger::debug("%ds: ukf estimate %.0f, %.0f, %.6f, rx %.0f",
+            "",
+            count + 1,
+            state(1),
+            state(0) / 8,
+            state(2),
+            estimator.getReceiveRate(call.getTime()));
+
+        if ((count % 8) == 7)
+        {
+            auto ebw = estimator.getEstimate(call.getTime());
+            video->setBandwidth(std::min(ebw - IPOH_MARGIN - 100.0, 560.0));
+            // EXPECT_LT(estimator.getState()(1), 1000.0);
+        }
+        count++;
+    }
+}
+
+TEST(BweTest, lowBw300)
+{
+    const double IPOH_MARGIN = 200.0 * 34 * 8 / 1000;
+    bwe::Config config;
+    config.measurementNoise *= 1.0;
+    config.estimate.minReportedKbps = 200;
+
+    bwe::BandwidthEstimator estimator(config);
+    auto* link = new fakenet::NetworkLink("EstimatorTestEasyLink", 350, 256 * 1024, 1500);
+    memory::PacketPoolAllocator allocator(1024, "test");
+
+    auto* video = new fakenet::FakeVideoSource(allocator, 150, 1);
+    video->setBandwidth(200.0);
+
+    // audio consuming 100kbps
+    fakenet::Call call(allocator, estimator, link, true, 500 * utils::Time::sec, "_ssdata/estLowBw300.csv");
+    call.addSource(video);
+    int count = 0;
+
+    while (call.run(utils::Time::sec / 8))
+    {
+        const auto state = estimator.getState();
+        logger::debug("%ds: ukf estimate %.0f, %.0f, %.6f, rx %.0f",
+            "",
+            count + 1,
+            state(1),
+            state(0) / 8,
+            state(2),
+            estimator.getReceiveRate(call.getTime()));
+
+        if ((count % 8) == 7)
+        {
+            auto ebw = estimator.getEstimate(call.getTime());
+            video->setBandwidth(std::min(ebw - IPOH_MARGIN - 100.0, 560.0));
+            // EXPECT_LT(estimator.getState()(1), 1000.0);
+        }
         count++;
     }
 }

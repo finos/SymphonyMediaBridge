@@ -7,21 +7,31 @@
 namespace fakenet
 {
 
+const size_t IPDTLSOVERHEAD = 34;
+
 Call::Call(memory::PacketPoolAllocator& allocator,
     bwe::Estimator& estimator,
     NetworkLink* firstLink,
     bool audio,
-    uint64_t duration)
+    uint64_t duration,
+    const char* bweDumpFile)
     : _bwe(estimator),
       _allocator(allocator),
-      _timeCursor(utils::Time::getAbsoluteTime()),
-      _endTime(_timeCursor + duration)
+      _startTime(_timeCursor.getAbsoluteTime()),
+      _endTime(_timeCursor.getAbsoluteTime() + duration)
 {
+    utils::Time::initialize(_timeCursor);
     addLink(firstLink);
     if (audio)
     {
         auto audio = new FakeAudioSource(_allocator, 90, 0);
         _mediaSources.push_back(audio);
+    }
+
+    if (bweDumpFile)
+    {
+        _csvWriter = std::make_unique<CsvWriter>(bweDumpFile);
+        _csvWriter->writeLine("time ms, bw kbps, delay ms, bitrate kbps");
     }
 }
 
@@ -36,6 +46,8 @@ Call::~Call()
     {
         delete src;
     }
+
+    utils::Time::initialize();
 }
 
 void Call::addLink(NetworkLink* link)
@@ -51,7 +63,7 @@ void Call::addSource(MediaSource* source)
 
 double Call::getEstimate() const
 {
-    return _bwe.getEstimate(_timeCursor);
+    return _bwe.getEstimate(_timeCursor.getAbsoluteTime());
 }
 
 // returns false when done
@@ -60,11 +72,11 @@ bool Call::run(uint64_t period)
     char data[1400];
     std::fill(data, data + 1400, 0xdd);
 
-    uint64_t nextLog = _timeCursor + period;
-    for (; utils::Time::diff(_timeCursor, _endTime) > 0;)
+    uint64_t nextLog = _timeCursor.getAbsoluteTime() + period;
+    for (; utils::Time::diff(_timeCursor.getAbsoluteTime(), _endTime) > 0;)
     {
-        const auto t = _timeCursor;
-        int64_t timeAdvance = utils::Time::diff(_timeCursor, nextLog);
+        const auto t = _timeCursor.getAbsoluteTime();
+        int64_t timeAdvance = utils::Time::diff(_timeCursor.getAbsoluteTime(), nextLog);
         for (auto* src : _mediaSources)
         {
             for (auto packet = src->getPacket(t); packet; packet = src->getPacket(t))
@@ -92,7 +104,15 @@ bool Call::run(uint64_t period)
             if (packet->get()[0] != FakeCrossTraffic::CROSS_TRAFFIC_PROTOCOL)
             {
                 auto& header = getMetaData(*packet);
-                _bwe.update(packet->getLength(), header.sendTime, t);
+                _bwe.update(packet->getLength() + IPDTLSOVERHEAD, header.sendTime, t);
+                if (_csvWriter)
+                {
+                    _csvWriter->writeLine("%" PRIu64 ", %.1f, %.2f, %.1f",
+                        (_timeCursor.getAbsoluteTime() - _startTime) / utils::Time::ms,
+                        _bwe.getEstimate(_timeCursor.getAbsoluteTime()),
+                        _bwe.getDelay(),
+                        _bwe.getReceiveRate(_timeCursor.getAbsoluteTime()));
+                }
             }
         }
 
@@ -100,7 +120,7 @@ bool Call::run(uint64_t period)
 
         if (timeAdvance > 0)
         {
-            _timeCursor += timeAdvance;
+            _timeCursor.advance(timeAdvance);
         }
 
         if (utils::Time::diff(t, nextLog) <= 0)
@@ -108,7 +128,7 @@ bool Call::run(uint64_t period)
             logger::info("estimate %.0f kbps owd %.1fms, link "
                          "%.0f, Q %zu",
                 "",
-                _bwe.getEstimate(_timeCursor),
+                _bwe.getEstimate(_timeCursor.getAbsoluteTime()),
                 _bwe.getDelay(),
                 _links[0]->getBitRateKbps(t),
                 _links[0]->getQueueLength());
