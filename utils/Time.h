@@ -13,8 +13,8 @@ class TimeSource
 public:
     virtual ~TimeSource() = default;
 
-    virtual uint64_t getAbsoluteTime() = 0;
-    virtual uint64_t getApproximateTime() { return getAbsoluteTime(); };
+    virtual uint64_t getAbsoluteTime() const = 0;
+    virtual uint64_t getApproximateTime() const { return getAbsoluteTime(); };
 
     virtual void nanoSleep(uint64_t nanoSeconds) = 0;
 
