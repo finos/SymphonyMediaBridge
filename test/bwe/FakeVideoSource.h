@@ -37,7 +37,7 @@ public:
         return std::max(int64_t(0), static_cast<int64_t>(_releaseTime - timestamp));
     }
 
-    void setBandwidth(uint32_t kbps) override { _bandwidthKbps = kbps; }
+    void setBandwidth(uint32_t kbps) override;
     uint32_t getBandwidth() const override { return _bandwidthKbps; }
 
     double getBitRate() const { return _avgRate.get() / 1000; }

@@ -8,7 +8,8 @@
 namespace bwe
 {
 class Estimator;
-}
+class BandwidthEstimator;
+} // namespace bwe
 namespace fakenet
 {
 class NetworkLink;
@@ -18,7 +19,7 @@ class Call
 {
 public:
     Call(memory::PacketPoolAllocator& allocator,
-        bwe::Estimator& estimator,
+        bwe::BandwidthEstimator& estimator,
         NetworkLink* firstLink,
         bool audio,
         uint64_t duration,
@@ -33,7 +34,7 @@ public:
     uint64_t getTime() { return _timeCursor.getAbsoluteTime(); }
 
     double getEstimate() const;
-    bwe::Estimator& _bwe;
+    bwe::BandwidthEstimator& _bwe;
 
 private:
     memory::PacketPoolAllocator& _allocator;

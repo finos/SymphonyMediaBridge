@@ -88,6 +88,19 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
         packetSize = _frameSize / 2;
     }
 
+    // needs some space for RTP headers, ext headers
+    if (packetSize < sizeof(FakeVideoFrameData) + 22)
+    {
+        packetSize = 0;
+        if (utils::Time::diffGT(_frameReleaseTime, timestamp, 0))
+        {
+            setNextFrameSize();
+            _frameReleaseTime = timestamp + utils::Time::sec / _fps;
+        }
+
+        _releaseTime = _frameReleaseTime;
+    }
+
     if (packetSize > 0 && utils::Time::diff(timestamp, _releaseTime) <= 0)
     {
         auto packet = memory::makeUniquePacket(_allocator);
@@ -151,14 +164,29 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
 void FakeVideoSource::setNextFrameSize()
 {
     auto meanSize = _bandwidthKbps * 125 / _fps;
+    // key frame every 15s
     if (_counter % (_fps * 15) == 0)
     {
-        meanSize *= 4;
+        meanSize *= std::max(1u, 4 * _fps / 30);
         _keyFrame = true;
     }
     ++_counter;
     _packetsInFrame = 0;
     _frameSize = randomSize(meanSize, 0.2);
     _pacing = (utils::Time::sec / _fps) * _mtu / (2 * (_frameSize + _mtu));
+}
+
+void FakeVideoSource::setBandwidth(uint32_t kbps)
+{
+    _bandwidthKbps = kbps;
+    _fps = 30;
+    if (_bandwidthKbps < 400)
+    {
+        _fps = 15;
+    }
+    if (_bandwidthKbps < 200)
+    {
+        _fps = 7;
+    }
 }
 } // namespace fakenet
