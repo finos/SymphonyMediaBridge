@@ -47,7 +47,7 @@ public:
 
 public: // internal job methods
     void internalUnregisterListener(const std::string& stunUserName, ServerEndpoint::IEvents* listener);
-    void internalStopped();
+    void internalStopped(tcp::JobContext jobContext);
     void internalReceive(int fd);
     void internalAccept();
     void internalShutdown(int fd);

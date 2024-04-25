@@ -84,13 +84,13 @@ public:
     template <class Callable>
     bool post(Callable&& callable)
     {
-        return addJob<CallableJob<Callable>>(std::forward<Callable>(callable));
+        return addJob<CallableJob<std::decay_t<Callable>>>(std::forward<Callable>(callable));
     }
 
     template <class Callable>
     bool post(std::atomic_uint32_t& jobsCounter, Callable&& callable)
     {
-        return addJob<CallableCountedJob<Callable>>(jobsCounter, std::forward<Callable>(callable));
+        return addJob<CallableCountedJob<std::decay_t<Callable>>>(jobsCounter, std::forward<Callable>(callable));
     }
 
     JobManager& getJobManager() { return _jobManager; }

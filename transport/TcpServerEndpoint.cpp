@@ -143,7 +143,8 @@ void TcpServerEndpoint::onSocketPollStopped(int fd)
     {
         _epollCountdown = 1;
         logger::info("server events stopped on %s", _name.c_str(), _socket.getBoundPort().toString().c_str());
-        _receiveJobs.addJob<tcp::PortStoppedJob<TcpServerEndpoint>>(*this, _epollCountdown);
+        _receiveJobs.addJob<tcp::PortStoppedJob<TcpServerEndpoint, tcp::JobContext::RECEIVE_JOBS>>(*this,
+            _epollCountdown);
     }
     else
     {
@@ -390,7 +391,7 @@ void TcpServerEndpoint::internalShutdown(int fd)
     }
 }
 
-void TcpServerEndpoint::internalStopped()
+void TcpServerEndpoint::internalStopped(tcp::JobContext jobContext)
 {
     assert(_epollCountdown == 0);
     _state = Endpoint::State::CREATED;
