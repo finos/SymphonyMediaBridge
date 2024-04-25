@@ -123,10 +123,11 @@ public:
             }
             duration = newDuration;
             totalSize += bucket.size;
-            if (duration == 0)
-            {
-                continue;
-            }
+        }
+
+        if (duration < interval / 4)
+        {
+            return 0;
         }
 
         return totalSize / static_cast<double>(std::max(int64_t(1), duration));

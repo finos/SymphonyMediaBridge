@@ -2,7 +2,7 @@
 #include "FakeAudioSource.h"
 #include "FakeCrossTraffic.h"
 #include "FakeMedia.h"
-#include "bwe/Estimator.h"
+#include "bwe/BandwidthEstimator.h"
 #include "test/transport/NetworkLink.h"
 namespace fakenet
 {
@@ -10,13 +10,14 @@ namespace fakenet
 const size_t IPDTLSOVERHEAD = 34;
 
 Call::Call(memory::PacketPoolAllocator& allocator,
-    bwe::Estimator& estimator,
+    bwe::BandwidthEstimator& estimator,
     NetworkLink* firstLink,
     bool audio,
     uint64_t duration,
     const char* bweDumpFile)
     : _bwe(estimator),
       _allocator(allocator),
+      _timeCursor(0),
       _startTime(_timeCursor.getAbsoluteTime()),
       _endTime(_timeCursor.getAbsoluteTime() + duration)
 {
@@ -31,7 +32,7 @@ Call::Call(memory::PacketPoolAllocator& allocator,
     if (bweDumpFile)
     {
         _csvWriter = std::make_unique<CsvWriter>(bweDumpFile);
-        _csvWriter->writeLine("time ms, bw kbps, delay ms, bitrate kbps");
+        _csvWriter->writeLine("time,bw,delay,bitrate,Q,BW,clk,psz,txTime");
     }
 }
 
@@ -76,6 +77,7 @@ bool Call::run(uint64_t period)
     for (; utils::Time::diff(_timeCursor.getAbsoluteTime(), _endTime) > 0;)
     {
         const auto t = _timeCursor.getAbsoluteTime();
+
         int64_t timeAdvance = utils::Time::diff(_timeCursor.getAbsoluteTime(), nextLog);
         for (auto* src : _mediaSources)
         {
@@ -83,6 +85,7 @@ bool Call::run(uint64_t period)
             {
                 auto& header = getMetaData(*packet);
                 header.sendTime = t;
+
                 _links.front()->push(std::move(packet), t);
             }
             timeAdvance = std::min(timeAdvance, src->timeToRelease(t));
@@ -107,11 +110,17 @@ bool Call::run(uint64_t period)
                 _bwe.update(packet->getLength() + IPDTLSOVERHEAD, header.sendTime, t);
                 if (_csvWriter)
                 {
-                    _csvWriter->writeLine("%" PRIu64 ", %.1f, %.2f, %.1f",
+                    const auto state = _bwe.getState();
+                    _csvWriter->writeLine("%" PRIu64 ", %.1f, %.2f, %.1f, %.0f, %.1f, %.4f, %zu, %" PRIu64,
                         (_timeCursor.getAbsoluteTime() - _startTime) / utils::Time::ms,
                         _bwe.getEstimate(_timeCursor.getAbsoluteTime()),
                         _bwe.getDelay(),
-                        _bwe.getReceiveRate(_timeCursor.getAbsoluteTime()));
+                        _bwe.getReceiveRate(_timeCursor.getAbsoluteTime()),
+                        state(0),
+                        state(1),
+                        state(2),
+                        packet->getLength() + IPDTLSOVERHEAD,
+                        (header.sendTime - _startTime) / utils::Time::ms);
                 }
             }
         }

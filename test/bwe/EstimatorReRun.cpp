@@ -142,7 +142,7 @@ uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
     }
     return 0;
 }
-
+/*
 double findClockOffset(logger::PacketLogReader& reader, uint32_t audioSsrc)
 {
     rtp::SendTimeDial sendTimeDial;
@@ -171,14 +171,14 @@ double findClockOffset(logger::PacketLogReader& reader, uint32_t audioSsrc)
     reader.rewind();
 
     return static_cast<double>(offset) / utils::Time::ms;
-}
+}*/
 } // namespace
 
 class BweRerun : public testing::TestWithParam<std::string>
 {
 };
 
-TEST_P(BweRerun, DISABLED_fromTrace)
+TEST_P(BweRerun, fromTrace)
 {
     bwe::Config config;
     config.congestion.cap.ratio = 0.5;
@@ -192,13 +192,17 @@ TEST_P(BweRerun, DISABLED_fromTrace)
 
     const char* outputFolder = "./_ssdata/";
     bwe::BandwidthEstimator estimator(config);
-    bwe::BwBurstTracker burstTracker;
     rtp::SendTimeDial sendTimeDial;
 
-    logger::PacketLogReader reader(::fopen(("./_bwelogs/" + trace).c_str(), "r"));
+    logger::PacketLogReader reader(::fopen(("../_bwelogs/" + trace).c_str(), "r"));
+    if (!reader.isOpen())
+    {
+        return;
+    }
+
     uint32_t audioSsrc = identifyAudioSsrc(reader);
     reader.rewind();
-    estimator.init(findClockOffset(reader, audioSsrc));
+    // estimator.init(findClockOffset(reader, audioSsrc));
 
     CsvWriter csvOut((outputFolder + trace + ".csv").c_str());
     CsvWriter csvOutAll((outputFolder + trace + "All.csv").c_str());
@@ -207,21 +211,18 @@ TEST_P(BweRerun, DISABLED_fromTrace)
     double prevBw = 0;
     double prevDelay = 0;
     uint64_t start = 0;
-    const char* legend =
-        "time, bwo, burst, bw, q, co, delay, delayerr, size, seqno, stime, rate, slowrate, instantrate";
+    const char* legend = "time,bwo,bw,q,co,delay,delayerr,size,seqno,stime,bwerate,bitrate,instantrate";
     csvOut.writeLine("%s", legend);
     csvOutAll.writeLine("%s", legend);
     logger::info("processing %s", "bweRerun", trace.c_str());
 
-    utils::RateTracker<25> rate(100 * utils::Time::ms);
-    utils::RateTracker<10> instantRate(5 * utils::Time::ms);
+    utils::RateTracker<50> rate(50 * utils::Time::ms);
 
-    const char* formatLine = "%.2f, %.3f,%.1f,%.3f, %.3f,%.3f, %.3f,%.3f, %u,%u,%.6f, %.1f,%.1f,%.1f";
+    const char* formatLine = "%.2f, %.1f,%.1f, %.0f,%.4f, %.2f,%.3f, %u,%u,%.6f, %.1f,%.1f,%.1f";
 
     for (int i = 0; reader.getNext(item) && (start == 0 || item.receiveTimestamp - start < utils::Time::sec * 200); ++i)
     {
         rate.update(item.size * 8, item.receiveTimestamp);
-        instantRate.update(item.size * 8, item.receiveTimestamp);
 
         if (item.ssrc == audioSsrc)
         {
@@ -236,15 +237,14 @@ TEST_P(BweRerun, DISABLED_fromTrace)
         auto bw = estimator.getEstimate(item.receiveTimestamp);
         auto state = estimator.getState();
         auto delay = estimator.getDelay();
-        burstTracker.onPacketReceived(item.size, item.receiveTimestamp, delay, estimator.getState()(0));
+
         const auto predictedDelay = estimator.predictDelay();
-        const auto slowRate = rate.get(item.receiveTimestamp, utils::Time::ms * 2000) * utils::Time::ms;
-        const auto rateNow =
-            std::min(1500000.0, instantRate.get(item.receiveTimestamp, utils::Time::ms * 50) * utils::Time::ms);
+        const auto slowRate =
+            std::min(5000.0, rate.get(item.receiveTimestamp, utils::Time::ms * 1000) * utils::Time::ms);
+        const auto rateNow = std::min(5000.0, rate.get(item.receiveTimestamp, utils::Time::ms * 250) * utils::Time::ms);
         csvOutAll.writeLine(formatLine,
             localTimestamp,
             bw,
-            burstTracker.getBurstBandwidthKbps(item.receiveTimestamp),
             state(1),
             state(0),
             state(2),
@@ -263,7 +263,6 @@ TEST_P(BweRerun, DISABLED_fromTrace)
             csvOut.writeLine(formatLine,
                 localTimestamp,
                 bw,
-                burstTracker.getBurstBandwidthKbps(item.receiveTimestamp),
                 state(1),
                 state(0),
                 state(2),
@@ -331,7 +330,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
     link.setLossRate(0);
     uint64_t wallClock = 0;
     const char* formatLine = "%u, %.1f,%.1f,%.f,%.3f,%.3f,%u,%u,%.6f, %.2f";
-    const char* legend = "time, bwo, bw, q, co, delay, size, seqno, stime, rate";
+    const char* legend = "time,bwo,bw,q,co,delay,size,seqno,stime,bitrate";
 
     bwe::BandwidthEstimator estimator(config);
     rtp::SendTimeDial sendTimeDial;

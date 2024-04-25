@@ -81,7 +81,7 @@ public:
     // kbps
     double getReceiveRate(uint64_t timestamp) const override
     {
-        return utils::Time::ms * _receiveBandwidth.get(timestamp, utils::Time::ms * 500);
+        return utils::Time::ms * _receiveBitrate.get(timestamp, utils::Time::ms * 750);
     }
 
     void reset();
@@ -93,10 +93,16 @@ private:
         std::array<math::Matrix<double, 3>, SIGMA_POINTS>& sigmaPoints);
 
     math::Matrix<double, 3> transitionState(uint32_t packetSize, double tau, const math::Matrix<double, 3>& prevState);
-    double predictDelay(const math::Matrix<double, 3>& state) const;
+    double predictAbsoluteDelay(const math::Matrix<double, 3>& state) const;
 
     void updateCongestionMargin(double packetIntervalMs);
     double analyseCongestion(double actualDelay, uint32_t packetSize, uint64_t timestamp);
+    void calculateProcessNoise(const math::Matrix<double, 3>& currentState,
+        double actualDelay,
+        uint32_t packetSize,
+        uint64_t receiveTimeNs,
+        math::Matrix<double, 3>& processNoise,
+        double& measurementNoise);
 
     const Config _config;
     uint64_t _baseClockOffset;
@@ -111,11 +117,17 @@ private:
     const double _weightMean0;
     const double _sigmaWeight;
     // in bits per nanosecond
-    utils::RateTracker<10> _receiveBandwidth;
+    utils::RateTracker<40> _receiveBitrate;
     uint64_t _previousTransmitTime;
     uint64_t _previousReceiveTime;
     double _observedDelay;
     double _packetSize0; // packet size at clock offset reset
+
+    struct ClockOffsetTrack
+    {
+        uint32_t packet0Size; // first packet in queue
+        uint64_t packet0;
+    };
 
     struct CongestionDips
     {

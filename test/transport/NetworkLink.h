@@ -30,7 +30,7 @@ public:
           _bufferCapacity(bufferSize),
           _lossRate(0),
           _burstIntervalUs(0),
-          _bitRate(200 * utils::Time::ms)
+          _bitRate(100 * utils::Time::ms)
     {
     }
 
