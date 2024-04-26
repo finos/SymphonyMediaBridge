@@ -12,6 +12,9 @@
 
 namespace transport
 {
+
+using namespace tcp;
+
 namespace
 {
 class SendJob : public jobmanager::Job
@@ -151,7 +154,8 @@ TcpEndpointImpl::TcpEndpointImpl(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager, 512),
       _allocator(allocator),
       _defaultListener(nullptr),
-      _epoll(epoll)
+      _epoll(epoll),
+      _epollCountdown(2)
 {
     int rc = _socket.open(localInterface, 0, SOCK_STREAM);
     if (rc)
@@ -324,18 +328,36 @@ void TcpEndpointImpl::sendPacket(const memory::Packet& packet)
 // - await pending send jobs to complete
 void TcpEndpointImpl::stop(Endpoint::IStopEvents* listener)
 {
-    if (_state == State::CONNECTING || _state == State::CONNECTED)
+    bool hasStoppingOwnership = false;
+    auto state = _state.load();
+
+    while (state == State::CONNECTING || state == State::CONNECTED)
     {
-        _stopListener = listener;
-        _state = State::STOPPING;
-        _epoll.remove(_socket.fd(), this);
-    }
-    else if (_state == State::CREATED)
-    {
-        if (listener)
+        if (_state.compare_exchange_weak(state, State::STOPPING))
         {
-            listener->onEndpointStopped(this);
+            _stopListener = listener;
+            _epoll.remove(_socket.fd(), this);
+            hasStoppingOwnership = true;
+            break;
         }
+    }
+
+    // When we don't have the stopping ownership
+    // we need to sync with _receiveJobs to call `onEndpointStopped`
+    // otherwise we can have a race condition when the socket is terminated
+    // by the remote side at the same time
+    if (!hasStoppingOwnership)
+    {
+        _receiveJobs.post([listener, this]() {
+            if (_state.load() == State::CREATED)
+            {
+                listener->onEndpointStopped(this);
+            }
+            else
+            {
+                _stopListener = listener;
+            }
+        });
     }
 }
 
@@ -344,15 +366,25 @@ void TcpEndpointImpl::stop(Endpoint::IStopEvents* listener)
 // then start close port procedure
 void TcpEndpointImpl::onSocketShutdown(int fd)
 {
-    if (_depacketizer.fd == fd && (_state == State::CONNECTING || _state == State::CONNECTED))
+    if (_depacketizer.fd == fd)
     {
-        logger::debug("peer shut down socket STOPPING", _name.c_str());
-        _state = State::STOPPING;
-        if (!_receiveJobs.post(utils::bind(&TcpEndpointImpl::internalReceive, this, _depacketizer.fd)))
+        auto state = _state.load();
+        // Avoid race conditions whith endpoint stop(Endpoint::IStopEvents* listener)
+        // called when the TcpSocket is being deleted by SMB at the same time we receive
+        // a close request from remote side
+        while (state == State::CONNECTING || state == State::CONNECTED)
         {
-            logger::warn("failed to add ReceiveJob", _name.c_str());
+            if (_state.compare_exchange_weak(state, State::STOPPING))
+            {
+                logger::debug("peer shut down socket STOPPING", _name.c_str());
+                if (!_receiveJobs.post(utils::bind(&TcpEndpointImpl::internalReceive, this, _depacketizer.fd)))
+                {
+                    logger::warn("failed to add ReceiveJob", _name.c_str());
+                }
+
+                _epoll.remove(fd, this);
+            }
         }
-        _epoll.remove(fd, this);
     }
 }
 
@@ -374,17 +406,35 @@ void TcpEndpointImpl::onSocketPollStarted(int fd)
 
 void TcpEndpointImpl::onSocketPollStopped(int fd)
 {
-    _epollCountdown = 2;
-    _receiveJobs.addJob<tcp::PortStoppedJob<TcpEndpointImpl>>(*this, _epollCountdown);
-    _sendJobs.addJob<tcp::PortStoppedJob<TcpEndpointImpl>>(*this, _epollCountdown);
+    assert(_epollCountdown.load() == 2);
+    _epollCountdown = 2; // We set it anyway
+    _sendJobs.addJob<tcp::PortStoppedJob<TcpEndpointImpl, JobContext::SEND_JOBS>>(*this, _epollCountdown);
+    _receiveJobs.addJob<tcp::PortStoppedJob<TcpEndpointImpl, JobContext::RECEIVE_JOBS>>(*this, _epollCountdown);
 }
 
-void TcpEndpointImpl::internalStopped()
+void TcpEndpointImpl::internalStopped(JobContext jobContext)
 {
     _state = State::CREATED;
-    if (_stopListener)
+
+    auto callEndpointStopFn = [this]() {
+        if (_stopListener)
+        {
+            _stopListener->onEndpointStopped(this);
+        }
+    };
+
+    // the _stopListener sync is made over receiveJobs queue
+    // and this method can be called either on receiveJobs queue context
+    // or sendJobs queue context.
+    // When it is called on the sendJobs, we need to post a job on receiveJob to avoid
+    // race conditions with set the _stopListener pointer on onStop
+    if (jobContext == JobContext::RECEIVE_JOBS)
     {
-        _stopListener->onEndpointStopped(this);
+        callEndpointStopFn();
+    }
+    else
+    {
+        _receiveJobs.post(callEndpointStopFn);
     }
 }
 

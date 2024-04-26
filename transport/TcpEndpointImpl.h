@@ -33,7 +33,14 @@ private:
 
 namespace tcp
 {
-template <typename T>
+
+enum class JobContext
+{
+    RECEIVE_JOBS,
+    SEND_JOBS
+};
+
+template <typename T, JobContext JOB_CONTEXT>
 class PortStoppedJob : public jobmanager::Job
 {
 public:
@@ -44,7 +51,7 @@ public:
         auto value = --_countDown;
         if (value == 0)
         {
-            _endpoint.internalStopped();
+            _endpoint.internalStopped(JOB_CONTEXT);
         }
     }
 
@@ -119,7 +126,7 @@ public:
     void internalSendTo(const transport::SocketAddress& target, memory::UniquePacket packet);
     void continueSend();
 
-    void internalStopped();
+    void internalStopped(tcp::JobContext jobContext);
 
 private:
     std::atomic<Endpoint::State> _state;
