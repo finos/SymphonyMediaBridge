@@ -184,14 +184,6 @@ TEST(BweTest, startCongested)
     int count = 0;
     while (call.run(utils::Time::sec))
     {
-        const auto state = estimator.getState();
-        logger::debug("%ds: ukf estimate %.0f, %.0f, %.3f, rx %.0f",
-            "",
-            count + 1,
-            state(1),
-            state(0) / 8,
-            state(2),
-            estimator.getReceiveRate(call.getTime()));
         if (count == 2)
         {
             estimator.reset();
@@ -225,15 +217,7 @@ TEST(BweTest, networkPause)
     int count = 0;
     while (call.run(utils::Time::sec))
     {
-        const auto state = estimator.getState();
-        logger::debug("%ds: ukf estimate %.0f, %.0f, %.3f, rx %.0f",
-            "",
-            count + 1,
-            state(1),
-            state(0) / 8,
-            state(2),
-            estimator.getReceiveRate(call.getTime()));
-        video->setBandwidth(std::min(4000.0, 0.9 * call.getEstimate()));
+        video->setBandwidth(std::min(4000.0, 0.8 * call.getEstimate()));
         if (count == 15)
         {
             link->setBandwidthKbps(0);
@@ -289,15 +273,6 @@ TEST_P(BweEthernet, lowBw)
 
     while (call.run(utils::Time::sec / 8))
     {
-        const auto state = estimator.getState();
-        logger::debug("%ds: ukf estimate %.0f, %.0f, %.6f, rx %.0f",
-            "",
-            count + 1,
-            state(1),
-            state(0) / 8,
-            state(2),
-            estimator.getReceiveRate(call.getTime()));
-
         if ((count % 8) == 7)
         {
             auto ebw = estimator.getEstimate(call.getTime());

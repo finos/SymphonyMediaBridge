@@ -32,7 +32,7 @@ Call::Call(memory::PacketPoolAllocator& allocator,
     if (bweDumpFile)
     {
         _csvWriter = std::make_unique<CsvWriter>(bweDumpFile);
-        _csvWriter->writeLine("time,bw,delay,bitrate,Q,BW,clk,psz,txTime");
+        _csvWriter->writeLine("time,bwo,delay,bitrate,Q,bw,clk,psz,txTime");
     }
 }
 
@@ -134,14 +134,6 @@ bool Call::run(uint64_t period)
 
         if (utils::Time::diff(t, nextLog) <= 0)
         {
-            logger::info("estimate %.0f kbps owd %.1fms, link "
-                         "%.0f, Q %zu",
-                "",
-                _bwe.getEstimate(_timeCursor.getAbsoluteTime()),
-                _bwe.getDelay(),
-                _links[0]->getBitRateKbps(t),
-                _links[0]->getQueueLength());
-
             return true;
         }
     }

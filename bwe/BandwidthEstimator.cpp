@@ -76,11 +76,6 @@ double BandwidthEstimator::predictDelay() const
     return predictAbsoluteDelay(_state) - _state(ClockOffset) + offsetAdjustment;
 }
 
-void BandwidthEstimator::init(double clockOffset)
-{
-    _state(ClockOffset) = clockOffset;
-}
-
 void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, uint64_t receiveTimeNs)
 {
     if (_baseClockOffset == 0 && _state(QueuedBits) == 0 && _previousTransmitTime == 0)
@@ -99,7 +94,7 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
 
     const auto expectedState = transitionState(packetSize, tau, _state);
     const auto expectedDelay = predictAbsoluteDelay(expectedState);
-    double clockOffsetScale = 1.0;
+
     auto actualDelay = (observedDelay - _state(ClockOffset));
     if (actualDelay < 0)
     {
@@ -112,13 +107,11 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
     {
         _packetSize0 = packetSize;
     }
-    else if (observedDelay > expectedDelay && tau > 20.0 && expectedState(QueuedBits) < 1280 * 8 * 3)
+    else if (observedDelay > expectedDelay && tau > 20.0 && expectedState(QueuedBits) < _config.mtu * 8 * 3)
     {
-        // inter transmit interval larger than 20ms risk having radio shut down. allow co to adjust
-        _state(ClockOffset) += std::min(20.0,
-            observedDelay - expectedDelay); // 100ms delay increase acceptance is based on 3G, 4G traces
+        // inter transmit interval larger than 20ms risk having radio shut down. adjust co up
+        _state(ClockOffset) += std::min(30.0, observedDelay - expectedDelay);
         _packetSize0 = packetSize;
-        clockOffsetScale = 1.0;
     }
 
     auto processNoise = _processNoise;
@@ -129,8 +122,6 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
         receiveTimeNs,
         processNoise,
         measurementNoise);
-
-    processNoise(2) *= clockOffsetScale;
 
     _receiveBitrate.update(packetSize * 8, receiveTimeNs);
 
@@ -191,31 +182,38 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
     _covarianceP = statePredictionCovariance - crossCovariance * math::transpose(kalmanGain);
 
     _state(Bandwidth) = std::max(_state(Bandwidth), _config.modelMinBandwidth);
-    _state(QueuedBits) = std::max(0.0, _state(QueuedBits));
+    _state(Bandwidth) = std::min(_config.estimate.maxKbps, _state(Bandwidth));
+    sanitizeQueue(observedDelay, _state);
+    _state(ClockOffset) = std::min(observedDelay, _state(ClockOffset));
 
-    if (observedDelay - predictAbsoluteDelay(_state) < 0 && _state(QueuedBits) > _config.mtu * 3)
-    {
-        // adjust queue if we received packet earlier than expected. If bw is higher than expected, queue should also
-        // have drained more
-        const double delayErr = predictAbsoluteDelay(_state) - observedDelay;
-        _state(QueuedBits) -= delayErr * _state(Bandwidth) / 3;
-        _state(QueuedBits) = std::max(0.0, _state(QueuedBits));
-    }
     assert(math::isValid(_covarianceP));
     math::makeSymmetric(_covarianceP);
     assert(math::isSymmetric(_covarianceP));
     assert(math::isValid(_covarianceP));
 
     _observedDelay = observedDelay;
-    _state(QueuedBits) = std::max(0.0, std::min(_state(QueuedBits), _config.maxNetworkQueue * 8));
-    _state(ClockOffset) = std::min(observedDelay, _state(ClockOffset));
-    _state(Bandwidth) = std::min(_config.estimate.maxKbps, std::max(_config.estimate.minKbps, _state(Bandwidth)));
 
     updateCongestionMargin(
         utils::Time::diff(_previousReceiveTime, receiveTimeNs) / static_cast<double>(utils::Time::ms));
 
     _previousReceiveTime = receiveTimeNs;
     _previousTransmitTime = transmitTimeNs;
+}
+
+void BandwidthEstimator::sanitizeQueue(const double observedDelay, math::Matrix<double, 3>& state)
+{
+    state(QueuedBits) = std::max(0.0, state(QueuedBits));
+
+    if (observedDelay - predictAbsoluteDelay(state) < 0 && state(QueuedBits) > _config.mtu * 3)
+    {
+        // adjust queue if we received packet earlier than expected. If bw is higher than expected, queue should also
+        // have drained more
+        const double delayErr = predictAbsoluteDelay(state) - observedDelay;
+        state(QueuedBits) -= delayErr * state(Bandwidth) / 3;
+        state(QueuedBits) = std::max(0.0, state(QueuedBits));
+    }
+
+    state(QueuedBits) = std::max(0.0, std::min(state(QueuedBits), _config.maxNetworkQueue * 8));
 }
 
 void BandwidthEstimator::calculateProcessNoise(const math::Matrix<double, 3>& currentState,
@@ -229,7 +227,7 @@ void BandwidthEstimator::calculateProcessNoise(const math::Matrix<double, 3>& cu
         currentState(QueuedBits) > _config.mtu * 2 * 8)
     {
         // queue is longer than expected and > 2pkts. Trust observation more and adjust bw more
-        processNoise(1) = 200;
+        processNoise(Bandwidth) = 200;
         measurementNoise = _config.measurementNoise * 0.5;
         return;
     }
