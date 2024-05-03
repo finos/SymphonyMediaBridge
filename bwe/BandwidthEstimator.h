@@ -16,7 +16,7 @@ struct Config
     double beta = 2.0;
     double measurementNoise = 100.1 * 3;
     double maxNetworkQueue = 500 * 1024;
-    const double modelMinBandwidth = 25.0;
+    const double modelMinBandwidth = 125.0;
 
     struct Estimate
     {
@@ -67,8 +67,6 @@ class BandwidthEstimator : public Estimator
 public:
     explicit BandwidthEstimator(const Config& config);
 
-    void init(double clockOffset);
-
     void update(uint32_t packetSize, uint64_t transmitTimeNs, uint64_t receiveTimeNs) override;
     void onUnmarkedTraffic(uint32_t packetSize, uint64_t receiveTimeNs) override;
 
@@ -103,6 +101,7 @@ private:
         uint64_t receiveTimeNs,
         math::Matrix<double, 3>& processNoise,
         double& measurementNoise);
+    void sanitizeQueue(double observedDelay, math::Matrix<double, 3>& state);
 
     const Config _config;
     uint64_t _baseClockOffset;
@@ -122,13 +121,6 @@ private:
     uint64_t _previousReceiveTime;
     double _observedDelay;
     double _packetSize0; // packet size at clock offset reset
-
-    struct ClockOffsetTrack
-    {
-        uint32_t packet0Size; // first packet in queue
-        uint64_t packet0;
-    };
-
     struct CongestionDips
     {
         static constexpr double maxCap = 100000.0;
