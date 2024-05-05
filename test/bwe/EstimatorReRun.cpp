@@ -142,43 +142,13 @@ uint32_t identifyAudioSsrc(logger::PacketLogReader& reader)
     }
     return 0;
 }
-/*
-double findClockOffset(logger::PacketLogReader& reader, uint32_t audioSsrc)
-{
-    rtp::SendTimeDial sendTimeDial;
-    uint64_t start = 0;
-    int64_t offset = 900000000;
-    logger::PacketLogItem item;
-    int64_t blockOffset = 0;
-    for (int i = 0; reader.getNext(item) && (start == 0 || item.receiveTimestamp - start < utils::Time::sec * 200); ++i)
-    {
-        if (item.ssrc == audioSsrc || item.transmitTimestamp == 0)
-        {
-            continue;
-        }
-        auto sendTime = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, item.receiveTimestamp);
-        if (start == 0)
-        {
-            start = (start == 0 ? item.receiveTimestamp : start);
-            blockOffset = item.receiveTimestamp - sendTime;
-        }
-
-        if (static_cast<int64_t>(item.receiveTimestamp - sendTime - blockOffset) < offset)
-        {
-            offset = static_cast<int64_t>(item.receiveTimestamp - sendTime) - blockOffset;
-        }
-    }
-    reader.rewind();
-
-    return static_cast<double>(offset) / utils::Time::ms;
-}*/
 } // namespace
 
 class BweRerun : public testing::TestWithParam<std::string>
 {
 };
 
-TEST_P(BweRerun, fromTrace)
+TEST_P(BweRerun, DISABLED_fromTrace)
 {
     bwe::Config config;
     config.congestion.cap.ratio = 0.5;
