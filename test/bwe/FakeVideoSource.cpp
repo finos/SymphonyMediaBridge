@@ -88,19 +88,6 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
         packetSize = _frameSize / 2;
     }
 
-    // needs some space for RTP headers, ext headers
-    if (packetSize < sizeof(FakeVideoFrameData) + 22)
-    {
-        packetSize = 0;
-        if (utils::Time::diffGT(_frameReleaseTime, timestamp, 0))
-        {
-            setNextFrameSize();
-            _frameReleaseTime = timestamp + utils::Time::sec / _fps;
-        }
-
-        _releaseTime = _frameReleaseTime;
-    }
-
     if (packetSize > 0 && utils::Time::diff(timestamp, _releaseTime) <= 0)
     {
         auto packet = memory::makeUniquePacket(_allocator);
@@ -123,7 +110,7 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             bool lastInFrame = false;
             if (_frameSize > 0)
             {
-                _releaseTime += _counter % 2 == 0 ? 0 : _pacing;
+                _releaseTime += _pacing;
             }
             else
             {
@@ -153,8 +140,8 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
     {
         setNextFrameSize();
         _rtpTimestamp += 90000 / _fps;
-        _releaseTime = timestamp;
         _frameReleaseTime += utils::Time::sec / _fps;
+        _releaseTime = _frameReleaseTime;
         return getPacket(timestamp);
     }
 
@@ -163,6 +150,11 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
 
 void FakeVideoSource::setNextFrameSize()
 {
+    if (_bandwidthKbps < 100)
+    {
+        _frameSize = 0;
+        return;
+    }
     auto meanSize = _bandwidthKbps * 125 / _fps;
     // key frame every 15s
     if (_counter % (_fps * 15) == 0)

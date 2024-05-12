@@ -284,7 +284,7 @@ TEST_P(BweEthernet, lowBw)
 
         if (count > 6 * 8)
         {
-            EXPECT_GT(estimator.getEstimate(call.getTime()), std::min(9000.0, linkBw * 0.8));
+            EXPECT_GT(estimator.getEstimate(call.getTime()), std::min(8500.0, linkBw * 0.8));
         }
     }
 }

@@ -803,11 +803,11 @@ TEST_F(BarbellTest, barbellStats)
             EXPECT_EQ(s2["video"]["inbound"]["activeStreamCount"], 3);
 
             // Packates per second for audio (expectations for values per second we can hardcode):
-            EXPECT_NEAR(s1["video"]["inbound"]["packetsPerSecond"], 660, 30.0);
-            EXPECT_NEAR(s2["video"]["outbound"]["packetsPerSecond"], 660, 30.0);
+            EXPECT_NEAR(s1["video"]["inbound"]["packetsPerSecond"], 710, 30.0);
+            EXPECT_NEAR(s2["video"]["outbound"]["packetsPerSecond"], 710, 30.0);
 
-            EXPECT_NEAR(s1["video"]["outbound"]["packetsPerSecond"], 330, 15.0);
-            EXPECT_NEAR(s2["video"]["inbound"]["packetsPerSecond"], 330, 15.0);
+            EXPECT_NEAR(s1["video"]["outbound"]["packetsPerSecond"], 350, 15.0);
+            EXPECT_NEAR(s2["video"]["inbound"]["packetsPerSecond"], 350, 15.0);
 
             // Audio bitrate symmetry (expectations for values per second we can hardcode):
             EXPECT_NEAR(s1["video"]["inbound"]["bitrateKbps"], 6222, 200.0);
