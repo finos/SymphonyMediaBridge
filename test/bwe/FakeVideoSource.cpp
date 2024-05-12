@@ -110,11 +110,11 @@ memory::UniquePacket FakeVideoSource::getPacket(uint64_t timestamp)
             bool lastInFrame = false;
             if (_frameSize > 0)
             {
-                _releaseTime += _pacing;
+                _releaseTime += _packetsInFrame < 3 ? 0 : _pacing;
             }
             else
             {
-                _releaseTime = _frameReleaseTime;
+                _releaseTime += utils::Time::us * 100;
                 lastInFrame = true;
             }
             _avgRate.update(packet->getLength() * 8, timestamp);
