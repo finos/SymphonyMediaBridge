@@ -91,6 +91,7 @@ void IntegrationTest::TearDown()
     GTEST_SKIP();
 #endif
 
+    utils::Time::initialize();
     _timeSource.shutdown();
 
     _bridge.reset();
