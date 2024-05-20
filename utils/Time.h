@@ -27,6 +27,7 @@ namespace Time
 
 void initialize();
 void initialize(TimeSource& timeSource);
+bool isDefaultTimeSource();
 
 /**
  * Returns absolute time since some machine specific point in time in nanoseconds.

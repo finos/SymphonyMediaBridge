@@ -91,7 +91,12 @@ void IntegrationTest::TearDown()
     GTEST_SKIP();
 #endif
 
-    utils::Time::initialize();
+    // if test ran, it will have re initialized, otherwise it is only threads started in Setup that runs.
+    if (!utils::Time::isDefaultTimeSource())
+    {
+        _timeSource.waitForThreadsToSleep(_workerThreads.size() + 2, 3 * utils::Time::sec);
+        utils::Time::initialize();
+    }
     _timeSource.shutdown();
 
     _bridge.reset();

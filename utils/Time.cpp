@@ -62,6 +62,8 @@ void initialize()
     initialize(_defaultTimeSource);
 }
 
+bool isDefaultTimeSource() {return _timeSource == &_defaultTimeSource;}
+
 void formatTime(const TimeSource& timeSource, char out[32])
 {
     const std::time_t currentTime = std::chrono::system_clock::to_time_t(timeSource.wallClock());
