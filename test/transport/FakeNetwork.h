@@ -176,7 +176,7 @@ private:
     Gateway& _internet;
     int _portCount = 1000;
     mutable std::mutex _nodesMutex;
-    memory::Map<std::pair<transport::SocketAddress, transport::SocketAddress>, bool, 1024> _blackList;
+    concurrency::MpmcHashmap32<std::pair<transport::SocketAddress, transport::SocketAddress>, bool> _blackList;
 };
 
 class InternetRunner

@@ -160,7 +160,8 @@ void Internet::process(const uint64_t timestamp)
 Firewall::Firewall(const transport::SocketAddress& publicIp, Gateway& internet)
     : _portMappingsUdp(512),
       _portMappingsTcp(512),
-      _internet(internet)
+      _internet(internet),
+      _blackList(1024)
 {
     addPublicIp(publicIp);
     internet.addLocal(this);
@@ -171,7 +172,8 @@ Firewall::Firewall(const transport::SocketAddress& publicIpv4,
     Gateway& internet)
     : _portMappingsUdp(512),
       _portMappingsTcp(512),
-      _internet(internet)
+      _internet(internet),
+      _blackList(1024)
 {
     addPublicIp(publicIpv4);
     addPublicIp(publicIpv6);

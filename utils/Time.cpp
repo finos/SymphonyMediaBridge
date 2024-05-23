@@ -62,7 +62,10 @@ void initialize()
     initialize(_defaultTimeSource);
 }
 
-bool isDefaultTimeSource() {return _timeSource == &_defaultTimeSource;}
+bool isDefaultTimeSource()
+{
+    return _timeSource == &_defaultTimeSource;
+}
 
 void formatTime(const TimeSource& timeSource, char out[32])
 {
