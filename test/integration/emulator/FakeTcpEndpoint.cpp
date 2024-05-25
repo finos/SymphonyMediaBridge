@@ -27,7 +27,9 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager, 256 * 1024),
       _fakeFd(++_fdGenerator)
 {
-    while (!_network->isLocalPortFree(_localPort.setPort(_portCounter++))) {}
+    while (!_network->isLocalPortFree(_localPort.setPort(_portCounter++)))
+    {
+    }
 }
 
 FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
@@ -93,7 +95,11 @@ void FakeTcpEndpoint::sendStunTo(const transport::SocketAddress& target,
 
 void FakeTcpEndpoint::connect(const transport::SocketAddress& target)
 {
-    _network->addLocal(this);
+    if (!_network->addLocal(this))
+    {
+        logger::error("Cannot open tcp port. IP clash", _name.c_str());
+        return;
+    }
     _state = State::CONNECTING;
     _peerPort = target;
 

@@ -29,13 +29,9 @@ FakeTcpServerEndpoint::FakeTcpServerEndpoint(jobmanager::JobManager& jobManager,
       _transportFactory(transportFactory),
       _endpointFactory(endpointFactory)
 {
-    if (!_network->isLocalPortFree(_localPort))
+    if (!_network->addLocal(this))
     {
         logger::error("TCP port already in use", _name.c_str());
-    }
-    else
-    {
-        _network->addLocal(this);
     }
 }
 
@@ -61,7 +57,7 @@ void FakeTcpServerEndpoint::onReceive(fakenet::Protocol protocol,
     }
 }
 
-bool FakeTcpServerEndpoint::hasIp(const transport::SocketAddress& target)
+bool FakeTcpServerEndpoint::hasIp(const transport::SocketAddress& target) const
 {
     return (target == _localPort);
 }
@@ -118,7 +114,10 @@ void FakeTcpServerEndpoint::internalReceive()
                     transport::SocketAddress(),
                     transport::SocketAddress());
 
-                _network->addLocal(tcpEndpoint);
+                if (!_network->addLocal(tcpEndpoint))
+                {
+                    logger::error("failed to accept tcp endpoint!", "FakeTcpServerEndpoint");
+                }
                 tcpEndpoint->sendSynAck(packetInfo.source);
                 _endpoints.emplace(packetInfo.source,
                     TcpEndpointItem{shareEndpoint, std::weak_ptr<transport::Endpoint>(shareEndpoint), tcpEndpoint});

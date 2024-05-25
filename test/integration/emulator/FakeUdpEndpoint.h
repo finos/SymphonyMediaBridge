@@ -56,7 +56,8 @@ public:
         const void* data,
         size_t length,
         uint64_t timestamp) override;
-    bool hasIp(const transport::SocketAddress& target) override;
+    bool hasIp(const transport::SocketAddress& target) const override;
+    bool hasIpClash(const fakenet::NetworkNode& node) const override;
 
     void process(uint64_t timestamp) override;
     std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return _networkLink; }

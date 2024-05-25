@@ -65,7 +65,7 @@ void Gateway::onReceive(Protocol protocol,
     const bool pushed = _packets.push(std::make_unique<Packet>(protocol, data, len, source, target));
     if (!pushed)
     {
-        logger::warn("gateway queue full", "Fakenetwork");
+        logger::warn("gateway queue full", "FakeNetwork");
     }
 }
 
@@ -77,15 +77,19 @@ Internet::~Internet()
     }
 }
 
-void Internet::addLocal(NetworkNode* node)
+bool Internet::addLocal(NetworkNode* newNode)
 {
     std::lock_guard<std::mutex> lock(_nodesMutex);
-    _nodes.push_back(node);
-}
-
-void Internet::addPublic(NetworkNode* node)
-{
-    return addLocal(node);
+    for (auto& node : _nodes)
+    {
+        if (node->hasIpClash(*newNode))
+        {
+            logger::error("IP clash adding public node", "Internet");
+            return false;
+        }
+    }
+    _nodes.push_back(newNode);
+    return true;
 }
 
 void Internet::removeNode(NetworkNode* node)
@@ -101,7 +105,7 @@ void Internet::removeNode(NetworkNode* node)
     }
 }
 
-bool Internet::isPublicPortFree(const transport::SocketAddress& ipPort) const
+bool Internet::isLocalPortFree(const transport::SocketAddress& ipPort) const
 {
     std::lock_guard<std::mutex> lock(_nodesMutex);
     for (auto& node : _nodes)
@@ -192,16 +196,18 @@ Firewall::~Firewall()
     }
 }
 
-void Firewall::addLocal(NetworkNode* endpoint)
+bool Firewall::addLocal(NetworkNode* endpoint)
 {
     std::lock_guard<std::mutex> lock(_nodesMutex);
+    for (auto& node : _endpoints)
+    {
+        if (node->hasIpClash(*endpoint))
+        {
+            return false;
+        }
+    }
     _endpoints.push_back(endpoint);
-}
-
-void Firewall::addPublic(NetworkNode* endpoint)
-{
-    std::lock_guard<std::mutex> lock(_nodesMutex);
-    _publicEndpoints.push_back(endpoint);
+    return true;
 }
 
 void Firewall::removeNode(NetworkNode* node)
@@ -215,14 +221,12 @@ void Firewall::removeNode(NetworkNode* node)
             return;
         }
     }
-    for (auto it = _publicEndpoints.begin(); it != _publicEndpoints.end(); ++it)
-    {
-        if (*it == node)
-        {
-            _publicEndpoints.erase(it);
-            return;
-        }
-    }
+}
+
+bool Firewall::hasIpClash(const NetworkNode& newNode) const
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    return newNode.hasIp(_publicIpv4) || newNode.hasIp(_publicIpv6);
 }
 
 bool Firewall::isLocalPortFree(const transport::SocketAddress& ipPort) const
@@ -238,26 +242,9 @@ bool Firewall::isLocalPortFree(const transport::SocketAddress& ipPort) const
     return true;
 }
 
-bool Firewall::isPublicPortFree(const transport::SocketAddress& ipPort) const
-{
-    std::lock_guard<std::mutex> lock(_nodesMutex);
-    for (auto& node : _publicEndpoints)
-    {
-        if (node->hasIp(ipPort))
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
 void Firewall::processEndpoints(const uint64_t timestamp)
 {
     for (auto* node : _endpoints)
-    {
-        node->process(timestamp);
-    }
-    for (auto* node : _publicEndpoints)
     {
         node->process(timestamp);
     }
@@ -345,24 +332,8 @@ void Firewall::process(const uint64_t timestamp)
         }
 
         packet->source = acquirePortMapping(packet->protocol, packet->source);
-        dispatchPublicly(*packet, timestamp);
+        _internet.onReceive(packet->protocol, packet->source, packet->target, packet->data, packet->length, timestamp);
     }
-}
-
-void Firewall::dispatchPublicly(const Packet& packet, const uint64_t timestamp)
-{
-    assert(packet.source.getFamily() == packet.target.getFamily());
-    for (auto publicEp : _publicEndpoints)
-    {
-        if (publicEp->hasIp(packet.target))
-        {
-            NETWORK_LOG("dmz %s -> %s", "firewall", packet.source.toString().c_str(), packet.target.toString().c_str());
-            publicEp->onReceive(packet.protocol, packet.source, packet.target, packet.data, packet.length, timestamp);
-            return;
-        }
-    }
-
-    _internet.onReceive(packet.protocol, packet.source, packet.target, packet.data, packet.length, timestamp);
 }
 
 transport::SocketAddress Firewall::acquirePortMapping(const Protocol protocol, const transport::SocketAddress& source)
@@ -375,7 +346,9 @@ transport::SocketAddress Firewall::acquirePortMapping(const Protocol protocol, c
     }
 
     auto publicAddress = (source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4);
-    while (portMap.contains(transport::SocketAddress(publicAddress, ++_portCount))) {}
+    while (portMap.contains(transport::SocketAddress(publicAddress, ++_portCount)))
+    {
+    }
 
     return addPortMapping(protocol, source, _portCount);
 }
@@ -551,11 +524,7 @@ std::map<std::string, std::shared_ptr<NetworkLink>> getMapOfInternet(std::shared
         const auto downlink = node->getDownlink();
         internetMap.emplace(downlink->getName(), downlink);
     }
-    for (const auto& node : internet->getPublicNodes())
-    {
-        const auto downlink = node->getDownlink();
-        internetMap.emplace(downlink->getName(), downlink);
-    }
+
     return internetMap;
 }
 } // namespace fakenet

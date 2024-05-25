@@ -581,7 +581,8 @@ public:
     void cancelStunTransaction(__uint128_t transactionId) override {}
 
     transport::SocketAddress getLocalPort() const override { return _address; }
-    bool hasIp(const transport::SocketAddress& target) override { return target == _address; }
+    bool hasIp(const transport::SocketAddress& target) const override { return target == _address; }
+    bool hasIpClash(const NetworkNode& node) const override { return node.hasIp(_address); }
 
     void attach(std::unique_ptr<ice::IceSession>& session)
     {
@@ -678,7 +679,7 @@ public:
           _internet(internet)
     {
         assert(!port.empty());
-        internet.addPublic(this);
+        internet.addLocal(this);
     }
     void onReceive(fakenet::Protocol protocol,
         const transport::SocketAddress& source,
@@ -703,7 +704,8 @@ public:
             }
         }
     }
-    bool hasIp(const transport::SocketAddress& target) override { return target == _address; }
+    bool hasIp(const transport::SocketAddress& target) const override { return target == _address; }
+    bool hasIpClash(const NetworkNode& node) const override { return node.hasIp(_address); }
 
     transport::SocketAddress getIp() const { return _address; }
 
