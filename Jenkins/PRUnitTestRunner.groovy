@@ -91,7 +91,7 @@ try {
 
     emailext(
         body: '''${SCRIPT, template="groovy-html.template"}''',
-        to 'ricardo.martins.domingues@gmail.com',
+        to: 'ricardo.martins.domingues@gmail.com',
         subject: "Jenkins PR build failed",
         mimeType: 'text/html',
         attachLog: true
