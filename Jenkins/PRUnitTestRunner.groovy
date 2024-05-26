@@ -89,11 +89,13 @@ try {
 } catch(Exception ex) {
     println "Sending email..."
 
-    emailext body: "${JELLY_SCRIPT, template='html'}"
+    emailext(
+        body: "${JELLY_SCRIPT, template='html'}"
         to 'ricardo.martins.domingues@gmail.com'
         subject: "Jenkins PR build failed",
         mimeType: 'text/html',
         attachLog: true
+    )
 
     throw ex
 }
