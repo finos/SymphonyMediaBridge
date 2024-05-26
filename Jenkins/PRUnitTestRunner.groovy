@@ -89,13 +89,17 @@ try {
 } catch(Exception ex) {
     println "Sending email..."
 
-    emailext(
-        body: '''${SCRIPT, template="groovy-html.template"}''',
-        to: 'ricardo.martins.domingues@gmail.com',
-        subject: "Jenkins PR build failed",
-        mimeType: 'text/html',
-        attachLog: true
-    )
+    try {
+        emailext(
+            body: '''${SCRIPT, template="groovy-html.template"}''',
+            to: 'ricardo.martins.domingues@gmail.com',
+            subject: "Jenkins PR build failed",
+            mimeType: 'text/html',
+            attachLog: true
+        )
+    } catch(Exception ex1) {
+        println "Fail to send email " + ex1.toString();
+    }
 
     throw ex
 }
