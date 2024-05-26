@@ -90,7 +90,7 @@ try {
     println "Sending email..."
 
     emailext(
-        body: "${JELLY_SCRIPT, template='html'}"
+        body: '''${SCRIPT, template="groovy-html.template"}'''
         to 'ricardo.martins.domingues@gmail.com'
         subject: "Jenkins PR build failed",
         mimeType: 'text/html',
