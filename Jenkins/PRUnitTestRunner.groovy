@@ -30,56 +30,70 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
 }
 
 abortPreviousRunningBuilds()
-parallel "Release el7": {
-    node('be-integration') {
-        prRunner("Release", "el7", "latest")
-    }
-}, "Release AWS-linux": {
-    node('be-integration') {
-        prRunner("Release", "aws-linux", "latest")
-    }
-}, "Release el8": {
-    node('be-integration') {
-        prRunner("Release", "el8", "latest")
-    }
-}, "Release Ubuntu-22.04 (Jammy)": {
-    node('be-integration') {
-        prRunner("Release", "ubuntu-jammy", "latest")
-    }
-}, "LCheck": {
-    node('be-integration') {
-        prRunner("LCheck", "el8", "latest")
-    }
-}, "TCheck": {
-    node('be-integration') {
-        prRunner("TCheck", "el8", "latest")
-    }
-}, "DCheck": {
-    node('be-integration') {
-        prRunner("DCheck", "el8", "latest")
-    }
-}, "LCov": {
-    node('be-integration') {
-        try {
-            prRunner("LCov", "el8", "latest")
-        } finally {
-            stage("Post Actions") {
-                dir ("el8/smb") {
-                    junit testResults: "test-results*.xml"
-                    publishHTML(target: [
-                            allowMissing         : false,
-                            alwaysLinkToLastBuild: false,
-                            keepAll              : true,
-                            reportDir            : "coverage",
-                            reportFiles          : "index.html",
-                            reportName           : "Code Coverage Report"
-                    ])
+
+try {
+    parallel "Release el7": {
+        node('be-integration') {
+            prRunner("Release", "el7", "latest")
+        }
+    }, "Release AWS-linux": {
+        node('be-integration') {
+            prRunner("Release", "aws-linux", "latest")
+        }
+    }, "Release el8": {
+        node('be-integration') {
+            prRunner("Release", "el8", "latest")
+        }
+    }, "Release Ubuntu-22.04 (Jammy)": {
+        node('be-integration') {
+            prRunner("Release", "ubuntu-jammy", "latest")
+        }
+    }, "LCheck": {
+        node('be-integration') {
+            prRunner("LCheck", "el8", "latest")
+        }
+    }, "TCheck": {
+        node('be-integration') {
+            prRunner("TCheck", "el8", "latest")
+        }
+    }, "DCheck": {
+        node('be-integration') {
+            prRunner("DCheck", "el8", "latest")
+        }
+    }, "LCov": {
+        node('be-integration') {
+            try {
+                prRunner("LCov", "el8", "latest")
+            } finally {
+                stage("Post Actions") {
+                    dir ("el8/smb") {
+                        junit testResults: "test-results*.xml"
+                        publishHTML(target: [
+                                allowMissing         : false,
+                                alwaysLinkToLastBuild: false,
+                                keepAll              : true,
+                                reportDir            : "coverage",
+                                reportFiles          : "index.html",
+                                reportName           : "Code Coverage Report"
+                        ])
+                    }
                 }
             }
         }
+    }, "Release Ubuntu public": {
+        node('be-integration') {
+            prRunner("Release", "ubuntu-focal-deb", "latest")
+        }
     }
-}, "Release Ubuntu public": {
-    node('be-integration') {
-        prRunner("Release", "ubuntu-focal-deb", "latest")
-    }
+
+} catch(Exception ex) {
+    println "Sending email..."
+
+    emailext body: "${JELLY_SCRIPT, template='html'}"
+        to 'ricardo.martins.domingues@gmail.com'
+        subject: "Jenkins PR build failed",
+        mimeType: 'text/html',
+        attachLog: true
+
+    throw ex
 }

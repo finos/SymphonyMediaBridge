@@ -22,6 +22,7 @@ TEST(ParserTest, patchNoIceCandidates)
 
 TEST(ParserTest, patchEmptyIceCandidates)
 {
+    ASSERT_TRUE(false);
     auto patchBody = ResourceLoader::loadAsJson("api-patch-empty-ice-candidates.json");
     api::EndpointDescription endpointDescription = api::Parser::parsePatchEndpoint(patchBody, "endpointId-0");
 
