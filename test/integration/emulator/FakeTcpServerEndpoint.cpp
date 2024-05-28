@@ -42,7 +42,7 @@ void FakeTcpServerEndpoint::onReceive(fakenet::Protocol protocol,
     size_t length,
     uint64_t timestamp)
 {
-    assert(hasIp(target));
+    assert(hasIp(target, protocol));
     // assert(protocol != fakenet::Protocol::UDP);
 
     auto packet = memory::makeUniquePacket(_networkLinkAllocator, data, length);
@@ -57,9 +57,9 @@ void FakeTcpServerEndpoint::onReceive(fakenet::Protocol protocol,
     }
 }
 
-bool FakeTcpServerEndpoint::hasIp(const transport::SocketAddress& target) const
+bool FakeTcpServerEndpoint::hasIp(const transport::SocketAddress& target, const fakenet::Protocol protocol) const
 {
-    return (target == _localPort);
+    return (target == _localPort && protocol >= fakenet::Protocol::SYN && protocol <= fakenet::Protocol::SYN_ACK);
 }
 
 void FakeTcpServerEndpoint::process(uint64_t timestamp)

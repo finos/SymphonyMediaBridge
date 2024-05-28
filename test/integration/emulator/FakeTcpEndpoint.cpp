@@ -27,7 +27,7 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager, 256 * 1024),
       _fakeFd(++_fdGenerator)
 {
-    while (!_network->isLocalPortFree(_localPort.setPort(_portCounter++)))
+    while (!_network->isLocalPortFree(_localPort.setPort(_portCounter++), fakenet::Protocol::TCPDATA))
     {
     }
 }
@@ -152,8 +152,9 @@ void FakeTcpEndpoint::onReceive(fakenet::Protocol protocol,
     size_t length,
     uint64_t timestamp)
 {
-    assert(hasIp(target));
+    assert(hasIp(target, protocol));
     assert(protocol != fakenet::Protocol::UDP);
+    assert(source == _peerPort);
     auto packet = memory::makeUniquePacket(_networkLinkAllocator, data, length);
     assert(!isWeirdPacket(*packet));
     _networkLink->push(serializeInbound(_networkLinkAllocator, protocol, source, data, length), timestamp);

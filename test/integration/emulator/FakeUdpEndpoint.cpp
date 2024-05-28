@@ -340,24 +340,24 @@ void FakeUdpEndpoint::onReceive(fakenet::Protocol protocol,
     size_t length,
     uint64_t timestamp)
 {
-    assert(hasIp(target));
+    assert(hasIp(target, protocol));
     assert(protocol == fakenet::Protocol::UDP);
 
     _networkLink->push(serializeInbound(_networkLinkAllocator, protocol, source, data, length), timestamp);
 }
 
-bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target) const
+bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const
 {
     if (_state != State::CONNECTED)
     {
         return false;
     }
-    return target == _localPort;
+    return target == _localPort && protocol == fakenet::Protocol::UDP;
 }
 
 bool FakeUdpEndpoint::hasIpClash(const fakenet::NetworkNode& node) const
 {
-    return node.hasIp(_localPort);
+    return node.hasIp(_localPort, fakenet::Protocol::UDP);
 }
 
 void FakeUdpEndpoint::process(uint64_t timestamp)

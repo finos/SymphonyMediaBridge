@@ -22,7 +22,8 @@ enum Protocol : uint8_t
     SYN_ACK,
     FIN,
     ACK,
-    TCPDATA
+    TCPDATA,
+    ANY
 };
 
 const char* toString(Protocol p);
@@ -38,9 +39,10 @@ public:
         const void* data,
         size_t length,
         uint64_t timestamp) = 0;
-    virtual bool hasIp(const transport::SocketAddress& target) const = 0;
+    virtual bool hasIp(const transport::SocketAddress& target, fakenet::Protocol) const = 0;
     virtual bool hasIpClash(const NetworkNode& node) const = 0;
     virtual void process(uint64_t timestamp){};
+    virtual fakenet::Protocol getProtocol() const = 0;
     virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() { return nullptr; }
 };
 
@@ -78,7 +80,7 @@ public:
 
     virtual void removeNode(NetworkNode* node) = 0;
 
-    virtual bool isLocalPortFree(const transport::SocketAddress&) const = 0;
+    virtual bool isLocalPortFree(const transport::SocketAddress&, fakenet::Protocol) const = 0;
 
     void onReceive(Protocol protocol,
         const transport::SocketAddress& source,
@@ -95,13 +97,14 @@ class Internet : public Gateway
 {
 public:
     ~Internet();
-    bool hasIp(const transport::SocketAddress& target) const override { return true; }
-    bool hasIpClash(const NetworkNode& node) const override { return false; }
+    bool hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const override { return true; }
+    bool hasIpClash(const NetworkNode& node) const override;
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::ANY; }
 
     bool addLocal(NetworkNode* node) override;
     void removeNode(NetworkNode* node) override;
 
-    bool isLocalPortFree(const transport::SocketAddress& ipPort) const override;
+    bool isLocalPortFree(const transport::SocketAddress& ipPort, fakenet::Protocol protocol) const override;
 
     void process(uint64_t timestamp) override;
 
@@ -124,9 +127,10 @@ public:
 
     void addPublicIp(const transport::SocketAddress& addr);
 
-    bool isLocalPortFree(const transport::SocketAddress& ipPort) const override;
+    bool isLocalPortFree(const transport::SocketAddress& ipPort, fakenet::Protocol protocol) const override;
 
-    bool hasIp(const transport::SocketAddress& port) const override
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::ANY; }
+    bool hasIp(const transport::SocketAddress& port, fakenet::Protocol) const override
     {
         return _publicIpv4.equalsIp(port) || _publicIpv6.equalsIp(port);
     }

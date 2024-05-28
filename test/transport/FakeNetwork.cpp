@@ -44,6 +44,8 @@ const char* toString(Protocol p)
         return "FIN";
     case Protocol::ACK:
         return "ACK";
+    case Protocol::ANY:
+        return "ANY";
     }
 
     return "any";
@@ -105,12 +107,25 @@ void Internet::removeNode(NetworkNode* node)
     }
 }
 
-bool Internet::isLocalPortFree(const transport::SocketAddress& ipPort) const
+bool Internet::isLocalPortFree(const transport::SocketAddress& ipPort, fakenet::Protocol protocol) const
 {
     std::lock_guard<std::mutex> lock(_nodesMutex);
     for (auto& node : _nodes)
     {
-        if (node->hasIp(ipPort))
+        if (node->hasIp(ipPort, protocol))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool Internet::hasIpClash(const NetworkNode& newNode) const
+{
+    std::lock_guard<std::mutex> lock(_nodesMutex);
+    for (auto& node : _nodes)
+    {
+        if (node->hasIpClash(newNode))
         {
             return false;
         }
@@ -132,7 +147,7 @@ void Internet::process(const uint64_t timestamp)
         std::lock_guard<std::mutex> lock(_nodesMutex);
         for (auto node : _nodes)
         {
-            if (node->hasIp(packet->target))
+            if (node->hasIp(packet->target, packet->protocol))
             {
                 NETWORK_LOG("forward %s %s -> %s bytes: %lu ",
                     "Internet",
@@ -226,15 +241,15 @@ void Firewall::removeNode(NetworkNode* node)
 bool Firewall::hasIpClash(const NetworkNode& newNode) const
 {
     std::lock_guard<std::mutex> lock(_nodesMutex);
-    return newNode.hasIp(_publicIpv4) || newNode.hasIp(_publicIpv6);
+    return newNode.hasIp(_publicIpv4, fakenet::Protocol::UDP) || newNode.hasIp(_publicIpv6, fakenet::Protocol::UDP);
 }
 
-bool Firewall::isLocalPortFree(const transport::SocketAddress& ipPort) const
+bool Firewall::isLocalPortFree(const transport::SocketAddress& ipPort, fakenet::Protocol protocol) const
 {
     std::lock_guard<std::mutex> lock(_nodesMutex);
     for (auto& node : _endpoints)
     {
-        if (node->hasIp(ipPort))
+        if (node->hasIp(ipPort, protocol))
         {
             return false;
         }
@@ -258,7 +273,7 @@ void Firewall::dispatchNAT(const Packet& packet, const uint64_t timestamp)
     {
         for (auto endpoint : _endpoints)
         {
-            if (endpoint->hasIp(portPair->lanPort))
+            if (endpoint->hasIp(portPair->lanPort, packet.protocol))
             {
                 NETWORK_LOG("NAT %s, %s -> %s -> %s",
                     "Firewall",
@@ -282,7 +297,7 @@ bool Firewall::dispatchLocally(const Packet& packet, const uint64_t timestamp)
 {
     for (auto ep : _endpoints)
     {
-        if (ep->hasIp(packet.target))
+        if (ep->hasIp(packet.target, packet.protocol))
         {
             NETWORK_LOG("local %s -> %s",
                 "Firewall",
@@ -310,7 +325,7 @@ void Firewall::process(const uint64_t timestamp)
             continue;
         }
 
-        if (hasIp(packet->target))
+        if (hasIp(packet->target, packet->protocol))
         {
             dispatchNAT(*packet, timestamp);
             continue;

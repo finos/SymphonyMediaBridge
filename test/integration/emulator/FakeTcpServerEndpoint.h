@@ -46,8 +46,9 @@ private:
         const void* data,
         size_t length,
         uint64_t timestamp) override;
-    bool hasIp(const transport::SocketAddress& target) const override;
-    bool hasIpClash(const NetworkNode& node) const override { return node.hasIp(_localPort); }
+    bool hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const override;
+    bool hasIpClash(const NetworkNode& node) const override { return node.hasIp(_localPort, fakenet::Protocol::SYN); }
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::SYN; }
     void process(uint64_t timestamp) override;
 
     void internalReceive();
