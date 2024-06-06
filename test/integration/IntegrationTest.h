@@ -348,6 +348,11 @@ void make5secCallWithDefaultAudioProfile(emulator::GroupCall<emulator::SfuClient
         client->_audioSource->setVolume(0.6);
     }
 
+    for (auto& client : groupCall.clients)
+    {
+        client->startRecording();
+    }
+
     groupCall.run(utils::Time::sec * 5);
     utils::Time::nanoSleep(utils::Time::sec * 1);
 
