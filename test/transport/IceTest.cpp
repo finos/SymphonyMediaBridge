@@ -644,7 +644,6 @@ void FakeEndpoint::onReceive(fakenet::Protocol protocol,
 
     if (_address.equalsIp(target))
     {
-        logger::debug("received from %s -> %s", "FakeEndpoint", source.toString().c_str(), target.toString().c_str());
         _session->onStunPacketReceived(this, source, data, length, timestamp);
     }
     else if (_gateway)
