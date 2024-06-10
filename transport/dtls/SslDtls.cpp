@@ -26,41 +26,7 @@ int verify(int, X509_STORE_CTX*)
 
 EVP_PKEY* generateRsaKey()
 {
-    auto bigNum = BN_new();
-    if (!bigNum)
-    {
-        return nullptr;
-    }
-
-    if (BN_set_word(bigNum, RSA_F4) == 0)
-    {
-        return nullptr;
-    }
-
-    auto rsaKey = RSA_new();
-    if (!rsaKey)
-    {
-        return nullptr;
-    }
-
-    if (RSA_generate_key_ex(rsaKey, keySize, bigNum, nullptr) == 0)
-    {
-        return nullptr;
-    }
-
-    auto evpPkey = EVP_PKEY_new();
-    if (!evpPkey)
-    {
-        return nullptr;
-    }
-
-    if (EVP_PKEY_assign_RSA(evpPkey, rsaKey) == 0)
-    {
-        return nullptr;
-    }
-
-    BN_free(bigNum);
-    return evpPkey;
+    return EVP_RSA_gen(keySize);
 }
 
 X509* generateCertificate(SSL_CTX* sslContext, EVP_PKEY* evpPkey)
