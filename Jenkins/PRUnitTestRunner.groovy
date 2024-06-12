@@ -86,8 +86,8 @@ try {
     }
 } finally {
     build(job: 'MediaBridge/SMB PR/PR Execution Result Publisher', parameters: [
-        [$class: 'StringParameterValue', name: "PR_ID", value: "PR_${env.CHANGE_ID}"],
+        [$class: 'StringParameterValue', name: "PR_ID", value: "PR-${env.CHANGE_ID}"],
         [$class: 'StringParameterValue', name: "PR_BUILD_NUMBER", value: env.BUILD_NUMBER]
-        ])
+        ], wait: false)
 }
 
