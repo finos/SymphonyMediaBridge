@@ -26,6 +26,9 @@ int verify(int, X509_STORE_CTX*)
 
 EVP_PKEY* generateRsaKey()
 {
+#if OPENSSL_VERSION_MAJOR >= 3
+    return EVP_RSA_gen(keySize);
+#else
     auto bigNum = BN_new();
     if (!bigNum)
     {
@@ -61,6 +64,7 @@ EVP_PKEY* generateRsaKey()
 
     BN_free(bigNum);
     return evpPkey;
+#endif
 }
 
 X509* generateCertificate(SSL_CTX* sslContext, EVP_PKEY* evpPkey)

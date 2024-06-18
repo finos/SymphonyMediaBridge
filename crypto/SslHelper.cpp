@@ -1,9 +1,12 @@
-#include "SslHelper.h"
-
+#include "crypto/SslHelper.h"
+#include <array>
 #include <cassert>
 #include <cstring>
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
+#if OPENSSL_VERSION_MAJOR >= 3
+#include <openssl/core_names.h>
+#include <openssl/params.h>
+#else
+#endif
 
 namespace
 {
@@ -31,14 +34,20 @@ std::string toHexString(const void* srcData, uint16_t len)
     return s;
 }
 
-HMAC::HMAC() : _ctx(HMAC_CTX_new())
+HMAC::HMAC() : _ctx(nullptr)
 {
+#if OPENSSL_VERSION_MAJOR >= 3
+    _mac = EVP_MAC_fetch(nullptr, "HMAC", nullptr);
+    assert(_mac);
+    _ctx = EVP_MAC_CTX_new(_mac);
+#else
+    _ctx = HMAC_CTX_new();
+#endif
     assert(_ctx);
 }
 
-HMAC::HMAC(const void* key, int keyLength) : _ctx(HMAC_CTX_new())
+HMAC::HMAC(const void* key, int keyLength) : HMAC()
 {
-    assert(_ctx);
     init(key, keyLength);
 }
 
@@ -48,38 +57,81 @@ bool HMAC::init(const void* key, int keyLength)
     assert(keyLength >= 0);
     if (key != nullptr && keyLength > 0)
     {
-        int success = HMAC_Init_ex(_ctx, key, keyLength, EVP_sha1(), nullptr);
+#if OPENSSL_VERSION_MAJOR >= 3
+        _key.resize(static_cast<size_t>(keyLength));
+        memcpy(_key.data(), key, _key.size());
+
+        return macInit();
+#else
+        const auto success = HMAC_Init_ex(_ctx, key, keyLength, EVP_sha1(), nullptr);
         assert(success);
         assert(HMAC_size(_ctx) <= 20);
-        return true;
+        return success;
+#endif
     }
     else
     {
+        _key.clear();
         assert(false);
         return false;
     }
 }
+
+#if OPENSSL_VERSION_MAJOR >= 3
+bool HMAC::macInit()
+{
+    char sha1DigestString[] = "sha1";
+    std::array<OSSL_PARAM, 4> params{
+        OSSL_PARAM_construct_utf8_string(OSSL_MAC_PARAM_DIGEST, sha1DigestString, sizeof(sha1DigestString)),
+        OSSL_PARAM_construct_end()};
+    const auto success = EVP_MAC_init(_ctx, _key.data(), _key.size(), params.data());
+    assert(success);
+    return success;
+}
+#endif
 
 /**
  * Resets calculation and prepares for another run off add, add, compute.
  */
 bool HMAC::reset()
 {
-    int success = HMAC_Init_ex(_ctx, nullptr, 0, nullptr, nullptr);
+#if OPENSSL_VERSION_MAJOR >= 3
+    if (!_key.empty())
+    {
+        return macInit();
+    }
+    else
+    {
+        const auto success = EVP_MAC_init(_ctx, nullptr, 0, nullptr);
+        assert(success);
+        return success;
+    }
+#else
+    const auto success = HMAC_Init_ex(_ctx, nullptr, 0, nullptr, nullptr);
     assert(success);
     assert(HMAC_size(_ctx) <= 20);
     return success;
+#endif
 }
 
 HMAC::~HMAC()
 {
+#if OPENSSL_VERSION_MAJOR >= 3
+    EVP_MAC_CTX_free(_ctx);
+    EVP_MAC_free(_mac);
+#else
     HMAC_CTX_free(_ctx);
+#endif
 }
 
 void HMAC::add(const void* data, int length)
 {
     assert(length > 0);
-    int success = HMAC_Update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
+#if OPENSSL_VERSION_MAJOR >= 3
+    const auto success = EVP_MAC_update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
+#else
+    const auto success = HMAC_Update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
+#endif
     assert(success);
 }
 
@@ -88,8 +140,13 @@ void HMAC::add(const void* data, int length)
  */
 void HMAC::compute(uint8_t* sha) const
 {
-    unsigned int outLen = 0;
-    int success = HMAC_Final(_ctx, sha, &outLen);
+#if OPENSSL_VERSION_MAJOR >= 3
+    size_t outLen = 20;
+    const auto success = EVP_MAC_final(_ctx, sha, &outLen, outLen);
+#else
+    uint32_t outLen = 0;
+    const auto success = HMAC_Final(_ctx, sha, &outLen);
+#endif
     assert(success);
     assert(outLen == 20);
 }
