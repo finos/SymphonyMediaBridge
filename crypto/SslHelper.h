@@ -2,11 +2,11 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 #include <openssl/opensslv.h>
 #include <string>
+#include <vector>
 
 namespace crypto
 {
@@ -40,8 +40,7 @@ private:
 #else
     hmac_ctx_st* _ctx;
 #endif
-    std::unique_ptr<uint8_t[]> _key;
-    int32_t _keyLength;
+    std::vector<uint8_t> _key;
 
 #if OPENSSL_VERSION_MAJOR >= 3
     [[nodiscard]] bool macInit();
