@@ -1,10 +1,12 @@
 #pragma once
-#include <cinttypes>
-#include <string>
 
-struct hmac_ctx_st;
-struct evp_md_ctx_st;
-struct evp_cipher_ctx_st;
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/opensslv.h>
+#include <string>
 
 namespace crypto
 {
@@ -32,7 +34,18 @@ public:
     }
 
 private:
+#if OPENSSL_VERSION_MAJOR >= 3
+    EVP_MAC* _mac = nullptr;
+    EVP_MAC_CTX* _ctx;
+#else
     hmac_ctx_st* _ctx;
+#endif
+    std::unique_ptr<uint8_t[]> _key;
+    int32_t _keyLength;
+
+#if OPENSSL_VERSION_MAJOR >= 3
+    [[nodiscard]] bool macInit();
+#endif
 };
 
 class MD5
