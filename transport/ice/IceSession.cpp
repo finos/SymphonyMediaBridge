@@ -1271,7 +1271,6 @@ void IceSession::stateCheck(const uint64_t now)
 void IceSession::freezePendingProbes(uint64_t now)
 {
     // We are going to clear all remote candidates without candidatePairs
-    logger::info("-------------------------- STARTING freezePendingProbes -------------------", _logId.c_str());
     _remoteCandidates.clear();
     auto itEnd = _candidatePairs.end();
 
@@ -1317,7 +1316,6 @@ void IceSession::freezePendingProbes(uint64_t now)
     }
 
     _candidatePairs.erase(itEnd, _candidatePairs.end());
-    logger::info("-------------------------- DONE freezePendingProbes -------------------", _logId.c_str());
 }
 
 void IceSession::removeNonReadableRemoteCandidates(uint64_t now)
