@@ -1076,22 +1076,10 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
     auto dataReceiver = _dataReceiver.load();
     if (_rtpIceSession->isAttached(&endpoint))
     {
-        if (ice::isResponse(packet->get()) && _rtpIceSession->isResponseAuthentic(packet->get(), packet->getLength()))
-        {
-        }
-        else if (ice::isRequest(packet->get()) &&
-            _rtpIceSession->isRequestAuthentic(packet->get(), packet->getLength()))
-        {
-        }
-        else
+        if (!_rtpIceSession->isIceAuthentic(packet->get(), packet->getLength()))
         {
             // TODO attack, add metric for this
             return;
-        }
-
-        if (_rtpIceSession->canAcceptNewRemoteCandidate(timestamp, source))
-        {
-            endpoint.registerListener(source, this);
         }
 
         auto timeout = _rtpIceSession->nextTimeout(timestamp);
@@ -1857,6 +1845,7 @@ bool TransportImpl::setRemotePeer(const SocketAddress& target)
     {
         endpoint->registerListener(_peerRtpPort, this);
     }
+
     for (auto& endpoint : _rtcpEndpoints)
     {
         endpoint->registerListener(_peerRtcpPort, this);
@@ -1922,7 +1911,7 @@ void TransportImpl::doSetRemoteIce(const memory::AudioPacket& credentialPacket,
                     endpoint->registerDefaultListener(this);
                     _rtpEndpoints.push_back(endpoint);
 
-                    _rtpIceSession->addRemoteCandidate(candidate, endpoint.get());
+                    _rtpIceSession->addRemoteTcpPassiveCandidate(candidate, endpoint.get());
                 }
             }
         }
@@ -2434,13 +2423,66 @@ void TransportImpl::setTag(const char* tag)
     utils::strncpy(_tag, tag, sizeof(_tag));
 }
 
+void TransportImpl::onIceCandidateAccepted(ice::IceSession* session,
+    ice::IceEndpoint* endpoint,
+    const ice::IceCandidate& remoteCandidate)
+{
+    logger::info("candidate accepted: %s %s, %s - %s",
+        _loggableId.c_str(),
+        endpoint->getLocalPort().getFamilyString().c_str(),
+        ice::toString(endpoint->getTransportType()).c_str(),
+        endpoint->getLocalPort().toString().c_str(),
+        remoteCandidate.address.toString().c_str());
+
+    for (auto& udpEndpoint : _rtpEndpoints)
+    {
+        // static upper cast is a safer option to compare raw points as an
+        // offset might be added in case of multiple inheritance
+        // and ice::IceEndpoint* is not the first (although it not currently the case).
+        if (endpoint == static_cast<ice::IceEndpoint*>(udpEndpoint.get()))
+        {
+            udpEndpoint->registerListener(remoteCandidate.address, this);
+            return;
+        }
+    }
+
+    for (auto& udpEndpoint : _rtpEndpoints)
+    {
+        if (endpoint == static_cast<ice::IceEndpoint*>(udpEndpoint.get()))
+        {
+            udpEndpoint->registerListener(remoteCandidate.address, this);
+            return;
+        }
+    }
+
+    logger::error("Not possible to register listener as the endpoint was not found: %s %s, %s - %s",
+        _loggableId.c_str(),
+        endpoint->getLocalPort().getFamilyString().c_str(),
+        ice::toString(endpoint->getTransportType()).c_str(),
+        endpoint->getLocalPort().toString().c_str(),
+        remoteCandidate.address.toString().c_str());
+}
+
 void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
     ice::IceEndpoint* endpoint,
     const transport::SocketAddress& sourcePort)
 {
+    if (session->getState() <= ice::IceSession::State::CONNECTED)
+    {
+        logger::info("candidate discarded: %s %s, %s - %s",
+            _loggableId.c_str(),
+            endpoint->getLocalPort().getFamilyString().c_str(),
+            ice::toString(endpoint->getTransportType()).c_str(),
+            endpoint->getLocalPort().toString().c_str(),
+            sourcePort.toString().c_str());
+    }
+
     for (auto& udpEndpoint : _rtpEndpoints)
     {
-        if (endpoint == udpEndpoint.get())
+        // static upper cast is a safer option to compare raw points as an
+        // offset might be added in case of multiple inheritance
+        // and ice::IceEndpoint* is not the first (although it not currently the case).
+        if (endpoint == static_cast<ice::IceEndpoint*>(udpEndpoint.get()))
         {
             udpEndpoint->unregisterListener(sourcePort, this);
             return;
@@ -2449,7 +2491,7 @@ void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
 
     for (auto& udpEndpoint : _rtcpEndpoints)
     {
-        if (endpoint == udpEndpoint.get())
+        if (endpoint == static_cast<ice::IceEndpoint*>(udpEndpoint.get()))
         {
             udpEndpoint->unregisterListener(sourcePort, this);
             return;
