@@ -33,7 +33,6 @@
 #else
 #define RTP_LOG(fmt, ...)
 #endif
-
 namespace transport
 {
 constexpr uint32_t Mbps100 = 100000;
@@ -1100,10 +1099,15 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
     }
     else if (_rtpIceSession && endpoint.getTransportType() == ice::TransportType::TCP)
     {
-        _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
-        if (dataReceiver)
+        // It is possible that a ice packet has been enqueued while we were discarding TCP candidates.
+        // Check if it CONNECTED to avoid IceSession to store a reference that will be dangling soon
+        if (Endpoint::State::CONNECTED == endpoint.getState())
         {
-            dataReceiver->onIceReceived(this, timestamp);
+            _rtpIceSession->onStunPacketReceived(&endpoint, source, packet->get(), packet->getLength(), timestamp);
+            if (dataReceiver)
+            {
+                dataReceiver->onIceReceived(this, timestamp);
+            }
         }
     }
 }
@@ -1111,6 +1115,26 @@ void TransportImpl::internalIceReceived(Endpoint& endpoint,
 void TransportImpl::onTcpDisconnect(Endpoint& endpoint)
 {
     _jobQueue.post([&]() { _rtpIceSession->onTcpDisconnect(&endpoint); });
+}
+
+void TransportImpl::onEndpointStopped(Endpoint* endpoint)
+{
+    _jobQueue.post(utils::bind(&TransportImpl::onTcpEndpointStoppedInternal, this, endpoint));
+}
+
+void TransportImpl::onTcpEndpointStoppedInternal(Endpoint* endpoint)
+{
+    auto it = std::find_if(_rtpEndpoints.begin(), _rtpEndpoints.end(), [endpoint](const auto& ep) {
+        return static_cast<const transport::Endpoint*>(ep.get()) == endpoint;
+    });
+
+    if (it != _rtpEndpoints.end())
+    {
+        std::iter_swap(it, std::prev(_rtpEndpoints.end()));
+        _rtpEndpoints.pop_back();
+    }
+
+    --_jobCounter;
 }
 
 namespace
@@ -2039,25 +2063,20 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
 
         if (_rtpIceSession->getRole() == ice::IceRole::CONTROLLING)
         {
-            while (!_rtpEndpoints.empty() && _rtpEndpoints.back().get() != _selectedRtp &&
-                _rtpEndpoints.back()->getTransportType() == ice::TransportType::TCP)
+            for (auto& endpoint : _rtpEndpoints)
             {
-                logger::info("discarding %s, ref %ld",
-                    _loggableId.c_str(),
-                    _rtpEndpoints.back()->getName(),
-                    _rtpEndpoints.back().use_count());
-                _rtpIceSession->onTcpRemoved(_rtpEndpoints.back().get());
-                _rtpEndpoints.back()->unregisterListener(this);
+                if (endpoint.get() != _selectedRtp && endpoint->getTransportType() == ice::TransportType::TCP)
+                {
+                    logger::info("discarding %s, ref %ld",
+                        _loggableId.c_str(),
+                        endpoint->getName(),
+                        endpoint.use_count());
 
-                _rtpEndpoints.pop_back();
-            }
-            while (!_rtpEndpoints.empty() && _rtpEndpoints.front().get() != _selectedRtp &&
-                _rtpEndpoints.front()->getTransportType() == ice::TransportType::TCP)
-            {
-                logger::info("discarding %s", _loggableId.c_str(), _rtpEndpoints.front()->getName());
-                _rtpIceSession->onTcpRemoved(_rtpEndpoints.front().get());
-                _rtpEndpoints.front()->unregisterListener(this);
-                _rtpEndpoints.erase(_rtpEndpoints.begin());
+                    _rtpIceSession->onTcpRemoved(endpoint.get());
+                    endpoint->unregisterListener(this);
+                    ++_jobCounter;
+                    endpoint->stop(this);
+                }
             }
         }
 
