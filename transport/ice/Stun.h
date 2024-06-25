@@ -250,8 +250,9 @@ public:
     enum Code
     {
         BadRequest = 400,
-        Unauthorized,
-        RoleConflict = 487
+        Unauthorized = 401,
+        RoleConflict = 487,
+        ServerError = 500,
     };
     StunError(int code, std::string phrase) : StunAttribute(ERROR_CODE)
     {

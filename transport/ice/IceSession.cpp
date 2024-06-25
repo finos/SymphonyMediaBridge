@@ -554,11 +554,6 @@ bool IceSession::processValidStunUdpRequest(IceEndpoint* localEndpoint,
 {
     assert(localEndpoint->getTransportType() == TransportType::UDP);
 
-    if (!(_state == State::CONNECTING || _state == State::CONNECTED))
-    {
-        return false;
-    }
-
     auto* pair = findCandidatePair(localEndpoint, remotePort);
     if (pair)
     {
@@ -571,43 +566,50 @@ bool IceSession::processValidStunUdpRequest(IceEndpoint* localEndpoint,
     const auto* remoteCandidate = findCandidateWithUdpAddress(_remoteCandidates, remotePort);
     if (remoteCandidate)
     {
-        // if it is not a new candidate but we don't have a candidate that could mean we are receiving
-        // a request from a pair we have discarded previously.
-        // I don't see why this should happen but if we are receiving a probe from it, perhaps there is no reason to be
-        // discarded. Let's add it again and log a warn
         const auto* localEndpointInfo = findEndpointInfo(localEndpoint);
         assert(localEndpointInfo);
         if (!localEndpointInfo)
         {
-            // We can't accept endpoint that are not attached. This should be an error as it is not supposed to
-            // happen
-            // This perhaps should send an error instead of just ignore
+            // We can't accept endpoint that are not attached.
+            logger::error("Receive stun from unattached endpoint. %s %s",
+                _logId.c_str(),
+                toString(localEndpoint->getTransportType()).c_str(),
+                localEndpoint->getLocalPort().toFixedString().c_str());
+
+            sendResponse(localEndpoint, remotePort, StunError::Code::ServerError, msg, now, "Server Error");
             return false;
         }
 
+        // Most likely we are receiving STUN from SRFLX or HOST when we are on READY state
         auto* candidatePair = addProbeForRemoteCandidate(*localEndpointInfo, *remoteCandidate);
-        if (candidatePair)
+        if (!candidatePair)
         {
-            candidatePair->accept();
-            candidatePair->nextTransmission = now;
-            candidatePair->receptionTimestamp = now;
+            logger::error("Failed to create candidate pair %s %s %s - %s",
+                _logId.c_str(),
+                toString(localEndpointInfo->endpoint->getTransportType()).c_str(),
+                toString(remoteCandidate->type).c_str(),
+                localEndpointInfo->endpoint->getLocalPort().toFixedString().c_str(),
+                maybeMasked(remoteCandidate->address).c_str());
 
-            // Only send response after accept! Otherwise we could drop early media
-            sendResponse(localEndpoint, remotePort, 0, msg, now);
-            sortCheckList();
-            processTimeout(now);
-            return true;
+            sendResponse(localEndpoint, remotePort, StunError::Code::ServerError, msg, now, "Server Error");
+            return false;
         }
-    }
 
-    // If we are here, it is a new candidate
+        candidatePair->accept();
+        candidatePair->nextTransmission = now;
+        candidatePair->receptionTimestamp = now;
+
+        // Only send response after accept! Otherwise we could drop early media
+        sendResponse(localEndpoint, remotePort, 0, msg, now);
+        sortCheckList();
+        processTimeout(now);
+        return true;
+    }
 
     if (_state == State::CONNECTED || _remoteCandidates.size() >= _config.maxCandidateCount)
     {
-        // When we see a new candidate and the ICE is CONNECTED, this can be an early sign that network state
-        // has changed on client. Therefore, we will try to remove some candidates that has not being received
-        // probes nor media for a while to ensure we can had new candidates. The removing will be more
-        // aggressive if the _remoteCandidates is full
+        // When we see a new candidate and the ICE is CONNECTED, this can be an early sign that network state.
+        // Also try to remove unviable when maxCandidateCount is reached to try to find space for this new candidate
         removeUnviableRemoteCandidates(now);
     }
 
@@ -646,11 +648,11 @@ bool IceSession::processValidStunUdpRequest(IceEndpoint* localEndpoint,
             if (endpoint.endpoint == localEndpoint)
             {
                 candidatePair->accept();
+                sendResponse(localEndpoint, remotePort, 0, msg, now);
             }
         }
     }
 
-    sendResponse(localEndpoint, remotePort, 0, msg, now);
     sortCheckList();
     processTimeout(now);
     return true;
