@@ -1347,10 +1347,6 @@ void IceSession::cancelAllAfterFail(uint64_t now)
 
 void IceSession::removeUnviableRemoteCandidates(uint64_t now)
 {
-    // If we are in the limit, we will be more aggressive on removing candidates
-    // by removing HOST and SRFLX candidates that didn't work or are inactive for long period.
-    // Wen the list is not full, we will only remove PRFLX
-    const bool aggressiveRemove = _remoteCandidates.size() >= _config.maxCandidateCount;
     _remoteCandidates.clear();
 
     auto itEnd = _candidatePairs.end();
@@ -1367,14 +1363,6 @@ void IceSession::removeUnviableRemoteCandidates(uint64_t now)
             continue;
         }
 
-        // Keep HOST and SRFLX if we are not in aggressive removing.
-        if (!aggressiveRemove && candidatePair->remoteCandidate.type != IceCandidate::Type::PRFLX)
-        {
-            addCandidateToListIfNotPresent(_remoteCandidates, candidatePair->remoteCandidate);
-            ++it;
-            continue;
-        }
-
         if (candidatePair->isViable(now))
         {
             addCandidateToListIfNotPresent(_remoteCandidates, candidatePair->remoteCandidate);
@@ -1382,7 +1370,7 @@ void IceSession::removeUnviableRemoteCandidates(uint64_t now)
             continue;
         }
 
-        logger::info("Remove unreadable candidate pair: %s %s %s - %s",
+        logger::info("Remove unviable candidate pair: %s %s %s - %s",
             _logId.c_str(),
             toString(candidatePair->localEndpoint.endpoint->getTransportType()).c_str(),
             toString(candidatePair->remoteCandidate.type).c_str(),
@@ -1395,74 +1383,6 @@ void IceSession::removeUnviableRemoteCandidates(uint64_t now)
     }
 
     _candidatePairs.erase(itEnd, _candidatePairs.end());
-
-    // If after the first scan the list it still bigger or equal to _config.maxCandidateCount,
-    // then we will be even more aggressive on removing candidates
-    if (_remoteCandidates.size() <= _config.maxCandidateCount)
-    {
-        return;
-    }
-
-    // If after 1st check it still there is no space for new candidates, we are going to sort the remote candidates and
-    // ensure we find space to add new ones
-    const auto role = _credentials.role;
-
-    //  Sort. 1st will be nominated, then readable candidates by priority and then non readable candidates by priority
-    std::sort(_candidatePairs.begin(), _candidatePairs.end(), [role, now](const auto& a, const auto& b) {
-        if (a->nominated != b->nominated)
-        {
-            return a->nominated;
-        }
-
-        const bool aIsNonViable = a->isViable(now);
-        const bool bIsNonViable = b->isViable(now);
-        if (aIsNonViable != bIsNonViable)
-        {
-            return bIsNonViable;
-        }
-
-        return a->getPriority(role) > b->getPriority(role);
-    });
-
-    _remoteCandidates.clear();
-    auto it = _candidatePairs.begin();
-
-    for (; it != _candidatePairs.end(); ++it)
-    {
-        auto* candidatePair = it->get();
-
-        // We still let the 5 most priority candidates even if not one is readable
-        if (!candidatePair->isViable(now) && _remoteCandidates.size() > 5)
-        {
-            break;
-        }
-
-        addCandidateToListIfNotPresent(_remoteCandidates, candidatePair->remoteCandidate);
-
-        // Ensure we have at least 1 slot to accommodate a new candidate
-        if (_remoteCandidates.size() + 1 <= _config.maxCandidateCount)
-        {
-            break;
-        }
-    }
-
-    auto firstPairToRemove = it;
-    for (; it != _candidatePairs.end(); ++it)
-    {
-        auto* candidatePair = it->get();
-
-        logger::info("Force remove candidate pair: %s %s %s - %s. Is viable %s",
-            _logId.c_str(),
-            toString(candidatePair->localEndpoint.endpoint->getTransportType()).c_str(),
-            toString(candidatePair->remoteCandidate.type).c_str(),
-            candidatePair->localCandidate.address.toFixedString().c_str(),
-            maybeMasked(candidatePair->remoteCandidate.address).c_str(),
-            candidatePair->isViable(now) ? "true" : "false");
-
-        onCandidatePairRemoved(candidatePair);
-    }
-
-    _candidatePairs.erase(firstPairToRemove, _candidatePairs.end());
 }
 
 void IceSession::restartProbes(uint64_t now)
