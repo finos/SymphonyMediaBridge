@@ -2436,9 +2436,7 @@ void TransportImpl::onIceCandidateAccepted(ice::IceSession* session,
 
     for (auto& udpEndpoint : _rtpEndpoints)
     {
-        // static upper cast is a safer option to compare raw points as an
-        // offset might be added in case of multiple inheritance
-        // and ice::IceEndpoint* is not the first (although it not currently the case).
+        // static cast for type safe raw pointer comparison
         if (endpoint == static_cast<ice::IceEndpoint*>(udpEndpoint.get()))
         {
             udpEndpoint->registerListener(remoteCandidate.address, this);
@@ -2479,9 +2477,7 @@ void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
 
     for (auto& udpEndpoint : _rtpEndpoints)
     {
-        // static upper cast is a safer option to compare raw points as an
-        // offset might be added in case of multiple inheritance
-        // and ice::IceEndpoint* is not the first (although it not currently the case).
+        // static cast for type safe raw pointer comparison
         if (endpoint == static_cast<ice::IceEndpoint*>(udpEndpoint.get()))
         {
             udpEndpoint->unregisterListener(sourcePort, this);
