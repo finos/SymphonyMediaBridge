@@ -1250,17 +1250,26 @@ void IceSession::stateCheck(const uint64_t now)
         nominate(now);
         if (isIceComplete(now))
         {
-            _state = (hasNomination() ? State::CONNECTED : State::FAILED);
-            freezePendingProbes(now);
-            if (_state == State::CONNECTED && _eventSink)
+            if (hasNomination())
             {
-                _eventSink->onIceCandidateChanged(this,
-                    _nomination->localEndpoint.endpoint,
-                    _nomination->remoteCandidate.address);
+                _state = State::CONNECTED;
+                pruneCandidatesAfterConnected(now);
+            }
+            else
+            {
+                _state = State::FAILED;
+                cancelAllAfterFail(now);
             }
 
             if (_eventSink)
             {
+                if (_state == State::CONNECTED)
+                {
+                    _eventSink->onIceCandidateChanged(this,
+                        _nomination->localEndpoint.endpoint,
+                        _nomination->remoteCandidate.address);
+                }
+
                 _eventSink->onIceStateChanged(this, _state);
                 _eventSink->onIceCompleted(this);
             }
@@ -1268,8 +1277,14 @@ void IceSession::stateCheck(const uint64_t now)
     }
 }
 
-void IceSession::freezePendingProbes(uint64_t now)
+void IceSession::pruneCandidatesAfterConnected(uint64_t now)
 {
+    // this is not implements Freeing Candidates like RFC8446 suggests on 8.4
+    // Instead we free the failed candidates and TCP candidates
+    // and we keep the successful UDP as backup in frozen state.
+    // It is entirely up to the client to continue probing them to keep them 'viable'.
+    assert(_state == IceSession::State::CONNECTED);
+
     // We are going to clear all remote candidates without candidatePairs
     _remoteCandidates.clear();
     auto itEnd = _candidatePairs.end();
@@ -1284,31 +1299,33 @@ void IceSession::freezePendingProbes(uint64_t now)
             continue;
         }
 
-        if (candidatePair->state <= ProbeState::Succeeded)
+        if (candidatePair->localCandidate.transportType == TransportType::TCP)
         {
             candidatePair->freeze();
-            if (candidatePair->localCandidate.transportType == TransportType::TCP)
-            {
-                candidatePair->state = ProbeState::Failed;
-                onCandidatePairRemoved(candidatePair);
-                std::iter_swap(it, --itEnd);
-                continue;
-            }
+            candidatePair->state = ProbeState::Failed;
+            onCandidatePairRemoved(candidatePair);
+            std::iter_swap(it, --itEnd);
+            continue;
         }
-        // If didn't fail, then it can be a backup in case the nominated becomes unreachable
-        else if (candidatePair->remoteCandidate.type == IceCandidate::Type::PRFLX &&
-            candidatePair->state == ProbeState::Failed)
+
+        if (candidatePair->state == ProbeState::Failed)
         {
-            logger::debug("freezePendingProbes - remove failed candidate: %s %s %s - %s",
+            logger::info("remove failed candidate: %s %s %s - %s",
                 _logId.c_str(),
                 toString(candidatePair->localEndpoint.endpoint->getTransportType()).c_str(),
                 toString(candidatePair->remoteCandidate.type).c_str(),
-                candidatePair->localCandidate.address.toString().c_str(),
-                candidatePair->remoteCandidate.address.toString().c_str());
+                candidatePair->localCandidate.address.toFixedString().c_str(),
+                maybeMasked(candidatePair->remoteCandidate.address).c_str());
 
             onCandidatePairRemoved(candidatePair);
             std::iter_swap(it, --itEnd);
             continue;
+        }
+
+        if (candidatePair->state == ProbeState::Succeeded)
+        {
+            // If succeeded AND not nominated. Stop probing
+            candidatePair->freeze();
         }
 
         addCandidateToListIfNotPresent(_remoteCandidates, candidatePair->remoteCandidate);
@@ -1316,6 +1333,16 @@ void IceSession::freezePendingProbes(uint64_t now)
     }
 
     _candidatePairs.erase(itEnd, _candidatePairs.end());
+}
+
+void IceSession::cancelAllAfterFail(uint64_t now)
+{
+    assert(_state == IceSession::State::FAILED);
+    for (auto& candidatePair : _candidatePairs)
+    {
+        candidatePair->freeze();
+        candidatePair->state = ProbeState::Failed;
+    }
 }
 
 void IceSession::removeUnviableRemoteCandidates(uint64_t now)
@@ -1438,9 +1465,11 @@ void IceSession::removeUnviableRemoteCandidates(uint64_t now)
     _candidatePairs.erase(firstPairToRemove, _candidatePairs.end());
 }
 
-void IceSession::releaseFrozenProbes(uint64_t now)
+void IceSession::restartProbes(uint64_t now)
 {
-    logger::info("releasing frozen probes", _logId.c_str());
+    assert(_state == IceSession::State::CONNECTING);
+
+    logger::info("restarting probes", _logId.c_str());
     for (auto& candidatePair : _candidatePairs)
     {
         if (candidatePair->state == ProbeState::Frozen)
@@ -1495,12 +1524,14 @@ int64_t IceSession::processTimeout(const uint64_t now)
     }
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
+    bool hasFailedCandidates = false;
     for (auto it = _candidatePairs.rbegin(); it != _candidatePairs.rend(); ++it)
     {
         auto* candidatePair = it->get();
 
         const auto currentState = candidatePair->state;
         candidatePair->processTimeout(now);
+        hasFailedCandidates = hasFailedCandidates || candidatePair->state == ProbeState::Failed;
         if (currentState == ProbeState::InProgress && candidatePair->state == ProbeState::Failed)
         {
             if (candidatePair->localCandidate.transportType == ice::TransportType::TCP)
@@ -1515,7 +1546,7 @@ int64_t IceSession::processTimeout(const uint64_t now)
             _sessionStart = now;
             candidatePair->nominated = false;
             _nomination = nullptr; // re-probe
-            releaseFrozenProbes(now);
+            restartProbes(now);
             sortCheckList();
         }
         else if (!_nomination && _state == State::CONNECTED && currentState == ProbeState::InProgress &&
@@ -1536,7 +1567,6 @@ int64_t IceSession::processTimeout(const uint64_t now)
     }
 
     stateCheck(now);
-
     return nextTimeout(now);
 }
 
@@ -1836,7 +1866,14 @@ void IceSession::CandidatePair::onResponse(uint64_t now, const StunMessage& resp
 
     if (++_replies > 0)
     {
-        state = ProbeState::Succeeded;
+        if (nominated || _iceSession._state <= ice::IceSession::State::CONNECTING)
+        {
+            state = ProbeState::Succeeded;
+        }
+        else
+        {
+            freeze();
+        }
     }
 }
 

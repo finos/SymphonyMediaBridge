@@ -338,8 +338,9 @@ private:
     void stateCheck(uint64_t now);
     void nominate(uint64_t now);
     void removeUnviableRemoteCandidates(uint64_t now);
-    void freezePendingProbes(uint64_t now);
-    void releaseFrozenProbes(uint64_t now);
+    void pruneCandidatesAfterConnected(uint64_t now);
+    void cancelAllAfterFail(uint64_t now);
+    void restartProbes(uint64_t now);
     bool hasNomination() const;
     uint64_t getMaxStunServerCandidateAge(uint64_t now) const;
     IceCandidate::Type inferCandidateType(const transport::SocketAddress& mappedAddress);
