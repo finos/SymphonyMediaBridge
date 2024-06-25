@@ -1524,14 +1524,17 @@ int64_t IceSession::processTimeout(const uint64_t now)
     }
 
     DBGCHECK_SINGLETHREADED(_mutexGuard);
-    bool hasFailedCandidates = false;
+    bool hadInProgressBeforeProcess = false;
+    bool hasInProgressAfterProcess = false;
     for (auto it = _candidatePairs.rbegin(); it != _candidatePairs.rend(); ++it)
     {
         auto* candidatePair = it->get();
 
         const auto currentState = candidatePair->state;
+        hadInProgressBeforeProcess = hadInProgressBeforeProcess || currentState == ProbeState::InProgress;
         candidatePair->processTimeout(now);
-        hasFailedCandidates = hasFailedCandidates || candidatePair->state == ProbeState::Failed;
+        hasInProgressAfterProcess = hasInProgressAfterProcess || candidatePair->state == ProbeState::InProgress;
+
         if (currentState == ProbeState::InProgress && candidatePair->state == ProbeState::Failed)
         {
             if (candidatePair->localCandidate.transportType == ice::TransportType::TCP)
@@ -1564,6 +1567,12 @@ int64_t IceSession::processTimeout(const uint64_t now)
                 }
             }
         }
+    }
+
+    const bool lastInProgressHasCompleted = hadInProgressBeforeProcess && !hasInProgressAfterProcess;
+    if (lastInProgressHasCompleted && _state == State::CONNECTED)
+    {
+        removeUnviableRemoteCandidates(now);
     }
 
     stateCheck(now);
