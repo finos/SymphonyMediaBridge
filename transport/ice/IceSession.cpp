@@ -303,8 +303,8 @@ IceSession::CandidatePair* IceSession::addProbeForRemoteCandidate(const Endpoint
 
     logger::info("added candidate pair %s-%s HOST-%s %s",
         _logId.c_str(),
-        endpointAddress.toString().c_str(),
-        remoteCandidate.address.toString().c_str(),
+        endpointAddress.toFixedString().c_str(),
+        maybeMasked(remoteCandidate.address).c_str(),
         ice::toString(remoteCandidate.type).c_str(),
         ice::toString(remoteCandidate.transportType).c_str());
 
@@ -616,7 +616,7 @@ bool IceSession::processValidStunUdpRequest(IceEndpoint* localEndpoint,
         logger::info("too many PRFLX candidates %u, %s",
             _logId.c_str(),
             _config.maxCandidateCount,
-            remotePort.toString().c_str());
+            maybeMasked(remotePort).c_str());
 
         // Although we are not able to accept this candidate (at least not now)
         // we should send probe response anyway as this candidate will not be
@@ -1359,8 +1359,8 @@ void IceSession::removeUnviableRemoteCandidates(uint64_t now)
             _logId.c_str(),
             toString(candidatePair->localEndpoint.endpoint->getTransportType()).c_str(),
             toString(candidatePair->remoteCandidate.type).c_str(),
-            candidatePair->localCandidate.address.toString().c_str(),
-            candidatePair->remoteCandidate.address.toString().c_str());
+            candidatePair->localCandidate.address.toFixedString().c_str(),
+            maybeMasked(candidatePair->remoteCandidate.address).c_str());
 
         candidatePair->state = ProbeState::Failed;
         std::iter_swap(it, --itEnd);
@@ -1428,8 +1428,8 @@ void IceSession::removeUnviableRemoteCandidates(uint64_t now)
             _logId.c_str(),
             toString(candidatePair->localEndpoint.endpoint->getTransportType()).c_str(),
             toString(candidatePair->remoteCandidate.type).c_str(),
-            candidatePair->localCandidate.address.toString().c_str(),
-            candidatePair->remoteCandidate.address.toString().c_str(),
+            candidatePair->localCandidate.address.toFixedString().c_str(),
+            maybeMasked(candidatePair->remoteCandidate.address).c_str(),
             candidatePair->isViable(now) ? "true" : "false");
 
         onCandidatePairRemoved(candidatePair);

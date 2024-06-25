@@ -575,6 +575,7 @@ set(TEST_FILES
     test/utils/StringTokenizerTest.cpp
     test/utils/TrackerTest.cpp
     test/utils/StdExtensionsTest.cpp
+    test/utils/SocketAddressTest.cpp
     test/memory/ListTest.cpp
     test/memory/ArrayTest.cpp
     test/jobmanager/JobManagerTest.cpp

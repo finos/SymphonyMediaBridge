@@ -1,4 +1,6 @@
 #pragma once
+#include "logger/Logger.h"
+#include "utils/FixString.h"
 #include "utils/FowlerNollHash.h"
 #include <arpa/inet.h>
 #include <cassert>
@@ -46,6 +48,7 @@ public:
     SocketAddress& setPort(uint16_t port);
     std::string ipToString() const;
     std::string toString() const;
+    utils::FixString<46> toFixedString() const;
 
     uint16_t getPort() const;
 
@@ -119,3 +122,36 @@ private:
 };
 
 } // namespace std
+
+namespace transport
+{
+/**
+ * This function will mask the IP if the log level is not debug
+ */
+inline utils::FixString<46> maybeMasked(const SocketAddress& address)
+{
+
+    if (logger::_logLevel != logger::Level::DBG)
+    {
+        size_t ipHash = 0;
+        if (address.getFamily() == AF_INET6)
+        {
+            const auto sin6 = address.getIpv6()->sin6_addr;
+            ipHash = utils::FowlerNollVoHash(&sin6, sizeof(sin6));
+        }
+        else if (address.getFamily() == AF_INET)
+        {
+            const auto sin = address.getIpv4()->sin_addr;
+            ipHash = utils::FowlerNollVoHash(&sin, sizeof(sin));
+        }
+        else
+        {
+            assert(false);
+        }
+
+        return utils::FixString<46>::sprintf("hash(%zu):%" PRIu16, ipHash, address.getPort());
+    }
+
+    return address.toFixedString();
+}
+} // namespace transport

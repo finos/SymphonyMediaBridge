@@ -1968,8 +1968,8 @@ void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
             _loggableId.c_str(),
             endpoint->getLocalPort().getFamilyString().c_str(),
             ice::toString(endpoint->getTransportType()).c_str(),
-            endpoint->getLocalPort().toString().c_str(),
-            sourcePort.toString().c_str());
+            endpoint->getLocalPort().toFixedString().c_str(),
+            maybeMasked(sourcePort).c_str());
 
         if (_srtpClient->getState() == SrtpClient::State::READY)
         {
@@ -1990,8 +1990,8 @@ void TransportImpl::onIceCandidateChanged(ice::IceSession* session,
             _loggableId.c_str(),
             endpoint->getLocalPort().getFamilyString().c_str(),
             ice::toString(endpoint->getTransportType()).c_str(),
-            endpoint->getLocalPort().toString().c_str(),
-            sourcePort.toString().c_str());
+            endpoint->getLocalPort().toFixedString().c_str(),
+            maybeMasked(sourcePort).c_str());
     }
 }
 
@@ -2019,8 +2019,8 @@ void TransportImpl::onIceStateChanged(ice::IceSession* session, const ice::IceSe
 
         logger::info("Pair selected: %s - %s  rtt:%" PRIu64 "us",
             _loggableId.c_str(),
-            candidatePair.first.address.toString().c_str(),
-            candidatePair.second.address.toString().c_str(),
+            candidatePair.first.address.toFixedString().c_str(),
+            maybeMasked(candidatePair.second.address).c_str(),
             rtt / utils::Time::us);
 
         if (_selectedRtp)
@@ -2431,8 +2431,8 @@ void TransportImpl::onIceCandidateAccepted(ice::IceSession* session,
         _loggableId.c_str(),
         endpoint->getLocalPort().getFamilyString().c_str(),
         ice::toString(endpoint->getTransportType()).c_str(),
-        endpoint->getLocalPort().toString().c_str(),
-        remoteCandidate.address.toString().c_str());
+        endpoint->getLocalPort().toFixedString().c_str(),
+        maybeMasked(remoteCandidate.address).c_str());
 
     for (auto& udpEndpoint : _rtpEndpoints)
     {
@@ -2471,8 +2471,8 @@ void TransportImpl::onIceDiscardCandidate(ice::IceSession* session,
             _loggableId.c_str(),
             endpoint->getLocalPort().getFamilyString().c_str(),
             ice::toString(endpoint->getTransportType()).c_str(),
-            endpoint->getLocalPort().toString().c_str(),
-            sourcePort.toString().c_str());
+            endpoint->getLocalPort().toFixedString().c_str(),
+            maybeMasked(sourcePort).c_str());
     }
 
     for (auto& udpEndpoint : _rtpEndpoints)
