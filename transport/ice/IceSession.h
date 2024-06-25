@@ -250,7 +250,7 @@ private:
     class CandidatePair
     {
     public:
-        CandidatePair(IceSession* iceSession,
+        CandidatePair(IceSession& iceSession,
             const EndpointInfo& localEndpoint,
             const IceCandidate& local,
             const IceCandidate& remote,
@@ -266,12 +266,12 @@ private:
         void send(uint64_t now);
         uint64_t getPriority(IceRole role) const;
         bool isFinished() const { return state == ProbeState::Succeeded || state == ProbeState::Failed; }
-        bool isReadable(uint64_t now) const
+        bool isViable(uint64_t now) const
         {
             return state != ProbeState::Failed && receptionTimestamp != 0 &&
                 utils::Time::diffLT(receptionTimestamp,
                     now,
-                    _iceSession->_config.notReadableCandidateTimeout * utils::Time::ms);
+                    _iceSession._config.notReadableCandidateTimeout * utils::Time::ms);
         };
 
         bool hasTransaction(const StunMessage& response) const;
@@ -307,7 +307,7 @@ private:
         uint64_t pendingRequestAge(uint64_t now) const;
         size_t pendingTransactionCount() const;
 
-        IceSession* _iceSession;
+        IceSession& _iceSession;
         uint64_t _transmitInterval;
         int _replies;
         IceError _errorCode;
@@ -337,7 +337,7 @@ private:
     bool isIceComplete(uint64_t now);
     void stateCheck(uint64_t now);
     void nominate(uint64_t now);
-    void removeNonReadableRemoteCandidates(uint64_t now);
+    void removeUnviableRemoteCandidates(uint64_t now);
     void freezePendingProbes(uint64_t now);
     void releaseFrozenProbes(uint64_t now);
     bool hasNomination() const;
