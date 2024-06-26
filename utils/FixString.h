@@ -2,6 +2,7 @@
 #include "utils/FowlerNollHash.h"
 #include "utils/StdExtensions.h"
 #include <algorithm>
+#include <cstdarg>
 #include <cstring>
 
 namespace utils
