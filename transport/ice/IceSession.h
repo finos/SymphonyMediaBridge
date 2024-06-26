@@ -394,6 +394,7 @@ private:
     IEvents* const _eventSink;
     SessionCredentials _credentials;
     uint64_t _sessionStart;
+    uint32_t _connectedCount;
     struct HmacComputers
     {
         crypto::HMAC local;

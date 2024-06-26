@@ -63,7 +63,8 @@ IceSession::IceSession(size_t sessionId,
       _state(State::IDLE),
       _eventSink(eventSink),
       _credentials(role, static_cast<uint64_t>(_idGenerator.next() & ~(0ull))),
-      _sessionStart(0)
+      _sessionStart(0),
+      _connectedCount(0)
 {
     char ufrag[14 + 1];
     char pwd[24 + 1]; // length selected to make attribute *4 length
@@ -1208,6 +1209,13 @@ void IceSession::nominate(const uint64_t now)
             {
                 nominee = ct;
             }
+            else if (ct->localCandidate.transportType == TransportType::UDP && _connectedCount > 0)
+            {
+                // If _connectedCount > 0 that means we are nominating a new candidate and the old one
+                // has become unviable. We should have a completed and sorted list at this point
+                // Then lets nominate one as quick as possible to reduce media interruptions
+                nominee = ct;
+            }
             else if (!hasTcpServerEndpoints)
             {
                 nominee = ct;
@@ -1255,6 +1263,7 @@ void IceSession::stateCheck(const uint64_t now)
             if (hasNomination())
             {
                 _state = State::CONNECTED;
+                ++_connectedCount;
                 pruneCandidatesAfterConnected(now);
             }
             else
@@ -1392,12 +1401,19 @@ void IceSession::restartProbes(uint64_t now)
     assert(_state == IceSession::State::CONNECTING);
 
     logger::info("restarting probes", _logId.c_str());
+    auto transmitTime = now;
     for (auto& candidatePair : _candidatePairs)
     {
         if (candidatePair->state == ProbeState::Frozen)
         {
             candidatePair->restartProbe(now, true);
-            candidatePair->send(now);
+            candidatePair->nextTransmission = transmitTime;
+            if (transmitTime == now)
+            {
+                candidatePair->send(now);
+            }
+
+            transmitTime += _config.probeReleasePace * utils::Time::ms;
         }
     }
 }
@@ -1471,8 +1487,8 @@ int64_t IceSession::processTimeout(const uint64_t now)
             _sessionStart = now;
             candidatePair->nominated = false;
             _nomination = nullptr; // re-probe
-            restartProbes(now);
             sortCheckList();
+            restartProbes(now);
         }
         else if (!_nomination && _state == State::CONNECTED && currentState == ProbeState::InProgress &&
             candidatePair->state == ProbeState::Succeeded)
