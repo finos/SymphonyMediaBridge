@@ -74,10 +74,13 @@ TEST(SocketAddressTest, maybeMaskShouldMaskWhenLogLevelIsNotDebug)
         auto maybeMaskedIpv6 = maybeMasked(ipv6Address);
         auto maybeMaskedIpv4 = maybeMasked(ipv4Address);
 
-        ASSERT_STREQ("hash(6134717025100730244):1000", maybeMaskedIpv6.c_str());
-        ASSERT_EQ(std::strlen("hash(6134717025100730244):1000"), maybeMaskedIpv6.size());
+        const char* a = maybeMaskedIpv6.c_str();
+        (void)a;
 
-        ASSERT_STREQ("hash(14244227746646367573):2665", maybeMaskedIpv4.c_str());
-        ASSERT_EQ(std::strlen("hash(14244227746646367573):2665"), maybeMaskedIpv4.size());
+        ASSERT_STREQ("ipv6-6134717025100730244:1000", maybeMaskedIpv6.c_str());
+        ASSERT_EQ(std::strlen("ipv6-6134717025100730244:1000"), maybeMaskedIpv6.size());
+
+        ASSERT_STREQ("ipv4-14244227746646367573:2665", maybeMaskedIpv4.c_str());
+        ASSERT_EQ(std::strlen("ipv4-14244227746646367573:2665"), maybeMaskedIpv4.size());
     }
 }

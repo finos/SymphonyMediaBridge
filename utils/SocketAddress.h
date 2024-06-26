@@ -133,23 +133,26 @@ inline utils::FixString<46> maybeMasked(const SocketAddress& address)
 
     if (logger::_logLevel != logger::Level::DBG)
     {
+        const char* prefix = "";
         size_t ipHash = 0;
         if (address.getFamily() == AF_INET6)
         {
             const auto sin6 = address.getIpv6()->sin6_addr;
             ipHash = utils::FowlerNollVoHash(&sin6, sizeof(sin6));
+            prefix = "ipv6-";
         }
         else if (address.getFamily() == AF_INET)
         {
             const auto sin = address.getIpv4()->sin_addr;
             ipHash = utils::FowlerNollVoHash(&sin, sizeof(sin));
+            prefix = "ipv4-";
         }
         else
         {
             assert(false);
         }
 
-        return utils::FixString<46>::sprintf("hash(%zu):%" PRIu16, ipHash, address.getPort());
+        return utils::FixString<46>::sprintf("%s%zu:%" PRIu16, prefix, ipHash, address.getPort());
     }
 
     return address.toFixedString();
