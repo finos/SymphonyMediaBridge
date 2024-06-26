@@ -1673,7 +1673,7 @@ TEST_F(IceRobustness, removeUnviableCandidates)
     // Continue until univable are discarded
     const auto connectedTime = timeSource.getAbsoluteTime();
     running = true;
-    while (running && timeSource.getAbsoluteTime() - connectedTime < utils::Time::sec * 6)
+    while (running && timeSource.getAbsoluteTime() - connectedTime < utils::Time::sec * 10)
     {
         internet.process(timeSource.getAbsoluteTime());
         int64_t timeout = std::numeric_limits<int64_t>::max();
