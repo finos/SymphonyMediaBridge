@@ -41,7 +41,7 @@ RtpDepacketizer::RtpDepacketizer(int socketHandle, memory::PacketPoolAllocator& 
     : fd(socketHandle),
       _receivedBytes(0),
       _allocator(allocator),
-      _streamPrestine(true),
+      _streamPristine(true),
       _remoteDisconnect(false)
 {
 }
@@ -75,7 +75,7 @@ memory::UniquePacket RtpDepacketizer::receive()
         if (_header.get() >= memory::Packet::size)
         {
             // attack with malicious length specifier
-            _streamPrestine = false;
+            _streamPristine = false;
             return memory::makeUniquePacket(_allocator);
         }
     }
@@ -355,6 +355,9 @@ void TcpEndpointImpl::stop(Endpoint::IStopEvents* listener)
             }
             else
             {
+                // We do support stop(Endpoint::IStopEvents*) to be called multiple times
+                // but only one at a time. So we can't register multiple listeners in waiting state
+                assert(_stopListener == nullptr);
                 _stopListener = listener;
             }
         });
@@ -369,7 +372,7 @@ void TcpEndpointImpl::onSocketShutdown(int fd)
     if (_depacketizer.fd == fd)
     {
         auto state = _state.load();
-        // Avoid race conditions whith endpoint stop(Endpoint::IStopEvents* listener)
+        // Avoid race conditions with endpoint stop(Endpoint::IStopEvents* listener)
         // called when the TcpSocket is being deleted by SMB at the same time we receive
         // a close request from remote side
         while (state == State::CONNECTING || state == State::CONNECTED)
