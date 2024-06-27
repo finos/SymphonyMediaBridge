@@ -525,8 +525,16 @@ public:
         }
 
         logger::debug("closing %s", _name, endpoint->getName());
-        ++_pendingTasks;
-        endpoint->stop(this);
+        if (endpoint->getState() == Endpoint::State::CREATED)
+        {
+            // When transport is CREATED we can delete it right now without call stop
+            enqueueDeleteJobNow(endpoint);
+        }
+        else
+        {
+            ++_pendingTasks;
+            endpoint->stop(this);
+        }
     }
 
     void shutdownEndpoint(ServerEndpoint* endpoint)
@@ -607,6 +615,8 @@ private:
         _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks);
         --_pendingTasks; // epoll stop is complete
     }
+
+    void enqueueDeleteJobNow(Endpoint* endpoint) { _garbageQueue.addJob<DeleteJob<Endpoint>>(endpoint, _pendingTasks); }
 
     jobmanager::JobManager& _jobManager;
     SrtpClientFactory& _srtpClientFactory;

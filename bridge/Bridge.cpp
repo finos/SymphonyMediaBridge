@@ -74,6 +74,11 @@ Bridge::Bridge(const config::Config& config)
 
 Bridge::~Bridge()
 {
+    if (_httpd)
+    {
+        _httpd = nullptr;
+    }
+
     if (_mixerManager)
     {
         _mixerManager->stop();

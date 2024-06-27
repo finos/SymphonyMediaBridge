@@ -166,7 +166,7 @@ void FakeTcpEndpoint::stop(Endpoint::IStopEvents* listener)
             _receiveJobs.post([this, listener]() { listener->onEndpointStopped(this); });
         }
     }
-    else if (_state == State::CREATED)
+    else if (_state == State::CREATED || _state == State::STOPPING)
     {
         if (listener)
         {
