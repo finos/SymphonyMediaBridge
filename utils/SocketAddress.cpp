@@ -157,6 +157,44 @@ std::string SocketAddress::toString() const
     }
 }
 
+utils::FixString<46> SocketAddress::toFixedString() const
+{
+    static constexpr int BUF_SIZE = 47; // 46 + null terminator
+    char result[BUF_SIZE];
+    result[0] = '\0';
+    if (getFamily() == AF_INET)
+    {
+        ::inet_ntop(getFamily(), &_address.v4.sin_addr, result, BUF_SIZE);
+    }
+    else
+    {
+        ::inet_ntop(getFamily(), &_address.v6.sin6_addr, result, BUF_SIZE);
+    }
+
+    size_t len = std::strlen(result);
+    // worst case we need more 6 bytes for port (:65535)
+    if (len + 6 >= BUF_SIZE)
+    {
+        return utils::FixString<46>(result);
+    }
+
+    result[len++] = ':';
+
+    int digits = 0;
+    uint16_t port = getPort();
+    do
+    {
+        result[len++] = '0' + (port % 10);
+        port /= 10;
+        ++digits;
+    } while (port);
+
+    std::reverse(&result[len - digits], &result[len]);
+
+    result[len] = '\0';
+    return utils::FixString<46>(result);
+}
+
 uint16_t SocketAddress::getPort() const
 {
     return ntohs(_address.v4.sin_port);

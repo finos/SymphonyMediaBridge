@@ -523,10 +523,13 @@ TEST_F(IntegrationTest, probing)
         // non-zero RTT indicates that there was a successful candidates pair, hence probing was performed
         ASSERT_GT(transport->getRtt(), 0);
         transport->stop();
+        start = utils::Time::getAbsoluteTime();
         while (transport->hasPendingJobs() && utils::Time::getAbsoluteTime() - start < timeout)
         {
             utils::Time::nanoSleep(utils::Time::ms * 100);
         }
+
+        ASSERT_EQ(false, transport->hasPendingJobs());
         finalizeSimulation();
     });
 }
@@ -1015,7 +1018,7 @@ TEST_F(IntegrationTest, endpointMessage)
                 ++endpointMessageCount;
             }
         });
-        // Dom speaker + UserMap + endpont message
+        // Dom speaker + UserMap + endpoint message
         EXPECT_CALL(listenerMock, onWebRtcDataString(_, _)).Times(AtLeast(3));
         group.run(utils::Time::sec * 2);
 

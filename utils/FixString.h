@@ -2,6 +2,7 @@
 #include "utils/FowlerNollHash.h"
 #include "utils/StdExtensions.h"
 #include <algorithm>
+#include <cstdarg>
 #include <cstring>
 
 namespace utils
@@ -50,6 +51,24 @@ public:
     }
 
     int compare(const char* s) const { return compare(s, std::strlen(s)); }
+
+    __attribute__((format(printf, 1, 2))) static FixString<SIZE> sprintf(const char* format, ...)
+    {
+        FixString<SIZE> str;
+
+        va_list arglist;
+        va_start(arglist, format);
+        const int written = std::vsnprintf(str._value, sizeof(str._value), format, arglist);
+        va_end(arglist);
+
+        if (written > -1)
+        {
+            str._size = std::min(static_cast<size_t>(written), SIZE);
+        }
+
+        str._value[SIZE] = '\0';
+        return str;
+    }
 
 private:
     size_t _size;

@@ -202,6 +202,9 @@ private: // SslWriteBioListener
     void onIceCandidateChanged(ice::IceSession* session,
         ice::IceEndpoint* endpoint,
         const SocketAddress& sourcePort) override;
+    void onIceCandidateAccepted(ice::IceSession* session,
+        ice::IceEndpoint* localEndpoint,
+        const ice::IceCandidate& remoteCandidate) override;
     void onIceDiscardCandidate(ice::IceSession* session,
         ice::IceEndpoint* endpoint,
         const transport::SocketAddress& sourcePort) override;

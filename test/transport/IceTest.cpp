@@ -4,15 +4,19 @@
 #include "logger/Logger.h"
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/Packet.h"
+#include "mocks/IceSessionEventListenerMock.h"
 #include "test/integration/emulator/TimeTurner.h"
 #include "transport/RtcSocket.h"
 #include "transport/RtcePoll.h"
 #include "transport/ice/IceSerialize.h"
 #include "transport/ice/IceSession.h"
 #include "transport/ice/Stun.h"
+#include "utils/ContainerAlgorithms.h"
 #include <atomic>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+
+using namespace ::testing;
 
 namespace
 {
@@ -1497,7 +1501,7 @@ TEST_F(IceRobustness, earlyProbes)
         }
     }
 
-    EXPECT_EQ(sessions[0]->getRemoteCandidates().size(), 2);
+    EXPECT_EQ(sessions[0]->getRemoteCandidates().size(), 3);
     EXPECT_GE(sessions[0]->getState(), ice::IceSession::State::CONNECTING);
     EXPECT_LE(sessions[0]->getState(), ice::IceSession::State::CONNECTED);
 
@@ -1527,9 +1531,176 @@ TEST_F(IceRobustness, earlyProbes)
     EXPECT_TRUE(selectedPair0.second.address.equalsIp(firewall2.getPublicIp()));
 
     auto remoteCandidates1 = sessions[0]->getRemoteCandidates();
-    EXPECT_EQ(remoteCandidates1.size(), 2);
+    EXPECT_EQ(remoteCandidates1.size(), 3);
     auto selectedPair1 = sessions[1]->getSelectedPair();
     EXPECT_TRUE(selectedPair1.second.address.equalsIp(firewall1.getPublicIp()));
+}
+
+TEST_F(IceRobustness, removeUnviableCandidates)
+{
+    fakenet::Internet internet;
+
+    FakeStunServer stunServer(transport::SocketAddress::parse("64.233.165.127", 19302), internet);
+    fakenet::Firewall firewall1(transport::SocketAddress::parse("216.93.246.10", 0), internet);
+    fakenet::Firewall firewall2(transport::SocketAddress::parse("216.93.24.11", 0), internet);
+
+    FakeEndpoint endpoint1(transport::SocketAddress::parse("172.16.0.10", 2000), firewall1);
+    FakeEndpoint endpoint2(transport::SocketAddress::parse("172.16.0.20", 3000), firewall2);
+
+    FakeEndpoint otherNonAccessibleEndpoint(transport::SocketAddress::parse("192.168.1.10", 25000));
+
+    NiceMock<test::IceSessionEventListenerMock> session0EventListenerMock;
+
+    EXPECT_CALL(session0EventListenerMock, onIceCandidateAccepted(_, _, Truly([](const auto& candidate) {
+        return transport::SocketAddress::parse("216.93.24.11", 0).equalsIp(candidate.address);
+    }))).Times(1);
+
+    EXPECT_CALL(session0EventListenerMock, onIceCandidateAccepted(_, _, Truly([](const auto& candidate) {
+        return transport::SocketAddress::parse("64.233.165.127", 0).equalsIp(candidate.address);
+    }))).Times(1);
+
+    // Unviable must be discarded
+    EXPECT_CALL(session0EventListenerMock, onIceDiscardCandidate(_, _, Truly([](const auto& remotePort) {
+        return transport::SocketAddress::parse("192.168.1.10", 0).equalsIp(remotePort);
+    }))).Times(1);
+
+    EXPECT_CALL(session0EventListenerMock, onIceDiscardCandidate(_, _, Truly([](const auto& remotePort) {
+        return transport::SocketAddress::parse("172.16.0.20", 0).equalsIp(remotePort);
+    }))).Times(1);
+
+    ice::IceConfig config;
+    IceSessions sessions;
+    sessions.emplace_back(std::make_unique<ice::IceSession>(1,
+        config,
+        ice::IceComponent::RTP,
+        ice::IceRole::CONTROLLING,
+        &session0EventListenerMock));
+
+    sessions.emplace_back(
+        std::make_unique<ice::IceSession>(2, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLED, nullptr));
+
+    endpoint1.attach(sessions[0]);
+    endpoint2.attach(sessions[1]);
+    otherNonAccessibleEndpoint.attach(sessions[1]);
+
+    std::vector<transport::SocketAddress> stunServers;
+    stunServers.push_back(stunServer.getIp());
+
+    gatherCandidates(internet, stunServers, sessions, timeSource);
+    // provide one side with candidates and credentials
+    logger::info("GATHER PHASE COMPLETE", "");
+    setRemoteCandidates(*sessions[1], *sessions[0]);
+    sessions[1]->setRemoteCredentials(sessions[0]->getLocalCredentials());
+
+    int si = 0;
+    for (auto& session : sessions)
+    {
+        logger::info("session %d local candidates", "", si);
+        log(session->getLocalCandidates());
+        logger::info("remote candidates", "");
+        log(session->getRemoteCandidates());
+    }
+
+    EXPECT_EQ(sessions[0]->getRemoteCandidates().size(), 0);
+
+    logger::info("probing from session %u", "", 0);
+    sessions[1]->probeRemoteCandidates(ice::IceRole::CONTROLLING, timeSource.getAbsoluteTime());
+
+    const auto startTimeNoCredentials = timeSource.getAbsoluteTime();
+    bool running = true;
+    while (running && timeSource.getAbsoluteTime() - startTimeNoCredentials < utils::Time::sec * 5)
+    {
+        internet.process(timeSource.getAbsoluteTime());
+        int64_t timeout = std::numeric_limits<int64_t>::max();
+        running = false;
+        for (auto& session : sessions)
+        {
+            auto sessionTimeout = session->processTimeout(timeSource.getAbsoluteTime());
+            internet.process(timeSource.getAbsoluteTime());
+            if (session->getState() == ice::IceSession::State::CONNECTING)
+            {
+                running = true;
+            }
+            if (sessionTimeout >= 0)
+            {
+                timeout = std::min(timeout, sessionTimeout);
+            }
+        }
+        if (running && timeout > 0)
+        {
+            timeSource.advance(timeout + 2);
+        }
+    }
+
+    ASSERT_EQ(sessions[0]->getRemoteCandidates().size(), 1);
+    EXPECT_EQ(sessions[0]->getState(), ice::IceSession::State::READY);
+
+    const auto session0Remotes = sessions[0]->getRemoteCandidates();
+    EXPECT_EQ(session0Remotes[0].type, ice::IceCandidate::Type::PRFLX);
+    EXPECT_TRUE(session0Remotes[0].address.equalsIp(firewall2.getPublicIp()));
+    // session 1 has a candidate, but session 0 cannot send request back on the probe
+
+    sessions[0]->setRemoteCredentials(sessions[1]->getLocalCredentials());
+    setRemoteCandidates(*sessions[0], *sessions[1]);
+    sessions[0]->probeRemoteCandidates(sessions[1]->getRole(), timeSource.getAbsoluteTime());
+    for (bool running = true; running;)
+    {
+        internet.process(timeSource.getAbsoluteTime());
+        int64_t timeout = std::numeric_limits<int64_t>::max();
+        running = false;
+        for (auto& session : sessions)
+        {
+            auto sessionTimeout = session->processTimeout(timeSource.getAbsoluteTime());
+            internet.process(timeSource.getAbsoluteTime());
+            if (session->getState() == ice::IceSession::State::CONNECTING)
+            {
+                running = true;
+            }
+            if (sessionTimeout >= 0)
+            {
+                timeout = std::min(timeout, sessionTimeout);
+            }
+        }
+        if (running && timeout > 0)
+        {
+            timeSource.advance(timeout + 2);
+        }
+    }
+
+    EXPECT_EQ(sessions[0]->getRemoteCandidates().size(), 4);
+    EXPECT_EQ(sessions[0]->getState(), ice::IceSession::State::CONNECTED);
+
+    // Continue until univable are discarded
+    const auto connectedTime = timeSource.getAbsoluteTime();
+    running = true;
+    while (running && timeSource.getAbsoluteTime() - connectedTime < utils::Time::sec * 10)
+    {
+        internet.process(timeSource.getAbsoluteTime());
+        int64_t timeout = std::numeric_limits<int64_t>::max();
+        running = false;
+        for (auto& session : sessions)
+        {
+            auto sessionTimeout = session->processTimeout(timeSource.getAbsoluteTime());
+            internet.process(timeSource.getAbsoluteTime());
+
+            if (sessionTimeout >= 0)
+            {
+                timeout = std::min(timeout, sessionTimeout);
+            }
+        }
+
+        if (sessions[0]->getRemoteCandidates().size() > 2)
+        {
+            running = true;
+        }
+
+        if (running && timeout > 0)
+        {
+            timeSource.advance(timeout + 2);
+        }
+    }
+
+    EXPECT_EQ(sessions[0]->getRemoteCandidates().size(), 2);
 }
 
 TEST_F(IceRobustness, roleConflict)
@@ -1606,13 +1777,13 @@ TEST_F(IceTest, udpTcpTimeout)
     endpoint2b.attach(sessions[1]);
 
     exchangeInfo(*sessions[0], *sessions[1]);
-    sessions[0]->addRemoteCandidate(ice::IceCandidate("werwe",
-                                        ice::IceComponent::RTP,
-                                        ice::TransportType::TCP,
-                                        12312,
-                                        endpoint2b._address,
-                                        ice::IceCandidate::Type::HOST,
-                                        ice::TcpType::PASSIVE),
+    sessions[0]->addRemoteTcpPassiveCandidate(ice::IceCandidate("werwe",
+                                                  ice::IceComponent::RTP,
+                                                  ice::TransportType::TCP,
+                                                  12312,
+                                                  endpoint2b._address,
+                                                  ice::IceCandidate::Type::HOST,
+                                                  ice::TcpType::PASSIVE),
         &endpoint1b);
     sessions[1]->addLocalTcpCandidate(ice::IceCandidate::Type::HOST,
         0,

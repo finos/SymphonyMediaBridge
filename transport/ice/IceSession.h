@@ -5,6 +5,7 @@
 #include "crypto/SslHelper.h"
 #include "memory/Map.h"
 #include "utils/SocketAddress.h"
+#include "utils/Time.h"
 #include <deque>
 
 namespace ice
@@ -24,6 +25,9 @@ struct IceConfig
     uint32_t reflexiveProbeTimeout = 15000; // probing towards reflexive
     uint32_t hostProbeTimeout = 5000; // probing towards host address
     uint32_t additionalCandidateTimeout = 2000; // before nominating TCP
+    uint32_t nominatedInProgressMaxTimeout = 1200; // max timeout to nominated is considered unreachable but not failed
+                                                   // yet. This should start a new candidate nomination
+                                                   //  The real timeout is this or 4x candidate rtt (whichever is lower)
     uint32_t connectTimeout = 30000;
     uint32_t RTO = 50; // initial RTO. RFC8489 says 500ms. This is faster in case of loss.
     uint32_t maxRTO = 1000;
@@ -31,6 +35,8 @@ struct IceConfig
     uint32_t probeConnectionExpirationTimeout = 5000;
     uint32_t transmitIntervalExtend = 10;
     uint32_t maxCandidateCount = 15;
+    uint32_t notReadableCandidateTimeout = 45000; // timeout to an candidate to be considered not readable and then be
+                                                  // removed if space for new candidates is needed
 
     std::string software = "slice"; // keep short please.
     transport::SocketAddress publicIpv4;
@@ -97,6 +103,8 @@ typedef std::vector<IceCandidate> IceCandidates;
 // It is not thread safe
 class IceSession
 {
+    struct EndpointInfo;
+
 public:
     enum class State
     {
@@ -125,6 +133,9 @@ public:
         virtual void onIceCandidateChanged(IceSession* session,
             IceEndpoint* localEndpoint,
             const transport::SocketAddress& remotePort) = 0;
+        virtual void onIceCandidateAccepted(IceSession* session,
+            IceEndpoint* localEndpoint,
+            const IceCandidate& remoteCandidate) = 0;
         virtual void onIceDiscardCandidate(IceSession* session,
             IceEndpoint* localEndpoint,
             const transport::SocketAddress& remotePort) = 0;
@@ -140,6 +151,7 @@ public:
     void attachLocalEndpoint(IceEndpoint* udpEndpoint);
 
     bool isAttached(const IceEndpoint* localEndpoint) const;
+    const EndpointInfo* findEndpointInfo(const IceEndpoint* localEndpoint) const;
     void gatherLocalCandidates(const std::vector<transport::SocketAddress>& stunServers, uint64_t timestamp);
     const std::pair<std::string, std::string>& getLocalCredentials() const;
     void setLocalCredentials(const std::pair<std::string, std::string>& credentials);
@@ -156,7 +168,7 @@ public:
     void removeLocalCandidate(const IceCandidate& localCandidate);
 
     const IceCandidate& addRemoteCandidate(const IceCandidate& udpCandidate);
-    void addRemoteCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
+    void addRemoteTcpPassiveCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
     void removeRemoteCandidate(const IceCandidate& remoteCandidate);
 
     void setRemoteCredentials(const std::string& ufrag, const std::string& pwd);
@@ -187,6 +199,7 @@ public:
 
     bool isRequestAuthentic(const void* data, size_t len) const;
     bool isResponseAuthentic(const void* data, size_t len) const;
+    bool isIceAuthentic(const void* data, size_t len) const;
 
     int64_t nextTimeout(uint64_t timestamp) const;
     int64_t processTimeout(uint64_t timestamp);
@@ -204,8 +217,6 @@ public:
     }
 
     void stop();
-
-    bool canAcceptNewRemoteCandidate(uint64_t timestamp, const transport::SocketAddress& address) const;
 
 private:
     class CandidatePair;
@@ -239,14 +250,10 @@ private:
     class CandidatePair
     {
     public:
-        CandidatePair(const IceConfig& config,
+        CandidatePair(IceSession& iceSession,
             const EndpointInfo& localEndpoint,
             const IceCandidate& local,
             const IceCandidate& remote,
-            StunTransactionIdGenerator& idGenerator,
-            const SessionCredentials& credentials,
-            crypto::HMAC& hmacComputerRemote,
-            const std::string& name,
             bool gathering);
 
         CandidatePair& operator=(const CandidatePair&) = delete;
@@ -254,16 +261,25 @@ private:
         int64_t nextTimeout(uint64_t now) const;
         void processTimeout(uint64_t now);
 
-        void restartProbe(const uint64_t now);
+        void restartProbe(const uint64_t now, bool releaseNomination);
+        int64_t nominatedInProgressNextTimedout(const uint64_t now) const;
         void send(uint64_t now);
         uint64_t getPriority(IceRole role) const;
         bool isFinished() const { return state == ProbeState::Succeeded || state == ProbeState::Failed; }
+        bool isViable(uint64_t now) const
+        {
+            return state != ProbeState::Failed && receptionTimestamp != 0 &&
+                utils::Time::diffLT(receptionTimestamp,
+                    now,
+                    _iceSession._config.notReadableCandidateTimeout * utils::Time::ms);
+        };
 
         bool hasTransaction(const StunMessage& response) const;
         StunTransaction* findTransaction(const StunMessage& response);
         void onResponse(uint64_t now, const StunMessage& response);
         void onDisconnect();
         void nominate(uint64_t now);
+        void accept();
         void freeze();
         void failCandidate(IceError reason);
 
@@ -279,11 +295,10 @@ private:
         uint64_t startTime;
         uint64_t nextTransmission;
         bool nominated;
+        bool accepted;
 
         uint64_t receptionTimestamp; // RTC+ICE traffic
-
         ProbeState state;
-
         StunMessage original;
 
     private:
@@ -292,28 +307,25 @@ private:
         uint64_t pendingRequestAge(uint64_t now) const;
         size_t pendingTransactionCount() const;
 
+        IceSession& _iceSession;
         uint64_t _transmitInterval;
         int _replies;
         IceError _errorCode;
         uint64_t _minRtt;
-        const std::string& _name;
         std::deque<StunTransaction> _transactions; // TODO replace with inplace circular container
-        StunTransactionIdGenerator& _idGenerator;
-        const IceConfig& _config;
-        const SessionCredentials& _credentials;
-        crypto::HMAC& _hmacComputer;
     };
 
-    CandidatePair* addRemoteTcpCandidate(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
-    CandidatePair* addProbeForRemoteCandidate(EndpointInfo& localEndpoint, const IceCandidate& remoteCandidate);
+    CandidatePair* addProbeForRemoteCandidate(const EndpointInfo& localEndpoint, const IceCandidate& remoteCandidate);
     void sortCheckList();
 
     CandidatePair* findCandidatePair(const IceEndpoint* localEndpoint,
         const StunMessage& response,
         const transport::SocketAddress& remotePort);
     CandidatePair* findCandidatePair(const IceEndpoint* localEndpoint, const transport::SocketAddress& remotePort);
+    CandidatePair* addRemoteTcpCandidateAndCreatePair(const IceCandidate& tcpCandidate, IceEndpoint* tcpEndpoint);
 
-    void removeCandidatePair(const CandidatePair* candidatePair);
+    void onCandidatePairRemoved(CandidatePair* candidatePair);
+    void removeCandidatePair(CandidatePair* candidatePair);
     void sendResponse(IceEndpoint* localEndpoint,
         const transport::SocketAddress& target,
         int code,
@@ -325,11 +337,30 @@ private:
     bool isIceComplete(uint64_t now);
     void stateCheck(uint64_t now);
     void nominate(uint64_t now);
-    void freezePendingProbes(uint64_t now);
-    void releaseFrozenProbes(uint64_t now);
+    void removeUnviableRemoteCandidates(uint64_t now);
+    void pruneCandidatesAfterConnected(uint64_t now);
+    void cancelAllAfterFail(uint64_t now);
+    void restartProbes(uint64_t now);
     bool hasNomination() const;
     uint64_t getMaxStunServerCandidateAge(uint64_t now) const;
     IceCandidate::Type inferCandidateType(const transport::SocketAddress& mappedAddress);
+
+    void processValidStunRequest(IceEndpoint* localEndpoint,
+        const transport::SocketAddress& remotePort,
+        const StunMessage& data,
+        uint64_t now);
+
+    bool processValidStunTcpRequest(IceEndpoint* localEndpoint,
+        const transport::SocketAddress& remotePort,
+        const StunMessage& data,
+        int remoteCandidatePriority,
+        uint64_t now);
+
+    bool processValidStunUdpRequest(IceEndpoint* localEndpoint,
+        const transport::SocketAddress& remotePort,
+        const StunMessage& data,
+        int remoteCandidatePriority,
+        uint64_t now);
 
     void onRequestReceived(IceEndpoint* localEndpoint,
         const transport::SocketAddress& remotePort,
@@ -363,6 +394,7 @@ private:
     IEvents* const _eventSink;
     SessionCredentials _credentials;
     uint64_t _sessionStart;
+    uint32_t _connectedCount;
     struct HmacComputers
     {
         crypto::HMAC local;
