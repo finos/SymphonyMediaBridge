@@ -426,6 +426,7 @@ void Firewall::removePortMapping(Protocol protocol, transport::SocketAddress& la
 
 void Firewall::block(const transport::SocketAddress& source, const transport::SocketAddress& destination)
 {
+    std::lock_guard<std::mutex> lock(_nodesMutex);
     if (isBlackListed(source, destination))
     {
         return;
@@ -436,6 +437,7 @@ void Firewall::block(const transport::SocketAddress& source, const transport::So
 
 void Firewall::unblock(const transport::SocketAddress& source, const transport::SocketAddress& destination)
 {
+    std::lock_guard<std::mutex> lock(_nodesMutex);
     auto it = _blackList.find(std::pair<transport::SocketAddress, transport::SocketAddress>(source, destination));
     if (it != _blackList.end())
     {
