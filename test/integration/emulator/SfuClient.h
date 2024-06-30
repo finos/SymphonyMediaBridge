@@ -57,7 +57,7 @@ public:
           _audioReceivers(256),
           _videoSsrcMap(128),
           _loggableId("client", id),
-          _recordingActive(true),
+          _recordingActive(false),
           _expectedReceiveAudioType(Audio::None),
           _startTime(0)
     {
@@ -673,6 +673,7 @@ public:
 
     bool isRemoteVideoSsrc(uint32_t ssrc) const { return _remoteVideoSsrc.find(ssrc) != _remoteVideoSsrc.end(); }
 
+    void startRecording() { _recordingActive = true; }
     void stopRecording() { _recordingActive = false; }
 
     std::shared_ptr<transport::RtcTransport> _bundleTransport;

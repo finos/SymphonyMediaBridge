@@ -88,8 +88,7 @@ memory::UniquePacket NetworkLink::pop(uint64_t timestamp)
         _queuedBytes -= packet->getLength();
         if (!_queue.empty())
         {
-            _releaseTime =
-                _releaseTime + (IPOVERHEAD + _queue.front()->getLength()) * 8 * utils::Time::ms / _bandwidthKbps;
+            _releaseTime += (IPOVERHEAD + _queue.front()->getLength()) * 8 * utils::Time::ms / _bandwidthKbps;
         }
         _bitRate.update(packet->getLength() * 8, timestamp);
         _delayQueue.push({std::move(packet), timestamp + _staticDelay});
@@ -113,11 +112,11 @@ int64_t NetworkLink::timeToRelease(uint64_t timestamp) const
     int64_t period = 60 * utils::Time::sec;
     if (!_delayQueue.empty())
     {
-        period = std::max(int64_t(0), static_cast<int64_t>(_delayQueue.front().releaseTime - timestamp));
+        period = std::max<int64_t>(0, _delayQueue.front().releaseTime - timestamp);
     }
     if (!_queue.empty())
     {
-        const auto period2 = std::max(int64_t(0), static_cast<int64_t>(_releaseTime - timestamp));
+        const auto period2 = std::max<int64_t>(0, _releaseTime - timestamp);
         period = std::min(period, period2);
     }
     return period;

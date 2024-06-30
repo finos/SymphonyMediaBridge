@@ -29,9 +29,9 @@ utils::TimeSource* _timeSource = nullptr;
 class TimeSourceImpl final : public utils::TimeSource
 {
 public:
-    uint64_t getAbsoluteTime() override { return rawAbsoluteTime(); }
+    uint64_t getAbsoluteTime() const override { return rawAbsoluteTime(); }
 
-    uint64_t getApproximateTime() override
+    uint64_t getApproximateTime() const override
     {
 #ifdef __APPLE__
         assert(machTimeBase.denom);
@@ -41,16 +41,30 @@ public:
 #endif
     }
 
-    void nanoSleep(uint64_t ns) override { rawNanoSleep(ns); }
-    void advance(uint64_t ns) override { rawNanoSleep(ns); }
+    void nanoSleep(uint64_t ns) override
+    {
+        rawNanoSleep(ns);
+    }
+    void advance(uint64_t ns) override
+    {
+        rawNanoSleep(ns);
+    }
 
-    std::chrono::system_clock::time_point wallClock() const override { return std::chrono::system_clock::now(); }
+    std::chrono::system_clock::time_point wallClock() const override
+    {
+        return std::chrono::system_clock::now();
+    }
 };
 TimeSourceImpl _defaultTimeSource;
 
 void initialize()
 {
     initialize(_defaultTimeSource);
+}
+
+bool isDefaultTimeSource()
+{
+    return _timeSource == &_defaultTimeSource;
 }
 
 void formatTime(const TimeSource& timeSource, char out[32])

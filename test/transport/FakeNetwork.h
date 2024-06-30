@@ -22,7 +22,8 @@ enum Protocol : uint8_t
     SYN_ACK,
     FIN,
     ACK,
-    TCPDATA
+    TCPDATA,
+    ANY
 };
 
 const char* toString(Protocol p);
@@ -38,8 +39,10 @@ public:
         const void* data,
         size_t length,
         uint64_t timestamp) = 0;
-    virtual bool hasIp(const transport::SocketAddress& target) = 0;
+    virtual bool hasIp(const transport::SocketAddress& target, fakenet::Protocol) const = 0;
+    virtual bool hasIpClash(const NetworkNode& node) const = 0;
     virtual void process(uint64_t timestamp){};
+    virtual fakenet::Protocol getProtocol() const = 0;
     virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() { return nullptr; }
 };
 
@@ -72,15 +75,12 @@ public:
     Gateway();
     ~Gateway();
 
-    virtual void addLocal(NetworkNode* node) = 0;
-    virtual void addPublic(NetworkNode* endpoint) = 0;
+    virtual bool addLocal(NetworkNode* node) = 0;
     virtual std::vector<NetworkNode*>& getLocalNodes() = 0;
-    virtual std::vector<NetworkNode*>& getPublicNodes() = 0;
 
     virtual void removeNode(NetworkNode* node) = 0;
 
-    virtual bool isLocalPortFree(const transport::SocketAddress&) const = 0;
-    virtual bool isPublicPortFree(const transport::SocketAddress&) const = 0;
+    virtual bool isLocalPortFree(const transport::SocketAddress&, fakenet::Protocol) const = 0;
 
     void onReceive(Protocol protocol,
         const transport::SocketAddress& source,
@@ -97,25 +97,24 @@ class Internet : public Gateway
 {
 public:
     ~Internet();
-    bool hasIp(const transport::SocketAddress& target) override { return true; }
+    bool hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const override { return true; }
+    bool hasIpClash(const NetworkNode& node) const override;
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::ANY; }
 
-    void addLocal(NetworkNode* node) override;
-    void addPublic(NetworkNode* node) override;
+    bool addLocal(NetworkNode* node) override;
     void removeNode(NetworkNode* node) override;
 
-    bool isLocalPortFree(const transport::SocketAddress& ipPort) const override { return isPublicPortFree(ipPort); }
-    bool isPublicPortFree(const transport::SocketAddress& ipPort) const override;
+    bool isLocalPortFree(const transport::SocketAddress& ipPort, fakenet::Protocol protocol) const override;
 
     void process(uint64_t timestamp) override;
 
     std::vector<NetworkNode*>& getLocalNodes() override { return _nodes; };
-    std::vector<NetworkNode*>& getPublicNodes() override { return _nodes; };
 
 private:
     mutable std::mutex _nodesMutex;
     std::vector<NetworkNode*> _nodes;
 };
-// private nextwork is 172.x.x.x and fe80:....
+// private network is 172.x.x.x and fe80:....
 class Firewall : public Gateway
 {
 public:
@@ -123,19 +122,20 @@ public:
     Firewall(const transport::SocketAddress& publicIpv4, const transport::SocketAddress& publicIpv6, Gateway& internet);
     virtual ~Firewall();
 
-    void addLocal(NetworkNode* endpoint) override;
-    void addPublic(NetworkNode* endpoint) override;
+    bool addLocal(NetworkNode* endpoint) override;
     void removeNode(NetworkNode* node) override;
 
     void addPublicIp(const transport::SocketAddress& addr);
 
-    bool isLocalPortFree(const transport::SocketAddress& ipPort) const override;
-    bool isPublicPortFree(const transport::SocketAddress& ipPort) const override;
+    bool isLocalPortFree(const transport::SocketAddress& ipPort, fakenet::Protocol protocol) const override;
 
-    bool hasIp(const transport::SocketAddress& port) override
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::ANY; }
+    bool hasIp(const transport::SocketAddress& port, fakenet::Protocol) const override
     {
         return _publicIpv4.equalsIp(port) || _publicIpv6.equalsIp(port);
     }
+
+    bool hasIpClash(const NetworkNode& node) const override;
 
     transport::SocketAddress getPublicIp() const { return _publicIpv4; }
     transport::SocketAddress getPublicIpv6() const { return _publicIpv6; }
@@ -145,13 +145,11 @@ public:
     void removePortMapping(Protocol protocol, transport::SocketAddress& lanAddress);
 
     std::vector<NetworkNode*>& getLocalNodes() override { return _endpoints; };
-    std::vector<NetworkNode*>& getPublicNodes() override { return _publicEndpoints; };
 
     void block(const transport::SocketAddress& source, const transport::SocketAddress& destination);
     void unblock(const transport::SocketAddress& source, const transport::SocketAddress& destination);
 
 private:
-    void dispatchPublicly(const Packet& packet, uint64_t timestamp);
     void processEndpoints(const uint64_t timestamp);
     void dispatchNAT(const Packet& packet, const uint64_t timestamp);
     bool dispatchLocally(const Packet& packet, const uint64_t timestamp);
@@ -172,11 +170,11 @@ private:
     PortMap _portMappingsUdp;
     PortMap _portMappingsTcp;
     std::vector<NetworkNode*> _endpoints;
-    std::vector<NetworkNode*> _publicEndpoints;
+
     Gateway& _internet;
     int _portCount = 1000;
     mutable std::mutex _nodesMutex;
-    memory::Map<std::pair<transport::SocketAddress, transport::SocketAddress>, bool, 1024> _blackList;
+    concurrency::MpmcHashmap32<std::pair<transport::SocketAddress, transport::SocketAddress>, bool> _blackList;
 };
 
 class InternetRunner

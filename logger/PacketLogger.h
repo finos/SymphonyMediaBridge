@@ -49,6 +49,8 @@ public:
 
     void rewind();
 
+    bool isOpen() const { return _logFile != nullptr; }
+
 private:
     FILE* _logFile;
 };
