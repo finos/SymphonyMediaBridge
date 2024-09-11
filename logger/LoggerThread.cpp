@@ -100,7 +100,6 @@ void LoggerThread::run()
             if (isTimeForMaintenance())
             {
                 auto threadId = (void*)pthread_self();
-                formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance");
                 if (_logFile)
                 {
                     fflush(_logFile);
@@ -111,11 +110,7 @@ void LoggerThread::run()
                     reopenLogFile();
                     std::string logLine = "SMB logfile maintenance: reopen was needed and " +
                         std::string(_logFile == nullptr ? "failed." : "succeeded.");
-                    formatTo(stdout, localTime, "WARN", threadId, logLine.c_str());
-                }
-                else
-                {
-                    formatTo(stdout, localTime, "INFO", threadId, "SMB logfile maintenance: reopen was not needed.");
+                    formatTo(stderr, localTime, "WARN", threadId, logLine.c_str());
                 }
             }
         }

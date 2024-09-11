@@ -26,11 +26,6 @@ void fatalSignalHandler(int32_t signalId)
 
     logger::flushLog();
 
-    if (signalId == SIGPIPE)
-    {
-        return;
-    }
-
     auto oldSignalHandlersItr = oldSignalHandlers.find(signalId);
     if (oldSignalHandlersItr != oldSignalHandlers.end())
     {
