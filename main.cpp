@@ -18,13 +18,15 @@ std::unordered_map<int32_t, struct sigaction> oldSignalHandlers;
 
 void fatalSignalHandler(int32_t signalId)
 {
-    void* array[16];
-    const auto size = backtrace(array, 16);
-    logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
-    logger::logStackImmediate(array, size, "fatalSignalHandler");
-    logger::error("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
+    if (signalId != SIGPIPE) {
+        void* array[16];
+        const auto size = backtrace(array, 16);
+        logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
+        logger::logStackImmediate(array, size, "fatalSignalHandler");
+        logger::error("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
 
-    logger::flushLog();
+        logger::flushLog();
+    }
 
     auto oldSignalHandlersItr = oldSignalHandlers.find(signalId);
     if (oldSignalHandlersItr != oldSignalHandlers.end())
