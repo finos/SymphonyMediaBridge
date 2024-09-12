@@ -14,7 +14,7 @@ public:
         utils::Time::initialize();
         auto fh = fopen("./smb_load_test.log", "w");
         fclose(fh);
-        logger::setup("./smb_load_test.log", true, logger::Level::DBG, 4 * 1024 * 1024);
+        logger::setup("./smb_load_test.log", true, true, logger::Level::DBG, 4 * 1024 * 1024);
     }
 
     void TearDown() override { logger::stop(); }

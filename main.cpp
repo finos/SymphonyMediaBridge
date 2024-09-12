@@ -18,15 +18,18 @@ std::unordered_map<int32_t, struct sigaction> oldSignalHandlers;
 
 void fatalSignalHandler(int32_t signalId)
 {
-    if (signalId != SIGPIPE) {
-        void* array[16];
-        const auto size = backtrace(array, 16);
-        logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
-        logger::logStackImmediate(array, size, "fatalSignalHandler");
-        logger::error("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
-
-        logger::flushLog();
+    if (signalId == SIGPIPE) {
+        logger::disableStdOut();
+        logger::disableStdErr();
     }
+
+    void* array[16];
+    const auto size = backtrace(array, 16);
+    logger::errorImmediate("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
+    logger::logStackImmediate(array, size, "fatalSignalHandler");
+    logger::error("Fatal signal %d, %d stack frames.", "fatalSignalHandler", signalId, size);
+
+    logger::flushLog();
 
     auto oldSignalHandlersItr = oldSignalHandlers.find(signalId);
     if (oldSignalHandlersItr != oldSignalHandlers.end())
@@ -144,7 +147,7 @@ int main(int argc, char** argv)
     }
 
     utils::Time::initialize();
-    logger::setup(config->logFile.get().c_str(), config->logStdOut, parseLogLevel(config->logLevel), 4 * 1024 * 1024);
+    logger::setup(config->logFile.get().c_str(), config->logStdOut, config->logStdErr, parseLogLevel(config->logLevel), 4 * 1024 * 1024);
     logger::info("Starting httpd on port %u", "main", config->port.get());
     logger::info("Configured udp port range: %s  %u - %u",
         "main",

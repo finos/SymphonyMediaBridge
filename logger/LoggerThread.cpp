@@ -11,11 +11,12 @@ namespace logger
 
 const auto timeStringLength = 32;
 
-LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize)
+LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, bool logStdErr, size_t backlogSize)
     : _running(true),
       _logQueue(backlogSize),
       _logFile(nullptr),
       _logStdOut(logStdOut),
+      _logStdErr(logStdErr),
       _logFileName(logFileName && std::strlen(logFileName) > 0 ? logFileName : ""),
       _droppedLogs(0),
       _lastMaintenanceTime(0),
@@ -62,10 +63,10 @@ void LoggerThread::run()
             if (_logStdOut)
             {
                 formatTo(stdout, localTime, item->logLevel, item->threadId, item->message);
-                if (!std::strcmp(item->logLevel, "ERROR"))
-                {
-                    formatTo(stderr, localTime, item->logLevel, item->threadId, item->message);
-                }
+            }
+            if (_logStdErr && !std::strcmp(item->logLevel, "ERROR"))
+            {
+                formatTo(stderr, localTime, item->logLevel, item->threadId, item->message);
             }
             if (_logFile)
             {
@@ -75,9 +76,14 @@ void LoggerThread::run()
         }
         else
         {
-            if (gotLogItem && _logStdOut)
+            if (gotLogItem)
             {
-                fflush(stdout);
+                if (_logStdOut) {
+                    fflush(stdout);
+                }
+                if (_logStdErr) {
+                    fflush(stderr);
+                }
             }
             if (gotLogItem && _logFile)
             {
@@ -229,13 +235,13 @@ void LoggerThread::immediate(std::chrono::system_clock::time_point timestamp,
 
     if (_logStdOut)
     {
-        if (!std::strcmp(logLevel, "ERROR"))
-        {
-            formatTo(stderr, localTime, logLevel, threadId, message);
-            fflush(stderr);
-        }
         formatTo(stdout, localTime, logLevel, threadId, message);
         fflush(stdout);
+    }
+    if (_logStdErr && !std::strcmp(logLevel, "ERROR")) 
+    {
+        formatTo(stderr, localTime, logLevel, threadId, message);
+        fflush(stderr);
     }
     if (_logFile)
     {

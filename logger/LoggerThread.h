@@ -20,7 +20,7 @@ class LoggerThread
     };
 
 public:
-    LoggerThread(const char* logFileName, bool logStdOut, size_t backlogSize);
+    LoggerThread(const char* logFileName, bool logStdOut, bool logStdErr, size_t backlogSize);
 
     void post(std::chrono::system_clock::time_point timestamp,
         const char* logLevel,
@@ -45,6 +45,9 @@ public:
 
     uint32_t getDroppedLogCount() const { return _droppedLogs; }
 
+    void disableStdOut() { _logStdOut = false; }
+    void disableStdErr() { _logStdErr = false; }
+
 private:
     void run();
     void reopenLogFile();
@@ -58,6 +61,7 @@ private:
     FILE* _logFile;
     ino_t _logFileINode;
     bool _logStdOut;
+    bool _logStdErr;
     std::string _logFileName;
     uint32_t _droppedLogs;
     uint64_t _lastMaintenanceTime;

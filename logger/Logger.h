@@ -16,7 +16,7 @@ enum class Level
 };
 
 extern Level _logLevel;
-void setup(const char* logToFile, bool logToStdOut, Level level, size_t backlogSize = 4096);
+void setup(const char* logToFile, bool logToStdOut, bool logToStdErr, Level level, size_t backlogSize = 4096);
 void stop();
 void reOpenLog();
 
@@ -97,6 +97,9 @@ __attribute__((format(printf, 1, 3))) inline void errorImmediate(const char* for
     logv("ERROR", logGroup, true, format, arglist);
     va_end(arglist);
 }
+
+void disableStdOut();
+void disableStdErr();
 
 inline void logStack(const char* logGroup)
 {

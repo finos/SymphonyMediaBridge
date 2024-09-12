@@ -10,10 +10,10 @@ std::atomic<size_t> LoggableId::_lastInstanceId;
 
 std::unique_ptr<LoggerThread> _logThread;
 
-void setup(const char* logFileName, bool logToStdOut, Level level, size_t backlogSize)
+void setup(const char* logFileName, bool logToStdOut, bool logToStdErr, Level level, size_t backlogSize)
 {
     _logLevel = level;
-    _logThread.reset(new LoggerThread(logFileName, logToStdOut, backlogSize));
+    _logThread.reset(new LoggerThread(logFileName, logToStdOut, logToStdErr, backlogSize));
 }
 
 void reOpenLog()
@@ -30,6 +30,20 @@ void stop()
     {
         _logThread->stop();
         _logThread.reset();
+    }
+}
+
+void disableStdOut() 
+{
+    if (_logThread) {
+        _logThread->disableStdOut();
+    }
+}
+
+void disableStdErr()
+{
+    if (_logThread) {
+        _logThread->disableStdErr();
     }
 }
 
