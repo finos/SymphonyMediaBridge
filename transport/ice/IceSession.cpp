@@ -2069,16 +2069,21 @@ void IceSession::onCandidatePairRemoved(CandidatePair* candidatePair)
 
 void IceSession::removeCandidatePair(CandidatePair* cp)
 {
+    std::unique_ptr<ice::IceSession::CandidatePair> candidateRemoved;
     for (auto it = _candidatePairs.begin(); it != _candidatePairs.end(); ++it)
     {
         if (it->get() == cp)
         {
+            candidateRemoved = std::move(*it);
             _candidatePairs.erase(it);
             break;
         }
     }
 
-    onCandidatePairRemoved(cp);
+    if (candidateRemoved)
+    {
+        onCandidatePairRemoved(cp);
+    }
 }
 
 const char* toString(IceSession::State s)
