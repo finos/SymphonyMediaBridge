@@ -6,6 +6,7 @@ jobs:
   pr-check:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: aws-linux
@@ -33,5 +34,5 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}  # Auth for private image if needed
     steps:
       - uses: actions/checkout@v3
-      - run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}"
-      - run: "docker/${{ matrix.os }}/runtests.sh"
+      - run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}
+      - run: docker/${{ matrix.os }}/runtests.sh
