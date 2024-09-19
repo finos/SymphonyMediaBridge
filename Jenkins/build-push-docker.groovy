@@ -13,7 +13,9 @@ node {
 
     def imageName = "buildsmb-${params.OSVERSION}"
     def gcpImageName="${gcpArtifactsRegistry}/${gcpArtifactsProject}/${gcpArtifactsRepo}/${imageName}"
+    def githubImageName="ghcr.io/finos/symphonymediabridge/${imageName}"
     def gcpImageNameWithVer="${gcpImageName}:${gitHash}"
+    def githubImageNameWithVer="${githubImageName}:${gitHash}"
 
     currentBuild.displayName = "${params.OSVERSION}-${gitBranch}"
 
@@ -25,12 +27,23 @@ node {
                 }
                 stage("Push") {
                     sh "docker tag ${imageName}:latest ${gcpImageNameWithVer}"
+
                     if (params.GCP_KEY_FILE_PATH != null) {
                         sh "gcloud auth activate-service-account --key-file=${params.GCP_KEY_FILE_PATH}"
                     }
                     sh "gcloud auth configure-docker ${gcpArtifactsRegistry} --quiet"
                     sh "docker push ${gcpImageNameWithVer}"
                     sh "gcloud container images add-tag -q ${gcpImageNameWithVer} '${gcpImageName}:latest'"
+
+                    withCredentials([
+                        [$class: "UsernamePasswordMultiBinding", credentialsId: "ricardo-github-package-writer", usernameVariable: "GITGUB_USERNAME", passwordVariable: "GITHUB_PASSWORD"]
+                    ]) {
+                        sh "echo ${GITHUB_PASSWORD} | docker login ghcr.io -u ${GITGUB_USERNAME} --password-stdin"
+                        sh "docker tag ${imageName}:latest ${githubImageNameWithVer}"
+                        sh "docker tag ${imageName}:latest ${githubImageName}:latest"
+                        sh "docker push --all-tags ${githubImageName}"
+                    }
+
                     println "${gcpImageNameWithVer} successfully uploaded"
                 }
             }
