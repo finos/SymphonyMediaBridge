@@ -1,0 +1,34 @@
+name: PR Unit Test
+
+on: [pull_request]
+
+jobs:
+  pr-check:
+    runs-on: ubuntu-latest
+    strategy:
+      - matrix.os: aws-linux
+        matrix.build.type: Release
+      # - matrix.os: el7
+      #   matrix.build.type: Release
+      - matrix.os: el8
+        matrix.build.type: Release
+      - matrix.os: ubuntu-focal-deb
+        matrix.build.type: Release
+      - matrix.os: ubuntu-focal
+        matrix.build.type: Release
+      - matrix.os: el8
+        matrix.build.type: LCheck
+      - matrix.os: el8
+        matrix.build.type: TCheck
+      - matrix.os: el8
+        matrix.build.type: DCheck
+      - matrix.os: el8
+        matrix.build.type: LCov
+      matrix:
+    runs-on: ubuntu-latest
+      container:
+        image: ghcr.io/finos/symphonymediabridge/${{ matrix.os }}:latest
+    steps:
+      - uses: actions/checkout@v3
+      - run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}"
+      - run: "docker/${{ matrix.os }}/runtests.sh"
