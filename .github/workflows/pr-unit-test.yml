@@ -24,9 +24,8 @@ jobs:
         matrix.build.type: DCheck
       - matrix.os: el8
         matrix.build.type: LCov
-    runs-on: ubuntu-latest
-      container:
-        image: ghcr.io/finos/symphonymediabridge/${{ matrix.os }}:latest
+    container:
+      image: ghcr.io/finos/symphonymediabridge/${{ matrix.os }}:latest
     steps:
       - uses: actions/checkout@v3
       - run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}"
