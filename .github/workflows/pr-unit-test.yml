@@ -7,24 +7,25 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        - matrix.os: aws-linux
-          matrix.build.type: Release
-        # - matrix.os: el7
-        #   matrix.build.type: Release
-        - matrix.os: el8
-          matrix.build.type: Release
-        - matrix.os: ubuntu-focal-deb
-          matrix.build.type: Release
-        - matrix.os: ubuntu-focal
-          matrix.build.type: Release
-        - matrix.os: el8
-          matrix.build.type: LCheck
-        - matrix.os: el8
-          matrix.build.type: TCheck
-        - matrix.os: el8
-          matrix.build.type: DCheck
-        - matrix.os: el8
-          matrix.build.type: LCov
+        include:
+          - os: aws-linux
+            build.type: Release
+          # - os: el7
+          #   build.type: Release
+          - os: el8
+            build.type: Release
+          - os: ubuntu-focal-deb
+            build.type: Release
+          - os: ubuntu-focal
+            build.type: Release
+          - os: el8
+            build.type: LCheck
+          - os: el8
+            build.type: TCheck
+          - os: el8
+            build.type: DCheck
+          - os: el8
+            build.type: LCov
     container:
       image: ghcr.io/finos/symphonymediabridge/${{ matrix.os }}:latest
     steps:
