@@ -27,7 +27,10 @@ jobs:
           - os: el8
             build.type: LCov
     container:
-      image: ghcr.io/finos/symphonymediabridge/${{ matrix.os }}:latest
+      image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}  # Auth for private image if needed
     steps:
       - uses: actions/checkout@v3
       - run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}"
