@@ -6,24 +6,25 @@ jobs:
   pr-check:
     runs-on: ubuntu-latest
     strategy:
-      - matrix.os: aws-linux
-        matrix.build.type: Release
-      # - matrix.os: el7
-      #   matrix.build.type: Release
-      - matrix.os: el8
-        matrix.build.type: Release
-      - matrix.os: ubuntu-focal-deb
-        matrix.build.type: Release
-      - matrix.os: ubuntu-focal
-        matrix.build.type: Release
-      - matrix.os: el8
-        matrix.build.type: LCheck
-      - matrix.os: el8
-        matrix.build.type: TCheck
-      - matrix.os: el8
-        matrix.build.type: DCheck
-      - matrix.os: el8
-        matrix.build.type: LCov
+      matrix:
+        - matrix.os: aws-linux
+          matrix.build.type: Release
+        # - matrix.os: el7
+        #   matrix.build.type: Release
+        - matrix.os: el8
+          matrix.build.type: Release
+        - matrix.os: ubuntu-focal-deb
+          matrix.build.type: Release
+        - matrix.os: ubuntu-focal
+          matrix.build.type: Release
+        - matrix.os: el8
+          matrix.build.type: LCheck
+        - matrix.os: el8
+          matrix.build.type: TCheck
+        - matrix.os: el8
+          matrix.build.type: DCheck
+        - matrix.os: el8
+          matrix.build.type: LCov
     container:
       image: ghcr.io/finos/symphonymediabridge/${{ matrix.os }}:latest
     steps:
