@@ -33,6 +33,9 @@ jobs:
             build.type: DCheck
           - os: el8
             build.type: LCov
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}
+      cancel-in-progress: true
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
     steps:
