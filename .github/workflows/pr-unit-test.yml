@@ -57,6 +57,7 @@ jobs:
       - name: Enable Debug Mode
         run: |
           echo "ACTIONS_RUNNER_DEBUG=true" >> $GITHUB_ENV
+          echo "ACTIONS_STEP_DEBUG=true" >> $GITHUB_ENV
       - uses: actions/checkout@v3
       - name: Mark workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -86,5 +87,5 @@ jobs:
         with:
           check_name: JUnit Test Report ${{ matrix.os }} ${{ matrix.build.type }}
           report_paths: ${{ matrix.os }}/smb/test-results*.xml
-          job_name: PR Unit Test
+          #job_name: PR Unit Test
           update_check: true
