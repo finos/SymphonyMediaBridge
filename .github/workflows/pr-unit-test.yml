@@ -76,4 +76,4 @@ jobs:
         with:
           name: Unit Tests
           path: ${{ matrix.os }}/smb/test-results*.xml
-          reporter: junit
+          reporter: java-junit
