@@ -2,7 +2,7 @@ name: PR Unit Test
 
 on: [pull_request]
 
-# make GHA actions use node16 which still works with bionic
+# make GHA actions use node16 which still works with aws-linux
 # See https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
 # Unclear how long this will work though
 env:
@@ -36,7 +36,7 @@ jobs:
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Mark workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Build
