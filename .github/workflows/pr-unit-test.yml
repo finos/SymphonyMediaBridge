@@ -78,9 +78,10 @@ jobs:
           retention-days: 14
           path: ${{ matrix.os }}/smb/test-results*.xml
       - name: Annotate test results
-        uses: dorny/test-reporter@v1
+        uses: mikepenz/action-junit-report@v4
         if: success() || failure()        # run this step even if previous step failed
         with:
-          name: Unit Tests ${{ matrix.os }} ${{ matrix.build.type }}
-          path: ${{ matrix.os }}/smb/test-results*.xml
+          check_name: JUnit Test Report ${{ matrix.os }} ${{ matrix.build.type }}
+          report_paths: ${{ matrix.os }}/smb/test-results*.xml
           reporter: java-junit
+          job_name: PR Unit Test
