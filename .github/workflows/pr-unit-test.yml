@@ -10,8 +10,10 @@ env:
 
 permissions:
   contents: read
+  packages: read
   actions: read
   checks: write
+  statuses: write
 
 jobs:
   pr-check:
