@@ -12,7 +12,7 @@ public:
         utils::Time::initialize();
         auto fh = fopen("./smb_unit_test.log", "w");
         fclose(fh);
-        logger::setup("./smb_unit_test.log", true, true, logger::Level::DBG, 8 * 1024 * 1024);
+        logger::setup("./smb_unit_test.log", false, false, logger::Level::DBG, 8 * 1024 * 1024);
     }
 
     void TearDown() override { logger::stop(); }

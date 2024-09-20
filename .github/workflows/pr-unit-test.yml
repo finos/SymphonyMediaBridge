@@ -54,3 +54,22 @@ jobs:
         run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}
       - name: Run Tests
         run: docker/${{ matrix.os }}/runtests.sh
+      - name: Upload Unit test logs
+        uses: actions/upload-artifact@v3
+        with:
+          name: unit-test-logs-${{ matrix.os }}-${{ matrix.build.type }}
+          retention-days: 14
+          path: ${{ matrix.os }}/smb/smb_unit_test*.log
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
+          retention-days: 14
+          path: ${{ matrix.os }}/smb/test-results/test-results*.xml
+      - name: Annotate test results
+        uses: dorny/test-reporter@v1
+        if: failure() # Only run this step if there is a failure
+        with:
+          name: Unit Tests
+          path: ${{ matrix.os }}/smb/test-results/test-results*.xml
+          reporter: junit
