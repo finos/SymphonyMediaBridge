@@ -16,7 +16,7 @@ TEST(ApiUtils, IceStateSerialization)
             "IceState.SerializeAndDeserialize",
             state,
             serialized,
-            deserialized);
+            static_cast<std::underlying_type_t<IceState>>(deserialized));
         ASSERT_EQ(state, (int)deserialized);
     }
 }
@@ -31,7 +31,7 @@ TEST(ApiUtils, DtlsStateSerialization)
             "DtlsState.SerializeAndDeserialize",
             state,
             serialized,
-            deserialized);
+            static_cast<std::underlying_type_t<IceState>>(deserialized));
         ASSERT_EQ(state, (int)deserialized);
     }
 }
