@@ -34,5 +34,9 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}  # Auth for private image if needed
     steps:
       - uses: actions/checkout@v3
-      - run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}
-      - run: docker/${{ matrix.os }}/runtests.sh
+      - name: Mark workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Build
+        run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}
+      - name: Run Tests
+        run: docker/${{ matrix.os }}/runtests.sh
