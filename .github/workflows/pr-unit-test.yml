@@ -34,7 +34,7 @@ jobs:
           - os: el8
             build.type: LCov
     concurrency:
-      group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}-${{ matrix.os }}-{{ matrix.build.type }}
+      group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}-${{ matrix.os }}-${{ matrix.build.type }}
       cancel-in-progress: true
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
