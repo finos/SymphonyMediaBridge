@@ -58,12 +58,14 @@ jobs:
         run: find . -type f -iname "smb_unit_test*"
       - name: Upload Unit test logs
         uses: actions/upload-artifact@v3
+        if: always()  # This step runs regardless of the previous step results
         with:
           name: unit-test-logs-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
-          path: ${{ matrix.os }}/smb/smb_unit_test*.log
+          path: tools/testfiles/smb_unit_test*.log
       - name: Upload test results
         uses: actions/upload-artifact@v3
+        if: always()  # This step runs regardless of the previous step results
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
