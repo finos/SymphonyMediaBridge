@@ -79,8 +79,8 @@ jobs:
           path: ${{ matrix.os }}/smb/test-results*.xml
       - name: Annotate test results
         uses: dorny/test-reporter@v1
-        if: failure() # Only run this step if there is a failure
+        if: success() || failure()        # run this step even if previous step failed
         with:
-          name: Unit Tests
+          name: Unit Tests ${{ matrix.os }} ${{ matrix.build.type }}
           path: ${{ matrix.os }}/smb/test-results*.xml
           reporter: java-junit
