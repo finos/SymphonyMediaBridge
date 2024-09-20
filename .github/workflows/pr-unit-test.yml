@@ -69,11 +69,11 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
-          path: ${{ matrix.os }}/smb/test-results/test-results*.xml
+          path: ${{ matrix.os }}/smb/test-results*.xml
       - name: Annotate test results
         uses: dorny/test-reporter@v1
         if: failure() # Only run this step if there is a failure
         with:
           name: Unit Tests
-          path: ${{ matrix.os }}/smb/test-results/test-results*.xml
+          path: ${{ matrix.os }}/smb/test-results*.xml
           reporter: junit
