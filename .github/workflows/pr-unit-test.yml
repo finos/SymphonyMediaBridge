@@ -54,7 +54,7 @@ jobs:
         run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}
       - name: Run Tests
         run: docker/${{ matrix.os }}/runtests.sh
-      - name: DEBUG search unit tests logs:
+      - name: DEBUG search unit tests logs
         run: find . -type f -iname "smb_unit_test*"
       - name: Upload Unit test logs
         uses: actions/upload-artifact@v3
