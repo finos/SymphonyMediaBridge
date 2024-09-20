@@ -54,6 +54,9 @@ jobs:
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
     steps:
+      - name: Enable Debug Mode
+        run: |
+          echo "ACTIONS_RUNNER_DEBUG=true" >> $GITHUB_ENV
       - uses: actions/checkout@v3
       - name: Mark workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
@@ -83,5 +86,4 @@ jobs:
         with:
           check_name: JUnit Test Report ${{ matrix.os }} ${{ matrix.build.type }}
           report_paths: ${{ matrix.os }}/smb/test-results*.xml
-          reporter: java-junit
           job_name: PR Unit Test
