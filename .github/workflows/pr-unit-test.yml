@@ -16,23 +16,31 @@ jobs:
       matrix:
         include:
           - os: aws-linux
-            build.type: Release
+            build:
+              type: Release
           # - os: el7
           #   build.type: Release
           - os: el8
-            build.type: Release
+            build:
+              type: Release
           - os: ubuntu-focal-deb
-            build.type: Release
+            build:
+              type: Release
           - os: ubuntu-focal
-            build.type: Release
+            build:
+              type: Release
           - os: el8
-            build.type: LCheck
+            build:
+              type: LCheck
           - os: el8
-            build.type: TCheck
+            build:
+              type: TCheck
           - os: el8
-            build.type: DCheck
+            build:
+              type: DCheck
           - os: el8
-            build.type: LCov
+            build:
+              type: LCov
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}-${{ matrix.os }}-${{ matrix.build.type }}
       cancel-in-progress: true
