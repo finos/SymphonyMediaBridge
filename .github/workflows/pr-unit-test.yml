@@ -29,9 +29,9 @@ jobs:
             build.type: LCov
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}  # Auth for private image if needed
+      #credentials:
+      #  username: ${{ github.actor }}
+      #  password: ${{ secrets.GITHUB_TOKEN }}  # Auth for private image if needed
     steps:
       - uses: actions/checkout@v3
       - name: Mark workspace as safe

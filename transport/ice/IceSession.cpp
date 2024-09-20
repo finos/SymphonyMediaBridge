@@ -1862,7 +1862,7 @@ void IceSession::CandidatePair::failCandidate(IceError reason)
         _iceSession._logId.c_str(),
         localCandidate.address.toString().c_str(),
         remoteCandidate.address.toString().c_str(),
-        reason);
+        static_cast<std::underlying_type_t<IceError>>(reason));
     state = ProbeState::Failed;
     _errorCode = reason;
     cancelPendingTransactions();
