@@ -2,6 +2,12 @@ name: PR Unit Test
 
 on: [pull_request]
 
+# make GHA actions use node16 which still works with bionic
+# See https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
+# Unclear how long this will work though
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
 jobs:
   pr-check:
     runs-on: ubuntu-latest
@@ -29,9 +35,6 @@ jobs:
             build.type: LCov
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
-      #credentials:
-      #  username: ${{ github.actor }}
-      #  password: ${{ secrets.GITHUB_TOKEN }}  # Auth for private image if needed
     steps:
       - uses: actions/checkout@v2
       - name: Mark workspace as safe
