@@ -33,7 +33,7 @@ jobs:
       #  username: ${{ github.actor }}
       #  password: ${{ secrets.GITHUB_TOKEN }}  # Auth for private image if needed
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v2
       - name: Mark workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
       - name: Build
