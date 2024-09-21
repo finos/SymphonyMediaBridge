@@ -23,8 +23,6 @@ TEST(ApiUtils, IceStateSerialization)
 
 TEST(ApiUtils, DtlsStateSerialization)
 {
-    // TO BR REMOVED:
-    ASSERT_EQ(true, false);
     for (int state = 0; state < (int)DtlsState::LAST; state++)
     {
         auto serialized = toString((DtlsState)state);
