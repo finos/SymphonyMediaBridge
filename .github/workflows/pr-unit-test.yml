@@ -93,7 +93,7 @@ jobs:
           retention-days: 14
           path: ${{ matrix.os }}/smb/coverage/index.xml
       - name: Annotate test results
-        uses: mikepenz/action-junit-report@v4
+        uses: mikepenz/action-junit-report@v3
         if: success() || failure()        # run this step even if previous step failed
         with:
           check_name: JUnit Test Report ${{ matrix.os }} ${{ matrix.build.type }}
