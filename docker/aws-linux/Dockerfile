@@ -47,3 +47,9 @@ RUN cd /tmp \
     && ./configure \
     && make -j5 \
     && make install
+
+# Install Node 16 for running Github Actions as most recent node verions
+# that would be added (mounterd) by Github Actions one that is
+# is not compatible with GLIBC available on Amazon Linux 2 (Centos 7)
+RUN curl -sL https://rpm.nodesource.com/setup_16.x | bash -
+RUN yum -y install nodejs
