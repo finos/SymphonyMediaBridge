@@ -81,6 +81,12 @@ jobs:
           name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
           path: ${{ matrix.os }}/smb/test-results*.xml
+      - name: Upload Code Coverage
+        if: success()  # This step runs regardless of the previous step results
+        with:
+          name: code-coverage-${{ matrix.os }}-${{ matrix.build.type }}
+          retention-days: 14
+          path: ${{ matrix.os }}/smb/coverage/index.xml
       - name: Annotate test results
         uses: mikepenz/action-junit-report@v4
         if: success() || failure()        # run this step even if previous step failed
