@@ -82,6 +82,7 @@ jobs:
           retention-days: 14
           path: ${{ matrix.os }}/smb/test-results*.xml
       - name: Upload Code Coverage
+        uses: actions/upload-artifact@v3
         if: success()  # This step runs regardless of the previous step results
         with:
           name: code-coverage-${{ matrix.os }}-${{ matrix.build.type }}
