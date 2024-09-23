@@ -54,6 +54,10 @@ jobs:
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
     steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16.x'
       - name: Enable Debug Mode
         run: |
           echo "ACTIONS_RUNNER_DEBUG=true" >> $GITHUB_ENV
