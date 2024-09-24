@@ -23,36 +23,44 @@ jobs:
       matrix:
         include:
           - os: aws-linux
+            image: 2ff464f
             build:
               type: Release
           # - os: el7
           #   build.type: Release
           - os: el8
+            image: latest
             build:
               type: Release
           - os: ubuntu-focal-deb
+            image: latest
             build:
               type: Release
           - os: ubuntu-focal
+            image: latest
             build:
               type: Release
           - os: el8
+            image: latest
             build:
               type: LCheck
           - os: el8
+            image: latest
             build:
               type: TCheck
           - os: el8
+            image: latest
             build:
               type: DCheck
           - os: el8
+            image: latest
             build:
               type: LCov
     concurrency:
       group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}-${{ matrix.os }}-${{ matrix.build.type }}
       cancel-in-progress: true
     container:
-      image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:latest
+      image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:${{ matrix.image }}
     steps:
       - name: Print node
         run: node --version
@@ -99,4 +107,3 @@ jobs:
           job_name: pr-check (${{ matrix.os }}, ${{ matrix.build.type }})
           detailed_summary: true
           update_check: true
-          node-version: '16'
