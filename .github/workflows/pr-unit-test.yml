@@ -61,6 +61,7 @@ jobs:
       cancel-in-progress: true
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:${{ matrix.image }}
+    name: pr-check-${{ matrix.os }}-${{ matrix.build.type }}
     steps:
       - uses: actions/checkout@v3
       - name: Mark workspace as safe
