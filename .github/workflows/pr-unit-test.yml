@@ -82,7 +82,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()  # This step runs regardless of the previous step results
         with:
-          name: test-results-${{ matrix.build.type == '' }}-${{ matrix.build.type }}
+          name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
           path: ${{ matrix.os }}/smb/test-results*.xml
       - name: Upload Code Coverage
