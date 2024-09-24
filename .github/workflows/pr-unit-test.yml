@@ -62,12 +62,6 @@ jobs:
     container:
       image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:${{ matrix.image }}
     steps:
-      - name: Print node
-        run: node --version
-      - name: Enable Debug Mode
-        run: |
-          echo "ACTIONS_RUNNER_DEBUG=true" >> $GITHUB_ENV
-          echo "ACTIONS_STEP_DEBUG=true" >> $GITHUB_ENV
       - uses: actions/checkout@v3
       - name: Mark workspace as safe
         run: git config --global --add safe.directory $GITHUB_WORKSPACE
