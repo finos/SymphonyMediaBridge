@@ -99,6 +99,6 @@ jobs:
         with:
           check_name: JUnit Test Report ${{ matrix.os }} ${{ matrix.build.type }}
           report_paths: ${{ matrix.os }}/smb/test-results*.xml
-          job_name: pr-check (${{ matrix.os }}, ${{ matrix.image }}, ${{ matrix.build.type }})
+          job_name: pr-check-${{ matrix.os }}-${{ matrix.build.type }}
           detailed_summary: true
           update_check: true
