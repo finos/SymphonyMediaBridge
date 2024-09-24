@@ -86,13 +86,16 @@ jobs:
           name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
           path: ${{ matrix.os }}/smb/test-results*.xml
+      - name: Find coverage
+        if: matrix.build.type =='LCov' && success()  # This step runs regardless of the previous step results
+        run: find / -type d -iname coverage
       - name: Upload Code Coverage
         uses: actions/upload-artifact@v3
         if: matrix.build.type =='LCov' && success()  # This step runs regardless of the previous step results
         with:
           name: code-coverage-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
-          path: ${{ matrix.os }}/smb/coverage/index.xml
+          path: ${{ matrix.os }}/smb/coverage/index.html
       - name: Annotate test results
         uses: mikepenz/action-junit-report@v3
         if: success() || failure()        # run this step even if previous step failed
