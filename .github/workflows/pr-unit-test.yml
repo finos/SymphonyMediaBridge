@@ -23,7 +23,7 @@ jobs:
       matrix:
         include:
           - os: aws-linux
-            image: 2ff464f
+            image: latest
             build:
               type: Release
           # - os: el7
