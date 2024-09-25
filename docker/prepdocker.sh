@@ -1,6 +1,6 @@
 #!/bin/bash
 if [ "$#" -ne 1 ]; then
-    echo "Usage prepdocker.sh <el7|el8|ubuntu-focal|ubuntu-jammy|aws-linux>. Eg. prepdocker.sh el8"
+    echo "Usage prepdocker.sh <el8|ubuntu-focal|ubuntu-jammy|aws-linux>. Eg. prepdocker.sh el8"
     exit
 fi
 

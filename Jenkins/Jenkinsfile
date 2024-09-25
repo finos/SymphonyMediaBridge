@@ -38,18 +38,6 @@ node('be-integration') {
 
         sh "gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet"
 
-        docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-el7:latest').inside {
-            stage('Build Centos 7') {
-                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
-                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
-                sh "docker/el7/buildscript.sh Release"
-            }
-
-            stage('Run tests centos7') {
-                sh "docker/el7/runtests.sh"
-            }
-        }
-
         docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-el8:latest').inside {
             stage('Build RHEL 8') {
                 env.GIT_COMMITTER_NAME = "Jenkins deployment job"
@@ -98,9 +86,9 @@ node('be-integration') {
             }
         }
 
-        docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-el7:latest').inside {
+        docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-ubuntu-focal-deb:latest').inside {
             stage('Create archive') {
-                sh "zip -r ${baseName}-${version}.zip el7/smb/smb el7/smb/versioninfo.txt el7/smb/libs/ el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-jammy/smb/smb ubuntu-jammy/smb/versioninfo.txt ubuntu-jammy/smb/libs/ ubuntu-focal-deb/smb/*.tar.gz ubuntu-focal-deb/smb/*.deb aws-linux/smb/versioninfo.txt aws-linux/smb/libs/ aws-linux/smb/smb"
+                sh "zip -r ${baseName}-${version}.zip el8/smb/smb el8/smb/versioninfo.txt el8/smb/libs/ ubuntu-jammy/smb/smb ubuntu-jammy/smb/versioninfo.txt ubuntu-jammy/smb/libs/ ubuntu-focal-deb/smb/*.tar.gz ubuntu-focal-deb/smb/*.deb aws-linux/smb/versioninfo.txt aws-linux/smb/libs/ aws-linux/smb/smb"
             }
         }
 
