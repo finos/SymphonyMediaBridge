@@ -69,7 +69,7 @@ TEST_P(IntegrationCallTypesTest, party3AllModes)
     auto transportMode = std::get<0>(GetParam());
     auto encryptionMode = std::get<1>(GetParam());
 
-    logger::info("test transportmode %u, encryption %u", "party3AllModes", transportMode, encryptionMode);
+    logger::info("test transportmode %d, encryption %d", "party3AllModes", static_cast<int>(transportMode), static_cast<int>(encryptionMode));
     auto testBody = [this, transportMode, encryptionMode]() {
         _config.readFromString(_defaultSmbConfig);
         _config.enableSrtpNullCipher = true;

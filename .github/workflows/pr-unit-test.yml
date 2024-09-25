@@ -1,0 +1,102 @@
+name: PR Unit Test
+
+on: [pull_request]
+
+# make GHA actions use node16 which still works with aws-linux
+# See https://github.blog/changelog/2024-03-07-github-actions-all-actions-will-run-on-node20-instead-of-node16-by-default/
+# Unclear how long this will work though
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+
+permissions:
+  contents: read
+  packages: read
+  actions: read
+  checks: write
+  statuses: write
+
+jobs:
+  pr-check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: aws-linux
+            image: latest
+            build:
+              type: Release
+          - os: el8
+            image: latest
+            build:
+              type: Release
+          - os: ubuntu-focal-deb
+            image: latest
+            build:
+              type: Release
+          - os: ubuntu-focal
+            image: latest
+            build:
+              type: Release
+          - os: el8
+            image: latest
+            build:
+              type: LCheck
+          - os: el8
+            image: latest
+            build:
+              type: TCheck
+          - os: el8
+            image: latest
+            build:
+              type: DCheck
+          - os: el8
+            image: latest
+            build:
+              type: LCov
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.head.ref }}-${{ matrix.os }}-${{ matrix.build.type }}
+      cancel-in-progress: true
+    container:
+      image: ghcr.io/finos/symphonymediabridge/buildsmb-${{ matrix.os }}:${{ matrix.image }}
+    name: pr-check-${{ matrix.os }}-${{ matrix.build.type }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Mark workspace as safe
+        run: git config --global --add safe.directory $GITHUB_WORKSPACE
+      - name: Build
+        run: docker/${{ matrix.os }}/buildscript.sh ${{ matrix.build.type }}
+      - name: Run Tests
+        run: docker/${{ matrix.os }}/runtests.sh
+      - name: DEBUG search unit tests logs
+        run: find . -type f -iname "smb_unit_test*"
+      - name: Upload Unit test logs
+        uses: actions/upload-artifact@v3
+        if: always()  # This step runs regardless of the previous step results
+        with:
+          name: unit-test-logs-${{ matrix.os }}-${{ matrix.build.type }}
+          retention-days: 14
+          path: tools/testfiles/smb_unit_test*.log
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()  # This step runs regardless of the previous step results
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
+          retention-days: 14
+          path: ${{ matrix.os }}/smb/test-results*.xml
+      - name: Upload Code Coverage
+        uses: actions/upload-artifact@v3
+        if: matrix.build.type =='LCov' && success()  # This step runs regardless of the previous step results
+        with:
+          name: code-coverage-${{ matrix.os }}-${{ matrix.build.type }}
+          retention-days: 14
+          path: ${{ matrix.os }}/smb/coverage/
+      - name: Annotate test results
+        uses: mikepenz/action-junit-report@v3
+        if: success() || failure()        # run this step even if previous step failed
+        with:
+          check_name: JUnit Test Report ${{ matrix.os }} ${{ matrix.build.type }}
+          report_paths: ${{ matrix.os }}/smb/test-results*.xml
+          job_name: pr-check-${{ matrix.os }}-${{ matrix.build.type }}
+          detailed_summary: true
+          update_check: true

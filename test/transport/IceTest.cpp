@@ -1507,7 +1507,7 @@ TEST_F(IceRobustness, earlyProbes)
 
     for (auto& session : sessions)
     {
-        logger::info("session state %d", "", session->getState());
+        logger::info("session state %d", "", static_cast<int>(session->getState()));
         log(session->getLocalCandidates());
         log(session->getRemoteCandidates());
 
