@@ -26,8 +26,6 @@ jobs:
             image: latest
             build:
               type: Release
-          # - os: el7
-          #   build.type: Release
           - os: el8
             image: latest
             build:
