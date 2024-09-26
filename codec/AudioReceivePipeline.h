@@ -1,4 +1,5 @@
 #pragma once
+#include "G711codec.h"
 #include "codec/NoiseFloor.h"
 #include "codec/OpusDecoder.h"
 #include "codec/SpscAudioBuffer.h"
@@ -82,7 +83,12 @@ private:
     void adjustReductionPower(uint32_t recentReduction);
 
     bool shouldWaitForMissingPacket(uint64_t timestamp) const;
-    bool dtxHandler(int16_t seqAdvance, int64_t timestampAdvance,uint32_t totalJitterBufferSize);
+    bool dtxHandler(int16_t seqAdvance, int64_t timestampAdvance, uint32_t totalJitterBufferSize);
+
+    size_t decodeG711(uint32_t extendedSequenceNumber,
+        const uint64_t timestamp,
+        const memory::Packet& packet,
+        int16_t* audioData);
 
     uint32_t _ssrc;
     const uint32_t _rtpFrequency;
@@ -94,6 +100,8 @@ private:
     const int _audioLevelExtensionId;
     codec::OpusDecoder _decoder;
     codec::NoiseFloor _noiseFloor;
+    codec::PcmaCodec _pcmaDecoder;
+    codec::PcmuCodec _pcmuDecoder;
 
     uint32_t _targetDelay;
     struct SampleElimination
