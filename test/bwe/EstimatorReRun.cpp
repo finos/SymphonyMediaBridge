@@ -162,56 +162,70 @@ TEST_P(BweRerun, DISABLED_fromTrace)
 
     const char* outputFolder = "./_ssdata/";
     bwe::BandwidthEstimator estimator(config);
-    bwe::BwBurstTracker burstTracker;
     rtp::SendTimeDial sendTimeDial;
-    logger::PacketLogReader reader(::fopen(("./_bwelogs/" + trace).c_str(), "r"));
+
+    logger::PacketLogReader reader(::fopen(("../_bwelogs/" + trace).c_str(), "r"));
+    if (!reader.isOpen())
+    {
+        return;
+    }
+
     uint32_t audioSsrc = identifyAudioSsrc(reader);
     reader.rewind();
+    // estimator.init(findClockOffset(reader, audioSsrc));
 
     CsvWriter csvOut((outputFolder + trace + ".csv").c_str());
     CsvWriter csvOutAll((outputFolder + trace + "All.csv").c_str());
     logger::PacketLogItem item;
+
     double prevBw = 0;
     double prevDelay = 0;
     uint64_t start = 0;
-    const char* legend = "time, bwo, burst, bw, q, co, delay, size, seqno, stime, rate, slowrate";
+    const char* legend = "time,bwo,bw,q,co,delay,delayerr,size,seqno,stime,bwerate,bitrate,instantrate";
     csvOut.writeLine("%s", legend);
     csvOutAll.writeLine("%s", legend);
     logger::info("processing %s", "bweRerun", trace.c_str());
 
-    utils::RateTracker<25> rate(100 * utils::Time::ms);
-    const char* formatLine = "%.2f, %.3f,%.1f,%.3f,%.3f,%.3f,%.3f,%u,%u,%.6f,%.2f, %.2f";
+    utils::RateTracker<50> rate(50 * utils::Time::ms);
+
+    const char* formatLine = "%.2f, %.1f,%.1f, %.0f,%.4f, %.2f,%.3f, %u,%u,%.6f, %.1f,%.1f,%.1f";
 
     for (int i = 0; reader.getNext(item) && (start == 0 || item.receiveTimestamp - start < utils::Time::sec * 200); ++i)
     {
         rate.update(item.size * 8, item.receiveTimestamp);
-        burstTracker.onPacketReceived(item.size, item.receiveTimestamp);
+
         if (item.ssrc == audioSsrc)
         {
             estimator.onUnmarkedTraffic(item.size, item.receiveTimestamp);
             continue;
         }
         start = (start == 0 ? item.receiveTimestamp : start);
-        auto localTimestamp = double(item.receiveTimestamp - start) / 1000000;
-        auto sendTime = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, item.receiveTimestamp);
+        const auto localTimestamp = double(item.receiveTimestamp - start) / 1000000;
+        const auto sendTime = sendTimeDial.toAbsoluteTime(item.transmitTimestamp, item.receiveTimestamp);
 
         estimator.update(item.size, sendTime, item.receiveTimestamp);
         auto bw = estimator.getEstimate(item.receiveTimestamp);
         auto state = estimator.getState();
         auto delay = estimator.getDelay();
+
+        const auto predictedDelay = estimator.predictDelay();
+        const auto slowRate =
+            std::min(5000.0, rate.get(item.receiveTimestamp, utils::Time::ms * 1000) * utils::Time::ms);
+        const auto rateNow = std::min(5000.0, rate.get(item.receiveTimestamp, utils::Time::ms * 250) * utils::Time::ms);
         csvOutAll.writeLine(formatLine,
             localTimestamp,
             bw,
-            burstTracker.getBandwidthPercentile(0.50),
             state(1),
             state(0),
             state(2),
             delay,
+            predictedDelay - delay,
             item.size,
             item.sequenceNumber,
             double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
             std::min(5000.0, estimator.getReceiveRate(item.receiveTimestamp)),
-            rate.get(item.receiveTimestamp, utils::Time::ms * 2000) * utils::Time::ms);
+            slowRate,
+            rateNow);
 
         if (((i % 1000) == 0) || std::fabs(delay - prevDelay) > 10 || delay > 70 ||
             std::fabs((bw - prevBw) / prevBw) > 0.15)
@@ -219,16 +233,17 @@ TEST_P(BweRerun, DISABLED_fromTrace)
             csvOut.writeLine(formatLine,
                 localTimestamp,
                 bw,
-                burstTracker.getBandwidthPercentile(0.50),
                 state(1),
                 state(0),
                 state(2),
                 delay,
+                predictedDelay - delay,
                 item.size,
                 item.sequenceNumber,
                 double(item.transmitTimestamp >> 18) + double(item.transmitTimestamp & 0x3FFFF) / 262144,
                 std::min(5000.0, estimator.getReceiveRate(item.receiveTimestamp)),
-                rate.get(item.receiveTimestamp, utils::Time::ms * 2000) * utils::Time::ms);
+                slowRate,
+                rateNow);
 
             prevBw = bw;
             prevDelay = delay;
@@ -237,31 +252,37 @@ TEST_P(BweRerun, DISABLED_fromTrace)
     logger::info("%" PRIu64 "s finished at %.3fkbps", "", (item.receiveTimestamp - start) / utils::Time::sec, prevBw);
 }
 
-INSTANTIATE_TEST_SUITE_P(BweReruns,
+INSTANTIATE_TEST_SUITE_P(BweRerunsWifi,
     BweRerun,
     testing::Values("Transport-4-wifi",
-        "Transport-105_tcp_1ploss",
-        "Transport-22-3G",
         "Transport-30_oka",
         "Transport-3644-wifi",
-        "Transport-39_tcp",
-        "Transport-4735-4G",
+        "Transport-32_Idre",
+        "Transport-37",
+        "Transport-14-wifi",
+        "Transport-3629",
+        "Transport-3887-wifi",
+        "Transport-44-clkdrift"));
+
+INSTANTIATE_TEST_SUITE_P(BweReruns3G,
+    BweRerun,
+    testing::Values("Transport-22-3G",
         "Transport-48_80_3G",
+        "Transport-48_50_3G",
+        "Transport-30-3G-1Mbps",
+        "Transport-48_60_3G"));
+
+INSTANTIATE_TEST_SUITE_P(BweReruns4G,
+    BweRerun,
+    testing::Values("Transport-4735-4G",
         "Transport-62-4G",
         "Transport-1094-4G",
         "Transport-22-4G-2.3Mbps",
-        "Transport-32_Idre",
-        "Transport-37",
-        "Transport-48_50_3G",
-        "Transport-58_tcp",
-        "Transport-86_tcp_1ploss",
-        "Transport-14-wifi",
-        "Transport-30-3G-1Mbps",
-        "Transport-3629",
-        "Transport-3887-wifi",
-        "Transport-44-clkdrift",
-        "Transport-48_60_3G",
         "Transport-6-4G-1-5Mbps"));
+
+INSTANTIATE_TEST_SUITE_P(BweRerunsTcp,
+    BweRerun,
+    testing::Values("Transport-105_tcp_1ploss", "Transport-39_tcp", "Transport-58_tcp", "Transport-86_tcp_1ploss"));
 
 class BweRerunLimit : public testing::TestWithParam<std::tuple<std::string, uint32_t>>
 {
@@ -279,7 +300,7 @@ TEST_P(BweRerunLimit, DISABLED_limitedLink)
     link.setLossRate(0);
     uint64_t wallClock = 0;
     const char* formatLine = "%u, %.1f,%.1f,%.f,%.3f,%.3f,%u,%u,%.6f, %.2f";
-    const char* legend = "time, bwo, bw, q, co, delay, size, seqno, stime, rate";
+    const char* legend = "time,bwo,bw,q,co,delay,size,seqno,stime,bitrate";
 
     bwe::BandwidthEstimator estimator(config);
     rtp::SendTimeDial sendTimeDial;

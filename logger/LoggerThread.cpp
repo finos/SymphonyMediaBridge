@@ -22,8 +22,6 @@ LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, bool logStdE
       _lastMaintenanceTime(0),
       _thread(new std::thread([this] { this->run(); }))
 {
-    _reOpenLog.test_and_set();
-    reopenLogFile();
 }
 
 void LoggerThread::reopenLogFile()
@@ -50,6 +48,9 @@ inline void formatTo(FILE* fh, const char* localTime, const char* level, const v
 void LoggerThread::run()
 {
     concurrency::setThreadName("Logger");
+    _reOpenLog.test_and_set();
+    reopenLogFile();
+
     char localTime[timeStringLength];
     bool gotLogItem = false;
     for (;;)

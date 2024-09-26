@@ -16,12 +16,13 @@ struct Config
     double beta = 2.0;
     double measurementNoise = 100.1 * 3;
     double maxNetworkQueue = 500 * 1024;
+    const double modelMinBandwidth = 125.0; // must be > 25
 
     struct Estimate
     {
         double minKbps = 250;
         double maxKbps = 500000;
-        double initialKbpsDownlink = 200;
+        double initialKbpsDownlink = 500;
         double initialKbpsUplink = 0;
         double minReportedKbps = 500;
     } estimate;
@@ -73,11 +74,12 @@ public:
     math::Matrix<double, 3> getCovariance() const;
     double getEstimate(uint64_t timestamp) const override;
     double getDelay() const override;
+    double predictDelay() const;
 
     // kbps
     double getReceiveRate(uint64_t timestamp) const override
     {
-        return utils::Time::ms * _receiveBandwidth.get(timestamp, utils::Time::ms * 500);
+        return utils::Time::ms * _receiveBitrate.get(timestamp, utils::Time::ms * 750);
     }
 
     void reset();
@@ -88,17 +90,18 @@ private:
         const math::Matrix<double, 3>& processNoise,
         std::array<math::Matrix<double, 3>, SIGMA_POINTS>& sigmaPoints);
 
-    math::Matrix<double, 3> transitionState(uint32_t packetSize,
-        double tau,
-        const math::Matrix<double, 3>& prevState,
-        double observedDelay);
-    math::Matrix<double, 3> sanitizeState(const math::Matrix<double, 1>& state,
-        double observedDelay,
-        uint32_t packetSize);
-    double predictDelay(const math::Matrix<double, 3>& state);
+    math::Matrix<double, 3> transitionState(uint32_t packetSize, double tau, const math::Matrix<double, 3>& prevState);
+    double predictAbsoluteDelay(const math::Matrix<double, 3>& state) const;
 
-    void updateCongestionMargin(double packetIntervalMs);
     double analyseCongestion(double actualDelay, uint32_t packetSize, uint64_t timestamp);
+    void calculateProcessNoise(const math::Matrix<double, 3>& currentState,
+        double actualDelay,
+        double observationError,
+        uint32_t packetSize,
+        uint64_t receiveTimeNs,
+        math::Matrix<double, 3>& processNoise,
+        double& measurementNoise);
+    void sanitizeState(double observedDelay, double packetBits, math::Matrix<double, 3>& state);
 
     const Config _config;
     uint64_t _baseClockOffset;
@@ -108,15 +111,16 @@ private:
     const math::Matrix<double, 3> _processNoise; // Q, Bw, offset  to control the filter
 
     const double _weightCovariance0;
-    const double _weightMeanCovariance;
+    const double _weightCovariance;
+    const double _weightMean;
     const double _weightMean0;
     const double _sigmaWeight;
     // in bits per nanosecond
-    utils::RateTracker<10> _receiveBandwidth;
+    utils::RateTracker<40> _receiveBitrate;
     uint64_t _previousTransmitTime;
     uint64_t _previousReceiveTime;
     double _observedDelay;
-
+    double _packetSize0; // packet size at clock offset reset
     struct CongestionDips
     {
         static constexpr double maxCap = 100000.0;
@@ -132,13 +136,18 @@ private:
         void onNewEstimate(double kbps);
 
         double margin;
-        utils::RateTracker<10> bandwidth;
-        int packetCount;
         uint64_t start;
         double avgEstimate;
 
         CongestionDips dip;
         FlankLatch congestionTrigger;
+
+        // track delay errors
+        uint32_t consecutiveOver; // observed higher than expected
+        uint32_t consecutiveUnder; // observed lower than expected
+        void countDelays(double delayError);
+
+        double estimateBeforeCongestion;
     } _congestion;
 };
 

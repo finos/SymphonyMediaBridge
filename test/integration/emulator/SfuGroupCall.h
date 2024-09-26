@@ -29,6 +29,14 @@ public:
         }
     }
 
+    void startRecordings()
+    {
+        for (auto& client : clients)
+        {
+            client->startRecording();
+        }
+    }
+
     bool connectAll(uint64_t timeout)
     {
         auto start = utils::Time::getAbsoluteTime();
@@ -73,6 +81,7 @@ public:
             if (it == clients.end())
             {
                 logger::info("all clients connected", "test");
+                startRecordings();
                 return true;
             }
 

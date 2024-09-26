@@ -121,7 +121,8 @@ void fftProducer(const std::vector<int16_t>& recording,
     const size_t threadId,
     CmplxArray& spectrum)
 {
-    for (size_t cursor = fftWindowSize * threadId; cursor < size - fftWindowSize; cursor += fftWindowSize * numThreads)
+    for (size_t cursor = fftWindowSize * threadId; cursor + fftWindowSize < std::min(recording.size(), size);
+         cursor += fftWindowSize * numThreads)
     {
         CmplxArray testVector(fftWindowSize);
         for (size_t x = 0; x < fftWindowSize; ++x)

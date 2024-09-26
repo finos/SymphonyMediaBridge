@@ -1,12 +1,15 @@
 #pragma once
 
 #include "memory/PacketPoolAllocator.h"
+#include "test/CsvWriter.h"
+#include "test/integration/emulator/TimeTurner.h"
 #include <vector>
 
 namespace bwe
 {
 class Estimator;
-}
+class BandwidthEstimator;
+} // namespace bwe
 namespace fakenet
 {
 class NetworkLink;
@@ -16,10 +19,11 @@ class Call
 {
 public:
     Call(memory::PacketPoolAllocator& allocator,
-        bwe::Estimator& estimator,
+        bwe::BandwidthEstimator& estimator,
         NetworkLink* firstLink,
         bool audio,
-        uint64_t duration);
+        uint64_t duration,
+        const char* bweDumpFile = nullptr);
 
     ~Call();
 
@@ -27,17 +31,20 @@ public:
     void addSource(MediaSource* source);
 
     bool run(uint64_t period);
-    uint64_t getTime() { return _timeCursor; }
+    uint64_t getTime() { return _timeCursor.getAbsoluteTime(); }
 
     double getEstimate() const;
-    bwe::Estimator& _bwe;
+    bwe::BandwidthEstimator& _bwe;
 
 private:
     memory::PacketPoolAllocator& _allocator;
     std::vector<MediaSource*> _mediaSources;
     std::vector<NetworkLink*> _links;
 
-    uint64_t _timeCursor;
+    emulator::TimeTurner _timeCursor;
+    uint64_t _startTime;
     uint64_t _endTime;
+
+    std::unique_ptr<CsvWriter> _csvWriter;
 };
 } // namespace fakenet

@@ -728,6 +728,9 @@ TEST_F(IntegrationTest, neighbours)
 
 TEST_F(IntegrationTest, dynamicNeighbours_removeNeighbours)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     runTestInThread(expectedTestThreadCount(1), [this]() {
         _config.readFromString(_defaultSmbConfig);
 

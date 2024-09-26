@@ -1,4 +1,5 @@
 #include "bwe/BandwidthEstimator.h"
+#include "math/helpers.h"
 #include "utils/Time.h"
 #include <algorithm>
 #include <array>
@@ -11,13 +12,24 @@ void Config::sanitize()
     estimate.initialKbpsDownlink = std::max(100.0, estimate.initialKbpsDownlink); // must not be zero
 }
 
+namespace
+{
+enum StateVariables
+{
+    QueuedBits = 0,
+    Bandwidth,
+    ClockOffset
+};
+}
+
 BandwidthEstimator::CongestionState::CongestionState(double margin_)
     : margin(margin_),
-      bandwidth(20 * utils::Time::ms),
-      packetCount(0),
       start(0),
       avgEstimate(0),
-      congestionTrigger(500.0, 100.0)
+      congestionTrigger(500.0, 100.0),
+      consecutiveOver(0),
+      consecutiveUnder(0),
+      estimateBeforeCongestion(200)
 {
 }
 
@@ -31,18 +43,20 @@ BandwidthEstimator::BandwidthEstimator(const Config& config)
     : _config(config),
       _baseClockOffset(0),
       _lambda(_config.alpha * _config.alpha * (DIMENSIONALITY + _config.kappa)),
-      _processNoise({20, 20, 0.0001}),
+      _processNoise({0, 40, 0.001}),
       _weightCovariance0((_lambda / (DIMENSIONALITY + _lambda)) + (1 + _config.beta - _config.alpha * _config.alpha)),
-      _weightMeanCovariance(1.0 / (2.0 * (DIMENSIONALITY + _lambda))),
-      _weightMean0(1.0 - _weightMeanCovariance * DIMENSIONALITY * 2.0),
+      _weightCovariance(1.0 / (2.0 * (DIMENSIONALITY + _lambda))),
+      _weightMean(_weightCovariance),
+      _weightMean0(1.0 - _weightMean * DIMENSIONALITY * 2.0),
       _sigmaWeight(sqrt(DIMENSIONALITY + _lambda)),
-      _receiveBandwidth(20 * utils::Time::ms),
+      _receiveBitrate(50 * utils::Time::ms),
       _previousTransmitTime(0),
       _previousReceiveTime(0),
       _observedDelay(0),
+      _packetSize0(0),
       _congestion(0.0)
 {
-    _state(1) = _config.estimate.initialKbpsDownlink;
+    _state(Bandwidth) = _config.estimate.initialKbpsDownlink;
 
     const math::Matrix<double, 3> initDelta({8000.0 * 8, _config.estimate.initialKbpsDownlink * 0.001, 0.1});
     _covarianceP = initDelta * math::transpose(initDelta);
@@ -50,73 +64,112 @@ BandwidthEstimator::BandwidthEstimator(const Config& config)
 
 void BandwidthEstimator::onUnmarkedTraffic(uint32_t packetSize, uint64_t receiveTimeNs)
 {
-    if (_baseClockOffset != 0 && _state(0) < 1600 * 8)
+    if (_baseClockOffset != 0 && _state(QueuedBits) < _config.mtu * 2 * 8)
     {
-        _state(0) = _state(0) + packetSize * 8;
+        _state(QueuedBits) += packetSize * 8;
     }
     _previousReceiveTime = receiveTimeNs;
-    _receiveBandwidth.update(packetSize * 8, receiveTimeNs);
+    _receiveBitrate.update(packetSize * 8, receiveTimeNs);
+}
+
+double BandwidthEstimator::predictDelay() const
+{
+    const double offsetAdjustment = _packetSize0 * 8 / _state(Bandwidth);
+    return predictAbsoluteDelay(_state) - _state(ClockOffset) + offsetAdjustment;
 }
 
 void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, uint64_t receiveTimeNs)
 {
-    if (_baseClockOffset == 0 && _state(2) == 0 && _state(0) == 0 && _previousTransmitTime == 0)
+    assert(_state(Bandwidth) > 10);
+    if (_baseClockOffset == 0 && _state(QueuedBits) == 0 && _previousTransmitTime == 0)
     {
         // base Offset is very sensitive, if you start 5ms behind it will create a lower estimate, assuming higher delay
         // and longer queue. Starting with a long queue is also a bad start
         _baseClockOffset = receiveTimeNs - transmitTimeNs;
         _previousTransmitTime = transmitTimeNs - 5 * utils::Time::sec;
         _previousReceiveTime = receiveTimeNs - 5 * utils::Time::ms;
+        _packetSize0 = packetSize;
     }
 
     const double tau = std::max(0.0, static_cast<double>(transmitTimeNs - _previousTransmitTime) / utils::Time::ms);
     const double observedDelay =
         static_cast<double>(static_cast<int64_t>(receiveTimeNs - transmitTimeNs - _baseClockOffset)) / utils::Time::ms;
 
-    const auto actualDelay = (observedDelay - _state(2));
-    const double congestionScale = analyseCongestion(actualDelay, packetSize, receiveTimeNs);
+    const auto expectedState = transitionState(packetSize, tau, _state);
+    const auto expectedDelay = predictAbsoluteDelay(expectedState);
+    _congestion.countDelays(observedDelay - expectedDelay);
 
-    _receiveBandwidth.update(packetSize * 8, receiveTimeNs);
-    // predict mean state
+    auto actualDelay = (observedDelay - _state(ClockOffset));
+    if (actualDelay < 0)
+    {
+        _state(QueuedBits) = 0; // queue must be empty before this packet
+        _state(ClockOffset) = observedDelay;
+        actualDelay = 0;
+        _packetSize0 = packetSize;
+    }
+    else if (actualDelay == 0 && packetSize > _packetSize0)
+    {
+        _packetSize0 = packetSize;
+    }
+    else if (observedDelay > expectedDelay && tau > 20.0 && expectedState(QueuedBits) < _config.mtu * 8 * 3)
+    {
+        // inter transmit interval larger than 20ms risk having radio shut down. adjust co up
+        _state(ClockOffset) += std::min(30.0, observedDelay - expectedDelay);
+        _packetSize0 = packetSize;
+    }
+
+    auto processNoise = _processNoise;
+    double measurementNoise = _config.measurementNoise;
+    calculateProcessNoise(transitionState(packetSize, tau, _state),
+        actualDelay,
+        observedDelay - expectedDelay,
+        packetSize,
+        receiveTimeNs,
+        processNoise,
+        measurementNoise);
+
+    measurementNoise *= analyseCongestion(actualDelay, packetSize, receiveTimeNs);
+
+    _receiveBitrate.update(packetSize * 8, receiveTimeNs);
+
+    // generate alternative current positions
     std::array<math::Matrix<double, 3>, SIGMA_POINTS> sigmaPoints;
-    generateSigmaPoints(_state, _covarianceP, _processNoise, sigmaPoints);
+    generateSigmaPoints(_state, _covarianceP, processNoise, sigmaPoints);
 
+    // calculate where we would have transitioned from alternative positions, and what the delay would be then
     std::array<double, SIGMA_POINTS> predictedDelays;
     for (size_t i = 0; i < sigmaPoints.size(); ++i)
     {
-        sigmaPoints[i] = transitionState(packetSize, tau, sigmaPoints[i], observedDelay);
-        predictedDelays[i] = predictDelay(sigmaPoints[i]);
+        sigmaPoints[i] = transitionState(packetSize, tau, sigmaPoints[i]);
+        predictedDelays[i] = predictAbsoluteDelay(sigmaPoints[i]);
     }
+    const double predictedMeanDelay = predictedDelays[0]; // delay of mean state, because 1/bw is non-linear
 
-    const double measurementNoise = _config.measurementNoise * congestionScale;
     predictedDelays[SIGMA_POINTS - 2] += measurementNoise;
     predictedDelays[SIGMA_POINTS - 1] -= measurementNoise;
 
-    math::Matrix<double, 3> predictedMeanState(sigmaPoints[0] * _weightMean0);
+    math::Matrix<double, 3> predictedMeanState;
     for (size_t i = 1; i < sigmaPoints.size(); ++i)
     {
-        predictedMeanState += _weightMeanCovariance * sigmaPoints[i];
+        predictedMeanState += sigmaPoints[i];
     }
+    predictedMeanState *= _weightMean;
+    predictedMeanState += sigmaPoints[0] * _weightMean0;
 
+    // calculate variance
+    math::Matrix<double, 3, 3> statePredictionCovariance;
     for (auto& point : sigmaPoints)
     {
         point = (point - predictedMeanState);
     }
 
-    math::Matrix<double, 3, 3> statePredictionCovariance;
     for (size_t i = 1; i < sigmaPoints.size(); ++i)
     {
         statePredictionCovariance += math::outerProduct(sigmaPoints[i]);
     }
-    statePredictionCovariance *= _weightMeanCovariance;
+    statePredictionCovariance *= _weightCovariance;
     statePredictionCovariance += (_weightCovariance0 * math::outerProduct(sigmaPoints[0]));
     assert(math::isValid(statePredictionCovariance));
-
-    double predictedMeanDelay = predictedDelays[0] * _weightMean0;
-    for (size_t i = 1; i < predictedDelays.size(); ++i)
-    {
-        predictedMeanDelay += predictedDelays[i] * _weightMeanCovariance;
-    }
 
     const auto residual0 = predictedDelays[0] - predictedMeanDelay;
     double covDelay = _weightCovariance0 * residual0 * residual0;
@@ -124,71 +177,109 @@ void BandwidthEstimator::update(uint32_t packetSize, uint64_t transmitTimeNs, ui
     for (size_t i = 1; i < predictedDelays.size(); ++i)
     {
         const auto residual = predictedDelays[i] - predictedMeanDelay;
-        covDelay += _weightMeanCovariance * residual * residual;
+        covDelay += _weightCovariance * residual * residual;
         crossCovariance += residual * sigmaPoints[i];
     }
-    crossCovariance *= _weightMeanCovariance;
+    crossCovariance *= _weightCovariance;
     crossCovariance += _weightCovariance0 * residual0 * sigmaPoints[0];
 
+    // update position towards mean position
     const auto kalmanGain = crossCovariance * (1.0 / covDelay);
     _state = predictedMeanState + kalmanGain * (observedDelay - predictedMeanDelay);
-    _covarianceP = statePredictionCovariance - kalmanGain * covDelay * math::transpose(kalmanGain);
+    _covarianceP = statePredictionCovariance - crossCovariance * math::transpose(kalmanGain);
+
+    sanitizeState(observedDelay, packetSize * 8, _state);
+
+    assert(math::isValid(_covarianceP));
     math::makeSymmetric(_covarianceP);
     assert(math::isSymmetric(_covarianceP));
     assert(math::isValid(_covarianceP));
 
     _observedDelay = observedDelay;
-    _state(0) = std::max(0.0, std::min(_state(0), _config.maxNetworkQueue * 8));
-
-    if (_state(2) > observedDelay + 12.0)
-    {
-        // under estimating delay. Likely in congestion and over estimating bw
-        _congestion.margin = _config.congestion.backOff;
-        _state(1) = std::min(_state(1), _receiveBandwidth.get(550 * utils::Time::ms) * utils::Time::ms);
-    }
-    _state(2) = std::min(observedDelay, _state(2));
-    _state(1) = std::min(_config.estimate.maxKbps, std::max(_config.estimate.minKbps, _state(1)));
-
-    updateCongestionMargin(
-        utils::Time::diff(_previousReceiveTime, receiveTimeNs) / static_cast<double>(utils::Time::ms));
 
     _previousReceiveTime = receiveTimeNs;
     _previousTransmitTime = transmitTimeNs;
 }
 
+void BandwidthEstimator::sanitizeState(const double observedDelay,
+    const double packetBits,
+    math::Matrix<double, 3>& state)
+{
+    state(Bandwidth) = math::clamp(state(Bandwidth), _config.modelMinBandwidth, _config.estimate.maxKbps);
+
+    state(QueuedBits) = std::max(packetBits, state(QueuedBits));
+
+    if (observedDelay - predictAbsoluteDelay(state) < 0 && state(QueuedBits) > _config.mtu * 3)
+    {
+        // adjust queue if we received packet earlier than expected. If bw is higher than expected, queue should also
+        // have drained more
+        const double delayErr = predictAbsoluteDelay(state) - observedDelay;
+        state(QueuedBits) -= delayErr * state(Bandwidth) / 3;
+        state(QueuedBits) = std::max(packetBits, state(QueuedBits));
+    }
+
+    state(QueuedBits) = math::clamp(state(QueuedBits), packetBits, _config.maxNetworkQueue * 8);
+
+    state(ClockOffset) = std::min(observedDelay, state(ClockOffset));
+}
+
+void BandwidthEstimator::calculateProcessNoise(const math::Matrix<double, 3>& currentState,
+    const double actualDelay,
+    const double observationError,
+    const uint32_t packetSize,
+    const uint64_t receiveTimeNs,
+    math::Matrix<double, 3>& processNoise,
+    double& measurementNoise)
+{
+    measurementNoise = _config.measurementNoise;
+
+    const double longerQueue = _config.mtu * 8 * 2;
+    if (_congestion.consecutiveOver == 0)
+    {
+        _congestion.estimateBeforeCongestion = currentState(Bandwidth);
+    }
+
+    if (_congestion.consecutiveUnder > 15 || _congestion.consecutiveOver > 30)
+    {
+        // adapt faster at consistent observed low delay or prolonged observed higher delay
+        processNoise(Bandwidth) = 300;
+        measurementNoise *= (5.0 / (_congestion.consecutiveUnder + _congestion.consecutiveOver));
+    }
+    else if (currentState(QueuedBits) > longerQueue && _congestion.consecutiveOver < 5)
+    {
+        // long queue means clock offset has less impact. Trust observation more.
+        processNoise(Bandwidth) = 200;
+        measurementNoise *= longerQueue * 2.0 / (longerQueue + currentState(QueuedBits));
+    }
+}
+
 double BandwidthEstimator::analyseCongestion(double actualDelay, const uint32_t packetSize, const uint64_t timestamp)
 {
-    _congestion.onNewEstimate(_state(1));
+    _congestion.onNewEstimate(_state(Bandwidth));
     double congestionScale = 1.0;
 
-    if (actualDelay > 90.0 && _state(0) < _config.mtu * 100.0 * 8 &&
-        actualDelay * _state(1) > (packetSize * 8 + _state(0) + _config.mtu * 10))
+    if (_congestion.consecutiveOver > 25 && actualDelay > _config.congestion.thresholdMs)
     {
-        // unexpected high delay and low bit rate
-        // Q is less than 100 pkts
-        _congestion.bandwidth.update(packetSize * 8, timestamp);
-        if (_congestion.packetCount == 0)
+        if (_congestion.consecutiveOver == 26)
         {
             _congestion.start = timestamp;
+            const auto drainRatio = _state(QueuedBits) / (_config.congestion.recoveryTime * 1000 * _state(Bandwidth));
+            _congestion.margin = std::min(drainRatio, _config.congestion.backOff);
         }
-        const auto congestionDuration = timestamp - _congestion.start;
-
-        if (++_congestion.packetCount > 16 &&
-            _congestion.bandwidth.get(timestamp, congestionDuration) * utils::Time::ms < _state(1))
-        {
-            // persistent, no sign of burst delivery at high rate
-            const auto congestionBandwidth = _congestion.bandwidth.get(timestamp, congestionDuration) * utils::Time::ms;
-
-            // make bwe sensitive to observation and reset queue and bandwidth for faster adaptation
-            _state(1) = congestionBandwidth;
-            _state(0) = actualDelay * congestionBandwidth - packetSize * 8;
-            congestionScale = 0.1;
-            _congestion.packetCount = 0;
-        }
+        congestionScale = 0.1;
     }
-    else
+
+    if (_congestion.margin > 0)
     {
-        _congestion.packetCount = 0;
+        if (actualDelay < _config.congestion.thresholdMs / 2)
+        {
+            _congestion.margin = 0;
+        }
+        else
+        {
+            const auto drainRatio = _state(QueuedBits) / (_config.congestion.recoveryTime * 1000 * _state(Bandwidth));
+            _congestion.margin = std::max(_congestion.margin, std::min(drainRatio, _config.congestion.backOff));
+        }
     }
 
     const auto congestionStatus = _congestion.congestionTrigger.update(actualDelay);
@@ -221,28 +312,37 @@ double BandwidthEstimator::analyseCongestion(double actualDelay, const uint32_t 
             _congestion.dip.bandwidthFloorKbps = 0;
         }
     }
+
     return congestionScale;
 }
 
 // in kbps
 double BandwidthEstimator::getEstimate(uint64_t timestamp) const
 {
-    const double estimatedBandwidth = std::min(_state(1), _congestion.dip.bandwidthCapKbps);
+    double estimatedBandwidth = std::min(_state(Bandwidth), _congestion.dip.bandwidthCapKbps);
+    if (_congestion.consecutiveOver < 50)
+    {
+        estimatedBandwidth =
+            math::clamp(_state(Bandwidth), _congestion.estimateBeforeCongestion, _congestion.dip.bandwidthCapKbps);
+    }
 
     if (_previousReceiveTime != 0 &&
         utils::Time::diffGT(_previousReceiveTime, timestamp, _config.silence.timeoutMs * utils::Time::ms))
     {
-        return std::max(_config.estimate.minReportedKbps,
-            std::min(_config.silence.maxBandwidthKbps, estimatedBandwidth * (1.0 - _config.silence.backOff)));
+        return math::clamp(estimatedBandwidth * (1.0 - _config.silence.backOff),
+            _config.estimate.minReportedKbps,
+            _config.silence.maxBandwidthKbps);
     }
-    return std::max(std::max(_congestion.dip.bandwidthFloorKbps, _config.estimate.minReportedKbps),
-        estimatedBandwidth * (1.0 - _congestion.margin));
+
+    return std::max({_congestion.dip.bandwidthFloorKbps,
+        _config.estimate.minReportedKbps,
+        estimatedBandwidth * (1.0 - _congestion.margin)});
 }
 
 // in ms
 double BandwidthEstimator::getDelay() const
 {
-    return (_observedDelay - _state(2));
+    return (_observedDelay - _state(ClockOffset) + (_packetSize0 * 8 / _state(Bandwidth)));
 }
 
 math::Matrix<double, 3> BandwidthEstimator::getCovariance() const
@@ -255,94 +355,90 @@ math::Matrix<double, 3> BandwidthEstimator::getCovariance() const
     return r;
 }
 
+// generate alternative current positions based on noise in model and process
 void BandwidthEstimator::generateSigmaPoints(const math::Matrix<double, 3>& state,
     const math::Matrix<double, 3, 3>& covP,
     const math::Matrix<double, 3>& processNoise,
     std::array<math::Matrix<double, 3>, SIGMA_POINTS>& sigmaPoints)
 {
+    assert(state(Bandwidth) > 10);
     static const auto seed = covP.I() * 0.0000001; // will make it positive definite
     const auto squareRoot = math::choleskyDecompositionLL(covP + seed);
-    sigmaPoints[0] = _state;
+    sigmaPoints[0] = state;
 
     int startIndex = 1;
+    const double maxBandwidthDeviation = std::max(0.0, state(Bandwidth) - 10);
     for (int c = 0; c < squareRoot.columns(); ++c)
     {
         auto sigmaOffset = _sigmaWeight * squareRoot.getColumn(c);
-        sigmaPoints[startIndex + 2 * c] = _state + sigmaOffset;
-        sigmaPoints[startIndex + 2 * c + 1] = _state - sigmaOffset;
+        sigmaOffset(QueuedBits) = math::clamp(sigmaOffset(QueuedBits), -state(QueuedBits), state(QueuedBits));
+        sigmaOffset(Bandwidth) = math::clamp(sigmaOffset(Bandwidth), -maxBandwidthDeviation, maxBandwidthDeviation);
+
+        sigmaPoints[startIndex + 2 * c] = state + sigmaOffset;
+        sigmaPoints[startIndex + 2 * c + 1] = state - sigmaOffset;
     }
 
     startIndex += 2 * squareRoot.columns();
-    for (int i = 0; i < _processNoise.rows(); ++i)
+    for (int i = 0; i < processNoise.rows(); ++i)
     {
         math::Matrix<double, 3> noise;
         noise(i) = processNoise(i) * _sigmaWeight;
-        sigmaPoints[startIndex + i * 2] = _state + noise;
-        // Offset the positive clock offset sigma point. Better catch up to clock drift.
-        // CO is easily pushed down by packets with short delay.
-        sigmaPoints[startIndex + i * 2 + 1] = _state - (i == 2 ? noise * 0.001 : noise);
+        noise(QueuedBits) = math::clamp(noise(QueuedBits), -state(QueuedBits), state(QueuedBits));
+        noise(Bandwidth) = math::clamp(noise(Bandwidth), -maxBandwidthDeviation, maxBandwidthDeviation);
+
+        sigmaPoints[startIndex + i * 2] = state + noise;
+        sigmaPoints[startIndex + i * 2 + 1] = state - noise;
     }
 
     // add two points for measurement noise
-    startIndex += 2 * _processNoise.rows();
+    startIndex += 2 * processNoise.rows();
     sigmaPoints[startIndex] = sigmaPoints[0];
     sigmaPoints[startIndex + 1] = sigmaPoints[0];
-
-    for (auto& point : sigmaPoints)
-    {
-        point(0) = std::max(0.0, point(0)); // no magic Q reduction
-        point(1) = std::max(_config.estimate.minKbps, std::min(_config.estimate.maxKbps, point(1)));
-    }
 }
 
-math::Matrix<double, 3> BandwidthEstimator::transitionState(uint32_t packetSize,
-    double tau,
-    const math::Matrix<double, 3>& prevState,
-    double observedDelay)
+math::Matrix<double, 3> BandwidthEstimator::transitionState(const uint32_t packetSize,
+    const double tau,
+    const math::Matrix<double, 3>& prevState)
 {
-    const auto bw = std::max(_config.estimate.minKbps, std::min(_config.estimate.maxKbps, prevState(1)));
+    const auto bw = math::clamp(prevState(Bandwidth), 0.0, _config.estimate.maxKbps);
     return math::Matrix<double, 3>(
-        {std::max(0.0, std::max(0.0, prevState(0)) - bw * tau) + packetSize * 8, bw, prevState(2)});
+        {std::max(0.0, prevState(QueuedBits) - bw * tau) + packetSize * 8, bw, prevState(ClockOffset)});
 }
 
-math::Matrix<double, 3> BandwidthEstimator::sanitizeState(const math::Matrix<double, 1>& state,
-    double observedDelay,
-    uint32_t packetSize)
+// excluding clock offset, adjusting for clock ref packet size
+double BandwidthEstimator::predictAbsoluteDelay(const math::Matrix<double, 3>& state) const
 {
-    return math::Matrix<double, 3>({std::max(static_cast<double>(packetSize * 8), state(0)),
-        std::max(_config.estimate.minKbps, std::min(_config.estimate.maxKbps, state(1))),
-        std::min(state(2), observedDelay)});
-}
-
-void BandwidthEstimator::updateCongestionMargin(double packetIntervalMs)
-{
-    if (_state(0) / _state(1) > _config.congestion.thresholdMs && _congestion.margin == 0.0)
-    {
-        _congestion.margin = std::min(_state(0) /
-                (_config.congestion.recoveryTime *
-                    std::max(_config.estimate.minKbps, _receiveBandwidth.get(550 * utils::Time::ms))),
-            _config.congestion.backOff);
-    }
-    else if (_congestion.margin > 0.0)
-    {
-        _congestion.margin = std::max(0.0,
-            _congestion.margin -
-                _config.congestion.backOff * packetIntervalMs / (_config.congestion.recoveryTime * 1000));
-    }
-}
-
-double BandwidthEstimator::predictDelay(const math::Matrix<double, 3>& state)
-{
-    return (state(0) / state(1)) + state(2);
+    assert(state(Bandwidth) > 0.0);
+    assert(math::isValid(state));
+    const double offsetAdjustment = _packetSize0 * 8 / state(Bandwidth);
+    return (state(QueuedBits) / state(Bandwidth)) + state(ClockOffset) - offsetAdjustment;
 }
 
 void BandwidthEstimator::reset()
 {
-    _state(0) = 0;
-    _state(1) = _config.estimate.initialKbpsDownlink;
-    _state(2) = 8000;
+    _state(QueuedBits) = 0;
+    _state(Bandwidth) = _config.estimate.initialKbpsDownlink;
+    _state(ClockOffset) = 8000;
     const math::Matrix<double, 3> initDelta({8000.0 * 8, _config.estimate.initialKbpsDownlink * 0.001, 0.1});
     _covarianceP = initDelta * math::transpose(initDelta);
 }
 
+void BandwidthEstimator::CongestionState::countDelays(double delayError)
+{
+    if (delayError > 0)
+    {
+        ++consecutiveOver;
+        consecutiveUnder = 0;
+    }
+    else if (delayError < 0)
+    {
+        consecutiveOver = 0;
+        ++consecutiveUnder;
+    }
+    else
+    {
+        consecutiveOver = 0;
+        consecutiveUnder = 0;
+    }
+}
 } // namespace bwe
