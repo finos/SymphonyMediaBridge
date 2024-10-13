@@ -14,6 +14,7 @@
 #include "utils/Pacer.h"
 #include <cstdint>
 #include <gtest/gtest.h>
+#include <iomanip>
 
 namespace
 {
