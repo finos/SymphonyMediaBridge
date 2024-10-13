@@ -1,4 +1,5 @@
 #include "utils/SocketAddress.h"
+#include <array>
 #include <gtest/gtest.h>
 #include <string>
 

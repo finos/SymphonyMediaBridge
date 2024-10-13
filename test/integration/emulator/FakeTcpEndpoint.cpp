@@ -27,7 +27,9 @@ FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
       _sendJobs(jobManager, 256 * 1024),
       _fakeFd(++_fdGenerator)
 {
-    while (!_network->isLocalPortFree(_localPort.setPort(_portCounter++))) {}
+    while (!_network->isLocalPortFree(_localPort.setPort(_portCounter++)))
+    {
+    }
 }
 
 FakeTcpEndpoint::FakeTcpEndpoint(jobmanager::JobManager& jobManager,
@@ -59,7 +61,7 @@ FakeTcpEndpoint::~FakeTcpEndpoint()
 }
 
 void FakeTcpEndpoint::sendStunTo(const transport::SocketAddress& target,
-    __uint128_t transactionId,
+    ice::Int96 transactionId,
     const void* data,
     size_t len,
     const uint64_t timestamp)

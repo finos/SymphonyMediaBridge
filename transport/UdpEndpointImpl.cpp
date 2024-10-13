@@ -61,7 +61,7 @@ UdpEndpointImpl::~UdpEndpointImpl()
 }
 
 void UdpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
-    __uint128_t transactionId,
+    ice::Int96 transactionId,
     const void* data,
     size_t len,
     uint64_t timestamp)
@@ -84,12 +84,11 @@ void UdpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
                 }
                 else
                 {
-                    const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
                     LOG("register ICE listener for %04x%04x%04x, count %" PRIu64,
                         _name.c_str(),
-                        id[1],
-                        id[2],
-                        id[3],
+                        transactionId.w2,
+                        transactionId.w1,
+                        transactionId.w0,
                         _iceResponseListeners.size());
                 }
             }
@@ -107,16 +106,15 @@ void UdpEndpointImpl::unregisterListener(IEvents* listener)
     }
 }
 
-void UdpEndpointImpl::cancelStunTransaction(__uint128_t transactionId)
+void UdpEndpointImpl::cancelStunTransaction(ice::Int96 transactionId)
 {
     const bool posted = _baseUdpEndpoint._receiveJobs.post([this, transactionId]() {
         _iceResponseListeners.erase(transactionId);
-        const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
         LOG("remove ICE listener for %04x%04x%04x, count %" PRIu64,
             _name.c_str(),
-            id[1],
-            id[2],
-            id[3],
+            transactionId.w2,
+            transactionId.w1,
+            transactionId.w0,
             _iceResponseListeners.size());
     });
     if (!posted)
@@ -193,12 +191,11 @@ void UdpEndpointImpl::dispatchReceivedPacket(const SocketAddress& srcAddress,
             if (listener)
             {
                 _iceResponseListeners.erase(transactionId);
-                const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
                 LOG("STUN response received for transaction %04x%04x%04x, count %" PRIu64,
                     _name.c_str(),
-                    id[1],
-                    id[2],
-                    id[3],
+                    transactionId.w2,
+                    transactionId.w1,
+                    transactionId.w0,
                     _iceResponseListeners.size());
             }
         }

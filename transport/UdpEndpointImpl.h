@@ -22,12 +22,12 @@ public:
     ~UdpEndpointImpl();
 
     void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        ice::Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override;
 
-    void cancelStunTransaction(__uint128_t transactionId) override;
+    void cancelStunTransaction(ice::Int96 transactionId) override;
 
     void registerListener(const std::string& stunUserName, IEvents* listener) override;
     void registerListener(const SocketAddress& remotePort, IEvents* listener) override;
@@ -67,7 +67,7 @@ private:
     void dispatchReceivedPacket(const SocketAddress& srcAddress, memory::UniquePacket packet, const uint64_t timestamp);
 
     void internalUnregisterListener(IEvents* listener);
-    void internalUnregisterStunListener(__uint128_t transactionId);
+    void internalUnregisterStunListener(ice::Int96 transactionId);
     void swapListener(const SocketAddress& srcAddress, IEvents* newListener);
 
     logger::LoggableId _name;
@@ -77,7 +77,7 @@ private:
     concurrency::MpmcHashmap32<SocketAddress, IEvents*> _dtlsListeners;
 
     // mainly used for client requests. SMB mainly uses dtlsListener for IP:port
-    concurrency::MpmcHashmap32<__uint128_t, IEvents*> _iceResponseListeners;
+    concurrency::MpmcHashmap32<ice::Int96, IEvents*> _iceResponseListeners;
     std::atomic<Endpoint::IEvents*> _defaultListener;
 };
 } // namespace transport

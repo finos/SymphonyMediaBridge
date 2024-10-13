@@ -20,7 +20,7 @@ TEST(SsrcGenerator, realloc)
 
 TEST(StunIdGenerator, realloc)
 {
-    __uint128_t a1, a2;
+    ice::Int96 a1, a2;
     generate<ice::StunTransactionIdGenerator>(a1);
     generate<ice::StunTransactionIdGenerator>(a2);
     EXPECT_NE(a1, a2);

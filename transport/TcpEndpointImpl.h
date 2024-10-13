@@ -83,7 +83,7 @@ public:
     virtual ~TcpEndpointImpl();
 
     void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        ice::Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override;
@@ -103,7 +103,7 @@ public:
     void connect(const SocketAddress& remotePort);
 
     SocketAddress getLocalPort() const override;
-    void cancelStunTransaction(__uint128_t transactionId) override{};
+    void cancelStunTransaction(ice::Int96 transactionId) override{};
 
     bool configureBufferSizes(size_t sendBufferSize, size_t receiveBufferSize) override;
 

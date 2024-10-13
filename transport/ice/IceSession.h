@@ -5,6 +5,7 @@
 #include "crypto/SslHelper.h"
 #include "memory/Map.h"
 #include "utils/SocketAddress.h"
+#include "utils/StdExtensions.h"
 #include "utils/Time.h"
 #include <deque>
 
@@ -49,14 +50,14 @@ class IceEndpoint
 {
 public:
     virtual void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) = 0;
 
     virtual ice::TransportType getTransportType() const = 0;
     virtual transport::SocketAddress getLocalPort() const = 0;
-    virtual void cancelStunTransaction(__uint128_t transactionId) = 0;
+    virtual void cancelStunTransaction(ice::Int96 transactionId) = 0;
 };
 
 enum class IceRole
@@ -454,4 +455,9 @@ private:
     };
 };
 
+template <>
+struct hash<ice::Int96>
+{
+    uint64_t operator()(ice::Int96 key) const { return utils::hash<char*>::hashBuffer(&key, sizeof(key)); }
+};
 } // namespace std

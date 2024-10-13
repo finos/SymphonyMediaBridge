@@ -38,7 +38,7 @@ public:
     ~RecordingEndpointImpl();
 
     void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        ice::Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override
@@ -46,7 +46,7 @@ public:
         assert(false);
     }
 
-    void cancelStunTransaction(__uint128_t transactionId) override { assert(false); }
+    void cancelStunTransaction(ice::Int96 transactionId) override { assert(false); }
 
     void registerListener(const std::string& stunUserName, Endpoint::IEvents* listener) override { assert(false); };
     void registerListener(const SocketAddress& remotePort, Endpoint::IEvents* listener) override { assert(false); };
