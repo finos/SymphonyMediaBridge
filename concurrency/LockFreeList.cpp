@@ -4,45 +4,47 @@ namespace concurrency
 {
 
 std::atomic_uint32_t LockFreeList::_versionCounter(1);
-LockFreeList::LockFreeList() : _head(&_eol), _tail(&_eol), _count(0)
+LockFreeList::LockFreeList() : _count(0)
 {
-    _eol._next = &_eol;
+    _head.store(VersionedPtr<ListItem>(&_eol, 0));
+    _tail.store(VersionedPtr<ListItem>(&_eol, 0));
+    _eol._next = VersionedPtr<ListItem>(&_eol, 0);
     _cacheLineSeparator[0] = 0xBA;
 }
 
 // Possible to push a list of items too
 bool LockFreeList::push(ListItem* item)
 {
-    ListItem* last = nullptr;
+    VersionedPtr<ListItem> last;
     const uint32_t version = _versionCounter.fetch_add(1);
     int count = 0;
 
-    for (auto p = item; p; p = p->_next.load())
+    for (auto p = VersionedPtr<ListItem>(item, version); p.get(); p = p->_next.load())
     {
         ++count;
-        const auto nextPtr = p->_next.load(std::memory_order::memory_order_relaxed);
-        if (nextPtr == nullptr)
+        auto nextPtr = p->_next.load(std::memory_order::memory_order_relaxed);
+        if (nextPtr.get() == nullptr)
         {
             last = p;
-            p->_next.store(makeVersionedPointer(&_eol, version));
+            p->_next.store(VersionedPtr<ListItem>(&_eol, version));
             break;
         }
         else
         {
-            p->_next.store(makeVersionedPointer(nextPtr, version));
+            p->_next.store(VersionedPtr<ListItem>(nextPtr.get(), version));
         }
     }
 
-    auto itemNode = makeVersionedPointer(item, version);
-    auto lastNode = makeVersionedPointer(last, version);
+    auto itemNode = VersionedPtr<ListItem>(item, version);
+    auto lastNode = VersionedPtr<ListItem>(last.get(), version);
 
     // move tail to our new tail, retry until we make it
     auto prevTailNode = _tail.load();
-    auto pPrevTail = getPointer(prevTailNode);
+    auto pPrevTail = prevTailNode.get();
     auto prevTailNext = pPrevTail->_next.load();
     while (!_tail.compare_exchange_weak(prevTailNode, lastNode))
     {
-        pPrevTail = getPointer(prevTailNode);
+        pPrevTail = prevTailNode.get();
         prevTailNext = pPrevTail->_next;
     }
 
@@ -52,7 +54,7 @@ bool LockFreeList::push(ListItem* item)
     // if it was popped and reinserted and next is still _eol, the version will differ, and we attach to head.
     // Otherwise we would detach ourselves and the rest. if we set next first, popper must notice and move head
 
-    if (pPrevTail != &_eol && getPointer(prevTailNext) == &_eol &&
+    if (pPrevTail != &_eol && prevTailNext.get() == &_eol &&
         pPrevTail->_next.compare_exchange_strong(prevTailNext, itemNode))
     {
         // if we won this, the popper will have to move head to us
@@ -89,19 +91,19 @@ bool LockFreeList::push(ListItem* item)
 */
 bool LockFreeList::pop(ListItem*& item)
 {
-    ListItem* pCurrent = nullptr;
-    ListItem* nextNode = nullptr;
-    ListItem* currentNode = _head.load(std::memory_order::memory_order_consume);
+    ListItem* pCurrent;
+    VersionedPtr<ListItem> nextNode;
+    auto currentNode = _head.load(std::memory_order::memory_order_consume);
     for (;;)
     {
-        pCurrent = getPointer(currentNode);
+        pCurrent = currentNode.get();
         if (pCurrent == &_eol)
         {
             return false;
         }
 
         nextNode = pCurrent->_next.load();
-        if (nextNode == nullptr) // cheap check instead of CAS
+        if (nextNode.get() == nullptr) // cheap check instead of CAS
         {
             currentNode = _head.load();
             continue;
@@ -125,11 +127,11 @@ bool LockFreeList::pop(ListItem*& item)
 
     // neither head nor tail can point to this node. We own it.
     // but a pusher may be trying to add to next
-    if (!pCurrent->_next.compare_exchange_strong(nextNode, nullptr))
+    if (!pCurrent->_next.compare_exchange_strong(nextNode, VersionedPtr<ListItem>()))
     {
         // pusher won. tail was added to our node. We have to fix head since we moved it to eol
         _head.store(nextNode);
-        pCurrent->_next.store(nullptr, std::memory_order::memory_order_relaxed);
+        pCurrent->_next.store(VersionedPtr<ListItem>(), std::memory_order::memory_order_relaxed);
     }
 
     item = pCurrent;

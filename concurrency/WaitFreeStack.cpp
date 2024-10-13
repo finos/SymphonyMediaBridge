@@ -4,7 +4,7 @@
 namespace concurrency
 {
 
-WaitFreeStack::WaitFreeStack() : _head(nullptr)
+WaitFreeStack::WaitFreeStack()
 {
     _cacheLinePadding[0] = 0xBA; // silence compile warning
 }
@@ -18,9 +18,9 @@ void WaitFreeStack::push(StackItem* item)
     }
 
     const auto versionedNext = item->_next.load(std::memory_order_relaxed);
-    assert(getPointer(versionedNext) == nullptr);
-    auto itemNode = makeVersionedPointer(item, getVersion(versionedNext) + 1);
-    for (StackItem* currentNode = _head.load(std::memory_order_consume);;)
+    assert(versionedNext.get() == nullptr);
+    auto itemNode = VersionedPtr<StackItem>(item, versionedNext.version() + 1);
+    for (auto currentNode = _head.load(std::memory_order_consume);;)
     {
         item->_next.store(currentNode, std::memory_order_relaxed);
         if (_head.compare_exchange_weak(currentNode, itemNode))
@@ -32,20 +32,19 @@ void WaitFreeStack::push(StackItem* item)
 
 bool WaitFreeStack::pop(StackItem*& item)
 {
-    for (StackItem* currentNode = _head.load(std::memory_order_consume);;)
+    for (auto currentNode = _head.load(std::memory_order_consume);;)
     {
-        StackItem* pCurrent = getPointer(currentNode);
+        auto pCurrent = currentNode.get();
         if (pCurrent == nullptr)
         {
             return false;
         }
 
-        StackItem* nextNode = pCurrent->_next.load(std::memory_order_relaxed);
+        auto nextNode = pCurrent->_next.load(std::memory_order_relaxed);
         if (_head.compare_exchange_weak(currentNode, nextNode))
         {
             // next is used to store version counter for this node
-            pCurrent->_next.store(makeVersionedPointer<StackItem>(nullptr, getVersion(currentNode)),
-                std::memory_order_relaxed);
+            pCurrent->_next.store(VersionedPtr<StackItem>(nullptr, currentNode.version()), std::memory_order_relaxed);
             item = pCurrent;
             return true;
         }
