@@ -22,13 +22,13 @@ public:
 
     // ice::IceEndpoint
     void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        ice::Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override;
     ice::TransportType getTransportType() const override;
     transport::SocketAddress getLocalPort() const override;
-    void cancelStunTransaction(__uint128_t transactionId) override;
+    void cancelStunTransaction(ice::Int96 transactionId) override;
 
     // transport::Endpoint
     void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;
@@ -84,7 +84,7 @@ private:
     transport::SocketAddress _localPort;
     concurrency::MpmcHashmap32<std::string, IEvents*> _iceListeners;
     concurrency::MpmcHashmap32<transport::SocketAddress, IEvents*> _dtlsListeners;
-    concurrency::MpmcHashmap32<__uint128_t, IEvents*> _iceResponseListeners;
+    concurrency::MpmcHashmap32<ice::Int96, IEvents*> _iceResponseListeners;
 
     jobmanager::JobQueue _receiveJobs;
     jobmanager::JobQueue _sendJobs;

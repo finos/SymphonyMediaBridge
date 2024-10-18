@@ -197,7 +197,7 @@ void TcpEndpointImpl::connect(const SocketAddress& remotePort)
 }
 
 void TcpEndpointImpl::sendStunTo(const transport::SocketAddress& target,
-    __uint128_t transactionId,
+    ice::Int96 transactionId,
     const void* data,
     size_t len,
     const uint64_t timestamp)

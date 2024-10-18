@@ -22,27 +22,21 @@ StunTransactionIdGenerator::StunTransactionIdGenerator()
 {
 }
 
-__uint128_t StunTransactionIdGenerator::next()
+Int96 StunTransactionIdGenerator::next()
 {
-    return static_cast<__uint128_t>(_distribution(_generator)) << 64 | _distribution(_generator);
+    const uint32_t value0 = _distribution(_generator);
+    const uint32_t value1 = _distribution(_generator);
+    const uint32_t value2 = _distribution(_generator);
+    return Int96{value0, value1, value2};
 }
 
 StunTransactionId::StunTransactionId() : w2(0), w1(0), w0(0) {}
 
-void StunTransactionId::set(__uint128_t id)
+void StunTransactionId::set(Int96 id)
 {
-    w0 = id & 0xFFFFFFFFu;
-    w1 = (id >> 32) & 0xFFFFFFFFu;
-    w2 = (id >> 64) & 0xFFFFFFFFu;
-}
-
-__uint128_t StunTransactionId::get() const
-{
-    __uint128_t result = w2;
-    result <<= 32;
-    result |= w1;
-    result <<= 32;
-    return result | w0;
+    w0 = id.w0;
+    w1 = id.w1;
+    w2 = id.w2;
 }
 
 StunHeader::StunHeader() : method(BindingRequest), length(0), magicCookie(MAGIC_COOKIE) {}
@@ -139,12 +133,12 @@ bool isResponse(const void* p)
     return msg->isResponse();
 }
 
-__uint128_t getStunTransactionId(const void* data, size_t length)
+ice::Int96 getStunTransactionId(const void* data, size_t length)
 {
     auto msg = StunMessage::fromPtr(data);
     if (!msg->header.isValid() || msg->header.length + sizeof(StunHeader) != length)
     {
-        return 0;
+        return Int96();
     }
 
     return msg->header.transactionId.get();

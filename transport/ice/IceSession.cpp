@@ -62,7 +62,7 @@ IceSession::IceSession(size_t sessionId,
       _config(config),
       _state(State::IDLE),
       _eventSink(eventSink),
-      _credentials(role, static_cast<uint64_t>(_idGenerator.next() & ~(0ull))),
+      _credentials(role, static_cast<uint64_t>(_idGenerator.next().w0) << 32 | _idGenerator.next().w1),
       _sessionStart(0),
       _connectedCount(0)
 {
@@ -1554,19 +1554,22 @@ void IceSession::generateCredentialString(StunTransactionIdGenerator& idGenerato
                                   "0123456789"
                                   "+/";
     const int COUNT = std::strlen(approvedLetters);
-    __uint64_t id = 0;
+    Int96 id;
     for (int i = 0; i < length; i++)
     {
-        if (i % 10 == 0)
+        if (i % 3 == 0)
         {
             id = idGenerator.next();
+            targetBuffer[i] = approvedLetters[(id.w0 & 0x3Fu) % COUNT];
         }
-        else
+        else if (i % 3 == 1)
         {
-            id >>= 6;
+            targetBuffer[i] = approvedLetters[(id.w1 & 0x3Fu) % COUNT];
         }
-
-        targetBuffer[i] = approvedLetters[(id & 0x3Fu) % COUNT];
+        else if (i % 3 == 2)
+        {
+            targetBuffer[i] = approvedLetters[(id.w2 & 0x3Fu) % COUNT];
+        }
     }
     targetBuffer[length] = '\0';
 }

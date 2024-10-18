@@ -52,7 +52,7 @@ FakeUdpEndpoint::~FakeUdpEndpoint()
 
 // ice::IceEndpoint
 void FakeUdpEndpoint::sendStunTo(const transport::SocketAddress& target,
-    __uint128_t transactionId,
+    ice::Int96 transactionId,
     const void* data,
     size_t len,
     uint64_t timestamp)
@@ -72,11 +72,6 @@ void FakeUdpEndpoint::sendStunTo(const transport::SocketAddress& target,
                 if (!pair.second)
                 {
                     logger::warn("Pending ICE request lookup table is full", _name.c_str());
-                }
-                else
-                {
-                    const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
-                    // logger::debug("register ICE listener for %04x%04x%04x", _name.c_str(), id[1], id[2], id[3]);
                 }
             }
             else
@@ -99,7 +94,7 @@ transport::SocketAddress FakeUdpEndpoint::getLocalPort() const
     return _localPort;
 }
 
-void FakeUdpEndpoint::cancelStunTransaction(__uint128_t transactionId)
+void FakeUdpEndpoint::cancelStunTransaction(ice::Int96 transactionId)
 {
     const bool posted = _receiveJobs.post([this, transactionId]() { _iceResponseListeners.erase(transactionId); });
     if (!posted)
@@ -448,12 +443,11 @@ void FakeUdpEndpoint::dispatchReceivedPacket(const transport::SocketAddress& src
             listener = _iceResponseListeners.getItem(transactionId);
             if (listener)
             {
-                const IndexableInteger<__uint128_t, uint32_t> id(transactionId);
                 logger::debug("STUN response received for transaction %04x%04x%04x",
                     _name.c_str(),
-                    id[1],
-                    id[2],
-                    id[3]);
+                    transactionId.w2,
+                    transactionId.w1,
+                    transactionId.w0);
                 _iceResponseListeners.erase(transactionId);
             }
         }

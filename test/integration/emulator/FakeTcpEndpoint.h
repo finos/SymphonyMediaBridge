@@ -29,13 +29,13 @@ public:
 
     // ice::IceEndpoint
     void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        ice::Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override;
     ice::TransportType getTransportType() const override { return ice::TransportType::TCP; }
     transport::SocketAddress getLocalPort() const override { return _localPort; };
-    void cancelStunTransaction(__uint128_t transactionId) override {}
+    void cancelStunTransaction(ice::Int96 transactionId) override {}
 
     // transport::Endpoint
     void sendTo(const transport::SocketAddress& target, memory::UniquePacket packet) override;

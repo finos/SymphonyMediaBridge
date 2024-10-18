@@ -15,6 +15,17 @@ class HMAC;
 namespace ice
 {
 const size_t MTU = 1280; // rfc states 576B for ipv4 and 1280 for ipv6
+
+struct Int96
+{
+    uint32_t w2 = 0;
+    uint32_t w1 = 0;
+    uint32_t w0 = 0;
+
+    bool operator==(const Int96& s) const { return w0 == s.w0 && w1 == s.w1 && w2 == s.w2; }
+    bool operator!=(const Int96& s) const { return w0 != s.w0 || w1 != s.w1 || w2 != s.w2; }
+};
+
 struct StunTransactionId
 {
     nwuint32_t w2; // msb
@@ -22,8 +33,8 @@ struct StunTransactionId
     nwuint32_t w0;
 
     StunTransactionId();
-    void set(__uint128_t id);
-    __uint128_t get() const;
+    Int96 get() const { return {w2.get(), w1.get(), w0.get()}; }
+    void set(Int96 v);
 };
 
 struct StunHeader
@@ -285,7 +296,7 @@ class StunTransactionIdGenerator
 {
 public:
     StunTransactionIdGenerator();
-    __uint128_t next();
+    Int96 next();
 
 private:
     std::mt19937_64 _generator;
@@ -339,7 +350,7 @@ private:
 };
 
 bool isStunMessage(const void* data, size_t length);
-__uint128_t getStunTransactionId(const void* data, size_t length);
+ice::Int96 getStunTransactionId(const void* data, size_t length);
 bool isRequest(const void* p);
 bool isResponse(const void* p);
 

@@ -93,20 +93,3 @@ IntT toLittleEndian(IntT value)
 
     return value;
 }
-
-template <typename T, typename RT>
-class IndexableInteger
-{
-public:
-    explicit IndexableInteger(const T& value) : _value(value) {}
-
-    RT operator[](size_t i) const
-    {
-        assert(i < sizeof(_value) / sizeof(RT));
-        auto v = reinterpret_cast<const RT*>(&_value);
-        return (isBigEndian() ? v[i] : v[sizeof(_value) / sizeof(RT) - i - 1]) & 0xFFFFFFFFu;
-    }
-
-private:
-    const T& _value;
-};

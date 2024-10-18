@@ -73,7 +73,7 @@ TEST_F(IceTest, parseprobe)
                                               "\x9c\x15\xa1\x33";
     auto stun = StunMessage::fromPtr(raw);
 
-    EXPECT_EQ(stun->header.transactionId.get(), (__uint128_t(0x716c0acc6e502a9eull) << 4 * 8) | 0xf7df3cf2ull);
+    EXPECT_EQ(stun->header.transactionId.get(), ice::Int96({0x716c0acc, 0x6e502a9e, 0xf7df3cf2}));
     EXPECT_EQ(stun->header.length, 60);
     EXPECT_EQ(stun->header.method.get(), ice::StunHeader::BindingResponse);
 
@@ -357,7 +357,7 @@ TEST_F(IceTest, stunv6)
 {
     ice::StunMessage msg;
     msg.header.setMethod(ice::StunHeader::BindingRequest);
-    msg.header.transactionId.set(0x1111222233334444ull);
+    msg.header.transactionId.set({0x1111u, 0x2222u, 0x3333u});
     ice::StunXorMappedAddress addr;
     auto address = transport::SocketAddress::parse("a000:1092:10cc:f56e::3c00", 0);
     addr.setAddress(address, msg.header);
@@ -371,7 +371,7 @@ TEST_F(IceTest, build)
     using namespace ice;
     ice::StunMessage msg;
     msg.header.setMethod(ice::StunHeader::BindingRequest);
-    msg.header.transactionId.set(0x1111222233334444ull);
+    msg.header.transactionId.set({0x1111, 0x2222, 0x3333});
 
     uint32_t tieBreaker = 0x1234123;
     msg.add(StunGenericAttribute(StunAttribute::SOFTWARE, "slice"));
@@ -394,7 +394,7 @@ public:
     virtual ~IceSocketAdapter(){};
 
     void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        ice::Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override
@@ -402,7 +402,7 @@ public:
         _socket.sendTo(static_cast<const char*>(data), len, target);
     }
 
-    void cancelStunTransaction(__uint128_t transactionId) override {}
+    void cancelStunTransaction(ice::Int96 transactionId) override {}
 
     transport::SocketAddress getLocalPort() const override { return _ip; }
     ice::TransportType getTransportType() const override { return ice::TransportType::UDP; }
@@ -574,11 +574,11 @@ public:
         size_t length,
         const uint64_t timestamp) override;
     void sendStunTo(const transport::SocketAddress& target,
-        __uint128_t transactionId,
+        ice::Int96 transactionId,
         const void* data,
         size_t len,
         uint64_t timestamp) override;
-    void cancelStunTransaction(__uint128_t transactionId) override {}
+    void cancelStunTransaction(ice::Int96 transactionId) override {}
 
     transport::SocketAddress getLocalPort() const override { return _address; }
     bool hasIp(const transport::SocketAddress& target) override { return target == _address; }
@@ -654,7 +654,7 @@ void FakeEndpoint::onReceive(fakenet::Protocol protocol,
 }
 
 void FakeEndpoint::sendStunTo(const transport::SocketAddress& target,
-    __uint128_t transactionId,
+    ice::Int96 transactionId,
     const void* data,
     size_t length,
     const uint64_t timestamp)
@@ -1849,12 +1849,11 @@ TEST_F(IceTest, serialize)
 
 TEST_F(IceTest, transactionId)
 {
-    __uint128_t id = (__uint128_t(0x9012121102568943ull) << 64) | 0x6623184555672389ull;
-    IndexableInteger<__uint128_t, uint32_t> id2(id);
-    EXPECT_EQ(id2[0], 0x90121211);
-    EXPECT_EQ(id2[1], 0x02568943);
-    EXPECT_EQ(id2[2], 0x66231845);
-    EXPECT_EQ(id2[3], 0x55672389);
+    ice::Int96 id{0x90121211, 0x02568943, 0x55672389};
+
+    EXPECT_EQ(id.w2, 0x90121211);
+    EXPECT_EQ(id.w1, 0x02568943);
+    EXPECT_EQ(id.w0, 0x55672389);
 }
 
 class IceEndpointMock : public ice::IceEndpoint
@@ -1863,7 +1862,7 @@ public:
     MOCK_METHOD(void,
         sendStunTo,
         (const transport::SocketAddress& target,
-            __uint128_t transactionId,
+            ice::Int96 transactionId,
             const void* data,
             size_t len,
             uint64_t timestamp),
@@ -1871,7 +1870,7 @@ public:
 
     MOCK_METHOD(ice::TransportType, getTransportType, (), (const, override));
     MOCK_METHOD(transport::SocketAddress, getLocalPort, (), (const, override));
-    MOCK_METHOD(void, cancelStunTransaction, (__uint128_t transactionId), (override));
+    MOCK_METHOD(void, cancelStunTransaction, (ice::Int96 transactionId), (override));
 };
 
 TEST_F(IceTest, retransmissions)
@@ -1901,7 +1900,7 @@ TEST_F(IceTest, retransmissions)
     std::vector<uint64_t> timestamps;
     ON_CALL(*networkMockA.get(), sendStunTo)
         .WillByDefault([&timestamps](const transport::SocketAddress& target,
-                           __uint128_t transactionId,
+                           ice::Int96 transactionId,
                            const void* data,
                            size_t len,
                            uint64_t timestamp) { timestamps.push_back(timestamp); });
