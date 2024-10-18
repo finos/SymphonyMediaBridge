@@ -41,6 +41,8 @@ public:
 
     uint16_t getSequenceCounter() const { return _sequenceCounter; }
 
+    void initSequenceCounter(uint16_t sequenceNumber) { _sequenceCounter = sequenceNumber; }
+
 private:
     static const uint32_t maxSentBufferSize = 12 * 1024;
     uint32_t _ssrc;

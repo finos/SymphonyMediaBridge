@@ -442,7 +442,6 @@ set(FILES
         utils/IdGenerator.h
         utils/MersienneRandom.h
         utils/Optional.h
-        utils/Pacer.cpp
         utils/Pacer.h
         utils/ScopedFileHandle.h
         utils/ScopedInvariantChecker.h
@@ -502,8 +501,6 @@ set(TEST_LIB_FILES
     test/integration/FFTanalysis.cpp
     test/sctp/SctpEndpoint.h
     test/sctp/SctpEndpoint.cpp
-    test/transport/SrtpProtectJob.cpp
-    test/transport/SrtpProtectJob.h
     test/transport/SrtpUnprotectJob.cpp
     test/transport/SrtpUnprotectJob.h
     test/transport/FakeNetwork.h
