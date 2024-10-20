@@ -24,7 +24,7 @@ bool LockFreeList::push(ListItem* item)
     {
         ++count;
         auto nextPtr = p->_next.load(std::memory_order::memory_order_relaxed);
-        if (!nextPtr) // nextPtr.get() == nullptr)
+        if (!nextPtr)
         {
             lastNode = VersionedPtr<ListItem>(p.get(), version);
             p->_next.store(VersionedPtr<ListItem>(&_eol, version), std::memory_order::memory_order_relaxed);
@@ -101,7 +101,7 @@ bool LockFreeList::pop(ListItem*& item)
 
         if (_head.compare_exchange_weak(nodeToPop, nextNode))
         {
-            break; // we popped the node
+            break;
         }
     }
 
