@@ -18,12 +18,12 @@ void WaitFreeStack::push(StackItem* item)
     }
 
     const auto versionedNext = item->_next.load(std::memory_order_relaxed);
-    assert(versionedNext.get() == nullptr);
-    auto itemNode = VersionedPtr<StackItem>(item, versionedNext.version() + 1);
-    for (auto currentNode = _head.load(std::memory_order_consume);;)
+    assert(!versionedNext);
+    auto newNode = VersionedPtr<StackItem>(item, versionedNext.version() + 1);
+    for (auto head = _head.load(std::memory_order_consume);;)
     {
-        item->_next.store(currentNode, std::memory_order_relaxed);
-        if (_head.compare_exchange_weak(currentNode, itemNode))
+        item->_next.store(head, std::memory_order_relaxed);
+        if (_head.compare_exchange_weak(head, newNode))
         {
             return;
         }
@@ -32,20 +32,19 @@ void WaitFreeStack::push(StackItem* item)
 
 bool WaitFreeStack::pop(StackItem*& item)
 {
-    for (auto currentNode = _head.load(std::memory_order_consume);;)
+    for (auto head = _head.load(std::memory_order_consume);;)
     {
-        auto pCurrent = currentNode.get();
-        if (pCurrent == nullptr)
+        if (!head)
         {
             return false;
         }
 
-        auto nextNode = pCurrent->_next.load(std::memory_order_relaxed);
-        if (_head.compare_exchange_weak(currentNode, nextNode))
+        auto nextNode = head->_next.load(std::memory_order_relaxed);
+        if (_head.compare_exchange_weak(head, nextNode))
         {
             // next is used to store version counter for this node
-            pCurrent->_next.store(VersionedPtr<StackItem>(nullptr, currentNode.version()), std::memory_order_relaxed);
-            item = pCurrent;
+            head->_next.store(VersionedPtr<StackItem>(nullptr, head.version()), std::memory_order_relaxed);
+            item = head.get();
             return true;
         }
     }
