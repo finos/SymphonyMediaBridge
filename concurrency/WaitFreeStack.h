@@ -32,7 +32,7 @@ public:
     void push(StackItem* item);
     bool pop(StackItem*& item);
 
-    bool empty() const { return _head.load() == VersionedPtr<StackItem>(nullptr, 0); }
+    bool empty() const { return !_head.load(); }
 
 private:
     std::atomic<VersionedPtr<StackItem>> _head;
