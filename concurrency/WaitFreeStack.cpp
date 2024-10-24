@@ -6,6 +6,7 @@ namespace concurrency
 
 WaitFreeStack::WaitFreeStack()
 {
+    _head = VersionedPtr<StackItem>();
     _cacheLinePadding[0] = 0xBA; // silence compile warning
 }
 
@@ -22,7 +23,7 @@ void WaitFreeStack::push(StackItem* item)
     auto newNode = VersionedPtr<StackItem>(item, versionedNext.version() + 1);
     for (auto head = _head.load(std::memory_order_consume);;)
     {
-        item->_next.store(head, std::memory_order_relaxed);
+        item->_next.store(head, std::memory_order_release);
         if (_head.compare_exchange_weak(head, newNode))
         {
             return;

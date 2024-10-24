@@ -11,7 +11,7 @@ namespace concurrency
 class ListItem
 {
 public:
-    ListItem() {}
+    ListItem() { _next = VersionedPtr<ListItem>(); }
 
 private:
     std::atomic<VersionedPtr<ListItem>> _next;

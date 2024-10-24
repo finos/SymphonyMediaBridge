@@ -26,7 +26,7 @@ struct VersionedPtr
     const T* get() const { return _value; }
     T* get() { return _value; }
 
-    bool operator==(const VersionedPtr p) { return _value == p._value && _version == p._version; }
+    bool operator==(const VersionedPtr p) const { return _value == p._value && _version == p._version; }
     explicit operator bool() const { return _value != nullptr; }
 
 private:
@@ -54,29 +54,10 @@ struct VersionedPtr
         _value = reinterpret_cast<T*>(p | vLow | vHigh);
     }
 
-    T* operator->()
-    {
-        auto p = reinterpret_cast<uint64_t>(_value);
-        return reinterpret_cast<T*>(p & VERSION_PTR_MASK);
-    }
-
-    const T* operator->() const
-    {
-        auto p = reinterpret_cast<const uint64_t>(_value);
-        return reinterpret_cast<const T*>(p & VERSION_PTR_MASK);
-    }
-
-    T& operator*()
-    {
-        auto p = reinterpret_cast<uint64_t>(_value);
-        return *reinterpret_cast<T*>(p & VERSION_PTR_MASK);
-    }
-
-    const T& operator*() const
-    {
-        auto p = reinterpret_cast<uint64_t>(_value);
-        return *reinterpret_cast<const T*>(p & VERSION_PTR_MASK);
-    }
+    T* operator->() { return get(); }
+    const T* operator->() const { return get(); }
+    T& operator*() { return *get(); }
+    const T& operator*() const { return *get(); }
 
     uint32_t version() const
     {
@@ -96,12 +77,9 @@ struct VersionedPtr
         return reinterpret_cast<T*>(p & VERSION_PTR_MASK);
     }
 
-    bool operator==(const VersionedPtr p) { return _value == p._value; }
-    explicit operator bool() const
-    {
-        auto p = reinterpret_cast<uint64_t>(_value);
-        return (p & VERSION_PTR_MASK) != 0;
-    }
+    bool operator==(const VersionedPtr p) const { return _value == p._value; }
+
+    explicit operator bool() const { return nullptr != get(); }
 
 private:
     T* _value;

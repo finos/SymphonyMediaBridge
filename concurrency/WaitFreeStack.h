@@ -11,7 +11,7 @@ namespace concurrency
 class StackItem
 {
 public:
-    StackItem() {}
+    StackItem() { _next = VersionedPtr<StackItem>(); }
     StackItem(const StackItem&) = delete;
 
 private:
