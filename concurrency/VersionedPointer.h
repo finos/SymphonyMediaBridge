@@ -6,8 +6,9 @@ namespace concurrency
 
 #if UINTPTR_MAX == 0xffffffff
 template <typename T>
-struct VersionedPtr
+class VersionedPtr
 {
+public:
     VersionedPtr() : _value(nullptr), _version(0) {}
 
     VersionedPtr(const T* pointer, uint32_t version)
@@ -41,8 +42,9 @@ constexpr uint64_t VERSION_PTR_MASK = ((1ull << VERSION_PTR_SIZE) - 1) & ~0x7;
 // Store version info in upper 16 bits and lower 3 for a total of 19 bits version number.
 // It is assumed all VersionedPtr points to objects on 64-bit alignment, thus the 3 LSB must always be 0.
 template <typename T>
-struct VersionedPtr
+class VersionedPtr
 {
+public:
     VersionedPtr() : _value(nullptr) {}
 
     VersionedPtr(const T* pointer, uint32_t version)
