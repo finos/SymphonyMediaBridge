@@ -46,8 +46,9 @@ class SsrcInboundContext
           defaultLevelSsrc(defaultLevelSsrc),
           markNextPacket(true),
           lastReceivedExtendedSequenceNumber(0),
-          packetsProcessed(0),
+          hasDecryptedPackets(false),
           lastUnprotectedExtendedSequenceNumber(0),
+          rocOffset(0),
           activeMedia(false),
           inactiveTransitionCount(0),
           isSsrcUsed(true),
@@ -109,8 +110,9 @@ public:
     // transport thread variables ===================================
     bool markNextPacket;
     uint32_t lastReceivedExtendedSequenceNumber;
-    uint32_t packetsProcessed;
+    bool hasDecryptedPackets;
     uint32_t lastUnprotectedExtendedSequenceNumber;
+    uint32_t rocOffset; // srtp packets with roc=0 were lost
     std::shared_ptr<VideoMissingPacketsTracker> videoMissingPacketsTracker;
     std::unique_ptr<codec::OpusDecoder> opusDecoder; // used for missing audio level
     std::unique_ptr<utils::AvgRateTracker> opusPacketRate; // pkt/s

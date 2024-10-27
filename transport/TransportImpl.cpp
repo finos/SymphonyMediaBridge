@@ -1775,6 +1775,15 @@ bool TransportImpl::unprotect(memory::Packet& packet)
     return false;
 }
 
+bool TransportImpl::unprotectFirstRtp(memory::Packet& packet, uint32_t& rolloverCounter)
+{
+    if (_srtpClient->isConnected())
+    {
+        return _srtpClient->unprotectFirstRtp(packet, rolloverCounter);
+    }
+    return false;
+}
+
 void TransportImpl::removeSrtpLocalSsrc(const uint32_t ssrc)
 {
     if (_srtpClient->isInitialized())

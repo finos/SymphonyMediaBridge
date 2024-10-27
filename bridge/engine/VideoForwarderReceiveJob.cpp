@@ -67,9 +67,7 @@ void VideoForwarderReceiveJob::run()
         ? codec::H264Header::isKeyFrame(payload, payloadSize)
         : codec::Vp8Header::isKeyFrame(payload, codec::Vp8Header::getPayloadDescriptorSize(payload, payloadSize));
 
-    ++_ssrcContext.packetsProcessed;
-
-    if (_ssrcContext.packetsProcessed == 1)
+    if (!_ssrcContext.videoMissingPacketsTracker)
     {
         _ssrcContext.lastReceivedExtendedSequenceNumber = _extendedSequenceNumber - 1;
         _ssrcContext.videoMissingPacketsTracker = std::make_shared<VideoMissingPacketsTracker>();

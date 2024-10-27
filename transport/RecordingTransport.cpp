@@ -232,6 +232,12 @@ bool RecordingTransport::unprotect(memory::Packet& packet)
     return false;
 }
 
+bool RecordingTransport::unprotectFirstRtp(memory::Packet& packet, uint32_t& rolloverCounter)
+{
+    // TODO implement payload decryption
+    return false;
+}
+
 bool RecordingTransport::isConnected()
 {
     return _isRunning && _recordingEndpoint->isGood();

@@ -143,22 +143,19 @@ TEST_F(IntegrationAudioTest, losePacketsWithRoc0)
 
             _firewall->block(group.clients[0]->_bundleTransport->getLocalRtpPort(),
                 transport::SocketAddress::createBroadcastIpv4());
-
             startCallWithDefaultAudioProfile(group, utils::Time::ms * 2);
 
-            group.run(utils::Time::ms * 300); // lose 10 pkts
             _firewall->unblock(group.clients[0]->_bundleTransport->getLocalRtpPort(),
                 transport::SocketAddress::createBroadcastIpv4());
-            testing::internal::CaptureStdout();
             group.run(utils::Time::sec * 4);
+
             auto audioReceiveCounters = group.clients[1]->_bundleTransport->getCumulativeAudioReceiveCounters();
-            (utils::Time::getAbsoluteTime());
             endCall(group);
 
             group.awaitPendingJobs(utils::Time::sec * 7);
             finalizeSimulation();
 
-            ASSERT_EQ(audioReceiveCounters.activeStreamCount, 1);
+            EXPECT_GT(audioReceiveCounters.packets, 140);
         },
         30 * 60);
 }

@@ -565,6 +565,7 @@ TEST_F(SrtpTest, losePacketsBeforeRoc1)
     uint16_t seqStart = 65530;
     uint32_t unprotectedExtSeqNo = 0;
     uint32_t unprotectCount = 0;
+    uint32_t roc = 0;
     for (uint32_t i = seqStart; i < 65601; ++i)
     {
         auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
@@ -589,8 +590,8 @@ TEST_F(SrtpTest, losePacketsBeforeRoc1)
         }
         else if (unprotectCount == 0)
         {
-            ASSERT_TRUE(_srtp2->unprotectRtpAgain(*packet, 1));
-
+            ASSERT_TRUE(_srtp2->unprotectFirstRtp(*packet, roc));
+            EXPECT_EQ(roc, 1);
             unprotectedExtSeqNo = i;
             ++unprotectCount;
         }

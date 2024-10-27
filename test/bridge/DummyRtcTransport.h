@@ -17,6 +17,7 @@ public:
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; }
     void protectAndSend(memory::UniquePacket packet) override {}
     bool unprotect(memory::Packet& packet) override { return true; }
+    bool unprotectFirstRtp(memory::Packet& packet, uint32_t& roc) override { return true; }
     void removeSrtpLocalSsrc(const uint32_t ssrc) override {}
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override { return true; }
     bool isGatheringComplete() const override { return true; }

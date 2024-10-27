@@ -86,7 +86,7 @@ TEST_F(VideoForwarderRtxReceiveJobTest, processRtxPacket)
         _ssrcMainInboundContext->ssrc,
         1000);
 
-    EXPECT_CALL(transportMock, unprotect(Ref(*packetRawPointer))).WillOnce(Return(true));
+    EXPECT_CALL(transportMock, unprotectFirstRtp(Ref(*packetRawPointer), _)).WillOnce(Return(true));
 
     job.run();
 
@@ -127,6 +127,7 @@ TEST_F(VideoForwarderRtxReceiveJobTest, shouldDropPaddingPackets)
 
     // Check we didn't spend cpu to decrypt the packet
     EXPECT_CALL(transportMock, unprotect(_)).Times(0);
+    EXPECT_CALL(transportMock, unprotectFirstRtp(_, _)).Times(0);
 
     job.run();
 
@@ -153,7 +154,7 @@ TEST_F(VideoForwarderRtxReceiveJobTest, shouldDropWhenUnprotectFails)
         1000);
 
     // simulate failed decryption
-    EXPECT_CALL(transportMock, unprotect(Ref(*packetRawPointer))).WillOnce(Return(false));
+    EXPECT_CALL(transportMock, unprotectFirstRtp(Ref(*packetRawPointer), _)).WillOnce(Return(false));
 
     job.run();
 

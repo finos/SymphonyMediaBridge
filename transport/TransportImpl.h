@@ -102,6 +102,7 @@ public: // Transport
     /** Called from Transport thread threads*/
     void protectAndSend(memory::UniquePacket packet) override;
     bool unprotect(memory::Packet& packet) override;
+    bool unprotectFirstRtp(memory::Packet& packet, uint32_t& rolloverCounter) override;
     void removeSrtpLocalSsrc(const uint32_t ssrc) override;
     bool setSrtpRemoteRolloverCounter(const uint32_t ssrc, const uint32_t rolloverCounter) override;
     void setRtxProbeSource(const uint32_t ssrc, uint32_t* sequenceCounter, const uint16_t payloadType) override;

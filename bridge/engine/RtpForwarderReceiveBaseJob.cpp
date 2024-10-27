@@ -26,11 +26,26 @@ RtpForwarderReceiveBaseJob::RtpForwarderReceiveBaseJob(memory::UniquePacket&& pa
 
 bool RtpForwarderReceiveBaseJob::tryUnprotectRtpPacket(const char* logGroup)
 {
+    if (!_ssrcContext.hasDecryptedPackets)
+    {
+        if (_sender->unprotectFirstRtp(*_packet, _ssrcContext.rocOffset))
+        {
+            _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+            _ssrcContext.hasDecryptedPackets = true;
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
     if (transport::SrtpClient::shouldSetRolloverCounter(_ssrcContext.lastUnprotectedExtendedSequenceNumber,
             _extendedSequenceNumber))
     {
-        const uint32_t oldRolloverCounter = _ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16;
-        const uint32_t newRolloverCounter = _extendedSequenceNumber >> 16;
+        const uint32_t oldRolloverCounter =
+            _ssrcContext.rocOffset + (_ssrcContext.lastUnprotectedExtendedSequenceNumber >> 16);
+        const uint32_t newRolloverCounter = _ssrcContext.rocOffset + (_extendedSequenceNumber >> 16);
 
         logger::info("Setting rollover counter for ssrc %u, extseqno %u->%u, seqno %u->%u, roc %u->%u, %s",
             logGroup,
