@@ -4,46 +4,44 @@ namespace concurrency
 {
 
 std::atomic_uint32_t LockFreeList::_versionCounter(1);
-LockFreeList::LockFreeList() : _head(&_eol), _tail(&_eol), _count(0)
+LockFreeList::LockFreeList() : _count(0)
 {
-    _eol._next = &_eol;
+    _head.store(VersionedPtr<ListItem>(&_eol, 0));
+    _tail.store(VersionedPtr<ListItem>(&_eol, 0));
+    _eol._next = VersionedPtr<ListItem>(&_eol, 0);
     _cacheLineSeparator[0] = 0xBA;
 }
 
 // Possible to push a list of items too
 bool LockFreeList::push(ListItem* item)
 {
-    ListItem* last = nullptr;
     const uint32_t version = _versionCounter.fetch_add(1);
     int count = 0;
 
-    for (auto p = item; p; p = p->_next.load())
+    auto itemNode = VersionedPtr<ListItem>(item, version);
+    VersionedPtr<ListItem> lastNode;
+    for (auto p = itemNode; p; p = p->_next.load())
     {
         ++count;
-        const auto nextPtr = p->_next.load(std::memory_order::memory_order_relaxed);
-        if (nextPtr == nullptr)
+        auto nextPtr = p->_next.load(std::memory_order::memory_order_acquire);
+        if (!nextPtr)
         {
-            last = p;
-            p->_next.store(makeVersionedPointer(&_eol, version));
+            lastNode = VersionedPtr<ListItem>(p.get(), version);
+            p->_next.store(VersionedPtr<ListItem>(&_eol, version), std::memory_order::memory_order_release);
             break;
         }
         else
         {
-            p->_next.store(makeVersionedPointer(nextPtr, version));
+            p->_next.store(VersionedPtr<ListItem>(nextPtr.get(), version), std::memory_order::memory_order_release);
         }
     }
 
-    auto itemNode = makeVersionedPointer(item, version);
-    auto lastNode = makeVersionedPointer(last, version);
-
     // move tail to our new tail, retry until we make it
     auto prevTailNode = _tail.load();
-    auto pPrevTail = getPointer(prevTailNode);
-    auto prevTailNext = pPrevTail->_next.load();
+    auto prevTailNext = prevTailNode->_next.load();
     while (!_tail.compare_exchange_weak(prevTailNode, lastNode))
     {
-        pPrevTail = getPointer(prevTailNode);
-        prevTailNext = pPrevTail->_next;
+        prevTailNext = prevTailNode->_next;
     }
 
     // prevTail may be one of: &this->_eol, prev node that may be in list or popped already
@@ -52,8 +50,8 @@ bool LockFreeList::push(ListItem* item)
     // if it was popped and reinserted and next is still _eol, the version will differ, and we attach to head.
     // Otherwise we would detach ourselves and the rest. if we set next first, popper must notice and move head
 
-    if (pPrevTail != &_eol && getPointer(prevTailNext) == &_eol &&
-        pPrevTail->_next.compare_exchange_strong(prevTailNext, itemNode))
+    if (prevTailNode.get() != &_eol && prevTailNext.get() == &_eol &&
+        prevTailNode->_next.compare_exchange_strong(prevTailNext, itemNode))
     {
         // if we won this, the popper will have to move head to us
         _count.fetch_add(count, std::memory_order::memory_order_relaxed);
@@ -63,7 +61,7 @@ bool LockFreeList::push(ListItem* item)
     {
         // prevTailNext is now indicating either nullptr, eol in another list, eol in this list but another version so
         // re-inserted at end popped empty, we must attach to head
-        _head.store(itemNode);
+        _head.store(itemNode, std::memory_order_release);
         _count.fetch_add(count, std::memory_order::memory_order_relaxed);
         return true;
     }
@@ -73,66 +71,59 @@ bool LockFreeList::push(ListItem* item)
  empty list, head points to _eol
     return false
 
-    Otherwise, we iterate down the list and try to lok an item. If a next pointer is not pointing to node of proper
- version we restart from head. Version always have to be checked after locking.
-
- = Popping the tail item =
-    if we locked tail item we can try to set tail back to head but it may already have been set to a new tail
-    We can try to set the head past our item but it may have been moved to earlier item or later item. In case of
-    earlier, we retry. If head has been moved back to eol we cannot decide unless head ptr is still versioned. eol
- item does not have to be versioned.
-
- = Popping first item or mid item
-    There is no difference. Once item is locked we try to move the pointer to next as long as the version of pointer
- is less than our item's version
+Otherwise, we load _head, next of head, and try to update _head to point to next. That will fail if _head changed and we
+retry.
+- Once popped, we cannot tell if we popped the _tail also. We do not know if others are pushing to our next.
+- We try to update _tail in case it pointed to our node, but it may have moved on and there is nothing we can do.
+It may have moved on before we checked it.
+- Now if we fail to update our next from the next pointer we had before pop, it means nodes have been added to our next
+because our node was the tail node at some point. But that also means we moved the _head to eol. All we can do is to
+have _head point to the new list added to our tail.
 
 */
 bool LockFreeList::pop(ListItem*& item)
 {
-    ListItem* pCurrent = nullptr;
-    ListItem* nextNode = nullptr;
-    ListItem* currentNode = _head.load(std::memory_order::memory_order_consume);
+    VersionedPtr<ListItem> nextNode;
+    auto nodeToPop = _head.load(std::memory_order::memory_order_acquire);
     for (;;)
     {
-        pCurrent = getPointer(currentNode);
-        if (pCurrent == &_eol)
+        if (nodeToPop.get() == &_eol)
         {
             return false;
         }
 
-        nextNode = pCurrent->_next.load();
-        if (nextNode == nullptr) // cheap check instead of CAS
+        nextNode = nodeToPop->_next.load();
+        if (!nextNode) // cheap check if node is popped, instead of CAS
         {
-            currentNode = _head.load();
+            nodeToPop = _head.load();
             continue;
         }
 
-        if (_head.compare_exchange_weak(currentNode, nextNode))
+        if (_head.compare_exchange_weak(nodeToPop, nextNode))
         {
             break;
         }
     }
-    // we won the node for popping and the next pointer is from that time
 
     {
         auto tail = _tail.load();
-        if (tail == currentNode)
+        if (tail == nodeToPop)
         {
             _tail.compare_exchange_strong(tail, nextNode);
             // else tail moved ahead already
         }
     }
 
-    // neither head nor tail can point to this node. We own it.
-    // but a pusher may be trying to add to next
-    if (!pCurrent->_next.compare_exchange_strong(nextNode, nullptr))
+    // Neither head nor tail can point to this node now. We own it.
+    // But a pusher may have added to our tail, before we changed _tail
+    if (!nodeToPop->_next.compare_exchange_strong(nextNode, VersionedPtr<ListItem>()))
     {
-        // pusher won. tail was added to our node. We have to fix head since we moved it to eol
+        // A tail was added to our node. We have to fix _head since we moved it to eol
         _head.store(nextNode);
-        pCurrent->_next.store(nullptr, std::memory_order::memory_order_relaxed);
+        nodeToPop->_next.store(VersionedPtr<ListItem>(), std::memory_order::memory_order_release);
     }
 
-    item = pCurrent;
+    item = nodeToPop.get();
     _count.fetch_sub(1, std::memory_order::memory_order_relaxed);
     return true;
 }

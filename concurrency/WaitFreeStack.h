@@ -11,21 +11,11 @@ namespace concurrency
 class StackItem
 {
 public:
-    StackItem() : _next(nullptr)
-    {
-        // _next must be initilized atomically. Cannot use constructor
-        _next = nullptr;
-    }
-
+    StackItem() { _next = VersionedPtr<StackItem>(); }
     StackItem(const StackItem&) = delete;
-    explicit StackItem(StackItem* tail)
-    {
-        // _next must be initilized atomically. Cannot use constructor
-        _next = tail;
-    }
 
 private:
-    std::atomic<StackItem*> _next;
+    std::atomic<VersionedPtr<StackItem>> _next;
     friend class WaitFreeStack;
 };
 
@@ -42,10 +32,10 @@ public:
     void push(StackItem* item);
     bool pop(StackItem*& item);
 
-    bool empty() const { return getPointer(_head.load()) == nullptr; }
+    bool empty() const { return !_head.load(); }
 
 private:
-    std::atomic<StackItem*> _head;
+    std::atomic<VersionedPtr<StackItem>> _head;
     uint64_t _cacheLinePadding[7];
 };
 } // namespace concurrency

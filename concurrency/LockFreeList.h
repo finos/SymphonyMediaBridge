@@ -11,14 +11,10 @@ namespace concurrency
 class ListItem
 {
 public:
-    ListItem()
-    {
-        // _next must be initialied atomically. Cannot use constructor
-        _next = nullptr;
-    }
+    ListItem() { _next = VersionedPtr<ListItem>(); }
 
 private:
-    std::atomic<ListItem*> _next;
+    std::atomic<VersionedPtr<ListItem>> _next;
     friend class LockFreeList;
 };
 
@@ -35,13 +31,13 @@ public:
     bool push(ListItem* item);
     bool pop(ListItem*& item);
 
-    bool empty() const { return getPointer(_head.load()) == &_eol; }
+    bool empty() const { return _head.load().get() == &_eol; }
     uint32_t size() const { return _count; }
 
 private:
-    std::atomic<ListItem*> _head;
+    std::atomic<VersionedPtr<ListItem>> _head;
     uint64_t _cacheLineSeparator[7];
-    std::atomic<ListItem*> _tail;
+    std::atomic<VersionedPtr<ListItem>> _tail;
     ListItem _eol;
     std::atomic_uint32_t _count;
     static std::atomic_uint32_t _versionCounter;
