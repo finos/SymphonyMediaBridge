@@ -23,16 +23,16 @@ bool LockFreeList::push(ListItem* item)
     for (auto p = itemNode; p; p = p->_next.load())
     {
         ++count;
-        auto nextPtr = p->_next.load(std::memory_order::memory_order_relaxed);
+        auto nextPtr = p->_next.load(std::memory_order::memory_order_acquire);
         if (!nextPtr)
         {
             lastNode = VersionedPtr<ListItem>(p.get(), version);
-            p->_next.store(VersionedPtr<ListItem>(&_eol, version), std::memory_order::memory_order_relaxed);
+            p->_next.store(VersionedPtr<ListItem>(&_eol, version), std::memory_order::memory_order_release);
             break;
         }
         else
         {
-            p->_next.store(VersionedPtr<ListItem>(nextPtr.get(), version), std::memory_order::memory_order_relaxed);
+            p->_next.store(VersionedPtr<ListItem>(nextPtr.get(), version), std::memory_order::memory_order_release);
         }
     }
 
@@ -84,7 +84,7 @@ have _head point to the new list added to our tail.
 bool LockFreeList::pop(ListItem*& item)
 {
     VersionedPtr<ListItem> nextNode;
-    auto nodeToPop = _head.load(std::memory_order::memory_order_consume);
+    auto nodeToPop = _head.load(std::memory_order::memory_order_acquire);
     for (;;)
     {
         if (nodeToPop.get() == &_eol)
@@ -120,7 +120,7 @@ bool LockFreeList::pop(ListItem*& item)
     {
         // A tail was added to our node. We have to fix _head since we moved it to eol
         _head.store(nextNode);
-        nodeToPop->_next.store(VersionedPtr<ListItem>(), std::memory_order::memory_order_relaxed);
+        nodeToPop->_next.store(VersionedPtr<ListItem>(), std::memory_order::memory_order_release);
     }
 
     item = nodeToPop.get();
