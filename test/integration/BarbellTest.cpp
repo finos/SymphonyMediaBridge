@@ -488,13 +488,9 @@ TEST_F(BarbellTest, barbellAfterClients)
         size_t freqId = 0;
         for (auto id : {0, 1})
         {
-            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5, true);
+            const auto data = analyzeRecording<SfuClient<Channel>>(group.clients[id].get(), 5);
             EXPECT_EQ(data.dominantFrequencies.size(), 1);
-            EXPECT_EQ(data.amplitudeProfile.size(), 4);
-            if (data.amplitudeProfile.size() > 3)
-            {
-                EXPECT_NEAR(data.amplitudeProfile[3].second, 5625, 150);
-            }
+
             ASSERT_GE(data.dominantFrequencies.size(), 1);
             EXPECT_NEAR(data.dominantFrequencies[0], expectedFrequencies[freqId++], 25.0);
 

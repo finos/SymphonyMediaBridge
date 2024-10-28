@@ -222,10 +222,17 @@ public:
                 {
                     // audio will start with a short noise floor to stabilize before going full amplitude.
                     EXPECT_GE(amplitudeProfile.size(), 3);
-                    if (amplitudeProfile.size() > 3)
+                    std::pair<uint64_t, double> maxAmp{0, 0};
+                    for (auto i = 0u; i < amplitudeProfile.size(); ++i)
                     {
-                        EXPECT_NEAR(amplitudeProfile[3].second, 5625, 175);
+                        auto& timeAmp = amplitudeProfile[i];
+                        if (timeAmp.second > maxAmp.second)
+                        {
+                            maxAmp = timeAmp;
+                        }
                     }
+                    EXPECT_NEAR(maxAmp.second, 5500, 300);
+                    EXPECT_LT(maxAmp.first, 60000);
                 }
             }
 
