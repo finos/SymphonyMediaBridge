@@ -184,7 +184,7 @@ size_t SctpAssociationImpl::GenericCookie::maxSize() const
 void SctpAssociationImpl::GenericCookie::set(const ChunkParameter& param)
 {
     std::memcpy(cookie, param.data(), std::min(static_cast<size_t>(param.dataSize()), sizeof(cookie)));
-    length = param.length.get();
+    length = param.dataSize();
 }
 
 SctpAssociationImpl::ConnectionEstablishment::ConnectionEstablishment(const SctpConfig& config)
@@ -760,8 +760,8 @@ void SctpAssociationImpl::onInitAck(const SctpPacket& packet,
         _connect.echoedCookie.set(*param);
         echoChunk.setCookie(*param);
         outboundPacket.commitAppendedChunk();
-
         _transport.send(outboundPacket);
+
         _connect.retransmitCount = 0;
         _connect.initTimer.stop();
         _connect.cookieTimer.startMs(timestamp, _config.init.timeout);

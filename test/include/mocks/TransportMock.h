@@ -27,6 +27,7 @@ public:
         ON_CALL(*this, hasPendingJobs()).WillByDefault(testing::Return(true));
         ON_CALL(*this, getJobCounter()).WillByDefault(testing::ReturnRef(_jobCounter));
         ON_CALL(*this, unprotect(testing::_)).WillByDefault(testing::Return(true));
+        ON_CALL(*this, unprotectFirstRtp(testing::_, testing::_)).WillByDefault(testing::Return(true));
     }
 
     MOCK_METHOD(bool, isInitialized, (), (const override));
@@ -37,6 +38,7 @@ public:
     MOCK_METHOD(bool, hasPendingJobs, (), (const override));
     MOCK_METHOD(std::atomic_uint32_t&, getJobCounter, (), (override));
     MOCK_METHOD(bool, unprotect, (memory::Packet & packet), (override));
+    MOCK_METHOD(bool, unprotectFirstRtp, (memory::Packet & packet, uint32_t& roc), (override));
     MOCK_METHOD(void, setDataReceiver, (transport::DataReceiver * dataReceiver), (override));
     MOCK_METHOD(bool, isConnected, (), (override));
     MOCK_METHOD(bool, start, (), (override));

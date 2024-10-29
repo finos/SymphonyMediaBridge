@@ -554,3 +554,48 @@ TEST_F(SrtpTest, muteUntilRoc1)
         }
     }
 }
+
+// sequence number starts close to 65535 and all packets with roc = 0 are lost.
+// First packet seen is on ROC 1 already
+TEST_F(SrtpTest, losePacketsBeforeRoc1)
+{
+    setupDtls();
+    connect();
+
+    uint16_t seqStart = 65530;
+    uint32_t unprotectedExtSeqNo = 0;
+    uint32_t unprotectCount = 0;
+    uint32_t roc = 0;
+    for (uint32_t i = seqStart; i < 65601; ++i)
+    {
+        auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+        auto header = rtp::RtpHeader::fromPacket(*packet);
+        header->ssrc = 1;
+        header->sequenceNumber = i & 0xFFFFu;
+        header->timestamp = i * 160;
+
+        ASSERT_TRUE(_srtp1->protect(*packet));
+        const uint32_t continuationPoint = 65550;
+        // srtp must decode at least one packet while ROC is 0, otherwise we get error
+
+        if (i < continuationPoint)
+        {
+            continue;
+        }
+
+        if (_srtp2->unprotect(*packet))
+        {
+            unprotectedExtSeqNo = i;
+            ++unprotectCount;
+        }
+        else if (unprotectCount == 0)
+        {
+            ASSERT_TRUE(_srtp2->unprotectFirstRtp(*packet, roc));
+            EXPECT_EQ(roc, 1);
+            unprotectedExtSeqNo = i;
+            ++unprotectCount;
+        }
+    }
+    EXPECT_EQ(unprotectedExtSeqNo, 65600);
+    EXPECT_EQ(unprotectCount, 51);
+}

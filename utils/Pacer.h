@@ -32,7 +32,19 @@ public:
     }
 
     // in nanoseconds
-    int64_t timeToNextTick(uint64_t timestamp) const;
+    int64_t timeToNextTick(uint64_t timestamp) const
+    {
+        if (_nextTick > timestamp)
+        {
+            assert(_nextTick - timestamp <= std::numeric_limits<int64_t>::max());
+        }
+        else if (timestamp > _nextTick)
+        {
+            assert(timestamp - _nextTick <= std::numeric_limits<int64_t>::max());
+        }
+
+        return static_cast<int64_t>(_nextTick - timestamp);
+    }
 
     void reset(uint64_t timestamp) { _nextTick = timestamp + _intervalNanoseconds; }
 

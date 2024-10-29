@@ -34,14 +34,13 @@ void DiscardReceivedVideoPacketJob::run()
         return;
     }
 
-    const bool noPacketsProcessedYet =
-        (_ssrcContext.packetsProcessed == 0 && _ssrcContext.lastReceivedExtendedSequenceNumber == 0 &&
-            _ssrcContext.lastUnprotectedExtendedSequenceNumber == 0);
-
-    if (noPacketsProcessedYet && (_extendedSequenceNumber >> 16) == 0)
+    if (!_ssrcContext.hasDecryptedPackets)
     {
-        _sender->unprotect(*_packet); // make sure srtp sees one packet with ROC=0
-        _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+        if (_sender->unprotectFirstRtp(*_packet, _ssrcContext.rocOffset)) // make sure srtp sees one packet with ROC=0
+        {
+            _ssrcContext.lastUnprotectedExtendedSequenceNumber = _extendedSequenceNumber;
+            _ssrcContext.hasDecryptedPackets = true;
+        }
     }
 
     _ssrcContext.onRtpPacketReceived(_timestamp);

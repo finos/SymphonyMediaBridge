@@ -262,9 +262,8 @@ public:
         }
 
         auto& inboundContext = it->second;
-        ++inboundContext.packetsProcessed;
 
-        if (inboundContext.packetsProcessed == 1)
+        if (!inboundContext.videoMissingPacketsTracker)
         {
             inboundContext.lastReceivedExtendedSequenceNumber = extendedSequenceNumber;
             inboundContext.videoMissingPacketsTracker = std::make_shared<bridge::VideoMissingPacketsTracker>();
@@ -390,12 +389,27 @@ public:
         _videoDecoder.process(payload, payloadSize, timestamp);
     }
 
-    const logger::LoggableId& getLoggableId() const { return _loggableId; }
+    const logger::LoggableId& getLoggableId() const
+    {
+        return _loggableId;
+    }
 
-    bool hasPackets() const { return (videoPacketCount | rtxPacketCount | unknownPayloadPacketCount) != 0; }
-    VideoContent getContent() const { return _videoContent; }
-    bool isLocalContent() const { return _videoContent == VideoContent::LOCAL; }
-    bool isSlidesContent() const { return _videoContent == VideoContent::SLIDES; }
+    bool hasPackets() const
+    {
+        return (videoPacketCount | rtxPacketCount | unknownPayloadPacketCount) != 0;
+    }
+    VideoContent getContent() const
+    {
+        return _videoContent;
+    }
+    bool isLocalContent() const
+    {
+        return _videoContent == VideoContent::LOCAL;
+    }
+    bool isSlidesContent() const
+    {
+        return _videoContent == VideoContent::SLIDES;
+    }
 
     size_t videoPacketCount = 0;
     size_t rtxPacketCount = 0;

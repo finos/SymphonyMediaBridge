@@ -41,6 +41,7 @@ public:
     std::atomic_uint32_t& getJobCounter() override { return _jobCounter; };
     void protectAndSend(memory::UniquePacket packet) override;
     bool unprotect(memory::Packet& packet) override;
+    bool unprotectFirstRtp(memory::Packet& packet, uint32_t& rolloverCounter) override;
     void setDataReceiver(DataReceiver* dataReceiver) override;
     bool isConnected() override;
     bool start() override;
