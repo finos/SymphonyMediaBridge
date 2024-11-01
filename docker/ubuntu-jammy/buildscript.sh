@@ -41,8 +41,8 @@ fi
 cp /usr/lib/x86_64-linux-gnu/libatomic.so.1 libs
 cp /usr/local/lib/libc++.so.1 libs
 cp /usr/local/lib/libc++abi.so.1 libs
-cp /usr/local/lib/libssl.so.1.1 libs
-cp /usr/local/lib/libcrypto.so.1.1 libs
+cp /usr/local/lib64/libssl.so.3 libs
+cp /usr/local/lib64/libcrypto.so.3 libs
 cp /usr/local/lib/libmicrohttpd.so.12 libs
 cp /usr/local/lib/libopus.so.0 libs
 
