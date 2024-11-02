@@ -5,14 +5,15 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get -y update --fix-missing && apt-get -y upgrade
 
 # Install build dependenices
-RUN apt-get -y install git wget cmake xz-utils libz-dev build-essential
+RUN apt-get -y install git wget xz-utils libz-dev build-essential
+
+RUN mkdir -p /usr/local/cmake-3.30 
+RUN wget -qO- https://github.com/Kitware/CMake/releases/download/v3.30.5/cmake-3.30.5-Linux-x86_64.tar.gz | tar --strip-components=1 -xz -C /usr/local/cmake-3.30 
+ENV PATH="/usr/local/cmake-3.30/bin:${PATH}"
 
 # Build openssl-3.4.0
 RUN cd /tmp && wget https://github.com/openssl/openssl/releases/download/openssl-3.4.0/openssl-3.4.0.tar.gz && tar xvfz openssl-3.4.0.tar.gz && rm openssl-3.4.0.tar.gz
 RUN cd /tmp/openssl-3.4.0 && ./config && make -j5 && make install_sw
-
-RUN apt-get -y remove cmake && cd /tmp && wget https://cmake.org/files/v3.30/cmake-3.30.0.tar.gz && tar -xvzf cmake-3.30.0.tar.gz \
-    && cd cmake-3.30.0 && ./bootstrap && make -j5 && make install
 
 # Build libsrtp 2.6.0
 RUN cd /tmp \
