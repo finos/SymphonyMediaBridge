@@ -99,7 +99,7 @@ void analyzeRecording(const std::vector<int16_t>& recording,
         for (size_t i = 0; i < frequencies[threadId].size() && i < 50; ++i)
         {
             if (std::find_if(frequencyPeaks.begin(), frequencyPeaks.end(), [&](double f) {
-                    return std::abs(f - frequencies[threadId][i]) < 90;
+                    return std::abs(f - frequencies[threadId][i]) < f * 0.1;
                 }) == frequencyPeaks.end())
             {
                 logger::debug("added new freq %.3f", logId, frequencies[threadId][i]);
