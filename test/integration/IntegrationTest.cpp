@@ -348,3 +348,25 @@ void IntegrationTest::enterRealTime(size_t expectedThreadCount, const uint64_t t
     // release all sleeping threads into real time to finish the test
     _timeSource.shutdown();
 }
+
+// When several audio streams are mixed, they all pass jitter buffers and audio time compression.
+// This means that some frequencies may appear that are 6% above original frequency.
+void IntegrationTest::removeTimeCompressionArtifacts(std::vector<double>& freqVector)
+{
+    std::sort(freqVector.begin(), freqVector.end());
+
+    double prevFreq = -5000;
+    for (auto it = freqVector.begin(); it != freqVector.end();)
+    {
+        if (*it < prevFreq * 1.1 && *it > prevFreq)
+        {
+            logger::debug("eliminating time compressed frequency %.2f", "IntegrationTest", *it);
+            it = freqVector.erase(it);
+        }
+        else
+        {
+            prevFreq = *it;
+            ++it;
+        }
+    }
+}

@@ -206,8 +206,12 @@ public:
                 codec::Opus::sampleRate,
                 mixedAudioSources ? expectedDurationSeconds * utils::Time::ms : 0);
 
+            logger::flushLog();
+            logger::awaitLogDrained(0, 100 * utils::Time::ms);
+
             if (mixedAudioSources)
             {
+                removeTimeCompressionArtifacts(freqVector);
                 EXPECT_EQ(freqVector.size(), mixedAudioSources);
                 EXPECT_GE(rec.size(), expectedDurationSeconds * codec::Opus::sampleRate);
             }
@@ -314,6 +318,8 @@ protected:
     void startSimulation();
 
     void initLocalTransports(config::Config& bridgeConfig);
+
+    static void removeTimeCompressionArtifacts(std::vector<double>& freqVector);
 
 protected:
     emulator::TimeTurner _timeSource;
