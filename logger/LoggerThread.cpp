@@ -22,8 +22,6 @@ LoggerThread::LoggerThread(const char* logFileName, bool logStdOut, bool logStdE
       _lastMaintenanceTime(0),
       _thread(new std::thread([this] { this->run(); }))
 {
-    _reOpenLog.test_and_set();
-    reopenLogFile();
 }
 
 void LoggerThread::reopenLogFile()
@@ -52,6 +50,9 @@ void LoggerThread::run()
     concurrency::setThreadName("Logger");
     char localTime[timeStringLength];
     bool gotLogItem = false;
+    _reOpenLog.test_and_set();
+    reopenLogFile();
+
     for (;;)
     {
         const auto item = _logQueue.front();
@@ -78,10 +79,12 @@ void LoggerThread::run()
         {
             if (gotLogItem)
             {
-                if (_logStdOut) {
+                if (_logStdOut)
+                {
                     fflush(stdout);
                 }
-                if (_logStdErr) {
+                if (_logStdErr)
+                {
                     fflush(stderr);
                 }
             }
@@ -238,7 +241,7 @@ void LoggerThread::immediate(std::chrono::system_clock::time_point timestamp,
         formatTo(stdout, localTime, logLevel, threadId, message);
         fflush(stdout);
     }
-    if (_logStdErr && !std::strcmp(logLevel, "ERROR")) 
+    if (_logStdErr && !std::strcmp(logLevel, "ERROR"))
     {
         formatTo(stderr, localTime, logLevel, threadId, message);
         fflush(stderr);
