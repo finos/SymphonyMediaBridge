@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdlib>
-#include <string>
+#include <cstring>
 #include <unordered_map>
 
 namespace httpd
@@ -33,27 +33,27 @@ namespace
 {
 Method methodFromString(const char* method)
 {
-    if (strncmp(method, "GET", 3) == 0)
+    if (std::strncmp(method, "GET", 3) == 0)
     {
         return Method::GET;
     }
-    else if (strncmp(method, "POST", 4) == 0)
+    else if (std::strncmp(method, "POST", 4) == 0)
     {
         return Method::POST;
     }
-    else if (strncmp(method, "DELETE", 6) == 0)
+    else if (std::strncmp(method, "DELETE", 6) == 0)
     {
         return Method::DELETE;
     }
-    else if (strncmp(method, "PATCH", 5) == 0)
+    else if (std::strncmp(method, "PATCH", 5) == 0)
     {
         return Method::PATCH;
     }
-    else if (strncmp(method, "OPTIONS", 7) == 0)
+    else if (std::strncmp(method, "OPTIONS", 7) == 0)
     {
         return Method::OPTIONS;
     }
-    else if (strncmp(method, "PUT", 3) == 0)
+    else if (std::strncmp(method, "PUT", 3) == 0)
     {
         return Method::PUT;
     }
