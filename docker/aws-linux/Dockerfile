@@ -2,15 +2,15 @@ FROM amazonlinux:2
 
 RUN yum -y update && yum -y upgrade
 RUN yum -y groupinstall "Development Tools"
-RUN yum -y install git wget which
+RUN yum -y install git wget which perl-IPC-Cmd
 RUN amazon-linux-extras enable python3.8 && yum -y install python3.8
 
-# Build openssl-1.1.1s
-RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
-RUN cd /tmp/openssl-1.1.1s && ./config && make -j5 && make install_sw
+# Build openssl-3.4.0
+RUN cd /tmp && wget https://github.com/openssl/openssl/releases/download/openssl-3.4.0/openssl-3.4.0.tar.gz && tar xvfz openssl-3.4.0.tar.gz && rm openssl-3.4.0.tar.gz
+RUN cd /tmp/openssl-3.4.0 && ./config && make -j5 && make install_sw
 
-RUN cd /tmp && wget https://cmake.org/files/v3.18/cmake-3.18.0.tar.gz && tar -xvzf cmake-3.18.0.tar.gz \
-    && cd cmake-3.18.0 && ./bootstrap && make -j5 && make install
+RUN cd /tmp && wget https://cmake.org/files/v3.30/cmake-3.30.0.tar.gz && tar -xvzf cmake-3.30.0.tar.gz \
+    && cd cmake-3.30.0 && ./bootstrap && make -j5 && make install
 
 RUN cd /tmp \
     && wget -O clang+llvm-12.0.1-x86_64-linux.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz \
@@ -21,12 +21,11 @@ RUN cd /tmp \
     && ln -s /usr/local/bin/lld /usr/local/bin/ld \
     && rm clang+llvm-12.0.1-x86_64-linux.tar.xz
 
-
-# Build libsrtp 2.4.2
+# Build libsrtp 2.6.0
 RUN cd /tmp \
     && git clone https://github.com/cisco/libsrtp \
     && cd /tmp/libsrtp \
-    && git checkout v2.4.2 \
+    && git checkout v2.6.0 \
     && PKG_CONFIG_PATH=/usr/local/lib64/pkgconfig ./configure --enable-openssl \
     && make -j5 \
     && make install
