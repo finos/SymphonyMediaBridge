@@ -253,6 +253,9 @@ TEST(MpmcMap, concurrency)
 
 TEST(MpmcMap, performance)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     using HMap = concurrency::MpmcHashmap32<uint64_t, Complicated<uint32_t>>;
     HMap hmap(4096);
     bool running = true;

@@ -139,15 +139,24 @@ public:
 
 TEST(LFList, consistencyPlenty)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     consistencyTest<LockFreeList>(8, 7 * BATCH_SIZE);
 }
 TEST(LFList, consistencyFew)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     consistencyTest<LockFreeList>(8, 128);
 }
 
 TEST(LFList, plainConsistencyPlenty)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     consistencyTest<QueueWrapper>(8, 7 * BATCH_SIZE);
 }
 
