@@ -143,8 +143,17 @@ void Internet::process(const uint64_t timestamp)
                     packet->data,
                     packet->length,
                     timestamp);
+                packet.reset();
                 break;
             }
+        }
+        if (packet)
+        {
+            logger::debug("no destination for %s, %zuB, nodes %zu",
+                "Internet",
+                packet->target.toString().c_str(),
+                packet->length,
+                _nodes.size());
         }
     }
 
@@ -276,7 +285,7 @@ void Firewall::dispatchNAT(const Packet& packet, const uint64_t timestamp)
                     toString(packet.protocol),
                     packet.source.toString().c_str(),
                     packet.target.toString().c_str(),
-                    mapping.first.toString().c_str());
+                    portPair->lanPort.ipToString().c_str());
                 endpoint->onReceive(packet.protocol,
                     packet.source,
                     portPair->lanPort,
@@ -373,7 +382,9 @@ transport::SocketAddress Firewall::acquirePortMapping(const Protocol protocol, c
     }
 
     auto publicAddress = (source.getFamily() == AF_INET6 ? _publicIpv6 : _publicIpv4);
-    while (portMap.contains(transport::SocketAddress(publicAddress, ++_portCount))) {}
+    while (portMap.contains(transport::SocketAddress(publicAddress, ++_portCount)))
+    {
+    }
 
     return addPortMapping(protocol, source, _portCount);
 }
@@ -521,6 +532,7 @@ std::shared_ptr<Internet> InternetRunner::getNetwork()
 void InternetRunner::internetThreadRun()
 {
     concurrency::setThreadName("Internet");
+    logger::info("internet thread started at interval %" PRIu64, "InternetRunner", _tickInterval);
     while (_command != quit)
     {
         if (_command == State::running)
@@ -531,12 +543,14 @@ void InternetRunner::internetThreadRun()
         }
         else if (_command == paused)
         {
+            logger::info("internet thread paused...", "InternetRunner");
             _state = paused;
             while (_command == paused)
             {
                 // check in to TimeTurner if enabled
                 utils::Time::nanoSleep(utils::Time::ms * 10);
             }
+            logger::info("internet thread resumed...", "InternetRunner");
         }
     }
 }
