@@ -4,22 +4,20 @@ import com.symphony.simpleserver.sdp.Candidate;
 import com.symphony.simpleserver.sdp.ParserFailedException;
 import com.symphony.simpleserver.sdp.SessionDescription;
 import com.symphony.simpleserver.sdp.objects.*;
-import org.springframework.stereotype.Component;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
 
-@Component
-public class Parser {
+@Component public class Parser
+{
 
-    public Parser() {
-    }
+    public Parser() {}
 
-    public SessionDescription makeSdpOffer(
-            SmbEndpointDescription endpointDescription,
-            String endpointId,
-            List<EndpointMediaStreams> endpointMediaStreams) throws ParserFailedException
+    public SessionDescription makeSdpOffer(SmbEndpointDescription endpointDescription,
+        String endpointId,
+        List<EndpointMediaStreams> endpointMediaStreams) throws ParserFailedException
     {
         int mediaDescriptionIndex = 0;
 
@@ -32,64 +30,66 @@ public class Parser {
         final var smbDtls = bundleTransport.dtls;
 
         final var candidates = new ArrayList<Candidate>();
-        for (var smbCandidate : smbIce.candidates) {
+        for (var smbCandidate : smbIce.candidates)
+        {
             candidates.add(new Candidate(smbCandidate.foundation,
-                    Candidate.Component.fromString(smbCandidate.component.toString()),
-                    Candidate.TransportType.fromString(smbCandidate.protocol),
-                    smbCandidate.priority,
-                    smbCandidate.ip,
-                    smbCandidate.port,
-                    Candidate.Type.fromString(smbCandidate.type)));
+                Candidate.Component.fromString(smbCandidate.component.toString()),
+                Candidate.TransportType.fromString(smbCandidate.protocol),
+                smbCandidate.priority,
+                smbCandidate.ip,
+                smbCandidate.port,
+                Candidate.Type.fromString(smbCandidate.type)));
         }
 
-        mediaDescriptionIndex = addSmbMids(endpointDescription,
-                mediaDescriptionIndex,
-                offer,
-                smbIce,
-                smbDtls,
-                candidates);
+        mediaDescriptionIndex =
+            addSmbMids(endpointDescription, mediaDescriptionIndex, offer, smbIce, smbDtls, candidates);
 
-        addParticipantMids(endpointDescription,
-                endpointId,
-                endpointMediaStreams,
-                mediaDescriptionIndex,
-                offer,
-                smbIce,
-                smbDtls,
-                candidates);
-
+        /*  addParticipantMids(endpointDescription,
+              endpointId,
+              endpointMediaStreams,
+              mediaDescriptionIndex,
+              offer,
+              smbIce,
+              smbDtls,
+              candidates);
+  */
         return offer;
     }
 
-    private void addParticipantMids(
-            SmbEndpointDescription endpointDescription,
-            String endpointId,
-            List<EndpointMediaStreams> endpointMediaStreams,
-            int mediaDescriptionIndex,
-            SessionDescription offer,
-            SmbIce smbIce,
-            SmbDtls smbDtls,
-            List<Candidate> candidates) throws ParserFailedException
+    private void addParticipantMids(SmbEndpointDescription endpointDescription,
+        String endpointId,
+        List<EndpointMediaStreams> endpointMediaStreams,
+        int mediaDescriptionIndex,
+        SessionDescription offer,
+        SmbIce smbIce,
+        SmbDtls smbDtls,
+        List<Candidate> candidates) throws ParserFailedException
     {
-        for (var endpointMediaStreamsEntry : endpointMediaStreams) {
-            if (endpointMediaStreamsEntry.endpointId.equals(endpointId)) {
+        for (var endpointMediaStreamsEntry : endpointMediaStreams)
+        {
+            if (endpointMediaStreamsEntry.endpointId.equals(endpointId))
+            {
                 continue;
             }
 
-            for (var mediaStream : endpointMediaStreamsEntry.mediaStreams) {
-                if (mediaStream.ssrcs.isEmpty()) {
+            for (var mediaStream : endpointMediaStreamsEntry.mediaStreams)
+            {
+                if (mediaStream.ssrcs.isEmpty())
+                {
                     continue;
                 }
 
-                if (mediaStream.type == MediaDescription.Type.AUDIO) {
+                if (mediaStream.type == MediaDescription.Type.AUDIO)
+                {
                     final var participantAudio = makeAudioDescription(endpointDescription,
-                            mediaDescriptionIndex,
-                            smbIce,
-                            smbDtls,
-                            candidates,
-                            mediaStream.ssrcs.get(0));
+                        mediaDescriptionIndex,
+                        smbIce,
+                        smbDtls,
+                        candidates,
+                        mediaStream.ssrcs.get(0));
 
-                    if (!endpointMediaStreamsEntry.active) {
+                    if (!endpointMediaStreamsEntry.active)
+                    {
                         participantAudio.direction = Types.Direction.INACTIVE;
                         participantAudio.ssrcs.clear();
                     }
@@ -97,17 +97,19 @@ public class Parser {
                     offer.mediaDescriptions.add(participantAudio);
                     offer.group.mids.add(participantAudio.mid);
                     ++mediaDescriptionIndex;
-
-                } else if (mediaStream.type == MediaDescription.Type.VIDEO) {
+                }
+                else if (mediaStream.type == MediaDescription.Type.VIDEO)
+                {
                     final var participantVideo = makeVideoDescription(endpointDescription,
-                            mediaDescriptionIndex,
-                            smbIce,
-                            smbDtls,
-                            candidates,
-                            mediaStream.ssrcs,
-                            mediaStream.ssrcGroups);
+                        mediaDescriptionIndex,
+                        smbIce,
+                        smbDtls,
+                        candidates,
+                        mediaStream.ssrcs,
+                        mediaStream.ssrcGroups);
 
-                    if (!endpointMediaStreamsEntry.active) {
+                    if (!endpointMediaStreamsEntry.active)
+                    {
                         participantVideo.direction = Types.Direction.INACTIVE;
                         participantVideo.ssrcs.clear();
                         participantVideo.ssrcGroups.clear();
@@ -118,55 +120,85 @@ public class Parser {
                     ++mediaDescriptionIndex;
                 }
 
-                for (var ssrc : mediaStream.ssrcs) {
+                for (var ssrc : mediaStream.ssrcs)
+                {
                     offer.msidSemantic.ids.add(ssrc.mslabel);
                 }
             }
         }
     }
 
-    private int addSmbMids(
-            SmbEndpointDescription endpointDescription,
-            int mediaDescriptionIndex,
-            SessionDescription offer,
-            SmbIce smbIce,
-            SmbDtls smbDtls,
-            List<Candidate> candidates) throws ParserFailedException
+    private int addSmbMids(SmbEndpointDescription endpointDescription,
+        int mediaDescriptionIndex,
+        SessionDescription offer,
+        SmbIce smbIce,
+        SmbDtls smbDtls,
+        List<Candidate> candidates) throws ParserFailedException
     {
-        final var smbAudioSsrc = new Ssrc(endpointDescription.audio.ssrcs.get(0));
-        smbAudioSsrc.label = "smbaudiolabel";
-        smbAudioSsrc.mslabel = "smbaudiomslabel";
-        smbAudioSsrc.cname = "smbaudiocname";
-        final var audio = makeAudioDescription(endpointDescription,
+
+        for (final var ssrc : endpointDescription.audio.ssrcs)
+        {
+            final var smbAudioSsrc = new Ssrc(ssrc);
+            final var uuid = UUID.randomUUID().toString();
+            smbAudioSsrc.label = "label" + uuid;
+            smbAudioSsrc.mslabel = "mslabel" + uuid;
+            smbAudioSsrc.cname = "smbaudiocname";
+            final var audio = makeAudioDescription(endpointDescription,
                 mediaDescriptionIndex,
                 smbIce,
                 smbDtls,
                 candidates,
                 smbAudioSsrc);
 
-        offer.mediaDescriptions.add(audio);
-        offer.group.mids.add(audio.mid);
-        offer.msidSemantic.ids.add(smbAudioSsrc.mslabel);
-        mediaDescriptionIndex++;
+            offer.mediaDescriptions.add(audio);
+            offer.group.mids.add(audio.mid);
+            offer.msidSemantic.ids.add(smbAudioSsrc.mslabel);
+            mediaDescriptionIndex++;
+        }
 
-        final var smbVideoStream = endpointDescription.video.streams.get(0);
-        final var smbVideoSsrc = new Ssrc(smbVideoStream.sources.get(0).main);
+        for (final var smbVideoStream : endpointDescription.video.streams)
+        {
+            final var smbVideoMain = new Ssrc(smbVideoStream.sources.get(0).main);
+            final var smbRtx = new Ssrc(smbVideoStream.sources.get(0).feedback);
 
-        smbVideoSsrc.label = "smbvideolabel";
-        smbVideoSsrc.mslabel = "smbvideomslabel";
-        smbVideoSsrc.cname = "smbvideocname";
-        final var video = makeVideoDescription(endpointDescription,
+            final var uuid = UUID.randomUUID().toString();
+            smbVideoMain.label = "label" + uuid;
+            smbVideoMain.mslabel = "mslabel" + uuid;
+            smbVideoMain.cname = "smbvideocname";
+
+            smbRtx.label = smbVideoMain.label;
+            smbRtx.mslabel = smbVideoMain.mslabel;
+            smbRtx.cname = smbVideoMain.cname;
+
+            var ssrcs = new ArrayList<Ssrc>();
+            ssrcs.add(smbVideoMain);
+            var groups = new ArrayList<SsrcGroup>();
+            if (!smbRtx.ssrc.equals("0"))
+            {
+                var fidGroup = new SsrcGroup("FID");
+                fidGroup.ssrcs.add(smbVideoMain.ssrc);
+                fidGroup.ssrcs.add(smbRtx.ssrc);
+                groups.add(fidGroup);
+                ssrcs.add(smbRtx);
+            }
+
+            final var video = makeVideoDescription(endpointDescription,
                 mediaDescriptionIndex,
                 smbIce,
                 smbDtls,
                 candidates,
-                List.of(smbVideoSsrc),
-                List.of());
+                ssrcs,
+                groups);
+            if (smbVideoStream.content.equals("slides"))
+            {
+                video.content = smbVideoStream.content;
+            }
 
-        offer.mediaDescriptions.add(video);
-        offer.group.mids.add(video.mid);
-        offer.msidSemantic.ids.add(smbVideoSsrc.mslabel);
-        mediaDescriptionIndex++;
+            offer.mediaDescriptions.add(video);
+            offer.group.mids.add(video.mid);
+            offer.msidSemantic.ids.add(smbVideoMain.mslabel);
+            mediaDescriptionIndex++;
+        }
 
         final var data = new MediaDescription();
         data.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
@@ -194,13 +226,12 @@ public class Parser {
         return mediaDescriptionIndex;
     }
 
-    private MediaDescription makeAudioDescription(
-            SmbEndpointDescription endpointDescription,
-            int mediaDescriptionIndex,
-            SmbIce smbIce,
-            SmbDtls smbDtls,
-            List<Candidate> candidates,
-            Ssrc ssrc) throws ParserFailedException
+    private MediaDescription makeAudioDescription(SmbEndpointDescription endpointDescription,
+        int mediaDescriptionIndex,
+        SmbIce smbIce,
+        SmbDtls smbDtls,
+        List<Candidate> candidates,
+        Ssrc ssrc) throws ParserFailedException
     {
         final var audio = new MediaDescription();
         audio.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
@@ -220,38 +251,46 @@ public class Parser {
         audio.ssrcs.add(ssrc);
 
         final var smbAudio = endpointDescription.audio;
-        audio.payloadTypes.add(smbAudio.payloadType.id);
-        audio.rtpMaps.put(smbAudio.payloadType.id,
-                new RtpMap(smbAudio.payloadType.name, smbAudio.payloadType.clockrate, smbAudio.payloadType.channels));
+        for (var smbPayloadType : smbAudio.payloadTypes)
+        {
+            if (smbPayloadType.name.equals("telephone-event"))
+            {
+                continue;
+            }
+            audio.payloadTypes.add(smbPayloadType.id);
 
-        final var rtcpFbs = new ArrayList<RtcpFb>();
-        for (var smbRtcpFb : smbAudio.payloadType.rtcpFeedbacks) {
-            rtcpFbs.add(new RtcpFb(smbRtcpFb.type, smbRtcpFb.subtype));
+            audio.rtpMaps.put(smbPayloadType.id, new RtpMap(smbPayloadType.name, smbPayloadType.clockrate, 2));
+
+            final var rtcpFbs = new ArrayList<RtcpFb>();
+            for (var smbRtcpFb : smbPayloadType.rtcpFeedbacks)
+            {
+                rtcpFbs.add(new RtcpFb(smbRtcpFb.type, smbRtcpFb.subtype));
+            }
+            audio.rtcpFbs.put(smbPayloadType.id, rtcpFbs);
+
+            final var fmtpsStringBuilder = new StringBuilder();
+            for (var parameter : smbPayloadType.parameters.entrySet())
+            {
+                fmtpsStringBuilder.append(parameter.getKey());
+                fmtpsStringBuilder.append("=");
+                fmtpsStringBuilder.append(parameter.getValue());
+                fmtpsStringBuilder.append(";");
+            }
+            audio.fmtps.put(smbPayloadType.id, fmtpsStringBuilder.toString());
+
+            smbAudio.rtpHeaderExtensions.forEach(smbHeaderExtension
+                -> audio.headerExtensions.add(new ExtMap(smbHeaderExtension.id, smbHeaderExtension.uri)));
         }
-        audio.rtcpFbs.put(smbAudio.payloadType.id, rtcpFbs);
-
-        final var fmtpsStringBuilder = new StringBuilder();
-        for (var parameter : smbAudio.payloadType.parameters.entrySet()) {
-            fmtpsStringBuilder.append(parameter.getKey());
-            fmtpsStringBuilder.append("=");
-            fmtpsStringBuilder.append(parameter.getValue());
-            fmtpsStringBuilder.append(";");
-        }
-        audio.fmtps.put(smbAudio.payloadType.id, fmtpsStringBuilder.toString());
-
-        smbAudio.rtpHeaderExtensions.forEach(smbHeaderExtension -> audio.headerExtensions.add(new ExtMap(smbHeaderExtension.id,
-                smbHeaderExtension.uri)));
         return audio;
     }
 
-    private MediaDescription makeVideoDescription(
-            SmbEndpointDescription endpointDescription,
-            int mediaDescriptionIndex,
-            SmbIce smbIce,
-            SmbDtls smbDtls,
-            List<Candidate> candidates,
-            List<Ssrc> ssrcs,
-            List<SsrcGroup> ssrcGroups) throws ParserFailedException
+    private MediaDescription makeVideoDescription(SmbEndpointDescription endpointDescription,
+        int mediaDescriptionIndex,
+        SmbIce smbIce,
+        SmbDtls smbDtls,
+        List<Candidate> candidates,
+        List<Ssrc> ssrcs,
+        List<SsrcGroup> ssrcGroups) throws ParserFailedException
     {
         final var video = new MediaDescription();
         video.connection = new Connection(Types.Net.IN, Types.Address.IP4, "0.0.0.0");
@@ -272,18 +311,21 @@ public class Parser {
         video.ssrcGroups.addAll(ssrcGroups);
 
         final var smbVideo = endpointDescription.video;
-        for (var smbPayloadType : smbVideo.payloadTypes) {
+        for (var smbPayloadType : smbVideo.payloadTypes)
+        {
             video.payloadTypes.add(smbPayloadType.id);
             video.rtpMaps.put(smbPayloadType.id, new RtpMap(smbPayloadType.name, smbPayloadType.clockrate, null));
 
             final var rtcpFbs = new ArrayList<RtcpFb>();
-            for (var smbRtcpFb : smbPayloadType.rtcpFeedbacks) {
+            for (var smbRtcpFb : smbPayloadType.rtcpFeedbacks)
+            {
                 rtcpFbs.add(new RtcpFb(smbRtcpFb.type, smbRtcpFb.subtype));
             }
             video.rtcpFbs.put(smbPayloadType.id, rtcpFbs);
 
             final var fmtpsStringBuilder = new StringBuilder();
-            for (var parameter : smbPayloadType.parameters.entrySet()) {
+            for (var parameter : smbPayloadType.parameters.entrySet())
+            {
                 fmtpsStringBuilder.append(parameter.getKey());
                 fmtpsStringBuilder.append("=");
                 fmtpsStringBuilder.append(parameter.getValue());
@@ -292,19 +334,23 @@ public class Parser {
             video.fmtps.put(smbPayloadType.id, fmtpsStringBuilder.toString());
         }
 
-        smbVideo.rtpHeaderExtensions.forEach(smbHeaderExtension -> video.headerExtensions.add(new ExtMap(smbHeaderExtension.id,
-                smbHeaderExtension.uri)));
+        smbVideo.rtpHeaderExtensions.forEach(smbHeaderExtension
+            -> video.headerExtensions.add(new ExtMap(smbHeaderExtension.id, smbHeaderExtension.uri)));
         return video;
     }
 
-    public SmbEndpointDescription makeEndpointDescription(SessionDescription sdpAnswer) throws ParserFailedException {
+    public SmbEndpointDescription makeEndpointDescription(SessionDescription sdpAnswer) throws ParserFailedException
+    {
+
         SmbEndpointDescription endpointDescription = new SmbEndpointDescription();
 
-        if (!sdpAnswer.group.semantics.equals("BUNDLE")) {
+        if (!sdpAnswer.group.semantics.equals("BUNDLE"))
+        {
             throw new ParserFailedException();
         }
 
-        if (sdpAnswer.mediaDescriptions.isEmpty()) {
+        if (sdpAnswer.mediaDescriptions.isEmpty())
+        {
             throw new ParserFailedException();
         }
 
@@ -339,33 +385,46 @@ public class Parser {
 
         endpointDescription.bundleTransport = bundleTransport;
 
-        for (final var mediaDescription : sdpAnswer.mediaDescriptions) {
+        for (final var mediaDescription : sdpAnswer.mediaDescriptions)
+        {
             if (mediaDescription.type != MediaDescription.Type.APPLICATION &&
-                    mediaDescription.direction != Types.Direction.SEND_RECV)
+                mediaDescription.direction != Types.Direction.SEND_RECV)
             {
                 continue;
             }
 
-            if (mediaDescription.type == MediaDescription.Type.AUDIO) {
+            if (mediaDescription.type == MediaDescription.Type.AUDIO)
+            {
                 final var audio = new SmbAudio();
 
                 audio.ssrcs = new ArrayList<>();
+                audio.payloadTypes = new ArrayList<>();
                 mediaDescription.ssrcs.forEach(ssrc -> audio.ssrcs.add(Long.parseLong(ssrc.ssrc)));
 
-                audio.payloadType = new SmbPayloadType();
-                final var firstPayloadType = mediaDescription.payloadTypes.get(0);
-                audio.payloadType.id = firstPayloadType;
-                audio.payloadType.name = mediaDescription.rtpMaps.get(firstPayloadType).codec;
-                audio.payloadType.clockrate = mediaDescription.rtpMaps.get(firstPayloadType).clockRate;
-                audio.payloadType.channels = mediaDescription.rtpMaps.get(firstPayloadType).parameter;
-
-                final var parameters = mediaDescription.fmtps.get(firstPayloadType);
-                if (parameters != null) {
-                    final var parametersSplit = mediaDescription.fmtps.get(firstPayloadType).split(";");
-                    for (final var parameter : parametersSplit) {
-                        final var split = parameter.split("=");
-                        audio.payloadType.addParameter(split[0], split[1]);
+                for (final var sdpPayloadType : mediaDescription.payloadTypes)
+                {
+                    var payloadType = new SmbPayloadType();
+                    payloadType.id = sdpPayloadType;
+                    payloadType.name = mediaDescription.rtpMaps.get(sdpPayloadType).codec;
+                    payloadType.clockrate = mediaDescription.rtpMaps.get(sdpPayloadType).clockRate;
+                    payloadType.channels = mediaDescription.rtpMaps.get(sdpPayloadType).parameter;
+                    if (payloadType.name.equals("telephone-event"))
+                    {
+                        continue;
                     }
+
+                    final var parameters = mediaDescription.fmtps.get(sdpPayloadType);
+                    if (parameters != null)
+                    {
+                        final var parametersSplit = mediaDescription.fmtps.get(sdpPayloadType).split(";");
+                        for (final var parameter : parametersSplit)
+                        {
+                            final var split = parameter.split("=");
+                            payloadType.addParameter(split[0], split[1]);
+                        }
+                    }
+
+                    audio.payloadTypes.add(payloadType);
                 }
 
                 audio.rtpHeaderExtensions = new ArrayList<>();
@@ -377,34 +436,35 @@ public class Parser {
                 });
 
                 endpointDescription.audio = audio;
-
-            } else if (mediaDescription.type == MediaDescription.Type.VIDEO) {
+            }
+            else if (mediaDescription.type == MediaDescription.Type.VIDEO)
+            {
                 final var video = new SmbVideo();
                 final var streamsMap = new HashMap<String, SmbVideoStream>();
 
                 mediaDescription.ssrcs.forEach(ssrc -> {
-                    final var smbVideoStream = streamsMap.computeIfAbsent(
-                            ssrc.mslabel,
-                            key -> {
-                                final var value = new SmbVideoStream();
-                                value.id = ssrc.mslabel;
-                                value.content = "slides".equals(mediaDescription.content)?  "slides" : "video";
-                                value.sources = new ArrayList<>();
-                                return value;
-                            });
+                    final var smbVideoStream = streamsMap.computeIfAbsent(ssrc.mslabel, key -> {
+                        final var value = new SmbVideoStream();
+                        value.id = ssrc.mslabel;
+                        value.content = "slides".equals(mediaDescription.content) ? "slides" : "video";
+                        value.sources = new ArrayList<>();
+                        return value;
+                    });
 
                     final var feedbackGroup = mediaDescription.ssrcGroups.stream()
-                            .filter(SsrcGroup::isFeedback)
-                            .filter(element -> element.ssrcs.contains(ssrc.ssrc))
-                            .findFirst();
+                                                  .filter(SsrcGroup::isFeedback)
+                                                  .filter(element -> element.ssrcs.contains(ssrc.ssrc))
+                                                  .findFirst();
 
-                    if (feedbackGroup.isPresent() && feedbackGroup.get().isMainSsrc(ssrc)) {
+                    if (feedbackGroup.isPresent() && feedbackGroup.get().isMainSsrc(ssrc))
+                    {
                         final var smbVideoSource = new SmbVideoStream.SmbVideoSource();
                         smbVideoSource.main = Long.parseLong(feedbackGroup.get().ssrcs.get(0));
                         smbVideoSource.feedback = Long.parseLong(feedbackGroup.get().ssrcs.get(1));
                         smbVideoStream.sources.add(smbVideoSource);
-
-                    } else if (feedbackGroup.isEmpty()) {
+                    }
+                    else if (feedbackGroup.isEmpty())
+                    {
                         final var smbVideoSource = new SmbVideoStream.SmbVideoSource();
                         smbVideoSource.main = Long.parseLong(ssrc.ssrc);
                         smbVideoStream.sources.add(smbVideoSource);
@@ -414,7 +474,8 @@ public class Parser {
                 video.streams = new ArrayList<>(streamsMap.values());
 
                 video.payloadTypes = new ArrayList<>();
-                for (var payloadType : mediaDescription.payloadTypes) {
+                for (var payloadType : mediaDescription.payloadTypes)
+                {
                     final var smbPayloadType = new SmbPayloadType();
                     smbPayloadType.id = payloadType;
                     smbPayloadType.name = mediaDescription.rtpMaps.get(payloadType).codec;
@@ -422,9 +483,11 @@ public class Parser {
                     smbPayloadType.channels = null;
 
                     final var parameters = mediaDescription.fmtps.get(payloadType);
-                    if (parameters != null) {
+                    if (parameters != null)
+                    {
                         final var parametersSplit = mediaDescription.fmtps.get(payloadType).split(";");
-                        for (final var parameter : parametersSplit) {
+                        for (final var parameter : parametersSplit)
+                        {
                             final var split = parameter.split("=");
                             smbPayloadType.addParameter(split[0], split[1]);
                         }
@@ -442,8 +505,9 @@ public class Parser {
                 });
 
                 endpointDescription.video = video;
-
-            } else if (mediaDescription.type == MediaDescription.Type.APPLICATION) {
+            }
+            else if (mediaDescription.type == MediaDescription.Type.APPLICATION)
+            {
                 final var data = new SmbData();
                 data.port = mediaDescription.sctpMap.number;
                 endpointDescription.data = data;
@@ -451,6 +515,5 @@ public class Parser {
         }
 
         return endpointDescription;
-
     }
 }
