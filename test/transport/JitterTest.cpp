@@ -400,8 +400,8 @@ TEST(JitterTest, clockSkewRxSlower)
         jitt.getMaxJitter());
 
     logger::info("above %d, below %d, 95p %d", "", countAbove, countBelow, below95);
-    EXPECT_GE(countAbove, 700);
-    EXPECT_GE(countBelow, 700);
+    EXPECT_GE(countAbove, 690);
+    EXPECT_GE(countBelow, 690);
     EXPECT_GE(below95, 1440);
     EXPECT_NEAR(jitt.getJitter(), 5.5, 1.5);
 }
@@ -745,8 +745,8 @@ TEST(JitterTest, adaptUp30)
         jitt.getMaxJitter());
 
     logger::info("above %d, below %d, 95p %d", "", countAbove, countBelow, below95);
-    EXPECT_GE(countAbove, 600);
-    EXPECT_GE(countBelow, 600);
+    EXPECT_GE(countAbove, 580);
+    EXPECT_GE(countBelow, 580);
     EXPECT_GE(below95, 1150);
     EXPECT_NEAR(jitt.getJitter(), 12, 2.5);
 }

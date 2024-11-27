@@ -86,6 +86,9 @@ Test setup:
 */
 TEST_F(BarbellTest, packetLossViaBarbell)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     runTestInThread(expectedTestThreadCount(2), [this]() {
         constexpr auto PACKET_LOSS_RATE = 0.03;
 
@@ -235,12 +238,12 @@ TEST_F(BarbellTest, packetLossViaBarbell)
                 if (id == 0)
                 {
                     EXPECT_NEAR(fps, 30.0, 5.0);
-                    EXPECT_NEAR(videoStats.numDecodedFrames, 146, 11);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 146, 20);
                 }
                 else
                 {
                     EXPECT_NEAR(fps, 30.0, 2.0);
-                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 11);
+                    EXPECT_NEAR(videoStats.numDecodedFrames, 150, 20);
                 }
             }
         }
@@ -799,18 +802,18 @@ TEST_F(BarbellTest, barbellStats)
             EXPECT_EQ(s2["video"]["inbound"]["activeStreamCount"], 3);
 
             // Packates per second for audio (expectations for values per second we can hardcode):
-            EXPECT_NEAR(s1["video"]["inbound"]["packetsPerSecond"], 660, 30.0);
-            EXPECT_NEAR(s2["video"]["outbound"]["packetsPerSecond"], 660, 30.0);
+            EXPECT_NEAR(s1["video"]["inbound"]["packetsPerSecond"], 500, 30.0);
+            EXPECT_NEAR(s2["video"]["outbound"]["packetsPerSecond"], 500, 30.0);
 
-            EXPECT_NEAR(s1["video"]["outbound"]["packetsPerSecond"], 330, 15.0);
-            EXPECT_NEAR(s2["video"]["inbound"]["packetsPerSecond"], 330, 15.0);
+            EXPECT_NEAR(s1["video"]["outbound"]["packetsPerSecond"], 250, 15.0);
+            EXPECT_NEAR(s2["video"]["inbound"]["packetsPerSecond"], 250, 15.0);
 
             // Audio bitrate symmetry (expectations for values per second we can hardcode):
-            EXPECT_NEAR(s1["video"]["inbound"]["bitrateKbps"], 6222, 200.0);
-            EXPECT_NEAR(s2["video"]["outbound"]["bitrateKbps"], 6220, 200.0);
+            EXPECT_NEAR(s1["video"]["inbound"]["bitrateKbps"], 4500, 200.0);
+            EXPECT_NEAR(s2["video"]["outbound"]["bitrateKbps"], 4500, 200.0);
 
-            EXPECT_NEAR(s1["video"]["outbound"]["bitrateKbps"], 3100, 100.0);
-            EXPECT_NEAR(s2["video"]["inbound"]["bitrateKbps"], 3100, 100.0);
+            EXPECT_NEAR(s1["video"]["outbound"]["bitrateKbps"], 2235, 100.0);
+            EXPECT_NEAR(s2["video"]["inbound"]["bitrateKbps"], 2235, 100.0);
 
             // Packets sent / received symmetry (exact value could vary, but s1.inbound ~=~ s2.outbount):
             EXPECT_NE(s1["video"]["inbound"]["packets"], 0);

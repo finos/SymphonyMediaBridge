@@ -581,7 +581,12 @@ public:
     void cancelStunTransaction(ice::Int96 transactionId) override {}
 
     transport::SocketAddress getLocalPort() const override { return _address; }
-    bool hasIp(const transport::SocketAddress& target) override { return target == _address; }
+    bool hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const override
+    {
+        return target == _address && protocol == fakenet::Protocol::UDP;
+    }
+    bool hasIpClash(const NetworkNode& node) const override { return node.hasIp(_address, fakenet::Protocol::UDP); }
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::UDP; }
 
     void attach(std::unique_ptr<ice::IceSession>& session)
     {
@@ -639,7 +644,6 @@ void FakeEndpoint::onReceive(fakenet::Protocol protocol,
 
     if (_address.equalsIp(target))
     {
-        logger::debug("received from %s -> %s", "FakeEndpoint", source.toString().c_str(), target.toString().c_str());
         _session->onStunPacketReceived(this, source, data, length, timestamp);
     }
     else if (_gateway)
@@ -678,7 +682,7 @@ public:
           _internet(internet)
     {
         assert(!port.empty());
-        internet.addPublic(this);
+        internet.addLocal(this);
     }
     void onReceive(fakenet::Protocol protocol,
         const transport::SocketAddress& source,
@@ -703,7 +707,12 @@ public:
             }
         }
     }
-    bool hasIp(const transport::SocketAddress& target) override { return target == _address; }
+    bool hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const override
+    {
+        return target == _address && protocol == fakenet::Protocol::UDP;
+    }
+    bool hasIpClash(const NetworkNode& node) const override { return node.hasIp(_address, fakenet::Protocol::UDP); }
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::UDP; }
 
     transport::SocketAddress getIp() const { return _address; }
 
@@ -959,13 +968,13 @@ TEST_F(IceTest, iceprobes2)
 
     auto pair1 = sessions[0]->getSelectedPair();
     auto pair2 = sessions[1]->getSelectedPair();
-    EXPECT_TRUE(firewall1.hasIp(pair1.first.address));
+    EXPECT_TRUE(firewall1.hasIp(pair1.first.address, fakenet::Protocol::UDP));
     EXPECT_TRUE(pair1.first.baseAddress == endpoint1b._address);
     EXPECT_TRUE(pair2.first.address == pair1.second.address);
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
 
     EXPECT_TRUE(pair2.first.baseAddress == endpoint2._address);
-    EXPECT_TRUE(firewall2.hasIp(pair2.first.address));
+    EXPECT_TRUE(firewall2.hasIp(pair2.first.address, fakenet::Protocol::UDP));
 }
 
 TEST_F(IceTest, timerNoCandidates)
@@ -1143,7 +1152,7 @@ TEST_F(IceTest, fixedportmap)
 
     auto pair1 = sessions[0]->getSelectedPair();
     auto pair2 = sessions[1]->getSelectedPair();
-    EXPECT_TRUE(firewall1.hasIp(pair1.first.address));
+    EXPECT_TRUE(firewall1.hasIp(pair1.first.address, fakenet::Protocol::UDP));
 
     EXPECT_TRUE(pair2.first.address == pair1.second.address);
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
@@ -1219,7 +1228,7 @@ TEST_F(IceTest, fixedportmapNogathering)
 
     auto pair1 = sessions[0]->getSelectedPair();
     auto pair2 = sessions[1]->getSelectedPair();
-    EXPECT_TRUE(firewall1.hasIp(pair1.first.address));
+    EXPECT_TRUE(firewall1.hasIp(pair1.first.address, fakenet::Protocol::UDP));
 
     EXPECT_TRUE(pair2.first.address == pair1.second.address);
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
@@ -1256,7 +1265,7 @@ TEST_F(IceTest, icev6)
 
     auto pair1 = sessions[0]->getSelectedPair();
     auto pair2 = sessions[1]->getSelectedPair();
-    EXPECT_TRUE(firewall1.hasIp(pair1.first.address));
+    EXPECT_TRUE(firewall1.hasIp(pair1.first.address, fakenet::Protocol::UDP));
 
     EXPECT_TRUE(pair2.first.address == pair1.second.address);
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
@@ -1292,8 +1301,8 @@ TEST_F(IceTest, icev6sameFw)
 
     auto pair1 = sessions[0]->getSelectedPair();
     auto pair2 = sessions[1]->getSelectedPair();
-    EXPECT_TRUE(endpoint1.hasIp(pair1.first.address));
-    EXPECT_TRUE(endpoint2.hasIp(pair2.first.address));
+    EXPECT_TRUE(endpoint1.hasIp(pair1.first.address, fakenet::Protocol::UDP));
+    EXPECT_TRUE(endpoint2.hasIp(pair2.first.address, fakenet::Protocol::UDP));
     EXPECT_TRUE(pair2.first.address == pair1.second.address);
     EXPECT_TRUE(pair1.first.address == pair2.second.address);
 }
@@ -1336,7 +1345,7 @@ TEST_F(IceTest, icev6v4Mix)
 
     auto pair1 = sessions[0]->getSelectedPair();
     auto pair2 = sessions[1]->getSelectedPair();
-    EXPECT_TRUE(firewall1.hasIp(pair1.first.address));
+    EXPECT_TRUE(firewall1.hasIp(pair1.first.address, fakenet::Protocol::UDP));
 
     EXPECT_TRUE(pair2.first.address == pair1.second.address);
     EXPECT_TRUE(pair1.first.address == pair2.second.address);

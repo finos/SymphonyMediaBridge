@@ -6,7 +6,12 @@
 namespace emulator
 {
 
-TimeTurner::TimeTurner() : _timestamp(100), _startTime(std::chrono::system_clock::now()), _running(true), _abort(false)
+TimeTurner::TimeTurner(uint64_t granularity)
+    : _timestamp(100),
+      _startTime(std::chrono::system_clock::now()),
+      _running(true),
+      _abort(false),
+      _granularity(granularity)
 {
 }
 
@@ -160,7 +165,7 @@ void TimeTurner::advance()
 
 void TimeTurner::advance(uint64_t nanoSeconds)
 {
-    nanoSeconds = std::max(nanoSeconds, 2 * utils::Time::ms);
+    nanoSeconds = std::max(nanoSeconds, _granularity);
     _timestamp += nanoSeconds;
 
     for (auto& slot : _sleepers)

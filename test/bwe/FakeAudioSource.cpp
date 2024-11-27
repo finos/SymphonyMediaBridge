@@ -74,6 +74,6 @@ size_t FakeAudioSource::randomPacketSize()
         }
     }
     ++_counter;
-    return _talkSprint + randomSize(_talkSprint, 0.1);
+    return _talkSprint + randomSize(_talkSprint / 4, 0.75);
 }
 } // namespace fakenet

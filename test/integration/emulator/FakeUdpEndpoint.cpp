@@ -250,17 +250,21 @@ bool FakeUdpEndpoint::openPort(uint16_t port)
 {
     auto wantedAddress = _localPort;
     wantedAddress.setPort(port);
-    if (!_network->isLocalPortFree(wantedAddress))
-    {
-        logger::error("UDP port already in use", _name.c_str());
-        return false;
-    }
+    _localPort = wantedAddress;
 
     _localPort.setPort(port);
-    logger::info("adding %s to network", "FakeUdpEndpoint", _localPort.toString().c_str());
-    _network->addLocal(this);
-    _state = Endpoint::State::CREATED;
-    return true;
+
+    if (_network->addLocal(this))
+    {
+        logger::info("adding %s to network", "FakeUdpEndpoint", _localPort.toString().c_str());
+        _state = Endpoint::State::CREATED;
+        return true;
+    }
+    else
+    {
+        logger::error("UDP port already in use %s", _name.c_str(), wantedAddress.toString().c_str());
+    }
+    return false;
 }
 
 bool FakeUdpEndpoint::isGood() const
@@ -334,15 +338,20 @@ void FakeUdpEndpoint::onReceive(fakenet::Protocol protocol,
     size_t length,
     uint64_t timestamp)
 {
-    assert(hasIp(target));
+    assert(hasIp(target, protocol));
     assert(protocol == fakenet::Protocol::UDP);
 
     _networkLink->push(serializeInbound(_networkLinkAllocator, protocol, source, data, length), timestamp);
 }
 
-bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
+bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const
 {
-    return target == _localPort;
+    return target == _localPort && protocol == fakenet::Protocol::UDP;
+}
+
+bool FakeUdpEndpoint::hasIpClash(const fakenet::NetworkNode& node) const
+{
+    return node.hasIp(_localPort, fakenet::Protocol::UDP);
 }
 
 void FakeUdpEndpoint::process(uint64_t timestamp)

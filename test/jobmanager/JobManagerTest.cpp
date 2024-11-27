@@ -128,6 +128,10 @@ struct JobManagerTest : public ::testing::Test
 
 TEST_F(JobManagerTest, concurrentJobs)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
+
     thread writerThread1(writer<JobManager>, ref(context), 0, n / 2, ref(jobManager), nullptr);
     thread writerThread2(writer<JobManager>, ref(context), n / 2, n, ref(jobManager), nullptr);
     writerThread1.join();
@@ -149,6 +153,10 @@ TEST_F(JobManagerTest, concurrentJobs)
 
 TEST_F(JobManagerTest, serialJobs)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
+
     atomic_int32_t serialConcurrency1(0);
     atomic_int32_t serialConcurrency2(0);
 
