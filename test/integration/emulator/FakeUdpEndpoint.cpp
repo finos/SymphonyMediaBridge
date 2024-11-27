@@ -257,6 +257,7 @@ bool FakeUdpEndpoint::openPort(uint16_t port)
     }
 
     _localPort.setPort(port);
+    logger::info("adding %s to network", "FakeUdpEndpoint", _localPort.toString().c_str());
     _network->addLocal(this);
     _state = Endpoint::State::CREATED;
     return true;
@@ -341,10 +342,6 @@ void FakeUdpEndpoint::onReceive(fakenet::Protocol protocol,
 
 bool FakeUdpEndpoint::hasIp(const transport::SocketAddress& target)
 {
-    if (_state != State::CONNECTED)
-    {
-        return false;
-    }
     return target == _localPort;
 }
 
