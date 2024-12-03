@@ -6,6 +6,7 @@ responsible for allocating and configuring SMB resources. Simpleclient acts as t
 These projects are limited in their use cases and are only meant for documentation and testing purposes.
 
 ## Building
+Make sure SMb has been built with legacy_api off
 
 ### Simpleserver
 
@@ -25,7 +26,7 @@ Simpleserver is a java project requiring maven and openjdk 11 or later.
 
 1. Start SMB.
 2. Start simpleserver.
-3. Open two or more tabs in Chrome with simpleclient/dist/index.html
+3. Open two or more tabs in Chrome with localhost:3000
 4. Make sure the simpleserver instance at https://localhost:8081/ is accessible from Chrome. You might have to add an exception for the self-signed certificate of simpleserver.
 5. Click 'join' in the simpleclient instances.
 
