@@ -8,18 +8,20 @@ let peerConnection: RTCPeerConnection|undefined = undefined
 let localMediaStream: MediaStream|undefined = undefined;
 let localDataChannel: RTCDataChannel|undefined = undefined;
 let endpointId: string|undefined = undefined;
+let conferenceId: string|undefined = undefined;
 let remoteMediaStreams: Set<string> = new Set();
 
 const serverUrl = 'https://localhost:8081/conferences/';
 
 interface UserVideoMapItem
 {
-    ssrc: number;
+    ssrc: Number;
     msid: String;
     element: HTMLVideoElement;
 }
 
 let receivers = new Map<string, UserVideoMapItem>();
+let keepPolling = true;
 
 // Keeps a long-poll running for simpleserver to simpleclient communication
 async function startPoll()
@@ -41,7 +43,10 @@ async function startPoll()
         return;
     }
 
-    startPoll();
+    if (keepPolling)
+    {
+        startPoll();
+    }
 }
 
 async function onPollMessage(resultJson: any)
@@ -121,10 +126,69 @@ function onTrack(event: RTCTrackEvent)
             videoElement.height = 180;
             videoElement.muted = false;
             videoElementsDiv.appendChild(videoElement);
-            receivers.set(event.track.id, {ssrc : 0, msid : event.track.id as String, element : videoElement});
+            var mapItem: UserVideoMapItem = {
+                ssrc : 0, // not available anyway
+                msid : event.track.id as String,
+                element : videoElement
+            };
+
+            receivers.set(event.track.id, mapItem);
             console.log('Added video element ' + stream.id);
         }
     }
+}
+
+function getSsrcOfVideoMsid(trackId: String): Number
+{
+    var rtpReceivers = peerConnection.getReceivers();
+    for (var rtpReceiver of rtpReceivers)
+    {
+        var ssrcs = rtpReceiver.getSynchronizationSources();
+        if (ssrcs.length == 0 || rtpReceiver.track.kind != "video")
+        {
+            continue;
+        }
+
+        if (rtpReceiver.track.label == trackId)
+        {
+            return ssrcs[0].source;
+        }
+    }
+    return null;
+}
+
+function getVideoElementBySsrc(ssrc: Number): HTMLVideoElement
+{
+    var rtpReceivers = peerConnection.getReceivers();
+    for (var rtpReceiver of rtpReceivers)
+    {
+        var ssrcs = rtpReceiver.getSynchronizationSources();
+        if (ssrcs.length == 0 || rtpReceiver.track.kind != "video")
+        {
+            continue;
+        }
+
+        if (ssrcs[0].source == ssrc)
+        {
+            var mapItem = receivers.get(rtpReceiver.track.label);
+            return mapItem.element;
+        }
+    }
+    return null;
+}
+
+function getAllUserMapSsrcs(umap: any): Set<Number>
+{
+    var s = new Set<Number>();
+    for (var endpoint of umap.endpoints)
+    {
+        for (var ssrc of endpoint.ssrcs)
+        {
+            s.add(ssrc);
+        }
+    }
+
+    return s;
 }
 
 function onDataChannelMessage(event: MessageEvent<any>)
@@ -147,31 +211,41 @@ function onDataChannelMessage(event: MessageEvent<any>)
     }
     else if (message.type === 'UserMediaMap')
     {
+        /*  var activeUsers = getAllUserMapSsrcs(message);
+          for (var v of videoElementsDiv.children)
+          {
+              const ssrc = v.getAttribute("custom_ssrc");
+              if (ssrc != null && !(ssrc in activeUsers))
+              {
+                  var videoElem = v as HTMLVideoElement;
+                  videoElem.currentTime = 0;
+              }
+          }*/
+
         for (const endpoint of message.endpoints)
         {
             for (var ssrc of endpoint.ssrcs)
             {
-                console.log("ssrc {} speaking", ssrc)
+                console.log("ssrc speaking", ssrc)
 
-                var rtpReceivers = peerConnection.getReceivers();
-                for (var rtpReceiver of rtpReceivers)
+                var videoElement = getVideoElementBySsrc(ssrc);
+                /*if (videoElement.getAttribute("custom_ssrc") == null)
                 {
-                    var ssrcs = rtpReceiver.getSynchronizationSources();
-                    if (ssrcs.length == 0 || rtpReceiver.track.kind != "video")
-                    {
-                        continue;
-                    }
+                    videoElement.setAttribute("custom_ssrc", ssrc.toString());
+                }*/
 
-                    if (ssrcs[0].source == ssrc)
-                    {
-                        var mapItem = receivers.get(rtpReceiver.track.label);
-                        if (videoElementsDiv.firstChild != mapItem.element)
-                        {
-                            videoElementsDiv.removeChild(mapItem.element);
-                            videoElementsDiv.insertBefore(mapItem.element, videoElementsDiv.firstChild);
-                        }
-                        return;
-                    }
+                if (videoElement && videoElementsDiv.firstChild != videoElement)
+                {
+                    videoElementsDiv.removeChild(videoElement);
+                    var speaker = videoElementsDiv.firstChild as HTMLVideoElement
+                    speaker.width = 320;
+                    speaker.height = 180;
+                    videoElementsDiv.insertBefore(videoElement, videoElementsDiv.firstChild);
+                    var speaker = videoElementsDiv.firstChild as HTMLVideoElement
+                    speaker.width = 640;
+                    speaker.height = 360;
+
+                    return;
                 }
             }
 
@@ -224,7 +298,9 @@ async function joinClicked()
     console.log('Join result ' + JSON.stringify(resultJson));
 
     endpointId = resultJson.endpointId;
+    conferenceId = resultJson
     endpointIdLabel.innerText = endpointId;
+    keepPolling = true;
     startPoll()
 }
 
@@ -287,10 +363,44 @@ async function listVideoDevices()
     }
 }
 
+async function hangupClicked()
+{
+    keepPolling = false;
+    const url = serverUrl + 'endpoints/' + endpointId + '/actions';
+    const body = {type : 'hangup'};
+
+    const requestInit: RequestInit = {method : 'POST', mode : 'cors', cache : 'no-store', body : JSON.stringify(body)};
+    const request = new Request(url, requestInit);
+    const result = await fetch(request);
+
+    console.log('hangup result ' + result.status);
+
+    localMediaStream.getTracks().forEach(function(track) { track.stop() })
+    localMediaStream = null;
+    localDataChannel.close();
+    localDataChannel.onmessage = null;
+    localDataChannel = null;
+    peerConnection.ontrack = null;
+    peerConnection.onicegatheringstatechange = null;
+    peerConnection.ondatachannel = null;
+    remoteMediaStreams.clear();
+    peerConnection.close();
+    peerConnection = null;
+
+    const localVideo = document.getElementById("localVideo") as HTMLVideoElement;
+    localVideo.srcObject = null;
+
+    audioElementsDiv.textContent = '';
+    videoElementsDiv.textContent = '';
+}
+
 async function main()
 {
     var joinButton = document.getElementById('join') as HTMLButtonElement;
     joinButton.onclick = joinClicked;
+
+    var hangupButton = document.getElementById('hangup') as HTMLButtonElement;
+    hangupButton.onclick = hangupClicked;
 
     await listAudioDevices();
     await listVideoDevices();
