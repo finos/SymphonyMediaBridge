@@ -100,6 +100,10 @@ import org.springframework.stereotype.Component;
         {
             return onAnswer(endpointId, message);
         }
+        else if (message.type.equals("hangup"))
+        {
+            return onHangup(endpointId);
+        }
 
         return false;
     }
@@ -168,6 +172,28 @@ import org.springframework.stereotype.Component;
         }
 
         return true;
+    }
+
+    private boolean onHangup(String endpointId)
+        throws ParserFailedException, IOException, InterruptedException, ParseException
+    {
+        final var endpoint = endpoints.get(endpointId);
+        if (endpoint == null)
+        {
+            return false;
+        }
+        endpoints.remove(endpointId);
+        messageQueues.remove(endpointId);
+        try
+        {
+            symphonyMediaBridge.deleteEndpoint(conferenceId, endpointId);
+            return true;
+        }
+        catch (IOException | ParseException e)
+        {
+            LOGGER.error("Error deleting endpoint ", e);
+            return false;
+        }
     }
 
     public String poll(String endpointId) throws InterruptedException
