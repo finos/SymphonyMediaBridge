@@ -209,7 +209,7 @@ function onDataChannelMessage(event: MessageEvent<any>)
             console.log('Sent data channel message ' + JSON.stringify(pinMessage));
         }
     }
-    else if (message.type === 'UserMediaMap')
+    else if (message.type === 'UserMediaMap' || message.colibriClass === 'UserMediaMap')
     {
         /*  var activeUsers = getAllUserMapSsrcs(message);
           for (var v of videoElementsDiv.children)
