@@ -26,28 +26,30 @@ public:
         FakeEndpointFactory& endpointFactory,
         transport::RtcePoll& epoll);
 
-    virtual const transport::SocketAddress getLocalPort() const override { return _localPort; };
-    virtual void registerListener(const std::string& stunUserName, IEvents* listener) override;
-    virtual void unregisterListener(const std::string& stunUserName, IEvents* listener) override;
-    virtual bool isGood() const override { return true; }
-    virtual void start() override { _state = transport::Endpoint::State::CONNECTED; };
-    virtual void stop(transport::ServerEndpoint::IStopEvents* event) override;
-    virtual const char* getName() const override { return _name.c_str(); }
-    virtual transport::Endpoint::State getState() const override { return _state; }
-    virtual void maintenance(uint64_t timestamp) override;
+    const transport::SocketAddress getLocalPort() const override { return _localPort; };
+    void registerListener(const std::string& stunUserName, IEvents* listener) override;
+    void unregisterListener(const std::string& stunUserName, IEvents* listener) override;
+    bool isGood() const override { return true; }
+    void start() override { _state = transport::Endpoint::State::CONNECTED; };
+    void stop(transport::ServerEndpoint::IStopEvents* event) override;
+    const char* getName() const override { return _name.c_str(); }
+    transport::Endpoint::State getState() const override { return _state; }
+    void maintenance(uint64_t timestamp) override;
 
-    virtual std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return nullptr; }
+    std::shared_ptr<fakenet::NetworkLink> getDownlink() override { return nullptr; }
 
 private:
     // networkNode
-    virtual void onReceive(fakenet::Protocol protocol,
+    void onReceive(fakenet::Protocol protocol,
         const transport::SocketAddress& source,
         const transport::SocketAddress& target,
         const void* data,
         size_t length,
         uint64_t timestamp) override;
-    virtual bool hasIp(const transport::SocketAddress& target) override;
-    virtual void process(uint64_t timestamp) override;
+    bool hasIp(const transport::SocketAddress& target, fakenet::Protocol protocol) const override;
+    bool hasIpClash(const NetworkNode& node) const override { return node.hasIp(_localPort, fakenet::Protocol::SYN); }
+    fakenet::Protocol getProtocol() const override { return fakenet::Protocol::SYN; }
+    void process(uint64_t timestamp) override;
 
     void internalReceive();
 

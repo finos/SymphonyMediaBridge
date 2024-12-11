@@ -14,9 +14,9 @@ class TimeTurner : public utils::TimeSource
 public:
     static const size_t MAX_THREAD_COUNT = 60;
 
-    TimeTurner();
+    explicit TimeTurner(uint64_t granularity = 2 * utils::Time::ms);
 
-    virtual uint64_t getAbsoluteTime() override { return _timestamp; }
+    virtual uint64_t getAbsoluteTime() const override { return _timestamp; }
     virtual void nanoSleep(uint64_t nanoSeconds) override;
 
     virtual std::chrono::system_clock::time_point wallClock() const override;
@@ -66,5 +66,6 @@ private:
     concurrency::CountdownEvent _sleeperCountdown;
     concurrency::EventSemaphore _abortSemaphore;
     std::atomic_bool _abort;
+    uint64_t _granularity;
 };
 } // namespace emulator

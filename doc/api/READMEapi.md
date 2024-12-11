@@ -1048,3 +1048,18 @@ GET /ice-candidates
     "ufrag": "y2uBVS3RATC4Sd"
 }
 ```
+
+## Data Channel notifications
+SMB send messages over the data channel to all participants. The messages carrry information about which endpoint is dominant speaker at the moment. It also sends messages listing all the last-N active users in order.
+This means that the dominant speaker can be derived from that list, but also that the enpoints that are in the list at the moment and which main video ssrc they are sending. This can be used by client to associate view port with the user being shown in that port.
+
+User media map contains the list of forwarded user streams
+```
+ {"type":"UserMediaMap","endpoints":[{"endpoint":"28885389-571f-4a43-8c20-d5fb225884bb", "ssrcs":[2035838989]}]}
+```
+
+
+Dominant speaker message looks like this:
+```
+{"type":"DominantSpeaker", "endpoint":"28885389-571f-4a43-8c20-d5fb225884bb"}
+```

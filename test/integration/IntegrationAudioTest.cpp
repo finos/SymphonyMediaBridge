@@ -48,6 +48,9 @@ public:
 
 TEST_F(IntegrationAudioTest, longMute)
 {
+#ifdef NOPERF_TEST
+    GTEST_SKIP();
+#endif
     runTestInThread(
         expectedTestThreadCount(1),
         [this]() {

@@ -28,7 +28,7 @@ class TimeTicker : public utils::TimeSource
 public:
     TimeTicker() : _startTime(std::chrono::system_clock::now()), _time(utils::Time::getAbsoluteTime()) {}
 
-    uint64_t getAbsoluteTime() override { return _time; };
+    uint64_t getAbsoluteTime() const override { return _time; };
 
     void nanoSleep(uint64_t nanoSeconds) override { _time += nanoSeconds; };
 

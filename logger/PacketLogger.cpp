@@ -109,7 +109,10 @@ PacketLogReader::PacketLogReader(FILE* logFile) : _logFile(logFile) {}
 
 PacketLogReader::~PacketLogReader()
 {
-    ::fclose(_logFile);
+    if (_logFile)
+    {
+        ::fclose(_logFile);
+    }
 }
 
 bool PacketLogReader::getNext(PacketLogItem& item)

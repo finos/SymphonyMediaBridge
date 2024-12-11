@@ -34,7 +34,11 @@ public:
     virtual void OnTestEnd(const TestInfo& test_info) override
     {
         utils::Time::initialize(); // the time source may be deleted by now
-        logger::info("Test Ended %s.%s <<<", "gtest", test_info.test_case_name(), test_info.name());
+        logger::info("Test Ended %s.%s (%" PRIi64 " ms) <<<",
+            "gtest",
+            test_info.test_case_name(),
+            test_info.name(),
+            test_info.result()->elapsed_time());
         logger::awaitLogDrained();
     }
     virtual void OnEnvironmentsTearDownStart(const UnitTest& unit_test) override {}
