@@ -22,10 +22,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: aws-linux
-            image: latest
-            build:
-              type: Release
           - os: el8
             image: latest
             build:
