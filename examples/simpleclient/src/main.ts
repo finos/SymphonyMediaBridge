@@ -96,16 +96,17 @@ async function onIceGatheringStateChange(event: Event)
 
 function onTrack(event: RTCTrackEvent)
 {
+    var count: number = 0;
     for (const stream of event.streams)
     {
         if (remoteMediaStreams.has(stream.id))
         {
             continue;
         }
-
+        count = count + 1;
         remoteMediaStreams.add(stream.id);
         console.log(`Added remote stream ${stream.id} audio ${stream.getAudioTracks().length} video ${
-            stream.getVideoTracks().length}`);
+            stream.getVideoTracks().length} `);
 
         if (stream.getAudioTracks().length !== 0)
         {
@@ -113,7 +114,7 @@ function onTrack(event: RTCTrackEvent)
             audioElement.autoplay = true;
             audioElement.srcObject = stream;
             audioElementsDiv.appendChild(audioElement);
-            console.log('Added audio element ' + stream.id);
+            console.log(`${audioElementsDiv.children.length} Added audio element ${stream.id}`);
         }
 
         if (stream.getVideoTracks().length !== 0)
@@ -133,7 +134,7 @@ function onTrack(event: RTCTrackEvent)
             };
 
             receivers.set(event.track.id, mapItem);
-            console.log('Added video element ' + stream.id);
+            console.log(`${videoElementsDiv.children.length} Added video element ${stream.id}`);
         }
     }
 }
@@ -241,10 +242,10 @@ function onDataChannelMessage(event: MessageEvent<any>)
                     speaker.width = 320;
                     speaker.height = 180;
                     videoElementsDiv.insertBefore(videoElement, videoElementsDiv.firstChild);
-                    var speaker = videoElementsDiv.firstChild as HTMLVideoElement
+                    speaker = videoElementsDiv.firstChild as HTMLVideoElement
                     speaker.width = 640;
                     speaker.height = 360;
-
+                    console.log(`replace top ${videoElementsDiv.children.length}`);
                     return;
                 }
             }

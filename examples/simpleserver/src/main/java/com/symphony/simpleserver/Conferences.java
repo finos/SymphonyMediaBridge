@@ -158,18 +158,18 @@ import org.springframework.stereotype.Component;
         endpoint.isConfigured = true;
         endpoints.put(endpointId, endpoint);
 
-        for (var endpointsEntry : endpoints.entrySet())
-        {
-            if (endpointsEntry.getKey().equals(endpointId))
-            {
-                continue;
-            }
+        /*   for (var endpointsEntry : endpoints.entrySet())
+           {
+               if (endpointsEntry.getKey().equals(endpointId))
+               {
+                   continue;
+               }
 
-            final var lastEndpointDescription = endpointsEntry.getValue().lastEndpointDescription;
-            final var offer =
-                parser.makeSdpOffer(lastEndpointDescription, endpointsEntry.getKey(), endpointMediaStreams);
-            sendMessage(endpointsEntry.getKey(), "offer", offer.toString());
-        }
+               final var lastEndpointDescription = endpointsEntry.getValue().lastEndpointDescription;
+               final var offer =
+                   parser.makeSdpOffer(lastEndpointDescription, endpointsEntry.getKey(), endpointMediaStreams);
+               sendMessage(endpointsEntry.getKey(), "offer", offer.toString());
+           }*/
 
         return true;
     }
