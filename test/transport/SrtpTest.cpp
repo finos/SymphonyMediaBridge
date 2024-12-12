@@ -557,6 +557,31 @@ TEST_F(SrtpTest, muteUntilRoc1)
 
 // sequence number starts close to 65535 and all packets with roc = 0 are lost.
 // First packet seen is on ROC 1 already
+TEST_F(SrtpTest, unprotect1st)
+{
+    setupDtls();
+    connect();
+
+    uint32_t roc = 0;
+
+    auto packet = memory::makeUniquePacket(_allocator, _audioPacket);
+    auto header = rtp::RtpHeader::fromPacket(*packet);
+    header->ssrc = 1;
+    header->sequenceNumber = 670;
+    header->timestamp = 160;
+    const auto audioPacketLength = packet->getLength();
+    const auto packetCopy = memory::makeUniquePacket(_allocator, *packet);
+
+    ASSERT_TRUE(_srtp1->protect(*packet));
+
+    ASSERT_TRUE(_srtp2->unprotectFirstRtp(*packet, roc));
+    EXPECT_EQ(roc, 0);
+    ASSERT_TRUE(packet->getLength() == audioPacketLength);
+    EXPECT_EQ(0, std::memcmp(packet->get(), packetCopy->get(), packetCopy->getLength()));
+}
+
+// sequence number starts close to 65535 and all packets with roc = 0 are lost.
+// First packet seen is on ROC 1 already
 TEST_F(SrtpTest, losePacketsBeforeRoc1)
 {
     setupDtls();
@@ -573,6 +598,7 @@ TEST_F(SrtpTest, losePacketsBeforeRoc1)
         header->ssrc = 1;
         header->sequenceNumber = i & 0xFFFFu;
         header->timestamp = i * 160;
+        const auto audioPacketLength = packet->getLength();
 
         ASSERT_TRUE(_srtp1->protect(*packet));
         const uint32_t continuationPoint = 65550;
@@ -594,6 +620,7 @@ TEST_F(SrtpTest, losePacketsBeforeRoc1)
             EXPECT_EQ(roc, 1);
             unprotectedExtSeqNo = i;
             ++unprotectCount;
+            ASSERT_TRUE(packet->getLength() == audioPacketLength);
         }
     }
     EXPECT_EQ(unprotectedExtSeqNo, 65600);
