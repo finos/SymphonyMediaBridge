@@ -178,6 +178,30 @@ function getVideoElementBySsrc(ssrc: Number): HTMLVideoElement
     return null;
 }
 
+function getSsrcOfVideoElement(element: HTMLVideoElement)
+{
+    var rtpReceivers = peerConnection.getReceivers();
+
+    for (var rx of receivers)
+    {
+        if (rx[1].element == element)
+        {
+            for (var rtpReceiver of rtpReceivers)
+            {
+                var ssrcs = rtpReceiver.getSynchronizationSources();
+                if (ssrcs.length == 0 || rtpReceiver.track.kind != "video" || rtpReceiver.track.id != rx[1].msid)
+                {
+                    continue;
+                }
+
+                return ssrcs[0].source;
+            }
+        }
+    }
+
+    return null;
+}
+
 function getAllUserMapSsrcs(umap: any): Set<Number>
 {
     var s = new Set<Number>();
@@ -212,28 +236,25 @@ function onDataChannelMessage(event: MessageEvent<any>)
     }
     else if (message.type === 'UserMediaMap' || message.colibriClass === 'UserMediaMap')
     {
-        /*  var activeUsers = getAllUserMapSsrcs(message);
-          for (var v of videoElementsDiv.children)
-          {
-              const ssrc = v.getAttribute("custom_ssrc");
-              if (ssrc != null && !(ssrc in activeUsers))
-              {
-                  var videoElem = v as HTMLVideoElement;
-                  videoElem.currentTime = 0;
-              }
-          }*/
-
-        for (const endpoint of message.endpoints)
+        var activeUsers = getAllUserMapSsrcs(message);
+        for (var v of videoElementsDiv.children)
         {
-            for (var ssrc of endpoint.ssrcs)
+            var videoElem = v as HTMLVideoElement;
+            const ssrc = getSsrcOfVideoElement(videoElem);
+            if (ssrc != null && !(ssrc in activeUsers))
+            {
+                videoElem.hidden = true;
+            }
+        }
+
+        if (message.endpoints.length > 0)
+        {
+            var firstEndpoint = message.endpoints[0];
+            for (var ssrc of firstEndpoint.ssrcs)
             {
                 console.log("ssrc speaking", ssrc)
 
                 var videoElement = getVideoElementBySsrc(ssrc);
-                /*if (videoElement.getAttribute("custom_ssrc") == null)
-                {
-                    videoElement.setAttribute("custom_ssrc", ssrc.toString());
-                }*/
 
                 if (videoElement && videoElementsDiv.firstChild != videoElement)
                 {
@@ -245,11 +266,20 @@ function onDataChannelMessage(event: MessageEvent<any>)
                     speaker = videoElementsDiv.firstChild as HTMLVideoElement
                     speaker.width = 640;
                     speaker.height = 360;
+                    speaker.hidden = false;
                     console.log(`replace top ${videoElementsDiv.children.length}`);
-                    return;
+                    break;
                 }
             }
+        }
 
+        for (const endpoint of message.endpoints)
+        {
+            for (var ssrc of firstEndpoint.ssrcs)
+            {
+                var videoElement = getVideoElementBySsrc(ssrc);
+                videoElement.hidden = false;
+            }
             return;
         }
     }
