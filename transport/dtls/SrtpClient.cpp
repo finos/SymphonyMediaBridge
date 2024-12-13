@@ -927,6 +927,7 @@ bool SrtpClient::unprotectFirstRtp(memory::Packet& packet, uint32_t& rolloverCou
     const auto result = srtp_unprotect(_remoteSrtp, packet.get(), &bufferLength);
     if (result == srtp_err_status_ok)
     {
+        packet.setLength(utils::checkedCast<size_t>(bufferLength));
         return true;
     }
 
@@ -936,8 +937,8 @@ bool SrtpClient::unprotectFirstRtp(memory::Packet& packet, uint32_t& rolloverCou
         assert(false);
         return false;
     }
-    const uint32_t ssrc = header->ssrc;
 
+    const uint32_t ssrc = header->ssrc;
     {
         // use remote srtp context to fake a packet with ROC=0
         alignas(sizeof(uint32_t)) uint8_t fakePacketRoc0[40]{0};
@@ -972,6 +973,7 @@ bool SrtpClient::unprotectFirstRtp(memory::Packet& packet, uint32_t& rolloverCou
 
         if (srtp_err_status_ok == srtp_unprotect(_remoteSrtp, packet.get(), &bufferLength))
         {
+            packet.setLength(utils::checkedCast<size_t>(bufferLength));
             return true;
         }
     }
