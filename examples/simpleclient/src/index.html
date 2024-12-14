@@ -2,12 +2,14 @@
 <html>
     <head>
         <meta charset="UTF-8" />
-        <title>Hello World!</title>
+        <meta name="mobile-web-app-capable" content="yes">
+        <title>SmbClient!</title>
     </head>
-    <body>
+    <body id="1">
         <table>
             <tr>
-                <td><button id="join">join</button></td>
+                <td id="joincell"><button id="join">Join</button></td>
+                <td><button id="hangup">Hangup</button></td>
             </tr>
             <tr>
                 <td>My endpoint id: <label id="endpointId"></label></td>
@@ -15,9 +17,13 @@
             <tr>
                 <td>Dominant speaker endpoint id: <label id="dominantSpeaker"></label></td>
             </tr>
+            <tr><select id="audioDevices"></select></tr>
+            <tr><select id="videoDevices"></select></tr>
         </table>
+        
+        <div id="localDiv"><video id="localVideo" playsinline autoplay muted></video></div>
         <div id=audioElements></div>
-        <div id=videoElements></div>
+        <div id=videoElements style="display: inline-block;"></div>
         <script src="bundle.js"></script>
     </body>
 </html>

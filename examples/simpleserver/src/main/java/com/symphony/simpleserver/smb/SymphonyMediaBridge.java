@@ -8,28 +8,28 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.symphony.simpleserver.httpClient.HttpClient;
 import com.symphony.simpleserver.httpClient.HttpClientFactory;
 import com.symphony.simpleserver.smb.api.SmbEndpointDescription;
+import java.io.IOException;
 import org.apache.hc.core5.http.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
-
-@Component
-public class SymphonyMediaBridge {
+@Component public class SymphonyMediaBridge
+{
     private static final Logger LOGGER = LoggerFactory.getLogger(SymphonyMediaBridge.class);
     private static final String BASE_URL = "http://127.0.0.1:8080/conferences/";
     private final HttpClient httpClient;
     private final ObjectMapper objectMapper;
 
-    @Autowired
-    public SymphonyMediaBridge(HttpClientFactory httpClientFactory) {
+    @Autowired public SymphonyMediaBridge(HttpClientFactory httpClientFactory)
+    {
         this.httpClient = httpClientFactory.createClient();
         this.objectMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
-    public String allocateConference() throws IOException, ParseException {
+    public String allocateConference() throws IOException, ParseException
+    {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
         final var response = httpClient.post(BASE_URL, requestBodyJson);
 
@@ -37,7 +37,8 @@ public class SymphonyMediaBridge {
         return responseBodyJson.get("id").asText();
     }
 
-    public JsonNode allocateEndpoint(String conferenceId, String endpointId) throws IOException, ParseException {
+    public JsonNode allocateEndpoint(String conferenceId, String endpointId) throws IOException, ParseException
+    {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
         requestBodyJson.put("action", "allocate");
 
@@ -63,10 +64,11 @@ public class SymphonyMediaBridge {
         return responseBodyJson;
     }
 
-    public void configureEndpoint(
-            String conferenceId, String endpointId, SmbEndpointDescription endpointDescription) throws IOException, ParseException {
+    public void configureEndpoint(String conferenceId, String endpointId, SmbEndpointDescription endpointDescription)
+        throws IOException, ParseException
+    {
 
-        final var requestBodyJson = (ObjectNode) objectMapper.valueToTree(endpointDescription);
+        final var requestBodyJson = (ObjectNode)objectMapper.valueToTree(endpointDescription);
         requestBodyJson.put("action", "configure");
 
         LOGGER.info("Request\n{}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestBodyJson));
@@ -76,14 +78,10 @@ public class SymphonyMediaBridge {
         LOGGER.info("Response {}", response.statusCode);
     }
 
-    public void deleteEndpoint(String conferenceId, String endpointId) throws IOException, ParseException {
-        final var requestBodyJson = JsonNodeFactory.instance.objectNode();
-        requestBodyJson.put("action", "expire");
-
-        LOGGER.info("Request\n{}", objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(requestBodyJson));
-
+    public void deleteEndpoint(String conferenceId, String endpointId) throws IOException, ParseException
+    {
         final var url = BASE_URL + conferenceId + "/" + endpointId;
-        final var response = httpClient.post(url, requestBodyJson);
+        final var response = httpClient.delete(url);
         LOGGER.info("Response {}", response.statusCode);
     }
 }
