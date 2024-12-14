@@ -225,7 +225,8 @@ protected:
             audioSsrc,
             videoSsrcs,
             videoPinSsrc,
-            useGlobalPort);
+            useGlobalPort,
+            false);
     }
 
     void addEndpointWithBundleTransport(Mixer& mixer,

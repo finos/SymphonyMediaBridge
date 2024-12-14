@@ -94,7 +94,8 @@ public:
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<api::SimulcastGroup>& videoSsrcs,
         const std::vector<api::SsrcPair>& videoPinSsrcs,
-        bool useGlobalPort);
+        bool useGlobalPort,
+        bool useH264);
 
     virtual ~Mixer() = default;
 
@@ -298,6 +299,8 @@ public:
     const config::Config& getConfig() const { return _config; }
     bridge::Stats::MixerBarbellStats gatherBarbellStats(const uint64_t engineIterationStartTimestamp);
 
+    bool isH264Enabled() const { return _useH264; }
+
 private:
     struct BundleTransport
     {
@@ -332,6 +335,7 @@ private:
 
     std::unordered_map<std::string, BundleTransport> _bundleTransports;
     bool _useGlobalPort;
+    bool _useH264;
     transport::Endpoints _rtpPorts;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _videoPacketCaches;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _recordingRtpPacketCaches;
