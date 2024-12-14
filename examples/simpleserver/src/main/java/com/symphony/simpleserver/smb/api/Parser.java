@@ -44,88 +44,7 @@ import org.springframework.stereotype.Component;
         mediaDescriptionIndex =
             addSmbMids(endpointDescription, mediaDescriptionIndex, offer, smbIce, smbDtls, candidates);
 
-        /*  addParticipantMids(endpointDescription,
-              endpointId,
-              endpointMediaStreams,
-              mediaDescriptionIndex,
-              offer,
-              smbIce,
-              smbDtls,
-              candidates);
-  */
         return offer;
-    }
-
-    private void addParticipantMids(SmbEndpointDescription endpointDescription,
-        String endpointId,
-        List<EndpointMediaStreams> endpointMediaStreams,
-        int mediaDescriptionIndex,
-        SessionDescription offer,
-        SmbIce smbIce,
-        SmbDtls smbDtls,
-        List<Candidate> candidates) throws ParserFailedException
-    {
-        for (var endpointMediaStreamsEntry : endpointMediaStreams)
-        {
-            if (endpointMediaStreamsEntry.endpointId.equals(endpointId))
-            {
-                continue;
-            }
-
-            for (var mediaStream : endpointMediaStreamsEntry.mediaStreams)
-            {
-                if (mediaStream.ssrcs.isEmpty())
-                {
-                    continue;
-                }
-
-                if (mediaStream.type == MediaDescription.Type.AUDIO)
-                {
-                    final var participantAudio = makeAudioDescription(endpointDescription,
-                        mediaDescriptionIndex,
-                        smbIce,
-                        smbDtls,
-                        candidates,
-                        mediaStream.ssrcs.get(0));
-
-                    if (!endpointMediaStreamsEntry.active)
-                    {
-                        participantAudio.direction = Types.Direction.INACTIVE;
-                        participantAudio.ssrcs.clear();
-                    }
-
-                    offer.mediaDescriptions.add(participantAudio);
-                    offer.group.mids.add(participantAudio.mid);
-                    ++mediaDescriptionIndex;
-                }
-                else if (mediaStream.type == MediaDescription.Type.VIDEO)
-                {
-                    final var participantVideo = makeVideoDescription(endpointDescription,
-                        mediaDescriptionIndex,
-                        smbIce,
-                        smbDtls,
-                        candidates,
-                        mediaStream.ssrcs,
-                        mediaStream.ssrcGroups);
-
-                    if (!endpointMediaStreamsEntry.active)
-                    {
-                        participantVideo.direction = Types.Direction.INACTIVE;
-                        participantVideo.ssrcs.clear();
-                        participantVideo.ssrcGroups.clear();
-                    }
-
-                    offer.mediaDescriptions.add(participantVideo);
-                    offer.group.mids.add(participantVideo.mid);
-                    ++mediaDescriptionIndex;
-                }
-
-                for (var ssrc : mediaStream.ssrcs)
-                {
-                    offer.msidSemantic.ids.add(ssrc.mslabel);
-                }
-            }
-        }
     }
 
     private int addSmbMids(SmbEndpointDescription endpointDescription,
@@ -313,6 +232,11 @@ import org.springframework.stereotype.Component;
         final var smbVideo = endpointDescription.video;
         for (var smbPayloadType : smbVideo.payloadTypes)
         {
+            if (ssrcGroups.isEmpty() && smbPayloadType.name.equals(("rtx")))
+            {
+                continue;
+            }
+
             video.payloadTypes.add(smbPayloadType.id);
             video.rtpMaps.put(smbPayloadType.id, new RtpMap(smbPayloadType.name, smbPayloadType.clockrate, null));
 
@@ -336,6 +260,7 @@ import org.springframework.stereotype.Component;
 
         smbVideo.rtpHeaderExtensions.forEach(smbHeaderExtension
             -> video.headerExtensions.add(new ExtMap(smbHeaderExtension.id, smbHeaderExtension.uri)));
+
         return video;
     }
 

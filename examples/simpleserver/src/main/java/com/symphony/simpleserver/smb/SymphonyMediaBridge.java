@@ -28,9 +28,10 @@ import org.springframework.stereotype.Component;
         this.objectMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
-    public String allocateConference() throws IOException, ParseException
+    public String allocateConference(boolean enableH264) throws IOException, ParseException
     {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
+        requestBodyJson.put("enable-h264", true);
         final var response = httpClient.post(BASE_URL, requestBodyJson);
 
         final var responseBodyJson = objectMapper.readTree(response.body);

@@ -4,6 +4,7 @@ const endpointIdLabel: HTMLLabelElement = <HTMLLabelElement>document.getElementB
 const dominantSpeakerLabel: HTMLLabelElement = <HTMLLabelElement>document.getElementById('dominantSpeaker');
 const audioElementsDiv: HTMLDivElement = <HTMLDivElement>document.getElementById('audioElements');
 const videoElementsDiv: HTMLDivElement = <HTMLDivElement>document.getElementById('videoElements');
+const h264Element: HTMLInputElement = <HTMLInputElement>document.getElementById('h264');
 let peerConnection: RTCPeerConnection|undefined = undefined
 let localMediaStream: MediaStream|undefined = undefined;
 let localDataChannel: RTCDataChannel|undefined = undefined;
@@ -319,7 +320,7 @@ async function joinClicked()
     localDataChannel.onmessage = onDataChannelMessage;
 
     const url = serverUrl + 'endpoints/';
-    const body = {};
+    const body = {h264 : h264Element.checked};
 
     const requestInit: RequestInit = {method : 'POST', mode : 'cors', cache : 'no-store', body : JSON.stringify(body)};
     const request = new Request(url, requestInit);
