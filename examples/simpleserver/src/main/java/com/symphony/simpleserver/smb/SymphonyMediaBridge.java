@@ -31,7 +31,7 @@ import org.springframework.stereotype.Component;
     public String allocateConference(boolean enableH264) throws IOException, ParseException
     {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
-        requestBodyJson.put("enable-h264", true);
+        requestBodyJson.put("enable-h264", enableH264);
         final var response = httpClient.post(BASE_URL, requestBodyJson);
 
         final var responseBodyJson = objectMapper.readTree(response.body);
