@@ -4,10 +4,15 @@ import com.symphony.simpleserver.sdp.Candidate;
 import com.symphony.simpleserver.sdp.ParserFailedException;
 import com.symphony.simpleserver.sdp.SessionDescription;
 import com.symphony.simpleserver.sdp.objects.*;
+import com.symphony.simpleserver.sdp.objects.Types.Direction;
+import com.symphony.simpleserver.smb.api.SmbVideoStream.SmbVideoSource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
+import java.util.Vector;
+import java.util.random.RandomGenerator;
 import org.springframework.stereotype.Component;
 
 @Component public class Parser
@@ -78,22 +83,40 @@ import org.springframework.stereotype.Component;
         for (final var smbVideoStream : endpointDescription.video.streams)
         {
             final var smbVideoMain = new Ssrc(smbVideoStream.sources.get(0).main);
-            final var smbRtx = new Ssrc(smbVideoStream.sources.get(0).feedback);
 
             final var uuid = UUID.randomUUID().toString();
             smbVideoMain.label = "label" + uuid;
             smbVideoMain.mslabel = "mslabel" + uuid;
             smbVideoMain.cname = "smbvideocname";
 
-            smbRtx.label = smbVideoMain.label;
-            smbRtx.mslabel = smbVideoMain.mslabel;
-            smbRtx.cname = smbVideoMain.cname;
-
             var ssrcs = new ArrayList<Ssrc>();
-            ssrcs.add(smbVideoMain);
+
             var groups = new ArrayList<SsrcGroup>();
-            if (!smbRtx.ssrc.equals("0"))
+            if (smbVideoStream.content.equals("local"))
             {
+                var rgen = new Random();
+
+                // fake the rtx ssrc so client will send rtx also
+                final var smbRtx = new Ssrc(Integer.toUnsignedLong(rgen.nextInt()));
+                smbRtx.label = smbVideoMain.label;
+                smbRtx.mslabel = smbVideoMain.mslabel;
+                smbRtx.cname = smbVideoMain.cname;
+
+                ssrcs.add(smbVideoMain);
+                var fidGroup = new SsrcGroup("FID");
+                fidGroup.ssrcs.add(smbVideoMain.ssrc);
+                fidGroup.ssrcs.add(smbRtx.ssrc);
+                groups.add(fidGroup);
+                ssrcs.add(smbRtx);
+            }
+            else
+            {
+                final var smbRtx = new Ssrc(smbVideoStream.sources.get(0).feedback);
+                smbRtx.label = smbVideoMain.label;
+                smbRtx.mslabel = smbVideoMain.mslabel;
+                smbRtx.cname = smbVideoMain.cname;
+
+                ssrcs.add(smbVideoMain);
                 var fidGroup = new SsrcGroup("FID");
                 fidGroup.ssrcs.add(smbVideoMain.ssrc);
                 fidGroup.ssrcs.add(smbRtx.ssrc);
