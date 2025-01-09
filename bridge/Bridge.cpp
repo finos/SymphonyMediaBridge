@@ -209,7 +209,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
         return;
     }
 
-    _probeServer = std::make_unique<transport::ProbeServer>(_iceConfig, _config);
+    _probeServer = std::make_unique<transport::ProbeServer>(_iceConfig, _config, *_rtJobManager);
 
     const auto credentials = _probeServer->getCredentials();
 
