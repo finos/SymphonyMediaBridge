@@ -5,14 +5,18 @@
 #include "transport/ice/IceSession.h"
 #include "transport/ice/Stun.h"
 #include "utils/ContainerAlgorithms.h"
+#include "utils/Function.h"
 #include "utils/Time.h"
 #include <unistd.h>
 
 namespace transport
 {
-ProbeServer::ProbeServer(const ice::IceConfig& iceConfig, const config::Config& config)
+ProbeServer::ProbeServer(const ice::IceConfig& iceConfig,
+    const config::Config& config,
+    jobmanager::JobManager& jobmanager)
     : _iceConfig(iceConfig),
       _config(config),
+      _jobQueue(jobmanager, 1024),
       _queue(1024),
       _maintenanceThreadIsRunning(true),
       _maintenanceThread(new std::thread([this] { this->run(); }))
@@ -40,7 +44,7 @@ void ProbeServer::onDtlsReceived(Endpoint& endpoint,
     const SocketAddress& source,
     const SocketAddress& target,
     memory::UniquePacket packet,
-    const uint64_t timestamp){};
+    const uint64_t timestamp) {};
 
 void ProbeServer::onRtcpReceived(Endpoint& endpoint,
     const SocketAddress& source,
@@ -56,7 +60,12 @@ void ProbeServer::onIceReceived(Endpoint& endpoint,
     memory::UniquePacket packet,
     const uint64_t timestamp)
 {
-    replyStunOk(endpoint, source, std::move(packet));
+    _jobQueue.post(utils::bind(&ProbeServer::onIceReceivedInternal,
+        this,
+        std::ref(endpoint),
+        source,
+        utils::moveParam(packet),
+        timestamp));
 }
 
 void ProbeServer::onRegistered(Endpoint& endpoint)
@@ -242,26 +251,24 @@ void ProbeServer::onIceTcpConnect(std::shared_ptr<Endpoint> endpoint,
     memory::UniquePacket packet,
     const uint64_t timestamp)
 {
-    if (endpoint->getTransportType() == ice::TransportType::TCP)
-    {
-        replyStunOk(*endpoint, source, std::move(packet));
 
-        ProbeTcpConnection connection;
-        connection.endpoint = endpoint;
-        connection.timestamp = utils::Time::getAbsoluteTime();
-        _queue.push(connection);
-    }
+    _jobQueue.post(utils::bind(&ProbeServer::onIceTcpConnectInternal,
+        this,
+        endpoint,
+        source,
+        utils::moveParam(packet),
+        timestamp));
 }
 
 // Endpoint::IStopEvents
 void ProbeServer::onEndpointStopped(Endpoint* endpoint) {}
 
-void ProbeServer::replyStunOk(Endpoint& endpoint, const SocketAddress& destination, memory::UniquePacket packet)
+bool ProbeServer::replyStunOk(Endpoint& endpoint,
+    const SocketAddress& destination,
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
 {
-    uint64_t timestamp = utils::Time::getAbsoluteTime();
-    const void* data = packet->get();
-
-    auto* stunMessage = ice::StunMessage::fromPtr(data);
+    auto* stunMessage = ice::StunMessage::fromPtr(packet->get());
 
     if (stunMessage && stunMessage->isValid() && stunMessage->header.isRequest() &&
         stunMessage->isAuthentic(_hmacComputer))
@@ -274,10 +281,39 @@ void ProbeServer::replyStunOk(Endpoint& endpoint, const SocketAddress& destinati
         response.addFingerprint();
 
         endpoint.sendStunTo(destination, response.header.transactionId.get(), &response, response.size(), timestamp);
+        return true;
     }
-    else
+
+    if (endpoint.getTransportType() != ice::TransportType::UDP)
     {
         endpoint.stop(this);
+    }
+
+    return false;
+}
+
+void ProbeServer::onIceReceivedInternal(Endpoint& endpoint,
+    const SocketAddress& source,
+    memory::UniquePacket packet,
+    uint64_t timestamp)
+{
+    replyStunOk(endpoint, source, std::move(packet), timestamp);
+}
+
+void ProbeServer::onIceTcpConnectInternal(std::shared_ptr<Endpoint> endpoint,
+    const SocketAddress& source,
+    memory::UniquePacket packet,
+    const uint64_t timestamp)
+{
+    if (endpoint->getTransportType() == ice::TransportType::TCP)
+    {
+        if (replyStunOk(*endpoint, source, std::move(packet), timestamp))
+        {
+            ProbeTcpConnection connection;
+            connection.endpoint = endpoint;
+            connection.timestamp = utils::Time::getAbsoluteTime();
+            _queue.push(connection);
+        }
     }
 }
 

@@ -90,6 +90,12 @@ Bridge::~Bridge()
 
     _timers->stop();
 
+    if (_probeServer)
+    {
+        _probeServer->stop();
+        _probeServer = nullptr;
+    }
+
     if (_backgroundJobQueue)
     {
         _backgroundJobQueue->stop();
@@ -102,11 +108,6 @@ Bridge::~Bridge()
     logger::info("JobManager stopped", "main");
 
     _timers.reset();
-
-    if (_probeServer)
-    {
-        _probeServer->stop();
-    }
 
     uint32_t n = 0;
     for (auto& workerThread : _workerThreads)
@@ -209,7 +210,7 @@ void Bridge::initialize(std::shared_ptr<transport::EndpointFactory> endpointFact
         return;
     }
 
-    _probeServer = std::make_unique<transport::ProbeServer>(_iceConfig, _config);
+    _probeServer = std::make_unique<transport::ProbeServer>(_iceConfig, _config, *_rtJobManager);
 
     const auto credentials = _probeServer->getCredentials();
 

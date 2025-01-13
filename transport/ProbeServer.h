@@ -3,6 +3,7 @@
 #include "crypto/SslHelper.h"
 #include "ice/IceCandidate.h"
 #include "ice/Stun.h"
+#include "jobmanager/JobQueue.h"
 #include "transport/Endpoint.h"
 #include <config/Config.h>
 #include <mutex>
@@ -15,8 +16,8 @@ class ProbeServer : public Endpoint::IEvents, public ServerEndpoint::IEvents, pu
 {
 
 public:
-    ProbeServer(const ice::IceConfig& iceConfig, const config::Config& config);
-    virtual ~ProbeServer(){};
+    ProbeServer(const ice::IceConfig& iceConfig, const config::Config& config, jobmanager::JobManager& jobmanager);
+    virtual ~ProbeServer() {};
 
     // Endpoint::IEvents
     void onRtpReceived(Endpoint&,
@@ -70,6 +71,21 @@ public:
     void stop();
 
 private:
+    void onIceReceivedInternal(Endpoint& endpoint,
+        const SocketAddress& source,
+        memory::UniquePacket packet,
+        uint64_t timestamp);
+
+    void onIceTcpConnectInternal(std::shared_ptr<Endpoint> endpoint,
+        const SocketAddress& source,
+        memory::UniquePacket packet,
+        const uint64_t timestamp);
+
+    bool replyStunOk(Endpoint&, const SocketAddress&, memory::UniquePacket, const uint64_t timestamp);
+    void addCandidate(const ice::IceCandidate& candidate);
+    int getInterfaceIndex(transport::SocketAddress address);
+
+private:
     std::pair<std::string, std::string> _credentials;
     const ice::IceConfig& _iceConfig;
     const config::Config& _config;
@@ -86,13 +102,10 @@ private:
     };
 
     crypto::HMAC _hmacComputer;
+    jobmanager::JobQueue _jobQueue;
     std::vector<ProbeTcpConnection> _tcpConnections;
     concurrency::MpmcQueue<ProbeTcpConnection> _queue;
     std::atomic_bool _maintenanceThreadIsRunning;
     std::unique_ptr<std::thread> _maintenanceThread;
-
-    void replyStunOk(Endpoint&, const SocketAddress&, memory::UniquePacket);
-    void addCandidate(const ice::IceCandidate& candidate);
-    int getInterfaceIndex(transport::SocketAddress address);
 };
 } // namespace transport
