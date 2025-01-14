@@ -284,6 +284,7 @@ AllocateConference parseAllocateConference(const nlohmann::json& data)
         }
     }
     setIfExistsOrDefault(allocateConference.useGlobalPort, data, "global-port", true);
+    setIfExistsOrDefault(allocateConference.useH264, data, "enable-h264", false);
 
     return allocateConference;
 }

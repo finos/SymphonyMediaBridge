@@ -4,10 +4,15 @@ import com.symphony.simpleserver.sdp.Candidate;
 import com.symphony.simpleserver.sdp.ParserFailedException;
 import com.symphony.simpleserver.sdp.SessionDescription;
 import com.symphony.simpleserver.sdp.objects.*;
+import com.symphony.simpleserver.sdp.objects.Types.Direction;
+import com.symphony.simpleserver.smb.api.SmbVideoStream.SmbVideoSource;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
+import java.util.Vector;
+import java.util.random.RandomGenerator;
 import org.springframework.stereotype.Component;
 
 @Component public class Parser
@@ -44,88 +49,7 @@ import org.springframework.stereotype.Component;
         mediaDescriptionIndex =
             addSmbMids(endpointDescription, mediaDescriptionIndex, offer, smbIce, smbDtls, candidates);
 
-        /*  addParticipantMids(endpointDescription,
-              endpointId,
-              endpointMediaStreams,
-              mediaDescriptionIndex,
-              offer,
-              smbIce,
-              smbDtls,
-              candidates);
-  */
         return offer;
-    }
-
-    private void addParticipantMids(SmbEndpointDescription endpointDescription,
-        String endpointId,
-        List<EndpointMediaStreams> endpointMediaStreams,
-        int mediaDescriptionIndex,
-        SessionDescription offer,
-        SmbIce smbIce,
-        SmbDtls smbDtls,
-        List<Candidate> candidates) throws ParserFailedException
-    {
-        for (var endpointMediaStreamsEntry : endpointMediaStreams)
-        {
-            if (endpointMediaStreamsEntry.endpointId.equals(endpointId))
-            {
-                continue;
-            }
-
-            for (var mediaStream : endpointMediaStreamsEntry.mediaStreams)
-            {
-                if (mediaStream.ssrcs.isEmpty())
-                {
-                    continue;
-                }
-
-                if (mediaStream.type == MediaDescription.Type.AUDIO)
-                {
-                    final var participantAudio = makeAudioDescription(endpointDescription,
-                        mediaDescriptionIndex,
-                        smbIce,
-                        smbDtls,
-                        candidates,
-                        mediaStream.ssrcs.get(0));
-
-                    if (!endpointMediaStreamsEntry.active)
-                    {
-                        participantAudio.direction = Types.Direction.INACTIVE;
-                        participantAudio.ssrcs.clear();
-                    }
-
-                    offer.mediaDescriptions.add(participantAudio);
-                    offer.group.mids.add(participantAudio.mid);
-                    ++mediaDescriptionIndex;
-                }
-                else if (mediaStream.type == MediaDescription.Type.VIDEO)
-                {
-                    final var participantVideo = makeVideoDescription(endpointDescription,
-                        mediaDescriptionIndex,
-                        smbIce,
-                        smbDtls,
-                        candidates,
-                        mediaStream.ssrcs,
-                        mediaStream.ssrcGroups);
-
-                    if (!endpointMediaStreamsEntry.active)
-                    {
-                        participantVideo.direction = Types.Direction.INACTIVE;
-                        participantVideo.ssrcs.clear();
-                        participantVideo.ssrcGroups.clear();
-                    }
-
-                    offer.mediaDescriptions.add(participantVideo);
-                    offer.group.mids.add(participantVideo.mid);
-                    ++mediaDescriptionIndex;
-                }
-
-                for (var ssrc : mediaStream.ssrcs)
-                {
-                    offer.msidSemantic.ids.add(ssrc.mslabel);
-                }
-            }
-        }
     }
 
     private int addSmbMids(SmbEndpointDescription endpointDescription,
@@ -159,22 +83,40 @@ import org.springframework.stereotype.Component;
         for (final var smbVideoStream : endpointDescription.video.streams)
         {
             final var smbVideoMain = new Ssrc(smbVideoStream.sources.get(0).main);
-            final var smbRtx = new Ssrc(smbVideoStream.sources.get(0).feedback);
 
             final var uuid = UUID.randomUUID().toString();
             smbVideoMain.label = "label" + uuid;
             smbVideoMain.mslabel = "mslabel" + uuid;
             smbVideoMain.cname = "smbvideocname";
 
-            smbRtx.label = smbVideoMain.label;
-            smbRtx.mslabel = smbVideoMain.mslabel;
-            smbRtx.cname = smbVideoMain.cname;
-
             var ssrcs = new ArrayList<Ssrc>();
-            ssrcs.add(smbVideoMain);
+
             var groups = new ArrayList<SsrcGroup>();
-            if (!smbRtx.ssrc.equals("0"))
+            if (smbVideoStream.content.equals("local"))
             {
+                var rgen = new Random();
+
+                // fake the rtx ssrc so client will send rtx also
+                final var smbRtx = new Ssrc(Integer.toUnsignedLong(rgen.nextInt()));
+                smbRtx.label = smbVideoMain.label;
+                smbRtx.mslabel = smbVideoMain.mslabel;
+                smbRtx.cname = smbVideoMain.cname;
+
+                ssrcs.add(smbVideoMain);
+                var fidGroup = new SsrcGroup("FID");
+                fidGroup.ssrcs.add(smbVideoMain.ssrc);
+                fidGroup.ssrcs.add(smbRtx.ssrc);
+                groups.add(fidGroup);
+                ssrcs.add(smbRtx);
+            }
+            else
+            {
+                final var smbRtx = new Ssrc(smbVideoStream.sources.get(0).feedback);
+                smbRtx.label = smbVideoMain.label;
+                smbRtx.mslabel = smbVideoMain.mslabel;
+                smbRtx.cname = smbVideoMain.cname;
+
+                ssrcs.add(smbVideoMain);
                 var fidGroup = new SsrcGroup("FID");
                 fidGroup.ssrcs.add(smbVideoMain.ssrc);
                 fidGroup.ssrcs.add(smbRtx.ssrc);
@@ -313,6 +255,11 @@ import org.springframework.stereotype.Component;
         final var smbVideo = endpointDescription.video;
         for (var smbPayloadType : smbVideo.payloadTypes)
         {
+            if (ssrcGroups.isEmpty() && smbPayloadType.name.equals(("rtx")))
+            {
+                continue;
+            }
+
             video.payloadTypes.add(smbPayloadType.id);
             video.rtpMaps.put(smbPayloadType.id, new RtpMap(smbPayloadType.name, smbPayloadType.clockrate, null));
 
@@ -336,6 +283,7 @@ import org.springframework.stereotype.Component;
 
         smbVideo.rtpHeaderExtensions.forEach(smbHeaderExtension
             -> video.headerExtensions.add(new ExtMap(smbHeaderExtension.id, smbHeaderExtension.uri)));
+
         return video;
     }
 

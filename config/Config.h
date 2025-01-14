@@ -139,6 +139,7 @@ public:
 
     CFG_GROUP()
     CFG_PROP(std::string, videoCodec, "VP8");
+    // webRTC profiles: 42001f, 42e01f, 4d001f, 64001f, f4001f
     CFG_PROP(std::string, h264ProfileLevelId, "42001f");
     CFG_PROP(uint32_t, h264PacketizationMode, 1);
 
