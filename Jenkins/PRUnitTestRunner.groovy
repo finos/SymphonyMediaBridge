@@ -29,6 +29,10 @@ void prRunner(String cmakeBuildType, String platform, String dockerTag) {
     }
 }
 
+properties([
+    buildDiscarder(logRotator(artifactNumToKeepStr: "15", numToKeepStr: "15")),
+])
+
 abortPreviousRunningBuilds()
 parallel "Release el7": {
     node('be-integration') {
