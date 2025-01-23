@@ -10,7 +10,7 @@ option(ENABLE_LIBATOMIC "ENABLE_LIBATOMIC" OFF)
 option(ENABLE_ALLOCATOR_METRICS "Force enable the allocator metrics. It will be active by default in DEBUG" OFF)
 
 set(ADDITIONAL_CXX_FLAGS,
-    "-Wno-vla-extension" # // disable variable-length arrays as they are not part of C++ standard
+    "-Wno-vla-cxx-extension" # // disable variable-length arrays as they are not part of C++ standard
 )
 
 if (ENABLE_LEGACY_API)
