@@ -11,6 +11,15 @@ option(ENABLE_ALLOCATOR_METRICS "Force enable the allocator metrics. It will be 
 
 set(ADDITIONAL_CXX_FLAGS, "")
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+    if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 18_0)
+        # disable variable-length arrays as they are not part of C++ standard
+        # We should consider not using variable-length arrays instead of suppressing the waring
+        set(ADDITIONAL_CXX_FLAGS "${ADDITIONAL_CXX_FLAGS} -Wno-vla-cxx-extension")
+    endif()
+endif()
+
+
 if (ENABLE_LEGACY_API)
     set(ADDITIONAL_CXX_FLAGS "${ADDITIONAL_CXX_FLAGS} -DENABLE_LEGACY_API=1")
     message(STATUS "Enable Legacy API: ON")
@@ -29,16 +38,16 @@ if (ENABLE_LIBATOMIC)
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_FLAGS_DEBUG "-stdlib=libc++ -glldb -O0 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces")
-set(CMAKE_CXX_FLAGS_DCHECK "-stdlib=libc++ -glldb -O0 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DDCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=address -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS_TCHECK "-stdlib=libc++ -glldb -O1 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DTCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=thread -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS_LCHECK "-stdlib=libc++ -glldb -O1 -g -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DLCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=leak -fno-omit-frame-pointer")
-set(CMAKE_CXX_FLAGS_RELEASE "-stdlib=libc++ -O3 -DNDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -Wno-missing-braces -Wuninitialized -Wsign-compare")
+set(CMAKE_CXX_FLAGS_DEBUG "-stdlib=libc++ -glldb -O0 -DDEBUG -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces ${ADDITIONAL_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_DCHECK "-stdlib=libc++ -glldb -O0 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DDCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=address -fno-omit-frame-pointer ${ADDITIONAL_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_TCHECK "-stdlib=libc++ -glldb -O1 -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DTCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=thread -fno-omit-frame-pointer ${ADDITIONAL_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_LCHECK "-stdlib=libc++ -glldb -O1 -g -DDEBUG ${ADDITIONAL_CXX_FLAGS} -DLCHECK_BUILD -DNOPERF_TEST -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fsanitize=leak -fno-omit-frame-pointer ${ADDITIONAL_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS_RELEASE "-stdlib=libc++ -O3 -DNDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -Wno-missing-braces -Wuninitialized -Wsign-compare ${ADDITIONAL_CXX_FLAGS}")
 set(CMAKE_C_FLAGS_DEBUG "-glldb -O0 -DDEBUG -Wall")
 set(CMAKE_C_FLAGS_RELEASE "-O3 -DNDEBUG")
-set(CMAKE_CXX_FLAGS_SYMRELEASE "-stdlib=libc++ -glldb -O2 -DNDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -fno-omit-frame-pointer -Wall -Wno-missing-braces -Wuninitialized -Wsign-compare")
+set(CMAKE_CXX_FLAGS_SYMRELEASE "-stdlib=libc++ -glldb -O2 -DNDEBUG ${ADDITIONAL_CXX_FLAGS} -fno-rtti -fno-omit-frame-pointer -Wall -Wno-missing-braces -Wuninitialized -Wsign-compare ${ADDITIONAL_CXX_FLAGS}")
 set(CMAKE_CXX_FLAGS_LCOV "-stdlib=libc++ -glldb -O0 -DDEBUG -DLCOV_BUILD -DNOPERF_TEST ${ADDITIONAL_CXX_FLAGS} -fno-rtti -Wall -Wuninitialized -Wsign-compare -Wthread-safety -Wno-missing-braces -fno-omit-frame-pointer \
-                          -fprofile-arcs -ftest-coverage -fprofile-instr-generate -fcoverage-mapping")
+                          -fprofile-arcs -ftest-coverage -fprofile-instr-generate -fcoverage-mapping ${ADDITIONAL_CXX_FLAGS}")
 
 set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
 set(THREADS_PREFER_PTHREAD_FLAG TRUE)
