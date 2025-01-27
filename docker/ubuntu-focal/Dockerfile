@@ -5,15 +5,24 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get -y update --fix-missing && apt-get -y upgrade
 
 # Install build dependenices
-RUN apt-get -y install git wget cmake xz-utils libz-dev build-essential
+RUN apt-get -y install git wget xz-utils libz-dev build-essential
 
-# Build openssl-1.1.1s
-RUN cd /tmp && wget https://www.openssl.org/source/openssl-1.1.1s.tar.gz && tar xvfz openssl-1.1.1s.tar.gz && rm openssl-1.1.1s.tar.gz
-RUN cd /tmp/openssl-1.1.1s && ./config && make -j5 && make install_sw
+RUN mkdir -p /usr/local/cmake-3.30 
+RUN wget -qO- https://github.com/Kitware/CMake/releases/download/v3.30.5/cmake-3.30.5-Linux-x86_64.tar.gz | tar --strip-components=1 -xz -C /usr/local/cmake-3.30 
+ENV PATH="/usr/local/cmake-3.30/bin:${PATH}"
 
-# Build libsrtp 2.4.2
-RUN cd /tmp && git clone https://github.com/cisco/libsrtp
-RUN cd /tmp/libsrtp && git checkout v2.4.2 && PKG_CONFIG_PATH=/usr/local/lib/pkgconfig ./configure --enable-openssl && make -j5 && make install
+# Build openssl-3.4.0
+RUN cd /tmp && wget https://github.com/openssl/openssl/releases/download/openssl-3.4.0/openssl-3.4.0.tar.gz && tar xvfz openssl-3.4.0.tar.gz && rm openssl-3.4.0.tar.gz
+RUN cd /tmp/openssl-3.4.0 && ./config && make -j5 && make install_sw
+
+# Build libsrtp 2.6.0
+RUN cd /tmp \
+    && git clone https://github.com/cisco/libsrtp \
+    && cd /tmp/libsrtp \
+    && git checkout v2.6.0 \
+    && PKG_CONFIG_PATH=/usr/local/lib64/pkgconfig ./configure --enable-openssl \
+    && make -j5 \
+    && make install
 
 RUN cd /tmp \
     && wget -O clang+llvm-12.0.1-x86_64-linux.tar.xz https://github.com/llvm/llvm-project/releases/download/llvmorg-12.0.1/clang+llvm-12.0.1-x86_64-linux-gnu-ubuntu-16.04.tar.xz \

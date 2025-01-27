@@ -23,31 +23,31 @@ jobs:
       matrix:
         include:
           - os: el8
-            image: latest
+            image: 2dd8104
             build:
               type: Release
           - os: ubuntu-focal-deb
-            image: latest
+            image: d9f98e8
             build:
               type: Release
-          - os: ubuntu-focal
-            image: latest
+          - os: ubuntu-jammy
+            image: d9f98e8
             build:
               type: Release
           - os: el8
-            image: latest
+            image: 2dd8104
             build:
               type: LCheck
           - os: el8
-            image: latest
+            image: 2dd8104
             build:
               type: TCheck
           - os: el8
-            image: latest
+            image: 2dd8104
             build:
               type: DCheck
           - os: el8
-            image: latest
+            image: 2dd8104
             build:
               type: LCov
     concurrency:

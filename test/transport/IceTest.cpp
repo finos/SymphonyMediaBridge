@@ -161,8 +161,8 @@ TEST_F(IceTest, HMACempty)
     EXPECT_TRUE(hmac.init(pwd.c_str(), pwd.size()));
     uint8_t result[20];
     hmac.compute(result);
+    hmac.reset();
     hmac.add(req, 5);
-
     hmac.compute(result);
 }
 
@@ -391,7 +391,7 @@ class IceSocketAdapter : public ice::IceEndpoint
 {
 public:
     IceSocketAdapter() {}
-    virtual ~IceSocketAdapter(){};
+    virtual ~IceSocketAdapter() {};
 
     void sendStunTo(const transport::SocketAddress& target,
         ice::Int96 transactionId,
@@ -419,7 +419,7 @@ public:
           session(1, config, ice::IceComponent::RTP, ice::IceRole::CONTROLLING, nullptr),
           _socketService(transport::createRtcePoll()),
           _socketCount(0),
-          _inboundPackets(32){};
+          _inboundPackets(32) {};
 
     void add(transport::SocketAddress localInterface)
     {
