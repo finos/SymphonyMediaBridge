@@ -68,7 +68,7 @@ import org.springframework.stereotype.Component;
 
     @SuppressWarnings("unused") @PreDestroy public void preDestroy() { timerCheckerSchedule.cancel(true); }
 
-    public synchronized String join(boolean useH264)
+    public synchronized String join(List<String> videoCodecs)
         throws IOException, ParserFailedException, InterruptedException, ParseException
     {
         final var endpointId = UUID.randomUUID().toString();
@@ -77,7 +77,7 @@ import org.springframework.stereotype.Component;
 
         if (conferenceId == null)
         {
-            conferenceId = symphonyMediaBridge.allocateConference(useH264);
+            conferenceId = symphonyMediaBridge.allocateConference(videoCodecs);
         }
 
         final var allocateEndpointResponse = symphonyMediaBridge.allocateEndpoint(conferenceId, endpointId);

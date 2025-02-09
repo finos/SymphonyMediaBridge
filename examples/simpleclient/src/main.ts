@@ -318,7 +318,11 @@ async function joinClicked()
     localDataChannel.onmessage = onDataChannelMessage;
 
     const url = serverUrl + 'endpoints/';
-    const body = {'enable-h264' : h264Element.checked};
+    let body: {'video-codecs': string[]} = {'video-codecs' : []};
+    if (h264Element.checked)
+    {
+        body['video-codecs'].push("h264");
+    }
 
     const requestInit: RequestInit = {method : 'POST', mode : 'cors', cache : 'no-store', body : JSON.stringify(body)};
     const request = new Request(url, requestInit);

@@ -1,8 +1,11 @@
 package com.symphony.simpleserver;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import java.util.ArrayList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,12 +38,17 @@ import org.springframework.web.bind.annotation.*;
             var objectMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
             var jsonBody = objectMapper.readTree(message);
 
-            boolean useH264 = false;
-            if (jsonBody.has("enable-h264") && jsonBody.get("enable-h264").asBoolean())
+            var codecList = new ArrayList<String>();
+            if (jsonBody.has("video-codecs"))
             {
-                useH264 = true;
+                var codecs = (ArrayNode)jsonBody.get("video-codecs");
+
+                for (JsonNode node : codecs)
+                {
+                    codecList.add(node.asText());
+                }
             }
-            final var endpointId = conferences.join(useH264);
+            final var endpointId = conferences.join(codecList);
 
             final var responseBodyJson = JsonNodeFactory.instance.objectNode();
             responseBodyJson.put("endpointId", endpointId);

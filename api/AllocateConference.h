@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/CodecCapabilities.h"
 #include "utils/Optional.h"
 #include <cstdint>
 
@@ -10,7 +11,7 @@ struct AllocateConference
 {
     utils::Optional<uint32_t> lastN;
     bool useGlobalPort = true;
-    bool useH264 = false;
+    bridge::VideoCodecSpec videoCodecs = bridge::VideoCodecSpec::makeVp8();
 };
 
 } // namespace api
