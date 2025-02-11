@@ -37,6 +37,7 @@ constexpr const uint32_t REWRITE_AUDIO_SRC_1 = 220002;
 constexpr const uint32_t REWRITE_AUDIO_SRC_2 = 220004;
 constexpr const uint32_t REWRITE_AUDIO_SRC_3 = 220006;
 constexpr const uint32_t REWRITE_AUDIO_SRC_4 = 220008;
+constexpr const bool DISABLE_VIDEO = false;
 
 const bridge::RtpMap AUDIO_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::OPUS);
 const bridge::RtpMap TELEPHONE_EVENT_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::TELEPHONE_EVENT);
@@ -51,11 +52,11 @@ const bridge::RtpMap FEEDBACK_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::R
         if (!(EXPRESSION))                                                                                             \
         {                                                                                                              \
             FAIL() << (std::string()                                                                                   \
-                           .append("Line ")                                                                            \
-                           .append(std::to_string(__LINE__))                                                           \
-                           .append(": expression has failed!. Expression: '")                                          \
-                           .append(#EXPRESSION)                                                                        \
-                           .append("'"));                                                                              \
+                    .append("Line ")                                                                                   \
+                    .append(std::to_string(__LINE__))                                                                  \
+                    .append(": expression has failed!. Expression: '")                                                 \
+                    .append(#EXPRESSION)                                                                               \
+                    .append("'"));                                                                                     \
         }                                                                                                              \
     } while (0)
 
@@ -212,7 +213,8 @@ protected:
             _testScope->packetAllocator,
             audioSsrc,
             videoSsrcs,
-            LAST_N);
+            LAST_N,
+            DISABLE_VIDEO);
 
         return std::make_unique<Mixer>(id,
             1,
@@ -225,8 +227,9 @@ protected:
             audioSsrc,
             videoSsrcs,
             videoPinSsrc,
+            VideoCodecSpec::makeVp8(),
             useGlobalPort,
-            VideoCodecSpec::makeVp8());
+            DISABLE_VIDEO);
     }
 
     void addEndpointWithBundleTransport(Mixer& mixer,

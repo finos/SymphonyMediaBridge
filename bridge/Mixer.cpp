@@ -156,8 +156,9 @@ Mixer::Mixer(std::string id,
     const std::vector<uint32_t>& audioSsrcs,
     const std::vector<api::SimulcastGroup>& videoSsrcs,
     const std::vector<api::SsrcPair>& videoPinSsrcs,
+    VideoCodecSpec videoCodecs,
     bool useGlobalPort,
-    VideoCodecSpec videoCodecs)
+    bool disableVideo)
     : _config(config),
       _id(std::move(id)),
       _loggableId("Mixer", logInstanceId),
@@ -170,8 +171,9 @@ Mixer::Mixer(std::string id,
       _engineMixer(std::move(engineMixer)),
       _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
+      _videoCodecs(videoCodecs),
       _useGlobalPort(useGlobalPort),
-      _videoCodecs(videoCodecs)
+      _videoDisabled(disableVideo)
 {
 }
 
@@ -374,6 +376,15 @@ bool Mixer::addVideoStream(std::string& outId,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
+
+    if (_videoDisabled)
+    {
+        logger::warn("Tried to allocate video video for endpointId %s when the conference has the video disabled",
+            _loggableId.c_str(),
+            endpointId.c_str());
+        return false;
+    }
+
     if (_videoStreams.find(endpointId) != _videoStreams.end())
     {
         logger::warn("VideoStream with endpointId %s already exists", _loggableId.c_str(), endpointId.c_str());
@@ -468,6 +479,15 @@ bool Mixer::addBundledVideoStream(std::string& outId,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
+
+    if (_videoDisabled)
+    {
+        logger::warn("Tried to allocate video video for endpointId %s when the conference has the video disabled",
+            _loggableId.c_str(),
+            endpointId.c_str());
+        return false;
+    }
+
     if (_videoStreams.find(endpointId) != _videoStreams.end())
     {
         logger::warn("VideoStream with endpointId %s already exists", _loggableId.c_str(), endpointId.c_str());
@@ -839,14 +859,14 @@ bridge::Stats::MixerBarbellStats Mixer::gatherBarbellStats(const uint64_t iterat
     return stats;
 }
 
-std::map<size_t, ActiveTalker> Mixer::getActiveTalkers()
+std::map<size_t, ActiveTalker> Mixer::getActiveTalkers() const
 {
     return _engineMixer->getActiveTalkers();
 }
 
 bool Mixer::getEndpointInfo(const std::string& endpointId,
     api::ConferenceEndpoint& endpoint,
-    const std::map<size_t, ActiveTalker>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
@@ -883,7 +903,7 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
 
 bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     api::ConferenceEndpointExtendedInfo& endpoint,
-    const std::map<size_t, ActiveTalker>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers) const
 {
     if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
     {
@@ -911,7 +931,7 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     return true;
 }
 
-bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription)
+bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _audioStreams.find(endpointId);
@@ -931,7 +951,7 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStream
     return true;
 }
 
-void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription)
+void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription) const
 {
     outDescription = AudioStreamDescription();
     for (auto ssrc : _audioSsrcs)
@@ -940,7 +960,7 @@ void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription)
     }
 }
 
-bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription)
+bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _videoStreams.find(endpointId);
@@ -979,7 +999,7 @@ void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellVideoStreamDescr
     }
 }
 
-bool Mixer::getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription)
+bool Mixer::getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _dataStreams.find(endpointId);
@@ -992,7 +1012,7 @@ bool Mixer::getDataStreamDescription(const std::string& endpointId, DataStreamDe
     return true;
 }
 
-bool Mixer::isAudioStreamConfigured(const std::string& endpointId)
+bool Mixer::isAudioStreamConfigured(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _audioStreams.find(endpointId);
@@ -1003,7 +1023,7 @@ bool Mixer::isAudioStreamConfigured(const std::string& endpointId)
     return streamItr->second->isConfigured;
 }
 
-bool Mixer::isVideoStreamConfigured(const std::string& endpointId)
+bool Mixer::isVideoStreamConfigured(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _videoStreams.find(endpointId);
@@ -1014,7 +1034,7 @@ bool Mixer::isVideoStreamConfigured(const std::string& endpointId)
     return streamItr->second->isConfigured;
 }
 
-bool Mixer::isDataStreamConfigured(const std::string& endpointId)
+bool Mixer::isDataStreamConfigured(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _dataStreams.find(endpointId);
@@ -1025,7 +1045,8 @@ bool Mixer::isDataStreamConfigured(const std::string& endpointId)
     return streamItr->second->isConfigured;
 }
 
-bool Mixer::getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription)
+bool Mixer::getTransportBundleDescription(const std::string& endpointId,
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -1049,7 +1070,8 @@ bool Mixer::getTransportBundleDescription(const std::string& endpointId, Transpo
     return true;
 }
 
-bool Mixer::getBarbellTransportDescription(const std::string& barbellId, TransportDescription& outTransportDescription)
+bool Mixer::getBarbellTransportDescription(const std::string& barbellId,
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -1072,7 +1094,7 @@ bool Mixer::getBarbellTransportDescription(const std::string& barbellId, Transpo
 }
 
 bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
-    TransportDescription& outTransportDescription)
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1120,7 +1142,7 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
 }
 
 bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
-    TransportDescription& outTransportDescription)
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto videoStreamItr = _videoStreams.find(endpointId);
@@ -1752,7 +1774,7 @@ bool Mixer::unpinEndpoint(const size_t endpointIdHash)
     return _engineMixer->asyncPinEndpoint(endpointIdHash, 0);
 }
 
-bool Mixer::isAudioStreamGatheringComplete(const std::string& endpointId)
+bool Mixer::isAudioStreamGatheringComplete(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1763,7 +1785,7 @@ bool Mixer::isAudioStreamGatheringComplete(const std::string& endpointId)
     return audioStreamItr->second->transport->isGatheringComplete();
 }
 
-bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId)
+bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto videoStreamItr = _videoStreams.find(endpointId);
@@ -1774,7 +1796,7 @@ bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId)
     return videoStreamItr->second->transport->isGatheringComplete();
 }
 
-bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId)
+bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto dataStreamItr = _dataStreams.find(endpointId);

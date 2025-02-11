@@ -19,18 +19,48 @@ class MpmcQueue
         enum State : uint32_t
         {
             emptySlot = 0,
-            committed
+            committed,
+            nullSlot // this a especial slot for when queue is zero capacity, Which make the slot unreadable and
+                     // unwritable
         } state = emptySlot;
     };
 
-    struct Entry
+    struct EntrySate
+    {
+        EntrySate() {}
+
+        EntrySate(typename CellState::State state) : state(CellState{0, state}) {}
+
+        std::atomic<CellState> state;
+    };
+
+    struct Entry : EntrySate
     {
         Entry() {}
 
         T& value() { return reinterpret_cast<T&>(data); }
-        std::atomic<CellState> state;
-        uint8_t data[sizeof(T)];
+        alignas(alignof(T)) uint8_t data[sizeof(T)];
     };
+
+    Entry* nullEntry()
+    {
+        // Make _elements to point to nullEntry (which is both unreadable and unwritable)
+        // Also we need to const_cast. As _elements can't be const but we know for
+        // empty queues, they will not change
+        return reinterpret_cast<Entry*>(const_cast<EntrySate*>(&_nullEntry));
+    }
+
+    static constexpr size_t kEntryPerCacheLine = (63 + sizeof(Entry)) / sizeof(Entry);
+
+    static constexpr uint32_t calculateFinalCapacity(uint32_t capacity)
+    {
+        return capacity == 0 ? 0 : (kEntryPerCacheLine * ((capacity + kEntryPerCacheLine - 1) / kEntryPerCacheLine));
+    }
+
+    static size_t calculateBlockSize(uint32_t finalCapacity)
+    {
+        return memory::page::alignedSpace(finalCapacity * sizeof(Entry));
+    }
 
     struct VersionedIndex
     {
@@ -42,13 +72,15 @@ class MpmcQueue
 
     uint32_t indexTransform(VersionedIndex v) const
     {
-        if (_entriesPerCacheline == 1)
+        if constexpr (kEntryPerCacheLine == 1)
         {
             return v.pos % _capacity;
         }
-
-        const auto p = v.pos * _entriesPerCacheline;
-        return (p / _capacity + p) % _capacity;
+        else
+        {
+            const auto p = v.pos * kEntryPerCacheLine;
+            return (p / _capacity + p) % _capacity;
+        }
     }
 
     VersionedIndex nextPosition(VersionedIndex index) const
@@ -69,20 +101,18 @@ class MpmcQueue
 public:
     typedef T value_type;
     explicit MpmcQueue(uint32_t capacity)
-        : _entriesPerCacheline((63 + sizeof(Entry)) / sizeof(Entry)),
-          _capacity(_entriesPerCacheline * ((capacity + _entriesPerCacheline - 1) / _entriesPerCacheline)),
-          _blockSize(memory::page::alignedSpace(_capacity * sizeof(Entry))),
-          _elements(reinterpret_cast<Entry*>(memory::page::allocate(_blockSize)))
+        : _capacity(
+              capacity == 0 ? 0 : (kEntryPerCacheLine * ((capacity + kEntryPerCacheLine - 1) / kEntryPerCacheLine))),
+          _elements(capacity == 0 ? nullEntry()
+                                  : reinterpret_cast<Entry*>(memory::page::allocate(calculateBlockSize(capacity))))
     {
-        assert(_capacity > 7);
+
+        assert(_capacity == 0 || _capacity > 7);
         assert(capacity < 0x80000000u);
-        assert(_capacity % _entriesPerCacheline == 0);
+        assert(_capacity % kEntryPerCacheLine == 0);
 
         _readCursor = VersionedIndex();
         _writeCursor = VersionedIndex();
-
-        _cacheLineSeparator1[0] = 0;
-        _cacheLineSeparator2[0] = 0;
 
         for (uint32_t i = 0; i < _capacity; ++i)
         {
@@ -101,7 +131,10 @@ public:
             _elements[i].~Entry();
         }
 
-        memory::page::free(_elements, _blockSize);
+        if (_capacity)
+        {
+            memory::page::free(_elements, calculateBlockSize(_capacity));
+        }
     }
 
     bool pop(T& target)
@@ -159,7 +192,7 @@ public:
                 // Assume we pause here.
                 // The emptyslot state will stop read cursor.
                 // The writeCursor has moved and another writer will have to try the next slot.
-                // If writers wrap back here, element is not writeable as the version is not the expected one
+                // If writers wrap back here, element is not writable as the version is not the expected one
                 auto& entry = _elements[indexTransform(pos)];
                 new (entry.data) T(std::move(obj));
                 entry.state.store(CellState{pos.version, CellState::committed}, std::memory_order_release);
@@ -191,7 +224,7 @@ public:
                 // Assume we pause here.
                 // The emptyslot state will stop read cursor.
                 // The writeCursor has moved and another writer will have to try the next slot.
-                // If writers wrap back here, element is not writeable as the version is not the expected one
+                // If writers wrap back here, element is not writable as the version is not the expected one
                 auto& entry = _elements[indexTransform(pos)];
                 new (entry.data) T(std::forward<U>(args)...);
                 entry.state.store(CellState{pos.version, CellState::committed}, std::memory_order_release);
@@ -249,13 +282,21 @@ private:
 
     // Layout below must be maintained for performance. The non atomic member variables may not be place before read
     // cursor.
-    std::atomic<VersionedIndex> _readCursor;
-    uint32_t _cacheLineSeparator1[14];
-    std::atomic<VersionedIndex> _writeCursor;
-    uint32_t _cacheLineSeparator2[14];
-    const uint32_t _entriesPerCacheline;
-    const uint32_t _capacity;
-    const size_t _blockSize;
+    alignas(64) std::atomic<VersionedIndex> _readCursor;
+
+    // Special Cell state for when queue has zero size
+    // Null Entry is not written and it is only read it when queue is zero size. So it can live in same cache line of
+    // _readCursor without performance impact
+    const EntrySate _nullEntry = CellState::State::nullSlot;
+
+    alignas(64) std::atomic<VersionedIndex> _writeCursor;
+
+    // Although they are const. Cache can be invalidated for the reader when _writeCursor
+    // Perhaps is not a big issue (and even compile can optimize it this const values)
+    // but forcing a new cache line also ensures tha nothing is placed in this cache line after
+    // MpmcQueue boundary (which we can predict if can affect performance
+    // of _writeCursor)
+    alignas(64) const uint32_t _capacity;
     Entry* const _elements;
 };
 } // namespace concurrency

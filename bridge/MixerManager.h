@@ -61,8 +61,7 @@ public:
 
     ~MixerManager();
 
-    bridge::Mixer* create(bool useGlobalPort, VideoCodecSpec videoCodecs = VideoCodecSpec());
-    bridge::Mixer* create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec videoCodecs = VideoCodecSpec());
+    bridge::Mixer* create(utils::Optional<uint32_t> optionalLastN, bool useGlobalPort, bool disableVideo, VideoCodecSpec videoCodecs = VideoCodecSpec());
     void remove(const std::string& id);
     std::vector<std::string> getMixerIds();
     std::unique_lock<std::mutex> getMixer(const std::string& id, Mixer*& outMixer);

@@ -2,11 +2,11 @@
 
 namespace concurrency
 {
-MurmurHashIndex::MurmurHashIndex(size_t elementCount) : _index(elementCount), _maxSpread(1)
+MurmurHashIndex::MurmurHashIndex(size_t elementCount) : _index(elementCount), _maxSpread(elementCount == 0 ? 0 : 1)
 {
-    assert(memory::isAligned<uint64_t>(&_index[0])); // must be atomically writeable
-    assert(memory::isAligned<uint64_t>(&_index[0].keyValue)); // must be atomically writeable
-    static_assert(sizeof(KeyValue) == 8, "Index entry must be 8 bytes on your platform to be atomically writeable");
+    assert(memory::isAligned<uint64_t>(&_index[0])); // must be atomically writable
+    assert(memory::isAligned<uint64_t>(&_index[0].keyValue)); // must be atomically writable
+    static_assert(sizeof(KeyValue) == 8, "Index entry must be 8 bytes on your platform to be atomically writable");
     static_assert(sizeof(Entry) == 16, "Index entry should be 16B to reduce cacheline contention");
     std::memset(_index.data(), 0, sizeof(Entry) * _index.size());
 }
@@ -14,7 +14,7 @@ MurmurHashIndex::MurmurHashIndex(size_t elementCount) : _index(elementCount), _m
 void MurmurHashIndex::reInitialize()
 {
     std::memset(_index.data(), 0, sizeof(Entry) * _index.size());
-    _maxSpread = 1;
+    _maxSpread = _index.size() == 0 ? 0 : 1;
 }
 
 bool MurmurHashIndex::add(uint64_t key, uint32_t value)

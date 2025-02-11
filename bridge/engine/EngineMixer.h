@@ -90,7 +90,8 @@ public:
         memory::PacketPoolAllocator& mainAllocator,
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<api::SimulcastGroup>& videoSsrcs,
-        const uint32_t lastN);
+        const uint32_t lastN,
+        const bool isVideoDisabled);
 
     ~EngineMixer() override;
 
@@ -238,7 +239,9 @@ public: // private but called from helper method
 protected:
     static const size_t maxPendingPackets = 8192;
     static const size_t maxPendingRtcpPackets = 2048;
+    static const size_t maxPendingRtcpPacketsVideoDisabled = 512;
     static const size_t maxSsrcs = 8192;
+    static const size_t maxSsrcsVideoDisabled = 1024;
     static const size_t maxStreamsPerModality = 4096;
     static const size_t maxRecordingStreams = 8;
 

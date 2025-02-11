@@ -23,10 +23,13 @@ const uint32_t gatheringCompleteMaxWaitMs = 5000;
 const uint32_t gatheringCompleteWaitMs = 100;
 const uint32_t GUUID_LENGTH = 36;
 
+namespace
+{
+
 httpd::Response generateAllocateEndpointResponse(ActionContext* context,
     RequestLogger& requestLogger,
     const api::AllocateEndpoint& allocateChannel,
-    Mixer& mixer,
+    const Mixer& mixer,
     const std::string& conferenceId,
     const std::string& endpointId)
 {
@@ -153,7 +156,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         channelsDescription.audio.set(responseAudio);
     }
 
-    if (allocateChannel.video.isSet())
+    if (allocateChannel.video.isSet() && !mixer.hasVideoDisabled())
     {
         const auto& allocVideo = allocateChannel.video.get();
         api::Video responseVideo;
@@ -336,15 +339,15 @@ httpd::Response allocateEndpoint(ActionContext* context,
             const auto ssrcRewrite = video.relayType.compare("ssrc-rewrite") == 0;
 
             std::string outChannelId;
-            if (!mixer->addBundledVideoStream(outChannelId,
-                    endpointId,
-                    ssrcRewrite,
-                    allocateChannel.idleTimeoutSeconds))
+            if (mixer->addBundledVideoStream(outChannelId, endpointId, ssrcRewrite, allocateChannel.idleTimeoutSeconds))
+            {
+                videoChannelId.set(outChannelId);
+            }
+            else if (!mixer->hasVideoDisabled())
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Add bundled video stream has failed");
             }
-            videoChannelId.set(outChannelId);
         }
 
         if (allocateChannel.data.isSet())
@@ -412,16 +415,19 @@ httpd::Response allocateEndpoint(ActionContext* context,
             std::string outChannelId;
             const auto ssrcRewrite = video.relayType.compare("ssrc-rewrite") == 0;
 
-            if (!mixer->addVideoStream(outChannelId,
+            if (mixer->addVideoStream(outChannelId,
                     endpointId,
                     iceRole,
                     ssrcRewrite,
                     allocateChannel.idleTimeoutSeconds))
             {
+                videoChannelId.set(outChannelId);
+            }
+            else if (!mixer->hasVideoDisabled())
+            {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding video stream has failed");
             }
-            videoChannelId.set(outChannelId);
         }
 
         if (allocateChannel.data.isSet())
@@ -487,9 +493,6 @@ httpd::Response allocateEndpoint(ActionContext* context,
 
     return generateAllocateEndpointResponse(context, requestLogger, allocateChannel, *mixer, conferenceId, endpointId);
 }
-
-namespace
-{
 
 std::vector<uint32_t> convertGroupIds(const std::vector<std::string>& groupIds)
 {
