@@ -67,21 +67,21 @@ jobs:
       - name: DEBUG search unit tests logs
         run: find . -type f -iname "smb_unit_test*"
       - name: Upload Unit test logs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()  # This step runs regardless of the previous step results
         with:
           name: unit-test-logs-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
           path: tools/testfiles/smb_unit_test*.log
       - name: Upload test results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: always()  # This step runs regardless of the previous step results
         with:
           name: test-results-${{ matrix.os }}-${{ matrix.build.type }}
           retention-days: 14
           path: ${{ matrix.os }}/smb/test-results*.xml
       - name: Upload Code Coverage
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: matrix.build.type =='LCov' && success()  # This step runs regardless of the previous step results
         with:
           name: code-coverage-${{ matrix.os }}-${{ matrix.build.type }}
