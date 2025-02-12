@@ -3,12 +3,14 @@ package com.symphony.simpleserver.smb;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.symphony.simpleserver.httpClient.HttpClient;
 import com.symphony.simpleserver.httpClient.HttpClientFactory;
 import com.symphony.simpleserver.smb.api.SmbEndpointDescription;
 import java.io.IOException;
+import java.util.List;
 import org.apache.hc.core5.http.ParseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,9 +30,16 @@ import org.springframework.stereotype.Component;
         this.objectMapper = new ObjectMapper().setSerializationInclusion(JsonInclude.Include.NON_NULL);
     }
 
-    public String allocateConference() throws IOException, ParseException
+    public String allocateConference(List<String> videoCodecs) throws IOException, ParseException
     {
         final var requestBodyJson = JsonNodeFactory.instance.objectNode();
+        ArrayNode arrayNode = JsonNodeFactory.instance.arrayNode();
+        for (String item : videoCodecs)
+        {
+            arrayNode.add(item);
+        }
+
+        requestBodyJson.set("video-codecs", arrayNode);
         final var response = httpClient.post(BASE_URL, requestBodyJson);
 
         final var responseBodyJson = objectMapper.readTree(response.body);

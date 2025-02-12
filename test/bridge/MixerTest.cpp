@@ -225,7 +225,8 @@ protected:
             audioSsrc,
             videoSsrcs,
             videoPinSsrc,
-            useGlobalPort);
+            useGlobalPort,
+            VideoCodecSpec::makeVp8());
     }
 
     void addEndpointWithBundleTransport(Mixer& mixer,

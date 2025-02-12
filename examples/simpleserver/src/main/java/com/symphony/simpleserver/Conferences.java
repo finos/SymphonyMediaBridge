@@ -68,7 +68,8 @@ import org.springframework.stereotype.Component;
 
     @SuppressWarnings("unused") @PreDestroy public void preDestroy() { timerCheckerSchedule.cancel(true); }
 
-    public synchronized String join() throws IOException, ParserFailedException, InterruptedException, ParseException
+    public synchronized String join(List<String> videoCodecs)
+        throws IOException, ParserFailedException, InterruptedException, ParseException
     {
         final var endpointId = UUID.randomUUID().toString();
 
@@ -76,7 +77,7 @@ import org.springframework.stereotype.Component;
 
         if (conferenceId == null)
         {
-            conferenceId = symphonyMediaBridge.allocateConference();
+            conferenceId = symphonyMediaBridge.allocateConference(videoCodecs);
         }
 
         final var allocateEndpointResponse = symphonyMediaBridge.allocateEndpoint(conferenceId, endpointId);
@@ -157,19 +158,6 @@ import org.springframework.stereotype.Component;
         symphonyMediaBridge.configureEndpoint(conferenceId, endpointId, endpointDescription);
         endpoint.isConfigured = true;
         endpoints.put(endpointId, endpoint);
-
-        /*   for (var endpointsEntry : endpoints.entrySet())
-           {
-               if (endpointsEntry.getKey().equals(endpointId))
-               {
-                   continue;
-               }
-
-               final var lastEndpointDescription = endpointsEntry.getValue().lastEndpointDescription;
-               final var offer =
-                   parser.makeSdpOffer(lastEndpointDescription, endpointsEntry.getKey(), endpointMediaStreams);
-               sendMessage(endpointsEntry.getKey(), "offer", offer.toString());
-           }*/
 
         return true;
     }

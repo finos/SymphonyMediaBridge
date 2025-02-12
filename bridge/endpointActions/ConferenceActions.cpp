@@ -242,13 +242,13 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
             responseVideo.transport.set(responseTransport);
         }
 
-        if (context->config.codec.videoCodec.get() == "H264")
+        if (context->config.codec.videoCodec.get() == "H264" || mixer.isH264Enabled())
         {
             addH264VideoProperties(responseVideo,
                 context->config.codec.h264ProfileLevelId.get(),
                 context->config.codec.h264PacketizationMode.get());
         }
-        else
+        else if (context->config.codec.videoCodec.get() == "VP8")
         {
             addVp8VideoProperties(responseVideo);
         }

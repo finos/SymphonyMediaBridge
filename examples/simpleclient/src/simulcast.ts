@@ -1,180 +1,145 @@
-function rtxVp8Used(sdpStr: string, primarySsrc: number): boolean {
-    // Check that VP8 and rtx are present in SDP and connected with rtpmap
-    let regExpVp8 = new RegExp(".*" + " VP8/90000" + ".*$", "gmi");
-    let vp8SdpLines = sdpStr.match(regExpVp8);
-    if (!vp8SdpLines) {
-        return false;
-    }
-    let ptVp8: number = parseInt(vp8SdpLines[0].substr("a=rtpmap:".length));
-    let regExpRtx = new RegExp(".*" + " rtx/90000" + ".*$", "gmi");
-    let ptRtxVp8Present: boolean = false;
-    let rtxLines = sdpStr.match(regExpRtx);
-    if (!ptVp8 || !rtxLines) {
-        return false;
-    }
-    rtxLines.forEach(function(rtxLine) {
-        let potentialPt: number = parseInt(rtxLine.substr("a=rtpmap:".length));
-        let potentialRtxVp8str: string = "a=fmtp:" + potentialPt + " apt=" + ptVp8;
-        if (sdpStr.indexOf(potentialRtxVp8str) >= 0) {
-            ptRtxVp8Present = true;
-        }
-    });
-    // Check that ssrc-group exists
-    let fidPresent: boolean = (sdpStr.indexOf("a=ssrc-group:FID " + primarySsrc) >= 0);
 
-    return (ptRtxVp8Present && fidPresent);
+function tracksOf(sdp: string): string[]
+{
+    var lines = sdp.split('\n');
+    var tracks: Array<string> = [];
+
+    var intrack = false;
+    var track = "";
+    for (var l of lines)
+    {
+        if (!intrack && l.startsWith("m="))
+        {
+            track = l;
+            intrack = true;
+        }
+        else if (intrack && l.startsWith("m="))
+        {
+            tracks.push(track);
+            track = l;
+        }
+        else if (intrack)
+        {
+            track += "\n" + l;
+        }
+    }
+    return tracks;
 }
 
-function generateSsrcMap(sdpStr: string, rtxUsed: boolean, primarySsrc: number, nrOfSimulcastLayers: number): number[] {
-    let ssrcStr = "a=ssrc:";
-    let usedSsrc: number[] = [0, 1];
+function generateSsrcMap(trackDesc: string, rtxUsed: boolean, primarySsrc: number, nrOfSimulcastLayers: number):
+    number[]
+{
+    let usedSsrc = new Set<number>();
     let i: number, j: number;
-    let ssrcSimulcastMap: number[] = [primarySsrc];
+    let ssrcSimulcastMap: number[] = [ primarySsrc ];
 
-    // Store already used SSRCs
-    // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-    let regExpSsrc = new RegExp(".*" + ssrcStr + ".*$", "gmi");
-    let ssrcLines = sdpStr.match(regExpSsrc);
-    ssrcLines && ssrcLines.forEach(function(ssrcLine) {
-        let sdpSsrc: number = parseInt(ssrcLine.substr(ssrcStr.length));
-        if (!(usedSsrc.indexOf(sdpSsrc) >= 0)) {
-            usedSsrc.push(sdpSsrc);
-        }
-    });
-
-    // Insert known VP8/rtx ssrc and generate unique SSRCs for simulcast layers
-    let columns: number = rtxUsed ? 2 : 1;
-    if (rtxUsed) {
-        let fidStr: string = "a=ssrc-group:FID " + primarySsrc + " ";
-        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-        let regExpFid: RegExp = new RegExp(".*" + fidStr + ".*$", "gmi");
-        let fidLines = sdpStr.match(regExpFid);
-        ssrcSimulcastMap[1] = fidLines ? parseInt(fidLines[0].substr(fidStr.length)) : NaN;
+    let regExpSsrc = new RegExp("^a=ssrc:(\\d+)\\s+.*$", "gmi");
+    let ssrcMatch;
+    while ((ssrcMatch = regExpSsrc.exec(trackDesc)) != null)
+    {
+        usedSsrc.add(Number(ssrcMatch[1]));
     }
-    for (i = 1; i < nrOfSimulcastLayers; i++) {
-        for (j = 0; j < columns; j++) {
+
+    let columns: number = rtxUsed ? 2 : 1;
+    if (rtxUsed)
+    {
+        ssrcSimulcastMap[1] = NaN;
+        let regExpFid: RegExp = new RegExp("^a=ssrc-group:FID\\s+" + primarySsrc + "\\s+(\\d+)\s*$", "gmi");
+        let fidLine;
+
+        while ((fidLine = regExpFid.exec(trackDesc)) != null)
+        {
+            ssrcSimulcastMap[1] = Number(fidLine[1]);
+        }
+    }
+    for (i = 1; i < nrOfSimulcastLayers; i++)
+    {
+        for (j = 0; j < columns; j++)
+        {
             let newSsrc: number = generateSSRC();
-            while (usedSsrc.indexOf(newSsrc) >= 0) {
+            while (usedSsrc.has(newSsrc))
+            {
                 newSsrc = generateSSRC();
             }
             ssrcSimulcastMap[i * columns + j] = newSsrc;
-            usedSsrc.push(newSsrc);
+            usedSsrc.add(newSsrc);
         }
     }
     return (ssrcSimulcastMap);
 }
 
-function generateSSRC() {
+function generateSSRC()
+{
     let minSSRC = 1;
     let maxSSRC = 0xffffffff;
     return (Math.floor(Math.random() * (maxSSRC - minSSRC)) + minSSRC);
 }
 
-export function addSimulcastSdpLocalDescription(inSessionDescription: RTCSessionDescriptionInit, mediaTrackId: string, nrOfSimulcastLayers: number) {
-    if (inSessionDescription.sdp) {
-        let sdpStr = inSessionDescription.sdp;
-        // Validate that SDP has a video line
-        let videoSdp = "m=video ";
-        let ssrcStr = "a=ssrc:";
-        let i, j;
-        // Do basic validation that SDP contains video section and the media track
-        if ((!(sdpStr.indexOf(videoSdp) >= 0)) || (!(sdpStr.indexOf(ssrcStr) >= 0)) || (!(sdpStr.indexOf(mediaTrackId) >= 0))) {
-            return (inSessionDescription);
-        } else {
-            // Get SSRC for the mediatrack
-            // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-            let regExpMediaTrackPrimarySsrc = new RegExp(".*" + "msid:.*? " + mediaTrackId + ".*$", "gmi");
-            let mediaTrackPrimarySsrcArr = sdpStr.match(regExpMediaTrackPrimarySsrc);
-            if (!mediaTrackPrimarySsrcArr) {
-                return (inSessionDescription);
-            }
-            let primarySsrc = parseInt(mediaTrackPrimarySsrcArr[0].substr(ssrcStr.length));
-
-            // Validate that SIM: hasn't already been added for this mediatrack
-            if (sdpStr.indexOf("a=ssrc-group:SIM " + primarySsrc) >= 0) {
-                return (inSessionDescription);
-            }
-
-            let rtxUsed = rtxVp8Used(sdpStr, primarySsrc);
-            let ssrcSimulcastMap: number[] = generateSsrcMap(sdpStr, rtxUsed, primarySsrc, nrOfSimulcastLayers);
-
-            // Fill in ssrc lines by copy pasting ssrc lines with generated simulcast ssrc
-            let primarySsrcStr: string = "a=ssrc:" + primarySsrc + " ";
-            // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-            let regExpPrimarySsrcLine = new RegExp(".*" + primarySsrcStr + ".*$", "gmi");
-            let sdpPrimarySsrcLinesArr = sdpStr.match(regExpPrimarySsrcLine);
-            if (!sdpPrimarySsrcLinesArr) {
-                return (inSessionDescription);
-            }
-            let sdpPrimarySsrcLines = sdpPrimarySsrcLinesArr.filter(lines => lines !== "").join("\r\n");
-            sdpPrimarySsrcLines += "\r\n";
-            let ssrcAddLines: string = "";
-            let columns = rtxUsed ? 2 : 1;
-            // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp.detect-non-literal-regexp
-            let regExpPrimarySsrc = new RegExp(primarySsrcStr, "gmi");
-            for (i = 1; i < nrOfSimulcastLayers; i++) {
-                for (j = 0; j < columns; j++) {
-                    ssrcAddLines += sdpPrimarySsrcLines.replace(regExpPrimarySsrc, "a=ssrc:" + ssrcSimulcastMap[i * columns + j] + " ");
-                }
-            }
-            let lastSsrcStr: string = "a=ssrc:" + ssrcSimulcastMap[columns - 1] + " ";
-            let index: number = sdpStr.lastIndexOf(lastSsrcStr);
-            index = sdpStr.indexOf("\r\n", index) + 2;
-            sdpStr = sdpStr.substr(0, index) + ssrcAddLines + sdpStr.substr(index);
-
-            // Fill in the a=ssrc-group:FID lines for simulcast if rtx is present
-            if (rtxUsed) {
-                let fidAddLines = "";
-                for (i = 1; i < nrOfSimulcastLayers; i++) {
-                    fidAddLines += "a=ssrc-group:FID " + ssrcSimulcastMap[i * 2] + " " + ssrcSimulcastMap[i * 2 + 1] + "\r\n";
-                }
-                let findFidStr = "a=ssrc-group:FID " + ssrcSimulcastMap[0] + " " + ssrcSimulcastMap[1] + "\r\n";
-                index = sdpStr.indexOf(findFidStr) + findFidStr.length;
-                sdpStr = sdpStr.slice(0, index) + fidAddLines + sdpStr.slice(index);
-                index += fidAddLines.length;
-            } else {
-                // Put next item under a=ssrc: list if ssrc-group:FID is missing
-                index += ssrcAddLines.length;
-            }
-
-            // Add a=ssrc-group:SIM
-            let simGroupStr = "a=ssrc-group:SIM";
-            for (i = 0; i < nrOfSimulcastLayers; i++) {
-                simGroupStr += " " + ssrcSimulcastMap[i * columns];
-            }
-            simGroupStr += "\r\n";
-            sdpStr = sdpStr.slice(0, index) + simGroupStr + sdpStr.slice(index);
-
-            // Update Session SDP
-            inSessionDescription.sdp = sdpStr;
-        }
+export function addSimulcastSdpLocalDescription(inSessionDescription: RTCSessionDescriptionInit,
+    nrOfSimulcastLayers: number)
+{
+    if (!inSessionDescription.sdp)
+    {
+        return inSessionDescription;
     }
-    return (inSessionDescription);
-}
 
-// Return the MediaStreamTrack id for the m= section with a=mid:<mid>
-export function getTrackIdForMid(inSessionDescription: RTCSessionDescriptionInit, mid: string) {
-    const sdpStr = inSessionDescription.sdp;
-    if (sdpStr) {
-        let videoIndex = -1;
-        const midIndex = sdpStr.indexOf("a=mid:" + mid);
-        const regExpVideo = new RegExp("m=video " + ".*$", "gmi");
+    let sdp = inSessionDescription.sdp.replace(/\r\n/g, "\n");
+    let i, j;
 
-        while (regExpVideo.exec(sdpStr)) {
-            if (regExpVideo.lastIndex < midIndex) {
-                videoIndex = regExpVideo.lastIndex;
-            } else {
-                break;
+    for (const trackDesc of tracksOf(sdp))
+    {
+        if (!trackDesc.startsWith("m=video") || trackDesc.indexOf("a=ssrc-group:SIM") > 0)
+        {
+            continue;
+        }
+
+        const regExpPrimarySsrc = /^a=ssrc:(\d+)\s+msid:(\S+)\s+(\S+)\s*$/gm
+        let primarySsrcMatch = regExpPrimarySsrc.exec(trackDesc);
+        if (!primarySsrcMatch)
+        {
+            continue;
+        }
+
+        let primarySsrc = Number(primarySsrcMatch[1]);
+        let msid = primarySsrcMatch[2];
+        console.log("prim ssrc " + primarySsrc + " " + msid);
+
+        const regExpPrimaryLabels = new RegExp("^a=ssrc:" + primarySsrc + " .*$", "gmi");
+        let labelLineMatches = trackDesc.match(regExpPrimaryLabels);
+        let labelLines = labelLineMatches.filter(lines => lines !== "").join("\n");
+        labelLines += "\n";
+
+        const regExpFid = /^a=ssrc-group:FID.+$/gm;
+        let rtxUsed = !!regExpFid.exec(trackDesc);
+        let ssrcSimulcastMap: number[] = generateSsrcMap(trackDesc, rtxUsed, primarySsrc, nrOfSimulcastLayers);
+
+        let newTrack = trackDesc + "\n";
+
+        let columns = rtxUsed ? 2 : 1;
+        const regExpPrimaryLabel = new RegExp("a=ssrc:" + primarySsrc, "gmi");
+        for (i = 1; i < nrOfSimulcastLayers; i++)
+        {
+            for (j = 0; j < columns; j++)
+            {
+                newTrack += labelLines.replace(regExpPrimaryLabel, "a=ssrc:" + ssrcSimulcastMap[i * columns + j]);
             }
         }
 
-        if (videoIndex >= 0) {
-            const regExpPrimarySsrcLine = new RegExp("a=ssrc:" + ".*" + "msid:.* (.*)" + ".*$", "mi");
-            const primarySsrcLine = sdpStr.substr(videoIndex).match(regExpPrimarySsrcLine);
-            if (primarySsrcLine) {
-                return primarySsrcLine[1];
-            }
+        for (i = 1; i < nrOfSimulcastLayers && rtxUsed; i++)
+        {
+            newTrack += "a=ssrc-group:FID " + ssrcSimulcastMap[i * 2] + " " + ssrcSimulcastMap[i * 2 + 1] + "\n";
         }
+
+        let simGroupStr = "a=ssrc-group:SIM";
+        for (i = 0; i < nrOfSimulcastLayers; i++)
+        {
+            simGroupStr += " " + ssrcSimulcastMap[i * columns];
+        }
+        newTrack += simGroupStr;
+
+        sdp = sdp.replace(trackDesc, newTrack);
     }
-    return undefined;
+
+    inSessionDescription.sdp = sdp;
+    return inSessionDescription;
 }

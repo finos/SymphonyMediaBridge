@@ -116,12 +116,12 @@ MixerManager::~MixerManager()
     logger::debug("Deleted", "MixerManager");
 }
 
-Mixer* MixerManager::create(bool useGlobalPort)
+Mixer* MixerManager::create(bool useGlobalPort, VideoCodecSpec videoCodecs)
 {
-    return create(_config.defaultLastN, useGlobalPort);
+    return create(_config.defaultLastN, useGlobalPort, videoCodecs);
 }
 
-Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
+Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec videoCodecs)
 {
     lastN = std::min(lastN, maxLastN);
     logger::info("Create mixer, last-n %u", "MixerManager", lastN);
@@ -190,7 +190,8 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort)
             audioSsrcs,
             videoSsrcs,
             videoPinSsrcs,
-            useGlobalPort));
+            useGlobalPort,
+            videoCodecs));
     if (!mixerEmplaceResult.second)
     {
         logger::error("Failed to create mixer", "MixerManager");

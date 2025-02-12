@@ -284,6 +284,25 @@ AllocateConference parseAllocateConference(const nlohmann::json& data)
         }
     }
     setIfExistsOrDefault(allocateConference.useGlobalPort, data, "global-port", true);
+    auto it = data.find("video-codecs");
+    if (it != data.end())
+    {
+        for (auto codec : data["video-codecs"])
+        {
+            if (codec == "vp8")
+            {
+                allocateConference.videoCodecs.vp8 = true;
+            }
+            else if (codec == "h264")
+            {
+                allocateConference.videoCodecs.h264 = true;
+            }
+        }
+    }
+    else
+    {
+        allocateConference.videoCodecs.vp8 = true;
+    }
 
     return allocateConference;
 }

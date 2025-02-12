@@ -156,7 +156,8 @@ Mixer::Mixer(std::string id,
     const std::vector<uint32_t>& audioSsrcs,
     const std::vector<api::SimulcastGroup>& videoSsrcs,
     const std::vector<api::SsrcPair>& videoPinSsrcs,
-    bool useGlobalPort)
+    bool useGlobalPort,
+    VideoCodecSpec videoCodecs)
     : _config(config),
       _id(std::move(id)),
       _loggableId("Mixer", logInstanceId),
@@ -169,7 +170,8 @@ Mixer::Mixer(std::string id,
       _engineMixer(std::move(engineMixer)),
       _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
-      _useGlobalPort(useGlobalPort)
+      _useGlobalPort(useGlobalPort),
+      _videoCodecs(videoCodecs)
 {
 }
 
@@ -2432,4 +2434,8 @@ void Mixer::engineBarbellRemoved(const EngineBarbell& engineBarbell)
     }
 }
 
+bool Mixer::isH264Enabled() const
+{
+    return _videoCodecs.h264;
+}
 } // namespace bridge

@@ -4,6 +4,7 @@ const endpointIdLabel: HTMLLabelElement = <HTMLLabelElement>document.getElementB
 const dominantSpeakerLabel: HTMLLabelElement = <HTMLLabelElement>document.getElementById('dominantSpeaker');
 const audioElementsDiv: HTMLDivElement = <HTMLDivElement>document.getElementById('audioElements');
 const videoElementsDiv: HTMLDivElement = <HTMLDivElement>document.getElementById('videoElements');
+const h264Element: HTMLInputElement = <HTMLInputElement>document.getElementById('h264');
 let peerConnection: RTCPeerConnection|undefined = undefined
 let localMediaStream: MediaStream|undefined = undefined;
 let localDataChannel: RTCDataChannel|undefined = undefined;
@@ -54,16 +55,14 @@ async function onPollMessage(resultJson: any)
     if (resultJson.type === 'offer')
     {
         const remoteDescription = new RTCSessionDescription({type : 'offer', sdp : resultJson.payload});
-        console.log("Got offer " + JSON.stringify(remoteDescription));
         await peerConnection.setRemoteDescription(remoteDescription);
 
         let localDescription = await peerConnection.createAnswer();
 
         // Add simulcast layers to the video stream with SDP munging
-        const mediaTracks = localMediaStream.getVideoTracks();
-        mediaTracks.forEach(
-            mediaTrack => { localDescription = addSimulcastSdpLocalDescription(localDescription, mediaTrack.id, 3); });
+        localDescription = addSimulcastSdpLocalDescription(localDescription, 3);
 
+        console.log('set local SDP ' + localDescription.sdp);
         await peerConnection.setLocalDescription(localDescription);
     }
 }
@@ -79,10 +78,10 @@ async function onIceGatheringStateChange(event: Event)
         console.log('ICE candidate gathering complete');
         if (peerConnection.localDescription)
         {
-            console.log('Sending answer ' + JSON.stringify(peerConnection.localDescription));
-
             const url = serverUrl + 'endpoints/' + endpointId + '/actions';
             const body = {type : 'answer', payload : peerConnection.localDescription.sdp};
+
+            console.log('Send answer SDP ' + body.payload);
 
             const requestInit:
                 RequestInit = {method : 'POST', mode : 'cors', cache : 'no-store', body : JSON.stringify(body)};
@@ -319,7 +318,11 @@ async function joinClicked()
     localDataChannel.onmessage = onDataChannelMessage;
 
     const url = serverUrl + 'endpoints/';
-    const body = {};
+    let body: {'video-codecs': string[]} = {'video-codecs' : []};
+    if (h264Element.checked)
+    {
+        body['video-codecs'].push("h264");
+    }
 
     const requestInit: RequestInit = {method : 'POST', mode : 'cors', cache : 'no-store', body : JSON.stringify(body)};
     const request = new Request(url, requestInit);

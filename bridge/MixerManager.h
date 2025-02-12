@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bridge/CodecCapabilities.h"
 #include "bridge/MixerManagerAsync.h"
 #include "bridge/Stats.h"
 #include "bridge/engine/EngineMixer.h"
@@ -60,8 +61,8 @@ public:
 
     ~MixerManager();
 
-    bridge::Mixer* create(bool useGlobalPort);
-    bridge::Mixer* create(uint32_t lastN, bool useGlobalPort);
+    bridge::Mixer* create(bool useGlobalPort, VideoCodecSpec videoCodecs = VideoCodecSpec());
+    bridge::Mixer* create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec videoCodecs = VideoCodecSpec());
     void remove(const std::string& id);
     std::vector<std::string> getMixerIds();
     std::unique_lock<std::mutex> getMixer(const std::string& id, Mixer*& outMixer);
