@@ -90,8 +90,7 @@ public:
         memory::PacketPoolAllocator& mainAllocator,
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<api::SimulcastGroup>& videoSsrcs,
-        const uint32_t lastN,
-        const bool isVideoDisabled);
+        const uint32_t lastN);
 
     ~EngineMixer() override;
 

@@ -90,7 +90,6 @@ class MpmcHashmap32
         tombstone
     };
 
-public:
     struct Entry : public ListItem
     {
         template <typename... Args>
@@ -181,10 +180,16 @@ public:
 
     explicit MpmcHashmap32(size_t maxElements) : _end(0), _capacity(maxElements), _index(maxElements * 4)
     {
-        void* mem = _capacity ? memory::page::allocate(memory::page::alignedSpace(_capacity * sizeof(Entry))) : nullptr;
+        if (_capacity == 0)
+        {
+            _elements = nullptr;
+            return;
+        }
+
+        void* mem = memory::page::allocate(memory::page::alignedSpace(_capacity * sizeof(Entry)));
 
         _elements = reinterpret_cast<Entry*>(mem);
-        assert(maxElements == 0 || memory::isAligned<std::max_align_t>(_elements));
+        assert(memory::isAligned<std::max_align_t>(_elements));
 
         for (size_t i = 0; i < _capacity; ++i)
         {

@@ -96,14 +96,13 @@ public:
         const std::vector<api::SimulcastGroup>& videoSsrcs,
         const std::vector<api::SsrcPair>& videoPinSsrcs,
         VideoCodecSpec videoCodecs,
-        bool useGlobalPort,
-        bool disableVideo);
+        bool useGlobalPort);
 
     virtual ~Mixer() = default;
 
     void markForDeletion();
     bool isMarkedForDeletion() const { return _markedForDeletion; }
-    bool hasVideoDisabled() const { return _videoDisabled; }
+    bool hasVideoDisabled() const { return _videoSsrcs.empty(); }
     void stopTransports();
 
     bool addBundleTransportIfNeeded(const std::string& endpointId, const ice::IceRole iceRole);
@@ -341,7 +340,6 @@ private:
     std::unordered_map<std::string, BundleTransport> _bundleTransports;
     const VideoCodecSpec _videoCodecs;
     const bool _useGlobalPort;
-    const bool _videoDisabled;
     transport::Endpoints _rtpPorts;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _videoPacketCaches;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _recordingRtpPacketCaches;

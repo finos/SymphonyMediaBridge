@@ -71,12 +71,10 @@ private:
                   api::makeSsrcGroup({{4966522, 88641}, {12129487, 63283}, {74634, 76145}}),
                   api::makeSsrcGroup({{2224746, 2121764}, {6523253, 213434}, {74347334, 63223}}),
                   api::makeSsrcGroup({{734634, 121378}, {80034, 700456}, {500763, 100323}})},
-              9,
-              false)
+              9)
     {
     }
 
-public:
 public:
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingBarbellSctp() { return _incomingBarbellSctp; };
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingForwarderAudioRtp() { return _incomingForwarderAudioRtp; };

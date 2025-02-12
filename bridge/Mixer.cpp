@@ -157,8 +157,7 @@ Mixer::Mixer(std::string id,
     const std::vector<api::SimulcastGroup>& videoSsrcs,
     const std::vector<api::SsrcPair>& videoPinSsrcs,
     VideoCodecSpec videoCodecs,
-    bool useGlobalPort,
-    bool disableVideo)
+    bool useGlobalPort)
     : _config(config),
       _id(std::move(id)),
       _loggableId("Mixer", logInstanceId),
@@ -172,8 +171,7 @@ Mixer::Mixer(std::string id,
       _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
       _videoCodecs(videoCodecs),
-      _useGlobalPort(useGlobalPort),
-      _videoDisabled(disableVideo)
+      _useGlobalPort(useGlobalPort)
 {
 }
 
@@ -377,7 +375,7 @@ bool Mixer::addVideoStream(std::string& outId,
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    if (_videoDisabled)
+    if (hasVideoDisabled())
     {
         logger::warn("Tried to allocate video video for endpointId %s when the conference has the video disabled",
             _loggableId.c_str(),
@@ -480,7 +478,7 @@ bool Mixer::addBundledVideoStream(std::string& outId,
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    if (_videoDisabled)
+    if (hasVideoDisabled())
     {
         logger::warn("Tried to allocate video video for endpointId %s when the conference has the video disabled",
             _loggableId.c_str(),

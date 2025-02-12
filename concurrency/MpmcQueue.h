@@ -20,21 +20,20 @@ class MpmcQueue
         {
             emptySlot = 0,
             committed,
-            nullSlot // this a especial slot for when queue is zero capacity, Which make the slot unreadable and
-                     // unwritable
+            nullSlot // special state only for zero size queue
         } state = emptySlot;
     };
 
-    struct EntrySate
+    struct EntryState
     {
-        EntrySate() {}
+        EntryState() {}
 
-        EntrySate(typename CellState::State state) : state(CellState{0, state}) {}
+        EntryState(typename CellState::State state) : state(CellState{0, state}) {}
 
         std::atomic<CellState> state;
     };
 
-    struct Entry : EntrySate
+    struct Entry : EntryState
     {
         Entry() {}
 
@@ -44,10 +43,8 @@ class MpmcQueue
 
     Entry* nullEntry()
     {
-        // Make _elements to point to nullEntry (which is both unreadable and unwritable)
-        // Also we need to const_cast. As _elements can't be const but we know for
-        // empty queues, they will not change
-        return reinterpret_cast<Entry*>(const_cast<EntrySate*>(&_nullEntry));
+        // Dummy entry for empty queues.
+        return reinterpret_cast<Entry*>(const_cast<EntryState*>(&_nullEntry));
     }
 
     static constexpr size_t kEntryPerCacheLine = (63 + sizeof(Entry)) / sizeof(Entry);
@@ -280,23 +277,14 @@ private:
         return cell.state == CellState::committed && cell.version == index.version;
     }
 
-    // Layout below must be maintained for performance. The non atomic member variables may not be place before read
+    // Layout below must be maintained for performance. The non atomic member variables may not be placed before read
     // cursor.
     alignas(64) std::atomic<VersionedIndex> _readCursor;
-
-    // Special Cell state for when queue has zero size
-    // Null Entry is not written and it is only read it when queue is zero size. So it can live in same cache line of
-    // _readCursor without performance impact
-    const EntrySate _nullEntry = CellState::State::nullSlot;
-
     alignas(64) std::atomic<VersionedIndex> _writeCursor;
 
-    // Although they are const. Cache can be invalidated for the reader when _writeCursor
-    // Perhaps is not a big issue (and even compile can optimize it this const values)
-    // but forcing a new cache line also ensures tha nothing is placed in this cache line after
-    // MpmcQueue boundary (which we can predict if can affect performance
-    // of _writeCursor)
-    alignas(64) const uint32_t _capacity;
+    // Entry for zero size queues on the read and write cursor. Make them both unreadable and unwritable
+    const EntryState _nullEntry = CellState::State::nullSlot;
+    const uint32_t _capacity;
     Entry* const _elements;
 };
 } // namespace concurrency

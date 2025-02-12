@@ -172,8 +172,7 @@ Mixer* MixerManager::create(utils::Optional<uint32_t> optionalLastN,
         _mainAllocator,
         audioSsrcs,
         videoSsrcs,
-        lastN,
-        disableVideo);
+        lastN);
 
     if (!engineMixer)
     {
@@ -194,8 +193,7 @@ Mixer* MixerManager::create(utils::Optional<uint32_t> optionalLastN,
             videoSsrcs,
             videoPinSsrcs,
             videoCodecs,
-            useGlobalPort,
-            disableVideo));
+            useGlobalPort));
 
     if (!mixerEmplaceResult.second)
     {
