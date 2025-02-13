@@ -3,4 +3,4 @@ selfInitialization:bridge/AudioStream.h
 selfInitialization:bridge/DataStream.h
 selfInitialization:bridge/VideoStream.h
 nullPointer:test/utils/LogSpamTest.cpp:125
-uninitvar:test/bridge/MixerTest.cpp:90
+uninitvar:test/bridge/MixerTest.cpp:89
