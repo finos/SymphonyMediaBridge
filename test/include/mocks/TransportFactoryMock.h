@@ -100,8 +100,11 @@ public:
 
         ON_CALL(*this, create(_)).WillByDefault(Return(rtcTransport));
         ON_CALL(*this, create(_, _)).WillByDefault(Return(rtcTransport));
+        ON_CALL(*this, create(_, _, _, _, _, _, _)).WillByDefault(Return(rtcTransport));
         ON_CALL(*this, createOnSharedPort(_, _)).WillByDefault(Return(rtcTransport));
+        ON_CALL(*this, createOnSharedPort(_, _, _, _, _, _, _)).WillByDefault(Return(rtcTransport));
         ON_CALL(*this, createOnPrivatePort(_, _)).WillByDefault(Return(rtcTransport));
+        ON_CALL(*this, createOnPrivatePort(_, _, _, _, _, _, _)).WillByDefault(Return(rtcTransport));
     }
 
     void willReturnByDefaultForAllWeakly(const std::weak_ptr<transport::RtcTransport>& rtcTransport)
@@ -116,10 +119,18 @@ public:
             return rtcTransport.lock();
         };
 
+        const auto callback7Args =
+            [=](const auto&, const auto&, const auto&, const auto&, const auto&, const auto&, const auto&) {
+                return rtcTransport.lock();
+            };
+
         ON_CALL(*this, create(_)).WillByDefault(callback1Args);
         ON_CALL(*this, create(_, _)).WillByDefault(callback2Args);
+        ON_CALL(*this, create(_, _, _, _, _, _, _)).WillByDefault(callback7Args);
         ON_CALL(*this, createOnSharedPort(_, _)).WillByDefault(callback2Args);
+        ON_CALL(*this, createOnSharedPort(_, _, _, _, _, _, _)).WillByDefault(callback7Args);
         ON_CALL(*this, createOnPrivatePort(_, _)).WillByDefault(callback2Args);
+        ON_CALL(*this, createOnPrivatePort(_, _, _, _, _, _, _)).WillByDefault(callback7Args);
     }
 };
 
