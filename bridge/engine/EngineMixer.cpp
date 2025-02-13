@@ -16,6 +16,12 @@
 
 using namespace bridge;
 
+namespace
+{
+// Single instance for all conferences with disabled video
+const std::unique_ptr<EngineStreamDirector> kEmptyStreamDirectory = std::make_unique<EngineStreamDirector>();
+} // namespace
+
 namespace bridge
 {
 
@@ -60,7 +66,10 @@ EngineMixer::EngineMixer(const std::string& id,
       _lastReceiveTimeOnBarbellTransports(_lastStartedIterationTimestamp),
       _lastSendTimeOfUserMediaMapMessageOverBarbells(_lastStartedIterationTimestamp),
       _lastCounterCheck(0),
-      _engineStreamDirector(std::make_unique<EngineStreamDirector>(_loggableId.getInstanceId(), config, lastN)),
+      _ownEngineStreamDirector(videoSsrcs.empty()
+              ? nullptr
+              : std::make_unique<EngineStreamDirector>(_loggableId.getInstanceId(), config, lastN)),
+      _engineStreamDirector(_ownEngineStreamDirector ? _ownEngineStreamDirector.get() : kEmptyStreamDirectory.get()),
       _activeMediaList(std::make_unique<ActiveMediaList>(_loggableId.getInstanceId(),
           audioSsrcs,
           videoSsrcs,

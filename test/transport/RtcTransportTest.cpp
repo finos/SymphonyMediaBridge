@@ -68,10 +68,10 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
           _ssrc(ssrc),
           _sendAllocator(allocatorPacketCount, _name.c_str()),
           _audioAllocator(16, _name.c_str()),
-          _transport1(enableIce ? transportFactory->createOnSharedPort(ice::IceRole::CONTROLLED, 128, 1)
-                                : transportFactory->create(128, 1)),
-          _transport2(enableIce ? transportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 128, 2)
-                                : transportFactory->create(128, 2)),
+          _transport1(enableIce ? transportFactory->createOnSharedPort(ice::IceRole::CONTROLLED, 1)
+                                : transportFactory->create(1)),
+          _transport2(enableIce ? transportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 2)
+                                : transportFactory->create(2)),
           _jobManager(jobManager),
           _media1(_sendAllocator, ssrc),
           _media2(_sendAllocator, ssrc + 2)
@@ -211,15 +211,15 @@ struct ClientPair : public transport::DataReceiver, public transport::DecryptedP
 
     void onConnected(RtcTransport*) override {}
     bool onSctpConnectionRequest(RtcTransport*, uint16_t remotePort) override { return true; }
-    void onSctpEstablished(RtcTransport* sender) override{};
+    void onSctpEstablished(RtcTransport* sender) override {};
     void onSctpMessage(RtcTransport* sender,
         uint16_t streamId,
         uint16_t streamSequenceNumber,
         uint32_t payloadProtocol,
         const void* data,
-        size_t length) override{};
+        size_t length) override {};
 
-    void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override{};
+    void onRecControlReceived(RecordingTransport* sender, memory::UniquePacket packet, uint64_t timestamp) override {};
 
     void onIceReceived(transport::RtcTransport* sender, uint64_t timestamp) override {}
 

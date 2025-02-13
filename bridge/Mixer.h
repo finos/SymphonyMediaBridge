@@ -105,7 +105,9 @@ public:
     bool hasVideoDisabled() const { return _videoSsrcs.empty(); }
     void stopTransports();
 
-    bool addBundleTransportIfNeeded(const std::string& endpointId, const ice::IceRole iceRole);
+    bool addBundleTransportIfNeeded(const std::string& endpointId,
+        const ice::IceRole iceRole,
+        const bool hasVideoEnabled);
 
     bool addAudioStream(std::string& outId,
         const std::string& endpointId,

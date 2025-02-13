@@ -71,12 +71,12 @@ class MpmcQueue
     {
         if constexpr (kEntryPerCacheLine == 1)
         {
-            return v.pos % _capacity;
+            return v.pos % _elementsCount;
         }
         else
         {
             const auto p = v.pos * kEntryPerCacheLine;
-            return (p / _capacity + p) % _capacity;
+            return (p / _elementsCount + p) % _elementsCount;
         }
     }
 
@@ -100,6 +100,7 @@ public:
     explicit MpmcQueue(uint32_t capacity)
         : _capacity(
               capacity == 0 ? 0 : (kEntryPerCacheLine * ((capacity + kEntryPerCacheLine - 1) / kEntryPerCacheLine))),
+          _elementsCount(capacity == 0 ? 1 : capacity),
           _elements(capacity == 0 ? nullEntry()
                                   : reinterpret_cast<Entry*>(memory::page::allocate(calculateBlockSize(capacity))))
     {
@@ -285,6 +286,7 @@ private:
     // Entry for zero size queues on the read and write cursor. Make them both unreadable and unwritable
     const EntryState _nullEntry = CellState::State::nullSlot;
     const uint32_t _capacity;
+    const uint32_t _elementsCount;
     Entry* const _elements;
 };
 } // namespace concurrency

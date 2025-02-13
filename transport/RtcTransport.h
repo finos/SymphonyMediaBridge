@@ -141,6 +141,7 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     memory::PacketPoolAllocator& allocator,
     size_t expectedInboundStreamCount,
     size_t expectedOutboundStreamCount,
+    size_t jobQueueSize,
     bool enableUplinkEstimation,
     bool enableDownlinkEstimation);
 

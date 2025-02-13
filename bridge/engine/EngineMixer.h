@@ -400,7 +400,8 @@ protected:
     std::atomic_flag _iceReceivedOnBarbellTransport = ATOMIC_FLAG_INIT;
     uint64_t _lastCounterCheck;
 
-    std::unique_ptr<EngineStreamDirector> _engineStreamDirector;
+    std::unique_ptr<EngineStreamDirector> _ownEngineStreamDirector;
+    EngineStreamDirector* _engineStreamDirector;
     std::unique_ptr<ActiveMediaList> _activeMediaList;
     uint64_t _lastUplinkEstimateUpdate;
     uint64_t _lastIdleTransportCheck;

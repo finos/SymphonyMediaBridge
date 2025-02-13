@@ -270,7 +270,9 @@ bool Mixer::hasPendingTransportJobs()
     return false;
 }
 
-bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice::IceRole iceRole)
+bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId,
+    const ice::IceRole iceRole,
+    const bool hasVideoEnabled)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_bundleTransports.find(endpointId) != _bundleTransports.end())
@@ -289,10 +291,28 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         }
     }
 
+    const bool canDoVideo = hasVideoEnabled && !this->hasVideoDisabled();
+    const bool enableUplinkEstimation = canDoVideo;
+    const size_t expectedInboundStreamCount = canDoVideo ? 16 : 8;
+    const size_t expectedOutboundStreamCount = canDoVideo ? 256 : 16;
+    const size_t jobQueueSize = canDoVideo ? 4096 : 1024;
+
     const auto endpointIdHash = utils::hash<std::string>{}(endpointId);
-    auto transport = _useGlobalPort
-        ? _transportFactory.create(iceRole, 512, endpointIdHash)
-        : _transportFactory.createOnPorts(iceRole, 512, endpointIdHash, _rtpPorts, 16, 256, true, true);
+    auto transport = _useGlobalPort ? _transportFactory.create(iceRole,
+                                          endpointIdHash,
+                                          expectedInboundStreamCount,
+                                          expectedOutboundStreamCount,
+                                          jobQueueSize,
+                                          enableUplinkEstimation,
+                                          true)
+                                    : _transportFactory.createOnPorts(iceRole,
+                                          endpointIdHash,
+                                          _rtpPorts,
+                                          expectedInboundStreamCount,
+                                          expectedOutboundStreamCount,
+                                          jobQueueSize,
+                                          enableUplinkEstimation,
+                                          true);
 
     if (!transport)
     {
@@ -332,9 +352,8 @@ bool Mixer::addAudioStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet()
-        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
-        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId))
+                                     : _transportFactory.create(utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {
@@ -390,9 +409,8 @@ bool Mixer::addVideoStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet()
-        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
-        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId))
+                                     : _transportFactory.create(utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {
@@ -2308,7 +2326,7 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
 
     transport =
         _transportFactory
-            .createOnPorts(iceRole, 64, utils::hash<std::string>{}(barbellId), _barbellPorts, 128, 128, false, false);
+            .createOnPorts(iceRole, utils::hash<std::string>{}(barbellId), _barbellPorts, 128, 128, 4096, false, false);
     if (!transport)
     {
         logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());

@@ -314,7 +314,9 @@ httpd::Response allocateEndpoint(ActionContext* context,
             ? ice::IceRole::CONTROLLED
             : ice::IceRole::CONTROLLING;
 
-        mixer->addBundleTransportIfNeeded(endpointId, iceRole);
+        const bool hasVideoEnabled = allocateChannel.video.isSet();
+
+        mixer->addBundleTransportIfNeeded(endpointId, iceRole, hasVideoEnabled);
 
         if (allocateChannel.audio.isSet())
         {
