@@ -100,7 +100,7 @@ public:
     explicit MpmcQueue(uint32_t capacity)
         : _capacity(
               capacity == 0 ? 0 : (kEntryPerCacheLine * ((capacity + kEntryPerCacheLine - 1) / kEntryPerCacheLine))),
-          _elementsCount(capacity == 0 ? 1 : capacity),
+          _elementsCount(capacity == 0 ? 1 : _capacity),
           _elements(capacity == 0 ? nullEntry()
                                   : reinterpret_cast<Entry*>(memory::page::allocate(calculateBlockSize(capacity))))
     {
