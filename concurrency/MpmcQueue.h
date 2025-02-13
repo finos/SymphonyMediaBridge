@@ -26,7 +26,7 @@ class MpmcQueue
 
     struct EntryState
     {
-        EntryState() {}
+        EntryState() : EntryState(CellState::emptySlot) {}
 
         EntryState(typename CellState::State state) : state(CellState{0, state}) {}
 
@@ -48,11 +48,6 @@ class MpmcQueue
     }
 
     static constexpr size_t kEntryPerCacheLine = (63 + sizeof(Entry)) / sizeof(Entry);
-
-    static constexpr uint32_t calculateFinalCapacity(uint32_t capacity)
-    {
-        return capacity == 0 ? 0 : (kEntryPerCacheLine * ((capacity + kEntryPerCacheLine - 1) / kEntryPerCacheLine));
-    }
 
     static size_t calculateBlockSize(uint32_t finalCapacity)
     {
@@ -102,7 +97,7 @@ public:
               capacity == 0 ? 0 : (kEntryPerCacheLine * ((capacity + kEntryPerCacheLine - 1) / kEntryPerCacheLine))),
           _elementsCount(capacity == 0 ? 1 : _capacity),
           _elements(capacity == 0 ? nullEntry()
-                                  : reinterpret_cast<Entry*>(memory::page::allocate(calculateBlockSize(capacity))))
+                                  : reinterpret_cast<Entry*>(memory::page::allocate(calculateBlockSize(_capacity))))
     {
 
         assert(_capacity == 0 || _capacity > 7);
