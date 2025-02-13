@@ -76,7 +76,6 @@ private:
     }
 
 public:
-public:
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingBarbellSctp() { return _incomingBarbellSctp; };
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingForwarderAudioRtp() { return _incomingForwarderAudioRtp; };
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingRtcp() { return _incomingRtcp; };

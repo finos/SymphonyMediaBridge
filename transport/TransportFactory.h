@@ -44,15 +44,32 @@ class TransportFactory
 public:
     virtual ~TransportFactory() = default;
     virtual std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
-        const size_t endpointId) = 0;
-    virtual std::shared_ptr<RtcTransport> create(const size_t sendPoolSize, const size_t endpointIdHash) = 0;
+        const size_t endpointId,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) = 0;
+    virtual std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole, const size_t endpointId) = 0;
+    virtual std::shared_ptr<RtcTransport> create(const size_t endpointIdHash) = 0;
     virtual std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
+        const size_t endpointIdHash) = 0;
+    virtual std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole,
+        const size_t endpointIdHash,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) = 0;
+    virtual std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole,
         const size_t endpointIdHash) = 0;
     virtual std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
-        const size_t endpointIdHash) = 0;
+        const size_t endpointIdHash,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) = 0;
     virtual std::unique_ptr<RecordingTransport> createForRecording(const size_t endpointHashId,
         const size_t streamHashId,
         const SocketAddress& peer,
@@ -62,11 +79,11 @@ public:
     virtual bool isGood() const = 0;
 
     virtual std::shared_ptr<RtcTransport> createOnPorts(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
         const size_t endpointIdHash,
         const Endpoints& rtpPorts,
         size_t expectedInboundStreamCount,
         size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
         bool enableUplinkEstimation,
         bool enableDownlinkEstimation) = 0;
 

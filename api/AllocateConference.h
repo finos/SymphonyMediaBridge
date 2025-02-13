@@ -11,6 +11,7 @@ struct AllocateConference
 {
     utils::Optional<uint32_t> lastN;
     bool useGlobalPort = true;
+    bool disableVideo = false;
     bridge::VideoCodecSpec videoCodecs = bridge::VideoCodecSpec::makeVp8();
 };
 

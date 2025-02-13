@@ -504,7 +504,7 @@ TEST_F(IntegrationTest, probing)
 
         // Setup transport and attempt to connect to trigger ICE probing
         // Note: use CONTROLLING role
-        auto transport = _clientTransportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 256 * 1024, 1);
+        auto transport = _clientTransportFactory->createOnPrivatePort(ice::IceRole::CONTROLLING, 1);
 
         transport->setRemoteIce(candidatesAndCredentials.second, candidatesAndCredentials.first, _audioAllocator);
         transport->start();

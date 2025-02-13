@@ -110,12 +110,12 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
       _dominantSpeaker(0),
       _nominatedSpeaker(0),
-      _videoParticipants(maxParticipants),
-      _videoSsrcs(SsrcRewrite::ssrcArraySize * 2),
-      _videoFeedbackSsrcLookupMap(SsrcRewrite::ssrcArraySize * 2),
-      _videoSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
-      _reverseVideoSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
-      _activeVideoListLookupMap(32),
+      _videoParticipants(videoSsrcs.empty() ? 0 : maxParticipants),
+      _videoSsrcs(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _videoFeedbackSsrcLookupMap(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _videoSsrcRewriteMap(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _reverseVideoSsrcRewriteMap(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _activeVideoListLookupMap(videoSsrcs.empty() ? 0 : 32),
 #if DEBUG
       _reentrancyCounter(0),
 #endif
@@ -803,7 +803,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
     }
 
     for (auto videoListEntry = _activeVideoList.tail(); videoListEntry && addedElements < lastN;
-         videoListEntry = videoListEntry->_previous)
+        videoListEntry = videoListEntry->_previous)
     {
         if (videoListEntry->_data == endpointIdHash ||
             (videoListEntry->_data == pinTargetEndpointIdHash && !isPinTargetInActiveVideoList))

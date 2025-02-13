@@ -16,6 +16,12 @@
 
 using namespace bridge;
 
+namespace
+{
+// Single instance for all conferences with disabled video
+const std::unique_ptr<EngineStreamDirector> kEmptyStreamDirectory = std::make_unique<EngineStreamDirector>();
+} // namespace
+
 namespace bridge
 {
 
@@ -39,16 +45,16 @@ EngineMixer::EngineMixer(const std::string& id,
       _messageListener(messageListener),
       _incomingBarbellSctp(128),
       _incomingForwarderAudioRtp(maxPendingPackets),
-      _incomingRtcp(maxPendingRtcpPackets),
-      _incomingForwarderVideoRtp(maxPendingPackets),
+      _incomingRtcp(videoSsrcs.empty() ? maxPendingRtcpPacketsVideoDisabled : maxPendingRtcpPackets),
+      _incomingForwarderVideoRtp(videoSsrcs.empty() ? 0 : maxPendingPackets),
       _engineAudioStreams(maxStreamsPerModality),
-      _engineVideoStreams(maxStreamsPerModality),
+      _engineVideoStreams(videoSsrcs.empty() ? 0 : maxStreamsPerModality),
       _engineDataStreams(maxStreamsPerModality),
       _engineRecordingStreams(maxRecordingStreams),
       _engineBarbells(maxNumBarbells),
       _neighbourMemberships(ActiveMediaList::maxParticipants),
-      _ssrcInboundContexts(maxSsrcs),
-      _allSsrcInboundContexts(maxSsrcs),
+      _ssrcInboundContexts(videoSsrcs.empty() ? maxSsrcsVideoDisabled : maxSsrcs),
+      _allSsrcInboundContexts(videoSsrcs.empty() ? maxSsrcsVideoDisabled : maxSsrcs),
       _audioSsrcToUserIdMap(ActiveMediaList::maxParticipants),
       _localVideoSsrc(localVideoSsrc),
       _rtpTimestampSource(1000),
@@ -60,7 +66,10 @@ EngineMixer::EngineMixer(const std::string& id,
       _lastReceiveTimeOnBarbellTransports(_lastStartedIterationTimestamp),
       _lastSendTimeOfUserMediaMapMessageOverBarbells(_lastStartedIterationTimestamp),
       _lastCounterCheck(0),
-      _engineStreamDirector(std::make_unique<EngineStreamDirector>(_loggableId.getInstanceId(), config, lastN)),
+      _ownEngineStreamDirector(videoSsrcs.empty()
+              ? nullptr
+              : std::make_unique<EngineStreamDirector>(_loggableId.getInstanceId(), config, lastN)),
+      _engineStreamDirector(_ownEngineStreamDirector ? _ownEngineStreamDirector.get() : kEmptyStreamDirectory.get()),
       _activeMediaList(std::make_unique<ActiveMediaList>(_loggableId.getInstanceId(),
           audioSsrcs,
           videoSsrcs,

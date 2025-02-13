@@ -334,21 +334,51 @@ public:
         return endPoints;
     }
 
-    std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
-        const size_t endpointId) override
+    virtual std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole,
+        const size_t endpointId,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) override
     {
         if (!_sharedEndpoints.empty())
         {
-            return createOnSharedPort(iceRole, sendPoolSize, endpointId);
+            return createOnSharedPort(iceRole,
+                endpointId,
+                expectedInboundStreamCount,
+                expectedOutboundStreamCount,
+                jobQueueSize,
+                enableUplinkEstimation,
+                enableDownlinkEstimation);
         }
 
-        return createOnPrivatePort(iceRole, sendPoolSize, endpointId);
+        return createOnPrivatePort(iceRole,
+            endpointId,
+            expectedInboundStreamCount,
+            expectedOutboundStreamCount,
+            jobQueueSize,
+            enableUplinkEstimation,
+            enableDownlinkEstimation);
     }
 
-    std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
-        const size_t endpointId) override
+    std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole, const size_t endpointId) override
+    {
+        return create(iceRole, endpointId, 16, 256, 4096, true, true);
+    }
+
+    std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole, const size_t endpointId) override
+    {
+        return createOnPrivatePort(iceRole, endpointId, 16, 256, 4096, false, false);
+    }
+
+    virtual std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole,
+        const size_t endpointIdHash,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) override
     {
         Endpoints rtpPorts;
         for (auto& interface : _interfaces)
@@ -360,7 +390,7 @@ public:
         {
             return transport::createTransport(_jobManager,
                 _srtpClientFactory,
-                endpointId,
+                endpointIdHash,
                 _config,
                 _sctpConfig,
                 _iceConfig,
@@ -371,20 +401,21 @@ public:
                 _tcpServerEndpoints,
                 this,
                 _mainAllocator,
-                16,
-                256,
-                false,
-                false);
+                expectedInboundStreamCount,
+                expectedOutboundStreamCount,
+                jobQueueSize,
+                enableUplinkEstimation,
+                enableDownlinkEstimation);
         }
         return nullptr;
     }
 
     std::shared_ptr<RtcTransport> createOnPorts(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
         const size_t endpointId,
         const Endpoints& rtpPorts,
         size_t expectedInboundStreamCount,
         size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
         bool enableUplinkEstimation,
         bool enableDownlinkEstimation) override
     {
@@ -403,18 +434,28 @@ public:
             _mainAllocator,
             expectedInboundStreamCount,
             expectedOutboundStreamCount,
+            jobQueueSize,
             enableUplinkEstimation,
             enableDownlinkEstimation);
     }
 
-    std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole,
-        const size_t sendPoolSize,
-        const size_t endpointId) override
+    std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole, const size_t endpointId) override
+    {
+        return createOnSharedPort(iceRole, endpointId, 16, 256, 4096, true, true);
+    }
+
+    virtual std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole,
+        const size_t endpointIdHash,
+        size_t expectedInboundStreamCount,
+        size_t expectedOutboundStreamCount,
+        size_t jobQueueSize,
+        bool enableUplinkEstimation,
+        bool enableDownlinkEstimation) override
     {
         const uint32_t index = _sharedEndpointListIndex.fetch_add(1) % _sharedEndpoints.size();
         return transport::createTransport(_jobManager,
             _srtpClientFactory,
-            endpointId,
+            endpointIdHash,
             _config,
             _sctpConfig,
             _iceConfig,
@@ -425,13 +466,14 @@ public:
             _tcpServerEndpoints,
             this,
             _mainAllocator,
-            16,
-            256,
-            true,
-            true);
+            expectedInboundStreamCount,
+            expectedOutboundStreamCount,
+            jobQueueSize,
+            enableUplinkEstimation,
+            enableDownlinkEstimation);
     }
 
-    std::shared_ptr<RtcTransport> create(const size_t sendPoolSize, const size_t endpointId) override
+    std::shared_ptr<RtcTransport> create(const size_t endpointId) override
     {
         Endpoints rtpPorts;
         Endpoints rtcpPorts;
@@ -466,7 +508,7 @@ public:
             do
             {
                 for (size_t endpointIndex = 0; endpointIndex < _sharedRecordingEndpoints[listIndex].size();
-                     ++endpointIndex)
+                    ++endpointIndex)
                 {
                     auto endpoint = _sharedRecordingEndpoints[listIndex][endpointIndex];
                     if (endpoint->getLocalPort().getFamily() == peer.getFamily())

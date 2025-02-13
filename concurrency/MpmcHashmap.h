@@ -180,6 +180,12 @@ public:
 
     explicit MpmcHashmap32(size_t maxElements) : _end(0), _capacity(maxElements), _index(maxElements * 4)
     {
+        if (_capacity == 0)
+        {
+            _elements = nullptr;
+            return;
+        }
+
         void* mem = memory::page::allocate(memory::page::alignedSpace(_capacity * sizeof(Entry)));
 
         _elements = reinterpret_cast<Entry*>(mem);
@@ -202,7 +208,10 @@ public:
             }
         }
 
-        memory::page::free(_elements, memory::page::alignedSpace(_capacity * sizeof(Entry)));
+        if (_capacity)
+        {
+            memory::page::free(_elements, memory::page::alignedSpace(_capacity * sizeof(Entry)));
+        }
     }
 
     template <typename... Args>
@@ -321,7 +330,9 @@ public:
     {
         _index.reInitialize();
         ListItem* item = nullptr;
-        while (_freeItems.pop(item)) {}
+        while (_freeItems.pop(item))
+        {
+        }
 
         for (size_t i = 0; i < _capacity; ++i)
         {

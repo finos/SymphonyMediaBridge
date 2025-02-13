@@ -238,7 +238,9 @@ public: // private but called from helper method
 protected:
     static const size_t maxPendingPackets = 8192;
     static const size_t maxPendingRtcpPackets = 2048;
+    static const size_t maxPendingRtcpPacketsVideoDisabled = 512;
     static const size_t maxSsrcs = 8192;
+    static const size_t maxSsrcsVideoDisabled = 1024;
     static const size_t maxStreamsPerModality = 4096;
     static const size_t maxRecordingStreams = 8;
 
@@ -398,7 +400,8 @@ protected:
     std::atomic_flag _iceReceivedOnBarbellTransport = ATOMIC_FLAG_INIT;
     uint64_t _lastCounterCheck;
 
-    std::unique_ptr<EngineStreamDirector> _engineStreamDirector;
+    std::unique_ptr<EngineStreamDirector> _ownEngineStreamDirector;
+    EngineStreamDirector* _engineStreamDirector;
     std::unique_ptr<ActiveMediaList> _activeMediaList;
     uint64_t _lastUplinkEstimateUpdate;
     uint64_t _lastIdleTransportCheck;
