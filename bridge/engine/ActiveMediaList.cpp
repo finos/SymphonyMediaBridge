@@ -124,7 +124,7 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _ssrcMapRevision(0),
       _transactionCounter(audioSsrcs[0])
 {
-    assert(videoSsrcs.size() >= _maxActiveListSize + 2);
+    assert(videoSsrcs.empty() || videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 

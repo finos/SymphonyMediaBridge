@@ -28,8 +28,9 @@ class VideoForwarderRtxReceiveJobTest : public ::testing::Test
 protected:
     void SetUp() override
     {
+        _engineMixerSpyResources = std::make_unique<test::EngineMixerSpy::EngineMixerResources>();
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "VideoForwarderRtxReceiveJobTest");
-        _engineMixerSpy = EngineMixerSpy::createDefault();
+        _engineMixerSpy = std::make_unique<test::EngineMixerSpy>(*_engineMixerSpyResources);
 
         _ssrcRtxInboundContext = std::make_unique<bridge::SsrcInboundContext>(kRtxSsrc, RTX_RTP_MAP, nullptr, 0, 0, 0);
         _ssrcMainInboundContext =
@@ -43,6 +44,7 @@ protected:
         _ssrcRtxInboundContext = nullptr;
         _engineMixerSpy = nullptr;
         _allocator = nullptr;
+        _engineMixerSpyResources = nullptr;
     }
 
     memory::UniquePacket makeRtxPacket(uint16_t rtxPacketSeq, uint32_t mainPacketSeq)
@@ -61,6 +63,7 @@ protected:
     }
 
 protected:
+    std::unique_ptr<test::EngineMixerSpy::EngineMixerResources> _engineMixerSpyResources;
     std::unique_ptr<memory::PacketPoolAllocator> _allocator;
     std::unique_ptr<test::EngineMixerSpy> _engineMixerSpy;
     std::unique_ptr<bridge::SsrcInboundContext> _ssrcRtxInboundContext;

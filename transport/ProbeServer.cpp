@@ -14,12 +14,20 @@ namespace transport
 ProbeServer::ProbeServer(const ice::IceConfig& iceConfig,
     const config::Config& config,
     jobmanager::JobManager& jobmanager)
+    : ProbeServer(iceConfig, config, jobmanager, std::thread([this] { this->run(); }))
+{
+}
+
+ProbeServer::ProbeServer(const ice::IceConfig& iceConfig,
+    const config::Config& config,
+    jobmanager::JobManager& jobmanager,
+    std::thread&& outsideThread)
     : _iceConfig(iceConfig),
       _config(config),
       _jobQueue(jobmanager, 1024),
       _queue(1024),
       _maintenanceThreadIsRunning(true),
-      _maintenanceThread(new std::thread([this] { this->run(); }))
+      _maintenanceThread(std::make_unique<std::thread>(std::move(outsideThread)))
 {
     char ufrag[14 + 1];
     char pwd[24 + 1]; // length selected to make attribute *4 length

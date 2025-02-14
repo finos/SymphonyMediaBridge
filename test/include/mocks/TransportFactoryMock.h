@@ -1,5 +1,6 @@
 #pragma once
 
+#include "transport/RecordingTransport.h"
 #include "transport/TransportFactory.h"
 #include <gmock/gmock.h>
 

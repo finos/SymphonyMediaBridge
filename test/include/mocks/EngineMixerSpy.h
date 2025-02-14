@@ -46,18 +46,18 @@ public:
     // using parent constructor
     using bridge::EngineMixer::EngineMixer;
 
-private:
-    EngineMixerSpy(std::unique_ptr<EngineMixerResources>&& resources)
-        : EngineMixerSpy(resources->id,
-              resources->jobManager,
-              concurrency::SynchronizationContext(resources->engineTaskQueue),
-              resources->backgroundJobManager,
-              resources->mixerManagerAsyncMock,
+public:
+    EngineMixerSpy(EngineMixerResources& resources)
+        : EngineMixerSpy(resources.id,
+              resources.jobManager,
+              concurrency::SynchronizationContext(resources.engineTaskQueue),
+              resources.backgroundJobManager,
+              resources.mixerManagerAsyncMock,
               27482742,
-              resources->config,
-              resources->senderAllocator,
-              resources->audioAllocator,
-              resources->mainAllocator,
+              resources.config,
+              resources.senderAllocator,
+              resources.audioAllocator,
+              resources.mainAllocator,
               {4373732u},
               {api::makeSsrcGroup({{3746438, 363463}, {482473, 754432}, {93232326, 55443221}}),
                   api::makeSsrcGroup({{373434, 355625}, {6655433, 723623}, {77346343, 327362}}),
@@ -95,15 +95,6 @@ public:
         return _engineRecordingStreams;
     }
     concurrency::MpmcHashmap32<size_t, bridge::EngineBarbell*>& spyEngineBarbells() { return _engineBarbells; }
-
-    static std::unique_ptr<EngineMixerSpy> createDefault()
-    {
-        auto resources = std::make_unique<EngineMixerResources>();
-        return std::unique_ptr<EngineMixerSpy>(new EngineMixerSpy(std::move(resources)));
-    }
-
-private:
-    std::unique_ptr<EngineMixerResources> _resources;
 };
 
 } // namespace test

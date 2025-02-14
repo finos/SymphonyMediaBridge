@@ -201,9 +201,9 @@ Mixer* MixerManager::create(utils::Optional<uint32_t> optionalLastN,
         return nullptr;
     }
 
-
     utils::StringBuilder<1024> b;
-    if (!videoSsrcs.empty()) {
+    if (!videoSsrcs.empty())
+    {
         b.append("local ").append(localVideoSsrc);
         b.append(" slides ").append(videoSsrcs[0][0].main);
         b.append(" pins");
@@ -212,10 +212,11 @@ Mixer* MixerManager::create(utils::Optional<uint32_t> optionalLastN,
             b.append(" ");
             b.append(pinSsrc.main);
         }
-    } else {
+    }
+    else
+    {
         b.append("video disabled");
     }
-
 
     logger::info("Mixer-%zu id=%s, %s",
         "MixerManager",
