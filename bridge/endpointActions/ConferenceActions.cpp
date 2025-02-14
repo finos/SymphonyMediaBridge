@@ -450,7 +450,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         }
     }
 
-    if (allocateChannel.video.isSet())
+    if (allocateChannel.video.isSet() && !mixer->hasVideoDisabled())
     {
         while (!mixer->isVideoStreamGatheringComplete(endpointId) && totalSleepTimeMs < gatheringCompleteMaxWaitMs)
         {
