@@ -125,11 +125,16 @@ public:
 
         _mixerManagerSpy = nullptr;
         _probeServer = nullptr;
-        _mixerManagerSpyResources = nullptr;
         _transportMock = nullptr;
 
         running = false;
         thread.join();
+
+        _probeServerProcessor = nullptr;
+        _managerQueueProcessor = nullptr;
+
+        _mixerManagerSpyResources = nullptr;
+        _probeServerJobManager = nullptr;
     }
 
     ApiRequestHandler createApiRequestHandler()
@@ -169,7 +174,6 @@ protected:
 
 TEST_F(ApiRequestHandlerTest, createConference)
 {
-
     auto requestHandler = createApiRequestHandler();
 
     const char* body = R"({
