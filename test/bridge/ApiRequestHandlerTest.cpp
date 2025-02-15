@@ -1,6 +1,7 @@
 
 #include "bridge/ApiRequestHandler.h"
 #include "bridge/Mixer.h"
+#include "mocks/EngineMixerSpy.h"
 #include "mocks/MixerManagerSpy.h"
 #include "mocks/RtcTransportMock.h"
 #include "transport/ProbeServer.h"
@@ -201,7 +202,6 @@ TEST_F(ApiRequestHandlerTest, createConference)
 
 TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableTrue)
 {
-
     auto requestHandler = createApiRequestHandler();
 
     const char* body = R"({
@@ -231,6 +231,17 @@ TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableTrue)
     ASSERT_NE(nullptr, mixer);
 
     ASSERT_EQ(true, mixer->hasVideoDisabled());
+
+    EngineMixerSpy* engineMixerSpy = EngineMixerSpy::spy(mixer->getEngineMixer());
+
+    // Check all video related things have zero capacity
+    ASSERT_EQ(0, engineMixerSpy->spyEngineVideoStreams().capacity());
+    ASSERT_EQ(0, engineMixerSpy->spyIncomingForwarderVideoRtp().capacity());
+
+    // Check the other fields are using the write capacity values
+    ASSERT_EQ(EngineMixerSpy::maxPendingRtcpPacketsVideoDisabled, engineMixerSpy->spyIncomingRtcp().capacity());
+    ASSERT_EQ(EngineMixerSpy::maxSsrcsVideoDisabled, engineMixerSpy->spySsrcInboundContexts().capacity());
+    ASSERT_EQ(EngineMixerSpy::maxSsrcsVideoDisabled, engineMixerSpy->spyAllSsrcInboundContexts().capacity());
 }
 
 TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableFalse)
@@ -264,6 +275,15 @@ TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableFalse)
     ASSERT_NE(nullptr, mixer);
 
     ASSERT_EQ(false, mixer->hasVideoDisabled());
+
+    EngineMixerSpy* engineMixerSpy = EngineMixerSpy::spy(mixer->getEngineMixer());
+
+    ASSERT_EQ(EngineMixerSpy::maxStreamsPerModality, engineMixerSpy->spyEngineVideoStreams().capacity());
+    ASSERT_EQ(EngineMixerSpy::maxPendingPackets, engineMixerSpy->spyIncomingForwarderVideoRtp().capacity());
+
+    ASSERT_EQ(EngineMixerSpy::maxPendingRtcpPackets, engineMixerSpy->spyIncomingRtcp().capacity());
+    ASSERT_EQ(EngineMixerSpy::maxSsrcs, engineMixerSpy->spySsrcInboundContexts().capacity());
+    ASSERT_EQ(EngineMixerSpy::maxSsrcs, engineMixerSpy->spyAllSsrcInboundContexts().capacity());
 }
 
 TEST_F(ApiRequestHandlerTest, allocateEndpointWithVideoFieldWhenVideoIsDisabledShouldNotReturnVideo)

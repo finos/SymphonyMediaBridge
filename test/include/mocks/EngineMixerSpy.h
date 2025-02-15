@@ -94,7 +94,27 @@ public:
     {
         return _engineRecordingStreams;
     }
+
     concurrency::MpmcHashmap32<size_t, bridge::EngineBarbell*>& spyEngineBarbells() { return _engineBarbells; }
+
+    concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext*>& spySsrcInboundContexts()
+    {
+        return _ssrcInboundContexts;
+    }
+
+    concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext>& spyAllSsrcInboundContexts()
+    {
+        return _allSsrcInboundContexts;
+    }
+
+    static EngineMixerSpy* spy(EngineMixer* EngineMixer)
+    {
+        // ATTENTION:
+        // We are going to reinterpret the pointer to the Spy pointer. This is only safe as long there is no virtual
+        // methods (as the vtable will be wrong) and there is EngineMixerSpy doesn't add more fields that would cause
+        // reading memory out of EngineMixer* boundaries
+        return reinterpret_cast<EngineMixerSpy*>(EngineMixer);
+    }
 };
 
 } // namespace test
