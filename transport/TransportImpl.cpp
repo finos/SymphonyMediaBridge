@@ -269,7 +269,7 @@ public:
 
     void run() override
     {
-        auto value = --_counter;
+        [[maybe_unused]] auto value = --_counter;
         assert(value != 0xFFFFFFFFu);
     }
 

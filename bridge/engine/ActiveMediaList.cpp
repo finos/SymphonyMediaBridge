@@ -210,7 +210,7 @@ bool ActiveMediaList::onAudioParticipantAdded(const size_t endpointIdHash, const
         ssrc);
 
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
-    const bool pushResult = _activeAudioList.pushToHead(endpointIdHash);
+    [[maybe_unused]] const bool pushResult = _activeAudioList.pushToHead(endpointIdHash);
     assert(pushResult);
     ++_ssrcMapRevision;
     return true;
@@ -258,7 +258,7 @@ bool ActiveMediaList::addBarbellVideoParticipant(const size_t endpointIdHash,
             return false;
         }
 
-        const bool wasRemoved = removeVideoParticipant(endpointIdHash);
+        [[maybe_unused]] const bool wasRemoved = removeVideoParticipant(endpointIdHash);
         assert(wasRemoved);
     }
 
@@ -338,7 +338,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
             simulcastGroup[2].main);
     }
 
-    const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
+    [[maybe_unused]] const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
     logger::info("new video endpoint %s %zu, added to active video list, original ssrc %u",
         _logId.c_str(),
         endpointId,
@@ -600,7 +600,7 @@ bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
             assert(false);
             return false;
         }
-        const auto pushResult = _activeAudioList.pushToTail(endpointIdHash);
+        [[maybe_unused]] const auto pushResult = _activeAudioList.pushToTail(endpointIdHash);
         assert(pushResult);
         return false; // content did not change
     }
@@ -634,7 +634,7 @@ bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
     }
 
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
-    const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
+    [[maybe_unused]] const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
     assert(pushResult);
     ++_ssrcMapRevision;
     return true;
@@ -699,7 +699,7 @@ bool ActiveMediaList::updateActiveVideoList(const size_t endpointIdHash)
         addToVideoRewriteMap(endpointIdHash, simulcastGroup);
     }
 
-    const bool addResult = _activeVideoList.pushToTail(endpointIdHash);
+    [[maybe_unused]] const bool addResult = _activeVideoList.pushToTail(endpointIdHash);
     assert(addResult);
     _activeVideoListLookupMap.emplace(endpointIdHash, _activeVideoList.tail());
     return true;

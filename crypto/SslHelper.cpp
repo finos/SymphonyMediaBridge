@@ -128,9 +128,9 @@ void HMAC::add(const void* data, int length)
 {
     assert(length > 0);
 #if OPENSSL_VERSION_MAJOR >= 3
-    const auto success = EVP_MAC_update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
+    [[maybe_unused]] const auto success = EVP_MAC_update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
 #else
-    const auto success = HMAC_Update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
+    [[maybe_unused]] const auto success = HMAC_Update(_ctx, reinterpret_cast<const uint8_t*>(data), length);
 #endif
     assert(success);
 }
@@ -142,10 +142,10 @@ void HMAC::compute(uint8_t* sha) const
 {
 #if OPENSSL_VERSION_MAJOR >= 3
     size_t outLen = 20;
-    const auto success = EVP_MAC_final(_ctx, sha, &outLen, outLen);
+    [[maybe_unused]] const auto success = EVP_MAC_final(_ctx, sha, &outLen, outLen);
 #else
     uint32_t outLen = 0;
-    const auto success = HMAC_Final(_ctx, sha, &outLen);
+    [[maybe_unused]] const auto success = HMAC_Final(_ctx, sha, &outLen);
 #endif
     assert(success);
     assert(outLen == 20);

@@ -646,7 +646,7 @@ public:
     bool onSctpConnectionRequest(transport::RtcTransport* sender, uint16_t remotePort) override { return false; }
     void onSctpEstablished(transport::RtcTransport* sender) override
     {
-        auto streamId = _dataStream->open(_loggableId.c_str());
+        [[maybe_unused]] auto streamId = _dataStream->open(_loggableId.c_str());
         assert(streamId != 0xFFFFu);
     }
 

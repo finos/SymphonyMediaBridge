@@ -44,7 +44,7 @@ void workRun(T* list, std::atomic_bool* running)
             tmp.push(item);
         }
 
-        int count = tmp.size();
+        [[maybe_unused]] int count = tmp.size();
         assert(count == i);
         while (tmp.pop(item))
         {

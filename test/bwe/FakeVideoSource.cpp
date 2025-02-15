@@ -50,7 +50,8 @@ void FakeVideoSource::tryFillFramePayload(unsigned char* packet, size_t length, 
     }
     payload[1] = 0; // payload[payloadDescriptorSize] & 0x1) == 0x0
 
-    bool hasSpaceForPayload = rtpHeader->headerLength() + VP8_HEADER_SIZE + sizeof(FakeVideoFrameData) <= length;
+    [[maybe_unused]] bool hasSpaceForPayload =
+        rtpHeader->headerLength() + VP8_HEADER_SIZE + sizeof(FakeVideoFrameData) <= length;
     assert(hasSpaceForPayload);
 
     FakeVideoFrameData frameData;

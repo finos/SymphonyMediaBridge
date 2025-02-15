@@ -470,7 +470,7 @@ TEST_F(RealTimeTest, localVideoMeeting)
 
     Conference conf(nullptr);
 
-    auto confOk = group.startConference(conf, baseUrl);
+    [[maybe_unused]] auto confOk = group.startConference(conf, baseUrl);
     assert(confOk);
     CallConfigBuilder cfg(conf.getId());
     cfg.url(baseUrl).withAudio().withVideo();

@@ -207,7 +207,7 @@ void LoggerThread::post(std::chrono::system_clock::time_point timestamp,
         else
         {
             const int groupLength = snprintf(log.message, logLength + 1, "[%s] ", logGroup);
-            const int messageLength =
+            [[maybe_unused]] const int messageLength =
                 vsnprintf(log.message + groupLength, logLength + 1 - groupLength, format, args2ndSprintf);
             assert(messageLength + groupLength <= logLength);
         }

@@ -2190,7 +2190,7 @@ void Mixer::engineRecordingDescStopped(const RecordingDescription& recordingDesc
         return;
     }
 
-    const size_t erasedCount = stream->_attachedRecording.erase(recordingDesc.recordingId);
+    [[maybe_unused]] const size_t erasedCount = stream->_attachedRecording.erase(recordingDesc.recordingId);
     assert(erasedCount == 1);
 }
 
