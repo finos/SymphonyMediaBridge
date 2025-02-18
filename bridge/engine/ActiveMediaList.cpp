@@ -869,14 +869,15 @@ const std::map<size_t, ActiveTalker> ActiveMediaList::getActiveTalkers() const
 }
 
 bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage,
-    const engine::EndpointMembershipsMap& neighbourMembershipMap)
+    const engine::EndpointMembershipsMap& neighbourMembershipMap,
+    bool includeVideo)
 {
     auto umm = json::writer::createObjectWriter(outMessage);
     umm.addProperty("type", "user-media-map");
     umm.addProperty("msg-id", ++_transactionCounter);
 
     bool slidesAdded = false;
-    if (!_videoSsrcRewriteMap.empty() || _videoScreenShareSsrcMapping.isSet())
+    if (includeVideo && (!_videoSsrcRewriteMap.empty() || _videoScreenShareSsrcMapping.isSet()))
     {
         auto videoArray = json::writer::createArrayWriter(outMessage, "video-endpoints");
         for (auto& item : _videoSsrcRewriteMap)

@@ -216,6 +216,13 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     auto videoEndpointsArray = mediaMapJson["video-endpoints"].getArray();
     auto audioEndpointsArray = mediaMapJson["audio-endpoints"].getArray();
 
+    if (_engineVideoStreams.capacity() == 0 && videoEndpointsArray.size() > 0)
+    {
+        // Just create an empty video-endpoint array in case this conference is not configured to have video (this
+        // should not happen)
+        videoEndpointsArray = utils::SimpleJsonArray(nullptr, nullptr);
+    }
+
     memory::Map<size_t, BarbellMapItem, 16> videoSsrcs;
     copyToBarbellMapItemArray(videoEndpointsArray, videoSsrcs);
     for (auto& stream : barbell->videoStreams)
@@ -638,7 +645,8 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     }
 
     utils::StringBuilder<1024> userMediaMapMessage;
-    _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessage, _neighbourMemberships);
+    utils::StringBuilder<1024> userMediaMapMessageNoVideo;
+    const bool isVideoDisabled = _engineVideoStreams.capacity() == 0;
 
     logger::debug("send BB msg %s", _loggableId.c_str(), userMediaMapMessage.get());
 
@@ -646,7 +654,27 @@ void EngineMixer::sendUserMediaMapMessageOverBarbells()
     {
         if (barbell.second->dataChannel.isOpen())
         {
-            barbell.second->dataChannel.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
+            if (isVideoDisabled || barbell.second->hasVideoDisabled())
+            {
+                if (userMediaMapMessageNoVideo.empty())
+                {
+                    _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessageNoVideo,
+                        _neighbourMemberships,
+                        false);
+                }
+
+                barbell.second->dataChannel.sendString(userMediaMapMessageNoVideo.get(),
+                    userMediaMapMessageNoVideo.getLength());
+            }
+            else
+            {
+                if (userMediaMapMessage.empty())
+                {
+                    _activeMediaList->makeBarbellUserMediaMapMessage(userMediaMapMessage, _neighbourMemberships, true);
+                }
+
+                barbell.second->dataChannel.sendString(userMediaMapMessage.get(), userMediaMapMessage.getLength());
+            }
         }
     }
 }
@@ -761,6 +789,11 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
     {
         auto& barbell = *it.second;
 
+        if (barbell.hasVideoDisabled())
+        {
+            continue;
+        }
+
         uint32_t targetSsrc = 0;
         const auto simulcastLevel = packetInfo.inboundContext()->simulcastLevel;
         const auto& screenShareSsrcMapping = _activeMediaList->getVideoScreenShareSsrcMapping();
@@ -782,8 +815,11 @@ void EngineMixer::forwardVideoRtpPacketOverBarbell(IncomingPacketInfo& packetInf
             targetSsrc = (*rewriteMapping)[simulcastLevel].main;
         }
 
-        auto* ssrcOutboundContext =
-            obtainOutboundSsrcContext(barbell.idHash, barbell.ssrcOutboundContexts, targetSsrc, barbell.videoRtpMap, bridge::RtpMap::EMPTY);
+        auto* ssrcOutboundContext = obtainOutboundSsrcContext(barbell.idHash,
+            barbell.ssrcOutboundContexts,
+            targetSsrc,
+            barbell.videoRtpMap,
+            bridge::RtpMap::EMPTY);
 
         if (!ssrcOutboundContext)
         {

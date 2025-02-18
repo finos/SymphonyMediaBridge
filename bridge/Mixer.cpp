@@ -396,7 +396,7 @@ bool Mixer::addVideoStream(std::string& outId,
 
     if (hasVideoDisabled())
     {
-        logger::warn("Tried to allocate video video for endpointId %s when the conference has the video disabled",
+        logger::warn("Tried to allocate video for endpointId %s when the conference has the video disabled",
             _loggableId.c_str(),
             endpointId.c_str());
         return false;
@@ -498,7 +498,7 @@ bool Mixer::addBundledVideoStream(std::string& outId,
 
     if (hasVideoDisabled())
     {
-        logger::warn("Tried to allocate video video for endpointId %s when the conference has the video disabled",
+        logger::warn("Tried to allocate video for endpointId %s when the conference has the video disabled",
             _loggableId.c_str(),
             endpointId.c_str());
         return false;
@@ -2405,6 +2405,7 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     const bridge::RtpMap& videoFeedbackRtpMap)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
+
     auto barbellItr = _barbells.find(barbellId);
     if (barbellItr == _barbells.end())
     {
@@ -2413,14 +2414,24 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
 
     auto& barbell = barbellItr->second;
     barbell->audioSsrcs = audioSsrcs;
-    barbell->videoSsrcs = videoSsrcs;
 
     barbell->audioRtpMap = audioRtpMap;
     // TODO: support telephone-events over barbells
     barbell->transport->setAudioPayloads(audioRtpMap.payloadType, utils::NullOpt, audioRtpMap.sampleRate);
 
-    barbell->videoRtpMap = videoRtpMap;
-    barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;
+    if (!hasVideoDisabled())
+    {
+        barbell->videoSsrcs = videoSsrcs;
+        barbell->videoRtpMap = videoRtpMap;
+        barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;
+    }
+    else if (!(videoRtpMap.isEmpty() && videoSsrcs.empty()))
+    {
+        logger::warn("Tried to allocate video video for barbellId %s when the conference has the video disabled",
+            _loggableId.c_str(),
+            barbellId.c_str());
+    }
+
     return true;
 }
 

@@ -551,7 +551,7 @@ TEST_F(ActiveMediaListTest, userMediaMapContainsOnlyLastNItems)
 
     utils::StringBuilder<1024> bbMessage;
     bridge::engine::EndpointMembershipsMap noMembership(8);
-    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage, noMembership);
+    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage, noMembership, true);
     printf("%s\n", bbMessage.get());
     const auto barbellJson = nlohmann::json::parse(bbMessage.build());
     EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));
@@ -651,7 +651,7 @@ TEST_F(ActiveMediaListTest, userMediaMapUpdatedWithDominantSpeaker)
 
     utils::StringBuilder<1024> bbMessage;
     bridge::engine::EndpointMembershipsMap noMembership(8);
-    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage, noMembership);
+    _activeMediaList->makeBarbellUserMediaMapMessage(bbMessage, noMembership, true);
     printf("%s\n", bbMessage.get());
     const auto barbellJson = nlohmann::json::parse(bbMessage.build());
     EXPECT_TRUE(endpointsContainsId(barbellJson, "video", "1"));

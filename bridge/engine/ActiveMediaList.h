@@ -156,7 +156,8 @@ public:
         utils::StringBuilder<1024>& outMessage);
 
     bool makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage,
-        const engine::EndpointMembershipsMap& membershipMap);
+        const engine::EndpointMembershipsMap& membershipMap,
+        bool includeVideo);
 
     uint32_t getMapRevision() const { return _ssrcMapRevision; }
 #if DEBUG
