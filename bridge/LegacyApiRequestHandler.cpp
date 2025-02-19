@@ -284,7 +284,7 @@ httpd::Response LegacyApiRequestHandler::createConference(const httpd::Request& 
             ? utils::Optional<uint32_t>(lastNItr->get<uint32_t>())
             : utils::NullOpt;
 
-        auto mixer = _mixerManager.create(optionalLastN, true, false);
+        auto mixer = _mixerManager.create(optionalLastN, true, true);
 
         if (!mixer)
         {
