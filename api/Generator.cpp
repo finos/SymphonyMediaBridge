@@ -321,9 +321,9 @@ nlohmann::json generateAllocateBarbellResponse(const BarbellDescription& channel
             }
 
             videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video.rtpHeaderExtensions);
-
-            responseJson["video"] = std::move(videoJson);
         }
+
+        responseJson["video"] = std::move(videoJson);
     }
 
     const auto& data = channelsDescription.data;
