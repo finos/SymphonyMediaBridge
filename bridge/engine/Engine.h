@@ -27,6 +27,7 @@ class Engine
 {
 public:
     Engine(jobmanager::JobManager& backgroundJobQueue);
+    Engine(jobmanager::JobManager& backgroundJobQueue, std::thread&& externalThread);
 
     void setMessageListener(MixerManagerAsync* messageListener);
     void stop();

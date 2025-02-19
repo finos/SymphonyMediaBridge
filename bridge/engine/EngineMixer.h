@@ -78,6 +78,14 @@ public:
 
     static constexpr size_t samplesPerFrame20ms = sampleRate * 20 / 1000;
 
+    static constexpr size_t maxPendingPackets = 8192;
+    static constexpr size_t maxPendingRtcpPackets = 2048;
+    static constexpr size_t maxPendingRtcpPacketsVideoDisabled = 512;
+    static constexpr size_t maxSsrcs = 8192;
+    static constexpr size_t maxSsrcsVideoDisabled = 1024;
+    static constexpr size_t maxStreamsPerModality = 4096;
+    static constexpr size_t maxRecordingStreams = 8;
+
     EngineMixer(const std::string& id,
         jobmanager::JobManager& jobManager,
         const concurrency::SynchronizationContext& engineSyncContext,
@@ -236,12 +244,6 @@ public: // private but called from helper method
 
     // Protected for testing (EngineMixerSpy)
 protected:
-    static const size_t maxPendingPackets = 8192;
-    static const size_t maxPendingRtcpPackets = 2048;
-    static const size_t maxSsrcs = 8192;
-    static const size_t maxStreamsPerModality = 4096;
-    static const size_t maxRecordingStreams = 8;
-
     template <typename PacketT>
     class IncomingPacketAggregate
     {
@@ -398,7 +400,8 @@ protected:
     std::atomic_flag _iceReceivedOnBarbellTransport = ATOMIC_FLAG_INIT;
     uint64_t _lastCounterCheck;
 
-    std::unique_ptr<EngineStreamDirector> _engineStreamDirector;
+    std::unique_ptr<EngineStreamDirector> _ownEngineStreamDirector;
+    EngineStreamDirector* _engineStreamDirector;
     std::unique_ptr<ActiveMediaList> _activeMediaList;
     uint64_t _lastUplinkEstimateUpdate;
     uint64_t _lastIdleTransportCheck;

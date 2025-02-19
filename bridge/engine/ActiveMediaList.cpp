@@ -110,12 +110,12 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _audioSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
       _dominantSpeaker(0),
       _nominatedSpeaker(0),
-      _videoParticipants(maxParticipants),
-      _videoSsrcs(SsrcRewrite::ssrcArraySize * 2),
-      _videoFeedbackSsrcLookupMap(SsrcRewrite::ssrcArraySize * 2),
-      _videoSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
-      _reverseVideoSsrcRewriteMap(SsrcRewrite::ssrcArraySize * 2),
-      _activeVideoListLookupMap(32),
+      _videoParticipants(videoSsrcs.empty() ? 0 : maxParticipants),
+      _videoSsrcs(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _videoFeedbackSsrcLookupMap(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _videoSsrcRewriteMap(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _reverseVideoSsrcRewriteMap(videoSsrcs.empty() ? 0 : SsrcRewrite::ssrcArraySize * 2),
+      _activeVideoListLookupMap(videoSsrcs.empty() ? 0 : 32),
 #if DEBUG
       _reentrancyCounter(0),
 #endif
@@ -124,7 +124,7 @@ ActiveMediaList::ActiveMediaList(size_t instanceId,
       _ssrcMapRevision(0),
       _transactionCounter(audioSsrcs[0])
 {
-    assert(videoSsrcs.size() >= _maxActiveListSize + 2);
+    assert(videoSsrcs.empty() || videoSsrcs.size() >= _maxActiveListSize + 2);
     assert(audioSsrcs.size() <= SsrcRewrite::ssrcArraySize);
     assert(videoSsrcs.size() <= SsrcRewrite::ssrcArraySize);
 
@@ -210,7 +210,7 @@ bool ActiveMediaList::onAudioParticipantAdded(const size_t endpointIdHash, const
         ssrc);
 
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
-    const bool pushResult = _activeAudioList.pushToHead(endpointIdHash);
+    [[maybe_unused]] const bool pushResult = _activeAudioList.pushToHead(endpointIdHash);
     assert(pushResult);
     ++_ssrcMapRevision;
     return true;
@@ -258,7 +258,7 @@ bool ActiveMediaList::addBarbellVideoParticipant(const size_t endpointIdHash,
             return false;
         }
 
-        const bool wasRemoved = removeVideoParticipant(endpointIdHash);
+        [[maybe_unused]] const bool wasRemoved = removeVideoParticipant(endpointIdHash);
         assert(wasRemoved);
     }
 
@@ -338,7 +338,7 @@ bool ActiveMediaList::onVideoParticipantAdded(const size_t endpointIdHash,
             simulcastGroup[2].main);
     }
 
-    const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
+    [[maybe_unused]] const bool pushResult = _activeVideoList.pushToHead(endpointIdHash);
     logger::info("new video endpoint %s %zu, added to active video list, original ssrc %u",
         _logId.c_str(),
         endpointId,
@@ -600,7 +600,7 @@ bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
             assert(false);
             return false;
         }
-        const auto pushResult = _activeAudioList.pushToTail(endpointIdHash);
+        [[maybe_unused]] const auto pushResult = _activeAudioList.pushToTail(endpointIdHash);
         assert(pushResult);
         return false; // content did not change
     }
@@ -634,7 +634,7 @@ bool ActiveMediaList::updateActiveAudioList(const size_t endpointIdHash)
     }
 
     _audioSsrcRewriteMap.emplace(endpointIdHash, ssrc);
-    const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
+    [[maybe_unused]] const bool pushResult = _activeAudioList.pushToTail(endpointIdHash);
     assert(pushResult);
     ++_ssrcMapRevision;
     return true;
@@ -699,7 +699,7 @@ bool ActiveMediaList::updateActiveVideoList(const size_t endpointIdHash)
         addToVideoRewriteMap(endpointIdHash, simulcastGroup);
     }
 
-    const bool addResult = _activeVideoList.pushToTail(endpointIdHash);
+    [[maybe_unused]] const bool addResult = _activeVideoList.pushToTail(endpointIdHash);
     assert(addResult);
     _activeVideoListLookupMap.emplace(endpointIdHash, _activeVideoList.tail());
     return true;
@@ -803,7 +803,7 @@ bool ActiveMediaList::makeUserMediaMapMessage(const size_t lastN,
     }
 
     for (auto videoListEntry = _activeVideoList.tail(); videoListEntry && addedElements < lastN;
-         videoListEntry = videoListEntry->_previous)
+        videoListEntry = videoListEntry->_previous)
     {
         if (videoListEntry->_data == endpointIdHash ||
             (videoListEntry->_data == pinTargetEndpointIdHash && !isPinTargetInActiveVideoList))
@@ -869,14 +869,15 @@ const std::map<size_t, ActiveTalker> ActiveMediaList::getActiveTalkers() const
 }
 
 bool ActiveMediaList::makeBarbellUserMediaMapMessage(utils::StringBuilder<1024>& outMessage,
-    const engine::EndpointMembershipsMap& neighbourMembershipMap)
+    const engine::EndpointMembershipsMap& neighbourMembershipMap,
+    bool includeVideo)
 {
     auto umm = json::writer::createObjectWriter(outMessage);
     umm.addProperty("type", "user-media-map");
     umm.addProperty("msg-id", ++_transactionCounter);
 
     bool slidesAdded = false;
-    if (!_videoSsrcRewriteMap.empty() || _videoScreenShareSsrcMapping.isSet())
+    if (includeVideo && (!_videoSsrcRewriteMap.empty() || _videoScreenShareSsrcMapping.isSet()))
     {
         auto videoArray = json::writer::createArrayWriter(outMessage, "video-endpoints");
         for (auto& item : _videoSsrcRewriteMap)

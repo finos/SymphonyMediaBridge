@@ -269,7 +269,7 @@ public:
 
     void run() override
     {
-        auto value = --_counter;
+        [[maybe_unused]] auto value = --_counter;
         assert(value != 0xFFFFFFFFu);
     }
 
@@ -316,6 +316,7 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
     memory::PacketPoolAllocator& allocator,
     size_t expectedInboundStreamCount,
     size_t expectedOutboundStreamCount,
+    size_t jobQueueSize,
     bool enableUplinkEstimation,
     bool enableDownlinkEstimation)
 {
@@ -334,6 +335,7 @@ std::shared_ptr<RtcTransport> createTransport(jobmanager::JobManager& jobmanager
         allocator,
         expectedInboundStreamCount,
         expectedOutboundStreamCount,
+        jobQueueSize,
         enableUplinkEstimation,
         enableDownlinkEstimation);
 }
@@ -472,6 +474,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
     memory::PacketPoolAllocator& allocator,
     const size_t expectedInboundStreamCount,
     const size_t expectedOutboundStreamCount,
+    const size_t jobQueueSize,
     const bool enableUplinkEstimation,
     const bool enableDownlinkEstimation)
     : _isInitialized(false),
@@ -485,7 +488,7 @@ TransportImpl::TransportImpl(jobmanager::JobManager& jobmanager,
       _selectedRtcp(nullptr),
       _dataReceiver(nullptr),
       _mainAllocator(allocator),
-      _jobQueue(jobmanager),
+      _jobQueue(jobmanager, jobQueueSize),
       _inboundMetrics(bweConfig.estimate.initialKbpsDownlink),
       _outboundMetrics(bweConfig.estimate.initialKbpsUplink),
       _outboundRembEstimateKbps(bweConfig.estimate.initialKbpsUplink),

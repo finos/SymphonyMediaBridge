@@ -64,19 +64,22 @@ httpd::Response generateBarbellResponse(ActionContext* context,
     responseBundleTransport.rtcpMux = true;
     channelsDescription.transport = responseBundleTransport;
 
-    // Describe audio, video and data streams
-    api::Audio responseAudio;
     {
+        // Describe audio, video and data streams
+        api::Audio responseAudio;
+
         AudioStreamDescription streamDescription;
         mixer.getAudioStreamDescription(streamDescription);
         responseAudio.ssrcs = streamDescription.ssrcs;
 
         addDefaultAudioProperties(responseAudio, false);
-        channelsDescription.audio = responseAudio;
+        channelsDescription.audio = std::move(responseAudio);
     }
 
-    api::Video responseVideo;
+    if (mixer.hasVideoEnabled())
     {
+        api::Video responseVideo;
+
         std::vector<BarbellVideoStreamDescription> streamDescriptions;
         mixer.getBarbellVideoStreamDescription(streamDescriptions);
         for (auto& group : streamDescriptions)
@@ -102,7 +105,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
             addVp8VideoProperties(responseVideo);
         }
         addDefaultVideoProperties(responseVideo);
-        channelsDescription.video = responseVideo;
+        channelsDescription.video = std::move(responseVideo);
     }
 
     api::Data responseData;

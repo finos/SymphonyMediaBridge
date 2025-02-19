@@ -228,7 +228,7 @@ public:
     {
         auto rtpHeader = rtp::RtpHeader::fromPacket(packet);
 
-        bool found = false;
+        [[maybe_unused]] bool found = false;
         api::SsrcPair ssrcLevel;
         for (const auto& ssrc : _ssrcs)
         {
@@ -332,8 +332,8 @@ public:
             else if (!missingPacketsTrackerReset)
             {
                 for (uint32_t missingSequenceNumber = inboundContext.lastReceivedExtendedSequenceNumber + 1;
-                     missingSequenceNumber != extendedSequenceNumber;
-                     ++missingSequenceNumber)
+                    missingSequenceNumber != extendedSequenceNumber;
+                    ++missingSequenceNumber)
                 {
                     _rtxStats.receiver.packetsMissing++;
                     inboundContext.videoMissingPacketsTracker->onMissingPacket(missingSequenceNumber, timestamp);
@@ -389,27 +389,12 @@ public:
         _videoDecoder.process(payload, payloadSize, timestamp);
     }
 
-    const logger::LoggableId& getLoggableId() const
-    {
-        return _loggableId;
-    }
+    const logger::LoggableId& getLoggableId() const { return _loggableId; }
 
-    bool hasPackets() const
-    {
-        return (videoPacketCount | rtxPacketCount | unknownPayloadPacketCount) != 0;
-    }
-    VideoContent getContent() const
-    {
-        return _videoContent;
-    }
-    bool isLocalContent() const
-    {
-        return _videoContent == VideoContent::LOCAL;
-    }
-    bool isSlidesContent() const
-    {
-        return _videoContent == VideoContent::SLIDES;
-    }
+    bool hasPackets() const { return (videoPacketCount | rtxPacketCount | unknownPayloadPacketCount) != 0; }
+    VideoContent getContent() const { return _videoContent; }
+    bool isLocalContent() const { return _videoContent == VideoContent::LOCAL; }
+    bool isSlidesContent() const { return _videoContent == VideoContent::SLIDES; }
 
     size_t videoPacketCount = 0;
     size_t rtxPacketCount = 0;

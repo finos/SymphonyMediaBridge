@@ -76,6 +76,22 @@ public:
     {
     }
 
+    EngineStreamDirector()
+        : _loggableId("StreamDirector-empty"),
+          _participantStreams(0),
+          _pinMap(0),
+          _reversePinMap(0),
+          _lowQualitySsrcs(0),
+          _midQualitySsrcs(0),
+          _bandwidthFloor(0),
+          _requiredMidLevelBandwidth(0),
+          _maxDefaultLevelBandwidthKbps(0),
+          _lastN(0),
+          _slidesBitrateKbps(0),
+          _slidesSsrc(0)
+    {
+    }
+
     void addParticipant(const size_t endpointIdHash)
     {
         if (_participantStreams.find(endpointIdHash) != _participantStreams.end())
@@ -277,13 +293,16 @@ public:
 
     void updateBandwidthFloor(const uint32_t lastN, const uint32_t audioStreams, const uint32_t videoStreams)
     {
-        _bandwidthFloor = bwe::BandwidthUtils::calcBandwidthFloor(lowQuality, lastN, audioStreams, videoStreams);
-        logger::debug("updateBandwidthFloor lastN %u, audioStreams %u, videoStreams %u -> %u",
-            _loggableId.c_str(),
-            lastN,
-            audioStreams,
-            videoStreams,
-            _bandwidthFloor);
+        if (_participantStreams.capacity())
+        {
+            _bandwidthFloor = bwe::BandwidthUtils::calcBandwidthFloor(lowQuality, lastN, audioStreams, videoStreams);
+            logger::debug("updateBandwidthFloor lastN %u, audioStreams %u, videoStreams %u -> %u",
+                _loggableId.c_str(),
+                lastN,
+                audioStreams,
+                videoStreams,
+                _bandwidthFloor);
+        }
     }
 
     /**

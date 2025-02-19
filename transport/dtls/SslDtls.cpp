@@ -188,7 +188,7 @@ SslDtls::SslDtls() : _sslContext(nullptr), _evpPkeyRsa(nullptr), _certificate(nu
             SSL_library_init();
             SSL_load_error_strings();
             OpenSSL_add_all_algorithms();
-            const auto srtpInitResult = srtp_init();
+            [[maybe_unused]] const auto srtpInitResult = srtp_init();
             assert(srtpInitResult == srtp_err_status_ok);
         }
     }
@@ -212,7 +212,7 @@ SslDtls::SslDtls() : _sslContext(nullptr), _evpPkeyRsa(nullptr), _certificate(nu
         return;
     }
 
-    auto result = SSL_CTX_use_certificate(_sslContext, _certificate);
+    [[maybe_unused]] auto result = SSL_CTX_use_certificate(_sslContext, _certificate);
     assert(result);
 
     result = SSL_CTX_use_PrivateKey(_sslContext, _evpPkeyRsa);

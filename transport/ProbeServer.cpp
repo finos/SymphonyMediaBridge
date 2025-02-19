@@ -19,7 +19,28 @@ ProbeServer::ProbeServer(const ice::IceConfig& iceConfig,
       _jobQueue(jobmanager, 1024),
       _queue(1024),
       _maintenanceThreadIsRunning(true),
-      _maintenanceThread(new std::thread([this] { this->run(); }))
+      _maintenanceThread(std::make_unique<std::thread>(std::thread([this] { this->run(); })))
+{
+    char ufrag[14 + 1];
+    char pwd[24 + 1]; // length selected to make attribute *4 length
+
+    ice::IceSession::generateCredentialString(_idGenerator, ufrag, sizeof(ufrag) - 1);
+    ice::IceSession::generateCredentialString(_idGenerator, pwd, sizeof(pwd) - 1);
+
+    _credentials = std::make_pair<std::string, std::string>(ufrag, pwd);
+    _hmacComputer.init(_credentials.second.c_str(), _credentials.second.size());
+}
+
+ProbeServer::ProbeServer(const ice::IceConfig& iceConfig,
+    const config::Config& config,
+    jobmanager::JobManager& jobmanager,
+    std::thread&& externalThread)
+    : _iceConfig(iceConfig),
+      _config(config),
+      _jobQueue(jobmanager, 1024),
+      _queue(1024),
+      _maintenanceThreadIsRunning(true),
+      _maintenanceThread(std::make_unique<std::thread>(std::move(externalThread)))
 {
     char ufrag[14 + 1];
     char pwd[24 + 1]; // length selected to make attribute *4 length

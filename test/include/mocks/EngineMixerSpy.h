@@ -46,18 +46,18 @@ public:
     // using parent constructor
     using bridge::EngineMixer::EngineMixer;
 
-private:
-    EngineMixerSpy(std::unique_ptr<EngineMixerResources>&& resources)
-        : EngineMixerSpy(resources->id,
-              resources->jobManager,
-              concurrency::SynchronizationContext(resources->engineTaskQueue),
-              resources->backgroundJobManager,
-              resources->mixerManagerAsyncMock,
+public:
+    EngineMixerSpy(EngineMixerResources& resources)
+        : EngineMixerSpy(resources.id,
+              resources.jobManager,
+              concurrency::SynchronizationContext(resources.engineTaskQueue),
+              resources.backgroundJobManager,
+              resources.mixerManagerAsyncMock,
               27482742,
-              resources->config,
-              resources->senderAllocator,
-              resources->audioAllocator,
-              resources->mainAllocator,
+              resources.config,
+              resources.senderAllocator,
+              resources.audioAllocator,
+              resources.mainAllocator,
               {4373732u},
               {api::makeSsrcGroup({{3746438, 363463}, {482473, 754432}, {93232326, 55443221}}),
                   api::makeSsrcGroup({{373434, 355625}, {6655433, 723623}, {77346343, 327362}}),
@@ -75,7 +75,6 @@ private:
     {
     }
 
-public:
 public:
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingBarbellSctp() { return _incomingBarbellSctp; };
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingForwarderAudioRtp() { return _incomingForwarderAudioRtp; };
@@ -95,16 +94,27 @@ public:
     {
         return _engineRecordingStreams;
     }
+
     concurrency::MpmcHashmap32<size_t, bridge::EngineBarbell*>& spyEngineBarbells() { return _engineBarbells; }
 
-    static std::unique_ptr<EngineMixerSpy> createDefault()
+    concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext*>& spySsrcInboundContexts()
     {
-        auto resources = std::make_unique<EngineMixerResources>();
-        return std::unique_ptr<EngineMixerSpy>(new EngineMixerSpy(std::move(resources)));
+        return _ssrcInboundContexts;
     }
 
-private:
-    std::unique_ptr<EngineMixerResources> _resources;
+    concurrency::MpmcHashmap32<uint32_t, bridge::SsrcInboundContext>& spyAllSsrcInboundContexts()
+    {
+        return _allSsrcInboundContexts;
+    }
+
+    static EngineMixerSpy* spy(EngineMixer* EngineMixer)
+    {
+        // ATTENTION:
+        // We are going to reinterpret the pointer to the Spy pointer. This is only safe as long there is no virtual
+        // methods (as the vtable will be wrong) and there is EngineMixerSpy doesn't add more fields that would cause
+        // reading memory out of EngineMixer* boundaries
+        return reinterpret_cast<EngineMixerSpy*>(EngineMixer);
+    }
 };
 
 } // namespace test

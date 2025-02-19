@@ -20,11 +20,10 @@ httpd::Response allocateConference(ActionContext* context, RequestLogger& reques
 
     const auto allocateConference = api::Parser::parseAllocateConference(requestBodyJson);
 
-    auto mixer = allocateConference.lastN.isSet()
-        ? context->mixerManager.create(allocateConference.lastN.get(),
-              allocateConference.useGlobalPort,
-              allocateConference.videoCodecs)
-        : context->mixerManager.create(allocateConference.useGlobalPort, allocateConference.videoCodecs);
+    auto mixer = context->mixerManager.create(allocateConference.lastN,
+        allocateConference.useGlobalPort,
+        allocateConference.enableVideo,
+        allocateConference.videoCodecs);
 
     if (!mixer)
     {

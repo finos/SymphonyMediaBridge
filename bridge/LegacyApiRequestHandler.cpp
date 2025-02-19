@@ -279,9 +279,12 @@ httpd::Response LegacyApiRequestHandler::createConference(const httpd::Request& 
         }
 
         const auto lastNItr = requestBodyJson.find("last-n");
-        auto mixer = lastNItr != requestBodyJson.end() && lastNItr->is_number() && lastNItr->get<int32_t>() > 0
-            ? _mixerManager.create(lastNItr->get<uint32_t>(), true)
-            : _mixerManager.create(true);
+        const auto optionalLastN =
+            lastNItr != requestBodyJson.end() && lastNItr->is_number() && lastNItr->get<int32_t>() > 0
+            ? utils::Optional<uint32_t>(lastNItr->get<uint32_t>())
+            : utils::NullOpt;
+
+        auto mixer = _mixerManager.create(optionalLastN, true, true);
 
         if (!mixer)
         {
@@ -968,7 +971,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
 
     if (useBundling)
     {
-        mixer.addBundleTransportIfNeeded(endpointId, iceRole.get());
+        mixer.addBundleTransportIfNeeded(endpointId, iceRole.get(), true);
         if (contentType == ContentType::Audio)
         {
             if (!mixer.addBundledAudioStream(channelId, endpointId, channel.getMediaMode()))
@@ -1072,7 +1075,7 @@ bool LegacyApiRequestHandler::allocateSctpConnection(const std::string& conferen
     {
         iceRole.set(ice::IceRole::CONTROLLING);
     }
-    mixer.addBundleTransportIfNeeded(endpointId, iceRole.get());
+    mixer.addBundleTransportIfNeeded(endpointId, iceRole.get(), true);
     mixer.addBundledDataStream(streamId, endpointId);
 
     uint32_t totalSleepTimeMs = 0;

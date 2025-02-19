@@ -197,7 +197,7 @@ __attribute__((no_sanitize("thread"))) void hasherRun(int threadIndex, HMAP& map
                 ++ops;
                 EXPECT_GE(item.second.seqNo, 0);
             }
-            // cannot put expectation since it may be insterted by other thread
+            // cannot put expectation since it may be inserted by other thread
         }
 
         if (keys.size() > 0)
@@ -586,4 +586,25 @@ TEST(MpmcMap, getItem)
 
     p = hmap3.getItem(3);
     EXPECT_EQ(p, &b);
+}
+
+TEST(MpmcMap, zeroCapacity)
+{
+    Simple a;
+    concurrency::MpmcHashmap32<uint64_t, Simple> hmap(0);
+
+    EXPECT_EQ(0, hmap.size());
+    EXPECT_EQ(0, hmap.capacity());
+    EXPECT_EQ(true, hmap.empty());
+
+    EXPECT_EQ(hmap.end(), hmap.begin());
+    EXPECT_EQ(hmap.cend(), hmap.cbegin());
+
+    auto result0 = hmap.emplace(1, a);
+    EXPECT_EQ(false, result0.second);
+    EXPECT_EQ(hmap.end(), hmap.find(1));
+
+    EXPECT_EQ(0, hmap.size());
+    EXPECT_EQ(0, hmap.capacity());
+    EXPECT_EQ(true, hmap.empty());
 }

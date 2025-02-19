@@ -19,18 +19,40 @@ class MpmcQueue
         enum State : uint32_t
         {
             emptySlot = 0,
-            committed
+            committed,
+            nullSlot // special state only for zero size queue
         } state = emptySlot;
     };
 
-    struct Entry
+    struct EntryState
+    {
+        EntryState() : EntryState(CellState::emptySlot) {}
+
+        EntryState(typename CellState::State state) : state(CellState{0, state}) {}
+
+        std::atomic<CellState> state;
+    };
+
+    struct Entry : EntryState
     {
         Entry() {}
 
         T& value() { return reinterpret_cast<T&>(data); }
-        std::atomic<CellState> state;
-        uint8_t data[sizeof(T)];
+        alignas(alignof(T)) uint8_t data[sizeof(T)];
     };
+
+    Entry* nullEntry()
+    {
+        // Dummy entry for empty queues.
+        return reinterpret_cast<Entry*>(const_cast<EntryState*>(&_nullEntry));
+    }
+
+    static constexpr size_t kEntryPerCacheLine = (63 + sizeof(Entry)) / sizeof(Entry);
+
+    static size_t calculateBlockSize(uint32_t finalCapacity)
+    {
+        return memory::page::alignedSpace(finalCapacity * sizeof(Entry));
+    }
 
     struct VersionedIndex
     {
@@ -42,13 +64,15 @@ class MpmcQueue
 
     uint32_t indexTransform(VersionedIndex v) const
     {
-        if (_entriesPerCacheline == 1)
+        if constexpr (kEntryPerCacheLine == 1)
         {
-            return v.pos % _capacity;
+            return v.pos % _elementsCount;
         }
-
-        const auto p = v.pos * _entriesPerCacheline;
-        return (p / _capacity + p) % _capacity;
+        else
+        {
+            const auto p = v.pos * kEntryPerCacheLine;
+            return (p / _elementsCount + p) % _elementsCount;
+        }
     }
 
     VersionedIndex nextPosition(VersionedIndex index) const
@@ -69,20 +93,19 @@ class MpmcQueue
 public:
     typedef T value_type;
     explicit MpmcQueue(uint32_t capacity)
-        : _entriesPerCacheline((63 + sizeof(Entry)) / sizeof(Entry)),
-          _capacity(_entriesPerCacheline * ((capacity + _entriesPerCacheline - 1) / _entriesPerCacheline)),
-          _blockSize(memory::page::alignedSpace(_capacity * sizeof(Entry))),
-          _elements(reinterpret_cast<Entry*>(memory::page::allocate(_blockSize)))
+        : _capacity(
+              capacity == 0 ? 0 : (kEntryPerCacheLine * ((capacity + kEntryPerCacheLine - 1) / kEntryPerCacheLine))),
+          _elementsCount(capacity == 0 ? 1 : _capacity),
+          _elements(capacity == 0 ? nullEntry()
+                                  : reinterpret_cast<Entry*>(memory::page::allocate(calculateBlockSize(_capacity))))
     {
-        assert(_capacity > 7);
+
+        assert(_capacity == 0 || _capacity > 7);
         assert(capacity < 0x80000000u);
-        assert(_capacity % _entriesPerCacheline == 0);
+        assert(_capacity % kEntryPerCacheLine == 0);
 
         _readCursor = VersionedIndex();
         _writeCursor = VersionedIndex();
-
-        _cacheLineSeparator1[0] = 0;
-        _cacheLineSeparator2[0] = 0;
 
         for (uint32_t i = 0; i < _capacity; ++i)
         {
@@ -101,7 +124,10 @@ public:
             _elements[i].~Entry();
         }
 
-        memory::page::free(_elements, _blockSize);
+        if (_capacity)
+        {
+            memory::page::free(_elements, calculateBlockSize(_capacity));
+        }
     }
 
     bool pop(T& target)
@@ -159,7 +185,7 @@ public:
                 // Assume we pause here.
                 // The emptyslot state will stop read cursor.
                 // The writeCursor has moved and another writer will have to try the next slot.
-                // If writers wrap back here, element is not writeable as the version is not the expected one
+                // If writers wrap back here, element is not writable as the version is not the expected one
                 auto& entry = _elements[indexTransform(pos)];
                 new (entry.data) T(std::move(obj));
                 entry.state.store(CellState{pos.version, CellState::committed}, std::memory_order_release);
@@ -191,7 +217,7 @@ public:
                 // Assume we pause here.
                 // The emptyslot state will stop read cursor.
                 // The writeCursor has moved and another writer will have to try the next slot.
-                // If writers wrap back here, element is not writeable as the version is not the expected one
+                // If writers wrap back here, element is not writable as the version is not the expected one
                 auto& entry = _elements[indexTransform(pos)];
                 new (entry.data) T(std::forward<U>(args)...);
                 entry.state.store(CellState{pos.version, CellState::committed}, std::memory_order_release);
@@ -247,15 +273,15 @@ private:
         return cell.state == CellState::committed && cell.version == index.version;
     }
 
-    // Layout below must be maintained for performance. The non atomic member variables may not be place before read
+    // Layout below must be maintained for performance. The non atomic member variables may not be placed before read
     // cursor.
-    std::atomic<VersionedIndex> _readCursor;
-    uint32_t _cacheLineSeparator1[14];
-    std::atomic<VersionedIndex> _writeCursor;
-    uint32_t _cacheLineSeparator2[14];
-    const uint32_t _entriesPerCacheline;
+    alignas(64) std::atomic<VersionedIndex> _readCursor;
+    alignas(64) std::atomic<VersionedIndex> _writeCursor;
+
+    // Entry for zero size queues on the read and write cursor. Make them both unreadable and unwritable
+    const EntryState _nullEntry = CellState::State::nullSlot;
     const uint32_t _capacity;
-    const size_t _blockSize;
+    const uint32_t _elementsCount;
     Entry* const _elements;
 };
 } // namespace concurrency

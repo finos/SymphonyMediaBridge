@@ -9,6 +9,7 @@ namespace test
 
 class RtcTransportMock : public TransportMock<transport::RtcTransport>
 {
+public:
     MOCK_METHOD(void, removeSrtpLocalSsrc, (const uint32_t ssrc), (override));
     MOCK_METHOD(bool, setSrtpRemoteRolloverCounter, (const uint32_t ssrc, const uint32_t rolloverCounter), (override));
 

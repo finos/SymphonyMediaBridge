@@ -17,6 +17,10 @@ class ProbeServer : public Endpoint::IEvents, public ServerEndpoint::IEvents, pu
 
 public:
     ProbeServer(const ice::IceConfig& iceConfig, const config::Config& config, jobmanager::JobManager& jobmanager);
+    ProbeServer(const ice::IceConfig& iceConfig,
+        const config::Config& config,
+        jobmanager::JobManager& jobmanager,
+        std::thread&& externalThread);
     virtual ~ProbeServer() {};
 
     // Endpoint::IEvents

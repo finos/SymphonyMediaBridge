@@ -116,14 +116,12 @@ MixerManager::~MixerManager()
     logger::debug("Deleted", "MixerManager");
 }
 
-Mixer* MixerManager::create(bool useGlobalPort, VideoCodecSpec videoCodecs)
+Mixer* MixerManager::create(utils::Optional<uint32_t> optionalLastN,
+    bool useGlobalPort,
+    bool enableVideo,
+    VideoCodecSpec videoCodecs)
 {
-    return create(_config.defaultLastN, useGlobalPort, videoCodecs);
-}
-
-Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec videoCodecs)
-{
-    lastN = std::min(lastN, maxLastN);
+    const uint32_t lastN = std::min(optionalLastN.valueOr(_config.defaultLastN), maxLastN);
     logger::info("Create mixer, last-n %u", "MixerManager", lastN);
 
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -139,24 +137,27 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec v
         audioSsrcs.push_back(_ssrcGenerator.next());
     }
 
-    videoSsrcs.reserve(lastN + 3);
-    // screen share / slides
+    if (enableVideo)
     {
-        api::SsrcPair a[1] = {{_ssrcGenerator.next(), _ssrcGenerator.next()}};
-        videoSsrcs.push_back(api::SimulcastGroup(a));
-    }
-    // Last-n + extra
-    for (uint32_t i = 0; i < lastN + 2; ++i)
-    {
-        api::SsrcPair a[3] = {{_ssrcGenerator.next(), _ssrcGenerator.next()},
-            {_ssrcGenerator.next(), _ssrcGenerator.next()},
-            {_ssrcGenerator.next(), _ssrcGenerator.next()}};
-        videoSsrcs.push_back(api::SimulcastGroup(a));
-    }
+        videoSsrcs.reserve(lastN + 3);
+        // screen share / slides
+        {
+            api::SsrcPair a[1] = {{_ssrcGenerator.next(), _ssrcGenerator.next()}};
+            videoSsrcs.push_back(api::SimulcastGroup(a));
+        }
+        // Last-n + extra
+        for (uint32_t i = 0; i < lastN + 2; ++i)
+        {
+            api::SsrcPair a[3] = {{_ssrcGenerator.next(), _ssrcGenerator.next()},
+                {_ssrcGenerator.next(), _ssrcGenerator.next()},
+                {_ssrcGenerator.next(), _ssrcGenerator.next()}};
+            videoSsrcs.push_back(api::SimulcastGroup(a));
+        }
 
-    for (uint32_t i = 0; i < 4; ++i)
-    {
-        videoPinSsrcs.push_back({_ssrcGenerator.next(), _ssrcGenerator.next()});
+        for (uint32_t i = 0; i < 4; ++i)
+        {
+            videoPinSsrcs.push_back({_ssrcGenerator.next(), _ssrcGenerator.next()});
+        }
     }
 
     auto engineMixer = std::make_unique<EngineMixer>(id,
@@ -172,6 +173,7 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec v
         audioSsrcs,
         videoSsrcs,
         lastN);
+
     if (!engineMixer)
     {
         logger::error("Failed to create engineMixer", "MixerManager");
@@ -190,8 +192,9 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec v
             audioSsrcs,
             videoSsrcs,
             videoPinSsrcs,
-            useGlobalPort,
-            videoCodecs));
+            videoCodecs,
+            useGlobalPort));
+
     if (!mixerEmplaceResult.second)
     {
         logger::error("Failed to create mixer", "MixerManager");
@@ -199,13 +202,20 @@ Mixer* MixerManager::create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec v
     }
 
     utils::StringBuilder<1024> b;
-    b.append("local ").append(localVideoSsrc);
-    b.append(" slides ").append(videoSsrcs[0][0].main);
-    b.append(" pins");
-    for (const auto& pinSsrc : videoPinSsrcs)
+    if (!videoSsrcs.empty())
     {
-        b.append(" ");
-        b.append(pinSsrc.main);
+        b.append("local ").append(localVideoSsrc);
+        b.append(" slides ").append(videoSsrcs[0][0].main);
+        b.append(" pins");
+        for (const auto& pinSsrc : videoPinSsrcs)
+        {
+            b.append(" ");
+            b.append(pinSsrc.main);
+        }
+    }
+    else
+    {
+        b.append("video disabled");
     }
 
     logger::info("Mixer-%zu id=%s, %s",

@@ -291,35 +291,39 @@ nlohmann::json generateAllocateBarbellResponse(const BarbellDescription& channel
     responseJson["audio"] = audioJson;
 
     const auto& video = channelsDescription.video;
-    nlohmann::json videoJson;
 
-    videoJson["streams"] = nlohmann::json::array();
-    for (const auto& stream : video.streams)
+    if (!video.streams.empty())
     {
-        nlohmann::json streamJson;
-        streamJson["sources"] = nlohmann::json::array();
-        for (const auto level : stream.sources)
+        nlohmann::json videoJson;
+        videoJson["streams"] = nlohmann::json::array();
+
+        for (const auto& stream : video.streams)
         {
-            nlohmann::json sourceJson;
-            sourceJson["main"] = level.main;
-            if (level.feedback != 0)
+            nlohmann::json streamJson;
+            streamJson["sources"] = nlohmann::json::array();
+            for (const auto level : stream.sources)
             {
-                sourceJson["feedback"] = level.feedback;
+                nlohmann::json sourceJson;
+                sourceJson["main"] = level.main;
+                if (level.feedback != 0)
+                {
+                    sourceJson["feedback"] = level.feedback;
+                }
+                streamJson["sources"].push_back(sourceJson);
             }
-            streamJson["sources"].push_back(sourceJson);
+            streamJson["content"] = stream.content;
+            videoJson["streams"].push_back(streamJson);
+
+            videoJson["payload-types"] = nlohmann::json::array();
+            for (const auto& payloadType : video.payloadTypes)
+            {
+                videoJson["payload-types"].push_back(generatePayloadType(payloadType));
+            }
+
+            videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video.rtpHeaderExtensions);
         }
-        streamJson["content"] = stream.content;
-        videoJson["streams"].push_back(streamJson);
 
-        videoJson["payload-types"] = nlohmann::json::array();
-        for (const auto& payloadType : video.payloadTypes)
-        {
-            videoJson["payload-types"].push_back(generatePayloadType(payloadType));
-        }
-
-        videoJson["rtp-hdrexts"] = generateRtpHeaderExtensions(video.rtpHeaderExtensions);
-
-        responseJson["video"] = videoJson;
+        responseJson["video"] = std::move(videoJson);
     }
 
     const auto& data = channelsDescription.data;

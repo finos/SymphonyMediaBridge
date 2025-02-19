@@ -382,7 +382,7 @@ void Channel::configureTransport(transport::RtcTransport& transport,
             {
                 continue;
             }
-            auto keyLen = utils::Base64::decode(sdesSpec["key"], key.keySalt, sizeof(key.keySalt));
+            [[maybe_unused]] auto keyLen = utils::Base64::decode(sdesSpec["key"], key.keySalt, sizeof(key.keySalt));
             assert(keyLen == key.getLength());
             transport.asyncSetRemoteSdesKey(key);
             break;

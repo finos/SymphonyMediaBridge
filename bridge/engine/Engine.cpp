@@ -35,6 +35,16 @@ Engine::Engine(jobmanager::JobManager& backgroundJobQueue)
     }
 }
 
+Engine::Engine(jobmanager::JobManager& backgroundJobQueue, std::thread&& externalThread)
+    : _messageListener(nullptr),
+      _running(true),
+      _tickCounter(0),
+      _tasks(1024),
+      _thread(std::move(externalThread))
+{
+    // This construct is for unit test so it does not initialize a thread
+}
+
 void Engine::setMessageListener(MixerManagerAsync* messageListener)
 {
     _messageListener = messageListener;

@@ -121,9 +121,8 @@ public:
 
         if (_callConfig.transportMode == TransportMode::BundledIce)
         {
-            _bundleTransport = _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED,
-                256 * 1024,
-                _channel.getEndpointIdHash());
+            _bundleTransport =
+                _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, _channel.getEndpointIdHash());
             _bundleTransport->setDataReceiver(this);
             _bundleTransport->setAbsSendTimeExtensionId(3);
             _channel.configureTransport(*_bundleTransport, _audioAllocator);
@@ -135,13 +134,12 @@ public:
             {
                 if (_callConfig.transportMode == TransportMode::StreamTransportIce)
                 {
-                    _audioTransport = _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED,
-                        256 * 1024,
-                        _channel.getEndpointIdHash());
+                    _audioTransport =
+                        _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, _channel.getEndpointIdHash());
                 }
                 else
                 {
-                    _audioTransport = _publicTransportFactory.create(256 * 1024, _channel.getEndpointIdHash());
+                    _audioTransport = _publicTransportFactory.create(_channel.getEndpointIdHash());
                 }
                 _audioTransport->setDataReceiver(this);
                 _audioTransport->setAbsSendTimeExtensionId(3);
@@ -156,13 +154,12 @@ public:
             {
                 if (_callConfig.transportMode == TransportMode::StreamTransportIce)
                 {
-                    _videoTransport = _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED,
-                        256 * 1024,
-                        _channel.getEndpointIdHash());
+                    _videoTransport =
+                        _transportFactory.createOnPrivatePort(ice::IceRole::CONTROLLED, _channel.getEndpointIdHash());
                 }
                 else
                 {
-                    _videoTransport = _publicTransportFactory.create(256 * 1024, _channel.getEndpointIdHash());
+                    _videoTransport = _publicTransportFactory.create(_channel.getEndpointIdHash());
                 }
                 _videoTransport->setDataReceiver(this);
                 _videoTransport->setAbsSendTimeExtensionId(3);
@@ -649,7 +646,7 @@ public:
     bool onSctpConnectionRequest(transport::RtcTransport* sender, uint16_t remotePort) override { return false; }
     void onSctpEstablished(transport::RtcTransport* sender) override
     {
-        auto streamId = _dataStream->open(_loggableId.c_str());
+        [[maybe_unused]] auto streamId = _dataStream->open(_loggableId.c_str());
         assert(streamId != 0xFFFFu);
     }
 
@@ -669,7 +666,7 @@ public:
     {
     }
 
-    void onIceReceived(transport::RtcTransport* sender, uint64_t timesetamp) override {}
+    void onIceReceived(transport::RtcTransport* sender, uint64_t timestamp) override {}
 
     bool isRemoteVideoSsrc(uint32_t ssrc) const { return _remoteVideoSsrc.find(ssrc) != _remoteVideoSsrc.end(); }
 

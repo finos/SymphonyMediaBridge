@@ -609,6 +609,7 @@ set(TEST_FILES
     test/codec/AudioProcessingTest.cpp
     test/concurrency/MpscTest.cpp
     test/concurrency/MpmcMapTest.cpp
+    test/concurrency/MpmcQueueTest.cpp
     test/concurrency/LockFreeListTest.cpp
     test/bwe/MatrixTests.cpp
     test/bwe/RateControllerTest.cpp
@@ -626,6 +627,7 @@ set(TEST_FILES
     test/codec/H264HeaderTest.cpp
     test/codec/Vp8HeaderTest.cpp
     test/bridge/ActiveMediaListTest.cpp
+    test/bridge/ApiRequestHandlerTest.cpp
     test/bridge/BarbellMessagesTest.cpp
     test/rtp/RtcpFeedbackTest.cpp
     test/bridge/PacketCacheTest.cpp

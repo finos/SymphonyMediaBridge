@@ -1,5 +1,6 @@
 #pragma once
 
+#include "nlohmann/json.hpp"
 #include <cstdint>
 #include <string>
 #include <unordered_map>
@@ -29,6 +30,8 @@ struct Response
           headers(std::move(other.headers))
     {
     }
+
+    nlohmann::json getBodyAsJson() const { return nlohmann::json::parse(body); }
 
     const StatusCode statusCode;
     std::string body;

@@ -45,7 +45,7 @@ namespace bridge
 
 class Mixer;
 
-class MixerManager final : public MixerManagerAsync
+class MixerManager : public MixerManagerAsync
 {
 public:
     MixerManager(utils::IdGenerator& idGenerator,
@@ -59,10 +59,12 @@ public:
         memory::PacketPoolAllocator& sendAllocator,
         memory::AudioPacketPoolAllocator& audioAllocator);
 
-    ~MixerManager();
+    virtual ~MixerManager();
 
-    bridge::Mixer* create(bool useGlobalPort, VideoCodecSpec videoCodecs = VideoCodecSpec());
-    bridge::Mixer* create(uint32_t lastN, bool useGlobalPort, VideoCodecSpec videoCodecs = VideoCodecSpec());
+    bridge::Mixer* create(utils::Optional<uint32_t> optionalLastN,
+        bool useGlobalPort,
+        bool enableVideo,
+        VideoCodecSpec videoCodecs = VideoCodecSpec());
     void remove(const std::string& id);
     std::vector<std::string> getMixerIds();
     std::unique_lock<std::mutex> getMixer(const std::string& id, Mixer*& outMixer);
@@ -75,7 +77,8 @@ public:
     Stats::AggregatedBarbellStats getBarbellStats();
     void finalizeEngineMixerRemoval(const std::string& mixerId);
 
-private:
+    // Protected for unit test spies to extend and have access to the variables
+protected:
     struct MixerStats
     {
         uint32_t conferences = 0;

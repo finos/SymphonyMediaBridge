@@ -156,8 +156,8 @@ Mixer::Mixer(std::string id,
     const std::vector<uint32_t>& audioSsrcs,
     const std::vector<api::SimulcastGroup>& videoSsrcs,
     const std::vector<api::SsrcPair>& videoPinSsrcs,
-    bool useGlobalPort,
-    VideoCodecSpec videoCodecs)
+    VideoCodecSpec videoCodecs,
+    bool useGlobalPort)
     : _config(config),
       _id(std::move(id)),
       _loggableId("Mixer", logInstanceId),
@@ -170,8 +170,8 @@ Mixer::Mixer(std::string id,
       _engineMixer(std::move(engineMixer)),
       _idGenerator(idGenerator),
       _ssrcGenerator(ssrcGenerator),
-      _useGlobalPort(useGlobalPort),
-      _videoCodecs(videoCodecs)
+      _videoCodecs(videoCodecs),
+      _useGlobalPort(useGlobalPort)
 {
 }
 
@@ -270,7 +270,9 @@ bool Mixer::hasPendingTransportJobs()
     return false;
 }
 
-bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice::IceRole iceRole)
+bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId,
+    const ice::IceRole iceRole,
+    const bool hasVideoEnabled)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_bundleTransports.find(endpointId) != _bundleTransports.end())
@@ -289,10 +291,28 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId, const ice:
         }
     }
 
+    const bool canDoVideo = hasVideoEnabled && this->hasVideoEnabled();
+    const bool enableUplinkEstimation = canDoVideo;
+    const size_t expectedInboundStreamCount = canDoVideo ? 16 : 8;
+    const size_t expectedOutboundStreamCount = canDoVideo ? 256 : 16;
+    const size_t jobQueueSize = canDoVideo ? 4096 : 1024;
+
     const auto endpointIdHash = utils::hash<std::string>{}(endpointId);
-    auto transport = _useGlobalPort
-        ? _transportFactory.create(iceRole, 512, endpointIdHash)
-        : _transportFactory.createOnPorts(iceRole, 512, endpointIdHash, _rtpPorts, 16, 256, true, true);
+    auto transport = _useGlobalPort ? _transportFactory.create(iceRole,
+                                          endpointIdHash,
+                                          expectedInboundStreamCount,
+                                          expectedOutboundStreamCount,
+                                          jobQueueSize,
+                                          enableUplinkEstimation,
+                                          true)
+                                    : _transportFactory.createOnPorts(iceRole,
+                                          endpointIdHash,
+                                          _rtpPorts,
+                                          expectedInboundStreamCount,
+                                          expectedOutboundStreamCount,
+                                          jobQueueSize,
+                                          enableUplinkEstimation,
+                                          true);
 
     if (!transport)
     {
@@ -332,9 +352,8 @@ bool Mixer::addAudioStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet()
-        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
-        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId))
+                                     : _transportFactory.create(utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {
@@ -374,6 +393,15 @@ bool Mixer::addVideoStream(std::string& outId,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
+
+    if (!hasVideoEnabled())
+    {
+        logger::warn("Tried to allocate video for endpointId %s when the conference has the video disabled",
+            _loggableId.c_str(),
+            endpointId.c_str());
+        return false;
+    }
+
     if (_videoStreams.find(endpointId) != _videoStreams.end())
     {
         logger::warn("VideoStream with endpointId %s already exists", _loggableId.c_str(), endpointId.c_str());
@@ -381,9 +409,8 @@ bool Mixer::addVideoStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet()
-        ? _transportFactory.create(iceRole.get(), 32, utils::hash<std::string>{}(endpointId))
-        : _transportFactory.create(32, utils::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId))
+                                     : _transportFactory.create(utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {
@@ -468,6 +495,15 @@ bool Mixer::addBundledVideoStream(std::string& outId,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
+
+    if (!hasVideoEnabled())
+    {
+        logger::warn("Tried to allocate video for endpointId %s when the conference has the video disabled",
+            _loggableId.c_str(),
+            endpointId.c_str());
+        return false;
+    }
+
     if (_videoStreams.find(endpointId) != _videoStreams.end())
     {
         logger::warn("VideoStream with endpointId %s already exists", _loggableId.c_str(), endpointId.c_str());
@@ -839,14 +875,14 @@ bridge::Stats::MixerBarbellStats Mixer::gatherBarbellStats(const uint64_t iterat
     return stats;
 }
 
-std::map<size_t, ActiveTalker> Mixer::getActiveTalkers()
+std::map<size_t, ActiveTalker> Mixer::getActiveTalkers() const
 {
     return _engineMixer->getActiveTalkers();
 }
 
 bool Mixer::getEndpointInfo(const std::string& endpointId,
     api::ConferenceEndpoint& endpoint,
-    const std::map<size_t, ActiveTalker>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto audio = _audioStreams.find(endpointId);
@@ -883,7 +919,7 @@ bool Mixer::getEndpointInfo(const std::string& endpointId,
 
 bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     api::ConferenceEndpointExtendedInfo& endpoint,
-    const std::map<size_t, ActiveTalker>& activeTalkers)
+    const std::map<size_t, ActiveTalker>& activeTalkers) const
 {
     if (!getEndpointInfo(endpointId, endpoint.basicEndpointInfo, activeTalkers))
     {
@@ -911,7 +947,7 @@ bool Mixer::getEndpointExtendedInfo(const std::string& endpointId,
     return true;
 }
 
-bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription)
+bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _audioStreams.find(endpointId);
@@ -931,7 +967,7 @@ bool Mixer::getAudioStreamDescription(const std::string& endpointId, AudioStream
     return true;
 }
 
-void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription)
+void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription) const
 {
     outDescription = AudioStreamDescription();
     for (auto ssrc : _audioSsrcs)
@@ -940,7 +976,7 @@ void Mixer::getAudioStreamDescription(AudioStreamDescription& outDescription)
     }
 }
 
-bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription)
+bool Mixer::getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _videoStreams.find(endpointId);
@@ -979,7 +1015,7 @@ void Mixer::getBarbellVideoStreamDescription(std::vector<BarbellVideoStreamDescr
     }
 }
 
-bool Mixer::getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription)
+bool Mixer::getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _dataStreams.find(endpointId);
@@ -992,7 +1028,7 @@ bool Mixer::getDataStreamDescription(const std::string& endpointId, DataStreamDe
     return true;
 }
 
-bool Mixer::isAudioStreamConfigured(const std::string& endpointId)
+bool Mixer::isAudioStreamConfigured(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _audioStreams.find(endpointId);
@@ -1003,7 +1039,7 @@ bool Mixer::isAudioStreamConfigured(const std::string& endpointId)
     return streamItr->second->isConfigured;
 }
 
-bool Mixer::isVideoStreamConfigured(const std::string& endpointId)
+bool Mixer::isVideoStreamConfigured(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _videoStreams.find(endpointId);
@@ -1014,7 +1050,7 @@ bool Mixer::isVideoStreamConfigured(const std::string& endpointId)
     return streamItr->second->isConfigured;
 }
 
-bool Mixer::isDataStreamConfigured(const std::string& endpointId)
+bool Mixer::isDataStreamConfigured(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     const auto streamItr = _dataStreams.find(endpointId);
@@ -1025,7 +1061,8 @@ bool Mixer::isDataStreamConfigured(const std::string& endpointId)
     return streamItr->second->isConfigured;
 }
 
-bool Mixer::getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription)
+bool Mixer::getTransportBundleDescription(const std::string& endpointId,
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -1049,7 +1086,8 @@ bool Mixer::getTransportBundleDescription(const std::string& endpointId, Transpo
     return true;
 }
 
-bool Mixer::getBarbellTransportDescription(const std::string& barbellId, TransportDescription& outTransportDescription)
+bool Mixer::getBarbellTransportDescription(const std::string& barbellId,
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -1072,7 +1110,7 @@ bool Mixer::getBarbellTransportDescription(const std::string& barbellId, Transpo
 }
 
 bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
-    TransportDescription& outTransportDescription)
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1120,7 +1158,7 @@ bool Mixer::getAudioStreamTransportDescription(const std::string& endpointId,
 }
 
 bool Mixer::getVideoStreamTransportDescription(const std::string& endpointId,
-    TransportDescription& outTransportDescription)
+    TransportDescription& outTransportDescription) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto videoStreamItr = _videoStreams.find(endpointId);
@@ -1752,7 +1790,7 @@ bool Mixer::unpinEndpoint(const size_t endpointIdHash)
     return _engineMixer->asyncPinEndpoint(endpointIdHash, 0);
 }
 
-bool Mixer::isAudioStreamGatheringComplete(const std::string& endpointId)
+bool Mixer::isAudioStreamGatheringComplete(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto audioStreamItr = _audioStreams.find(endpointId);
@@ -1763,7 +1801,7 @@ bool Mixer::isAudioStreamGatheringComplete(const std::string& endpointId)
     return audioStreamItr->second->transport->isGatheringComplete();
 }
 
-bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId)
+bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto videoStreamItr = _videoStreams.find(endpointId);
@@ -1774,7 +1812,7 @@ bool Mixer::isVideoStreamGatheringComplete(const std::string& endpointId)
     return videoStreamItr->second->transport->isGatheringComplete();
 }
 
-bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId)
+bool Mixer::isDataStreamGatheringComplete(const std::string& endpointId) const
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     auto dataStreamItr = _dataStreams.find(endpointId);
@@ -2152,7 +2190,7 @@ void Mixer::engineRecordingDescStopped(const RecordingDescription& recordingDesc
         return;
     }
 
-    const size_t erasedCount = stream->_attachedRecording.erase(recordingDesc.recordingId);
+    [[maybe_unused]] const size_t erasedCount = stream->_attachedRecording.erase(recordingDesc.recordingId);
     assert(erasedCount == 1);
 }
 
@@ -2288,7 +2326,7 @@ bool Mixer::addBarbell(const std::string& barbellId, ice::IceRole iceRole)
 
     transport =
         _transportFactory
-            .createOnPorts(iceRole, 64, utils::hash<std::string>{}(barbellId), _barbellPorts, 128, 128, false, false);
+            .createOnPorts(iceRole, utils::hash<std::string>{}(barbellId), _barbellPorts, 128, 128, 4096, false, false);
     if (!transport)
     {
         logger::error("Failed to create transport for barbell %s", _loggableId.c_str(), barbellId.c_str());
@@ -2367,6 +2405,7 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     const bridge::RtpMap& videoFeedbackRtpMap)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
+
     auto barbellItr = _barbells.find(barbellId);
     if (barbellItr == _barbells.end())
     {
@@ -2375,14 +2414,24 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
 
     auto& barbell = barbellItr->second;
     barbell->audioSsrcs = audioSsrcs;
-    barbell->videoSsrcs = videoSsrcs;
 
     barbell->audioRtpMap = audioRtpMap;
     // TODO: support telephone-events over barbells
     barbell->transport->setAudioPayloads(audioRtpMap.payloadType, utils::NullOpt, audioRtpMap.sampleRate);
 
-    barbell->videoRtpMap = videoRtpMap;
-    barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;
+    if (hasVideoEnabled())
+    {
+        barbell->videoSsrcs = videoSsrcs;
+        barbell->videoRtpMap = videoRtpMap;
+        barbell->videoFeedbackRtpMap = videoFeedbackRtpMap;
+    }
+    else if (!(videoRtpMap.isEmpty() && videoSsrcs.empty()))
+    {
+        logger::warn("Tried to allocate video video for barbellId %s when the conference has the video disabled",
+            _loggableId.c_str(),
+            barbellId.c_str());
+    }
+
     return true;
 }
 

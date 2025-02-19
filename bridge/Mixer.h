@@ -95,16 +95,19 @@ public:
         const std::vector<uint32_t>& audioSsrcs,
         const std::vector<api::SimulcastGroup>& videoSsrcs,
         const std::vector<api::SsrcPair>& videoPinSsrcs,
-        bool useGlobalPort,
-        VideoCodecSpec videoCodecs);
+        VideoCodecSpec videoCodecs,
+        bool useGlobalPort);
 
     virtual ~Mixer() = default;
 
     void markForDeletion();
     bool isMarkedForDeletion() const { return _markedForDeletion; }
+    bool hasVideoEnabled() const { return !_videoSsrcs.empty(); }
     void stopTransports();
 
-    bool addBundleTransportIfNeeded(const std::string& endpointId, const ice::IceRole iceRole);
+    bool addBundleTransportIfNeeded(const std::string& endpointId,
+        const ice::IceRole iceRole,
+        const bool hasVideoEnabled);
 
     bool addAudioStream(std::string& outId,
         const std::string& endpointId,
@@ -230,9 +233,9 @@ public:
     bool addAudioStreamToEngine(const std::string& endpointId);
     bool addVideoStreamToEngine(const std::string& endpointId);
     bool addDataStreamToEngine(const std::string& endpointId);
-    bool isAudioStreamGatheringComplete(const std::string& endpointId);
-    bool isVideoStreamGatheringComplete(const std::string& endpointId);
-    bool isDataStreamGatheringComplete(const std::string& endpointId);
+    bool isAudioStreamGatheringComplete(const std::string& endpointId) const;
+    bool isVideoStreamGatheringComplete(const std::string& endpointId) const;
+    bool isDataStreamGatheringComplete(const std::string& endpointId) const;
 
     const std::string getId() const { return _id; }
 
@@ -240,28 +243,30 @@ public:
 
     bool getEndpointInfo(const std::string& endpointId,
         api::ConferenceEndpoint&,
-        const std::map<size_t, ActiveTalker>& activeTalkers);
+        const std::map<size_t, ActiveTalker>& activeTalkers) const;
     bool getEndpointExtendedInfo(const std::string& endpointId,
         api::ConferenceEndpointExtendedInfo&,
-        const std::map<size_t, ActiveTalker>& activeTalkers);
-    std::map<size_t, ActiveTalker> getActiveTalkers();
-    bool getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription);
-    bool getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription);
-    bool getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription);
-    bool isAudioStreamConfigured(const std::string& endpointId);
-    bool isVideoStreamConfigured(const std::string& endpointId);
-    bool isDataStreamConfigured(const std::string& endpointId);
+        const std::map<size_t, ActiveTalker>& activeTalkers) const;
+    std::map<size_t, ActiveTalker> getActiveTalkers() const;
+    bool getAudioStreamDescription(const std::string& endpointId, AudioStreamDescription& outDescription) const;
+    bool getVideoStreamDescription(const std::string& endpointId, VideoStreamDescription& outDescription) const;
+    bool getDataStreamDescription(const std::string& endpointId, DataStreamDescription& outDescription) const;
+    bool isAudioStreamConfigured(const std::string& endpointId) const;
+    bool isVideoStreamConfigured(const std::string& endpointId) const;
+    bool isDataStreamConfigured(const std::string& endpointId) const;
 
-    void getAudioStreamDescription(AudioStreamDescription& outDescription);
+    void getAudioStreamDescription(AudioStreamDescription& outDescription) const;
     void getBarbellVideoStreamDescription(std::vector<BarbellVideoStreamDescription>& outDescription);
 
-    bool getTransportBundleDescription(const std::string& endpointId, TransportDescription& outTransportDescription);
+    bool getTransportBundleDescription(const std::string& endpointId,
+        TransportDescription& outTransportDescription) const;
     bool getAudioStreamTransportDescription(const std::string& endpointId,
-        TransportDescription& outTransportDescription);
+        TransportDescription& outTransportDescription) const;
     bool getVideoStreamTransportDescription(const std::string& endpointId,
-        TransportDescription& outTransportDescription);
+        TransportDescription& outTransportDescription) const;
 
-    bool getBarbellTransportDescription(const std::string& barbellId, TransportDescription& outTransportDescription);
+    bool getBarbellTransportDescription(const std::string& barbellId,
+        TransportDescription& outTransportDescription) const;
 
     void allocateVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash);
     void freeVideoPacketCache(const uint32_t ssrc, const size_t endpointIdHash);
@@ -335,8 +340,8 @@ private:
     std::unordered_map<std::string, std::unique_ptr<EngineRecordingStream>> _recordingEngineStreams;
 
     std::unordered_map<std::string, BundleTransport> _bundleTransports;
-    bool _useGlobalPort;
     const VideoCodecSpec _videoCodecs;
+    const bool _useGlobalPort;
     transport::Endpoints _rtpPorts;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _videoPacketCaches;
     std::unordered_map<size_t, std::unordered_map<uint32_t, std::unique_ptr<PacketCache>>> _recordingRtpPacketCaches;
@@ -346,7 +351,7 @@ private:
     std::unordered_map<std::string, std::unique_ptr<EngineBarbell>> _engineBarbells;
     transport::Endpoints _barbellPorts;
 
-    std::mutex _configurationLock;
+    mutable std::mutex _configurationLock;
 
     RecordingStream* findRecordingStream(const std::string& recordingId);
 

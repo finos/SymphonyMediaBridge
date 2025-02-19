@@ -51,11 +51,11 @@ const bridge::RtpMap FEEDBACK_RTP_MAP = bridge::RtpMap(bridge::RtpMap::Format::R
         if (!(EXPRESSION))                                                                                             \
         {                                                                                                              \
             FAIL() << (std::string()                                                                                   \
-                           .append("Line ")                                                                            \
-                           .append(std::to_string(__LINE__))                                                           \
-                           .append(": expression has failed!. Expression: '")                                          \
-                           .append(#EXPRESSION)                                                                        \
-                           .append("'"));                                                                              \
+                    .append("Line ")                                                                                   \
+                    .append(std::to_string(__LINE__))                                                                  \
+                    .append(": expression has failed!. Expression: '")                                                 \
+                    .append(#EXPRESSION)                                                                               \
+                    .append("'"));                                                                                     \
         }                                                                                                              \
     } while (0)
 
@@ -225,8 +225,8 @@ protected:
             audioSsrc,
             videoSsrcs,
             videoPinSsrc,
-            useGlobalPort,
-            VideoCodecSpec::makeVp8());
+            VideoCodecSpec::makeVp8(),
+            useGlobalPort);
     }
 
     void addEndpointWithBundleTransport(Mixer& mixer,
@@ -236,7 +236,7 @@ protected:
         bool useData)
     {
         std::string outId;
-        CHECK(mixer.addBundleTransportIfNeeded(endpointId, ice::IceRole::CONTROLLING));
+        CHECK(mixer.addBundleTransportIfNeeded(endpointId, ice::IceRole::CONTROLLING, true));
         CHECK(mixer.addBundledAudioStream(outId, endpointId, MediaMode::SSRC_REWRITE));
         CHECK(mixer.addBundledVideoStream(outId, endpointId, true));
         CHECK(mixer.addBundledDataStream(outId, endpointId));

@@ -62,8 +62,8 @@ struct ClientPair : public transport::DataReceiver
         JobManager& jobManager)
         : _ssrc(ssrc),
           _sendAllocator(allocator),
-          _transport1(transportFactory->create(4096, 1)),
-          _transport2(transportFactory->create(4096, 2)),
+          _transport1(transportFactory->create(1)),
+          _transport2(transportFactory->create(2)),
           _sequenceNumber(0),
           _tickCount(0),
           _receivedByteCount(0),

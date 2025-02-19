@@ -340,7 +340,9 @@ TEST(Mpmc, uniqueptr)
     EXPECT_EQ(counter, 55000);
     {
         std::unique_ptr<Counter> value;
-        while (queue->pop(value)) {}
+        while (queue->pop(value))
+        {
+        }
     }
     EXPECT_EQ(counter, 0);
     delete queue;

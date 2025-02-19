@@ -284,6 +284,7 @@ AllocateConference parseAllocateConference(const nlohmann::json& data)
         }
     }
     setIfExistsOrDefault(allocateConference.useGlobalPort, data, "global-port", true);
+    setIfExistsOrDefault(allocateConference.enableVideo, data, "enable-video", true);
     auto it = data.find("video-codecs");
     if (it != data.end())
     {
@@ -624,7 +625,7 @@ BarbellDescription parsePatchBarbell(const nlohmann::json& data, const std::stri
             }
         }
 
-        barbellDescription.audio = audioChannel;
+        barbellDescription.audio = std::move(audioChannel);
     }
 
     if (data.find("video") != data.end())
@@ -660,7 +661,7 @@ BarbellDescription parsePatchBarbell(const nlohmann::json& data, const std::stri
             videoStream.content = stream["content"];
         }
 
-        barbellDescription.video = videoChannel;
+        barbellDescription.video = std::move(videoChannel);
     }
 
     const auto& dataJson = getJsonFieldOrThrow(data, "data");
