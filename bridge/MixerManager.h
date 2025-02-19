@@ -63,7 +63,7 @@ public:
 
     bridge::Mixer* create(utils::Optional<uint32_t> optionalLastN,
         bool useGlobalPort,
-        bool disableVideo,
+        bool enableVideo,
         VideoCodecSpec videoCodecs = VideoCodecSpec());
     void remove(const std::string& id);
     std::vector<std::string> getMixerIds();

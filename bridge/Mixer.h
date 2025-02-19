@@ -102,7 +102,7 @@ public:
 
     void markForDeletion();
     bool isMarkedForDeletion() const { return _markedForDeletion; }
-    bool hasVideoDisabled() const { return _videoSsrcs.empty(); }
+    bool hasVideoEnabled() const { return !_videoSsrcs.empty(); }
     void stopTransports();
 
     bool addBundleTransportIfNeeded(const std::string& endpointId,

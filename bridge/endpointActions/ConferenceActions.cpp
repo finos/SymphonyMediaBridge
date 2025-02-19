@@ -156,7 +156,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         channelsDescription.audio.set(responseAudio);
     }
 
-    if (allocateChannel.video.isSet() && !mixer.hasVideoDisabled())
+    if (allocateChannel.video.isSet() && mixer.hasVideoEnabled())
     {
         const auto& allocVideo = allocateChannel.video.get();
         api::Video responseVideo;
@@ -345,7 +345,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
             {
                 videoChannelId.set(outChannelId);
             }
-            else if (!mixer->hasVideoDisabled())
+            else if (mixer->hasVideoEnabled())
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Add bundled video stream has failed");
@@ -425,7 +425,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
             {
                 videoChannelId.set(outChannelId);
             }
-            else if (!mixer->hasVideoDisabled())
+            else if (mixer->hasVideoEnabled())
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
                     "Adding video stream has failed");
@@ -450,7 +450,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
         }
     }
 
-    if (allocateChannel.video.isSet() && !mixer->hasVideoDisabled())
+    if (allocateChannel.video.isSet() && mixer->hasVideoEnabled())
     {
         while (!mixer->isVideoStreamGatheringComplete(endpointId) && totalSleepTimeMs < gatheringCompleteMaxWaitMs)
         {

@@ -291,7 +291,7 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId,
         }
     }
 
-    const bool canDoVideo = hasVideoEnabled && !this->hasVideoDisabled();
+    const bool canDoVideo = hasVideoEnabled && this->hasVideoEnabled();
     const bool enableUplinkEstimation = canDoVideo;
     const size_t expectedInboundStreamCount = canDoVideo ? 16 : 8;
     const size_t expectedOutboundStreamCount = canDoVideo ? 256 : 16;
@@ -394,7 +394,7 @@ bool Mixer::addVideoStream(std::string& outId,
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    if (hasVideoDisabled())
+    if (!hasVideoEnabled())
     {
         logger::warn("Tried to allocate video for endpointId %s when the conference has the video disabled",
             _loggableId.c_str(),
@@ -496,7 +496,7 @@ bool Mixer::addBundledVideoStream(std::string& outId,
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
 
-    if (hasVideoDisabled())
+    if (!hasVideoEnabled())
     {
         logger::warn("Tried to allocate video for endpointId %s when the conference has the video disabled",
             _loggableId.c_str(),
@@ -2419,7 +2419,7 @@ bool Mixer::configureBarbellSsrcs(const std::string& barbellId,
     // TODO: support telephone-events over barbells
     barbell->transport->setAudioPayloads(audioRtpMap.payloadType, utils::NullOpt, audioRtpMap.sampleRate);
 
-    if (!hasVideoDisabled())
+    if (hasVideoEnabled())
     {
         barbell->videoSsrcs = videoSsrcs;
         barbell->videoRtpMap = videoRtpMap;

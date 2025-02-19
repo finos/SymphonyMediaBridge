@@ -22,7 +22,7 @@ httpd::Response allocateConference(ActionContext* context, RequestLogger& reques
 
     auto mixer = context->mixerManager.create(allocateConference.lastN,
         allocateConference.useGlobalPort,
-        allocateConference.disableVideo,
+        allocateConference.enableVideo,
         allocateConference.videoCodecs);
 
     if (!mixer)

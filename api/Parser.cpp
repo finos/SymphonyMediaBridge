@@ -284,7 +284,7 @@ AllocateConference parseAllocateConference(const nlohmann::json& data)
         }
     }
     setIfExistsOrDefault(allocateConference.useGlobalPort, data, "global-port", true);
-    setIfExistsOrDefault(allocateConference.disableVideo, data, "disable-video", false);
+    setIfExistsOrDefault(allocateConference.enableVideo, data, "enable-video", true);
     auto it = data.find("video-codecs");
     if (it != data.end())
     {

@@ -118,7 +118,7 @@ MixerManager::~MixerManager()
 
 Mixer* MixerManager::create(utils::Optional<uint32_t> optionalLastN,
     bool useGlobalPort,
-    bool disableVideo,
+    bool enableVideo,
     VideoCodecSpec videoCodecs)
 {
     const uint32_t lastN = std::min(optionalLastN.valueOr(_config.defaultLastN), maxLastN);
@@ -137,7 +137,7 @@ Mixer* MixerManager::create(utils::Optional<uint32_t> optionalLastN,
         audioSsrcs.push_back(_ssrcGenerator.next());
     }
 
-    if (!disableVideo)
+    if (enableVideo)
     {
         videoSsrcs.reserve(lastN + 3);
         // screen share / slides

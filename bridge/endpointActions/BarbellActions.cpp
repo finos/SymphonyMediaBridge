@@ -76,7 +76,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
         channelsDescription.audio = std::move(responseAudio);
     }
 
-    if (!mixer.hasVideoDisabled())
+    if (mixer.hasVideoEnabled())
     {
         api::Video responseVideo;
 

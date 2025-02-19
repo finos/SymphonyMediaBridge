@@ -201,16 +201,16 @@ TEST_F(ApiRequestHandlerTest, createConference)
 
     ASSERT_NE(nullptr, mixer);
 
-    ASSERT_EQ(false, mixer->hasVideoDisabled());
+    ASSERT_EQ(true, mixer->hasVideoEnabled());
 }
 
-TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableTrue)
+TEST_F(ApiRequestHandlerTest, createConferenceVideoEnabledFalse)
 {
     auto requestHandler = createApiRequestHandler();
 
     const char* body = R"({
      "last-n": 9,
-     "disable-video": true
+     "enable-video": false
      })";
 
     httpd::Request request("POST", "/conferences");
@@ -234,7 +234,7 @@ TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableTrue)
 
     ASSERT_NE(nullptr, mixer);
 
-    ASSERT_EQ(true, mixer->hasVideoDisabled());
+    ASSERT_EQ(false, mixer->hasVideoEnabled());
 
     EngineMixerSpy* engineMixerSpy = EngineMixerSpy::spy(mixer->getEngineMixer());
 
@@ -248,13 +248,13 @@ TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableTrue)
     ASSERT_EQ(EngineMixerSpy::maxSsrcsVideoDisabled, engineMixerSpy->spyAllSsrcInboundContexts().capacity());
 }
 
-TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableFalse)
+TEST_F(ApiRequestHandlerTest, createConferenceVideoEnableTrue)
 {
     auto requestHandler = createApiRequestHandler();
 
     const char* body = R"({
      "last-n": 9,
-     "disable-video": false
+     "enable-video": true
      })";
 
     httpd::Request request("POST", "/conferences");
@@ -278,7 +278,7 @@ TEST_F(ApiRequestHandlerTest, createConferenceVideoDisableFalse)
 
     ASSERT_NE(nullptr, mixer);
 
-    ASSERT_EQ(false, mixer->hasVideoDisabled());
+    ASSERT_EQ(true, mixer->hasVideoEnabled());
 
     EngineMixerSpy* engineMixerSpy = EngineMixerSpy::spy(mixer->getEngineMixer());
 
@@ -296,7 +296,7 @@ TEST_F(ApiRequestHandlerTest, allocateEndpointWithVideoFieldWhenVideoIsDisabledS
 
     const auto conferenceId = createConference(requestHandler, R"({
      "last-n": 9,
-     "disable-video": true
+     "enable-video": false
      })");
 
     const char* body = R"({
@@ -347,7 +347,7 @@ TEST_F(ApiRequestHandlerTest, allocateEndpointWithVideoFieldWhenVideoIsEnableSho
 
     const auto conferenceId = createConference(requestHandler, R"({
      "last-n": 9,
-     "disable-video": false
+     "enable-video": true
      })");
 
     const char* body = R"({
