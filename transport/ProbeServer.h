@@ -20,7 +20,7 @@ public:
     ProbeServer(const ice::IceConfig& iceConfig,
         const config::Config& config,
         jobmanager::JobManager& jobmanager,
-        std::thread&& outsideThread);
+        std::thread&& externalThread);
     virtual ~ProbeServer() {};
 
     // Endpoint::IEvents

@@ -34,13 +34,13 @@ ProbeServer::ProbeServer(const ice::IceConfig& iceConfig,
 ProbeServer::ProbeServer(const ice::IceConfig& iceConfig,
     const config::Config& config,
     jobmanager::JobManager& jobmanager,
-    std::thread&& outsideThread)
+    std::thread&& externalThread)
     : _iceConfig(iceConfig),
       _config(config),
       _jobQueue(jobmanager, 1024),
       _queue(1024),
       _maintenanceThreadIsRunning(true),
-      _maintenanceThread(std::make_unique<std::thread>(std::move(outsideThread)))
+      _maintenanceThread(std::make_unique<std::thread>(std::move(externalThread)))
 {
     char ufrag[14 + 1];
     char pwd[24 + 1]; // length selected to make attribute *4 length
