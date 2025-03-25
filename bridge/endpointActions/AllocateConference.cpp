@@ -30,7 +30,7 @@ httpd::Response allocateConference(ActionContext* context, RequestLogger& reques
         throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR, "Conference creation has failed");
     }
 
-    logger::info("Allocate conference %s, mixer %s, last-n %d, global-port %c, codec %s, enable-video %s",
+    logger::info("Allocate conference %s, mixer %s, last-n %d, global-port %c, codec %s, enable-video %c",
         "ApiRequestHandler",
         mixer->getId().c_str(),
         mixer->getLoggableId().c_str(),
