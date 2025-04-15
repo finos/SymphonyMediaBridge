@@ -29,7 +29,7 @@ struct TransportStats
 
     void addLossGroup(double ratio)
     {
-        double limit = 0.1;
+        double limit = 0.01;
         for (size_t i = 0; i < std::size(lossGroup); ++i)
         {
             if (ratio < limit)
