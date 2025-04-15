@@ -834,7 +834,7 @@ SMB produces useful metrics about the CPU and network load. Bit rates are in kbp
 -   **inbound_audio_streams** is number of streams with apparent RTP activity.
 -   **inbound_video_streams** is number of streams with apparent activity. Note that clients may send 3 streams each to SMB.
 -   **bwe_download_hist** is histogram of number of calls that falls into estimated bandwidth buckets for the clients´ bandwidth when sending to SMB. The buckets are: [125, 250, 500, 1000, 2000, 4000, 8000, 16000, 32000, >32000] kbps.
--   **loss_download_hist** is histogram for number of calls with certain average loss rate when sending to SMB. The buckets are [0,1,2,4,8, 100] percent.
+-   **loss_download_hist** is histogram for number of calls with certain average loss rate when sending to SMB. The buckets are [1,2,4,8,16, 100] percent.
 -   **loss_upload_hist** histogram works the same but is based on loss reports from the clients.
 -   **rtt_download_hist** is a histogram for number of calls with specific RTT. The buckets are: [0.1, 0.2, 0.4, 0.8, 1.6, >1.6] seconds.
 -   **pacing_queue** is a queue used to pace video packets to adapt rate to the client`s receive bandwidth. This avoids choking the network and packets can be dropped in SMB instead of causing high latency towards client. If this runs high it means clients have network trouble and video will not be of good quality.
