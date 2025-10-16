@@ -18,11 +18,12 @@ public:
             size_t expectedOutboundStreamCount,
             size_t jobQueueSize,
             bool enableUplinkEstimation,
-            bool enableDownlinkEstimation),
+            bool enableDownlinkEstimation,
+            bool privatePort),
         (override));
     MOCK_METHOD(std::shared_ptr<transport::RtcTransport>,
         create,
-        (const ice::IceRole iceRole, const size_t endpointId),
+        (const ice::IceRole iceRole, const size_t endpointId, bool privatePort),
         (override));
 
     MOCK_METHOD(std::shared_ptr<transport::RtcTransport>, create, (const size_t endpointIdHash), (override));
@@ -100,8 +101,8 @@ public:
         using namespace ::testing;
 
         ON_CALL(*this, create(_)).WillByDefault(Return(rtcTransport));
-        ON_CALL(*this, create(_, _)).WillByDefault(Return(rtcTransport));
-        ON_CALL(*this, create(_, _, _, _, _, _, _)).WillByDefault(Return(rtcTransport));
+        ON_CALL(*this, create(_, _, _)).WillByDefault(Return(rtcTransport));
+        ON_CALL(*this, create(_, _, _, _, _, _, _, _)).WillByDefault(Return(rtcTransport));
         ON_CALL(*this, createOnSharedPort(_, _)).WillByDefault(Return(rtcTransport));
         ON_CALL(*this, createOnSharedPort(_, _, _, _, _, _, _)).WillByDefault(Return(rtcTransport));
         ON_CALL(*this, createOnPrivatePort(_, _)).WillByDefault(Return(rtcTransport));
@@ -112,26 +113,17 @@ public:
     {
         using namespace ::testing;
 
-        const auto callback1Args = [=](const auto&) {
+        const auto callbackNArgs = [=](const auto&... args) {
             return rtcTransport.lock();
         };
 
-        const auto callback2Args = [=](const auto&, const auto&) {
-            return rtcTransport.lock();
-        };
-
-        const auto callback7Args =
-            [=](const auto&, const auto&, const auto&, const auto&, const auto&, const auto&, const auto&) {
-                return rtcTransport.lock();
-            };
-
-        ON_CALL(*this, create(_)).WillByDefault(callback1Args);
-        ON_CALL(*this, create(_, _)).WillByDefault(callback2Args);
-        ON_CALL(*this, create(_, _, _, _, _, _, _)).WillByDefault(callback7Args);
-        ON_CALL(*this, createOnSharedPort(_, _)).WillByDefault(callback2Args);
-        ON_CALL(*this, createOnSharedPort(_, _, _, _, _, _, _)).WillByDefault(callback7Args);
-        ON_CALL(*this, createOnPrivatePort(_, _)).WillByDefault(callback2Args);
-        ON_CALL(*this, createOnPrivatePort(_, _, _, _, _, _, _)).WillByDefault(callback7Args);
+        ON_CALL(*this, create(_)).WillByDefault(callbackNArgs);
+        ON_CALL(*this, create(_, _, _)).WillByDefault(callbackNArgs);
+        ON_CALL(*this, create(_, _, _, _, _, _, _, _)).WillByDefault(callbackNArgs);
+        ON_CALL(*this, createOnSharedPort(_, _)).WillByDefault(callbackNArgs);
+        ON_CALL(*this, createOnSharedPort(_, _, _, _, _, _, _)).WillByDefault(callbackNArgs);
+        ON_CALL(*this, createOnPrivatePort(_, _)).WillByDefault(callbackNArgs);
+        ON_CALL(*this, createOnPrivatePort(_, _, _, _, _, _, _)).WillByDefault(callbackNArgs);
     }
 };
 

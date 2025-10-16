@@ -144,6 +144,7 @@ api::AllocateEndpoint::Transport parseAllocateEndpointTransport(const nlohmann::
 
     setIfExists(transport.dtls, data, "dtls");
     setIfExists(transport.sdes, data, "sdes");
+    setIfExists(transport.privatePort, data, "private-port");
 
     return transport;
 }

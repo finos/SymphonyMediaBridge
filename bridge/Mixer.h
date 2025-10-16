@@ -107,17 +107,20 @@ public:
 
     bool addBundleTransportIfNeeded(const std::string& endpointId,
         const ice::IceRole iceRole,
-        const bool hasVideoEnabled);
+        const bool hasVideoEnabled,
+        const bool usePrivatePort);
 
     bool addAudioStream(std::string& outId,
         const std::string& endpointId,
         const utils::Optional<ice::IceRole>& iceRole,
         MediaMode mediaMode,
+        const bool usePrivatePort,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
     bool addVideoStream(std::string& outId,
         const std::string& endpointId,
         const utils::Optional<ice::IceRole>& iceRole,
         bool rewriteSsrcs,
+        const bool usePrivatePort,
         utils::Optional<uint32_t> idleTimeoutSeconds = utils::Optional<uint32_t>());
 
     bool addBundledAudioStream(std::string& outId,

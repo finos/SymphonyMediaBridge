@@ -316,7 +316,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
 
         const bool hasVideoEnabled = allocateChannel.video.isSet();
 
-        mixer->addBundleTransportIfNeeded(endpointId, iceRole, hasVideoEnabled);
+        mixer->addBundleTransportIfNeeded(endpointId, iceRole, hasVideoEnabled, bundleTransport.privatePort);
 
         if (allocateChannel.audio.isSet())
         {
@@ -388,6 +388,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                     endpointId,
                     iceRole,
                     audio.getMediaMode(),
+                    transport.privatePort,
                     allocateChannel.idleTimeoutSeconds))
             {
                 throw httpd::RequestErrorException(httpd::StatusCode::INTERNAL_SERVER_ERROR,
@@ -421,6 +422,7 @@ httpd::Response allocateEndpoint(ActionContext* context,
                     endpointId,
                     iceRole,
                     ssrcRewrite,
+                    transport.privatePort,
                     allocateChannel.idleTimeoutSeconds))
             {
                 videoChannelId.set(outChannelId);
