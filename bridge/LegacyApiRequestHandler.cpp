@@ -971,7 +971,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
 
     if (useBundling)
     {
-        mixer.addBundleTransportIfNeeded(endpointId, iceRole.get(), true);
+        mixer.addBundleTransportIfNeeded(endpointId, iceRole.get(), true, false);
         if (contentType == ContentType::Audio)
         {
             if (!mixer.addBundledAudioStream(channelId, endpointId, channel.getMediaMode()))
@@ -993,7 +993,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
     {
         if (contentType == ContentType::Audio)
         {
-            if (!mixer.addAudioStream(channelId, endpointId, iceRole, channel.getMediaMode()))
+            if (!mixer.addAudioStream(channelId, endpointId, iceRole, channel.getMediaMode(), false))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
@@ -1001,7 +1001,7 @@ bool LegacyApiRequestHandler::allocateChannel(const std::string& contentName,
         }
         else if (contentType == ContentType::Video)
         {
-            if (!mixer.addVideoStream(channelId, endpointId, iceRole, channel.isRelayTypeRewrite()))
+            if (!mixer.addVideoStream(channelId, endpointId, iceRole, channel.isRelayTypeRewrite(), false))
             {
                 outStatus = httpd::StatusCode::BAD_REQUEST;
                 return false;
@@ -1075,7 +1075,7 @@ bool LegacyApiRequestHandler::allocateSctpConnection(const std::string& conferen
     {
         iceRole.set(ice::IceRole::CONTROLLING);
     }
-    mixer.addBundleTransportIfNeeded(endpointId, iceRole.get(), true);
+    mixer.addBundleTransportIfNeeded(endpointId, iceRole.get(), true, false);
     mixer.addBundledDataStream(streamId, endpointId);
 
     uint32_t totalSleepTimeMs = 0;

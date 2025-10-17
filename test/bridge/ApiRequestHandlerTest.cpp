@@ -1,6 +1,7 @@
 
 #include "bridge/ApiRequestHandler.h"
 #include "bridge/Mixer.h"
+#include "bridge/TransportDescription.h"
 #include "mocks/EngineMixerSpy.h"
 #include "mocks/MixerManagerSpy.h"
 #include "mocks/RtcTransportMock.h"
@@ -383,4 +384,105 @@ TEST_F(ApiRequestHandlerTest, allocateEndpointWithVideoFieldWhenVideoIsEnableSho
     EXPECT_NE(responseJson.end(), responseJson.find("bundle-transport"));
     EXPECT_NE(responseJson.end(), responseJson.find("video"));
     EXPECT_NE(responseJson.end(), responseJson.find("data"));
+}
+
+TEST_F(ApiRequestHandlerTest, allocateEndpointWithPrivateShouldPassFlagToFactory)
+{
+    auto requestHandler = createApiRequestHandler();
+
+    const auto conferenceId = createConference(requestHandler, R"({
+     "last-n": 9,
+     "enable-video": true
+     })");
+
+    const char* body = R"({
+        "action": "allocate",
+        "bundle-transport": {
+            "ice": true,
+            "dtls": true,
+            "private-port": true
+        },
+        "audio": {
+            "relay-type": "ssrc-rewrite"
+        }
+    })";
+
+    const auto urlPath = std::string("/conferences/").append(conferenceId).append("/session0");
+
+    httpd::Request request("POST", urlPath.c_str());
+    request.body.append(body, strlen(body));
+
+    EXPECT_CALL(*_mixerManagerSpyResources->transportFactoryMock, create(_, _, _, _, _, _, _, true)).Times(1);
+
+    const auto response = requestHandler.onRequest(request);
+
+    EXPECT_EQ(httpd::StatusCode::OK, response.statusCode);
+    EXPECT_EQ(false, response.body.empty());
+
+    Mixer* mixer = nullptr;
+
+    auto lock = _mixerManagerSpy->getMixer(conferenceId, mixer);
+
+    ASSERT_NE(nullptr, mixer);
+
+    bridge::TransportDescription transportDescription;
+    ASSERT_TRUE(mixer->getTransportBundleDescription("session0", transportDescription));
+}
+
+TEST_F(ApiRequestHandlerTest, allocateEndpointWithoutPrivateShouldPassFlagToFactory)
+{
+    auto requestHandler = createApiRequestHandler();
+
+    const auto conferenceId = createConference(requestHandler, R"({
+     "last-n": 9,
+     "enable-video": true
+     })");
+
+    const char* body0 = R"({
+        "action": "allocate",
+        "bundle-transport": {
+            "ice": true,
+            "dtls": true,
+            "private-port": false
+        },
+        "audio": {
+            "relay-type": "ssrc-rewrite"
+        }
+    })";
+
+    const char* body1 = R"({
+        "action": "allocate",
+        "bundle-transport": {
+            "ice": true,
+            "dtls": true
+        },
+        "audio": {
+            "relay-type": "ssrc-rewrite"
+        }
+    })";
+
+    EXPECT_CALL(*_mixerManagerSpyResources->transportFactoryMock,
+        create(_, utils::hash<std::string>{}("session2"), _, _, _, _, _, false))
+        .Times(1);
+
+    const auto urlPath0 = std::string("/conferences/").append(conferenceId).append("/session2");
+    const auto urlPath1 = std::string("/conferences/").append(conferenceId).append("/session3");
+
+    httpd::Request request0("POST", urlPath0.c_str());
+    request0.body.append(body0, strlen(body0));
+
+    const auto response0 = requestHandler.onRequest(request0);
+    EXPECT_EQ(httpd::StatusCode::OK, response0.statusCode);
+    EXPECT_EQ(false, response0.body.empty());
+
+    EXPECT_CALL(*_mixerManagerSpyResources->transportFactoryMock,
+        create(_, utils::hash<std::string>{}("session3"), _, _, _, _, _, false))
+        .Times(1);
+
+    httpd::Request request1("POST", urlPath1.c_str());
+    request1.body.append(body1, strlen(body1));
+
+    const auto response1 = requestHandler.onRequest(request1);
+    EXPECT_EQ(httpd::StatusCode::OK, response1.statusCode);
+    EXPECT_EQ(false, response1.body.empty());
 }

@@ -14,13 +14,14 @@ struct AllocateEndpoint
 {
     struct Transport
     {
-        Transport() : ice(false), dtls(false), sdes(false) {}
+        Transport() : ice(false), dtls(false), sdes(false), privatePort(false) {}
 
         bool ice;
         utils::Optional<bool> iceControlling;
 
         bool dtls;
         bool sdes;
+        bool privatePort;
     };
 
     struct Audio

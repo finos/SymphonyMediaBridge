@@ -272,7 +272,8 @@ bool Mixer::hasPendingTransportJobs()
 
 bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId,
     const ice::IceRole iceRole,
-    const bool hasVideoEnabled)
+    const bool hasVideoEnabled,
+    const bool usePrivatePort)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
     if (_bundleTransports.find(endpointId) != _bundleTransports.end())
@@ -280,7 +281,8 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId,
         return true;
     }
 
-    if (!_useGlobalPort && _rtpPorts.empty())
+    const bool needToOpenConferencePorts = !usePrivatePort && !_useGlobalPort && _rtpPorts.empty();
+    if (needToOpenConferencePorts)
     {
         if (!_transportFactory.openRtpMuxPorts(_rtpPorts, 1024))
         {
@@ -304,7 +306,8 @@ bool Mixer::addBundleTransportIfNeeded(const std::string& endpointId,
                                           expectedOutboundStreamCount,
                                           jobQueueSize,
                                           enableUplinkEstimation,
-                                          true)
+                                          true,
+                                          usePrivatePort)
                                     : _transportFactory.createOnPorts(iceRole,
                                           endpointIdHash,
                                           _rtpPorts,
@@ -342,6 +345,7 @@ bool Mixer::addAudioStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
     const MediaMode mediaMode,
+    const bool usePrivatePort,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -352,8 +356,9 @@ bool Mixer::addAudioStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(utils::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId), usePrivatePort)
+        : _transportFactory.create(utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {
@@ -390,6 +395,7 @@ bool Mixer::addVideoStream(std::string& outId,
     const std::string& endpointId,
     const utils::Optional<ice::IceRole>& iceRole,
     bool rewriteSsrcs,
+    const bool usePrivatePort,
     utils::Optional<uint32_t> idleTimeoutSeconds)
 {
     std::lock_guard<std::mutex> locker(_configurationLock);
@@ -409,8 +415,9 @@ bool Mixer::addVideoStream(std::string& outId,
     }
 
     outId = std::to_string(_idGenerator.next());
-    auto transport = iceRole.isSet() ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId))
-                                     : _transportFactory.create(utils::hash<std::string>{}(endpointId));
+    auto transport = iceRole.isSet()
+        ? _transportFactory.create(iceRole.get(), utils::hash<std::string>{}(endpointId), usePrivatePort)
+        : _transportFactory.create(utils::hash<std::string>{}(endpointId));
 
     if (!transport)
     {

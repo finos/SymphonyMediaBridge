@@ -340,11 +340,12 @@ public:
         size_t expectedOutboundStreamCount,
         size_t jobQueueSize,
         bool enableUplinkEstimation,
-        bool enableDownlinkEstimation) override
+        bool enableDownlinkEstimation,
+        bool privatePort) override
     {
-        if (!_sharedEndpoints.empty())
+        if (privatePort || _sharedEndpoints.empty())
         {
-            return createOnSharedPort(iceRole,
+            return createOnPrivatePort(iceRole,
                 endpointId,
                 expectedInboundStreamCount,
                 expectedOutboundStreamCount,
@@ -353,7 +354,7 @@ public:
                 enableDownlinkEstimation);
         }
 
-        return createOnPrivatePort(iceRole,
+        return createOnSharedPort(iceRole,
             endpointId,
             expectedInboundStreamCount,
             expectedOutboundStreamCount,
@@ -362,9 +363,11 @@ public:
             enableDownlinkEstimation);
     }
 
-    std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole, const size_t endpointId) override
+    std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole,
+        const size_t endpointId,
+        const bool privatePort) override
     {
-        return create(iceRole, endpointId, 16, 256, 4096, true, true);
+        return create(iceRole, endpointId, 16, 256, 4096, true, true, privatePort);
     }
 
     std::shared_ptr<RtcTransport> createOnPrivatePort(const ice::IceRole iceRole, const size_t endpointId) override

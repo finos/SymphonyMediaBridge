@@ -49,8 +49,11 @@ public:
         size_t expectedOutboundStreamCount,
         size_t jobQueueSize,
         bool enableUplinkEstimation,
-        bool enableDownlinkEstimation) = 0;
-    virtual std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole, const size_t endpointId) = 0;
+        bool enableDownlinkEstimation,
+        bool privatePort = false) = 0;
+    virtual std::shared_ptr<RtcTransport> create(const ice::IceRole iceRole,
+        const size_t endpointId,
+        bool privatePort = false) = 0;
     virtual std::shared_ptr<RtcTransport> create(const size_t endpointIdHash) = 0;
     virtual std::shared_ptr<RtcTransport> createOnSharedPort(const ice::IceRole iceRole,
         const size_t endpointIdHash) = 0;
