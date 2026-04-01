@@ -577,6 +577,7 @@ set(TEST_FILES
     test/api/ParserTest.cpp
     test/memory/MapTest.cpp
     test/memory/PoolAllocatorTest.cpp
+    test/memory/PoolBufferTest.cpp
     test/memory/RingAllocatorTest.cpp
     test/utils/StringTokenizerTest.cpp
     test/utils/TrackerTest.cpp
