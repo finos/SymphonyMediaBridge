@@ -511,35 +511,71 @@ SsrcInboundContext* EngineMixer::emplaceBarbellInboundSsrcContext(const uint32_t
 
 void EngineMixer::processBarbellSctp(const uint64_t timestamp)
 {
-    for (IncomingPacketInfo packetInfo; _incomingBarbellSctp.pop(packetInfo);)
+    for (IncomingLargeSctpPacketInfo packetInfo; _incomingBarbellSctp.pop(packetInfo);)
     {
-        auto header = reinterpret_cast<webrtc::SctpStreamMessageHeader*>(packetInfo.packet()->get());
-
-        if (header->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
+        _lastReceiveTimeOnBarbellTransports = timestamp;
+        auto* buffer = packetInfo.packet().get(); // Get raw PoolBuffer pointer
+        if (!buffer || buffer->empty())
         {
-            auto message = reinterpret_cast<const char*>(header->data());
-            const auto messageLength = header->getMessageLength(packetInfo.packet()->getLength());
+            continue;
+        }
+
+        const void* contiguousBufferPtr = nullptr;
+        char tempStorage[2048];
+        size_t bufferLength = buffer->getLength();
+
+        if (buffer->getChunks().size() == 1)
+        {
+            contiguousBufferPtr = buffer->getChunks()[0].get();
+        }
+        else if (bufferLength <= sizeof(tempStorage))
+        {
+            size_t bytesRead = buffer->getReader().read(tempStorage, bufferLength);
+            if (bytesRead == bufferLength)
+            {
+                contiguousBufferPtr = tempStorage;
+            }
+        }
+        else
+        {
+            logger::warn("Large multi-chunk barbell SCTP message %zu. Dropping.", _loggableId.c_str(), bufferLength);
+            continue;
+        }
+
+        if (!contiguousBufferPtr || bufferLength < sizeof(webrtc::SctpStreamMessageHeader))
+        {
+            continue;
+        }
+
+        auto* sctpHeader = const_cast<webrtc::SctpStreamMessageHeader*>(
+            reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(contiguousBufferPtr));
+
+        if (sctpHeader->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
+        {
+            const char* message = reinterpret_cast<const char*>(sctpHeader->data());
+            const auto messageLength = bufferLength - sizeof(*sctpHeader);
             if (messageLength == 0)
             {
-                return;
+                continue;
             }
 
             auto messageJson = utils::SimpleJson::create(message, messageLength);
+            std::string messageStr(message, messageLength);
 
             if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
             {
-                onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
+                onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), messageStr.c_str());
             }
             else if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
             {
-                onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), message);
+                onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), messageStr.c_str());
             }
         }
-        else if (header->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
+        else if (sctpHeader->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
         {
             onBarbellDataChannelEstablish(packetInfo.transport()->getEndpointIdHash(),
-                *header,
-                packetInfo.packet()->getLength());
+                *sctpHeader,
+                bufferLength);
         }
     }
 }

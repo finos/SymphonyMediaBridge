@@ -39,7 +39,7 @@ public:
 
     MOCK_METHOD(void,
         sctpReceived,
-        (bridge::EngineMixer & mixer, memory::UniquePacket msgPacket, size_t endpointIdHash),
+        (bridge::EngineMixer & mixer, memory::UniquePoolBuffer<memory::PacketPoolAllocator> msgBuffer, size_t endpointIdHash),
         (override));
 
     MOCK_METHOD(void,

@@ -112,6 +112,8 @@ public:
 
     size_t size() const { return _count.load(std::memory_order_relaxed); }
     size_t countAllocatedItems() const { return _originalElementCount - size(); }
+    size_t getElementSize() const { return ELEMENT_SIZE; }
+
     void* allocate()
     {
         concurrency::StackItem* item = nullptr;

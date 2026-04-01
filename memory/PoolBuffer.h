@@ -1,16 +1,17 @@
 #pragma once
 
 #include "memory/PoolAllocator.h"
+#include <vector>
 
 namespace memory
 {
 
-template <size_t ELEMENT_SIZE>
+template <typename TPoolAllocator>
 class PoolBuffer
 {
     struct ChunkDeleter
     {
-        PoolAllocator<ELEMENT_SIZE>* allocator;
+        TPoolAllocator* allocator;
         void operator()(void* p) const
         {
             if (allocator)
@@ -25,16 +26,20 @@ public:
     class view
     {
     public:
-        view(const std::vector<ChunkPtr>& chunks, size_t size, size_t offset)
+        view(const std::vector<ChunkPtr>& chunks,
+            size_t size,
+            size_t offset,
+            const TPoolAllocator& allocator)
             : _chunks(chunks),
               _size(size),
-              _offset(offset)
+              _offset(offset),
+              _allocator(allocator)
         {
         }
 
         view subview(size_t offset, size_t size) const
         {
-            return view(_chunks, std::min(_size - offset, size), _offset + offset);
+            return view(_chunks, std::min(_size - offset, size), _offset + offset, _allocator);
         }
 
         size_t read(void* destination, size_t count) const
@@ -48,13 +53,14 @@ public:
                 return 0;
             }
 
-            size_t chunkIndex = currentOffset / ELEMENT_SIZE;
-            size_t offsetInChunk = currentOffset % ELEMENT_SIZE;
+            const auto elementSize = _allocator.getElementSize();
+            size_t chunkIndex = currentOffset / elementSize;
+            size_t offsetInChunk = currentOffset % elementSize;
 
             while (bytesRead < remainingToRead && chunkIndex < _chunks.size())
             {
                 const uint8_t* sourceChunk = static_cast<const uint8_t*>(_chunks[chunkIndex].get());
-                size_t toReadFromChunk = std::min({remainingToRead - bytesRead, ELEMENT_SIZE - offsetInChunk});
+                size_t toReadFromChunk = std::min({remainingToRead - bytesRead, elementSize - offsetInChunk});
 
                 std::memcpy(static_cast<uint8_t*>(destination) + bytesRead, sourceChunk + offsetInChunk, toReadFromChunk);
 
@@ -69,9 +75,10 @@ public:
         const std::vector<ChunkPtr>& _chunks;
         size_t _size;
         size_t _offset;
+        const TPoolAllocator& _allocator;
     };
 
-    explicit PoolBuffer(PoolAllocator<ELEMENT_SIZE>& allocator) : _allocator(allocator), _size(0) {}
+    explicit PoolBuffer(TPoolAllocator& allocator) : _allocator(allocator), _size(0) {}
 
     PoolBuffer(PoolBuffer&& other) noexcept
         : _allocator(other._allocator),
@@ -102,7 +109,8 @@ public:
         if (size > capacity())
         {
             clear();
-            size_t numChunks = (size + ELEMENT_SIZE - 1) / ELEMENT_SIZE;
+            const auto elementSize = _allocator.getElementSize();
+            size_t numChunks = (size + elementSize - 1) / elementSize;
             _chunks.reserve(numChunks);
             for (size_t i = 0; i < numChunks; ++i)
             {
@@ -127,7 +135,8 @@ public:
     }
 
     size_t size() const { return _size; }
-    size_t capacity() const { return _chunks.size() * ELEMENT_SIZE; }
+    size_t getLength() const { return _size; }
+    size_t capacity() const { return _chunks.size() * _allocator.getElementSize(); }
     bool empty() const { return _size == 0; }
 
     size_t write(const void* data, size_t len, size_t offset = 0)
@@ -141,13 +150,14 @@ public:
             return 0;
         }
 
-        size_t chunkIndex = offset / ELEMENT_SIZE;
-        size_t offsetInChunk = offset % ELEMENT_SIZE;
+        const auto elementSize = _allocator.getElementSize();
+        size_t chunkIndex = offset / elementSize;
+        size_t offsetInChunk = offset % elementSize;
 
         while (bytesWritten < remainingToWrite && chunkIndex < _chunks.size())
         {
             uint8_t* targetChunk = static_cast<uint8_t*>(_chunks[chunkIndex].get());
-            size_t toWriteInChunk = std::min(remainingToWrite - bytesWritten, ELEMENT_SIZE - offsetInChunk);
+            size_t toWriteInChunk = std::min(remainingToWrite - bytesWritten, elementSize - offsetInChunk);
 
             std::memcpy(targetChunk + offsetInChunk, source + bytesWritten, toWriteInChunk);
 
@@ -159,14 +169,49 @@ public:
         return bytesWritten;
     }
 
-    view getReader() const { return view(_chunks, _size, 0); }
+    view getReader() const { return view(_chunks, _size, 0, _allocator); }
 
     const std::vector<ChunkPtr>& getChunks() const { return _chunks; }
 
 private:
-    PoolAllocator<ELEMENT_SIZE>& _allocator;
+    TPoolAllocator& _allocator;
     std::vector<ChunkPtr> _chunks;
     size_t _size;
 };
 
+template <typename T>
+using UniquePoolBuffer = std::unique_ptr<PoolBuffer<T>>;
+
+template <typename TPoolAllocator>
+inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& allocator,
+    size_t length)
+{
+    auto buffer = std::unique_ptr<PoolBuffer<TPoolAllocator>>(new PoolBuffer<TPoolAllocator>(allocator));
+    if (!buffer->allocate(length))
+    {
+        return nullptr;
+    }
+    return buffer;
+}
+
+template <typename TPoolAllocator>
+inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& allocator,
+    const void* data,
+    size_t length)
+{
+    // auto buffer = std::unique_ptr<PoolBuffer<TPoolAllocator>>(new PoolBuffer<TPoolAllocator>(allocator));
+    // if (!buffer->allocate(length))
+    // {
+    //     return nullptr;
+    // }
+
+    auto buffer = makeUniquePoolBuffer(allocator, length);
+
+    if (data)
+    {
+        buffer->write(data, length);
+    }
+
+    return buffer;
+}
 }

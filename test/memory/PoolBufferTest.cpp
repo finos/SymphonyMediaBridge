@@ -7,7 +7,7 @@
 TEST(PoolBuffer, create)
 {
     memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<128> buffer(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     EXPECT_TRUE(buffer.empty());
     EXPECT_EQ(buffer.size(), 0);
@@ -17,7 +17,7 @@ TEST(PoolBuffer, create)
 TEST(PoolBuffer, allocateSmall)
 {
     memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<128> buffer(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     EXPECT_TRUE(buffer.allocate(64));
     EXPECT_FALSE(buffer.empty());
@@ -29,7 +29,7 @@ TEST(PoolBuffer, allocateSmall)
 TEST(PoolBuffer, allocateExact)
 {
     memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<128> buffer(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     EXPECT_TRUE(buffer.allocate(128));
     EXPECT_EQ(buffer.size(), 128);
@@ -40,7 +40,7 @@ TEST(PoolBuffer, allocateExact)
 TEST(PoolBuffer, allocateMultipleChunks)
 {
     memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<128> buffer(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     EXPECT_TRUE(buffer.allocate(300));
     EXPECT_EQ(buffer.size(), 300);
@@ -54,7 +54,7 @@ TEST(PoolBuffer, allocateFail)
     const auto actualElementCount = allocator.size();
     const size_t sizeToRequest = actualElementCount * 128 + 1;
 
-    memory::PoolBuffer<128> buffer(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     EXPECT_FALSE(buffer.allocate(sizeToRequest));
     EXPECT_TRUE(buffer.empty());
@@ -66,7 +66,7 @@ TEST(PoolBuffer, allocateFail)
 TEST(PoolBuffer, writeAndRead)
 {
     memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<128> buffer(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     const size_t dataSize = 300;
     EXPECT_TRUE(buffer.allocate(dataSize));
@@ -89,7 +89,7 @@ TEST(PoolBuffer, writeAndRead)
 TEST(PoolBuffer, writeAndReadWithOffset)
 {
     memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<128> buffer(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     const size_t bufferSize = 400;
     EXPECT_TRUE(buffer.allocate(bufferSize));
@@ -113,11 +113,11 @@ TEST(PoolBuffer, writeAndReadWithOffset)
 TEST(PoolBuffer, move)
 {
     memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<128> buffer1(allocator);
+    memory::PoolBuffer<decltype(allocator)> buffer1(allocator);
     EXPECT_TRUE(buffer1.allocate(300));
     EXPECT_EQ(allocator.countAllocatedItems(), 3);
 
-    memory::PoolBuffer<128> buffer2 = std::move(buffer1);
+    memory::PoolBuffer<decltype(allocator)> buffer2 = std::move(buffer1);
     EXPECT_EQ(buffer2.size(), 300);
     EXPECT_EQ(buffer2.capacity(), 3 * 128);
     EXPECT_EQ(allocator.countAllocatedItems(), 3);

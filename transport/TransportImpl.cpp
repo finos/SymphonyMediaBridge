@@ -1,4 +1,5 @@
 #include "TransportImpl.h"
+#include "transport/sctp/SctpConfig.h"
 #include "api/utils.h"
 #include "bwe/BandwidthEstimator.h"
 #include "config/Config.h"
@@ -181,7 +182,8 @@ public:
           _protocolId(protocolId),
           _transport(transport)
     {
-        _payload = std::make_unique<memory::PoolBuffer<sizeof(memory::Packet)>>(allocator);
+        _payload = std::make_unique<memory::PoolBuffer<memory::PacketPoolAllocator>>(allocator);
+
         if (!_payload->allocate(length))
         {
             logger::error("failed to create packet for outbound sctp", transport.getLoggableId().c_str());
@@ -265,7 +267,7 @@ private:
     sctp::SctpAssociation& _sctpAssociation;
     const uint16_t _streamId;
     const uint32_t _protocolId;
-    std::unique_ptr<memory::PoolBuffer<sizeof(memory::Packet)>> _payload;
+    std::unique_ptr<memory::PoolBuffer<memory::PacketPoolAllocator>> _payload;
     TransportImpl& _transport;
 };
 
@@ -2250,8 +2252,8 @@ bool TransportImpl::sendSctp(const uint16_t streamId,
         logger::warn("SCTP not established yet.", _loggableId.c_str());
         return false;
     }
-
-    if (length == 0 || 2 * sizeof(uint32_t) + length > memory::Packet::size)
+    const auto maxSize = _sctpServerPort->getConfig().mtu.max;
+    if (length == 0 || 2 * sizeof(uint32_t) + length > maxSize)
     {
         logger::error("sctp message invalid size %u", getLoggableId().c_str(), length);
         return false;

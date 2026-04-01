@@ -532,9 +532,10 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
     }
 }
 
-void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet)
+void EngineMixer::handleSctpControl(const size_t endpointIdHash,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
 {
-    auto& header = webrtc::streamMessageHeader(*packet);
+    auto& header = webrtc::streamMessageHeader(*buffer);
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
     if (dataStream)
     {
@@ -544,7 +545,7 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniqueP
             header.sequenceNumber,
             header.payloadProtocol,
             header.data(),
-            packet->getLength() - sizeof(header));
+            buffer->getLength() - sizeof(header));
 
         if (!wasOpen && dataStream->stream.isOpen())
         {
@@ -652,19 +653,19 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     assert(sender);
     if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
-        auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
-        _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
+        auto packet = webrtc::makeUniqueBuffer(streamId, payloadProtocol, data, length, _sendAllocator);
+        _incomingBarbellSctp.push(IncomingLargeSctpPacketInfo(std::move(packet), sender));
         return;
     }
 
-    auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
-    if (!packet)
+    auto buffer = webrtc::makeUniqueBuffer(streamId, payloadProtocol, data, length, _sendAllocator);
+    if (!buffer)
     {
         logger::error("Unable to allocate sctp message, sender %p, length %lu", _loggableId.c_str(), sender, length);
         return;
     }
 
-    _messageListener.asyncSctpReceived(*this, packet, sender->getEndpointIdHash());
+    _messageListener.asyncSctpReceived(*this, buffer, sender->getEndpointIdHash());
 }
 
 /**
@@ -1672,9 +1673,10 @@ bool EngineMixer::asyncAddDataSteam(EngineDataStream* engineDataStream)
     return post(utils::bind(&EngineMixer::addDataSteam, this, engineDataStream));
 }
 
-bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash, memory::UniquePacket& packet)
+bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer)
 {
-    return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(packet)));
+    return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(buffer)));
 }
 
 void EngineMixer::onIceReceived(transport::RtcTransport* transport, uint64_t timestamp)
