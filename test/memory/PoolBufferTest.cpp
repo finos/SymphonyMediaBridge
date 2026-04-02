@@ -133,3 +133,111 @@ TEST(PoolBuffer, move)
     buffer2.clear();
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 }
+
+TEST(PoolBuffer, isNullTerminated)
+{
+    memory::PoolAllocator<128> allocator(10, "test");
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+
+    // Empty buffer
+    EXPECT_TRUE(buffer.allocate(0));
+    EXPECT_FALSE(buffer.isNullTerminated());
+    buffer.clear();
+    EXPECT_FALSE(buffer.isNullTerminated());
+
+    // Non-null terminated
+    const std::string s1 = "123456789a";
+    EXPECT_TRUE(buffer.allocate(s1.length()));
+    buffer.write(s1.c_str(), s1.length());
+    EXPECT_FALSE(buffer.isNullTerminated());
+
+    // Null terminated
+    const std::string s2 = "123456789";
+    EXPECT_TRUE(buffer.allocate(s2.length() + 1));
+    buffer.write(s2.c_str(), s2.length() + 1);
+    EXPECT_TRUE(buffer.isNullTerminated());
+
+    // Null at end of chunk
+    std::vector<char> testData3(128, 'a');
+    testData3[127] = '\0';
+    EXPECT_TRUE(buffer.allocate(128));
+    buffer.write(testData3.data(), 128);
+    EXPECT_TRUE(buffer.isNullTerminated());
+    EXPECT_FALSE(buffer.getReader().subview(0, 127).isNullTerminated());
+    EXPECT_TRUE(buffer.getReader().subview(127, 1).isNullTerminated());
+    EXPECT_FALSE(buffer.getReader().subview(126, 1).isNullTerminated());
+
+    // Subview from larger buffer
+    char testData4[] = {'1', '2', '3', '4', '5', '\0', '6', '7', '8', '\0', 'A'};
+    EXPECT_TRUE(buffer.allocate(sizeof(testData4)));
+    buffer.write(testData4, sizeof(testData4));
+    EXPECT_FALSE(buffer.isNullTerminated());
+    EXPECT_TRUE(buffer.getReader().subview(0, 6).isNullTerminated());
+    EXPECT_FALSE(buffer.getReader().subview(0, 5).isNullTerminated());
+    EXPECT_TRUE(buffer.getReader().subview(0, 10).isNullTerminated());
+}
+
+TEST(PoolBuffer, readAndAppendNullIfNeeded)
+{
+    memory::PoolAllocator<128> allocator(10, "test");
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+
+    // Not null-terminated, enough space
+    {
+        const std::string testData = "0123456789";
+        EXPECT_TRUE(buffer.allocate(testData.length()));
+        buffer.write(testData.c_str(), testData.length());
+
+        memory::Array<char, 20> dest;
+        auto reader = buffer.getReader();
+        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), testData.length() + 1);
+        EXPECT_EQ(std::string(dest.data()), testData);
+        EXPECT_EQ(dest[testData.length()], '\0');
+    }
+
+    // Null-terminated, enough space
+    {
+        const std::string testData = "0123456789";
+        EXPECT_TRUE(buffer.allocate(testData.length() + 1));
+        buffer.write(testData.c_str(), testData.length() + 1);
+
+        memory::Array<char, 20> dest;
+        auto reader = buffer.getReader();
+        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), testData.length() + 1);
+        EXPECT_EQ(std::string(dest.data()), testData);
+    }
+
+    // Not null-terminated, not enough space for null
+    {
+        const std::string testData = "0123456789";
+        EXPECT_TRUE(buffer.allocate(testData.length()));
+        buffer.write(testData.c_str(), testData.length());
+        memory::Array<char, 10> dest;
+        auto reader = buffer.getReader();
+        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), 0);
+    }
+
+    // Null-terminated, not enough space for content
+    {
+        const std::string testData = "0123456789";
+        EXPECT_TRUE(buffer.allocate(testData.length() + 1));
+        buffer.write(testData.c_str(), testData.length() + 1);
+        memory::Array<char, 10> dest;
+        auto reader = buffer.getReader();
+        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), 0);
+    }
+
+    // Multi-chunk and not null terminated
+    {
+        std::vector<char> testData(130, 'a');
+        EXPECT_TRUE(buffer.allocate(testData.size()));
+        buffer.write(testData.data(), testData.size());
+        EXPECT_FALSE(buffer.isNullTerminated());
+
+        memory::Array<char, 200> dest;
+        auto reader = buffer.getReader();
+        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), testData.size() + 1);
+        EXPECT_EQ(dest[testData.size()], '\0');
+        EXPECT_EQ(std::memcmp(dest.data(), testData.data(), testData.size()), 0);
+    }
+}

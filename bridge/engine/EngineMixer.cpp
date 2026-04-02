@@ -596,7 +596,6 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
         message = originalMessage.data();
     }
 
-    const_cast<char*>(message)[length] = '\0';
 
     if (toEndpointIdHash)
     {
