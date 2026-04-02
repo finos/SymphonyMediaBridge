@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory/PoolAllocator.h"
+#include "memory/Array.h"
 #include <vector>
 
 namespace memory
@@ -42,6 +43,59 @@ public:
             return view(_chunks, std::min(_size - offset, size), _offset + offset, _allocator);
         }
 
+        bool isNullTerminated() const
+        {
+            if (_size == 0)
+            {
+                return false;
+            }
+
+            const auto elementSize = _allocator.getElementSize();
+            const size_t lastByteAbsoluteOffset = _offset + _size - 1;
+            const size_t chunkIndex = lastByteAbsoluteOffset / elementSize;
+            const size_t offsetInChunk = lastByteAbsoluteOffset % elementSize;
+
+            if (chunkIndex >= _chunks.size())
+            {
+                return false;
+            }
+
+            const auto* chunk = static_cast<const uint8_t*>(_chunks[chunkIndex].get());
+            return chunk[offsetInChunk] == '\0';
+        }
+
+        template<size_t SIZE>
+        size_t read(memory::Array<char, SIZE>& array) const
+        {
+            if (array.resize(_size) != _size)
+            {
+                return 0;
+            }
+            return read(array.begin(), _size);
+        }
+
+        template<size_t SIZE>
+        size_t readAndAppendNullIfNeeded(memory::Array<char, SIZE>& array) const
+        {
+            size_t extraSize = isNullTerminated() ? 0 : 1;
+            if (array.resize(_size + extraSize) != _size + extraSize)
+            {
+                return 0;
+            }
+
+            //size_t bytesRead = read(reinterpret_cast<void*>(const_cast<char*>(array.data())), _size);
+            size_t bytesRead = read(array.begin(), _size);
+            if (bytesRead < _size) {
+                return 0;
+            }
+
+            if (extraSize > 0) {
+                array[bytesRead++] = 0;
+            }
+
+            return bytesRead;
+        }
+private:
         size_t read(void* destination, size_t count) const
         {
             size_t bytesRead = 0;
@@ -173,6 +227,10 @@ public:
 
     const std::vector<ChunkPtr>& getChunks() const { return _chunks; }
 
+    bool isNullTerminated() const {
+        return getReader().isNullTerminated();
+    }
+
 private:
     TPoolAllocator& _allocator;
     std::vector<ChunkPtr> _chunks;
@@ -199,17 +257,14 @@ inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& all
     const void* data,
     size_t length)
 {
-    // auto buffer = std::unique_ptr<PoolBuffer<TPoolAllocator>>(new PoolBuffer<TPoolAllocator>(allocator));
-    // if (!buffer->allocate(length))
-    // {
-    //     return nullptr;
-    // }
-
     auto buffer = makeUniquePoolBuffer(allocator, length);
 
     if (data)
     {
-        buffer->write(data, length);
+        if (buffer->write(data, length) != length)
+        {
+            return nullptr;
+        }
     }
 
     return buffer;

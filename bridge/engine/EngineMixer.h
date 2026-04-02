@@ -183,7 +183,7 @@ public: // EngineMixer async interface. Will execute on engine thread
     bool asyncPinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     bool asyncSendEndpointMessage(const size_t toEndpointIdHash,
         const size_t fromEndpointIdHash,
-        memory::UniqueAudioPacket& packet);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer);
     bool asyncAddRecordingStream(EngineRecordingStream* engineRecordingStream);
     bool asyncAddTransportToRecordingStream(const size_t streamIdHash,
         transport::RecordingTransport& transport,
@@ -223,7 +223,7 @@ private: // impl async interface
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     void sendEndpointMessage(const size_t toEndpointIdHash,
         const size_t fromEndpointIdHash,
-        memory::UniqueAudioPacket packet);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer);
     void recordingStart(EngineRecordingStream& stream, const RecordingDescription& desc);
     void stopRecording(EngineRecordingStream& stream, const RecordingDescription& desc);
     void updateRecordingStreamModalities(EngineRecordingStream& engineRecordingStream,

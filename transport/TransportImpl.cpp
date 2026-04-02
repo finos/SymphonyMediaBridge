@@ -182,19 +182,12 @@ public:
           _protocolId(protocolId),
           _transport(transport)
     {
-        _payload = std::make_unique<memory::PoolBuffer<memory::PacketPoolAllocator>>(allocator);
+        _payload = memory::makeUniquePoolBuffer(allocator, data, length);
 
-        if (!_payload->allocate(length))
+        if (!_payload)
         {
             logger::error("failed to create packet for outbound sctp", transport.getLoggableId().c_str());
-            _payload.reset();
             return;
-        }
-
-        if (length > 0 && _payload->write(data, length) != length)
-        {
-            logger::error("failed to write to sctp packet", _transport.getLoggableId().c_str());
-            _payload.reset();
         }
     }
 
@@ -209,8 +202,10 @@ public:
         auto currentTimeout = _sctpAssociation.nextTimeout(timestamp);
 
         const auto length = _payload->size();
+        memory::Array<char, 2048> buffer(length);
+
         const void* data = nullptr;
-        std::unique_ptr<uint8_t[]> buffer;
+
         auto& chunks = _payload->getChunks();
         if (chunks.size() == 1)
         {
@@ -218,9 +213,8 @@ public:
         }
         else if (length > 0)
         {
-            buffer = std::make_unique<uint8_t[]>(length);
-            _payload->getReader().read(buffer.get(), length);
-            data = buffer.get();
+            _payload->getReader().read(buffer);
+            data = buffer.data();
         }
         else
         {

@@ -9,6 +9,7 @@
 #include "bridge/engine/ProcessMissingVideoPacketsJob.h"
 #include "bridge/engine/VideoForwarderRewriteAndSendJob.h"
 #include "bridge/engine/VideoNackReceiveJob.h"
+#include "memory/Array.h"
 #include "rtp/RtcpFeedback.h"
 #include "utils/SimpleJson.h"
 #include "utils/StringBuilder.h"
@@ -521,19 +522,19 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
         }
 
         const void* contiguousBufferPtr = nullptr;
-        char tempStorage[2048];
+        memory::Array<char, 2048> tempStorage(_config.sctp.maxMessageSize);
         size_t bufferLength = buffer->getLength();
 
         if (buffer->getChunks().size() == 1)
         {
             contiguousBufferPtr = buffer->getChunks()[0].get();
         }
-        else if (bufferLength <= sizeof(tempStorage))
+        else if (bufferLength <= tempStorage.capacity())
         {
-            size_t bytesRead = buffer->getReader().read(tempStorage, bufferLength);
+            size_t bytesRead = buffer->getReader().read(tempStorage);
             if (bytesRead == bufferLength)
             {
-                contiguousBufferPtr = tempStorage;
+                contiguousBufferPtr = tempStorage.data();
             }
         }
         else

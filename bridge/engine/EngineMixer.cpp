@@ -10,6 +10,7 @@
 #include "bridge/engine/VideoNackReceiveJob.h"
 #include "config/Config.h"
 #include "logger/Logger.h"
+#include "memory/Array.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
@@ -562,9 +563,9 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash,
 
 void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
-    memory::UniqueAudioPacket packet)
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
 {
-    if (!fromEndpointIdHash || !packet)
+    if (!fromEndpointIdHash || !buffer)
     {
         assert(false);
         return;
@@ -576,8 +577,26 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
         return;
     }
 
-    auto message = reinterpret_cast<const char*>(packet->get());
-    utils::StringBuilder<2048> endpointMessage;
+    //Extract potentially fragmented message into continious memory
+    //If message is less than 2048 bytes it'll be allocated on stack.
+    //Add one byte for potentially necessary null terminatrion
+    memory::Array<char, 2048> originalMessage(buffer->size() + 1);
+    memory::Array<char, 2048> endpointMessage(_config.sctp.maxMessageSize);
+
+    const char* message = nullptr;
+    size_t length = buffer->size();
+    const auto& chunks = buffer->getChunks();
+    if (chunks.size() == 1 && buffer->isNullTerminated()) {
+        message = reinterpret_cast<const char*>(chunks[0].get());
+    } else if (length > 0)
+    {
+        auto readBytes = buffer->getReader().readAndAppendNullIfNeeded(originalMessage);
+        assert(readBytes == length || readBytes == length + 1); 
+        length = readBytes;
+        message = originalMessage.data();
+    }
+
+    const_cast<char*>(message)[length] = '\0';
 
     if (toEndpointIdHash)
     {
@@ -587,24 +606,40 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
             return;
         }
 
-        api::DataChannelMessage::makeEndpointMessage(endpointMessage,
-            toDataStream->endpointId,
-            fromDataStream->endpointId,
+        int length = 0;
+#if ENABLE_LEGACY_API
+        length = std::snprintf(endpointMessage.begin(),
+            endpointMessage.capacity(),
+            "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
+            toDataStream->endpointId.c_str(),
+            fromDataStream->endpointId.c_str(),
             message);
+#else
+        length = std::snprintf(endpointMessage.begin(),
+            endpointMessage.capacity(),
+            "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
+            toDataStream->endpointId.c_str(),
+            fromDataStream->endpointId.c_str(),
+            message);
+#endif
 
-        toDataStream->stream.sendString(endpointMessage.get(), endpointMessage.getLength());
-        logger::debug("Endpoint message %lu -> %lu: %s",
-            _loggableId.c_str(),
-            fromEndpointIdHash,
-            toEndpointIdHash,
-            endpointMessage.get());
+        if (length > 0 && (size_t)length < endpointMessage.capacity())
+        {
+            toDataStream->stream.sendString(endpointMessage.data(), length);
+            logger::debug("Endpoint message %lu -> %lu: %s",
+                _loggableId.c_str(),
+                fromEndpointIdHash,
+                toEndpointIdHash,
+                endpointMessage.data());
+        }
+        else
+        {
+            logger::warn("Failed to format endpoint message or buffer too small.", _loggableId.c_str());
+        }
     }
     else
     {
-        logger::debug("Broadcast Endpoint message from %lu %s",
-            _loggableId.c_str(),
-            fromEndpointIdHash,
-            endpointMessage.get());
+        logger::debug("Broadcast Endpoint message from %lu %s", _loggableId.c_str(), fromEndpointIdHash, message);
         for (auto& dataStreamEntry : _engineDataStreams)
         {
             if (dataStreamEntry.first == fromEndpointIdHash || !dataStreamEntry.second->stream.isOpen())
@@ -612,13 +647,30 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
                 continue;
             }
 
-            endpointMessage.clear();
-            api::DataChannelMessage::makeEndpointMessage(endpointMessage,
-                dataStreamEntry.second->endpointId,
-                fromDataStream->endpointId,
+            int length = 0;
+#if ENABLE_LEGACY_API
+            length = std::snprintf(endpointMessage.begin(),
+                endpointMessage.capacity(),
+                "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
+                dataStreamEntry.second->endpointId.c_str(),
+                fromDataStream->endpointId.c_str(),
                 message);
-
-            dataStreamEntry.second->stream.sendString(endpointMessage.get(), endpointMessage.getLength());
+#else
+            length = std::snprintf(endpointMessage.begin(),
+                endpointMessage.capacity(),
+                "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
+                dataStreamEntry.second->endpointId.c_str(),
+                fromDataStream->endpointId.c_str(),
+                message);
+#endif
+            if (length > 0 && (size_t)length < endpointMessage.capacity())
+            {
+                dataStreamEntry.second->stream.sendString(endpointMessage.data(), length);
+            }
+            else
+            {
+                logger::warn("Failed to format endpoint message or buffer too small.", _loggableId.c_str());
+            }
         }
     }
 }

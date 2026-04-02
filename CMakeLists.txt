@@ -652,6 +652,7 @@ set(TEST_FILES
     test/memory/StackMapTest.cpp
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/MixerTest.cpp
+    test/bridge/DataChannelMessageSizeTest.cpp
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp

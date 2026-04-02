@@ -1835,14 +1835,13 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
     const utils::SimpleJson& message)
 {
     assert(fromEndpointIdHash);
-    if (message.size() >= memory::AudioPacket::maxLength())
+    if (message.size() >= _config.sctp.maxMessageSize)
     {
         return;
     }
 
-    auto& audioAllocator = _engineMixer->getAudioAllocator();
-    auto packet = memory::makeUniquePacket(audioAllocator, message.jsonBegin(), message.size());
-    reinterpret_cast<char*>(packet->get())[message.size()] = 0; // null terminated in packet
+    auto& packetAllocator = _engineMixer->getMainAllocator();
+    auto buffer = memory::makeUniquePoolBuffer(packetAllocator, message.jsonBegin(), message.size());
 
     std::lock_guard<std::mutex> locker(_configurationLock);
 
@@ -1857,7 +1856,7 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
         toEndpointIdHash = dataStreamItr->second->endpointIdHash;
     }
 
-    _engineMixer->asyncSendEndpointMessage(toEndpointIdHash, fromEndpointIdHash, packet);
+    _engineMixer->asyncSendEndpointMessage(toEndpointIdHash, fromEndpointIdHash, buffer);
 }
 
 RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)

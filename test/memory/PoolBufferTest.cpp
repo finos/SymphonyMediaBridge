@@ -1,5 +1,6 @@
 #include "memory/PoolBuffer.h"
 #include "memory/PoolAllocator.h"
+#include "memory/Array.h"
 #include "test/macros.h"
 #include <gtest/gtest.h>
 #include <vector>
@@ -79,11 +80,14 @@ TEST(PoolBuffer, writeAndRead)
 
     EXPECT_EQ(buffer.write(sourceData.data(), sourceData.size()), dataSize);
 
-    std::vector<uint8_t> destinationData(dataSize);
+    memory::Array<char, dataSize> destinationData;
     auto reader = buffer.getReader();
-    EXPECT_EQ(reader.read(destinationData.data(), destinationData.size()), dataSize);
+    EXPECT_EQ(reader.read(destinationData), dataSize);
 
-    EXPECT_EQ(sourceData, destinationData);
+    for (size_t i = 0; i < dataSize; ++i)
+    {
+        EXPECT_EQ(sourceData[i], static_cast<uint8_t>(destinationData[i]));
+    }
 }
 
 TEST(PoolBuffer, writeAndReadWithOffset)
@@ -103,11 +107,14 @@ TEST(PoolBuffer, writeAndReadWithOffset)
     const size_t writeOffset = 130; // Cross chunk boundary
     EXPECT_EQ(buffer.write(sourceData.data(), sourceData.size(), writeOffset), sourceData.size());
 
-    std::vector<uint8_t> readData(sourceData.size());
+    memory::Array<char, 150> readData;
     auto reader = buffer.getReader().subview(writeOffset, sourceData.size());
-    EXPECT_EQ(reader.read(readData.data(), readData.size()), readData.size());
+    EXPECT_EQ(reader.read(readData), readData.size());
 
-    EXPECT_EQ(sourceData, readData);
+    for (size_t i = 0; i < sourceData.size(); ++i)
+    {
+        EXPECT_EQ(sourceData[i], static_cast<uint8_t>(readData[i]));
+    }
 }
 
 TEST(PoolBuffer, move)
