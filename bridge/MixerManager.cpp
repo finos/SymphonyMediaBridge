@@ -494,7 +494,8 @@ void MixerManager::freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_
 
 void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<memory::PacketPoolAllocator> msgBuffer, size_t endpointIdHash)
 {
-    auto& sctpHeader = webrtc::streamMessageHeader(*msgBuffer);
+    const auto& continuousBuffer = msgBuffer->getReadonlyBuffer();
+    auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
 
     if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
     {

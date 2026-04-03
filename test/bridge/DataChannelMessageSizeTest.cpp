@@ -91,8 +91,9 @@ struct MixerTestScope
           timeQueue(64),
           jobManagerProcessor(timeQueue),
           backgroundJobManagerProcessor(timeQueue),
-          packetAllocator(4096, "MixerTestPoolAllocator"),
-          audioPacketAllocator(4096, "MixerTestAudioPoolAllocator")
+          mainPacketAllocator(128 * 1024, "MainAllocator-test"),
+          sendPacketAllocator(32 * 1024, "SendAllocator-test"),
+          audioPacketAllocator(4 * 1024, "AudioAllocator-test")
     {
     }
 
@@ -103,7 +104,8 @@ struct MixerTestScope
     jobmanager::TimerQueue timeQueue;
     JobManagerProcessor jobManagerProcessor;
     JobManagerProcessor backgroundJobManagerProcessor;
-    memory::PacketPoolAllocator packetAllocator;
+    memory::PacketPoolAllocator mainPacketAllocator;
+    memory::PacketPoolAllocator sendPacketAllocator;
     memory::AudioPacketPoolAllocator audioPacketAllocator;
 };
 } // namespace
@@ -128,9 +130,9 @@ protected:
             _testScope->mixerManagerAsyncMock,
             0,
             _config,
-            _testScope->packetAllocator,
+            _testScope->sendPacketAllocator,
             _testScope->audioPacketAllocator,
-            _testScope->packetAllocator,
+            _testScope->mainPacketAllocator,
             audioSsrcs,
             videoSsrcs,
             0);
@@ -212,7 +214,6 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageSucceeds)
     _mixer->addDataStreamToEngine(endpointId1);
 
     processAllEngineQueue();
-    //_testScope->jobManagerProcessor.process();
 
     auto* dataStream1 = _mixer->getEngineDataStream(endpointId1);
     ASSERT_NE(nullptr, dataStream1);
@@ -251,7 +252,6 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageSucceeds)
     auto fromEndpointIdHash = utils::hash<std::string>{}(endpointId0);
     _mixer->sendEndpointMessage(endpointId1, fromEndpointIdHash, payloadJson);
     processAllEngineQueue();
-    //_testScope->jobManagerProcessor.process();
 }
 
 TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageFails)
@@ -287,7 +287,6 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageFails)
     _mixer->addDataStreamToEngine(endpointId1);
 
     processAllEngineQueue();
-    //_testScope->jobManagerProcessor.process();
 
     auto* dataStream1 = _mixer->getEngineDataStream(endpointId1);
     ASSERT_NE(nullptr, dataStream1);
@@ -321,7 +320,6 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageFails)
     auto fromEndpointIdHash = utils::hash<std::string>{}(endpointId0);
     _mixer->sendEndpointMessage(endpointId1, fromEndpointIdHash, payloadJson);
     processAllEngineQueue();
-    //_testScope->jobManagerProcessor.process();
 }
 
 TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
@@ -344,7 +342,13 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
     jobmanager::TimerQueue timerQueue(1024);
     JobManagerProcessor backgroundJobManager(timerQueue);
 
-    NiceMock<EngineMock> engine;
+    NiceMock<EngineMock> engine;\
+
+    EXPECT_CALL(engine, post(_)).WillRepeatedly(Invoke([&](auto&& task) {
+        task();
+        return true;
+    }));
+
     bridge::MixerManager mixerManager(_idGenerator,
         _ssrcGenerator,
         _testScope->jobManagerProcessor.getJobManager(),
@@ -352,8 +356,8 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
         *_testScope->transportFactoryMock,
         engine,
         _config,
-        _testScope->packetAllocator,
-        _testScope->packetAllocator,
+        _testScope->mainPacketAllocator,
+        _testScope->sendPacketAllocator,
         _testScope->audioPacketAllocator);
 
     auto mixer = mixerManager.create(utils::Optional<uint32_t>(5), true, false);
@@ -412,11 +416,6 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
             return true;
         }));
 
-    EXPECT_CALL(engine, post(_)).WillOnce(Invoke([&](auto&& task) {
-        task();
-        return true;
-    }));
-
     mixer->getEngineMixer()->onSctpMessage(&dataStream0->transport,
         0,
         0,
@@ -424,7 +423,6 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
         message,
         builder.getLength());
 
-    engine.processTasks();
     backgroundJobManager.process();
-    processAllEngineQueue();
+    engine.processTasks();
 }

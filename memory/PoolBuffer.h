@@ -3,9 +3,25 @@
 #include "memory/PoolAllocator.h"
 #include "memory/Array.h"
 #include <vector>
+#include <memory>
 
 namespace memory
 {
+
+enum class ReadMode
+{
+    AsIs,
+    NullTerminated
+};
+
+struct ReadonlyMemoryBuffer
+{
+    ReadonlyMemoryBuffer() : data(nullptr), length(0) {}
+
+    const void* data;
+    size_t length;
+    std::unique_ptr<memory::Array<char, 1500>> storage;
+};
 
 template <typename TPoolAllocator>
 class PoolBuffer
@@ -83,7 +99,6 @@ public:
                 return 0;
             }
 
-            //size_t bytesRead = read(reinterpret_cast<void*>(const_cast<char*>(array.data())), _size);
             size_t bytesRead = read(array.begin(), _size);
             if (bytesRead < _size) {
                 return 0;
@@ -153,7 +168,11 @@ private:
         return *this;
     }
 
-    ~PoolBuffer() = default;
+    //~PoolBuffer() = default;
+    ~PoolBuffer()
+    {
+        clear();
+    }
 
     PoolBuffer(const PoolBuffer&) = delete;
     PoolBuffer& operator=(const PoolBuffer&) = delete;
@@ -224,6 +243,63 @@ private:
     }
 
     view getReader() const { return view(_chunks, _size, 0, _allocator); }
+
+    ReadonlyMemoryBuffer getReadonlyBuffer(ReadMode readMode = ReadMode::AsIs) const
+    {
+        ReadonlyMemoryBuffer result;
+        const bool nullTerminate = (readMode == ReadMode::NullTerminated);
+
+        if (_size == 0)
+        {
+            if (nullTerminate)
+            {
+                result.storage = std::make_unique<memory::Array<char, 1500>>(1);
+                (*result.storage)[0] = '\0';
+                result.data = result.storage->data();
+                result.length = 1;
+            }
+            return result;
+        }
+
+        size_t targetSize = _size;
+        bool needsCopy = (_chunks.size() > 1);
+        if (nullTerminate && !isNullTerminated())
+        {
+            targetSize++;
+            needsCopy = true;
+        }
+
+        result.length = targetSize;
+
+        if (!needsCopy)
+        {
+            result.data = _chunks[0].get();
+        }
+        else
+        {
+            result.storage = std::make_unique<memory::Array<char, 1500>>(targetSize);
+            size_t bytesRead = 0;
+            if (nullTerminate)
+            {
+                bytesRead = getReader().readAndAppendNullIfNeeded(*result.storage);
+            }
+            else
+            {
+                bytesRead = getReader().read(*result.storage);
+            }
+
+            if (bytesRead == targetSize)
+            {
+                result.data = result.storage->data();
+            }
+            else
+            {
+                result.length = 0;
+            }
+        }
+
+        return result;
+    }
 
     const std::vector<ChunkPtr>& getChunks() const { return _chunks; }
 

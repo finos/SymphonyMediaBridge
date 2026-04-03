@@ -201,30 +201,12 @@ public:
         auto timestamp = utils::Time::getAbsoluteTime();
         auto currentTimeout = _sctpAssociation.nextTimeout(timestamp);
 
-        const auto length = _payload->size();
-        memory::Array<char, 2048> buffer(length);
-
-        const void* data = nullptr;
-
-        auto& chunks = _payload->getChunks();
-        if (chunks.size() == 1)
-        {
-            data = chunks[0].get();
-        }
-        else if (length > 0)
-        {
-            _payload->getReader().read(buffer);
-            data = buffer.data();
-        }
-        else
-        {
-            data = "";
-        }
+        const auto& continuousBuffer = _payload->getReadonlyBuffer();
 
         if (!_sctpAssociation.sendMessage(_streamId,
                 _protocolId,
-                data,
-                length,
+                continuousBuffer.data,
+                continuousBuffer.length,
                 timestamp))
         {
             if (_transport.isConnected())
@@ -241,7 +223,7 @@ public:
                 logger::info("SCTP message sent too soon. sctp state %s, %zuB",
                     _transport.getLoggableId().c_str(),
                     toString(_sctpAssociation.getState()),
-                    length);
+                    _payload->size());
             }
         }
 

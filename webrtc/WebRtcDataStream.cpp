@@ -104,12 +104,10 @@ memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueBuffer(uint16_t 
     header.id = streamId;
     header.sequenceNumber = 0;
     header.payloadProtocol = payloadProtocol;
-    std::memcpy(header.data(), message, messageSize);
-    auto* s = reinterpret_cast<char*>(header.data());
-    if (messageSize > 0 && s[messageSize - 1] != 0)
-    {
-        s[messageSize] = 0;
-        ++messageSize;
+    buffer->write(message, messageSize, sizeof(SctpStreamMessageHeader));
+
+    if (!buffer->isNullTerminated()) {
+        buffer->write("\0", sizeof(SctpStreamMessageHeader) + messageSize);
     }
 
     return buffer;
