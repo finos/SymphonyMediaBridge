@@ -116,6 +116,67 @@ public:
     DataChannelMessageSizeTest() : _testScope(std::make_unique<MixerTestScope>()) {}
 
 protected:
+    struct DataChannelEndpoints
+    {
+        std::shared_ptr<NiceMock<RtcTransportMock>> transport0;
+        std::shared_ptr<NiceMock<RtcTransportMock>> transport1;
+        const std::string endpointId0 = "endpoint-0";
+        const std::string endpointId1 = "endpoint-1";
+        size_t endpointId0Hash;
+        size_t endpointId1Hash;
+    };
+
+    DataChannelEndpoints createDataChannelEndpoints()
+    {
+        DataChannelEndpoints endpoints;
+        endpoints.endpointId0Hash = utils::hash<std::string>{}(endpoints.endpointId0);
+        endpoints.endpointId1Hash = utils::hash<std::string>{}(endpoints.endpointId1);
+
+        endpoints.transport0 = std::make_shared<NiceMock<RtcTransportMock>>();
+        endpoints.transport1 = std::make_shared<NiceMock<RtcTransportMock>>();
+
+        _testScope->transportFactoryMock->willReturnByDefaultForAll(nullptr);
+        EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpoints.endpointId0Hash, _, _, _, _, _, _))
+            .WillOnce(Return(endpoints.transport0));
+        EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpoints.endpointId1Hash, _, _, _, _, _, _))
+            .WillOnce(Return(endpoints.transport1));
+
+        return endpoints;
+    }
+
+    void connectDataStreams(Mixer& mixer, const DataChannelEndpoints& endpoints)
+    {
+        mixer.addBundleTransportIfNeeded(endpoints.endpointId0, ice::IceRole::CONTROLLING, false, false);
+        mixer.addBundleTransportIfNeeded(endpoints.endpointId1, ice::IceRole::CONTROLLING, false, false);
+
+        std::string dataStreamId;
+        ASSERT_TRUE(mixer.addBundledDataStream(dataStreamId, endpoints.endpointId0));
+        ASSERT_TRUE(mixer.addBundledDataStream(dataStreamId, endpoints.endpointId1));
+        mixer.configureDataStream(endpoints.endpointId0, 5000);
+        mixer.configureDataStream(endpoints.endpointId1, 5000);
+        mixer.addDataStreamToEngine(endpoints.endpointId0);
+        mixer.addDataStreamToEngine(endpoints.endpointId1);
+    }
+
+    void openDataChannels(Mixer& mixer, const DataChannelEndpoints& endpoints)
+    {
+        alignas(memory::Packet) const char webRtcOpen[] =
+            "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
+            "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
+
+        auto* dataStream1 = mixer.getEngineDataStream(endpoints.endpointId1);
+        ASSERT_NE(nullptr, dataStream1);
+        dataStream1->stream.onSctpMessage(&dataStream1->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
+            webRtcOpen,
+            sizeof(webRtcOpen) - 1);
+
+        auto* dataStream0 = mixer.getEngineDataStream(endpoints.endpointId0);
+        ASSERT_NE(nullptr, dataStream0);
+        dataStream0->stream.onSctpMessage(&dataStream0->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
+            webRtcOpen,
+            sizeof(webRtcOpen) - 1);
+    }
+
     void SetUp() override
     {
         _config.sctp.maxMessageSize = 4096;
@@ -181,169 +242,85 @@ protected:
     utils::SsrcGenerator _ssrcGenerator;
 };
 
-TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageSucceeds)
+struct SendMessageSizeTestParam
 {
-    const std::string endpointId0 = "endpoint-0";
-    const std::string endpointId1 = "endpoint-1";
+    size_t payloadSize;
+    int expectedSendSctpCalls;
+};
 
-    auto transport0 = std::make_shared<NiceMock<RtcTransportMock>>();
-    auto transport1 = std::make_shared<NiceMock<RtcTransportMock>>();
+class DataChannelSendMessageSizeTest : public DataChannelMessageSizeTest,
+                                       public WithParamInterface<SendMessageSizeTestParam>
+{
+};
 
-    const auto endpointId0Hash = utils::hash<std::string>{}(endpointId0);
-    const auto endpointId1Hash = utils::hash<std::string>{}(endpointId1);
+TEST_P(DataChannelSendMessageSizeTest, sendLargeEndpointMessage)
+{
+    const auto param = GetParam();
+    auto endpoints = createDataChannelEndpoints();
 
-    alignas(memory::Packet) const char webRtcOpen[] =
-        "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
-        "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
-
-    _testScope->transportFactoryMock->willReturnByDefaultForAll(nullptr);
-    EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpointId0Hash, _, _, _, _, _, _))
-        .WillOnce(Return(transport0));
-    EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpointId1Hash, _, _, _, _, _, _))
-        .WillOnce(Return(transport1));
-
-    _mixer->addBundleTransportIfNeeded(endpointId0, ice::IceRole::CONTROLLING, false, false);
-    _mixer->addBundleTransportIfNeeded(endpointId1, ice::IceRole::CONTROLLING, false, false);
-
-    std::string dataStreamId;
-    ASSERT_TRUE(_mixer->addBundledDataStream(dataStreamId, endpointId0));
-    ASSERT_TRUE(_mixer->addBundledDataStream(dataStreamId, endpointId1));
-    _mixer->configureDataStream(endpointId0, 5000);
-    _mixer->configureDataStream(endpointId1, 5000);
-    _mixer->addDataStreamToEngine(endpointId0);
-    _mixer->addDataStreamToEngine(endpointId1);
-
+    // 1. ARRANGE: setup data channels and message size
+    connectDataStreams(*_mixer, endpoints);
     processAllEngineQueue();
+    openDataChannels(*_mixer, endpoints);
+    std::string largeMessage(param.payloadSize, 'a');
 
-    auto* dataStream1 = _mixer->getEngineDataStream(endpointId1);
-    ASSERT_NE(nullptr, dataStream1);
-    dataStream1->stream.onSctpMessage(&dataStream1->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-        webRtcOpen,
-        sizeof(webRtcOpen) - 1); // Open the stream
-
-    // Opening this data channel is not actually required for this test, but it's added for clarity.
-    auto* dataStream0 = _mixer->getEngineDataStream(endpointId0);
-    ASSERT_NE(nullptr, dataStream0);
-    dataStream0->stream.onSctpMessage(&dataStream0->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-        webRtcOpen, 
-        sizeof(webRtcOpen) - 1); // Open the stream
-
-
-    //Creating a payload so that full message will still be
-    // slighly below configured max (see "_config.sctp.maxMessageSize = 4096" in SetUp);
-    std::string largeMessage(4000, 'a');
-
+    // 2. ACT: create a message of size close to or exceeding max and attempt to send it via 'sendEndpointMessage'
     utils::StringBuilder<8192> builder;
     std::string quotedPayload = "\"" + largeMessage + "\"";
-    api::DataChannelMessage::makeEndpointMessage(builder, endpointId1, endpointId0, quotedPayload.c_str());
+    api::DataChannelMessage::makeEndpointMessage(builder, endpoints.endpointId1, endpoints.endpointId0, quotedPayload.c_str());
     auto expectedJson = utils::SimpleJson::create(builder.get(), builder.getLength());
 
     const auto payloadJson = api::DataChannelMessageParser::getEndpointMessagePayload(expectedJson);
     ASSERT_FALSE(payloadJson.isNone());
 
-    EXPECT_CALL(*transport1, sendSctp(_, _, _, _))
-        .WillOnce(Invoke(
+    // 3. ASSERT: if message size is smaller than _config.sctp.maxMessageSize = 4096 send should succeed, otherwise fail
+    auto& expect = EXPECT_CALL(*endpoints.transport1, sendSctp(_, _, _, _))
+        .Times(param.expectedSendSctpCalls);
+    if (param.expectedSendSctpCalls > 0)
+    {
+        expect.WillOnce(Invoke(
             [&](uint16_t streamId, uint32_t protocolId, const void* data, uint16_t len) {
                 std::string sentData(static_cast<const char*>(data), len);
                 EXPECT_EQ(std::string(expectedJson.jsonBegin(), expectedJson.size()), sentData);
                 return true;
             }));
+    }
 
-    auto fromEndpointIdHash = utils::hash<std::string>{}(endpointId0);
-    _mixer->sendEndpointMessage(endpointId1, fromEndpointIdHash, payloadJson);
+    _mixer->sendEndpointMessage(endpoints.endpointId1, endpoints.endpointId0Hash, payloadJson);
     processAllEngineQueue();
 }
 
-TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageFails)
+INSTANTIATE_TEST_SUITE_P(DataChannelMessageSize,
+    DataChannelSendMessageSizeTest,
+    Values(SendMessageSizeTestParam{4000, 1},   // size of endpoint message < 4096 - send should happen (1 time)
+           SendMessageSizeTestParam{4096, 0}),  // size of endpoint message > 4096 - send should fail (happen 0 times)
+    [](const testing::TestParamInfo<SendMessageSizeTestParam>& info) {
+        if (info.param.expectedSendSctpCalls > 0)
+        {
+            return "Succeeds";
+        }
+        return "Fails";
+    });
+
+struct ForwardMessageSizeTestParam
 {
-    const std::string endpointId0 = "endpoint-0";
-    const std::string endpointId1 = "endpoint-1";
+    size_t payloadSize;
+    int expectedSendSctpCalls;
+};
 
-    auto transport0 = std::make_shared<NiceMock<RtcTransportMock>>();
-    auto transport1 = std::make_shared<NiceMock<RtcTransportMock>>();
-
-    const auto endpointId0Hash = utils::hash<std::string>{}(endpointId0);
-    const auto endpointId1Hash = utils::hash<std::string>{}(endpointId1);
-
-    alignas(memory::Packet) const char webRtcOpen[] =
-        "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
-        "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
-
-    _testScope->transportFactoryMock->willReturnByDefaultForAll(nullptr);
-    EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpointId0Hash, _, _, _, _, _, _))
-        .WillOnce(Return(transport0));
-    EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpointId1Hash, _, _, _, _, _, _))
-        .WillOnce(Return(transport1));
-
-    _mixer->addBundleTransportIfNeeded(endpointId0, ice::IceRole::CONTROLLING, false, false);
-    _mixer->addBundleTransportIfNeeded(endpointId1, ice::IceRole::CONTROLLING, false, false);
-
-    std::string dataStreamId;
-    ASSERT_TRUE(_mixer->addBundledDataStream(dataStreamId, endpointId0));
-    ASSERT_TRUE(_mixer->addBundledDataStream(dataStreamId, endpointId1));
-    _mixer->configureDataStream(endpointId0, 5000);
-    _mixer->configureDataStream(endpointId1, 5000);
-    _mixer->addDataStreamToEngine(endpointId0);
-    _mixer->addDataStreamToEngine(endpointId1);
-
-    processAllEngineQueue();
-
-    auto* dataStream1 = _mixer->getEngineDataStream(endpointId1);
-    ASSERT_NE(nullptr, dataStream1);
-    dataStream1->stream.onSctpMessage(&dataStream1->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-        webRtcOpen,
-        sizeof(webRtcOpen) - 1); // Open the stream
-
-    // Opening this data channel is not actually required for this test, but it's added for clarity.
-    auto* dataStream0 = _mixer->getEngineDataStream(endpointId0);
-    ASSERT_NE(nullptr, dataStream0);
-    dataStream0->stream.onSctpMessage(&dataStream0->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-        webRtcOpen, 
-        sizeof(webRtcOpen) - 1); // Open the stream
-
-
-    //Creating a payload so that full message will  be
-    //slightly above configured max (see "_config.sctp.maxMessageSize = 4096" in SetUp);
-    std::string largeMessage(4096, 'a');
-
-    utils::StringBuilder<8192> builder;
-    std::string quotedPayload = "\"" + largeMessage + "\"";
-    api::DataChannelMessage::makeEndpointMessage(builder, endpointId1, endpointId0, quotedPayload.c_str());
-    auto expectedJson = utils::SimpleJson::create(builder.get(), builder.getLength());
-
-    const auto payloadJson = api::DataChannelMessageParser::getEndpointMessagePayload(expectedJson);
-    ASSERT_FALSE(payloadJson.isNone());
-
-    EXPECT_CALL(*transport1, sendSctp(_, _, _, _))
-        .Times(0); // Expect sendSctp to never be called.
-
-    auto fromEndpointIdHash = utils::hash<std::string>{}(endpointId0);
-    _mixer->sendEndpointMessage(endpointId1, fromEndpointIdHash, payloadJson);
-    processAllEngineQueue();
-}
-
-TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
+class DataChannelForwardMessageSizeTest : public DataChannelMessageSizeTest,
+                                          public WithParamInterface<ForwardMessageSizeTestParam>
 {
-    const std::string endpointId0 = "endpoint-0";
-    const std::string endpointId1 = "endpoint-1";
+};
 
-    auto transport0 = std::make_shared<NiceMock<RtcTransportMock>>();
-    auto transport1 = std::make_shared<NiceMock<RtcTransportMock>>();
+TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
+{
+    const auto param = GetParam();
 
-    ON_CALL(*transport0, getTag()).WillByDefault(Return("tag-transport0"));
-    ON_CALL(*transport1, getTag()).WillByDefault(Return("tag-transport1"));
-
-    const auto endpointId0Hash = utils::hash<std::string>{}(endpointId0);
-    const auto endpointId1Hash = utils::hash<std::string>{}(endpointId1);
-
-    ON_CALL(*transport0, getEndpointIdHash()).WillByDefault(Return(endpointId0Hash));
-    ON_CALL(*transport1, getEndpointIdHash()).WillByDefault(Return(endpointId1Hash));
-
+    // 1. ARRANGE: setup mixer, engine, data channels and message size
     jobmanager::TimerQueue timerQueue(1024);
     JobManagerProcessor backgroundJobManager(timerQueue);
-
-    NiceMock<EngineMock> engine;\
-
+    NiceMock<EngineMock> engine;
     EXPECT_CALL(engine, post(_)).WillRepeatedly(Invoke([&](auto&& task) {
         task();
         return true;
@@ -359,64 +336,45 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
         _testScope->mainPacketAllocator,
         _testScope->sendPacketAllocator,
         _testScope->audioPacketAllocator);
-
     auto mixer = mixerManager.create(utils::Optional<uint32_t>(5), true, false);
 
+    auto endpoints = createDataChannelEndpoints();
 
+    ON_CALL(*endpoints.transport0, getTag()).WillByDefault(Return("tag-transport0"));
+    ON_CALL(*endpoints.transport1, getTag()).WillByDefault(Return("tag-transport1"));
+    ON_CALL(*endpoints.transport0, getEndpointIdHash()).WillByDefault(Return(endpoints.endpointId0Hash));
+    ON_CALL(*endpoints.transport1, getEndpointIdHash()).WillByDefault(Return(endpoints.endpointId1Hash));
 
-    _testScope->transportFactoryMock->willReturnByDefaultForAll(nullptr);
-    EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpointId0Hash, _, _, _, _, _, _))
-        .WillOnce(Return(transport0));
-    EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpointId1Hash, _, _, _, _, _, _))
-        .WillOnce(Return(transport1));
-
-    mixer->addBundleTransportIfNeeded(endpointId0, ice::IceRole::CONTROLLING, false, false);
-    mixer->addBundleTransportIfNeeded(endpointId1, ice::IceRole::CONTROLLING, false, false);
-
-    std::string dataStreamId;
-    ASSERT_TRUE(mixer->addBundledDataStream(dataStreamId, endpointId0));
-    ASSERT_TRUE(mixer->addBundledDataStream(dataStreamId, endpointId1));
-    mixer->configureDataStream(endpointId0, 5000);
-    mixer->configureDataStream(endpointId1, 5000);
-    mixer->addDataStreamToEngine(endpointId0);
-    mixer->addDataStreamToEngine(endpointId1);
+    connectDataStreams(*mixer, endpoints);
 
     engine.processTasks();
     backgroundJobManager.process();
     processAllEngineQueue();
-    alignas(memory::Packet) const char webRtcOpen[] =
-        "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
-        "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
 
-    auto* dataStream1 = mixer->getEngineDataStream(endpointId1);
-    ASSERT_NE(nullptr, dataStream1);
-    dataStream1->stream.onSctpMessage(&dataStream1->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-        webRtcOpen,
-        sizeof(webRtcOpen) - 1); // Open the stream
+    openDataChannels(*mixer, endpoints);
 
-    auto* dataStream0 = mixer->getEngineDataStream(endpointId0);
-    ASSERT_NE(nullptr, dataStream0);
-    dataStream0->stream.onSctpMessage(&dataStream0->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-        webRtcOpen,
-        sizeof(webRtcOpen) - 1); // Open the stream
+    std::string largeMessage(param.payloadSize, 'a');
 
-    // Creating a payload so that full message will still be
-    // slighly below configured max (see "_config.sctp.maxMessageSize = 4096" in SetUp);
-    std::string largeMessage(4000, 'a');
-
+    // 2. ACT: create a message of size close to or exceeding max and attempt to FORWARD it via 'onSctpMessage'
+    // FORWARD: engine mixer receives the in 'onSctpMessage' and later transport sends/forwards it via 'sendSctp'
     utils::StringBuilder<8192> builder;
     std::string quotedPayload = "\"" + largeMessage + "\"";
-    api::DataChannelMessage::makeEndpointMessage(builder, endpointId1, endpointId0, quotedPayload.c_str());
+    api::DataChannelMessage::makeEndpointMessage(builder, endpoints.endpointId1, endpoints.endpointId0, quotedPayload.c_str());
     const auto message = builder.get();
 
-    EXPECT_CALL(*transport1, sendSctp(_, _, _, _))
-        .WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, const void* data, uint16_t len) {
+    // 3. ASSERT: if message size is smaller than _config.sctp.maxMessageSize = 4096 FORWARD should succeed, otherwise fail
+    auto& expect = EXPECT_CALL(*endpoints.transport1, sendSctp(_, _, _, _))
+        .Times(param.expectedSendSctpCalls);
+    if (param.expectedSendSctpCalls > 0)
+    {
+        expect.WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, const void* data, uint16_t len) {
             std::string sentData(static_cast<const char*>(data), len);
             EXPECT_EQ(message, sentData);
             return true;
         }));
+    }
 
-    mixer->getEngineMixer()->onSctpMessage(&dataStream0->transport,
+    mixer->getEngineMixer()->onSctpMessage(&mixer->getEngineDataStream(endpoints.endpointId0)->transport,
         0,
         0,
         webrtc::DataChannelPpid::WEBRTC_STRING,
@@ -426,3 +384,15 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
     backgroundJobManager.process();
     engine.processTasks();
 }
+
+INSTANTIATE_TEST_SUITE_P(DataChannelMessageSize,
+    DataChannelForwardMessageSizeTest,
+    Values(ForwardMessageSizeTestParam{4000, 1},  // size of endpoint message < 4096 - send should happen (1 time)
+           ForwardMessageSizeTestParam{4097, 0}), // size of endpoint message > 4096 - send should fail (happen 0 times)
+    [](const testing::TestParamInfo<ForwardMessageSizeTestParam>& info) {
+        if (info.param.expectedSendSctpCalls > 0)
+        {
+            return "Succeeds";
+        }
+        return "Fails";
+    });
