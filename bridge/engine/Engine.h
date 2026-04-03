@@ -1,6 +1,6 @@
 #pragma once
 
-#include "bridge/engine/EngineStats.h"
+#include "bridge/engine/IEngine.h"
 #include "concurrency/MpmcPublish.h"
 #include "concurrency/MpmcQueue.h"
 #include "concurrency/SynchronizationContext.h"
@@ -23,24 +23,24 @@ class MixerManagerAsync;
 struct EngineRecordingStream;
 struct RecordingDescription;
 
-class Engine
+class Engine : public IEngine
 {
 public:
     Engine(jobmanager::JobManager& backgroundJobQueue);
     Engine(jobmanager::JobManager& backgroundJobQueue, std::thread&& externalThread);
 
-    void setMessageListener(MixerManagerAsync* messageListener);
-    void stop();
-    void run();
+    void setMessageListener(MixerManagerAsync* messageListener) override;
+    void stop() override;
+    void run() override;
 
-    bool post(utils::Function&& task) { return _tasks.push(std::move(task)); }
+    bool post(utils::Function&& task) override { return _tasks.push(std::move(task)); }
 
-    concurrency::SynchronizationContext getSynchronizationContext()
+    concurrency::SynchronizationContext getSynchronizationContext() override
     {
         return concurrency::SynchronizationContext(_tasks);
     }
 
-    EngineStats::EngineStats getStats();
+    EngineStats::EngineStats getStats() override;
 
 private:
     static const size_t maxMixers = 4096;
@@ -62,8 +62,8 @@ private:
     void updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& currentStatSample, uint64_t timestamp);
 
 public:
-    bool asyncAddMixer(EngineMixer* engineMixer);
-    bool asyncRemoveMixer(EngineMixer* engineMixer);
+    bool asyncAddMixer(EngineMixer* engineMixer) override;
+    bool asyncRemoveMixer(EngineMixer* engineMixer) override;
 
 private:
     void addMixer(EngineMixer* engineMixer);

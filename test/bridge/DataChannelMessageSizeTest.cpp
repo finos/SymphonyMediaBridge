@@ -31,7 +31,7 @@
 #include <memory>
 
 #include "bridge/MixerManager.h"
-#include "bridge/engine/Engine.h"
+#include "mocks/EngineMock.h"
 
 using namespace ::testing;
 using namespace ::test;
@@ -212,6 +212,7 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageSucceeds)
     _mixer->addDataStreamToEngine(endpointId1);
 
     processAllEngineQueue();
+    //_testScope->jobManagerProcessor.process();
 
     auto* dataStream1 = _mixer->getEngineDataStream(endpointId1);
     ASSERT_NE(nullptr, dataStream1);
@@ -250,6 +251,7 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageSucceeds)
     auto fromEndpointIdHash = utils::hash<std::string>{}(endpointId0);
     _mixer->sendEndpointMessage(endpointId1, fromEndpointIdHash, payloadJson);
     processAllEngineQueue();
+    //_testScope->jobManagerProcessor.process();
 }
 
 TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageFails)
@@ -285,6 +287,7 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageFails)
     _mixer->addDataStreamToEngine(endpointId1);
 
     processAllEngineQueue();
+    //_testScope->jobManagerProcessor.process();
 
     auto* dataStream1 = _mixer->getEngineDataStream(endpointId1);
     ASSERT_NE(nullptr, dataStream1);
@@ -318,6 +321,7 @@ TEST_F(DataChannelMessageSizeTest, sendLargeEndpointMessageFails)
     auto fromEndpointIdHash = utils::hash<std::string>{}(endpointId0);
     _mixer->sendEndpointMessage(endpointId1, fromEndpointIdHash, payloadJson);
     processAllEngineQueue();
+    //_testScope->jobManagerProcessor.process();
 }
 
 TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
@@ -340,7 +344,7 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
     jobmanager::TimerQueue timerQueue(1024);
     JobManagerProcessor backgroundJobManager(timerQueue);
 
-    bridge::Engine engine(backgroundJobManager.getJobManager());
+    NiceMock<EngineMock> engine;
     bridge::MixerManager mixerManager(_idGenerator,
         _ssrcGenerator,
         _testScope->jobManagerProcessor.getJobManager(),
@@ -352,13 +356,9 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
         _testScope->packetAllocator,
         _testScope->audioPacketAllocator);
 
-    auto mixer = mixerManager.create(utils::Optional<uint32_t>(5),true,false);
+    auto mixer = mixerManager.create(utils::Optional<uint32_t>(5), true, false);
 
-    ON_CALL(_testScope->mixerManagerAsyncMock, post(_))
-    .WillByDefault(Invoke([](auto&& task) {
-        task();
-        return true;
-    }));
+
 
     _testScope->transportFactoryMock->willReturnByDefaultForAll(nullptr);
     EXPECT_CALL(*_testScope->transportFactoryMock, create(_, endpointId0Hash, _, _, _, _, _, _))
@@ -377,9 +377,9 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
     mixer->addDataStreamToEngine(endpointId0);
     mixer->addDataStreamToEngine(endpointId1);
 
+    engine.processTasks();
     backgroundJobManager.process();
     processAllEngineQueue();
-
     alignas(memory::Packet) const char webRtcOpen[] =
         "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
         "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
@@ -396,8 +396,8 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
         webRtcOpen,
         sizeof(webRtcOpen) - 1); // Open the stream
 
-    //Creating a payload so that full message will still be
-    //slighly below configured max (see "_config.sctp.maxMessageSize = 4096" in SetUp);
+    // Creating a payload so that full message will still be
+    // slighly below configured max (see "_config.sctp.maxMessageSize = 4096" in SetUp);
     std::string largeMessage(4000, 'a');
 
     utils::StringBuilder<8192> builder;
@@ -406,21 +406,25 @@ TEST_F(DataChannelMessageSizeTest, forwardLargeEndpointMessageSucceeds)
     const auto message = builder.get();
 
     EXPECT_CALL(*transport1, sendSctp(_, _, _, _))
-        .WillOnce(Invoke(
-            [&](uint16_t streamId, uint32_t protocolId, const void* data, uint16_t len) {
-                std::string sentData(static_cast<const char*>(data), len);
-                EXPECT_EQ(message, sentData);
-                return true;
-            }));
+        .WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, const void* data, uint16_t len) {
+            std::string sentData(static_cast<const char*>(data), len);
+            EXPECT_EQ(message, sentData);
+            return true;
+        }));
 
-    engine.stop();
+    EXPECT_CALL(engine, post(_)).WillOnce(Invoke([&](auto&& task) {
+        task();
+        return true;
+    }));
 
     mixer->getEngineMixer()->onSctpMessage(&dataStream0->transport,
-        0, 0,
+        0,
+        0,
         webrtc::DataChannelPpid::WEBRTC_STRING,
         message,
         builder.getLength());
 
+    engine.processTasks();
     backgroundJobManager.process();
     processAllEngineQueue();
 }
