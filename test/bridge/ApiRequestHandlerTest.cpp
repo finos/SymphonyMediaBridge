@@ -330,13 +330,22 @@ TEST_F(ApiRequestHandlerTest, allocateEndpointWithVideoFieldWhenVideoIsDisabledS
 
     auto audioIt = responseJson.find("audio");
     auto bundleTransportIt = responseJson.find("bundle-transport");
-    auto data = responseJson.find("data");
+    auto dataIt = responseJson.find("data");
 
     // Check if answer contains the only 3 expected (audio, bundle-transport and data )
     EXPECT_EQ(3, responseJson.size());
     EXPECT_NE(responseJson.end(), audioIt);
     EXPECT_NE(responseJson.end(), bundleTransportIt);
-    EXPECT_NE(responseJson.end(), data);
+    EXPECT_NE(responseJson.end(), dataIt);
+
+    const auto dataJson = *dataIt;
+    const auto portIt = dataJson.find("port");
+    EXPECT_NE(dataJson.end(), portIt);
+    EXPECT_EQ(5000, portIt->get<uint32_t>());
+
+    const auto maxMessageSizeIt = dataJson.find("max-message-size");
+    EXPECT_NE(dataJson.end(), maxMessageSizeIt);
+    EXPECT_EQ(_mixerManagerSpyResources->config.sctp.maxMessageSize, maxMessageSizeIt->get<uint32_t>());
 
     // Because this test is explicit to test that the video is not present. Let's check it explicitly
     EXPECT_EQ(responseJson.end(), responseJson.find("video"));

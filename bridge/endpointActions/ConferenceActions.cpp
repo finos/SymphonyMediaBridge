@@ -272,6 +272,7 @@ httpd::Response generateAllocateEndpointResponse(ActionContext* context,
         }
 
         responseData.port = streamDescription.sctpPort.isSet() ? streamDescription.sctpPort.get() : 5000;
+        responseData.maxMessageSize = mixer.getConfig().sctp.maxMessageSize;
         channelsDescription.data.set(responseData);
     }
 

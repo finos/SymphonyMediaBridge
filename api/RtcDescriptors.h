@@ -140,5 +140,6 @@ struct Video
 struct Data
 {
     uint32_t port;
+    uint32_t maxMessageSize;
 };
 } // namespace api

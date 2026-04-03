@@ -210,6 +210,7 @@ nlohmann::json generateAllocateEndpointResponse(const EndpointDescription& chann
         const auto& data = channelsDescription.data.get();
         nlohmann::json dataJson;
         dataJson["port"] = data.port;
+        dataJson["max-message-size"] = data.maxMessageSize;
         responseJson["data"] = dataJson;
     }
 
