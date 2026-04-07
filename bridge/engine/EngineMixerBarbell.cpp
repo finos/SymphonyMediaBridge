@@ -512,7 +512,7 @@ SsrcInboundContext* EngineMixer::emplaceBarbellInboundSsrcContext(const uint32_t
 
 void EngineMixer::processBarbellSctp(const uint64_t timestamp)
 {
-    for (IncomingLargeSctpPacketInfo packetInfo; _incomingBarbellSctp.pop(packetInfo);)
+    for (IncomingSctpMessageInfo packetInfo; _incomingBarbellSctp.pop(packetInfo);)
     {
         _lastReceiveTimeOnBarbellTransports = timestamp;
         auto* buffer = packetInfo.packet().get(); // Get raw PoolBuffer pointer

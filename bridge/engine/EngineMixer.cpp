@@ -705,7 +705,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
         auto packet = webrtc::makeUniqueBuffer(streamId, payloadProtocol, data, length, _sendAllocator);
-        _incomingBarbellSctp.push(IncomingLargeSctpPacketInfo(std::move(packet), sender));
+        _incomingBarbellSctp.push(IncomingSctpMessageInfo(std::move(packet), sender));
         return;
     }
 

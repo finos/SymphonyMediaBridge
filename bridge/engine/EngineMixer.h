@@ -356,7 +356,7 @@ protected:
     };
 
     using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket>;
-    using IncomingLargeSctpPacketInfo = IncomingPacketAggregate<memory::UniquePoolBuffer<memory::PacketPoolAllocator>>;
+    using IncomingSctpMessageInfo = IncomingPacketAggregate<memory::UniquePoolBuffer<memory::PacketPoolAllocator>>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -365,7 +365,7 @@ protected:
     concurrency::SynchronizationContext _engineSyncContext;
     MixerManagerAsync& _messageListener;
 
-    concurrency::MpmcQueue<IncomingLargeSctpPacketInfo> _incomingBarbellSctp;
+    concurrency::MpmcQueue<IncomingSctpMessageInfo> _incomingBarbellSctp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderAudioRtp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingRtcp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderVideoRtp;

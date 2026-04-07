@@ -43,7 +43,7 @@ public:
     // Make IncomingPacketInfo visible
     using IncomingPacketInfo = bridge::EngineMixer::IncomingPacketInfo;
 
-    using IncomingLargeSctpPacketInfo = bridge::EngineMixer::IncomingLargeSctpPacketInfo;
+    using IncomingSctpMessagePacketInfo = bridge::EngineMixer::IncomingSctpMessageInfo;
 
     // using parent constructor
     using bridge::EngineMixer::EngineMixer;
@@ -78,7 +78,7 @@ public:
     }
 
 public:
-    concurrency::MpmcQueue<IncomingLargeSctpPacketInfo>& spyIncomingBarbellSctp() { return _incomingBarbellSctp; };
+    concurrency::MpmcQueue<IncomingSctpMessagePacketInfo>& spyIncomingBarbellSctp() { return _incomingBarbellSctp; };
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingForwarderAudioRtp() { return _incomingForwarderAudioRtp; };
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingRtcp() { return _incomingRtcp; };
     concurrency::MpmcQueue<IncomingPacketInfo>& spyIncomingForwarderVideoRtp() { return _incomingForwarderVideoRtp; };

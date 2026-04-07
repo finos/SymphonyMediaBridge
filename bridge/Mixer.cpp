@@ -1837,6 +1837,10 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
     assert(fromEndpointIdHash);
     if (message.size() >= _config.sctp.maxMessageSize)
     {
+        logger::warn("Endpoint message too big, len %zu",
+            "MixerManager",
+            message.size()
+        );
         return;
     }
 
