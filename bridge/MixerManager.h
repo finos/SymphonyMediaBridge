@@ -5,7 +5,7 @@
 #include "bridge/Stats.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/EngineStats.h"
-#include "bridge/engine/IEngine.h"
+#include "bridge/engine/Engine.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "utils/Pacer.h"
@@ -49,7 +49,7 @@ public:
         jobmanager::JobManager& rtJobManager,
         jobmanager::JobManager& backgroundJobQueue,
         transport::TransportFactory& transportFactory,
-        bridge::IEngine& engine,
+        bridge::Engine& engine,
         const config::Config& config,
         memory::PacketPoolAllocator& mainAllocator,
         memory::PacketPoolAllocator& sendAllocator,
@@ -91,7 +91,7 @@ protected:
     jobmanager::JobManager& _rtJobManager;
     jobmanager::JobManager& _backgroundJobQueue;
     transport::TransportFactory& _transportFactory;
-    IEngine& _engine;
+    Engine& _engine;
     const config::Config& _config;
 
     std::unordered_map<std::string, std::shared_ptr<Mixer>> _mixers;

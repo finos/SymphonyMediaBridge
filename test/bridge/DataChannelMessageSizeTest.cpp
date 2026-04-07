@@ -31,7 +31,6 @@
 #include <memory>
 
 #include "bridge/MixerManager.h"
-#include "mocks/EngineMock.h"
 
 using namespace ::testing;
 using namespace ::test;
@@ -308,6 +307,15 @@ struct ForwardMessageSizeTestParam
     int expectedSendSctpCalls;
 };
 
+class MockEngine : public bridge::Engine
+{
+public:
+    MockEngine(jobmanager::JobManager& backgroundJobQueue) : bridge::Engine(backgroundJobQueue, {}) {}
+
+    MOCK_METHOD(bool, post, (utils::Function && task), (override));
+    MOCK_METHOD(concurrency::SynchronizationContext, getSynchronizationContext, (), (override));
+};
+
 class DataChannelForwardMessageSizeTest : public DataChannelMessageSizeTest,
                                           public WithParamInterface<ForwardMessageSizeTestParam>
 {
@@ -320,11 +328,13 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
     // 1. ARRANGE: setup mixer, engine, data channels and message size
     jobmanager::TimerQueue timerQueue(1024);
     JobManagerProcessor backgroundJobManager(timerQueue);
-    NiceMock<EngineMock> engine;
-    EXPECT_CALL(engine, post(_)).WillRepeatedly(Invoke([&](auto&& task) {
-        task();
-        return true;
+
+    concurrency::MpmcQueue<utils::Function>& engineQueue = _testScope->engineTaskQueue;
+    NiceMock<MockEngine> engine(backgroundJobManager.getJobManager());
+    ON_CALL(engine, post(_)).WillByDefault(Invoke([&engineQueue](utils::Function&& task) {
+        return engineQueue.push(std::move(task));
     }));
+    ON_CALL(engine, getSynchronizationContext()).WillByDefault(Return(concurrency::SynchronizationContext(_testScope->engineTaskQueue)));
 
     bridge::MixerManager mixerManager(_idGenerator,
         _ssrcGenerator,
@@ -347,9 +357,7 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
 
     connectDataStreams(*mixer, endpoints);
 
-    engine.processTasks();
     backgroundJobManager.process();
-    processAllEngineQueue();
 
     openDataChannels(*mixer, endpoints);
 
@@ -382,7 +390,7 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
         builder.getLength());
 
     backgroundJobManager.process();
-    engine.processTasks();
+    processAllEngineQueue();
 }
 
 INSTANTIATE_TEST_SUITE_P(DataChannelMessageSize,
