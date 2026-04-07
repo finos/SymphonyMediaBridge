@@ -687,7 +687,7 @@ set(CMAKE_TEST_INCLUDE "${CMAKE_TEST_DIRECTORY}/include")
 configure_file(test/TestConfig.h.in ${CMAKE_TEST_INCLUDE}/TestConfig.h)
 
 add_library(testlib STATIC ${TEST_LIB_FILES})
-target_include_directories(testlib PRIVATE ${CMAKE_TEST_INCLUDE} ${gtest_SOURCE_DIR}/include "test")
+target_include_directories(testlib PRIVATE ${CMAKE_TEST_INCLUDE} ${gtest_SOURCE_DIR}/include "test/include")
 target_link_libraries(testlib PUBLIC smblib ${THIRD_PARTY_LIBS})
 
 add_executable(UnitTest
