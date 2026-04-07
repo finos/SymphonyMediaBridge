@@ -548,15 +548,14 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
             }
 
             auto messageJson = utils::SimpleJson::create(message, messageLength);
-            std::string messageStr(message, messageLength);
 
             if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
             {
-                onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), messageStr.c_str());
+                onBarbellUserMediaMap(packetInfo.transport()->getEndpointIdHash(), message);
             }
             else if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
             {
-                onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), messageStr.c_str());
+                onBarbellMinUplinkEstimate(packetInfo.transport()->getEndpointIdHash(), message);
             }
         }
         else if (sctpHeader->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)

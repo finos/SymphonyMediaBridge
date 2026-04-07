@@ -243,7 +243,7 @@ private:
     sctp::SctpAssociation& _sctpAssociation;
     const uint16_t _streamId;
     const uint32_t _protocolId;
-    std::unique_ptr<memory::PoolBuffer<memory::PacketPoolAllocator>> _payload;
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> _payload;
     TransportImpl& _transport;
 };
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory/PoolAllocator.h"
+#include "memory/PacketPoolAllocator.h"
 #include "memory/Array.h"
 #include <vector>
 #include <memory>
@@ -26,28 +27,17 @@ struct ReadonlyMemoryBuffer
 template <typename TPoolAllocator>
 class PoolBuffer
 {
-    struct ChunkDeleter
-    {
-        TPoolAllocator* allocator;
-        void operator()(void* p) const
-        {
-            if (allocator)
-            {
-                allocator->free(p);
-            }
-        }
-    };
-    using ChunkPtr = std::unique_ptr<void, ChunkDeleter>;
-
 public:
     class view
     {
     public:
-        view(const std::vector<ChunkPtr>& chunks,
+        view(void* const* chunkPointers,
+            size_t numChunks,
             size_t size,
             size_t offset,
             const TPoolAllocator& allocator)
-            : _chunks(chunks),
+            : _chunkPointers(chunkPointers),
+              _numChunks(numChunks),
               _size(size),
               _offset(offset),
               _allocator(allocator)
@@ -56,7 +46,11 @@ public:
 
         view subview(size_t offset, size_t size) const
         {
-            return view(_chunks, std::min(_size - offset, size), _offset + offset, _allocator);
+            return view(_chunkPointers,
+                _numChunks,
+                std::min(_size - offset, size),
+                _offset + offset,
+                _allocator);
         }
 
         bool isNullTerminated() const
@@ -71,16 +65,16 @@ public:
             const size_t chunkIndex = lastByteAbsoluteOffset / elementSize;
             const size_t offsetInChunk = lastByteAbsoluteOffset % elementSize;
 
-            if (chunkIndex >= _chunks.size())
+            if (chunkIndex >= _numChunks)
             {
                 return false;
             }
 
-            const auto* chunk = static_cast<const uint8_t*>(_chunks[chunkIndex].get());
+            const auto* chunk = static_cast<const uint8_t*>(_chunkPointers[chunkIndex]);
             return chunk[offsetInChunk] == '\0';
         }
 
-        template<size_t SIZE>
+        template <size_t SIZE>
         size_t read(memory::Array<char, SIZE>& array) const
         {
             if (array.resize(_size) != _size)
@@ -90,7 +84,7 @@ public:
             return read(array.begin(), _size);
         }
 
-        template<size_t SIZE>
+        template <size_t SIZE>
         size_t readAndAppendNullIfNeeded(memory::Array<char, SIZE>& array) const
         {
             size_t extraSize = isNullTerminated() ? 0 : 1;
@@ -100,24 +94,27 @@ public:
             }
 
             size_t bytesRead = read(array.begin(), _size);
-            if (bytesRead < _size) {
+            if (bytesRead < _size)
+            {
                 return 0;
             }
 
-            if (extraSize > 0) {
+            if (extraSize > 0)
+            {
                 array[bytesRead++] = 0;
             }
 
             return bytesRead;
         }
-private:
+
+    private:
         size_t read(void* destination, size_t count) const
         {
             size_t bytesRead = 0;
             size_t currentOffset = _offset;
             size_t remainingToRead = std::min(count, _size);
 
-            if (_chunks.empty() || remainingToRead == 0)
+            if (!_chunkPointers || remainingToRead == 0)
             {
                 return 0;
             }
@@ -126,9 +123,9 @@ private:
             size_t chunkIndex = currentOffset / elementSize;
             size_t offsetInChunk = currentOffset % elementSize;
 
-            while (bytesRead < remainingToRead && chunkIndex < _chunks.size())
+            while (bytesRead < remainingToRead && chunkIndex < _numChunks)
             {
-                const uint8_t* sourceChunk = static_cast<const uint8_t*>(_chunks[chunkIndex].get());
+                const uint8_t* sourceChunk = static_cast<const uint8_t*>(_chunkPointers[chunkIndex]);
                 size_t toReadFromChunk = std::min({remainingToRead - bytesRead, elementSize - offsetInChunk});
 
                 std::memcpy(static_cast<uint8_t*>(destination) + bytesRead, sourceChunk + offsetInChunk, toReadFromChunk);
@@ -141,38 +138,43 @@ private:
         }
 
     private:
-        const std::vector<ChunkPtr>& _chunks;
+        void* const* _chunkPointers;
+        size_t _numChunks;
         size_t _size;
         size_t _offset;
         const TPoolAllocator& _allocator;
     };
 
-    explicit PoolBuffer(TPoolAllocator& allocator) : _allocator(allocator), _size(0) {}
+    explicit PoolBuffer(TPoolAllocator& allocator) : _allocator(allocator), _masterChunk(nullptr), _size(0), _numChunks(0) {}
 
     PoolBuffer(PoolBuffer&& other) noexcept
         : _allocator(other._allocator),
-          _chunks(std::move(other._chunks)),
-          _size(other._size)
+          _masterChunk(other._masterChunk),
+          _size(other._size),
+          _numChunks(other._numChunks)
     {
+        other._masterChunk = nullptr;
         other._size = 0;
+        other._numChunks = 0;
     }
 
     PoolBuffer& operator=(PoolBuffer&& other) noexcept
     {
         if (this != &other)
         {
-            _chunks = std::move(other._chunks);
+            clear();
+            _masterChunk = other._masterChunk;
             _size = other._size;
+            _numChunks = other._numChunks;
+
+            other._masterChunk = nullptr;
             other._size = 0;
+            other._numChunks = 0;
         }
         return *this;
     }
 
-    //~PoolBuffer() = default;
-    ~PoolBuffer()
-    {
-        clear();
-    }
+    ~PoolBuffer() { clear(); }
 
     PoolBuffer(const PoolBuffer&) = delete;
     PoolBuffer& operator=(const PoolBuffer&) = delete;
@@ -183,18 +185,45 @@ private:
         {
             clear();
             const auto elementSize = _allocator.getElementSize();
-            size_t numChunks = (size + elementSize - 1) / elementSize;
-            _chunks.reserve(numChunks);
-            for (size_t i = 0; i < numChunks; ++i)
+            _numChunks = (size + elementSize - 1) / elementSize;
+            if (_numChunks == 0)
             {
-                void* chunk = _allocator.allocate();
-                if (!chunk)
+                _size = 0;
+                return true;
+            }
+
+            if (elementSize < _numChunks * sizeof(void*))
+            {
+                logger::error("master chunk is too small to hold chunk pointers. element size %zu, chunks %zu",
+                    "PoolBuffer",
+                    elementSize,
+                    _numChunks);
+                _numChunks = 0;
+                return false;
+            }
+
+            _masterChunk = _allocator.allocate();
+            if (!_masterChunk)
+            {
+                _numChunks = 0;
+                return false;
+            }
+
+            void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+            for (size_t i = 0; i < _numChunks; ++i)
+            {
+                chunkPointers[i] = _allocator.allocate();
+                if (!chunkPointers[i])
                 {
-                    _chunks.clear();
-                    _size = 0;
+                    for (size_t j = 0; j < i; ++j)
+                    {
+                        _allocator.free(chunkPointers[j]);
+                    }
+                    _allocator.free(_masterChunk);
+                    _masterChunk = nullptr;
+                    _numChunks = 0;
                     return false;
                 }
-                _chunks.emplace_back(chunk, ChunkDeleter{&_allocator});
             }
         }
         _size = size;
@@ -203,14 +232,27 @@ private:
 
     void clear()
     {
-        _chunks.clear();
+        if (_masterChunk)
+        {
+            void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+            for (size_t i = 0; i < _numChunks; ++i)
+            {
+                if (chunkPointers[i])
+                {
+                    _allocator.free(chunkPointers[i]);
+                }
+            }
+            _allocator.free(_masterChunk);
+        }
+        _masterChunk = nullptr;
+        _numChunks = 0;
         _size = 0;
     }
 
     size_t size() const { return _size; }
     size_t getLength() const { return _size; }
-    size_t capacity() const { return _chunks.size() * _allocator.getElementSize(); }
-    bool empty() const { return _size == 0; }
+    size_t capacity() const { return _numChunks * _allocator.getElementSize(); }
+    bool empty() const { return _size == 0 || _numChunks == 0 || _masterChunk == nullptr; }
 
     size_t write(const void* data, size_t len, size_t offset = 0)
     {
@@ -218,7 +260,7 @@ private:
         size_t bytesWritten = 0;
         size_t remainingToWrite = std::min(len, _size - offset);
 
-        if (_chunks.empty() || offset >= _size)
+        if (!_masterChunk || offset >= _size)
         {
             return 0;
         }
@@ -226,10 +268,11 @@ private:
         const auto elementSize = _allocator.getElementSize();
         size_t chunkIndex = offset / elementSize;
         size_t offsetInChunk = offset % elementSize;
+        void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
 
-        while (bytesWritten < remainingToWrite && chunkIndex < _chunks.size())
+        while (bytesWritten < remainingToWrite && chunkIndex < _numChunks)
         {
-            uint8_t* targetChunk = static_cast<uint8_t*>(_chunks[chunkIndex].get());
+            uint8_t* targetChunk = static_cast<uint8_t*>(chunkPointers[chunkIndex]);
             size_t toWriteInChunk = std::min(remainingToWrite - bytesWritten, elementSize - offsetInChunk);
 
             std::memcpy(targetChunk + offsetInChunk, source + bytesWritten, toWriteInChunk);
@@ -242,7 +285,10 @@ private:
         return bytesWritten;
     }
 
-    view getReader() const { return view(_chunks, _size, 0, _allocator); }
+    view getReader() const
+    {
+        return view(reinterpret_cast<void**>(_masterChunk), _numChunks, _size, 0, _allocator);
+    }
 
     ReadonlyMemoryBuffer getReadonlyBuffer(ReadMode readMode = ReadMode::AsIs) const
     {
@@ -262,7 +308,7 @@ private:
         }
 
         size_t targetSize = _size;
-        bool needsCopy = (_chunks.size() > 1);
+        bool needsCopy = (_numChunks > 1);
         if (nullTerminate && !isNullTerminated())
         {
             targetSize++;
@@ -273,7 +319,7 @@ private:
 
         if (!needsCopy)
         {
-            result.data = _chunks[0].get();
+            result.data = reinterpret_cast<void**>(_masterChunk)[0];
         }
         else
         {
@@ -301,31 +347,40 @@ private:
         return result;
     }
 
-    const std::vector<ChunkPtr>& getChunks() const { return _chunks; }
-
-    bool isNullTerminated() const {
-        return getReader().isNullTerminated();
-    }
+    bool isNullTerminated() const { return getReader().isNullTerminated(); }
 
 private:
     TPoolAllocator& _allocator;
-    std::vector<ChunkPtr> _chunks;
+    void* _masterChunk;
     size_t _size;
+    size_t _numChunks;
 };
 
 template <typename T>
-using UniquePoolBuffer = std::unique_ptr<PoolBuffer<T>>;
+using UniquePoolBuffer = std::unique_ptr<PoolBuffer<T>, PacketPoolAllocator::Deleter>;
 
 template <typename TPoolAllocator>
 inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& allocator,
     size_t length)
 {
-    auto buffer = std::unique_ptr<PoolBuffer<TPoolAllocator>>(new PoolBuffer<TPoolAllocator>(allocator));
-    if (!buffer->allocate(length))
+    auto pointer = allocator.allocate();
+    assert(pointer);
+    if (!pointer)
     {
-        return nullptr;
+        logger::error("Unable to allocate pool buffer, no space left in pool %s",
+            "PoolBuffer",
+            allocator.getName().c_str());
+        return UniquePoolBuffer<TPoolAllocator>();
     }
-    return buffer;
+
+    auto buffer = new (pointer) PoolBuffer<TPoolAllocator>(allocator);
+    auto smartBuffer = UniquePoolBuffer<TPoolAllocator>(buffer, allocator.getDeleter());
+
+    if (!smartBuffer->allocate(length))
+    {
+        return UniquePoolBuffer<TPoolAllocator>();
+    }
+    return smartBuffer;
 }
 
 template <typename TPoolAllocator>
