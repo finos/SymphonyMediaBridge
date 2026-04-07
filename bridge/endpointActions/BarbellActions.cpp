@@ -110,6 +110,7 @@ httpd::Response generateBarbellResponse(ActionContext* context,
 
     api::Data responseData;
     responseData.port = 5000;
+    responseData.maxMessageSize = 2048;
     channelsDescription.data = responseData;
 
     const auto responseBody = api::Generator::generateAllocateBarbellResponse(channelsDescription);
