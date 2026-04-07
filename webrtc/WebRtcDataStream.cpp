@@ -2,6 +2,7 @@
 #include "logger/Logger.h"
 #include "webrtc/DataChannel.h"
 #include "webrtc/DataStreamTransport.h"
+#include "memory/PoolBuffer.h"
 
 namespace webrtc
 {
@@ -87,39 +88,28 @@ void WebRtcDataStream::onSctpMessage(webrtc::DataStreamTransport* sender,
     }
 }
 
-memory::UniquePacket makeUniquePacket(uint16_t streamId,
+memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueBuffer(uint16_t streamId,
     uint32_t payloadProtocol,
     const void* message,
     size_t messageSize,
     memory::PacketPoolAllocator& allocator)
 {
-    assert(sizeof(SctpStreamMessageHeader) + messageSize <= memory::Packet::size);
-    if (sizeof(SctpStreamMessageHeader) + messageSize > memory::Packet::size)
+    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(allocator, sizeof(SctpStreamMessageHeader) + messageSize + 1);
+    if (!buffer)
     {
-        return nullptr;
+        return buffer;
     }
 
-    auto packet = memory::makeUniquePacket(allocator);
-    if (!packet)
-    {
-        return packet;
+    auto& header = streamMessageHeader(*buffer);
+    header.id = streamId;
+    header.sequenceNumber = 0;
+    header.payloadProtocol = payloadProtocol;
+    buffer->write(message, messageSize, sizeof(SctpStreamMessageHeader));
+
+    if (!buffer->isNullTerminated()) {
+        buffer->write("\0", sizeof(SctpStreamMessageHeader) + messageSize);
     }
 
-    auto* header = reinterpret_cast<SctpStreamMessageHeader*>(packet->get());
-    header->id = streamId;
-    header->sequenceNumber = 0;
-    header->payloadProtocol = payloadProtocol;
-    std::memcpy(header->data(), message, messageSize);
-    auto* s = reinterpret_cast<char*>(header->data());
-    if (messageSize > 0 && s[messageSize - 1] != 0)
-    {
-        s[messageSize] = 0;
-        ++messageSize;
-    }
-
-    packet->setLength(sizeof(SctpStreamMessageHeader) + messageSize);
-
-    return packet;
+    return buffer;
 }
-
 } // namespace webrtc

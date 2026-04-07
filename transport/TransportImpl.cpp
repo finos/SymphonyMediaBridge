@@ -1,4 +1,5 @@
 #include "TransportImpl.h"
+#include "transport/sctp/SctpConfig.h"
 #include "api/utils.h"
 #include "bwe/BandwidthEstimator.h"
 #include "config/Config.h"
@@ -10,6 +11,7 @@
 #include "logger/Logger.h"
 #include "logger/PacketLogger.h"
 #include "memory/AudioPacketPoolAllocator.h"
+#include "memory/PoolBuffer.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "sctp/SctpAssociation.h"
@@ -164,15 +166,6 @@ private:
 
 class SctpSendJob : public jobmanager::CountedJob
 {
-    struct SctpDataChunk
-    {
-        uint32_t payloadProtocol;
-        uint16_t id;
-
-        void* data() { return &id + 1; }
-        const void* data() const { return &id + 1; };
-    };
-
 public:
     SctpSendJob(sctp::SctpAssociation& association,
         uint16_t streamId,
@@ -185,43 +178,35 @@ public:
         : CountedJob(transport.getJobCounter()),
           _jobQueue(jobQueue),
           _sctpAssociation(association),
-          _packet(memory::makeUniquePacket(allocator)),
+          _streamId(streamId),
+          _protocolId(protocolId),
           _transport(transport)
     {
-        if (_packet)
-        {
-            if (sizeof(SctpDataChunk) + length > memory::Packet::size)
-            {
-                logger::error("sctp message too big %u", _transport.getLoggableId().c_str(), length);
-                return;
-            }
+        _payload = memory::makeUniquePoolBuffer(allocator, data, length);
 
-            auto* header = reinterpret_cast<SctpDataChunk*>(_packet->get());
-            header->id = streamId;
-            header->payloadProtocol = protocolId;
-            std::memcpy(header->data(), data, length);
-            _packet->setLength(sizeof(SctpDataChunk) + length);
-        }
-        else
+        if (!_payload)
         {
             logger::error("failed to create packet for outbound sctp", transport.getLoggableId().c_str());
+            return;
         }
     }
 
     void run() override
     {
-        if (!_packet)
+        if (!_payload)
         {
             return;
         }
 
         auto timestamp = utils::Time::getAbsoluteTime();
         auto currentTimeout = _sctpAssociation.nextTimeout(timestamp);
-        auto& header = *reinterpret_cast<SctpDataChunk*>(_packet->get());
-        if (!_sctpAssociation.sendMessage(header.id,
-                header.payloadProtocol,
-                header.data(),
-                _packet->getLength() - sizeof(header),
+
+        const auto& continuousBuffer = _payload->getReadonlyBuffer();
+
+        if (!_sctpAssociation.sendMessage(_streamId,
+                _protocolId,
+                continuousBuffer.data,
+                continuousBuffer.length,
                 timestamp))
         {
             if (_transport.isConnected())
@@ -238,7 +223,7 @@ public:
                 logger::info("SCTP message sent too soon. sctp state %s, %zuB",
                     _transport.getLoggableId().c_str(),
                     toString(_sctpAssociation.getState()),
-                    _packet->getLength());
+                    _payload->size());
             }
         }
 
@@ -256,7 +241,9 @@ public:
 private:
     jobmanager::JobQueue& _jobQueue;
     sctp::SctpAssociation& _sctpAssociation;
-    memory::UniquePacket _packet;
+    const uint16_t _streamId;
+    const uint32_t _protocolId;
+    std::unique_ptr<memory::PoolBuffer<memory::PacketPoolAllocator>> _payload;
     TransportImpl& _transport;
 };
 
@@ -2241,8 +2228,8 @@ bool TransportImpl::sendSctp(const uint16_t streamId,
         logger::warn("SCTP not established yet.", _loggableId.c_str());
         return false;
     }
-
-    if (length == 0 || 2 * sizeof(uint32_t) + length > memory::Packet::size)
+    const auto maxSize = _sctpServerPort->getConfig().maxMessageSize;
+    if (length == 0 || 2 * sizeof(uint32_t) + length > maxSize)
     {
         logger::error("sctp message invalid size %u", getLoggableId().c_str(), length);
         return false;

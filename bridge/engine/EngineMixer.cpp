@@ -10,6 +10,7 @@
 #include "bridge/engine/VideoNackReceiveJob.h"
 #include "config/Config.h"
 #include "logger/Logger.h"
+#include "memory/Array.h"
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
@@ -532,9 +533,10 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
     }
 }
 
-void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet)
+void EngineMixer::handleSctpControl(const size_t endpointIdHash,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
 {
-    auto& header = webrtc::streamMessageHeader(*packet);
+    auto& header = webrtc::streamMessageHeader(*buffer);
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
     if (dataStream)
     {
@@ -544,7 +546,7 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniqueP
             header.sequenceNumber,
             header.payloadProtocol,
             header.data(),
-            packet->getLength() - sizeof(header));
+            buffer->getLength() - sizeof(header));
 
         if (!wasOpen && dataStream->stream.isOpen())
         {
@@ -561,9 +563,9 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash, memory::UniqueP
 
 void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
-    memory::UniqueAudioPacket packet)
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
 {
-    if (!fromEndpointIdHash || !packet)
+    if (!fromEndpointIdHash || !buffer)
     {
         assert(false);
         return;
@@ -575,8 +577,25 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
         return;
     }
 
-    auto message = reinterpret_cast<const char*>(packet->get());
-    utils::StringBuilder<2048> endpointMessage;
+    //Extract potentially fragmented message into continious memory
+    //If message is less than 2048 bytes it'll be allocated on stack.
+    //Add one byte for potentially necessary null terminatrion
+    memory::Array<char, 2048> originalMessage(buffer->size() + 1);
+    memory::Array<char, 2048> endpointMessage(_config.sctp.maxMessageSize);
+
+    const char* message = nullptr;
+    size_t length = buffer->size();
+    const auto& chunks = buffer->getChunks();
+    if (chunks.size() == 1 && buffer->isNullTerminated()) {
+        message = reinterpret_cast<const char*>(chunks[0].get());
+    } else if (length > 0)
+    {
+        auto readBytes = buffer->getReader().readAndAppendNullIfNeeded(originalMessage);
+        assert(readBytes == length || readBytes == length + 1); 
+        length = readBytes;
+        message = originalMessage.data();
+    }
+
 
     if (toEndpointIdHash)
     {
@@ -586,24 +605,40 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
             return;
         }
 
-        api::DataChannelMessage::makeEndpointMessage(endpointMessage,
-            toDataStream->endpointId,
-            fromDataStream->endpointId,
+        int length = 0;
+#if ENABLE_LEGACY_API
+        length = std::snprintf(endpointMessage.begin(),
+            endpointMessage.capacity(),
+            "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
+            toDataStream->endpointId.c_str(),
+            fromDataStream->endpointId.c_str(),
             message);
+#else
+        length = std::snprintf(endpointMessage.begin(),
+            endpointMessage.capacity(),
+            "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
+            toDataStream->endpointId.c_str(),
+            fromDataStream->endpointId.c_str(),
+            message);
+#endif
 
-        toDataStream->stream.sendString(endpointMessage.get(), endpointMessage.getLength());
-        logger::debug("Endpoint message %lu -> %lu: %s",
-            _loggableId.c_str(),
-            fromEndpointIdHash,
-            toEndpointIdHash,
-            endpointMessage.get());
+        if (length > 0 && (size_t)length < endpointMessage.capacity())
+        {
+            toDataStream->stream.sendString(endpointMessage.data(), length);
+            logger::debug("Endpoint message %lu -> %lu: %s",
+                _loggableId.c_str(),
+                fromEndpointIdHash,
+                toEndpointIdHash,
+                endpointMessage.data());
+        }
+        else
+        {
+            logger::warn("Failed to format endpoint message or buffer too small.", _loggableId.c_str());
+        }
     }
     else
     {
-        logger::debug("Broadcast Endpoint message from %lu %s",
-            _loggableId.c_str(),
-            fromEndpointIdHash,
-            endpointMessage.get());
+        logger::debug("Broadcast Endpoint message from %lu %s", _loggableId.c_str(), fromEndpointIdHash, message);
         for (auto& dataStreamEntry : _engineDataStreams)
         {
             if (dataStreamEntry.first == fromEndpointIdHash || !dataStreamEntry.second->stream.isOpen())
@@ -611,13 +646,30 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
                 continue;
             }
 
-            endpointMessage.clear();
-            api::DataChannelMessage::makeEndpointMessage(endpointMessage,
-                dataStreamEntry.second->endpointId,
-                fromDataStream->endpointId,
+            int length = 0;
+#if ENABLE_LEGACY_API
+            length = std::snprintf(endpointMessage.begin(),
+                endpointMessage.capacity(),
+                "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
+                dataStreamEntry.second->endpointId.c_str(),
+                fromDataStream->endpointId.c_str(),
                 message);
-
-            dataStreamEntry.second->stream.sendString(endpointMessage.get(), endpointMessage.getLength());
+#else
+            length = std::snprintf(endpointMessage.begin(),
+                endpointMessage.capacity(),
+                "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
+                dataStreamEntry.second->endpointId.c_str(),
+                fromDataStream->endpointId.c_str(),
+                message);
+#endif
+            if (length > 0 && (size_t)length < endpointMessage.capacity())
+            {
+                dataStreamEntry.second->stream.sendString(endpointMessage.data(), length);
+            }
+            else
+            {
+                logger::warn("Failed to format endpoint message or buffer too small.", _loggableId.c_str());
+            }
         }
     }
 }
@@ -652,19 +704,19 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     assert(sender);
     if (EngineBarbell::isFromBarbell(sender->getTag()))
     {
-        auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
-        _incomingBarbellSctp.push(IncomingPacketInfo(std::move(packet), sender));
+        auto packet = webrtc::makeUniqueBuffer(streamId, payloadProtocol, data, length, _sendAllocator);
+        _incomingBarbellSctp.push(IncomingLargeSctpPacketInfo(std::move(packet), sender));
         return;
     }
 
-    auto packet = webrtc::makeUniquePacket(streamId, payloadProtocol, data, length, _sendAllocator);
-    if (!packet)
+    auto buffer = webrtc::makeUniqueBuffer(streamId, payloadProtocol, data, length, _sendAllocator);
+    if (!buffer)
     {
         logger::error("Unable to allocate sctp message, sender %p, length %lu", _loggableId.c_str(), sender, length);
         return;
     }
 
-    _messageListener.asyncSctpReceived(*this, packet, sender->getEndpointIdHash());
+    _messageListener.asyncSctpReceived(*this, buffer, sender->getEndpointIdHash());
 }
 
 /**
@@ -1672,9 +1724,10 @@ bool EngineMixer::asyncAddDataSteam(EngineDataStream* engineDataStream)
     return post(utils::bind(&EngineMixer::addDataSteam, this, engineDataStream));
 }
 
-bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash, memory::UniquePacket& packet)
+bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer)
 {
-    return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(packet)));
+    return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(buffer)));
 }
 
 void EngineMixer::onIceReceived(transport::RtcTransport* transport, uint64_t timestamp)

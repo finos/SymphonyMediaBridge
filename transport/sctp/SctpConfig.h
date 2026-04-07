@@ -50,6 +50,8 @@ struct SctpConfig
         uint32_t max = 4096;
     } mtu;
 
+    uint32_t maxMessageSize = 2048;
+
     size_t transmitBufferSize = 512 * 1024;
     size_t receiveBufferSize = 512 * 1024;
 };

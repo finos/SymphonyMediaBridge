@@ -492,24 +492,25 @@ void MixerManager::freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_
     mixerItr->second->freeVideoPacketCache(ssrc, endpointIdHash);
 }
 
-void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPacket, size_t endpointIdHash)
+void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<memory::PacketPoolAllocator> msgBuffer, size_t endpointIdHash)
 {
-    auto& sctpHeader = webrtc::streamMessageHeader(*msgPacket);
+    const auto& continuousBuffer = msgBuffer->getReadonlyBuffer();
+    auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
 
     if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
     {
         // create command with this packet to send the binary data -> engine -> WebRtcDataStream belonging to this
         // transport
-        mixer.asyncHandleSctpControl(endpointIdHash, msgPacket);
+        mixer.asyncHandleSctpControl(endpointIdHash, msgBuffer);
         return; // do not free packet as we passed it on
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
     {
-        std::string body(reinterpret_cast<const char*>(sctpHeader.data()), msgPacket->getLength() - sizeof(sctpHeader));
+        std::string body(reinterpret_cast<const char*>(sctpHeader.data()), msgBuffer->getLength() - sizeof(sctpHeader));
         try
         {
             auto json = utils::SimpleJson::create(reinterpret_cast<const char*>(sctpHeader.data()),
-                msgPacket->getLength() - sizeof(sctpHeader));
+                msgBuffer->getLength() - sizeof(sctpHeader));
 
             if (api::DataChannelMessageParser::isPinnedEndpointsChanged(json))
             {
@@ -573,7 +574,7 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPack
         logger::debug("received unexpected DataChannel payload protocol, %u, len %zu",
             "MixerManager",
             sctpHeader.payloadProtocol,
-            msgPacket->getLength());
+            msgBuffer->getLength());
     }
 }
 

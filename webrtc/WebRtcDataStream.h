@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory/PacketPoolAllocator.h"
+#include "memory/PoolBuffer.h"
 #include <cstdint>
 #include <string>
 
@@ -72,12 +73,19 @@ struct SctpStreamMessageHeader
 };
 static_assert(sizeof(SctpStreamMessageHeader) == 8, "Misalignment of SctpStreamMessageHeader");
 
-inline const SctpStreamMessageHeader& streamMessageHeader(const memory::Packet& p)
+inline SctpStreamMessageHeader& streamMessageHeader(memory::PoolBuffer<memory::PacketPoolAllocator>& buffer)
 {
-    return reinterpret_cast<const SctpStreamMessageHeader&>(*p.get());
+    assert(!buffer.getChunks().empty() && buffer.getLength() >= sizeof(SctpStreamMessageHeader));
+    return *reinterpret_cast<SctpStreamMessageHeader*>(buffer.getChunks()[0].get());
 }
 
-memory::UniquePacket makeUniquePacket(uint16_t streamId,
+inline const SctpStreamMessageHeader& streamMessageHeader(const memory::PoolBuffer<memory::PacketPoolAllocator>& buffer)
+{
+    //assert(!buffer.getChunks().empty() && buffer.getLength() >= sizeof(SctpStreamMessageHeader));
+    return *reinterpret_cast<const SctpStreamMessageHeader*>(buffer.getChunks()[0].get());
+}
+
+memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueBuffer(uint16_t streamId,
     uint32_t payloadProtocol,
     const void* message,
     size_t messageSize,

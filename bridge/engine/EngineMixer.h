@@ -12,6 +12,7 @@
 #include "memory/AudioPacketPoolAllocator.h"
 #include "memory/Map.h"
 #include "memory/PacketPoolAllocator.h"
+#include "memory/PoolBuffer.h"
 #include "transport/RtcTransport.h"
 #include <cstddef>
 #include <cstdint>
@@ -182,7 +183,7 @@ public: // EngineMixer async interface. Will execute on engine thread
     bool asyncPinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     bool asyncSendEndpointMessage(const size_t toEndpointIdHash,
         const size_t fromEndpointIdHash,
-        memory::UniqueAudioPacket& packet);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer);
     bool asyncAddRecordingStream(EngineRecordingStream* engineRecordingStream);
     bool asyncAddTransportToRecordingStream(const size_t streamIdHash,
         transport::RecordingTransport& transport,
@@ -198,7 +199,8 @@ public: // EngineMixer async interface. Will execute on engine thread
     bool asyncRemoveTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
     bool asyncAddBarbell(EngineBarbell* barbell);
     bool asyncRemoveBarbell(size_t idHash);
-    bool asyncHandleSctpControl(const size_t endpointIdHash, memory::UniquePacket& packet);
+    bool asyncHandleSctpControl(const size_t endpointIdHash,
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer);
     bool asyncRemoveRecordingStream(const EngineRecordingStream& engineRecordingStream);
 
 private: // impl async interface
@@ -221,7 +223,7 @@ private: // impl async interface
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     void sendEndpointMessage(const size_t toEndpointIdHash,
         const size_t fromEndpointIdHash,
-        memory::UniqueAudioPacket packet);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer);
     void recordingStart(EngineRecordingStream& stream, const RecordingDescription& desc);
     void stopRecording(EngineRecordingStream& stream, const RecordingDescription& desc);
     void updateRecordingStreamModalities(EngineRecordingStream& engineRecordingStream,
@@ -235,7 +237,7 @@ private: // impl async interface
     void removeTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
     void addBarbell(EngineBarbell* barbell);
     void removeBarbell(size_t idHash);
-    void handleSctpControl(const size_t endpointIdHash, memory::UniquePacket packet);
+    void handleSctpControl(const size_t endpointIdHash, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer);
 
 public: // private but called from helper method
     void removeStream(const EngineVideoStream* engineVideoStream);
@@ -354,6 +356,7 @@ protected:
     };
 
     using IncomingPacketInfo = IncomingPacketAggregate<memory::UniquePacket>;
+    using IncomingLargeSctpPacketInfo = IncomingPacketAggregate<memory::UniquePoolBuffer<memory::PacketPoolAllocator>>;
 
     std::string _id;
     logger::LoggableId _loggableId;
@@ -362,7 +365,7 @@ protected:
     concurrency::SynchronizationContext _engineSyncContext;
     MixerManagerAsync& _messageListener;
 
-    concurrency::MpmcQueue<IncomingPacketInfo> _incomingBarbellSctp;
+    concurrency::MpmcQueue<IncomingLargeSctpPacketInfo> _incomingBarbellSctp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderAudioRtp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingRtcp;
     concurrency::MpmcQueue<IncomingPacketInfo> _incomingForwarderVideoRtp;

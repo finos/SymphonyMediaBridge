@@ -12,7 +12,8 @@ namespace api
 namespace DataChannelMessage
 {
 
-inline void makeEndpointMessage(utils::StringBuilder<2048>& outMessage,
+template <size_t T>
+inline void makeEndpointMessage(utils::StringBuilder<T>& outMessage,
     const std::string& toEndpointId,
     const std::string& fromEndpointId,
     const char* message)
