@@ -28,6 +28,27 @@ template <typename TPoolAllocator>
 class PoolBuffer
 {
 public:
+    struct Deleter
+    {
+        Deleter() : _allocator(nullptr) {}
+        explicit Deleter(TPoolAllocator& allocator) : _allocator(&allocator) {}
+
+        void operator()(PoolBuffer<TPoolAllocator>* p)
+        {
+            if (p)
+            {
+                p->~PoolBuffer();
+                if (_allocator)
+                {
+                    _allocator->free(p);
+                }
+            }
+        }
+
+    private:
+        TPoolAllocator* _allocator;
+    };
+
     class view
     {
     public:
@@ -368,8 +389,8 @@ private:
     size_t _numChunks;
 };
 
-template <typename T>
-using UniquePoolBuffer = std::unique_ptr<PoolBuffer<T>, PacketPoolAllocator::Deleter>;
+template <typename TPoolAllocator>
+using UniquePoolBuffer = std::unique_ptr<PoolBuffer<TPoolAllocator>, typename PoolBuffer<TPoolAllocator>::Deleter>;
 
 template <typename TPoolAllocator>
 inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& allocator,
@@ -386,7 +407,8 @@ inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& all
     }
 
     auto buffer = new (pointer) PoolBuffer<TPoolAllocator>(allocator);
-    auto smartBuffer = UniquePoolBuffer<TPoolAllocator>(buffer, allocator.getDeleter());
+    auto smartBuffer =
+        UniquePoolBuffer<TPoolAllocator>(buffer, typename PoolBuffer<TPoolAllocator>::Deleter(allocator));
 
     if (!smartBuffer->allocate(length))
     {
@@ -401,6 +423,10 @@ inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& all
     size_t length)
 {
     auto buffer = makeUniquePoolBuffer(allocator, length);
+    if (!buffer)
+    {
+        return buffer;
+    }
 
     if (data)
     {
