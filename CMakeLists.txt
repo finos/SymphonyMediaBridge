@@ -577,6 +577,7 @@ set(TEST_FILES
     test/api/ParserTest.cpp
     test/memory/MapTest.cpp
     test/memory/PoolAllocatorTest.cpp
+    test/memory/PoolBufferTest.cpp
     test/memory/RingAllocatorTest.cpp
     test/utils/StringTokenizerTest.cpp
     test/utils/TrackerTest.cpp
@@ -651,6 +652,7 @@ set(TEST_FILES
     test/memory/StackMapTest.cpp
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/MixerTest.cpp
+    test/bridge/DataChannelMessageSizeTest.cpp
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp
@@ -685,13 +687,13 @@ set(CMAKE_TEST_INCLUDE "${CMAKE_TEST_DIRECTORY}/include")
 configure_file(test/TestConfig.h.in ${CMAKE_TEST_INCLUDE}/TestConfig.h)
 
 add_library(testlib STATIC ${TEST_LIB_FILES})
-target_include_directories(testlib PRIVATE ${CMAKE_TEST_INCLUDE} ${gtest_SOURCE_DIR}/include "test/include")
+target_include_directories(testlib PRIVATE ${CMAKE_TEST_INCLUDE} ${gtest_SOURCE_DIR}/include "test")
 target_link_libraries(testlib PUBLIC smblib ${THIRD_PARTY_LIBS})
 
 add_executable(UnitTest
     ${TEST_FILES} test/gtest_main.cpp)
 
-target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test/include")
+target_include_directories(UnitTest PRIVATE ${CMAKE_TEST_INCLUDE} "test")
 
 # Copy test Data
 file(COPY "${CMAKE_SOURCE_DIR}/test/resources" DESTINATION "${CMAKE_TEST_DIRECTORY}")

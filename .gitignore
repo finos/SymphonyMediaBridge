@@ -37,3 +37,9 @@ git_version.*
 versioninfo.txt
 rtprcv-*
 _bwelogs*
+
+# Executables
+smb
+UnitTest2
+UnitTest
+LoadTest

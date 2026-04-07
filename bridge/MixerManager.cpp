@@ -5,7 +5,7 @@
 #include "bridge/Mixer.h"
 #include "bridge/MixerJobs.h"
 #include "bridge/VideoStream.h"
-#include "bridge/engine/Engine.h"
+
 #include "bridge/engine/EngineAudioStream.h"
 #include "bridge/engine/EngineBarbell.h"
 #include "bridge/engine/EngineDataStream.h"
@@ -87,7 +87,7 @@ MixerManager::MixerManager(utils::IdGenerator& idGenerator,
     jobmanager::JobManager& rtJobManager,
     jobmanager::JobManager& backgroundJobQueue,
     transport::TransportFactory& transportFactory,
-    Engine& engine,
+    IEngine& engine,
     const config::Config& config,
     memory::PacketPoolAllocator& mainAllocator,
     memory::PacketPoolAllocator& sendAllocator,
