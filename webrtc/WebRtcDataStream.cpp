@@ -44,12 +44,17 @@ void WebRtcDataStream::sendData(const void* data, size_t length)
 }
 
 void WebRtcDataStream::onSctpMessage(webrtc::DataStreamTransport* sender,
-    uint16_t streamId,
-    uint16_t streamSequenceNumber,
-    uint32_t payloadProtocol,
-    const void* data,
-    size_t length)
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer
+    )
 {
+    const auto firstChunk = buffer->getFirstChunk();
+    assert(firstChunk.length >= sizeof(SctpStreamMessageHeader));
+    const auto& header = *reinterpret_cast<const SctpStreamMessageHeader*>(firstChunk.data);
+    const auto& payloadProtocol = header.payloadProtocol;
+    const auto& streamId = header.id;
+    const auto length = buffer->getLength() - sizeof(SctpStreamMessageHeader);
+    const auto data = reinterpret_cast<const uint8_t*>(firstChunk.data) + sizeof(SctpStreamMessageHeader);
+
     if (payloadProtocol == DataChannelPpid::WEBRTC_STRING)
     {
         std::string command(reinterpret_cast<const char*>(data), length);
@@ -100,10 +105,12 @@ memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueBuffer(uint16_t 
         return buffer;
     }
 
-    auto& header = streamMessageHeader(*buffer);
-    header.id = streamId;
-    header.sequenceNumber = 0;
-    header.payloadProtocol = payloadProtocol;
+    SctpStreamMessageHeader header = {
+        .payloadProtocol = payloadProtocol,
+        .id = streamId,
+        .sequenceNumber = 0,
+    };
+    buffer->write(&header, sizeof(SctpStreamMessageHeader), 0);
     buffer->write(message, messageSize, sizeof(SctpStreamMessageHeader));
 
     if (!buffer->isNullTerminated()) {

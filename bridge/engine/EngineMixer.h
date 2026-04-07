@@ -521,8 +521,7 @@ protected:
     void onBarbellUserMediaMap(size_t barbellIdHash, const char* message);
     void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message);
     void onBarbellDataChannelEstablish(size_t barbellIdHash,
-        webrtc::SctpStreamMessageHeader& header,
-        size_t packetSize);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer);
 
     ////
 

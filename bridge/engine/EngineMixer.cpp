@@ -536,17 +536,11 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
 void EngineMixer::handleSctpControl(const size_t endpointIdHash,
     memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
 {
-    auto& header = webrtc::streamMessageHeader(*buffer);
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
     if (dataStream)
     {
         const bool wasOpen = dataStream->stream.isOpen();
-        dataStream->stream.onSctpMessage(&dataStream->transport,
-            header.id,
-            header.sequenceNumber,
-            header.payloadProtocol,
-            header.data(),
-            buffer->getLength() - sizeof(header));
+        dataStream->stream.onSctpMessage(&dataStream->transport, buffer);
 
         if (!wasOpen && dataStream->stream.isOpen())
         {
@@ -580,22 +574,9 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     //Extract potentially fragmented message into continious memory
     //If message is less than 2048 bytes it'll be allocated on stack.
     //Add one byte for potentially necessary null terminatrion
-    memory::Array<char, 2048> originalMessage(buffer->size() + 1);
+    const auto continiousBuffer = buffer->getReadonlyBuffer(memory::ReadMode::NullTerminated);
+
     memory::Array<char, 2048> endpointMessage(_config.sctp.maxMessageSize);
-
-    const char* message = nullptr;
-    size_t length = buffer->size();
-    const auto& chunks = buffer->getChunks();
-    if (chunks.size() == 1 && buffer->isNullTerminated()) {
-        message = reinterpret_cast<const char*>(chunks[0].get());
-    } else if (length > 0)
-    {
-        auto readBytes = buffer->getReader().readAndAppendNullIfNeeded(originalMessage);
-        assert(readBytes == length || readBytes == length + 1); 
-        length = readBytes;
-        message = originalMessage.data();
-    }
-
 
     if (toEndpointIdHash)
     {
@@ -612,14 +593,14 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
             "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
             toDataStream->endpointId.c_str(),
             fromDataStream->endpointId.c_str(),
-            message);
+            (char*)continiousBuffer.data);
 #else
         length = std::snprintf(endpointMessage.begin(),
             endpointMessage.capacity(),
             "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
             toDataStream->endpointId.c_str(),
             fromDataStream->endpointId.c_str(),
-            message);
+            (char*)continiousBuffer.data);
 #endif
 
         if (length > 0 && (size_t)length < endpointMessage.capacity())
@@ -638,7 +619,7 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     }
     else
     {
-        logger::debug("Broadcast Endpoint message from %lu %s", _loggableId.c_str(), fromEndpointIdHash, message);
+        logger::debug("Broadcast Endpoint message from %lu %s", _loggableId.c_str(), fromEndpointIdHash, (char*)continiousBuffer.data);
         for (auto& dataStreamEntry : _engineDataStreams)
         {
             if (dataStreamEntry.first == fromEndpointIdHash || !dataStreamEntry.second->stream.isOpen())
@@ -653,14 +634,14 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
                 "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
                 dataStreamEntry.second->endpointId.c_str(),
                 fromDataStream->endpointId.c_str(),
-                message);
+                (char*)continiousBuffer.data);
 #else
             length = std::snprintf(endpointMessage.begin(),
                 endpointMessage.capacity(),
                 "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
                 dataStreamEntry.second->endpointId.c_str(),
                 fromDataStream->endpointId.c_str(),
-                message);
+                (char*)continiousBuffer.data);
 #endif
             if (length > 0 && (size_t)length < endpointMessage.capacity())
             {

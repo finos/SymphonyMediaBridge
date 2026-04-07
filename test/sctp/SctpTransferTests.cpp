@@ -26,7 +26,7 @@ namespace
 
 struct SctpTransferTestFixture : public ::testing::Test
 {
-    SctpTransferTestFixture() : _timestamp(utils::Time::getAbsoluteTime()) {}
+    SctpTransferTestFixture() : _timestamp(utils::Time::getAbsoluteTime()), _mainPacketAllocator(1024, "main-allocator") {}
 
     void establishConnection(SctpEndpoint& A, SctpEndpoint& B)
     {
@@ -59,6 +59,7 @@ struct SctpTransferTestFixture : public ::testing::Test
     }
     uint64_t _timestamp;
     sctp::SctpConfig _config;
+    memory::PacketPoolAllocator _mainPacketAllocator;
 };
 
 TEST_F(SctpTransferTestFixture, send500K)
@@ -461,7 +462,18 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     _timestamp += B.process();
     auto sack3 = B._sendQueue.pop();
 
-    dataStream.onSctpMessage(&fakeTransport, 0, 55, 0x32, sctpOpen->get() + 28, sctpOpen->getLength() - 28);
+    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(this->_mainPacketAllocator, sizeof(webrtc::SctpStreamMessageHeader) + sizeof(webRtcOpen));
+    webrtc::SctpStreamMessageHeader header = {
+        .payloadProtocol = 0x32,
+        .id = 0,
+        .sequenceNumber = 55,
+    };
+
+    buffer->write(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
+    buffer->write(sctpOpen->get() + 28, sctpOpen->getLength() - 28, sizeof(webrtc::SctpStreamMessageHeader));
+
+    //dataStream.onSctpMessage(&fakeTransport, 0, 55, 0x32, sctpOpen->get() + 28, sctpOpen->getLength() - 28);
+    dataStream.onSctpMessage(&fakeTransport, buffer);
     auto openAckMsg = fakeTransport._sendQueue.front();
     fakeTransport._sendQueue.pop();
     B._session->sendMessage(A.getStreamId(), openAckMsg.protocol, openAckMsg.data, openAckMsg.length, _timestamp);

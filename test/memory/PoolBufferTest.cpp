@@ -24,7 +24,7 @@ TEST(PoolBuffer, allocateSmall)
     EXPECT_FALSE(buffer.empty());
     EXPECT_EQ(buffer.size(), 64);
     EXPECT_EQ(buffer.capacity(), 128);
-    EXPECT_EQ(allocator.countAllocatedItems(), 1);
+    EXPECT_EQ(allocator.countAllocatedItems(), 1 + 1);
 }
 
 TEST(PoolBuffer, allocateExact)
@@ -35,7 +35,7 @@ TEST(PoolBuffer, allocateExact)
     EXPECT_TRUE(buffer.allocate(128));
     EXPECT_EQ(buffer.size(), 128);
     EXPECT_EQ(buffer.capacity(), 128);
-    EXPECT_EQ(allocator.countAllocatedItems(), 1);
+    EXPECT_EQ(allocator.countAllocatedItems(), 1 + 1);
 }
 
 TEST(PoolBuffer, allocateMultipleChunks)
@@ -46,7 +46,7 @@ TEST(PoolBuffer, allocateMultipleChunks)
     EXPECT_TRUE(buffer.allocate(300));
     EXPECT_EQ(buffer.size(), 300);
     EXPECT_EQ(buffer.capacity(), 3 * 128);
-    EXPECT_EQ(allocator.countAllocatedItems(), 3);
+    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1);
 }
 
 TEST(PoolBuffer, allocateFail)
@@ -122,12 +122,12 @@ TEST(PoolBuffer, move)
     memory::PoolAllocator<128> allocator(10, "test");
     memory::PoolBuffer<decltype(allocator)> buffer1(allocator);
     EXPECT_TRUE(buffer1.allocate(300));
-    EXPECT_EQ(allocator.countAllocatedItems(), 3);
+    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1);
 
     memory::PoolBuffer<decltype(allocator)> buffer2 = std::move(buffer1);
     EXPECT_EQ(buffer2.size(), 300);
     EXPECT_EQ(buffer2.capacity(), 3 * 128);
-    EXPECT_EQ(allocator.countAllocatedItems(), 3);
+    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1);
     EXPECT_EQ(buffer1.size(), 0); // NOLINT
 
     buffer2.clear();

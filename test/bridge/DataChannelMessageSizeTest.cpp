@@ -157,24 +157,32 @@ protected:
         mixer.addDataStreamToEngine(endpoints.endpointId1);
     }
 
-    void openDataChannels(Mixer& mixer, const DataChannelEndpoints& endpoints)
+    void openDataChannel(Mixer& mixer, const std::string& endpointsId)
     {
         alignas(memory::Packet) const char webRtcOpen[] =
             "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
             "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
 
-        auto* dataStream1 = mixer.getEngineDataStream(endpoints.endpointId1);
-        ASSERT_NE(nullptr, dataStream1);
-        dataStream1->stream.onSctpMessage(&dataStream1->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-            webRtcOpen,
-            sizeof(webRtcOpen) - 1);
+        webrtc::SctpStreamMessageHeader header = {
+            .payloadProtocol = webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
+            .id = 0,
+            .sequenceNumber = 0,
+        };
+        auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_testScope->mainPacketAllocator, sizeof(webrtc::SctpStreamMessageHeader) + sizeof(webRtcOpen));
+        buffer->write(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
+        buffer->write(webRtcOpen, sizeof(webRtcOpen) - 1, sizeof(webrtc::SctpStreamMessageHeader));
 
-        auto* dataStream0 = mixer.getEngineDataStream(endpoints.endpointId0);
-        ASSERT_NE(nullptr, dataStream0);
-        dataStream0->stream.onSctpMessage(&dataStream0->transport, 0, 0, webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-            webRtcOpen,
-            sizeof(webRtcOpen) - 1);
+        auto* dataStream = mixer.getEngineDataStream(endpointsId);
+        ASSERT_NE(nullptr, dataStream);
+        dataStream->stream.onSctpMessage(&dataStream->transport, buffer);
     }
+
+    void openDataChannels(Mixer& mixer, const DataChannelEndpoints& endpoints)
+    {
+        openDataChannel(mixer, endpoints.endpointId0);
+        openDataChannel(mixer, endpoints.endpointId1);
+    }
+
 
     void SetUp() override
     {

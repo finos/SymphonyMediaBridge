@@ -41,11 +41,7 @@ public:
     std::string getLabel() const { return _label; }
 
     void onSctpMessage(webrtc::DataStreamTransport* sender,
-        uint16_t streamId,
-        uint16_t streamSequenceNumber,
-        uint32_t payloadProtocol,
-        const void* data,
-        size_t length);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer);
 
     State getState() const { return _state; }
 
@@ -72,18 +68,6 @@ struct SctpStreamMessageHeader
     static size_t getMessageLength(size_t packetSize) { return packetSize - sizeof(SctpStreamMessageHeader); }
 };
 static_assert(sizeof(SctpStreamMessageHeader) == 8, "Misalignment of SctpStreamMessageHeader");
-
-inline SctpStreamMessageHeader& streamMessageHeader(memory::PoolBuffer<memory::PacketPoolAllocator>& buffer)
-{
-    assert(!buffer.getChunks().empty() && buffer.getLength() >= sizeof(SctpStreamMessageHeader));
-    return *reinterpret_cast<SctpStreamMessageHeader*>(buffer.getChunks()[0].get());
-}
-
-inline const SctpStreamMessageHeader& streamMessageHeader(const memory::PoolBuffer<memory::PacketPoolAllocator>& buffer)
-{
-    //assert(!buffer.getChunks().empty() && buffer.getLength() >= sizeof(SctpStreamMessageHeader));
-    return *reinterpret_cast<const SctpStreamMessageHeader*>(buffer.getChunks()[0].get());
-}
 
 memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueBuffer(uint16_t streamId,
     uint32_t payloadProtocol,

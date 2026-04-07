@@ -657,7 +657,9 @@ public:
         const void* data,
         size_t length) override
     {
-        _dataStream->onSctpMessage(sender, streamId, streamSequenceNumber, payloadProtocol, data, length);
+        auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_allocator, length);
+        buffer->write(data, length, 0);
+        _dataStream->onSctpMessage(sender, buffer);
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,

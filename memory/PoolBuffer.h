@@ -347,6 +347,18 @@ public:
         return result;
     }
 
+    ReadonlyMemoryBuffer getFirstChunk() const
+    {
+        ReadonlyMemoryBuffer result;
+        if (_masterChunk && _numChunks > 0)
+        {
+            void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+            result.data = chunkPointers[0];
+            result.length = std::min(_size, _allocator.getElementSize());
+        }
+        return result;
+    }
+
     bool isNullTerminated() const { return getReader().isNullTerminated(); }
 
 private:
