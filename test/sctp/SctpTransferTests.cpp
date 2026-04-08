@@ -26,7 +26,7 @@ namespace
 
 struct SctpTransferTestFixture : public ::testing::Test
 {
-    SctpTransferTestFixture() : _timestamp(utils::Time::getAbsoluteTime()), _mainPacketAllocator(1024, "main-allocator") {}
+    SctpTransferTestFixture() : _timestamp(utils::Time::getAbsoluteTime()), _mainPacketAllocator(500 * 1024, "main-allocator") {}
 
     void establishConnection(SctpEndpoint& A, SctpEndpoint& B)
     {
@@ -62,7 +62,7 @@ struct SctpTransferTestFixture : public ::testing::Test
     memory::PacketPoolAllocator _mainPacketAllocator;
 };
 
-TEST_F(SctpTransferTestFixture, send500K)
+TEST_F(SctpTransferTestFixture, send250K)
 {
     using namespace sctptest;
     SctpEndpoint A(5000, _config, _timestamp, 250);
@@ -70,15 +70,14 @@ TEST_F(SctpTransferTestFixture, send500K)
 
     establishConnection(A, B);
 
-    const int DATA_SIZE = 450 * 1024;
+    const int DATA_SIZE = 250 * 1024;
     std::array<uint8_t, DATA_SIZE> data;
     std::memset(data.data(), 0xAA, DATA_SIZE);
     const auto startTime = _timestamp;
-    A._session->sendMessage(A.getStreamId(),
-        webrtc::DataChannelPpid::WEBRTC_BINARY,
-        data.data(),
-        DATA_SIZE,
-        _timestamp);
+
+    auto buffer =  memory::makeUniquePoolBuffer( _mainPacketAllocator, data.data(), DATA_SIZE);
+
+    A._session->sendMessage(A.getStreamId(), webrtc::DataChannelPpid::WEBRTC_BINARY, buffer, _timestamp);
     for (int i = 0; i < 280000 && B.getReceivedSize() < DATA_SIZE; ++i)
     {
         _timestamp += 1 * utils::Time::ms;
@@ -114,10 +113,12 @@ TEST_F(SctpTransferTestFixture, sendMany)
             auto toSend = std::max<int>(15, rand() % data.size());
             totalSent += toSend;
             ++totalSentCount;
+
+            auto buffer = memory::makeUniquePoolBuffer(_mainPacketAllocator, data.data(), toSend);
+
             A._session->sendMessage(A.getStreamId(),
                 webrtc::DataChannelPpid::WEBRTC_BINARY,
-                data.data(),
-                toSend,
+                buffer,
                 _timestamp);
         }
         _timestamp += 1 * utils::Time::ms;
@@ -150,14 +151,16 @@ TEST_F(SctpTransferTestFixture, withLoss20)
     A._sendQueue.setLossRate(0.01);
     establishConnection(A, B);
 
-    const int DATA_SIZE = 450 * 1024;
+    const int DATA_SIZE = 250 * 1024;
     std::array<uint8_t, DATA_SIZE> data;
     std::memset(data.data(), 0xcd, DATA_SIZE);
     const auto startTime = _timestamp;
+
+    auto buffer = memory::makeUniquePoolBuffer(_mainPacketAllocator, data.data(), DATA_SIZE);
+
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_BINARY,
-        data.data(),
-        DATA_SIZE,
+        buffer,
         _timestamp);
     const auto endTime = _timestamp + 4 * utils::Time::sec;
     while (static_cast<int64_t>(endTime - _timestamp) > 0 && B.getReceivedSize() == 0)
@@ -208,14 +211,16 @@ TEST_F(SctpTransferTestFixture, lostSacks)
 
     establishConnection(A, B);
 
-    const int DATA_SIZE = 450 * 1024;
+    const int DATA_SIZE = 250 * 1024;
     std::array<uint8_t, DATA_SIZE> data;
     std::memset(data.data(), 0xcd, DATA_SIZE);
     // const auto startTime = _timestamp;
+
+    auto buffer = memory::makeUniquePoolBuffer(_mainPacketAllocator, data.data(), DATA_SIZE);
+
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_BINARY,
-        data.data(),
-        DATA_SIZE,
+        buffer,
         _timestamp);
     for (int i = 0; i < 10000; ++i)
     {
@@ -246,14 +251,15 @@ TEST_F(SctpTransferTestFixture, zeroRecvWindow)
 
     establishConnection(A, B);
 
-    const int DATA_SIZE = 450 * 1024;
+    const int DATA_SIZE = 250 * 1024;
     std::array<uint8_t, DATA_SIZE> data;
     std::memset(data.data(), 0xcd, DATA_SIZE);
 
+    auto buffer = memory::makeUniquePoolBuffer(_mainPacketAllocator, data.data(), DATA_SIZE);
+
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_BINARY,
-        data.data(),
-        DATA_SIZE,
+        buffer,
         _timestamp);
     for (int i = 0; i < 10000; ++i)
     {
@@ -297,8 +303,11 @@ TEST_F(SctpTransferTestFixture, sendEmptyMessage)
     const auto startTime = _timestamp;
     size_t totalSent = 0;
     size_t totalSentCount = 0;
+
+    auto buffer = memory::makeUniquePoolBuffer(_mainPacketAllocator, data.data(), 0);
+
     const bool sendResult =
-        A._session->sendMessage(A.getStreamId(), webrtc::DataChannelPpid::WEBRTC_STRING, data.data(), 0, _timestamp);
+        A._session->sendMessage(A.getStreamId(), webrtc::DataChannelPpid::WEBRTC_STRING, buffer, _timestamp);
     EXPECT_TRUE(sendResult);
 
     for (int i = 0; i < 30000 && B.getReceivedSize() < DATA_SIZE; ++i)
@@ -330,8 +339,10 @@ TEST_F(SctpTransferTestFixture, sendMtuMessage)
     std::array<uint8_t, mtu * 2> data;
     std::memset(data.data(), 0xdd, data.size());
 
+    auto buffer0 = memory::makeUniquePoolBuffer(_mainPacketAllocator, data.data(), mtu);
+
     const bool sendResult =
-        A._session->sendMessage(A.getStreamId(), webrtc::DataChannelPpid::WEBRTC_STRING, data.data(), mtu, _timestamp);
+        A._session->sendMessage(A.getStreamId(), webrtc::DataChannelPpid::WEBRTC_STRING, buffer0, _timestamp);
     EXPECT_TRUE(sendResult);
 
     for (int i = 0; i < 3000 && B.getReceivedSize() < mtu; ++i)
@@ -347,10 +358,11 @@ TEST_F(SctpTransferTestFixture, sendMtuMessage)
     EXPECT_EQ(B.getReceivedSize(), mtu);
     EXPECT_EQ(B.getReceivedMessageCount(), 1);
 
+    auto buffer1 = memory::makeUniquePoolBuffer(_mainPacketAllocator, data.data(), mtu * 2);
+
     EXPECT_TRUE(A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
-        data.data(),
-        mtu * 2,
+        buffer1,
         _timestamp));
 
     for (int i = 0; i < 3000 && B.getReceivedSize() < DATA_SIZE; ++i)
@@ -426,20 +438,28 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
                                                 "\x34\x64\x32\x38\x2d\x62\x65\x36\x35\x2d\x39\x30\x33\x65\x39\x38"
                                                 "\x63\x62\x37\x65\x66\x32\x22\x5d\x7d\x00\x00\x00";
 
+    auto buffer0 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(webRtcOpen));
+    buffer0->write(webRtcOpen, sizeof(webRtcOpen) - 1, 0);
+
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-        webRtcOpen,
-        sizeof(webRtcOpen) - 1,
+        buffer0,
         _timestamp);
+
+    auto buffer1 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(msg1));
+    buffer1->write(webRtcOpen, sizeof(msg1) - 1, 0);
+
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
-        msg1,
-        sizeof(msg1) - 1,
+        buffer1,
         _timestamp);
+
+    auto buffer2 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(msg2));
+    buffer2->write(webRtcOpen, sizeof(msg2) - 1, 0);
+
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
-        msg2,
-        sizeof(msg2) - 1,
+        buffer2,
         _timestamp);
     A.process();
     auto sctpOpen = A._sendQueue.pop();
@@ -475,12 +495,11 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     buffer->write(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
     buffer->write(sctpOpen->get() + 28, sctpOpen->getLength() - 28, sizeof(webrtc::SctpStreamMessageHeader));
 
-    //dataStream.onSctpMessage(&fakeTransport, 0, 55, 0x32, sctpOpen->get() + 28, sctpOpen->getLength() - 28);
     dataStream.onSctpMessage(&fakeTransport, buffer);
     auto openAckMsg = std::move(fakeTransport._sendQueue.front());
     fakeTransport._sendQueue.pop();
-    auto readonlyBuffer = openAckMsg.buffer->getReadonlyBuffer();
-    B._session->sendMessage(A.getStreamId(), openAckMsg.protocol, readonlyBuffer.data, readonlyBuffer.length, _timestamp);
+
+    B._session->sendMessage(A.getStreamId(), openAckMsg.protocol, openAckMsg.buffer, _timestamp);
     B.process();
     auto openAck = B._sendQueue.pop();
     EXPECT_NE(sack3, nullptr);

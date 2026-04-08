@@ -6,6 +6,7 @@
 #include "memory/Array.h"
 #include "utils/MersienneRandom.h"
 #include "utils/Time.h"
+#include "webrtc/WebRtcDataStream.h"
 
 #define SCTP_LOG_ENABLE 0
 
@@ -128,7 +129,8 @@ SctpAssociationImpl::SentDataChunk::SentDataChunk(uint16_t streamId_,
     bool fragmentBegin_,
     bool fragmentEnd_,
     uint32_t transmissionSequenceNumber,
-    const void* payload,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer,
+    size_t offset,
     size_t size_)
     : transmitTime(0),
       size(size_),
@@ -143,7 +145,8 @@ SctpAssociationImpl::SentDataChunk::SentDataChunk(uint16_t streamId_,
       reserved0(0),
       reserved1(0)
 {
-    std::memcpy(data(), payload, size_);
+    const auto copied = buffer->copy(data(), offset, size_);
+    assert(copied == size);
 }
 
 SctpAssociationImpl::ReceivedDataChunk::ReceivedDataChunk(const PayloadDataChunk& chunk, uint64_t timestamp)
@@ -379,11 +382,11 @@ void SctpAssociationImpl::onCookieEcho(const SctpPacket& cookieEcho, const uint6
 
 bool SctpAssociationImpl::sendMessage(uint16_t streamId,
     uint32_t payloadProtocol,
-    const void* payloadData,
-    size_t length,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
     uint64_t timestamp)
 {
     auto streamIt = _streams.find(streamId);
+    size_t length = sctpMessage->size();
     if (_state < State::ESTABLISHED || streamIt == _streams.cend())
     {
         logger::warn("SCTP stream not open yet %u, count %zu", _loggableId.c_str(), streamId, _streams.size());
@@ -402,7 +405,6 @@ bool SctpAssociationImpl::sendMessage(uint16_t streamId,
         return false;
     }
     auto& streamState = streamIt->second;
-    auto* payloadBytes = reinterpret_cast<const uint8_t*>(payloadData);
     size_t writtenBytes = 0;
     for (size_t i = 0; i < pktCount; ++i)
     {
@@ -414,7 +416,8 @@ bool SctpAssociationImpl::sendMessage(uint16_t streamId,
             i == 0,
             i == (pktCount - 1),
             _local.tsn,
-            payloadBytes + writtenBytes,
+            sctpMessage,
+            writtenBytes,
             toWrite);
 
         assert(chunk);

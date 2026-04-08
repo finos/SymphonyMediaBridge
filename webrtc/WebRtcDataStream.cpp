@@ -28,7 +28,7 @@ uint16_t WebRtcDataStream::open(const std::string& label)
     auto& message = DataChannelOpenMessage::create(data, label);
     _state = State::OPENING;
 
-    auto buffer = makeUniqueBuffer(_streamId, DataChannelPpid::WEBRTC_ESTABLISH, data, message.size(), _transport.getAllocator());
+    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_transport.getAllocator(), data, message.size());
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_ESTABLISH, std::move(buffer));
 
     return _streamId;
@@ -36,26 +36,27 @@ uint16_t WebRtcDataStream::open(const std::string& label)
 
 void WebRtcDataStream::sendString(const char* string, const size_t length)
 {
-    auto buffer = makeUniqueBuffer(_streamId, DataChannelPpid::WEBRTC_STRING, string, length, _transport.getAllocator());
+    auto buffer = memory::makeUniquePoolBuffer(_transport.getAllocator(), string, length);
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_STRING, std::move(buffer));
 }
 
 void WebRtcDataStream::sendData(const void* data, size_t length)
 {
-    auto buffer = makeUniqueBuffer(_streamId, DataChannelPpid::WEBRTC_BINARY, data, length, _transport.getAllocator());
+    auto buffer = memory::makeUniquePoolBuffer(_transport.getAllocator(), data, length);
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_BINARY, std::move(buffer));
 }
 
 void WebRtcDataStream::onSctpMessage(webrtc::DataStreamTransport* sender,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message
     )
 {
-    const auto firstChunk = buffer->getFirstChunk();
+    // HEADER: SctpStreamMessageHeader prepended to payload
+    const auto firstChunk = message->getFirstChunk();
     assert(firstChunk.length >= sizeof(SctpStreamMessageHeader));
     const auto& header = *reinterpret_cast<const SctpStreamMessageHeader*>(firstChunk.data);
     const auto& payloadProtocol = header.payloadProtocol;
     const auto& streamId = header.id;
-    const auto length = buffer->getLength() - sizeof(SctpStreamMessageHeader);
+    const auto length = message->getLength() - sizeof(SctpStreamMessageHeader);
     const auto data = reinterpret_cast<const uint8_t*>(firstChunk.data) + sizeof(SctpStreamMessageHeader);
 
     if (payloadProtocol == DataChannelPpid::WEBRTC_STRING)
@@ -81,7 +82,7 @@ void WebRtcDataStream::onSctpMessage(webrtc::DataStreamTransport* sender,
             _streamId = streamId;
             _label = msg->getLabel();
             uint8_t ack[] = {webrtc::DATA_CHANNEL_ACK};
-            auto buffer = makeUniqueBuffer(_streamId, DataChannelPpid::WEBRTC_ESTABLISH, ack, 1, _transport.getAllocator());
+            auto buffer = memory::makeUniquePoolBuffer(_transport.getAllocator(), ack, 1);
             sender->sendSctp(streamId, DataChannelPpid::WEBRTC_ESTABLISH, std::move(buffer));
             logger::info("Data channel open. stream %u", _loggableId, streamId);
         }
@@ -97,13 +98,13 @@ void WebRtcDataStream::onSctpMessage(webrtc::DataStreamTransport* sender,
     }
 }
 
-memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueBuffer(uint16_t streamId,
+memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueSctpMessage(uint16_t streamId,
     uint32_t payloadProtocol,
     const void* message,
     size_t messageSize,
     memory::PacketPoolAllocator& allocator)
 {
-    auto needNullTermination = !(payloadProtocol == WEBRTC_STRING && (message && messageSize > 0 && ((char*)message)[messageSize - 1] == '\0'));
+    auto needNullTermination = payloadProtocol == WEBRTC_STRING && message && messageSize > 0 && ((char*)message)[messageSize - 1] == '\0';
     if (payloadProtocol == WEBRTC_STRING_EMPTY || payloadProtocol == WEBRTC_BINARY_EMPTY) {
         needNullTermination = false;
         messageSize = 0;

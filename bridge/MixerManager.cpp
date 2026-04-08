@@ -492,26 +492,27 @@ void MixerManager::freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_
     mixerItr->second->freeVideoPacketCache(ssrc, endpointIdHash);
 }
 
-void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<memory::PacketPoolAllocator> msgBuffer, size_t endpointIdHash)
+void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<memory::PacketPoolAllocator> message, size_t endpointIdHash)
 {
+    // HEADER: SctpStreamMessageHeader prepended to payload
     // Need to get full message instead of first chunk only to form JSON from it.
-    const auto& continuousBuffer = msgBuffer->getReadonlyBuffer();
+    const auto& continuousBuffer = message->getReadonlyBuffer();
     auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
 
     if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
     {
         // create command with this packet to send the binary data -> engine -> WebRtcDataStream belonging to this
         // transport
-        mixer.asyncHandleSctpControl(endpointIdHash, msgBuffer);
+        mixer.asyncHandleSctpControl(endpointIdHash, message);
         return; // do not free packet as we passed it on
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
     {
-        std::string body(reinterpret_cast<const char*>(sctpHeader.data()), msgBuffer->getLength() - sizeof(sctpHeader));
+        std::string body(reinterpret_cast<const char*>(sctpHeader.data()), message->getLength() - sizeof(sctpHeader));
         try
         {
             auto json = utils::SimpleJson::create(reinterpret_cast<const char*>(sctpHeader.data()),
-                msgBuffer->getLength() - sizeof(sctpHeader));
+                message->getLength() - sizeof(sctpHeader));
 
             if (api::DataChannelMessageParser::isPinnedEndpointsChanged(json))
             {
@@ -575,7 +576,7 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<mem
         logger::debug("received unexpected DataChannel payload protocol, %u, len %zu",
             "MixerManager",
             sctpHeader.payloadProtocol,
-            msgBuffer->getLength());
+            message->getLength());
     }
 }
 

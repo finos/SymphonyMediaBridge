@@ -413,8 +413,9 @@ void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* m
 }
 
 void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> message)
 {
+    // HEADER: SctpStreamMessageHeader prepended to payload
     auto barbell = _engineBarbells.getItem(barbellIdHash);
     if (!barbell)
     {
@@ -422,7 +423,7 @@ void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
     }
 
     const auto state = barbell->dataChannel.getState();
-    barbell->dataChannel.onSctpMessage(&barbell->transport, buffer);
+    barbell->dataChannel.onSctpMessage(&barbell->transport, message);
 
     const auto newState = barbell->dataChannel.getState();
     if (state != newState && newState == webrtc::WebRtcDataStream::State::OPEN)

@@ -119,7 +119,7 @@ protected:
     void allocateRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
     void videoStreamRemoved(EngineMixer& engineMixer, const EngineVideoStream& videoStream) override;
     void sctpReceived(EngineMixer& mixer,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator> msgBuffer,
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> message,
         size_t endpointIdHash) override;
     void dataStreamRemoved(EngineMixer& mixer, const EngineDataStream& dataStream) override;
     void freeRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;

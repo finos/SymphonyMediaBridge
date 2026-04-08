@@ -53,13 +53,13 @@ bool MixerManagerAsync::asyncVideoStreamRemoved(EngineMixer& engineMixer, const 
 }
 
 bool MixerManagerAsync::asyncSctpReceived(EngineMixer& mixer,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& msgBuffer,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message,
     size_t endpointIdHash)
 {
     return post(utils::bind(&MixerManagerAsync::sctpReceived,
         this,
         std::ref(mixer),
-        utils::moveParam(msgBuffer),
+        utils::moveParam(message),
         endpointIdHash));
 }
 

@@ -2,6 +2,7 @@
 #include "SctpTimer.h"
 #include "Sctprotocol.h"
 #include "logger/Logger.h"
+#include "memory/PoolBuffer.h"
 #include "memory/RingAllocator.h"
 #include "utils/MersienneRandom.h"
 #include <list>
@@ -44,7 +45,8 @@ class SctpAssociationImpl : public SctpAssociation
             bool fragmentBegin,
             bool fragmentEnd,
             uint32_t transmissionSequenceNumber,
-            const void* payload,
+            memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer,
+            size_t offset,
             size_t size);
 
         uint64_t transmitTime;
@@ -119,8 +121,7 @@ public:
     uint16_t allocateStream() override;
     bool sendMessage(uint16_t streamId,
         uint32_t payloadProtocol,
-        const void* payloadData,
-        size_t length,
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
         uint64_t timestamp) override;
     size_t outboundPendingSize() const override;
     int64_t nextTimeout(uint64_t timestamp) override;

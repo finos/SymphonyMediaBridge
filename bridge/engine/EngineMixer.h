@@ -200,7 +200,7 @@ public: // EngineMixer async interface. Will execute on engine thread
     bool asyncAddBarbell(EngineBarbell* barbell);
     bool asyncRemoveBarbell(size_t idHash);
     bool asyncHandleSctpControl(const size_t endpointIdHash,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message);
     bool asyncRemoveRecordingStream(const EngineRecordingStream& engineRecordingStream);
 
 private: // impl async interface
@@ -237,7 +237,7 @@ private: // impl async interface
     void removeTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
     void addBarbell(EngineBarbell* barbell);
     void removeBarbell(size_t idHash);
-    void handleSctpControl(const size_t endpointIdHash, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer);
+    void handleSctpControl(const size_t endpointIdHash, memory::UniquePoolBuffer<memory::PacketPoolAllocator> message);
 
 public: // private but called from helper method
     void removeStream(const EngineVideoStream* engineVideoStream);
@@ -521,7 +521,7 @@ protected:
     void onBarbellUserMediaMap(size_t barbellIdHash, const char* message);
     void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message);
     void onBarbellDataChannelEstablish(size_t barbellIdHash,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> message);
 
     ////
 

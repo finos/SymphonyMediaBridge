@@ -291,9 +291,7 @@ TEST_P(DataChannelSendMessageSizeTest, sendLargeEndpointMessage)
         expect.WillOnce(Invoke(
             [&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
                 const auto& continuousBuffer = buffer->getReadonlyBuffer();
-                //Message comes with SctpStreamMessageHeader prepended
-                auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
-                std::string sentData(reinterpret_cast<const char*>(sctpHeader.data()));
+                std::string sentData(reinterpret_cast<const char*>(continuousBuffer.data), continuousBuffer.length);
 
                 EXPECT_EQ(std::string(expectedJson.jsonBegin(), expectedJson.size()), sentData);
                 return true;
@@ -395,9 +393,7 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
     {
         expect.WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
             const auto& continuousBuffer = buffer->getReadonlyBuffer();
-            //Message comes with SctpStreamMessageHeader prepended
-            auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
-            std::string sentData(reinterpret_cast<const char*>(sctpHeader.data()));
+            std::string sentData(reinterpret_cast<const char*>(continuousBuffer.data), continuousBuffer.length);
 
             EXPECT_EQ(message, sentData);
             return true;

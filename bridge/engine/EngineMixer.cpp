@@ -534,13 +534,14 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
 }
 
 void EngineMixer::handleSctpControl(const size_t endpointIdHash,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> message)
 {
+    // HEADER: SctpStreamMessageHeader prepended to payload
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
     if (dataStream)
     {
         const bool wasOpen = dataStream->stream.isOpen();
-        dataStream->stream.onSctpMessage(&dataStream->transport, buffer);
+        dataStream->stream.onSctpMessage(&dataStream->transport, message);
 
         if (!wasOpen && dataStream->stream.isOpen())
         {
@@ -684,17 +685,17 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
     size_t length)
 {
     assert(sender);
-    if (EngineBarbell::isFromBarbell(sender->getTag()))
-    {
-        auto packet = webrtc::makeUniqueBuffer(streamId, payloadProtocol, data, length, _sendAllocator);
-        _incomingBarbellSctp.push(IncomingSctpMessageInfo(std::move(packet), sender));
-        return;
-    }
 
-    auto buffer = webrtc::makeUniqueBuffer(streamId, payloadProtocol, data, length, _sendAllocator);
+    auto buffer = webrtc::makeUniqueSctpMessage(streamId, payloadProtocol, data, length, _sendAllocator);
     if (!buffer)
     {
         logger::error("Unable to allocate sctp message, sender %p, length %lu", _loggableId.c_str(), sender, length);
+        return;
+    }
+
+    if (EngineBarbell::isFromBarbell(sender->getTag()))
+    {
+        _incomingBarbellSctp.push(IncomingSctpMessageInfo(std::move(buffer), sender));
         return;
     }
 
@@ -1707,9 +1708,9 @@ bool EngineMixer::asyncAddDataSteam(EngineDataStream* engineDataStream)
 }
 
 bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer)
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message)
 {
-    return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(buffer)));
+    return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(message)));
 }
 
 void EngineMixer::onIceReceived(transport::RtcTransport* transport, uint64_t timestamp)

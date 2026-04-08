@@ -170,7 +170,7 @@ public:
     SctpSendJob(sctp::SctpAssociation& association,
         uint16_t streamId,
         uint32_t protocolId,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator> payload,
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> message,
         jobmanager::JobQueue& jobQueue,
         TransportImpl& transport)
         : CountedJob(transport.getJobCounter()),
@@ -178,10 +178,10 @@ public:
           _sctpAssociation(association),
           _streamId(streamId),
           _protocolId(protocolId),
-          _payload(std::move(payload)),
+          _message(std::move(message)),
           _transport(transport)
     {
-        if (!_payload)
+        if (!_message)
         {
             logger::error("failed to create packet for outbound sctp", transport.getLoggableId().c_str());
             return;
@@ -190,7 +190,7 @@ public:
 
     void run() override
     {
-        if (!_payload)
+        if (!_message)
         {
             return;
         }
@@ -198,12 +198,9 @@ public:
         auto timestamp = utils::Time::getAbsoluteTime();
         auto currentTimeout = _sctpAssociation.nextTimeout(timestamp);
 
-        const auto& continuousBuffer = _payload->getReadonlyBuffer();
-
         if (!_sctpAssociation.sendMessage(_streamId,
                 _protocolId,
-                continuousBuffer.data,
-                continuousBuffer.length,
+                _message,
                 timestamp))
         {
             if (_transport.isConnected())
@@ -220,7 +217,7 @@ public:
                 logger::info("SCTP message sent too soon. sctp state %s, %zuB",
                     _transport.getLoggableId().c_str(),
                     toString(_sctpAssociation.getState()),
-                    _payload->size());
+                    _message->size());
             }
         }
 
@@ -240,7 +237,7 @@ private:
     sctp::SctpAssociation& _sctpAssociation;
     const uint16_t _streamId;
     const uint32_t _protocolId;
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> _payload;
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> _message;
     TransportImpl& _transport;
 };
 
@@ -2217,7 +2214,7 @@ uint16_t TransportImpl::allocateOutboundSctpStream()
 
 bool TransportImpl::sendSctp(uint16_t streamId,
     uint32_t protocolId,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> message)
 {
     if (!_remoteSctpPort.isSet() || !_sctpAssociation)
     {
@@ -2225,13 +2222,13 @@ bool TransportImpl::sendSctp(uint16_t streamId,
         return false;
     }
     const auto maxSize = _sctpServerPort->getConfig().maxMessageSize;
-    if (buffer->getLength() == 0 || 2 * sizeof(uint32_t) + buffer->getLength() > maxSize)
+    if (message->getLength() == 0 || message->getLength() > maxSize)
     {
-        logger::error("sctp message invalid size %zu", getLoggableId().c_str(), buffer->getLength());
+        logger::error("sctp message invalid size %zu", getLoggableId().c_str(), message->getLength());
         return false;
     }
 
-    _jobQueue.addJob<SctpSendJob>(*_sctpAssociation, streamId, protocolId, std::move(buffer), _jobQueue, *this);
+    _jobQueue.addJob<SctpSendJob>(*_sctpAssociation, streamId, protocolId, std::move(message), _jobQueue, *this);
 
     return true;
 }

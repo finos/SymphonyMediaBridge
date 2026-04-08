@@ -177,71 +177,6 @@ TEST(PoolBuffer, isNullTerminated)
     EXPECT_TRUE(buffer.getReader().subview(0, 10).isNullTerminated());
 }
 
-TEST(PoolBuffer, readAndAppendNullIfNeeded)
-{
-    memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
-
-    // Not null-terminated, enough space
-    {
-        const std::string testData = "0123456789";
-        EXPECT_TRUE(buffer.allocate(testData.length()));
-        buffer.write(testData.c_str(), testData.length());
-
-        memory::Array<char, 20> dest;
-        auto reader = buffer.getReader();
-        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), testData.length() + 1);
-        EXPECT_EQ(std::string(dest.data()), testData);
-        EXPECT_EQ(dest[testData.length()], '\0');
-    }
-
-    // Null-terminated, enough space
-    {
-        const std::string testData = "0123456789";
-        EXPECT_TRUE(buffer.allocate(testData.length() + 1));
-        buffer.write(testData.c_str(), testData.length() + 1);
-
-        memory::Array<char, 20> dest;
-        auto reader = buffer.getReader();
-        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), testData.length() + 1);
-        EXPECT_EQ(std::string(dest.data()), testData);
-    }
-
-    // Not null-terminated, not enough space for null
-    {
-        const std::string testData = "0123456789";
-        EXPECT_TRUE(buffer.allocate(testData.length()));
-        buffer.write(testData.c_str(), testData.length());
-        memory::Array<char, 10> dest;
-        auto reader = buffer.getReader();
-        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), 0);
-    }
-
-    // Null-terminated, not enough space for content
-    {
-        const std::string testData = "0123456789";
-        EXPECT_TRUE(buffer.allocate(testData.length() + 1));
-        buffer.write(testData.c_str(), testData.length() + 1);
-        memory::Array<char, 10> dest;
-        auto reader = buffer.getReader();
-        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), 0);
-    }
-
-    // Multi-chunk and not null terminated
-    {
-        std::vector<char> testData(130, 'a');
-        EXPECT_TRUE(buffer.allocate(testData.size()));
-        buffer.write(testData.data(), testData.size());
-        EXPECT_FALSE(buffer.isNullTerminated());
-
-        memory::Array<char, 200> dest;
-        auto reader = buffer.getReader();
-        EXPECT_EQ(reader.readAndAppendNullIfNeeded(dest), testData.size() + 1);
-        EXPECT_EQ(dest[testData.size()], '\0');
-        EXPECT_EQ(std::memcmp(dest.data(), testData.data(), testData.size()), 0);
-    }
-}
-
 TEST(PoolBuffer, deleter)
 {
     memory::PoolAllocator<128> allocator(5, "test");
@@ -325,4 +260,57 @@ TEST(PoolBuffer, getReadonlyBuffer)
         EXPECT_EQ(readonlyBuffer.length, testData.size());
         EXPECT_EQ(std::memcmp(readonlyBuffer.data, testData.data(), testData.size()), 0);
     }
+}
+
+TEST(PoolBuffer, copy)
+{
+    memory::PoolAllocator<128> allocator(10, "test");
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+
+    const size_t dataSize = 300;
+    EXPECT_TRUE(buffer.allocate(dataSize));
+
+    std::vector<uint8_t> sourceData(dataSize);
+    for (size_t i = 0; i < dataSize; ++i)
+    {
+        sourceData[i] = static_cast<uint8_t>(i);
+    }
+    EXPECT_EQ(buffer.write(sourceData.data(), sourceData.size()), dataSize);
+
+    // Test copying the full buffer
+    std::vector<uint8_t> destData(dataSize);
+    EXPECT_EQ(buffer.copy(destData.data(), 0, dataSize), dataSize);
+    EXPECT_EQ(sourceData, destData);
+
+    // Test copying a portion from the beginning
+    std::fill(destData.begin(), destData.end(), 0);
+    EXPECT_EQ(buffer.copy(destData.data(), 0, 100), 100);
+    EXPECT_TRUE(std::equal(sourceData.begin(), sourceData.begin() + 100, destData.begin()));
+
+    // Test copying a portion from the middle, crossing a chunk boundary
+    std::fill(destData.begin(), destData.end(), 0);
+    const size_t copyOffset = 100;
+    const size_t copySize = 150;
+    EXPECT_EQ(buffer.copy(destData.data(), copyOffset, copySize), copySize);
+    EXPECT_TRUE(std::equal(sourceData.begin() + copyOffset, sourceData.begin() + copyOffset + copySize, destData.begin()));
+
+    // Test copying with a count that goes over the end
+    std::fill(destData.begin(), destData.end(), 0);
+    EXPECT_EQ(buffer.copy(destData.data(), 200, 200), 100);
+    EXPECT_TRUE(std::equal(sourceData.begin() + 200, sourceData.end(), destData.begin()));
+
+    // Test copying with an offset that is out of bounds
+    EXPECT_EQ(buffer.copy(destData.data(), dataSize, 1), 0);
+    EXPECT_EQ(buffer.copy(destData.data(), dataSize + 1, 1), 0);
+
+    // Test copying to a nullptr destination
+    EXPECT_EQ(buffer.copy(nullptr, 0, 1), 0);
+
+    // Test copying 0 bytes
+    EXPECT_EQ(buffer.copy(destData.data(), 0, 0), 0);
+
+    // Test copying from an empty buffer
+    memory::PoolBuffer<decltype(allocator)> emptyBuffer(allocator);
+    EXPECT_TRUE(emptyBuffer.allocate(0));
+    EXPECT_EQ(emptyBuffer.copy(destData.data(), 0, 1), 0);
 }

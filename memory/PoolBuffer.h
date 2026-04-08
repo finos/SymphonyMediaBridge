@@ -98,29 +98,6 @@ public:
             return read(array.begin(), _size);
         }
 
-        template <size_t SIZE>
-        size_t readAndAppendNullIfNeeded(memory::Array<char, SIZE>& array) const
-        {
-            size_t extraSize = isNullTerminated() ? 0 : 1;
-            if (array.resize(_size + extraSize) != _size + extraSize)
-            {
-                return 0;
-            }
-
-            size_t bytesRead = read(array.begin(), _size);
-            if (bytesRead < _size)
-            {
-                return 0;
-            }
-
-            if (extraSize > 0)
-            {
-                array[bytesRead++] = 0;
-            }
-
-            return bytesRead;
-        }
-
     private:
         size_t read(void* destination, size_t count) const
         {
@@ -272,9 +249,9 @@ public:
     {
         const uint8_t* source = static_cast<const uint8_t*>(data);
         size_t bytesWritten = 0;
-        size_t remainingToWrite = std::min(len, _size - offset);
+        size_t remainingToWrite = std::min(len, _size > offset ? _size - offset : 0);
 
-        if (!_masterChunk || offset >= _size)
+        if (!_masterChunk || remainingToWrite == 0)
         {
             return 0;
         }
@@ -298,6 +275,42 @@ public:
 
         return bytesWritten;
     }
+
+    size_t copy(void* dest, size_t offset, size_t count) const
+    {
+        if (!dest)
+        {
+            return 0;
+        }
+
+        size_t bytesCopied = 0;
+        const size_t remainingToCopy = std::min(count, _size > offset ? _size - offset : 0);
+
+        if (!_masterChunk || remainingToCopy == 0)
+        {
+            return 0;
+        }
+
+        const auto elementSize = _allocator.getElementSize();
+        size_t chunkIndex = offset / elementSize;
+        size_t offsetInChunk = offset % elementSize;
+        void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+
+        while (bytesCopied < remainingToCopy && chunkIndex < _numChunks)
+        {
+            const uint8_t* sourceChunk = static_cast<const uint8_t*>(chunkPointers[chunkIndex]);
+            size_t toCopyFromChunk = std::min({remainingToCopy - bytesCopied, elementSize - offsetInChunk});
+
+            std::memcpy(static_cast<uint8_t*>(dest) + bytesCopied, sourceChunk + offsetInChunk, toCopyFromChunk);
+
+            bytesCopied += toCopyFromChunk;
+            offsetInChunk = 0;
+            chunkIndex++;
+        }
+
+        return bytesCopied;
+    }
+
 
     view getReader() const
     {

@@ -41,7 +41,7 @@ public:
     std::string getLabel() const { return _label; }
 
     void onSctpMessage(webrtc::DataStreamTransport* sender,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer);
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message);
 
     State getState() const { return _state; }
 
@@ -69,7 +69,8 @@ struct SctpStreamMessageHeader
 };
 static_assert(sizeof(SctpStreamMessageHeader) == 8, "Misalignment of SctpStreamMessageHeader");
 
-memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueBuffer(uint16_t streamId,
+// Craeats sctp message with SctpStreamMessageHeader
+memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueSctpMessage(uint16_t streamId,
     uint32_t payloadProtocol,
     const void* message,
     size_t messageSize,
