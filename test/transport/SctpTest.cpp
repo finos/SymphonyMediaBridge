@@ -15,6 +15,7 @@
 #include "utils/Pacer.h"
 #include "utils/Time.h"
 #include "webrtc/DataChannel.h"
+#include "webrtc/WebRtcDataStream.h"
 #include <cstdint>
 #include <gtest/gtest.h>
 #include <memory>
@@ -121,10 +122,9 @@ struct ClientPair : public transport::DataReceiver
         {
             ++_messagesSent;
             _messageBytesSent += std::strlen(theMessage);
-            _transport1->sendSctp(_streamId,
-                webrtc::DataChannelPpid::WEBRTC_STRING,
-                theMessage,
-                std::strlen(theMessage));
+
+            auto buffer = makeUniqueBuffer(_streamId, webrtc::DataChannelPpid::WEBRTC_STRING, theMessage, std::strlen(theMessage), _sendAllocator);
+            _transport1->sendSctp(_streamId,webrtc::DataChannelPpid::WEBRTC_STRING, std::move(buffer));
         }
 
         for (int j = 0; j < 1; ++j)

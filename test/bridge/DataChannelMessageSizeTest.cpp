@@ -265,6 +265,9 @@ TEST_P(DataChannelSendMessageSizeTest, sendLargeEndpointMessage)
     const auto param = GetParam();
     auto endpoints = createDataChannelEndpoints();
 
+    ON_CALL(*endpoints.transport0, getAllocator()).WillByDefault(ReturnRef(_testScope->mainPacketAllocator));
+    ON_CALL(*endpoints.transport1, getAllocator()).WillByDefault(ReturnRef(_testScope->mainPacketAllocator));
+
     // 1. ARRANGE: setup data channels and message size
     connectDataStreams(*_mixer, endpoints);
     processAllEngineQueue();
@@ -281,13 +284,17 @@ TEST_P(DataChannelSendMessageSizeTest, sendLargeEndpointMessage)
     ASSERT_FALSE(payloadJson.isNone());
 
     // 3. ASSERT: if message size is smaller than _config.sctp.maxMessageSize = 4096 send should succeed, otherwise fail
-    auto& expect = EXPECT_CALL(*endpoints.transport1, sendSctp(_, _, _, _))
+    auto& expect = EXPECT_CALL(*endpoints.transport1, sendSctp(_, _, _))
         .Times(param.expectedSendSctpCalls);
     if (param.expectedSendSctpCalls > 0)
     {
         expect.WillOnce(Invoke(
-            [&](uint16_t streamId, uint32_t protocolId, const void* data, uint16_t len) {
-                std::string sentData(static_cast<const char*>(data), len);
+            [&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
+                const auto& continuousBuffer = buffer->getReadonlyBuffer();
+                //Message comes with SctpStreamMessageHeader prepended
+                auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
+                std::string sentData(reinterpret_cast<const char*>(sctpHeader.data()));
+
                 EXPECT_EQ(std::string(expectedJson.jsonBegin(), expectedJson.size()), sentData);
                 return true;
             }));
@@ -358,6 +365,9 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
 
     auto endpoints = createDataChannelEndpoints();
 
+    ON_CALL(*endpoints.transport0, getAllocator()).WillByDefault(ReturnRef(_testScope->mainPacketAllocator));
+    ON_CALL(*endpoints.transport1, getAllocator()).WillByDefault(ReturnRef(_testScope->mainPacketAllocator));
+
     ON_CALL(*endpoints.transport0, getTag()).WillByDefault(Return("tag-transport0"));
     ON_CALL(*endpoints.transport1, getTag()).WillByDefault(Return("tag-transport1"));
     ON_CALL(*endpoints.transport0, getEndpointIdHash()).WillByDefault(Return(endpoints.endpointId0Hash));
@@ -379,12 +389,16 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
     const auto message = builder.get();
 
     // 3. ASSERT: if message size is smaller than _config.sctp.maxMessageSize = 4096 FORWARD should succeed, otherwise fail
-    auto& expect = EXPECT_CALL(*endpoints.transport1, sendSctp(_, _, _, _))
+    auto& expect = EXPECT_CALL(*endpoints.transport1, sendSctp(_, _, _))
         .Times(param.expectedSendSctpCalls);
     if (param.expectedSendSctpCalls > 0)
     {
-        expect.WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, const void* data, uint16_t len) {
-            std::string sentData(static_cast<const char*>(data), len);
+        expect.WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
+            const auto& continuousBuffer = buffer->getReadonlyBuffer();
+            //Message comes with SctpStreamMessageHeader prepended
+            auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
+            std::string sentData(reinterpret_cast<const char*>(sctpHeader.data()));
+
             EXPECT_EQ(message, sentData);
             return true;
         }));

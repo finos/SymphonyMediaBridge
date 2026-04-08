@@ -374,23 +374,26 @@ public:
     {
         uint16_t streamId = 0;
         uint32_t protocol = 0;
-        char data[256];
-        uint16_t length = 0;
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer;
     };
-    DummySctpTransport() : _loggableId("dummy") {}
+    DummySctpTransport(memory::PacketPoolAllocator& allocator) : _loggableId("dummy"), _allocator(allocator) {}
 
-    bool sendSctp(uint16_t streamId, uint32_t protocolId, const void* data, uint16_t length) override
+    bool sendSctp(uint16_t streamId,
+        uint32_t protocolId,
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) override
     {
-        SctpInfo info{streamId, protocolId};
-        info.length = length;
-        std::strncpy(info.data, reinterpret_cast<const char*>(data), length);
-        _sendQueue.push(info);
+        SctpInfo info;
+        info.streamId = streamId;
+        info.protocol = protocolId;
+        info.buffer = std::move(buffer);
+        _sendQueue.push(std::move(info));
         return true;
     }
     uint16_t allocateOutboundSctpStream() override { return 0; }
+    memory::PacketPoolAllocator& getAllocator() override { return _allocator; }
 
     logger::LoggableId _loggableId;
-
+    memory::PacketPoolAllocator& _allocator;
     std::queue<SctpInfo> _sendQueue;
 };
 
@@ -401,7 +404,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     SctpEndpoint B(5001, _config, _timestamp, 250);
     establishConnection(A, B);
 
-    DummySctpTransport fakeTransport;
+    DummySctpTransport fakeTransport(_mainPacketAllocator);
     webrtc::WebRtcDataStream dataStream(2, fakeTransport);
     alignas(memory::Packet) const char webRtcOpen[] =
         "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
@@ -474,9 +477,10 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
 
     //dataStream.onSctpMessage(&fakeTransport, 0, 55, 0x32, sctpOpen->get() + 28, sctpOpen->getLength() - 28);
     dataStream.onSctpMessage(&fakeTransport, buffer);
-    auto openAckMsg = fakeTransport._sendQueue.front();
+    auto openAckMsg = std::move(fakeTransport._sendQueue.front());
     fakeTransport._sendQueue.pop();
-    B._session->sendMessage(A.getStreamId(), openAckMsg.protocol, openAckMsg.data, openAckMsg.length, _timestamp);
+    auto readonlyBuffer = openAckMsg.buffer->getReadonlyBuffer();
+    B._session->sendMessage(A.getStreamId(), openAckMsg.protocol, readonlyBuffer.data, readonlyBuffer.length, _timestamp);
     B.process();
     auto openAck = B._sendQueue.pop();
     EXPECT_NE(sack3, nullptr);

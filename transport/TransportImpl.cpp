@@ -170,9 +170,7 @@ public:
     SctpSendJob(sctp::SctpAssociation& association,
         uint16_t streamId,
         uint32_t protocolId,
-        const void* data,
-        uint16_t length,
-        memory::PacketPoolAllocator& allocator,
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> payload,
         jobmanager::JobQueue& jobQueue,
         TransportImpl& transport)
         : CountedJob(transport.getJobCounter()),
@@ -180,10 +178,9 @@ public:
           _sctpAssociation(association),
           _streamId(streamId),
           _protocolId(protocolId),
+          _payload(std::move(payload)),
           _transport(transport)
     {
-        _payload = memory::makeUniquePoolBuffer(allocator, data, length);
-
         if (!_payload)
         {
             logger::error("failed to create packet for outbound sctp", transport.getLoggableId().c_str());
@@ -2218,10 +2215,9 @@ uint16_t TransportImpl::allocateOutboundSctpStream()
     return 0xFFFFu;
 }
 
-bool TransportImpl::sendSctp(const uint16_t streamId,
-    const uint32_t protocolId,
-    const void* data,
-    const uint16_t length)
+bool TransportImpl::sendSctp(uint16_t streamId,
+    uint32_t protocolId,
+    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
 {
     if (!_remoteSctpPort.isSet() || !_sctpAssociation)
     {
@@ -2229,14 +2225,13 @@ bool TransportImpl::sendSctp(const uint16_t streamId,
         return false;
     }
     const auto maxSize = _sctpServerPort->getConfig().maxMessageSize;
-    if (length == 0 || 2 * sizeof(uint32_t) + length > maxSize)
+    if (buffer->getLength() == 0 || 2 * sizeof(uint32_t) + buffer->getLength() > maxSize)
     {
-        logger::error("sctp message invalid size %u", getLoggableId().c_str(), length);
+        logger::error("sctp message invalid size %zu", getLoggableId().c_str(), buffer->getLength());
         return false;
     }
 
-    _jobQueue
-        .addJob<SctpSendJob>(*_sctpAssociation, streamId, protocolId, data, length, _mainAllocator, _jobQueue, *this);
+    _jobQueue.addJob<SctpSendJob>(*_sctpAssociation, streamId, protocolId, std::move(buffer), _jobQueue, *this);
 
     return true;
 }

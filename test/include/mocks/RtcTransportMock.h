@@ -87,12 +87,12 @@ public:
 
     MOCK_METHOD(uint64_t, getLastReceivedPacketTimestamp, (), (const override));
 
-    MOCK_METHOD(bool,
-        sendSctp,
-        (uint16_t streamId, uint32_t protocolId, const void* data, uint16_t length),
-        (override));
+    using SctpBuffer = memory::UniquePoolBuffer<memory::PacketPoolAllocator>;
+    MOCK_METHOD(bool, sendSctp, (uint16_t streamId, uint32_t protocolId, SctpBuffer buffer), (override));
 
     MOCK_METHOD(uint16_t, allocateOutboundSctpStream, (), (override));
+
+    MOCK_METHOD(memory::PacketPoolAllocator&, getAllocator, (), (override));
 
     MOCK_METHOD(void, getSdesKeys, (std::vector<srtp::AesKey> & sdesKeys), (const override));
     MOCK_METHOD(void, asyncSetRemoteSdesKey, (const srtp::AesKey& key), (override));

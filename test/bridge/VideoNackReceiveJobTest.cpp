@@ -26,9 +26,9 @@ class VideoNackReceiveJobTest : public ::testing::Test
         _timers = std::make_unique<jobmanager::TimerQueue>(4096 * 8);
         _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
         _jobQueue = std::make_unique<jobmanager::JobQueue>(*_jobManager);
-        _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
-
         _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "VideoNackReceiveJobTest");
+        _transport = std::make_unique<DummyRtcTransport>(*_jobQueue, *_allocator);
+
         _mainOutboundContext =
             std::make_unique<bridge::SsrcOutboundContext>(mediaSsrc, *_allocator, VP8_RTP_MAP, bridge::RtpMap::EMPTY);
 

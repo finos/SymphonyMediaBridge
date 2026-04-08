@@ -156,6 +156,8 @@ public: // Transport
 
     jobmanager::JobQueue& getJobQueue() override { return _jobQueue; }
 
+    memory::PacketPoolAllocator& getAllocator() override { return _mainAllocator; }
+
     uint32_t getSenderLossCount() const override;
     uint32_t getUplinkEstimateKbps() const override;
     uint32_t getDownlinkEstimateKbps() const override;
@@ -177,7 +179,9 @@ public: // Transport
         uint32_t rtpFrequency) override;
     void setAbsSendTimeExtensionId(uint8_t extensionId) override;
 
-    bool sendSctp(uint16_t streamId, uint32_t protocolId, const void* data, uint16_t length) override;
+    bool sendSctp(uint16_t streamId,
+        uint32_t protocolId,
+        memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) override;
     uint16_t allocateOutboundSctpStream() override;
     void setSctp(uint16_t localPort, uint16_t remotePort) override;
     void connectSctp() override;
