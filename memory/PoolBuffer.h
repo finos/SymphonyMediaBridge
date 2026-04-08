@@ -8,13 +8,6 @@
 
 namespace memory
 {
-
-enum class ReadMode
-{
-    AsIs,
-    NullTerminated
-};
-
 struct ReadonlyMemoryBuffer
 {
     ReadonlyMemoryBuffer() : data(nullptr), length(0) {}
@@ -311,30 +304,17 @@ public:
         return view(reinterpret_cast<void**>(_masterChunk), _numChunks, _size, 0, _allocator);
     }
 
-    ReadonlyMemoryBuffer getReadonlyBuffer(ReadMode readMode = ReadMode::AsIs) const
+    ReadonlyMemoryBuffer getReadonlyBuffer() const
     {
         ReadonlyMemoryBuffer result;
-        const bool nullTerminate = (readMode == ReadMode::NullTerminated);
 
         if (_size == 0)
         {
-            if (nullTerminate)
-            {
-                result.storage = std::make_unique<memory::Array<char, 1500>>(1);
-                (*result.storage)[0] = '\0';
-                result.data = result.storage->data();
-                result.length = 1;
-            }
             return result;
         }
 
         size_t targetSize = _size;
         bool needsCopy = (_numChunks > 1);
-        if (nullTerminate && !isNullTerminated())
-        {
-            targetSize++;
-            needsCopy = true;
-        }
 
         result.length = targetSize;
 
@@ -346,14 +326,7 @@ public:
         {
             result.storage = std::make_unique<memory::Array<char, 1500>>(targetSize);
             size_t bytesRead = 0;
-            if (nullTerminate)
-            {
-                bytesRead = getReader().readAndAppendNullIfNeeded(*result.storage);
-            }
-            else
-            {
-                bytesRead = getReader().read(*result.storage);
-            }
+            bytesRead = getReader().read(*result.storage);
 
             if (bytesRead == targetSize)
             {

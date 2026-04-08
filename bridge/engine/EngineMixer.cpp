@@ -571,10 +571,7 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
         return;
     }
 
-    //Extract potentially fragmented message into continious memory
-    //If message is less than 2048 bytes it'll be allocated on stack.
-    //Add one byte for potentially necessary null terminatrion
-    const auto continiousBuffer = buffer->getReadonlyBuffer(memory::ReadMode::NullTerminated);
+    const auto continiousBuffer = buffer->getReadonlyBuffer();
 
     memory::Array<char, 2048> endpointMessage(_config.sctp.maxMessageSize);
 
@@ -590,16 +587,18 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
 #if ENABLE_LEGACY_API
         length = std::snprintf(endpointMessage.begin(),
             endpointMessage.capacity(),
-            "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
+            "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%.*s}",
             toDataStream->endpointId.c_str(),
             fromDataStream->endpointId.c_str(),
+            (int)continiousBuffer.length,
             (char*)continiousBuffer.data);
 #else
         length = std::snprintf(endpointMessage.begin(),
             endpointMessage.capacity(),
-            "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
+            "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%.*s}",
             toDataStream->endpointId.c_str(),
             fromDataStream->endpointId.c_str(),
+            (int)continiousBuffer.length,
             (char*)continiousBuffer.data);
 #endif
 
@@ -631,16 +630,18 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
 #if ENABLE_LEGACY_API
             length = std::snprintf(endpointMessage.begin(),
                 endpointMessage.capacity(),
-                "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%s}",
+                "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%.*s}",
                 dataStreamEntry.second->endpointId.c_str(),
                 fromDataStream->endpointId.c_str(),
+                (int)continiousBuffer.length,
                 (char*)continiousBuffer.data);
 #else
             length = std::snprintf(endpointMessage.begin(),
                 endpointMessage.capacity(),
-                "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%s}",
+                "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%.*s}",
                 dataStreamEntry.second->endpointId.c_str(),
                 fromDataStream->endpointId.c_str(),
+                (int)continiousBuffer.length,
                 (char*)continiousBuffer.data);
 #endif
             if (length > 0 && (size_t)length < endpointMessage.capacity())

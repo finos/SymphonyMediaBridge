@@ -494,6 +494,7 @@ void MixerManager::freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_
 
 void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<memory::PacketPoolAllocator> msgBuffer, size_t endpointIdHash)
 {
+    // Need to get full message instead of first chunk only to form JSON from it.
     const auto& continuousBuffer = msgBuffer->getReadonlyBuffer();
     auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
 
