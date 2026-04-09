@@ -4,6 +4,7 @@
 #include "test/macros.h"
 #include <gtest/gtest.h>
 #include <vector>
+#include <algorithm>
 
 TEST(PoolBuffer, create)
 {
@@ -330,3 +331,152 @@ TEST(PoolBuffer, copy)
     EXPECT_TRUE(emptyBuffer.allocate(0));
     EXPECT_EQ(emptyBuffer.copy(destData.data(), 0, 1), 0);
 }
+
+TEST(PoolBuffer, writeFromPoolBuffer)
+{
+    // Use different chunk sizes for src and dest to test more complex scenarios
+    memory::PoolAllocator<100> srcAllocator(20, "srcTest");
+    memory::PoolAllocator<128> destAllocator(20, "destTest");
+
+    auto srcBuffer = memory::makeUniquePoolBuffer(srcAllocator, 1000);
+    ASSERT_TRUE(srcBuffer);
+    auto destBuffer = memory::makeUniquePoolBuffer(destAllocator, 1000);
+    ASSERT_TRUE(destBuffer);
+
+    // Fill srcBuffer with some data
+    std::vector<uint8_t> sourceData(1000);
+    for (size_t i = 0; i < sourceData.size(); ++i)
+    {
+        sourceData[i] = static_cast<uint8_t>(i % 256);
+    }
+    srcBuffer->write(sourceData.data(), sourceData.size());
+
+    // Case 1: Simple full copy
+    {
+        SCOPED_TRACE("Case 1: Simple full copy");
+        std::vector<uint8_t> zeros(1000, 0);
+        destBuffer->write(zeros.data(), zeros.size());
+
+        EXPECT_EQ(destBuffer->write(*srcBuffer, 0, srcBuffer->size(), 0), srcBuffer->size());
+
+        std::vector<uint8_t> destData(1000);
+        destBuffer->copy(destData.data(), 0, destData.size());
+        EXPECT_EQ(sourceData, destData);
+    }
+
+    // Case 2: Copy with source and destination offsets, crossing chunk boundaries
+    {
+        SCOPED_TRACE("Case 2: Offsets and boundary crossing");
+        std::vector<uint8_t> zeros(1000, 0);
+        destBuffer->write(zeros.data(), zeros.size());
+
+        const size_t srcOffset = 50;   // start in 1st chunk of src
+        const size_t destOffset = 150; // start in 2nd chunk of dest
+        const size_t len = 300;        // will cross boundaries for both
+
+        size_t bytesWritten = destBuffer->write(*srcBuffer, srcOffset, len, destOffset);
+        EXPECT_EQ(bytesWritten, len);
+
+        // Check area before write
+        std::vector<uint8_t> beforeData(destOffset);
+        destBuffer->copy(beforeData.data(), 0, destOffset);
+        EXPECT_TRUE(std::all_of(beforeData.begin(), beforeData.end(), [](uint8_t i) { return i == 0; }));
+
+        // Check written data
+        std::vector<uint8_t> writtenData(len);
+        destBuffer->copy(writtenData.data(), destOffset, len);
+        EXPECT_TRUE(std::equal(sourceData.begin() + srcOffset, sourceData.begin() + srcOffset + len, writtenData.begin()));
+
+        // Check area after write
+        const size_t afterOffset = destOffset + len;
+        if (destBuffer->size() > afterOffset)
+        {
+            const size_t afterLen = destBuffer->size() - afterOffset;
+            std::vector<uint8_t> afterData(afterLen);
+            destBuffer->copy(afterData.data(), afterOffset, afterLen);
+            EXPECT_TRUE(std::all_of(afterData.begin(), afterData.end(), [](uint8_t i) { return i == 0; }));
+        }
+    }
+
+    // Case 3: Partial copy, len is smaller than available data
+    {
+        SCOPED_TRACE("Case 3: Partial copy");
+        std::vector<uint8_t> zeros(1000, 0);
+        destBuffer->write(zeros.data(), zeros.size());
+        const size_t srcOffset = 10;
+        const size_t destOffset = 20;
+        const size_t len = 50;
+
+        size_t bytesWritten = destBuffer->write(*srcBuffer, srcOffset, len, destOffset);
+        EXPECT_EQ(bytesWritten, len);
+
+        std::vector<uint8_t> destData(len);
+        destBuffer->copy(destData.data(), destOffset, len);
+        EXPECT_TRUE(std::equal(sourceData.begin() + srcOffset, sourceData.begin() + srcOffset + len, destData.begin()));
+    }
+
+    // Case 4: len is larger than available in src
+    {
+        SCOPED_TRACE("Case 4: Read past source boundary");
+        const size_t srcOffset = 900;
+        const size_t destOffset = 0;
+        const size_t len = 200; // only 100 bytes available in src
+        const size_t expectedWrite = 100;
+
+        size_t bytesWritten = destBuffer->write(*srcBuffer, srcOffset, len, destOffset);
+        EXPECT_EQ(bytesWritten, expectedWrite);
+
+        std::vector<uint8_t> destData(expectedWrite);
+        destBuffer->copy(destData.data(), destOffset, expectedWrite);
+        EXPECT_TRUE(std::equal(sourceData.begin() + srcOffset, sourceData.end(), destData.begin()));
+    }
+
+    // Case 5: len is larger than available in dest
+    {
+        SCOPED_TRACE("Case 5: Write past destination boundary");
+        const size_t srcOffset = 0;
+        const size_t destOffset = 950;
+        const size_t len = 100; // only 50 bytes available in dest
+        const size_t expectedWrite = 50;
+
+        size_t bytesWritten = destBuffer->write(*srcBuffer, srcOffset, len, destOffset);
+        EXPECT_EQ(bytesWritten, expectedWrite);
+
+        std::vector<uint8_t> destData(expectedWrite);
+        destBuffer->copy(destData.data(), destOffset, expectedWrite);
+        EXPECT_TRUE(
+            std::equal(sourceData.begin() + srcOffset, sourceData.begin() + srcOffset + expectedWrite, destData.begin()));
+    }
+
+    // Case 6: Zero-length copy
+    {
+        SCOPED_TRACE("Case 6: Zero-length copy");
+        EXPECT_EQ(destBuffer->write(*srcBuffer, 10, 0, 10), 0);
+    }
+
+    // Case 7: Out-of-bounds offsets
+    {
+        SCOPED_TRACE("Case 7: Out-of-bounds offsets");
+        EXPECT_EQ(destBuffer->write(*srcBuffer, srcBuffer->size(), 1, 0), 0);
+        EXPECT_EQ(destBuffer->write(*srcBuffer, 0, 1, destBuffer->size()), 0);
+        EXPECT_EQ(destBuffer->write(*srcBuffer, srcBuffer->size() + 1, 1, 0), 0);
+        EXPECT_EQ(destBuffer->write(*srcBuffer, 0, 1, destBuffer->size() + 1), 0);
+    }
+
+    // Case 8: Copy from empty source buffer
+    {
+        SCOPED_TRACE("Case 8: Empty source");
+        auto emptySrc = memory::makeUniquePoolBuffer(srcAllocator, 0);
+        ASSERT_TRUE(emptySrc);
+        EXPECT_EQ(destBuffer->write(*emptySrc, 0, 1, 0), 0);
+    }
+
+    // Case 9: Copy to empty dest buffer
+    {
+        SCOPED_TRACE("Case 9: Empty destination");
+        auto emptyDest = memory::makeUniquePoolBuffer(destAllocator, 0);
+        ASSERT_TRUE(emptyDest);
+        EXPECT_EQ(emptyDest->write(*srcBuffer, 0, 1, 0), 0);
+    }
+}
+

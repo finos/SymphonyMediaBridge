@@ -1,5 +1,5 @@
-#include "bridge/engine/EngineMixer.h"
 #include "api/DataChannelMessage.h"
+#include "bridge/engine/EngineMixer.h"
 #include "bridge/MixerManagerAsync.h"
 #include "bridge/engine/ActiveMediaList.h"
 #include "bridge/engine/EngineAudioStream.h"
@@ -14,6 +14,7 @@
 #include "rtp/RtcpFeedback.h"
 #include "rtp/RtpHeader.h"
 #include "transport/Transport.h"
+#include "webrtc/DataChannel.h"
 
 using namespace bridge;
 
@@ -556,6 +557,43 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash,
     }
 }
 
+void EngineMixer::sendEndpointMessageTo(EngineDataStream* toDataStream,
+    const EngineDataStream* fromDataStream,
+    const memory::UniquePoolBuffer<memory::PacketPoolAllocator>& payload,
+    bool shouldLog)
+{
+    if (!toDataStream || !toDataStream->stream.isOpen())
+    {
+        return;
+    }
+
+    auto endpointMessageBuffer =
+        api::DataChannelMessage::makeUniqueEndpointMessageBuffer(toDataStream->endpointId, fromDataStream->endpointId, payload);
+    const int length = endpointMessageBuffer->getLength();
+
+    if (length > 0 && (size_t)length < _config.sctp.maxMessageSize)
+    {
+        if (shouldLog)
+        {
+            memory::Array<char, 2048> loggableBuffer;
+            api::DataChannelMessage::makeLoggableStringFromBuffer(loggableBuffer, endpointMessageBuffer);
+            logger::debug("Endpoint message %s -> %s: %s",
+                _loggableId.c_str(),
+                fromDataStream->endpointId.c_str(),
+                toDataStream->endpointId.c_str(),
+                loggableBuffer.data());
+        }
+        toDataStream->stream.sendMessage(webrtc::DataChannelPpid::WEBRTC_STRING, std::move(endpointMessageBuffer));
+    }
+    else
+    {
+        logger::warn("Failed to format endpoint message or buffer too small for %s -> %s.",
+            _loggableId.c_str(),
+            fromDataStream->endpointId.c_str(),
+            toDataStream->endpointId.c_str());
+    }
+}
+
 void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
     memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
@@ -572,87 +610,27 @@ void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
         return;
     }
 
-    const auto continiousBuffer = buffer->getReadonlyBuffer();
-
-    memory::Array<char, 2048> endpointMessage(_config.sctp.maxMessageSize);
-
     if (toEndpointIdHash)
     {
         auto* toDataStream = _engineDataStreams.getItem(toEndpointIdHash);
-        if (!toDataStream || !toDataStream->stream.isOpen())
-        {
-            return;
-        }
-
-        int length = 0;
-#if ENABLE_LEGACY_API
-        length = std::snprintf(endpointMessage.begin(),
-            endpointMessage.capacity(),
-            "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%.*s}",
-            toDataStream->endpointId.c_str(),
-            fromDataStream->endpointId.c_str(),
-            (int)continiousBuffer.length,
-            (char*)continiousBuffer.data);
-#else
-        length = std::snprintf(endpointMessage.begin(),
-            endpointMessage.capacity(),
-            "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%.*s}",
-            toDataStream->endpointId.c_str(),
-            fromDataStream->endpointId.c_str(),
-            (int)continiousBuffer.length,
-            (char*)continiousBuffer.data);
-#endif
-
-        if (length > 0 && (size_t)length < endpointMessage.capacity())
-        {
-            toDataStream->stream.sendString(endpointMessage.data(), length);
-            logger::debug("Endpoint message %lu -> %lu: %s",
-                _loggableId.c_str(),
-                fromEndpointIdHash,
-                toEndpointIdHash,
-                endpointMessage.data());
-        }
-        else
-        {
-            logger::warn("Failed to format endpoint message or buffer too small.", _loggableId.c_str());
-        }
+        sendEndpointMessageTo(toDataStream, fromDataStream, buffer, true);
     }
     else
     {
-        logger::debug("Broadcast Endpoint message from %lu %s", _loggableId.c_str(), fromEndpointIdHash, (char*)continiousBuffer.data);
+        memory::Array<char, 2048> loggableBuffer;
+        api::DataChannelMessage::makeLoggableStringFromBuffer(loggableBuffer, buffer);
+        logger::debug("Broadcast Endpoint message from %s: %s",
+            _loggableId.c_str(),
+            fromDataStream->endpointId.c_str(),
+            loggableBuffer.data());
+
         for (auto& dataStreamEntry : _engineDataStreams)
         {
-            if (dataStreamEntry.first == fromEndpointIdHash || !dataStreamEntry.second->stream.isOpen())
+            if (dataStreamEntry.first == fromEndpointIdHash)
             {
                 continue;
             }
-
-            int length = 0;
-#if ENABLE_LEGACY_API
-            length = std::snprintf(endpointMessage.begin(),
-                endpointMessage.capacity(),
-                "{\"colibriClass\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"msgPayload\":%.*s}",
-                dataStreamEntry.second->endpointId.c_str(),
-                fromDataStream->endpointId.c_str(),
-                (int)continiousBuffer.length,
-                (char*)continiousBuffer.data);
-#else
-            length = std::snprintf(endpointMessage.begin(),
-                endpointMessage.capacity(),
-                "{\"type\":\"EndpointMessage\",\"to\":\"%s\",\"from\":\"%s\",\"payload\":%.*s}",
-                dataStreamEntry.second->endpointId.c_str(),
-                fromDataStream->endpointId.c_str(),
-                (int)continiousBuffer.length,
-                (char*)continiousBuffer.data);
-#endif
-            if (length > 0 && (size_t)length < endpointMessage.capacity())
-            {
-                dataStreamEntry.second->stream.sendString(endpointMessage.data(), length);
-            }
-            else
-            {
-                logger::warn("Failed to format endpoint message or buffer too small.", _loggableId.c_str());
-            }
+            sendEndpointMessageTo(dataStreamEntry.second, fromDataStream, buffer, false);
         }
     }
 }

@@ -14,7 +14,7 @@ struct ReadonlyMemoryBuffer
 
     const void* data;
     size_t length;
-    std::unique_ptr<memory::Array<char, 1500>> storage;
+    std::unique_ptr<memory::Array<char, 2048>> storage;
 };
 
 template <typename TPoolAllocator>
@@ -98,7 +98,6 @@ public:
             return read(array.begin(), _size);
         }
 
-    private:
         size_t read(void* destination, size_t count) const
         {
             size_t bytesRead = 0;
@@ -245,11 +244,67 @@ public:
     size_t capacity() const { return _numChunks * _allocator.getElementSize(); }
     bool empty() const { return _size == 0 || _numChunks == 0 || _masterChunk == nullptr; }
 
-    size_t write(const void* data, size_t len, size_t offset = 0)
+    template<typename AllocatorT>
+    size_t write(const PoolBuffer<AllocatorT>& src, size_t srcOffset, size_t len, size_t dstOffset = 0)
+    {
+        const auto destSize = size();
+        const auto srcSize = src.size();
+
+        if (dstOffset >= destSize || srcOffset >= srcSize)
+        {
+            return 0;
+        }
+
+        size_t bytesToWrite = std::min(len, srcSize - srcOffset);
+        bytesToWrite = std::min(bytesToWrite, destSize - dstOffset);
+
+        if (bytesToWrite == 0 || !_masterChunk)
+        {
+            return 0;
+        }
+
+        const auto elementSize = _allocator.getElementSize();
+        auto** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+        size_t totalBytesWritten = 0;
+        size_t currentDestOffset = dstOffset;
+        size_t currentSrcOffset = srcOffset;
+
+        while (totalBytesWritten < bytesToWrite)
+        {
+            const auto chunkIndex = currentDestOffset / elementSize;
+            if (chunkIndex >= _numChunks)
+            {
+                break;
+            }
+            const auto offsetInChunk = currentDestOffset % elementSize;
+
+            auto* chunk = static_cast<uint8_t*>(chunkPointers[chunkIndex]);
+            const auto spaceInChunk = elementSize - offsetInChunk;
+            const auto toCopy = std::min(bytesToWrite - totalBytesWritten, spaceInChunk);
+
+            const auto copied = src.copy(chunk + offsetInChunk, currentSrcOffset, toCopy);
+            if (copied == 0)
+            {
+                break;
+            }
+
+            totalBytesWritten += copied;
+            currentDestOffset += copied;
+            currentSrcOffset += copied;
+        }
+
+        return totalBytesWritten;
+    }
+
+    size_t write(const PoolBuffer& src, size_t dstOffset = 0) {
+        return write(src, 0, src.size(), dstOffset);
+    }
+
+    size_t write(const void* data, size_t len, size_t dstOffset = 0)
     {
         const uint8_t* source = static_cast<const uint8_t*>(data);
         size_t bytesWritten = 0;
-        size_t remainingToWrite = std::min(len, _size > offset ? _size - offset : 0);
+        size_t remainingToWrite = std::min(len, _size > dstOffset ? _size - dstOffset : 0);
 
         if (!_masterChunk || remainingToWrite == 0)
         {
@@ -257,8 +312,8 @@ public:
         }
 
         const auto elementSize = _allocator.getElementSize();
-        size_t chunkIndex = offset / elementSize;
-        size_t offsetInChunk = offset % elementSize;
+        size_t chunkIndex = dstOffset / elementSize;
+        size_t offsetInChunk = dstOffset % elementSize;
         void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
 
         while (bytesWritten < remainingToWrite && chunkIndex < _numChunks)
@@ -337,7 +392,7 @@ public:
         }
         else
         {
-            result.storage = std::make_unique<memory::Array<char, 1500>>(targetSize);
+            result.storage = std::make_unique<memory::Array<char, 2048>>(targetSize);
             size_t bytesRead = 0;
             bytesRead = getReader().read(*result.storage);
 
@@ -365,6 +420,8 @@ public:
         }
         return result;
     }
+
+    TPoolAllocator& getAllocator() const { return _allocator; }
 
     bool isNullTerminated() const { return getReader().isNullTerminated(); }
 

@@ -224,6 +224,10 @@ private: // impl async interface
     void sendEndpointMessage(const size_t toEndpointIdHash,
         const size_t fromEndpointIdHash,
         memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer);
+    void sendEndpointMessageTo(EngineDataStream* toDataStream,
+        const EngineDataStream* fromDataStream,
+        const memory::UniquePoolBuffer<memory::PacketPoolAllocator>& payload,
+        bool shouldLog);
     void recordingStart(EngineRecordingStream& stream, const RecordingDescription& desc);
     void stopRecording(EngineRecordingStream& stream, const RecordingDescription& desc);
     void updateRecordingStreamModalities(EngineRecordingStream& engineRecordingStream,

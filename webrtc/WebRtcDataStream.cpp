@@ -46,6 +46,10 @@ void WebRtcDataStream::sendData(const void* data, size_t length)
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_BINARY, std::move(buffer));
 }
 
+void WebRtcDataStream::sendMessage(uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> message) {
+    _transport.sendSctp(_streamId, protocolId, std::move(message));
+}
+
 void WebRtcDataStream::onSctpMessageBuffer(webrtc::DataStreamTransport* sender,
     memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message
     )

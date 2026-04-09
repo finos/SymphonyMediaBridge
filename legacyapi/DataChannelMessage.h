@@ -1,5 +1,6 @@
 #pragma once
 
+#include "memory/PoolBuffer.h"
 #include "utils/StringBuilder.h"
 
 namespace legacyapi
@@ -24,6 +25,40 @@ inline void makeEndpointMessage(utils::StringBuilder<T>& outMessage,
     outMessage.append("\"msgPayload\":");
     outMessage.append(message);
     outMessage.append("}");
+}
+
+inline memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueEndpointMessageBuffer(
+    const std::string& toEndpointId,
+    const std::string& fromEndpointId,
+    const memory::UniquePoolBuffer<memory::PacketPoolAllocator>& payload)
+{
+    constexpr const char* TO_STRING = "{\"colibriClass\":\"EndpointMessage\",\"to\":\"";
+    constexpr const char* FROM_STRING = "\",\"from\":\"";
+    constexpr const char* MSG_STRING = "\",\"msgPayload\":";
+    constexpr const char* TAIL_STRING = "}";
+
+    constexpr std::size_t overhead_len = std::char_traits<char>::length(TO_STRING) + 
+        std::char_traits<char>::length(FROM_STRING) + 
+        std::char_traits<char>::length(MSG_STRING) + 
+        std::char_traits<char>::length(TAIL_STRING);
+
+    const std::size_t extraLen = toEndpointId.length() + fromEndpointId.length() + payload->getLength();
+    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(payload->getAllocator(), overhead_len + extraLen);
+    if (!buffer)
+    {
+        return buffer;
+    }
+
+    auto written = buffer->write(TO_STRING, std::char_traits<char>::length(TO_STRING), 0);
+    written += buffer->write(toEndpointId.c_str(), toEndpointId.length(), written);
+    written += buffer->write(FROM_STRING, std::char_traits<char>::length(FROM_STRING), written);
+    written += buffer->write(fromEndpointId.c_str(), fromEndpointId.length(), written);
+    written += buffer->write(MSG_STRING, std::char_traits<char>::length(MSG_STRING), written);
+    written += buffer->write(*payload.get(), written);
+    written += buffer->write(TAIL_STRING, std::char_traits<char>::length(TAIL_STRING), written);
+
+    assert(written == buffer->getLength());
+    return buffer;
 }
 
 inline void makeDominantSpeakerChange(utils::StringBuilder<256>& outMessage, const char* endpointId)

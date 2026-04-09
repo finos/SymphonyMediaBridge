@@ -1,5 +1,7 @@
 #include "api/DataChannelMessage.h"
 #include "api/DataChannelMessageParser.h"
+#include "memory/PacketPoolAllocator.h"
+#include "memory/PoolBuffer.h"
 #include "bridge/AudioStream.h"
 #include "bridge/DataStream.h"
 #include "bridge/Mixer.h"
@@ -418,3 +420,89 @@ INSTANTIATE_TEST_SUITE_P(DataChannelMessageSize,
         }
         return "Fails";
     });
+
+TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_smallBufferEllipsis)
+{
+    // Test case for T < 4 where ellipsis is needed
+    // This targets the potential buffer underflow before the fix.
+
+    memory::PacketPoolAllocator testAllocator(1024, "TestAllocator");
+
+    // Test with T = 3, payload "abcde"
+    memory::Array<char, 3> outArray3;
+    auto payload = memory::makeUniquePoolBuffer(testAllocator, 5);
+    payload->write("abcde", 5, 0);
+
+    // Call the function - it should not crash
+    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray3, payload);
+
+    // Verify it's null-terminated and no crash
+    ASSERT_EQ(outArray3.size(), 3);
+    ASSERT_EQ(std::string(outArray3.data()), "ab");
+
+    // Test with T = 2, payload "abcde"
+    memory::Array<char, 2> outArray2;
+    auto payload2 = memory::makeUniquePoolBuffer(testAllocator, 5);
+    payload2->write("abcde", 5, 0);
+
+    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray2, payload);
+    ASSERT_EQ(outArray2.size(), 2);
+    ASSERT_EQ(std::string(outArray2.data()), "a");
+
+    // Test with T = 1, payload "abcde"
+    memory::Array<char, 1> outArray1;
+
+    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray1, payload);
+    ASSERT_EQ(outArray1.size(), 1);
+    ASSERT_EQ(std::string(outArray1.data()), "");
+}
+
+TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_bigBufferEllipsis)
+{
+    memory::PacketPoolAllocator testAllocator(1024, "TestAllocator");
+    std::string payloadString = "abcdefghjklmnopqrstuvwxyz";
+
+    // Test with T = 10
+    memory::Array<char, 10> outArray10;
+    auto payload = memory::makeUniquePoolBuffer(testAllocator, payloadString.length());
+    payload->write(payloadString.c_str(), payloadString.length(), 0);
+
+    // Call the function - it should not crash
+    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray10, payload);
+
+    // Verify it's null-terminated and no crash
+    ASSERT_EQ(outArray10.size(), 10);
+
+    std::string resultStr10(outArray10.data());
+
+    ASSERT_EQ(resultStr10.length(), 9);
+    ASSERT_EQ(resultStr10, "abcdef...");
+
+    // Test with T = 5
+    memory::Array<char, 5> outArray5;
+
+    // Call the function - it should not crash
+    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray5, payload);
+
+    // Verify it's null-terminated and no crash
+    ASSERT_EQ(outArray5.size(), 5);
+
+    std::string resultStr5(outArray5.data());
+
+    ASSERT_EQ(resultStr5.length(), 4);
+    ASSERT_EQ(resultStr5, "a...");
+
+    // Test with T = 4
+    memory::Array<char, 4> outArray4;
+
+    // Call the function - it should not crash
+    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray4, payload);
+
+    // Verify it's null-terminated and no crash
+    ASSERT_EQ(outArray4.size(), 4);
+
+    std::string resultStr4(outArray4.data());
+
+    ASSERT_EQ(resultStr4.length(), 3);
+    ASSERT_EQ(resultStr4, "...");
+}
