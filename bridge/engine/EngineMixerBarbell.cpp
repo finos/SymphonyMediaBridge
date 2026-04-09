@@ -516,16 +516,18 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
             continue;
         }
 
-        const auto& continuousBuffer = buffer->getReadonlyBuffer();
+        // Only accept short, packet-size sctp messages
+        assert(!buffer->isMultiChunk());
+        const auto& continuousBuffer = buffer->getFirstChunk();
         const void* contiguousBufferPtr = continuousBuffer.data;
 
-        if (continuousBuffer.length > _config.sctp.maxMessageSize)
+        if (buffer->isMultiChunk())
         {
-            logger::warn("Large multi-chunk barbell SCTP message %zu. Dropping.", _loggableId.c_str(), continuousBuffer.length);
+            logger::warn("Large multi-chunk barbell SCTP message (size = %zu, chunk count = %zu). Dropping.", _loggableId.c_str(), buffer->getLength(), buffer->getChunkCount());
             continue;
         }
 
-        if (!contiguousBufferPtr || continuousBuffer.length < sizeof(webrtc::SctpStreamMessageHeader))
+        if (!contiguousBufferPtr || buffer->getLength() < sizeof(webrtc::SctpStreamMessageHeader))
         {
             continue;
         }
@@ -536,7 +538,7 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
         if (sctpHeader->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
         {
             const char* message = reinterpret_cast<const char*>(sctpHeader->data());
-            const auto messageLength = continuousBuffer.length - sizeof(*sctpHeader);
+            const auto messageLength = buffer->getLength() - sizeof(*sctpHeader);
             if (messageLength == 0)
             {
                 continue;

@@ -243,6 +243,9 @@ public:
     size_t getLength() const { return _size; }
     size_t capacity() const { return _numChunks * _allocator.getElementSize(); }
     bool empty() const { return _size == 0 || _numChunks == 0 || _masterChunk == nullptr; }
+    size_t getChunkCount() const { return _numChunks; }
+    bool isMultiChunk() const { return _numChunks > 1; }
+
 
     template<typename AllocatorT>
     size_t write(const PoolBuffer<AllocatorT>& src, size_t srcOffset, size_t len, size_t dstOffset = 0)
