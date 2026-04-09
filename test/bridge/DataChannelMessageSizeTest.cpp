@@ -163,11 +163,7 @@ protected:
             "\x03\x00\x00\x00\x00\x00\x00\x00\x00\x12\x00\x00\x77\x65\x62\x72"
             "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
 
-        webrtc::SctpStreamMessageHeader header = {
-            .payloadProtocol = webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
-            .id = 0,
-            .sequenceNumber = 0,
-        };
+        webrtc::SctpStreamMessageHeader header = {webrtc::DataChannelPpid::WEBRTC_ESTABLISH, 0, 0};
         auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_testScope->mainPacketAllocator, sizeof(webrtc::SctpStreamMessageHeader) + sizeof(webRtcOpen));
         buffer->write(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
         buffer->write(webRtcOpen, sizeof(webRtcOpen) - 1, sizeof(webrtc::SctpStreamMessageHeader));
