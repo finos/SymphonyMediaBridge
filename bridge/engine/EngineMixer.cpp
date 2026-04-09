@@ -541,7 +541,7 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash,
     if (dataStream)
     {
         const bool wasOpen = dataStream->stream.isOpen();
-        dataStream->stream.onSctpMessage(&dataStream->transport, message);
+        dataStream->stream.onSctpMessageBuffer(&dataStream->transport, message);
 
         if (!wasOpen && dataStream->stream.isOpen())
         {

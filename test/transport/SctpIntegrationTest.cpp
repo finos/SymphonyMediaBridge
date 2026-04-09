@@ -73,11 +73,11 @@ struct ClientPair : public TransportClientPair
             buffer->write(data, length, 0);
             if (sender == _transport1.get())
             {
-                _stream1.onSctpMessage(sender, buffer);
+                _stream1.onSctpMessageBuffer(sender, buffer);
             }
             else
             {
-                _stream2.onSctpMessage(sender, buffer);
+                _stream2.onSctpMessageBuffer(sender, buffer);
             }
         }
 

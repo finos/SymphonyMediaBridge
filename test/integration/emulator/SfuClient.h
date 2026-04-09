@@ -657,9 +657,8 @@ public:
         const void* data,
         size_t length) override
     {
-        auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_allocator, length);
-        buffer->write(data, length, 0);
-        _dataStream->onSctpMessage(sender, buffer);
+        auto buffer = webrtc::makeUniqueSctpMessage(streamId, payloadProtocol, data, length, _allocator);
+        _dataStream->onSctpMessageBuffer(sender, buffer);
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,

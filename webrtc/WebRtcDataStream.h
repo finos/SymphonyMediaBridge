@@ -40,7 +40,7 @@ public:
     uint16_t getStreamId() const { return _streamId; };
     std::string getLabel() const { return _label; }
 
-    void onSctpMessage(webrtc::DataStreamTransport* sender,
+    void onSctpMessageBuffer(webrtc::DataStreamTransport* sender,
         memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message);
 
     State getState() const { return _state; }

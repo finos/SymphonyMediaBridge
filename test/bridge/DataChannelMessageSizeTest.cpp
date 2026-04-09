@@ -170,7 +170,7 @@ protected:
 
         auto* dataStream = mixer.getEngineDataStream(endpointsId);
         ASSERT_NE(nullptr, dataStream);
-        dataStream->stream.onSctpMessage(&dataStream->transport, buffer);
+        dataStream->stream.onSctpMessageBuffer(&dataStream->transport, buffer);
     }
 
     void openDataChannels(Mixer& mixer, const DataChannelEndpoints& endpoints)

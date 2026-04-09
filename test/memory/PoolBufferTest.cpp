@@ -24,7 +24,9 @@ TEST(PoolBuffer, allocateSmall)
     EXPECT_FALSE(buffer.empty());
     EXPECT_EQ(buffer.size(), 64);
     EXPECT_EQ(buffer.capacity(), 128);
+#if ENABLE_ALLOCATOR_METRICS
     EXPECT_EQ(allocator.countAllocatedItems(), 1 + 1);
+#endif
 }
 
 TEST(PoolBuffer, allocateExact)
@@ -35,7 +37,9 @@ TEST(PoolBuffer, allocateExact)
     EXPECT_TRUE(buffer.allocate(128));
     EXPECT_EQ(buffer.size(), 128);
     EXPECT_EQ(buffer.capacity(), 128);
+#if ENABLE_ALLOCATOR_METRICS    
     EXPECT_EQ(allocator.countAllocatedItems(), 1 + 1);
+#endif
 }
 
 TEST(PoolBuffer, allocateMultipleChunks)
@@ -46,7 +50,9 @@ TEST(PoolBuffer, allocateMultipleChunks)
     EXPECT_TRUE(buffer.allocate(300));
     EXPECT_EQ(buffer.size(), 300);
     EXPECT_EQ(buffer.capacity(), 3 * 128);
+#if ENABLE_ALLOCATOR_METRICS    
     EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1);
+#endif
 }
 
 TEST(PoolBuffer, allocateFail)
@@ -61,7 +67,9 @@ TEST(PoolBuffer, allocateFail)
     EXPECT_TRUE(buffer.empty());
     EXPECT_EQ(buffer.size(), 0);
     EXPECT_EQ(buffer.capacity(), 0);
+#if ENABLE_ALLOCATOR_METRICS    
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
+#endif    
 }
 
 TEST(PoolBuffer, writeAndRead)
@@ -119,6 +127,10 @@ TEST(PoolBuffer, writeAndReadWithOffset)
 
 TEST(PoolBuffer, move)
 {
+// This test use allocator.countAllocatedItems extensively.
+#if !ENABLE_ALLOCATOR_METRICS
+    GTEST_SKIP();
+#endif
     memory::PoolAllocator<128> allocator(10, "test");
     memory::PoolBuffer<decltype(allocator)> buffer1(allocator);
     EXPECT_TRUE(buffer1.allocate(300));
@@ -179,6 +191,10 @@ TEST(PoolBuffer, isNullTerminated)
 
 TEST(PoolBuffer, deleter)
 {
+// This test use allocator.countAllocatedItems extensively.
+#if !ENABLE_ALLOCATOR_METRICS
+    GTEST_SKIP();
+#endif
     memory::PoolAllocator<128> allocator(5, "test");
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 

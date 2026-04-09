@@ -423,7 +423,7 @@ void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
     }
 
     const auto state = barbell->dataChannel.getState();
-    barbell->dataChannel.onSctpMessage(&barbell->transport, message);
+    barbell->dataChannel.onSctpMessageBuffer(&barbell->transport, message);
 
     const auto newState = barbell->dataChannel.getState();
     if (state != newState && newState == webrtc::WebRtcDataStream::State::OPEN)

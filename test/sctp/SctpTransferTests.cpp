@@ -495,7 +495,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     buffer->write(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
     buffer->write(sctpOpen->get() + 28, sctpOpen->getLength() - 28, sizeof(webrtc::SctpStreamMessageHeader));
 
-    dataStream.onSctpMessage(&fakeTransport, buffer);
+    dataStream.onSctpMessageBuffer(&fakeTransport, buffer);
     auto openAckMsg = std::move(fakeTransport._sendQueue.front());
     fakeTransport._sendQueue.pop();
 
