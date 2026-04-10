@@ -135,13 +135,28 @@ public:
         const TPoolAllocator& _allocator;
     };
 
-    explicit PoolBuffer(TPoolAllocator& allocator) : _allocator(allocator), _masterChunk(nullptr), _size(0), _numChunks(0) {}
+    explicit PoolBuffer(TPoolAllocator& allocator)
+        : _allocator(allocator),
+          _masterChunk(nullptr),
+          _size(0),
+          _numChunks(0),
+          _externalMasterChunkSize(0)
+    {}
+
+    explicit PoolBuffer(TPoolAllocator& allocator, void* preallocatedMasterChunk, size_t _masterChunkSize)
+        : _allocator(allocator),
+          _masterChunk(preallocatedMasterChunk),
+          _size(0),
+          _numChunks(0),
+          _externalMasterChunkSize(_masterChunkSize) // This buffer does NOT own masterChunk
+    {}
 
     PoolBuffer(PoolBuffer&& other) noexcept
         : _allocator(other._allocator),
           _masterChunk(other._masterChunk),
           _size(other._size),
-          _numChunks(other._numChunks)
+          _numChunks(other._numChunks),
+          _externalMasterChunkSize(other._externalMasterChunkSize)
     {
         other._masterChunk = nullptr;
         other._size = 0;
@@ -154,10 +169,12 @@ public:
         {
             clear();
             _masterChunk = other._masterChunk;
+            _externalMasterChunkSize = other._externalMasterChunkSize;
             _size = other._size;
             _numChunks = other._numChunks;
 
             other._masterChunk = nullptr;
+            other._externalMasterChunkSize = 0;
             other._size = 0;
             other._numChunks = 0;
         }
@@ -175,6 +192,7 @@ public:
         {
             clear();
             const auto elementSize = _allocator.getElementSize();
+            const auto masterChunkCapacity = _externalMasterChunkSize > 0 ? _externalMasterChunkSize : elementSize;
             _numChunks = (size + elementSize - 1) / elementSize;
             if (_numChunks == 0)
             {
@@ -182,17 +200,20 @@ public:
                 return true;
             }
 
-            if (elementSize < _numChunks * sizeof(void*))
+            if (masterChunkCapacity < _numChunks * sizeof(void*))
             {
                 logger::error("master chunk is too small to hold chunk pointers. element size %zu, chunks %zu",
                     "PoolBuffer",
-                    elementSize,
+                    masterChunkCapacity,
                     _numChunks);
                 _numChunks = 0;
                 return false;
             }
 
-            _masterChunk = _allocator.allocate();
+            if (0 == _externalMasterChunkSize || !_masterChunk) {
+                _masterChunk = _allocator.allocate();
+                _externalMasterChunkSize = 0;
+            }
             if (!_masterChunk)
             {
                 _numChunks = 0;
@@ -209,7 +230,9 @@ public:
                     {
                         _allocator.free(chunkPointers[j]);
                     }
-                    _allocator.free(_masterChunk);
+                    if (0 == _externalMasterChunkSize) {
+                        _allocator.free(_masterChunk);
+                    }
                     _masterChunk = nullptr;
                     _numChunks = 0;
                     return false;
@@ -232,9 +255,14 @@ public:
                     _allocator.free(chunkPointers[i]);
                 }
             }
-            _allocator.free(_masterChunk);
+            if (0 == _externalMasterChunkSize) {
+                _allocator.free(_masterChunk);
+            }
         }
-        _masterChunk = nullptr;
+        if (0 == _externalMasterChunkSize) {
+            _masterChunk = nullptr;
+        }
+
         _numChunks = 0;
         _size = 0;
     }
@@ -245,7 +273,6 @@ public:
     bool empty() const { return _size == 0 || _numChunks == 0 || _masterChunk == nullptr; }
     size_t getChunkCount() const { return _numChunks; }
     bool isMultiChunk() const { return _numChunks > 1; }
-
 
     template<typename AllocatorT>
     size_t write(const PoolBuffer<AllocatorT>& src, size_t srcOffset, size_t len, size_t dstOffset = 0)
@@ -433,6 +460,7 @@ private:
     void* _masterChunk;
     size_t _size;
     size_t _numChunks;
+    size_t _externalMasterChunkSize;
 };
 
 template <typename TPoolAllocator>
@@ -452,7 +480,30 @@ inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& all
         return UniquePoolBuffer<TPoolAllocator>();
     }
 
-    auto buffer = new (pointer) PoolBuffer<TPoolAllocator>(allocator);
+    constexpr auto poolBufferAlignment = alignof(PoolBuffer<TPoolAllocator>);
+    const auto alignedPoolBufferSize =
+        (sizeof(PoolBuffer<TPoolAllocator>) + poolBufferAlignment - 1) & ~(poolBufferAlignment - 1);
+
+    const auto elementSize = allocator.getElementSize();
+    const auto storageSize = elementSize > alignedPoolBufferSize ? elementSize - alignedPoolBufferSize : 0;
+    const auto maxChunkCount = elementSize > sizeof(void*) ? elementSize / sizeof(void*) : 0;
+    const auto optChunkCount = storageSize > sizeof(void*) ? storageSize / sizeof(void*) : 0;
+
+    // Check that we can theoretically fit enough pointers to chunk into master chunk to accomodate all data.
+    if (maxChunkCount * elementSize < length) {
+        logger::error("Unable to allocate pool buffer, master chunk it too small %s",
+            "PoolBuffer",
+            allocator.getName().c_str());
+        allocator.free(pointer);
+        return UniquePoolBuffer<TPoolAllocator>();
+    }
+
+    // Try to fit master chunk in already allocated pointer right after PoolBuffer*.
+    void* masterChunk = reinterpret_cast<char*>(pointer) + alignedPoolBufferSize;
+    auto buffer = (optChunkCount * elementSize >= length)
+        ? new (pointer) PoolBuffer<TPoolAllocator>(allocator, masterChunk, storageSize)
+        : new (pointer) PoolBuffer<TPoolAllocator>(allocator);
+
     auto smartBuffer =
         UniquePoolBuffer<TPoolAllocator>(buffer, typename PoolBuffer<TPoolAllocator>::Deleter(allocator));
 

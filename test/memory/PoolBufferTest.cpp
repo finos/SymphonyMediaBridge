@@ -199,17 +199,24 @@ TEST(PoolBuffer, deleter)
     memory::PoolAllocator<128> allocator(5, "test");
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 
+     {
+        auto buffer = memory::makeUniquePoolBuffer(allocator, 20);
+        EXPECT_TRUE(buffer);
+        EXPECT_EQ(allocator.countAllocatedItems(), 2); // 1 chunks of 20 bytes + 1 'master chunk' and PoolBuffer
+    }
+    EXPECT_EQ(allocator.countAllocatedItems(), 0);
+
     {
         auto buffer = memory::makeUniquePoolBuffer(allocator, 3 * 128);
         EXPECT_TRUE(buffer);
-        EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1 + 1); // 3 chunks of 128 bytes, 1 'master chunk', 1 for unuiq_ptr in-place new for PoolBuffer itself
+        EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1); // 3 chunks of 128 bytes + 1 'master chunk' and PoolBuffer
     }
 
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 
     auto buffer2 = memory::makeUniquePoolBuffer(allocator, 3 * 128);
     EXPECT_TRUE(buffer2);
-    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1 + 1);
+    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1); // 3 chunks of 128 bytes + 1 'master chunk' and PoolBuffer
 }
 
 TEST(PoolBuffer, getReadonlyBuffer)
