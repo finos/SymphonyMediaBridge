@@ -31,6 +31,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <memory>
+#include <thread>
+#include <chrono>
 
 #include "bridge/MixerManager.h"
 
@@ -59,6 +61,13 @@ struct JobManagerProcessor
                 pendingJobs.push_back(job);
             }
         }
+    }
+
+    void activatePendingJobs() {
+       for (auto job : pendingJobs) {
+            jobManager.addJobItem(job);
+       }
+       pendingJobs.clear();
     }
 
     void dropAll()
@@ -179,6 +188,31 @@ protected:
     {
         openDataChannel(mixer, endpoints.endpointId0);
         openDataChannel(mixer, endpoints.endpointId1);
+    }
+
+    void gracefullyTerminateMixerManager(bridge::Mixer* mixer,
+        bridge::MixerManager& mixerManager,
+        JobManagerProcessor& backgroundJobManager)
+    {
+        auto id = mixer->getId();
+        mixerManager.remove(id);
+        processAllEngineQueue(); // will be removed on engine thread
+        backgroundJobManager.process(); // and event posted to background thread of MixerManager
+
+        std::thread backgroundProcessor([&backgroundJobManager]() {
+            for (int i = 0; i < 300; ++i)
+            {
+                backgroundJobManager.process();
+                if (i % 10 == 0)
+                {
+                    backgroundJobManager.activatePendingJobs();
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        });
+
+        mixerManager.stop();
+        backgroundProcessor.join();
     }
 
 
@@ -407,6 +441,8 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
 
     backgroundJobManager.process();
     processAllEngineQueue();
+
+    gracefullyTerminateMixerManager(mixer, mixerManager, backgroundJobManager);
 }
 
 INSTANTIATE_TEST_SUITE_P(DataChannelMessageSize,
