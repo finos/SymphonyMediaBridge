@@ -55,21 +55,34 @@ void WebRtcDataStream::onSctpMessageBuffer(webrtc::DataStreamTransport* sender,
     )
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
-    const auto firstChunk = message->getFirstChunk();
-    assert(firstChunk.length >= sizeof(SctpStreamMessageHeader));
-    const auto& header = *reinterpret_cast<const SctpStreamMessageHeader*>(firstChunk.data);
+    assert(message->size() >= sizeof(SctpStreamMessageHeader));
+    if (message->size() < sizeof(SctpStreamMessageHeader))
+    {
+        return;
+    }
+    if (message->size() > 8192) {
+        logger::warn("SCTP message too big, len %zu",
+            _loggableId,
+            message->size()
+        );
+        return;
+    }
+
+    char continousBuffer[message->size()];
+    message->copyTo(continousBuffer, 0, message->size());
+
+    const auto& header = *reinterpret_cast<const SctpStreamMessageHeader*>(continousBuffer);
     const auto& payloadProtocol = header.payloadProtocol;
     const auto& streamId = header.id;
     const auto length = message->getLength() - sizeof(SctpStreamMessageHeader);
-    const auto data = reinterpret_cast<const uint8_t*>(firstChunk.data) + sizeof(SctpStreamMessageHeader);
 
     if (payloadProtocol == DataChannelPpid::WEBRTC_STRING)
     {
-        std::string command(reinterpret_cast<const char*>(data), length);
+        std::string command(header.getMessage(), length);
         logger::debug("received on stream %u message %s", _loggableId, streamId, command.c_str());
         if (_listener)
         {
-            _listener->onWebRtcDataString(reinterpret_cast<const char*>(data), length);
+            _listener->onWebRtcDataString(header.getMessage(), length);
         }
     }
     if (payloadProtocol != webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
@@ -79,7 +92,7 @@ void WebRtcDataStream::onSctpMessageBuffer(webrtc::DataStreamTransport* sender,
 
     if (_state == State::CLOSED)
     {
-        auto msg = reinterpret_cast<const webrtc::DataChannelOpenMessage*>(data);
+        auto msg = reinterpret_cast<const webrtc::DataChannelOpenMessage*>(header.data());
         if (msg->messageType == webrtc::DataChannelMessageType::DATA_CHANNEL_OPEN)
         {
             _state = State::OPEN;
@@ -93,7 +106,7 @@ void WebRtcDataStream::onSctpMessageBuffer(webrtc::DataStreamTransport* sender,
     }
     else if (_state == State::OPENING)
     {
-        auto* message = reinterpret_cast<const uint8_t*>(data);
+        auto* message = reinterpret_cast<const uint8_t*>(header.data());
         if (length > 0 && message[0] == DataChannelMessageType::DATA_CHANNEL_ACK)
         {
             _state = State::OPEN;

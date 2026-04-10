@@ -496,8 +496,16 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<mem
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
     // Need to get full message instead of first chunk only to form JSON from it.
-    const auto& continuousBuffer = message->getReadonlyBuffer();
-    auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continuousBuffer.data);
+    constexpr size_t MAX_BUFFER_SIZE = 8192;
+    if (message->size() > MAX_BUFFER_SIZE) {
+        logger::warn("Received large SCTP message(size = %zu, max allowed = %zu). Dropping.", "MixerManager", message->getLength(), MAX_BUFFER_SIZE);
+        return;
+    }
+
+    char continousBuffer[message->size()];
+    message->copyTo(continousBuffer, 0, message->size());
+
+    auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continousBuffer);
 
     if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)
     {
@@ -508,11 +516,10 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<mem
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
     {
-        std::string body(reinterpret_cast<const char*>(sctpHeader.data()), message->getLength() - sizeof(sctpHeader));
+        std::string body(sctpHeader.getMessage(), message->getLength() - sizeof(sctpHeader));
         try
         {
-            auto json = utils::SimpleJson::create(reinterpret_cast<const char*>(sctpHeader.data()),
-                message->getLength() - sizeof(sctpHeader));
+            auto json = utils::SimpleJson::create(sctpHeader.getMessage(), message->getLength() - sizeof(sctpHeader));
 
             if (api::DataChannelMessageParser::isPinnedEndpointsChanged(json))
             {

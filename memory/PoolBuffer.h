@@ -8,13 +8,14 @@
 
 namespace memory
 {
+//template<size_t SIZE>
 struct ReadonlyMemoryBuffer
 {
     ReadonlyMemoryBuffer() : data(nullptr), length(0) {}
 
     const void* data;
     size_t length;
-    std::unique_ptr<memory::Array<char, 2048>> storage;
+    char storage[8192];
 };
 
 template <typename TPoolAllocator>
@@ -324,55 +325,6 @@ public:
 
         forEachBlock(sourceOffset, count, callback);
         return bytesCopied;
-    }
-
-    ReadonlyMemoryBuffer getReadonlyBuffer() const
-    {
-        ReadonlyMemoryBuffer result;
-
-        if (_size == 0)
-        {
-            return result;
-        }
-
-        size_t targetSize = _size;
-        bool needsCopy = (_numChunks > 1);
-
-        result.length = targetSize;
-
-        if (!needsCopy)
-        {
-            result.data = reinterpret_cast<void**>(_masterChunk)[0];
-        }
-        else
-        {
-            result.storage = std::make_unique<memory::Array<char, 2048>>(targetSize);
-            size_t bytesRead = 0;
-            bytesRead = copyTo(const_cast<char*>(result.storage->data()), 0, targetSize);
-
-            if (bytesRead == targetSize)
-            {
-                result.data = result.storage->data();
-            }
-            else
-            {
-                result.length = 0;
-            }
-        }
-
-        return result;
-    }
-
-    ReadonlyMemoryBuffer getFirstChunk() const
-    {
-        ReadonlyMemoryBuffer result;
-        if (_masterChunk && _numChunks > 0)
-        {
-            void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
-            result.data = chunkPointers[0];
-            result.length = std::min(_size, _allocator.getElementSize());
-        }
-        return result;
     }
 
     TPoolAllocator& getAllocator() const { return _allocator; }

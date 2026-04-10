@@ -322,8 +322,9 @@ TEST_P(DataChannelSendMessageSizeTest, sendLargeEndpointMessage)
     {
         expect.WillOnce(Invoke(
             [&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
-                const auto& continuousBuffer = buffer->getReadonlyBuffer();
-                std::string sentData(reinterpret_cast<const char*>(continuousBuffer.data), continuousBuffer.length);
+                char continuousBuffer[buffer->getLength()];
+                buffer->copyTo(continuousBuffer, 0, buffer->getLength());
+                std::string sentData(continuousBuffer, buffer->getLength());
 
                 EXPECT_EQ(std::string(expectedJson.jsonBegin(), expectedJson.size()), sentData);
                 return true;
@@ -424,8 +425,9 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
     if (param.expectedSendSctpCalls > 0)
     {
         expect.WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
-            const auto& continuousBuffer = buffer->getReadonlyBuffer();
-            std::string sentData(reinterpret_cast<const char*>(continuousBuffer.data), continuousBuffer.length);
+            char continuousBuffer[buffer->getLength()];
+            buffer->copyTo(continuousBuffer, 0, buffer->getLength());
+            std::string sentData(continuousBuffer, buffer->getLength());
 
             EXPECT_EQ(message, sentData);
             return true;

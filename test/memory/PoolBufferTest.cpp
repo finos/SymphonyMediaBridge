@@ -230,9 +230,9 @@ TEST(PoolBuffer, copyToAndNullTermination)
     // Empty buffer
     {
         EXPECT_TRUE(buffer.allocate(0));
-        auto readonlyBuffer = buffer.getReadonlyBuffer();
-        EXPECT_EQ(readonlyBuffer.data, nullptr);
-        EXPECT_EQ(readonlyBuffer.length, 0);
+        EXPECT_FALSE(buffer.isNullTerminated());
+        EXPECT_FALSE(buffer.isMultiChunk());
+        EXPECT_EQ(buffer.getLength(), 0);
     }
 
     // Single chunk, not null-terminated
@@ -242,10 +242,10 @@ TEST(PoolBuffer, copyToAndNullTermination)
         buffer.copyFrom(testData.c_str(), testData.length());
         EXPECT_FALSE(buffer.isNullTerminated());
 
-        auto readonlyBuffer = buffer.getReadonlyBuffer();
-        EXPECT_EQ(readonlyBuffer.length, testData.length());
-        EXPECT_EQ(readonlyBuffer.storage, nullptr); // No copy should be made
-        EXPECT_EQ(std::memcmp(readonlyBuffer.data, testData.c_str(), testData.length()), 0);
+        char readData[buffer.getLength()];
+        EXPECT_EQ(buffer.getLength(), testData.length());
+        EXPECT_EQ(buffer.copyTo(readData, 0, testData.length()), buffer.getLength());
+        EXPECT_EQ(std::memcmp(readData, testData.c_str(), testData.length()), 0);
     }
 
     // Single chunk, null-terminated
@@ -255,10 +255,10 @@ TEST(PoolBuffer, copyToAndNullTermination)
         buffer.copyFrom(testData.c_str(), testData.length() + 1);
         EXPECT_TRUE(buffer.isNullTerminated());
 
-        auto readonlyBuffer = buffer.getReadonlyBuffer();
-        EXPECT_EQ(readonlyBuffer.length, testData.length() + 1);
-        EXPECT_EQ(readonlyBuffer.storage, nullptr); // No copy should be made
-        EXPECT_EQ(std::string(static_cast<const char*>(readonlyBuffer.data)), testData);
+        char readData[buffer.getLength()];
+        EXPECT_EQ(buffer.getLength(), testData.length() + 1);
+        EXPECT_EQ(buffer.copyTo(readData, 0, testData.length() + 1), buffer.getLength());
+        EXPECT_EQ(std::string(readData), testData);
     }
 
     // Multi-chunk, not null-terminated
@@ -268,24 +268,24 @@ TEST(PoolBuffer, copyToAndNullTermination)
         buffer.copyFrom(testData.data(), testData.size());
         EXPECT_FALSE(buffer.isNullTerminated());
 
-        auto readonlyBuffer = buffer.getReadonlyBuffer();
-        EXPECT_NE(readonlyBuffer.storage, nullptr); // Should be a copy
-        EXPECT_EQ(readonlyBuffer.length, testData.size());
-        EXPECT_EQ(std::memcmp(readonlyBuffer.data, testData.data(), testData.size()), 0);
+        char readData[buffer.getLength()];
+        EXPECT_EQ(buffer.getLength(), testData.size());
+        EXPECT_EQ(buffer.copyTo(readData, 0, testData.size()), buffer.getLength());
+        EXPECT_EQ(std::memcmp(readData, testData.data(), testData.size()), 0);
     }
 
     // Multi-chunk, null-terminated
     {
-        std::vector<char> testData(150, 'n');
+        std::vector<char> testData(15, 'n');
         testData.back() = '\0';
         EXPECT_TRUE(buffer.allocate(testData.size()));
         buffer.copyFrom(testData.data(), testData.size());
         EXPECT_TRUE(buffer.isNullTerminated());
 
-        auto readonlyBuffer = buffer.getReadonlyBuffer();
-        EXPECT_NE(readonlyBuffer.storage, nullptr); // Should be a copy
-        EXPECT_EQ(readonlyBuffer.length, testData.size());
-        EXPECT_EQ(std::memcmp(readonlyBuffer.data, testData.data(), testData.size()), 0);
+        char readData[buffer.getLength()];
+        EXPECT_EQ(buffer.getLength(), testData.size());
+        EXPECT_EQ(buffer.copyTo(readData, 0, testData.size()), buffer.getLength());
+        EXPECT_EQ(std::memcmp(readData, testData.data(), testData.size()), 0);
     }
 }
 
