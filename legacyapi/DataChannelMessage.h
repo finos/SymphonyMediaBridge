@@ -49,13 +49,13 @@ inline memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueEndpointM
         return buffer;
     }
 
-    auto written = buffer->write(TO_STRING, std::char_traits<char>::length(TO_STRING), 0);
-    written += buffer->write(toEndpointId.c_str(), toEndpointId.length(), written);
-    written += buffer->write(FROM_STRING, std::char_traits<char>::length(FROM_STRING), written);
-    written += buffer->write(fromEndpointId.c_str(), fromEndpointId.length(), written);
-    written += buffer->write(MSG_STRING, std::char_traits<char>::length(MSG_STRING), written);
-    written += buffer->write(*payload.get(), written);
-    written += buffer->write(TAIL_STRING, std::char_traits<char>::length(TAIL_STRING), written);
+    auto written = buffer->copyFrom(TO_STRING, std::char_traits<char>::length(TO_STRING), 0);
+    written += buffer->copyFrom(toEndpointId.c_str(), toEndpointId.length(), written);
+    written += buffer->copyFrom(FROM_STRING, std::char_traits<char>::length(FROM_STRING), written);
+    written += buffer->copyFrom(fromEndpointId.c_str(), fromEndpointId.length(), written);
+    written += buffer->copyFrom(MSG_STRING, std::char_traits<char>::length(MSG_STRING), written);
+    written += buffer->copyFrom(*payload.get(), written);
+    written += buffer->copyFrom(TAIL_STRING, std::char_traits<char>::length(TAIL_STRING), written);
 
     assert(written == buffer->getLength());
     return buffer;

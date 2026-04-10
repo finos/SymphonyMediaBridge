@@ -176,8 +176,8 @@ protected:
 
         webrtc::SctpStreamMessageHeader header = {webrtc::DataChannelPpid::WEBRTC_ESTABLISH, 0, 0};
         auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_testScope->mainPacketAllocator, sizeof(webrtc::SctpStreamMessageHeader) + sizeof(webRtcOpen));
-        buffer->write(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
-        buffer->write(webRtcOpen, sizeof(webRtcOpen) - 1, sizeof(webrtc::SctpStreamMessageHeader));
+        buffer->copyFrom(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
+        buffer->copyFrom(webRtcOpen, sizeof(webRtcOpen) - 1, sizeof(webrtc::SctpStreamMessageHeader));
 
         auto* dataStream = mixer.getEngineDataStream(endpointsId);
         ASSERT_NE(nullptr, dataStream);
@@ -467,7 +467,7 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_smallBufferEllipsis)
     // Test with T = 3, payload "abcde"
     memory::Array<char, 3> outArray3;
     auto payload = memory::makeUniquePoolBuffer(testAllocator, 5);
-    payload->write("abcde", 5, 0);
+    payload->copyFrom("abcde", 5, 0);
 
     // Call the function - it should not crash
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray3, payload);
@@ -479,7 +479,7 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_smallBufferEllipsis)
     // Test with T = 2, payload "abcde"
     memory::Array<char, 2> outArray2;
     auto payload2 = memory::makeUniquePoolBuffer(testAllocator, 5);
-    payload2->write("abcde", 5, 0);
+    payload2->copyFrom("abcde", 5, 0);
 
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray2, payload);
     ASSERT_EQ(outArray2.size(), 2);
@@ -501,7 +501,7 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_bigBufferEllipsis)
     // Test with T = 10
     memory::Array<char, 10> outArray10;
     auto payload = memory::makeUniquePoolBuffer(testAllocator, payloadString.length());
-    payload->write(payloadString.c_str(), payloadString.length(), 0);
+    payload->copyFrom(payloadString.c_str(), payloadString.length(), 0);
 
     // Call the function - it should not crash
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray10, payload);

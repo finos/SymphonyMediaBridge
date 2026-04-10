@@ -255,71 +255,74 @@ public:
     bool isMultiChunk() const { return _numChunks > 1; }
 
     template <typename AllocatorT>
-    size_t write(const PoolBuffer<AllocatorT>& src, size_t srcOffset, size_t len, size_t dstOffset = 0)
+    size_t copyFrom(const PoolBuffer<AllocatorT>& sourceBuffer,
+        size_t sourceOffset,
+        size_t len,
+        size_t destinationOffset = 0)
     {
         const auto destSize = size();
-        const auto srcSize = src.size();
-        if (dstOffset >= destSize || srcOffset >= srcSize)
+        const auto srcSize = sourceBuffer.size();
+        if (destinationOffset >= destSize || sourceOffset >= srcSize)
         {
             return 0;
         }
 
-        const size_t bytesToWrite = std::min({len, srcSize - srcOffset, destSize - dstOffset});
-        if (bytesToWrite == 0)
+        const size_t bytesToCopy = std::min({len, srcSize - sourceOffset, destSize - destinationOffset});
+        if (bytesToCopy == 0)
         {
             return 0;
         }
 
-        size_t totalBytesWritten = 0;
-        size_t currentSrcOffset = srcOffset;
+        size_t totalBytesCopied = 0;
+        size_t currentSrcOffset = sourceOffset;
 
         auto callback = [&](uint8_t* block, size_t blockSize) {
-            const auto copied = src.copyTo(block, currentSrcOffset, blockSize);
-            totalBytesWritten += copied;
+            const auto copied = sourceBuffer.copyTo(block, currentSrcOffset, blockSize);
+            totalBytesCopied += copied;
             currentSrcOffset += copied;
             return copied == blockSize; // Continue only if we copied the whole block
         };
 
-        forEachBlock(dstOffset, bytesToWrite, callback);
+        forEachBlock(destinationOffset, bytesToCopy, callback);
 
-        return totalBytesWritten;
+        return totalBytesCopied;
     }
 
-    size_t write(const PoolBuffer& src, size_t dstOffset = 0) {
-        return write(src, 0, src.size(), dstOffset);
+    size_t copyFrom(const PoolBuffer& src, size_t destinationOffset = 0) {
+        return copyFrom(src, 0, src.size(), destinationOffset);
     }
 
-    size_t write(const void* data, size_t len, size_t dstOffset = 0)
+    size_t copyFrom(const void* source, size_t len, size_t destinationOffset = 0)
     {
-        const uint8_t* source = static_cast<const uint8_t*>(data);
-        size_t bytesWritten = 0;
-        const size_t remainingToWrite = std::min(len, _size > dstOffset ? _size - dstOffset : 0);
+        const uint8_t* sourceData = static_cast<const uint8_t*>(source);
+        size_t bytesCopied = 0;
+        const size_t remainingToCopy = std::min(len, _size > destinationOffset ? _size - destinationOffset : 0);
 
         auto callback = [&](uint8_t* block, size_t blockSize) {
-            std::memcpy(block, source + bytesWritten, blockSize);
-            bytesWritten += blockSize;
+            std::memcpy(block, sourceData + bytesCopied, blockSize);
+            bytesCopied += blockSize;
             return true;
         };
 
-        forEachBlock(dstOffset, remainingToWrite, callback);
-        return bytesWritten;
+        forEachBlock(destinationOffset, remainingToCopy, callback);
+        return bytesCopied;
     }
 
-    size_t copyTo(void* dest, size_t offset, size_t count) const
+    size_t copyTo(void* destination, size_t sourceOffset, size_t count) const
     {
-        if (!dest)
+        if (!destination)
         {
             return 0;
         }
 
         size_t bytesCopied = 0;
         auto callback = [&](const uint8_t* block, size_t blockSize) {
-            std::memcpy(static_cast<uint8_t*>(dest) + bytesCopied, block, blockSize);
+            std::memcpy(static_cast<uint8_t*>(destination) + bytesCopied, block, blockSize);
             bytesCopied += blockSize;
             return true;
         };
 
-        forEachBlock(offset, count, callback);
+        forEachBlock(sourceOffset, count, callback);
         return bytesCopied;
     }
 
@@ -528,7 +531,7 @@ inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& all
     size_t length)
 {
     auto buffer = makeUniquePoolBuffer(allocator, length);
-    if (buffer && data && buffer->write(data, length) != length)
+    if (buffer && data && buffer->copyFrom(data, length) != length)
     {
         return nullptr;
     }

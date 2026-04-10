@@ -439,7 +439,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
                                                 "\x63\x62\x37\x65\x66\x32\x22\x5d\x7d\x00\x00\x00";
 
     auto buffer0 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(webRtcOpen));
-    buffer0->write(webRtcOpen, sizeof(webRtcOpen) - 1, 0);
+    buffer0->copyFrom(webRtcOpen, sizeof(webRtcOpen) - 1, 0);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
@@ -447,7 +447,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
         _timestamp);
 
     auto buffer1 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(msg1));
-    buffer1->write(msg1, sizeof(msg1) - 1, 0);
+    buffer1->copyFrom(msg1, sizeof(msg1) - 1, 0);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
@@ -455,7 +455,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
         _timestamp);
 
     auto buffer2 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(msg2));
-    buffer2->write(msg2, sizeof(msg2) - 1, 0);
+    buffer2->copyFrom(msg2, sizeof(msg2) - 1, 0);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
@@ -492,8 +492,8 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
         .sequenceNumber = 55,
     };
 
-    buffer->write(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
-    buffer->write(sctpOpen->get() + 28, sctpOpen->getLength() - 28, sizeof(webrtc::SctpStreamMessageHeader));
+    buffer->copyFrom(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
+    buffer->copyFrom(sctpOpen->get() + 28, sctpOpen->getLength() - 28, sizeof(webrtc::SctpStreamMessageHeader));
 
     dataStream.onSctpMessageBuffer(&fakeTransport, buffer);
     auto openAckMsg = std::move(fakeTransport._sendQueue.front());

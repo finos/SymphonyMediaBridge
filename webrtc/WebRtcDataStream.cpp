@@ -124,11 +124,11 @@ memory::UniquePoolBuffer<memory::PacketPoolAllocator> makeUniqueSctpMessage(uint
         .id = streamId,
         .sequenceNumber = 0,
     };
-    buffer->write(&header, sizeof(SctpStreamMessageHeader), 0);
-    buffer->write(message, messageSize, sizeof(SctpStreamMessageHeader));
+    buffer->copyFrom(&header, sizeof(SctpStreamMessageHeader), 0);
+    buffer->copyFrom(message, messageSize, sizeof(SctpStreamMessageHeader));
 
     if (needNullTermination) {
-        buffer->write("\0", 1, sizeof(SctpStreamMessageHeader) + messageSize);
+        buffer->copyFrom("\0", 1, sizeof(SctpStreamMessageHeader) + messageSize);
     }
 
     return buffer;

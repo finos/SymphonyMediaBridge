@@ -70,7 +70,7 @@ struct ClientPair : public TransportClientPair
         if (payloadProtocol != webrtc::DataChannelPpid::WEBRTC_STRING)
         {
             auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_sendAllocator, length);
-            buffer->write(data, length, 0);
+            buffer->copyFrom(data, length, 0);
             if (sender == _transport1.get())
             {
                 _stream1.onSctpMessageBuffer(sender, buffer);
