@@ -49,12 +49,16 @@ public:
             size_t numChunks,
             size_t size,
             size_t offset,
-            const TPoolAllocator& allocator)
+            const TPoolAllocator& allocator,
+            size_t firstChunkSize,
+            bool firstChunkIsInMaster)
             : _chunkPointers(chunkPointers),
               _numChunks(numChunks),
               _size(size),
               _offset(offset),
-              _allocator(allocator)
+              _allocator(allocator),
+              _firstChunkSize(firstChunkSize),
+              _firstChunkIsInMaster(firstChunkIsInMaster)
         {
         }
 
@@ -64,7 +68,39 @@ public:
                 _numChunks,
                 std::min(_size - offset, size),
                 _offset + offset,
-                _allocator);
+                _allocator,
+                _firstChunkSize,
+                _firstChunkIsInMaster);
+        }
+
+        size_t getChunkSize(size_t chunkIndex) const
+        {
+            if (_firstChunkIsInMaster && chunkIndex == 0)
+            {
+                return _firstChunkSize;
+            }
+            return _allocator.getElementSize();
+        }
+
+        std::pair<size_t, size_t> getChunkAndOffset(size_t absoluteOffset) const
+        {
+            const auto elementSize = _allocator.getElementSize();
+            if (_firstChunkIsInMaster && _numChunks > 0)
+            {
+                if (absoluteOffset < _firstChunkSize)
+                {
+                    return {0, absoluteOffset};
+                }
+                else
+                {
+                    return {1 + (absoluteOffset - _firstChunkSize) / elementSize,
+                        (absoluteOffset - _firstChunkSize) % elementSize};
+                }
+            }
+            else
+            {
+                return {absoluteOffset / elementSize, absoluteOffset % elementSize};
+            }
         }
 
         bool isNullTerminated() const
@@ -74,10 +110,10 @@ public:
                 return false;
             }
 
-            const auto elementSize = _allocator.getElementSize();
             const size_t lastByteAbsoluteOffset = _offset + _size - 1;
-            const size_t chunkIndex = lastByteAbsoluteOffset / elementSize;
-            const size_t offsetInChunk = lastByteAbsoluteOffset % elementSize;
+            auto chunkInfo = getChunkAndOffset(lastByteAbsoluteOffset);
+            const size_t chunkIndex = chunkInfo.first;
+            const size_t offsetInChunk = chunkInfo.second;
 
             if (chunkIndex >= _numChunks)
             {
@@ -109,14 +145,15 @@ public:
                 return 0;
             }
 
-            const auto elementSize = _allocator.getElementSize();
-            size_t chunkIndex = currentOffset / elementSize;
-            size_t offsetInChunk = currentOffset % elementSize;
+            auto chunkInfo = getChunkAndOffset(currentOffset);
+            size_t chunkIndex = chunkInfo.first;
+            size_t offsetInChunk = chunkInfo.second;
 
             while (bytesRead < remainingToRead && chunkIndex < _numChunks)
             {
+                const auto currentChunkSize = getChunkSize(chunkIndex);
                 const uint8_t* sourceChunk = static_cast<const uint8_t*>(_chunkPointers[chunkIndex]);
-                size_t toReadFromChunk = std::min({remainingToRead - bytesRead, elementSize - offsetInChunk});
+                size_t toReadFromChunk = std::min({remainingToRead - bytesRead, currentChunkSize - offsetInChunk});
 
                 std::memcpy(static_cast<uint8_t*>(destination) + bytesRead, sourceChunk + offsetInChunk, toReadFromChunk);
 
@@ -133,6 +170,8 @@ public:
         size_t _size;
         size_t _offset;
         const TPoolAllocator& _allocator;
+        size_t _firstChunkSize;
+        bool _firstChunkIsInMaster;
     };
 
     explicit PoolBuffer(TPoolAllocator& allocator)
@@ -140,7 +179,9 @@ public:
           _masterChunk(nullptr),
           _size(0),
           _numChunks(0),
-          _externalMasterChunkSize(0)
+          _externalMasterChunkSize(0),
+          _firstChunkSize(0),
+          _firstChunkIsInMaster(false)
     {}
 
     explicit PoolBuffer(TPoolAllocator& allocator, void* preallocatedMasterChunk, size_t _masterChunkSize)
@@ -148,7 +189,9 @@ public:
           _masterChunk(preallocatedMasterChunk),
           _size(0),
           _numChunks(0),
-          _externalMasterChunkSize(_masterChunkSize) // This buffer does NOT own masterChunk
+          _externalMasterChunkSize(_masterChunkSize), // This buffer does NOT own masterChunk
+          _firstChunkSize(0),
+          _firstChunkIsInMaster(false)
     {}
 
     PoolBuffer(PoolBuffer&& other) noexcept
@@ -156,11 +199,15 @@ public:
           _masterChunk(other._masterChunk),
           _size(other._size),
           _numChunks(other._numChunks),
-          _externalMasterChunkSize(other._externalMasterChunkSize)
+          _externalMasterChunkSize(other._externalMasterChunkSize),
+          _firstChunkSize(other._firstChunkSize),
+          _firstChunkIsInMaster(other._firstChunkIsInMaster)
     {
         other._masterChunk = nullptr;
         other._size = 0;
         other._numChunks = 0;
+        other._firstChunkSize = 0;
+        other._firstChunkIsInMaster = false;
     }
 
     PoolBuffer& operator=(PoolBuffer&& other) noexcept
@@ -172,11 +219,15 @@ public:
             _externalMasterChunkSize = other._externalMasterChunkSize;
             _size = other._size;
             _numChunks = other._numChunks;
+            _firstChunkSize = other._firstChunkSize;
+            _firstChunkIsInMaster = other._firstChunkIsInMaster;
 
             other._masterChunk = nullptr;
             other._externalMasterChunkSize = 0;
             other._size = 0;
             other._numChunks = 0;
+            other._firstChunkSize = 0;
+            other._firstChunkIsInMaster = false;
         }
         return *this;
     }
@@ -192,45 +243,95 @@ public:
         {
             clear();
             const auto elementSize = _allocator.getElementSize();
-            const auto masterChunkCapacity = _externalMasterChunkSize > 0 ? _externalMasterChunkSize : elementSize;
-            _numChunks = (size + elementSize - 1) / elementSize;
-            if (_numChunks == 0)
+            auto masterChunkCapacity = _externalMasterChunkSize > 0 ? _externalMasterChunkSize : elementSize;
+
+            if (size == 0)
             {
                 _size = 0;
                 return true;
             }
 
-            if (masterChunkCapacity < _numChunks * sizeof(void*))
+            if (0 == _externalMasterChunkSize || !_masterChunk)
             {
-                logger::error("master chunk is too small to hold chunk pointers. element size %zu, chunks %zu",
-                    "PoolBuffer",
-                    masterChunkCapacity,
-                    _numChunks);
-                _numChunks = 0;
-                return false;
+                _masterChunk = _allocator.allocate();
+                if (!_masterChunk)
+                {
+                    return false;
+                }
+                _externalMasterChunkSize = 0;
+                masterChunkCapacity = elementSize;
             }
 
-            if (0 == _externalMasterChunkSize || !_masterChunk) {
-                _masterChunk = _allocator.allocate();
-                _externalMasterChunkSize = 0;
-            }
-            if (!_masterChunk)
+            size_t numChunks = (size + elementSize - 1) / elementSize;
+            if (size <= masterChunkCapacity)
             {
+                numChunks = 1;
+            }
+            size_t pointersAreaSize = numChunks * sizeof(void*);
+
+            if (masterChunkCapacity > pointersAreaSize)
+            {
+                const size_t firstChunkSize = masterChunkCapacity - pointersAreaSize;
+                if (size > firstChunkSize)
+                {
+                    numChunks = 1 + (size - firstChunkSize + elementSize - 1) / elementSize;
+                }
+                else
+                {
+                    numChunks = 1;
+                }
+
+                pointersAreaSize = numChunks * sizeof(void*);
+                if (masterChunkCapacity > pointersAreaSize)
+                {
+                    _firstChunkSize = masterChunkCapacity - pointersAreaSize;
+                    _numChunks = numChunks;
+                    _firstChunkIsInMaster = true;
+                }
+                else
+                {
+                    _numChunks = (size + elementSize - 1) / elementSize;
+                }
+            }
+            else
+            {
+                _numChunks = numChunks;
+            }
+
+            if (masterChunkCapacity < _numChunks * sizeof(void*))
+            {
+                logger::error("master chunk is too small to hold chunk pointers. capacity %zu, required %zu",
+                    "PoolBuffer",
+                    masterChunkCapacity,
+                    _numChunks * sizeof(void*));
                 _numChunks = 0;
+                if (_masterChunk && !_externalMasterChunkSize)
+                {
+                    _allocator.free(_masterChunk);
+                    _masterChunk = nullptr;
+                }
                 return false;
             }
 
             void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
-            for (size_t i = 0; i < _numChunks; ++i)
+            size_t i = 0;
+            if (_firstChunkIsInMaster)
+            {
+                chunkPointers[0] = reinterpret_cast<uint8_t*>(_masterChunk) + _numChunks * sizeof(void*);
+                i = 1;
+            }
+
+            for (; i < _numChunks; ++i)
             {
                 chunkPointers[i] = _allocator.allocate();
                 if (!chunkPointers[i])
                 {
-                    for (size_t j = 0; j < i; ++j)
+                    for (size_t j = _firstChunkIsInMaster ? 1 : 0; j < i; ++j)
                     {
                         _allocator.free(chunkPointers[j]);
                     }
-                    if (0 == _externalMasterChunkSize) {
+                    if (0 == _externalMasterChunkSize)
+                    {
                         _allocator.free(_masterChunk);
                     }
                     _masterChunk = nullptr;
@@ -248,28 +349,39 @@ public:
         if (_masterChunk)
         {
             void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
-            for (size_t i = 0; i < _numChunks; ++i)
+            for (size_t i = _firstChunkIsInMaster ? 1 : 0; i < _numChunks; ++i)
             {
                 if (chunkPointers[i])
                 {
                     _allocator.free(chunkPointers[i]);
                 }
             }
-            if (0 == _externalMasterChunkSize) {
+            if (0 == _externalMasterChunkSize)
+            {
                 _allocator.free(_masterChunk);
             }
         }
-        if (0 == _externalMasterChunkSize) {
+        if (0 == _externalMasterChunkSize)
+        {
             _masterChunk = nullptr;
         }
 
         _numChunks = 0;
         _size = 0;
+        _firstChunkIsInMaster = false;
+        _firstChunkSize = 0;
     }
 
     size_t size() const { return _size; }
     size_t getLength() const { return _size; }
-    size_t capacity() const { return _numChunks * _allocator.getElementSize(); }
+    size_t capacity() const
+    {
+        if (_firstChunkIsInMaster)
+        {
+            return _firstChunkSize + (_numChunks - 1) * _allocator.getElementSize();
+        }
+        return _numChunks * _allocator.getElementSize();
+    }
     bool empty() const { return _size == 0 || _numChunks == 0 || _masterChunk == nullptr; }
     size_t getChunkCount() const { return _numChunks; }
     bool isMultiChunk() const { return _numChunks > 1; }
@@ -293,23 +405,20 @@ public:
             return 0;
         }
 
-        const auto elementSize = _allocator.getElementSize();
         auto** chunkPointers = reinterpret_cast<void**>(_masterChunk);
         size_t totalBytesWritten = 0;
-        size_t currentDestOffset = dstOffset;
         size_t currentSrcOffset = srcOffset;
 
-        while (totalBytesWritten < bytesToWrite)
-        {
-            const auto chunkIndex = currentDestOffset / elementSize;
-            if (chunkIndex >= _numChunks)
-            {
-                break;
-            }
-            const auto offsetInChunk = currentDestOffset % elementSize;
+        auto reader = getReader();
+        auto chunkInfo = reader.getChunkAndOffset(dstOffset);
+        size_t chunkIndex = chunkInfo.first;
+        size_t offsetInChunk = chunkInfo.second;
 
+        while (totalBytesWritten < bytesToWrite && chunkIndex < _numChunks)
+        {
+            const auto currentChunkSize = reader.getChunkSize(chunkIndex);
             auto* chunk = static_cast<uint8_t*>(chunkPointers[chunkIndex]);
-            const auto spaceInChunk = elementSize - offsetInChunk;
+            const auto spaceInChunk = currentChunkSize - offsetInChunk;
             const auto toCopy = std::min(bytesToWrite - totalBytesWritten, spaceInChunk);
 
             const auto copied = src.copy(chunk + offsetInChunk, currentSrcOffset, toCopy);
@@ -319,8 +428,9 @@ public:
             }
 
             totalBytesWritten += copied;
-            currentDestOffset += copied;
             currentSrcOffset += copied;
+            offsetInChunk = 0;
+            ++chunkIndex;
         }
 
         return totalBytesWritten;
@@ -341,15 +451,17 @@ public:
             return 0;
         }
 
-        const auto elementSize = _allocator.getElementSize();
-        size_t chunkIndex = dstOffset / elementSize;
-        size_t offsetInChunk = dstOffset % elementSize;
+        auto reader = getReader();
+        auto chunkInfo = reader.getChunkAndOffset(dstOffset);
+        size_t chunkIndex = chunkInfo.first;
+        size_t offsetInChunk = chunkInfo.second;
         void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
 
         while (bytesWritten < remainingToWrite && chunkIndex < _numChunks)
         {
             uint8_t* targetChunk = static_cast<uint8_t*>(chunkPointers[chunkIndex]);
-            size_t toWriteInChunk = std::min(remainingToWrite - bytesWritten, elementSize - offsetInChunk);
+            const auto currentChunkSize = reader.getChunkSize(chunkIndex);
+            size_t toWriteInChunk = std::min(remainingToWrite - bytesWritten, currentChunkSize - offsetInChunk);
 
             std::memcpy(targetChunk + offsetInChunk, source + bytesWritten, toWriteInChunk);
 
@@ -376,15 +488,17 @@ public:
             return 0;
         }
 
-        const auto elementSize = _allocator.getElementSize();
-        size_t chunkIndex = offset / elementSize;
-        size_t offsetInChunk = offset % elementSize;
-        void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+        auto reader = getReader();
+        auto chunkInfo = reader.getChunkAndOffset(offset);
+        size_t chunkIndex = chunkInfo.first;
+        size_t offsetInChunk = chunkInfo.second;
+        const void* const* chunkPointers = reinterpret_cast<const void* const*>(_masterChunk);
 
         while (bytesCopied < remainingToCopy && chunkIndex < _numChunks)
         {
-            const uint8_t* sourceChunk = static_cast<const uint8_t*>(chunkPointers[chunkIndex]);
-            size_t toCopyFromChunk = std::min({remainingToCopy - bytesCopied, elementSize - offsetInChunk});
+            const auto* sourceChunk = static_cast<const uint8_t*>(chunkPointers[chunkIndex]);
+            const auto currentChunkSize = reader.getChunkSize(chunkIndex);
+            const size_t toCopyFromChunk = std::min({remainingToCopy - bytesCopied, currentChunkSize - offsetInChunk});
 
             std::memcpy(static_cast<uint8_t*>(dest) + bytesCopied, sourceChunk + offsetInChunk, toCopyFromChunk);
 
@@ -399,7 +513,7 @@ public:
 
     view getReader() const
     {
-        return view(reinterpret_cast<void**>(_masterChunk), _numChunks, _size, 0, _allocator);
+        return view(reinterpret_cast<void**>(_masterChunk), _numChunks, _size, 0, _allocator, _firstChunkSize, _firstChunkIsInMaster);
     }
 
     ReadonlyMemoryBuffer getReadonlyBuffer() const
@@ -461,6 +575,8 @@ private:
     size_t _size;
     size_t _numChunks;
     size_t _externalMasterChunkSize;
+    size_t _firstChunkSize;
+    bool _firstChunkIsInMaster;
 };
 
 template <typename TPoolAllocator>

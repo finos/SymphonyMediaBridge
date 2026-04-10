@@ -24,22 +24,26 @@ TEST(PoolBuffer, allocateSmall)
     EXPECT_TRUE(buffer.allocate(64));
     EXPECT_FALSE(buffer.empty());
     EXPECT_EQ(buffer.size(), 64);
-    EXPECT_EQ(buffer.capacity(), 128);
+
+    // We expect 64 bytes totall fit into master chunk
+    EXPECT_EQ(buffer.capacity(), 128 - sizeof(void*)); 
 #if ENABLE_ALLOCATOR_METRICS
-    EXPECT_EQ(allocator.countAllocatedItems(), 1 + 1);
+    EXPECT_EQ(allocator.countAllocatedItems(), 1);
 #endif
 }
 
 TEST(PoolBuffer, allocateExact)
 {
-    memory::PoolAllocator<128> allocator(10, "test");
+    // Leave space for single pointer to chunk[0] in the master chunk -
+    // all data than should fit into the single buffer.
+    memory::PoolAllocator<128 + sizeof(void*)> allocator(10, "test");
     memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     EXPECT_TRUE(buffer.allocate(128));
     EXPECT_EQ(buffer.size(), 128);
     EXPECT_EQ(buffer.capacity(), 128);
-#if ENABLE_ALLOCATOR_METRICS    
-    EXPECT_EQ(allocator.countAllocatedItems(), 1 + 1);
+#if ENABLE_ALLOCATOR_METRICS
+    EXPECT_EQ(allocator.countAllocatedItems(), 1);
 #endif
 }
 
@@ -50,9 +54,10 @@ TEST(PoolBuffer, allocateMultipleChunks)
 
     EXPECT_TRUE(buffer.allocate(300));
     EXPECT_EQ(buffer.size(), 300);
-    EXPECT_EQ(buffer.capacity(), 3 * 128);
-#if ENABLE_ALLOCATOR_METRICS    
-    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1);
+    // 3 chunks needed: 2 full + 1 in the master chunk, slightly smaller
+    EXPECT_EQ(buffer.capacity(), (3 - 1) * 128 + (128 - sizeof(void*) * 3));
+#if ENABLE_ALLOCATOR_METRICS
+    EXPECT_EQ(allocator.countAllocatedItems(), 3);
 #endif
 }
 
@@ -68,9 +73,9 @@ TEST(PoolBuffer, allocateFail)
     EXPECT_TRUE(buffer.empty());
     EXPECT_EQ(buffer.size(), 0);
     EXPECT_EQ(buffer.capacity(), 0);
-#if ENABLE_ALLOCATOR_METRICS    
+#if ENABLE_ALLOCATOR_METRICS
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
-#endif    
+#endif
 }
 
 TEST(PoolBuffer, writeAndRead)
@@ -135,12 +140,12 @@ TEST(PoolBuffer, move)
     memory::PoolAllocator<128> allocator(10, "test");
     memory::PoolBuffer<decltype(allocator)> buffer1(allocator);
     EXPECT_TRUE(buffer1.allocate(300));
-    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1);
+    EXPECT_EQ(allocator.countAllocatedItems(), 3);
 
     memory::PoolBuffer<decltype(allocator)> buffer2 = std::move(buffer1);
     EXPECT_EQ(buffer2.size(), 300);
-    EXPECT_EQ(buffer2.capacity(), 3 * 128);
-    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1);
+    EXPECT_GE(buffer2.capacity(), 300);
+    EXPECT_EQ(allocator.countAllocatedItems(), 3);
     EXPECT_EQ(buffer1.size(), 0); // NOLINT
 
     buffer2.clear();
@@ -202,7 +207,12 @@ TEST(PoolBuffer, deleter)
      {
         auto buffer = memory::makeUniquePoolBuffer(allocator, 20);
         EXPECT_TRUE(buffer);
-        EXPECT_EQ(allocator.countAllocatedItems(), 2); // 1 chunks of 20 bytes + 1 'master chunk' and PoolBuffer
+
+        // PoolBuffer aligned, (48 bytes),
+        // Master chunk contianing single pointer to data chunk 8 bytes,
+        // datachunk payload itself (20 bytes) = 76.
+        // All fits the single allocator's buffer of 128 bytes.
+        EXPECT_EQ(allocator.countAllocatedItems(), 1);
     }
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 
