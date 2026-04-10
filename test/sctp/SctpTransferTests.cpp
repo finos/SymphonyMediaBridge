@@ -447,7 +447,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
         _timestamp);
 
     auto buffer1 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(msg1));
-    buffer1->write(webRtcOpen, sizeof(msg1) - 1, 0);
+    buffer1->write(msg1, sizeof(msg1) - 1, 0);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
@@ -455,7 +455,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
         _timestamp);
 
     auto buffer2 = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_mainPacketAllocator, sizeof(msg2));
-    buffer2->write(webRtcOpen, sizeof(msg2) - 1, 0);
+    buffer2->write(msg2, sizeof(msg2) - 1, 0);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
@@ -485,7 +485,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     _timestamp += B.process();
     auto sack3 = B._sendQueue.pop();
 
-    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(this->_mainPacketAllocator, sizeof(webrtc::SctpStreamMessageHeader) + sizeof(webRtcOpen));
+    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(this->_mainPacketAllocator, sctpOpen->getLength() - 28);
     webrtc::SctpStreamMessageHeader header = {
         .payloadProtocol = 0x32,
         .id = 0,
