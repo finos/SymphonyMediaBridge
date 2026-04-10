@@ -145,7 +145,7 @@ SctpAssociationImpl::SentDataChunk::SentDataChunk(uint16_t streamId_,
       reserved0(0),
       reserved1(0)
 {
-    const auto copied = buffer->copy(data(), offset, size_);
+    const auto copied = buffer->copyTo(data(), offset, size_);
     assert(copied == size);
 }
 

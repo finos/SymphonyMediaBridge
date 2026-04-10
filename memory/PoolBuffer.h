@@ -42,138 +42,6 @@ public:
         TPoolAllocator* _allocator;
     };
 
-    class view
-    {
-    public:
-        view(void* const* chunkPointers,
-            size_t numChunks,
-            size_t size,
-            size_t offset,
-            const TPoolAllocator& allocator,
-            size_t firstChunkSize,
-            bool firstChunkIsInMaster)
-            : _chunkPointers(chunkPointers),
-              _numChunks(numChunks),
-              _size(size),
-              _offset(offset),
-              _allocator(allocator),
-              _firstChunkSize(firstChunkSize),
-              _firstChunkIsInMaster(firstChunkIsInMaster)
-        {
-        }
-
-        view subview(size_t offset, size_t size) const
-        {
-            return view(_chunkPointers,
-                _numChunks,
-                std::min(_size - offset, size),
-                _offset + offset,
-                _allocator,
-                _firstChunkSize,
-                _firstChunkIsInMaster);
-        }
-
-        size_t getChunkSize(size_t chunkIndex) const
-        {
-            if (_firstChunkIsInMaster && chunkIndex == 0)
-            {
-                return _firstChunkSize;
-            }
-            return _allocator.getElementSize();
-        }
-
-        std::pair<size_t, size_t> getChunkAndOffset(size_t absoluteOffset) const
-        {
-            const auto elementSize = _allocator.getElementSize();
-            if (_firstChunkIsInMaster && _numChunks > 0)
-            {
-                if (absoluteOffset < _firstChunkSize)
-                {
-                    return {0, absoluteOffset};
-                }
-                else
-                {
-                    return {1 + (absoluteOffset - _firstChunkSize) / elementSize,
-                        (absoluteOffset - _firstChunkSize) % elementSize};
-                }
-            }
-            else
-            {
-                return {absoluteOffset / elementSize, absoluteOffset % elementSize};
-            }
-        }
-
-        bool isNullTerminated() const
-        {
-            if (_size == 0)
-            {
-                return false;
-            }
-
-            const size_t lastByteAbsoluteOffset = _offset + _size - 1;
-            auto chunkInfo = getChunkAndOffset(lastByteAbsoluteOffset);
-            const size_t chunkIndex = chunkInfo.first;
-            const size_t offsetInChunk = chunkInfo.second;
-
-            if (chunkIndex >= _numChunks)
-            {
-                return false;
-            }
-
-            const auto* chunk = static_cast<const uint8_t*>(_chunkPointers[chunkIndex]);
-            return chunk[offsetInChunk] == '\0';
-        }
-
-        template <size_t SIZE>
-        size_t read(memory::Array<char, SIZE>& array) const
-        {
-            if (array.resize(_size) != _size)
-            {
-                return 0;
-            }
-            return read(array.begin(), _size);
-        }
-
-        size_t read(void* destination, size_t count) const
-        {
-            size_t bytesRead = 0;
-            size_t currentOffset = _offset;
-            size_t remainingToRead = std::min(count, _size);
-
-            if (!_chunkPointers || remainingToRead == 0)
-            {
-                return 0;
-            }
-
-            auto chunkInfo = getChunkAndOffset(currentOffset);
-            size_t chunkIndex = chunkInfo.first;
-            size_t offsetInChunk = chunkInfo.second;
-
-            while (bytesRead < remainingToRead && chunkIndex < _numChunks)
-            {
-                const auto currentChunkSize = getChunkSize(chunkIndex);
-                const uint8_t* sourceChunk = static_cast<const uint8_t*>(_chunkPointers[chunkIndex]);
-                size_t toReadFromChunk = std::min({remainingToRead - bytesRead, currentChunkSize - offsetInChunk});
-
-                std::memcpy(static_cast<uint8_t*>(destination) + bytesRead, sourceChunk + offsetInChunk, toReadFromChunk);
-
-                bytesRead += toReadFromChunk;
-                offsetInChunk = 0;
-                chunkIndex++;
-            }
-            return bytesRead;
-        }
-
-    private:
-        void* const* _chunkPointers;
-        size_t _numChunks;
-        size_t _size;
-        size_t _offset;
-        const TPoolAllocator& _allocator;
-        size_t _firstChunkSize;
-        bool _firstChunkIsInMaster;
-    };
-
     explicit PoolBuffer(TPoolAllocator& allocator)
         : _allocator(allocator),
           _masterChunk(nullptr),
@@ -386,52 +254,33 @@ public:
     size_t getChunkCount() const { return _numChunks; }
     bool isMultiChunk() const { return _numChunks > 1; }
 
-    template<typename AllocatorT>
+    template <typename AllocatorT>
     size_t write(const PoolBuffer<AllocatorT>& src, size_t srcOffset, size_t len, size_t dstOffset = 0)
     {
         const auto destSize = size();
         const auto srcSize = src.size();
-
         if (dstOffset >= destSize || srcOffset >= srcSize)
         {
             return 0;
         }
 
-        size_t bytesToWrite = std::min(len, srcSize - srcOffset);
-        bytesToWrite = std::min(bytesToWrite, destSize - dstOffset);
-
-        if (bytesToWrite == 0 || !_masterChunk)
+        const size_t bytesToWrite = std::min({len, srcSize - srcOffset, destSize - dstOffset});
+        if (bytesToWrite == 0)
         {
             return 0;
         }
 
-        auto** chunkPointers = reinterpret_cast<void**>(_masterChunk);
         size_t totalBytesWritten = 0;
         size_t currentSrcOffset = srcOffset;
 
-        auto reader = getReader();
-        auto chunkInfo = reader.getChunkAndOffset(dstOffset);
-        size_t chunkIndex = chunkInfo.first;
-        size_t offsetInChunk = chunkInfo.second;
-
-        while (totalBytesWritten < bytesToWrite && chunkIndex < _numChunks)
-        {
-            const auto currentChunkSize = reader.getChunkSize(chunkIndex);
-            auto* chunk = static_cast<uint8_t*>(chunkPointers[chunkIndex]);
-            const auto spaceInChunk = currentChunkSize - offsetInChunk;
-            const auto toCopy = std::min(bytesToWrite - totalBytesWritten, spaceInChunk);
-
-            const auto copied = src.copy(chunk + offsetInChunk, currentSrcOffset, toCopy);
-            if (copied == 0)
-            {
-                break;
-            }
-
+        auto callback = [&](uint8_t* block, size_t blockSize) {
+            const auto copied = src.copyTo(block, currentSrcOffset, blockSize);
             totalBytesWritten += copied;
             currentSrcOffset += copied;
-            offsetInChunk = 0;
-            ++chunkIndex;
-        }
+            return copied == blockSize; // Continue only if we copied the whole block
+        };
+
+        forEachBlock(dstOffset, bytesToWrite, callback);
 
         return totalBytesWritten;
     }
@@ -444,36 +293,19 @@ public:
     {
         const uint8_t* source = static_cast<const uint8_t*>(data);
         size_t bytesWritten = 0;
-        size_t remainingToWrite = std::min(len, _size > dstOffset ? _size - dstOffset : 0);
+        const size_t remainingToWrite = std::min(len, _size > dstOffset ? _size - dstOffset : 0);
 
-        if (!_masterChunk || remainingToWrite == 0)
-        {
-            return 0;
-        }
+        auto callback = [&](uint8_t* block, size_t blockSize) {
+            std::memcpy(block, source + bytesWritten, blockSize);
+            bytesWritten += blockSize;
+            return true;
+        };
 
-        auto reader = getReader();
-        auto chunkInfo = reader.getChunkAndOffset(dstOffset);
-        size_t chunkIndex = chunkInfo.first;
-        size_t offsetInChunk = chunkInfo.second;
-        void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
-
-        while (bytesWritten < remainingToWrite && chunkIndex < _numChunks)
-        {
-            uint8_t* targetChunk = static_cast<uint8_t*>(chunkPointers[chunkIndex]);
-            const auto currentChunkSize = reader.getChunkSize(chunkIndex);
-            size_t toWriteInChunk = std::min(remainingToWrite - bytesWritten, currentChunkSize - offsetInChunk);
-
-            std::memcpy(targetChunk + offsetInChunk, source + bytesWritten, toWriteInChunk);
-
-            bytesWritten += toWriteInChunk;
-            offsetInChunk = 0;
-            chunkIndex++;
-        }
-
+        forEachBlock(dstOffset, remainingToWrite, callback);
         return bytesWritten;
     }
 
-    size_t copy(void* dest, size_t offset, size_t count) const
+    size_t copyTo(void* dest, size_t offset, size_t count) const
     {
         if (!dest)
         {
@@ -481,39 +313,14 @@ public:
         }
 
         size_t bytesCopied = 0;
-        const size_t remainingToCopy = std::min(count, _size > offset ? _size - offset : 0);
+        auto callback = [&](const uint8_t* block, size_t blockSize) {
+            std::memcpy(static_cast<uint8_t*>(dest) + bytesCopied, block, blockSize);
+            bytesCopied += blockSize;
+            return true;
+        };
 
-        if (!_masterChunk || remainingToCopy == 0)
-        {
-            return 0;
-        }
-
-        auto reader = getReader();
-        auto chunkInfo = reader.getChunkAndOffset(offset);
-        size_t chunkIndex = chunkInfo.first;
-        size_t offsetInChunk = chunkInfo.second;
-        const void* const* chunkPointers = reinterpret_cast<const void* const*>(_masterChunk);
-
-        while (bytesCopied < remainingToCopy && chunkIndex < _numChunks)
-        {
-            const auto* sourceChunk = static_cast<const uint8_t*>(chunkPointers[chunkIndex]);
-            const auto currentChunkSize = reader.getChunkSize(chunkIndex);
-            const size_t toCopyFromChunk = std::min({remainingToCopy - bytesCopied, currentChunkSize - offsetInChunk});
-
-            std::memcpy(static_cast<uint8_t*>(dest) + bytesCopied, sourceChunk + offsetInChunk, toCopyFromChunk);
-
-            bytesCopied += toCopyFromChunk;
-            offsetInChunk = 0;
-            chunkIndex++;
-        }
-
+        forEachBlock(offset, count, callback);
         return bytesCopied;
-    }
-
-
-    view getReader() const
-    {
-        return view(reinterpret_cast<void**>(_masterChunk), _numChunks, _size, 0, _allocator, _firstChunkSize, _firstChunkIsInMaster);
     }
 
     ReadonlyMemoryBuffer getReadonlyBuffer() const
@@ -538,7 +345,7 @@ public:
         {
             result.storage = std::make_unique<memory::Array<char, 2048>>(targetSize);
             size_t bytesRead = 0;
-            bytesRead = getReader().read(*result.storage);
+            bytesRead = copyTo(const_cast<char*>(result.storage->data()), 0, targetSize);
 
             if (bytesRead == targetSize)
             {
@@ -567,9 +374,94 @@ public:
 
     TPoolAllocator& getAllocator() const { return _allocator; }
 
-    bool isNullTerminated() const { return getReader().isNullTerminated(); }
+    bool isNullTerminated() const { 
+        if (_size == 0) {
+            return false;
+        }
+        void** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+        const auto chunkAndOffset = getChunkAndOffset(_size - 1);
+        const auto data = chunkPointers[chunkAndOffset.first];
+        return reinterpret_cast<const char*>(data)[chunkAndOffset.second] == '\0';
+     }
 
 private:
+    size_t getChunkSize(size_t chunkIndex) const
+    {
+        if (_firstChunkIsInMaster && chunkIndex == 0)
+        {
+            return _firstChunkSize;
+        }
+        return _allocator.getElementSize();
+    }
+
+    std::pair<size_t, size_t> getChunkAndOffset(size_t absoluteOffset) const
+    {
+        const auto elementSize = _allocator.getElementSize();
+        if (_firstChunkIsInMaster && _numChunks > 0)
+        {
+            if (absoluteOffset < _firstChunkSize)
+            {
+                return {0, absoluteOffset};
+            }
+            else
+            {
+                return {1 + (absoluteOffset - _firstChunkSize) / elementSize,
+                    (absoluteOffset - _firstChunkSize) % elementSize};
+            }
+        }
+        else
+        {
+            return {absoluteOffset / elementSize, absoluteOffset % elementSize};
+        }
+    }
+
+    template <typename T, typename F>
+    void forEachBlockImpl(size_t offset, size_t count, F& callback) const
+    {
+        size_t processedBytes = 0;
+        const size_t remainingToProcess = std::min(count, _size > offset ? _size - offset : 0);
+
+        if (!_masterChunk || remainingToProcess == 0)
+        {
+            return;
+        }
+
+        auto chunkInfo = getChunkAndOffset(offset);
+        size_t chunkIndex = chunkInfo.first;
+        size_t offsetInChunk = chunkInfo.second;
+
+        auto** chunkPointers = reinterpret_cast<void**>(_masterChunk);
+
+        while (processedBytes < remainingToProcess && chunkIndex < _numChunks)
+        {
+            const auto currentChunkSize = getChunkSize(chunkIndex);
+            const size_t toProcessInChunk =
+                std::min(remainingToProcess - processedBytes, currentChunkSize - offsetInChunk);
+
+            if (!callback(static_cast<T*>(static_cast<uint8_t*>(chunkPointers[chunkIndex]) + offsetInChunk),
+                    toProcessInChunk))
+            {
+                break;
+            }
+
+            processedBytes += toProcessInChunk;
+            offsetInChunk = 0;
+            chunkIndex++;
+        }
+    }
+
+    template <typename F>
+    void forEachBlock(size_t offset, size_t count, F& callback)
+    {
+        forEachBlockImpl<uint8_t>(offset, count, callback);
+    }
+
+    template <typename F>
+    void forEachBlock(size_t offset, size_t count, F& callback) const
+    {
+        forEachBlockImpl<const uint8_t>(offset, count, callback);
+    }
+
     TPoolAllocator& _allocator;
     void* _masterChunk;
     size_t _size;
@@ -636,17 +528,9 @@ inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& all
     size_t length)
 {
     auto buffer = makeUniquePoolBuffer(allocator, length);
-    if (!buffer)
+    if (buffer && data && buffer->write(data, length) != length)
     {
-        return buffer;
-    }
-
-    if (data)
-    {
-        if (buffer->write(data, length) != length)
-        {
-            return nullptr;
-        }
+        return nullptr;
     }
 
     return buffer;

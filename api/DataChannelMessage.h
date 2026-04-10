@@ -85,7 +85,7 @@ inline void makeLoggableStringFromBuffer(memory::Array<char,T>& outArray, memory
 
     const size_t maxCStrLength = std::min(payload->getLength(), T - 1);
     outArray.resize(maxCStrLength + 1);
-    const auto read = payload->getReader().read(const_cast<void*>(reinterpret_cast<const void*>(outArray.data())), maxCStrLength);
+    const auto read = payload->copyTo(const_cast<void*>(reinterpret_cast<const void*>(outArray.data())), 0, maxCStrLength);
     assert(read == maxCStrLength);
     outArray[maxCStrLength] = '\0';
 
