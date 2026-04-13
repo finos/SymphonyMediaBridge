@@ -485,7 +485,7 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
     _timestamp += B.process();
     auto sack3 = B._sendQueue.pop();
 
-    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(this->_mainPacketAllocator, sctpOpen->getLength() - 28);
+    auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(this->_mainPacketAllocator, sctpOpen->getLength() - 28 + sizeof(webrtc::SctpStreamMessageHeader));
     webrtc::SctpStreamMessageHeader header = {
         .payloadProtocol = 0x32,
         .id = 0,
