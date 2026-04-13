@@ -197,7 +197,7 @@ void EngineMixer::checkBarbellPacketCounters(const uint64_t timestamp)
 // Step1: Create a table of all existing stream mappings and all new stream mappings so we can compare changes
 // Step2: Remove all streams that have changed mapping and old mapping. Could be that the new mapping is nil
 // Step3: Add all streams that have changed and new mapping
-void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* message)
+void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* message, size_t messageLength)
 {
     auto barbell = _engineBarbells.getItem(barbellIdHash);
     if (!barbell)
@@ -206,12 +206,13 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
         return;
     }
 
-    auto mediaMapJson = utils::SimpleJson::create(message, strlen(message));
+    auto mediaMapJson = utils::SimpleJson::create(message, messageLength);
 
-    logger::info("received BB msg over barbell %s %zu, json %s",
+    logger::info("received BB msg over barbell %s %zu, json %.*s",
         _loggableId.c_str(),
         barbell->id.c_str(),
         barbellIdHash,
+        static_cast<int>(messageLength),
         message);
 
     auto videoEndpointsArray = mediaMapJson["video-endpoints"].getArray();
@@ -394,7 +395,7 @@ void EngineMixer::onBarbellUserMediaMap(size_t barbellIdHash, const char* messag
     }
 }
 
-void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message)
+void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message, size_t messageLength)
 {
     auto barbell = _engineBarbells.getItem(barbellIdHash);
     if (!barbell)
@@ -402,14 +403,15 @@ void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* m
         return;
     }
 
-    logger::debug("received BB msg over barbell %s %zu, json %s",
+    logger::debug("received BB msg over barbell %s %zu, json %.*s",
         _loggableId.c_str(),
         barbell->id.c_str(),
         barbellIdHash,
+        static_cast<int>(messageLength),
         message);
 
     barbell->minClientDownlinkBandwidth =
-        api::DataChannelMessageParser::getMinUplinkBitrate(utils::SimpleJson::create(message, strlen(message)));
+        api::DataChannelMessageParser::getMinUplinkBitrate(utils::SimpleJson::create(message, messageLength));
 }
 
 void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
@@ -545,11 +547,11 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
 
             if (api::DataChannelMessageParser::isUserMediaMap(messageJson))
             {
-                onBarbellUserMediaMap(messageInfo.transport()->getEndpointIdHash(), message);
+                onBarbellUserMediaMap(messageInfo.transport()->getEndpointIdHash(), message, messageLength);
             }
             else if (api::DataChannelMessageParser::isMinUplinkBitrate(messageJson))
             {
-                onBarbellMinUplinkEstimate(messageInfo.transport()->getEndpointIdHash(), message);
+                onBarbellMinUplinkEstimate(messageInfo.transport()->getEndpointIdHash(), message, messageLength);
             }
         }
         else if (sctpHeader->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_ESTABLISH)

@@ -522,8 +522,8 @@ protected:
     void startProbingVideoStream(EngineVideoStream&);
     void stopProbingVideoStream(const EngineVideoStream&);
 
-    void onBarbellUserMediaMap(size_t barbellIdHash, const char* message);
-    void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message);
+    void onBarbellUserMediaMap(size_t barbellIdHash, const char* message, size_t messageLength);
+    void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message, size_t messageLength);
     void onBarbellDataChannelEstablish(size_t barbellIdHash,
         memory::UniquePoolBuffer<memory::PacketPoolAllocator> message);
 

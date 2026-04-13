@@ -1015,7 +1015,7 @@ TEST_F(IntegrationTest, endpointMessage)
         ON_CALL(listenerMock, onWebRtcDataString).WillByDefault([&endpointMessageCount](const char* m, size_t len) {
             auto json = utils::SimpleJson::create(m, len);
             char typeName[100];
-            logger::debug("recv data channel message %s", "Test", m);
+            logger::debug("recv data channel message %.*s", "Test", static_cast<int>(len), m);
             if (json["colibriClass"].getString(typeName) && std::strcmp(typeName, "EndpointMessage") == 0)
             {
                 ++endpointMessageCount;
