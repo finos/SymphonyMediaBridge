@@ -129,7 +129,7 @@ SctpAssociationImpl::SentDataChunk::SentDataChunk(uint16_t streamId_,
     bool fragmentBegin_,
     bool fragmentEnd_,
     uint32_t transmissionSequenceNumber,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer,
+    memory::PoolBuffer<memory::PacketPoolAllocator>& buffer,
     size_t offset,
     size_t size_)
     : transmitTime(0),
@@ -145,7 +145,7 @@ SctpAssociationImpl::SentDataChunk::SentDataChunk(uint16_t streamId_,
       reserved0(0),
       reserved1(0)
 {
-    const auto copied = buffer->copyTo(data(), offset, size_);
+    const auto copied = buffer.copyTo(data(), offset, size_);
     assert(copied == size);
 }
 
@@ -382,11 +382,11 @@ void SctpAssociationImpl::onCookieEcho(const SctpPacket& cookieEcho, const uint6
 
 bool SctpAssociationImpl::sendMessage(uint16_t streamId,
     uint32_t payloadProtocol,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
+    memory::PoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
     uint64_t timestamp)
 {
     auto streamIt = _streams.find(streamId);
-    size_t length = sctpMessage->size();
+    size_t length = sctpMessage.size();
     if (_state < State::ESTABLISHED || streamIt == _streams.cend())
     {
         logger::warn("SCTP stream not open yet %u, count %zu", _loggableId.c_str(), streamId, _streams.size());

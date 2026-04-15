@@ -170,7 +170,7 @@ public:
     SctpSendJob(sctp::SctpAssociation& association,
         uint16_t streamId,
         uint32_t protocolId,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator> message,
+        memory::PoolBuffer<memory::PacketPoolAllocator> message,
         jobmanager::JobQueue& jobQueue,
         TransportImpl& transport)
         : CountedJob(transport.getJobCounter()),
@@ -181,7 +181,7 @@ public:
           _message(std::move(message)),
           _transport(transport)
     {
-        if (!_message)
+        if (_message.empty())
         {
             logger::error("failed to create packet for outbound sctp", transport.getLoggableId().c_str());
             return;
@@ -190,7 +190,7 @@ public:
 
     void run() override
     {
-        if (!_message)
+        if (_message.empty())
         {
             return;
         }
@@ -217,7 +217,7 @@ public:
                 logger::info("SCTP message sent too soon. sctp state %s, %zuB",
                     _transport.getLoggableId().c_str(),
                     toString(_sctpAssociation.getState()),
-                    _message->size());
+                    _message.size());
             }
         }
 
@@ -237,7 +237,7 @@ private:
     sctp::SctpAssociation& _sctpAssociation;
     const uint16_t _streamId;
     const uint32_t _protocolId;
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> _message;
+    memory::PoolBuffer<memory::PacketPoolAllocator> _message;
     TransportImpl& _transport;
 };
 
@@ -2214,7 +2214,7 @@ uint16_t TransportImpl::allocateOutboundSctpStream()
 
 bool TransportImpl::sendSctp(uint16_t streamId,
     uint32_t protocolId,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> message)
+    memory::PoolBuffer<memory::PacketPoolAllocator> message)
 {
     if (!_remoteSctpPort.isSet() || !_sctpAssociation)
     {
@@ -2222,9 +2222,9 @@ bool TransportImpl::sendSctp(uint16_t streamId,
         return false;
     }
     const auto maxSize = _sctpServerPort->getConfig().maxMessageSize;
-    if (message->getLength() == 0 || message->getLength() > maxSize)
+    if (message.getLength() == 0 || message.getLength() > maxSize)
     {
-        logger::error("sctp message invalid size %zu", getLoggableId().c_str(), message->getLength());
+        logger::error("sctp message invalid size %zu", getLoggableId().c_str(), message.getLength());
         return false;
     }
 

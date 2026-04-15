@@ -198,28 +198,27 @@ TEST(PoolBuffer, deleter)
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 
      {
-        auto buffer = memory::makeUniquePoolBuffer(allocator, 20);
-        EXPECT_TRUE(buffer);
+        memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+        EXPECT_TRUE(buffer.allocate(20));
 
-        // PoolBuffer aligned, (48 bytes),
-        // Master chunk contianing single pointer to data chunk 8 bytes,
-        // datachunk payload itself (20 bytes) = 76.
-        // All fits the single allocator's buffer of 128 bytes.
+        // Master chunk containing single pointer to data chunk 8 bytes,
+        // datachunk payload itself (20 bytes) = 28.
+        // All fits the single allocator's buffer of 128 bytes along with pointer.
         EXPECT_EQ(allocator.countAllocatedItems(), 1);
     }
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 
     {
-        auto buffer = memory::makeUniquePoolBuffer(allocator, 3 * 128);
-        EXPECT_TRUE(buffer);
-        EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1); // 3 chunks of 128 bytes + 1 'master chunk' and PoolBuffer
+        memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+        EXPECT_TRUE(buffer.allocate(3 * 128));
+        EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1); // 3 chunks of 128 bytes + 1 'master chunk'
     }
 
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 
-    auto buffer2 = memory::makeUniquePoolBuffer(allocator, 3 * 128);
-    EXPECT_TRUE(buffer2);
-    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1); // 3 chunks of 128 bytes + 1 'master chunk' and PoolBuffer
+    memory::PoolBuffer<decltype(allocator)> buffer2(allocator);
+    EXPECT_TRUE(buffer2.allocate(3 * 128));
+    EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1); // 3 chunks of 128 bytes + 1 'master chunk'
 }
 
 TEST(PoolBuffer, copyToAndNullTermination)
@@ -348,10 +347,10 @@ TEST(PoolBuffer, writeFromPoolBuffer)
     memory::PoolAllocator<100> srcAllocator(20, "srcTest");
     memory::PoolAllocator<128> destAllocator(20, "destTest");
 
-    auto srcBuffer = memory::makeUniquePoolBuffer(srcAllocator, 1000);
-    ASSERT_TRUE(srcBuffer);
-    auto destBuffer = memory::makeUniquePoolBuffer(destAllocator, 1000);
-    ASSERT_TRUE(destBuffer);
+    memory::PoolBuffer<decltype(srcAllocator)> srcBuffer(srcAllocator);
+    srcBuffer.allocate(1000);
+    memory::PoolBuffer<decltype(destAllocator)> destBuffer(destAllocator);
+    destBuffer.allocate(1000);
 
     // Fill srcBuffer with some data
     std::vector<uint8_t> sourceData(1000);
@@ -359,18 +358,18 @@ TEST(PoolBuffer, writeFromPoolBuffer)
     {
         sourceData[i] = static_cast<uint8_t>(i % 256);
     }
-    srcBuffer->copyFrom(sourceData.data(), sourceData.size());
+    srcBuffer.copyFrom(sourceData.data(), sourceData.size());
 
     // Case 1: Simple full copy
     {
         SCOPED_TRACE("Case 1: Simple full copy");
         std::vector<uint8_t> zeros(1000, 0);
-        destBuffer->copyFrom(zeros.data(), zeros.size());
+        destBuffer.copyFrom(zeros.data(), zeros.size());
 
-        EXPECT_EQ(destBuffer->copyFrom(*srcBuffer, 0, srcBuffer->size(), 0), srcBuffer->size());
+        EXPECT_EQ(destBuffer.copyFrom(srcBuffer, 0, srcBuffer.size(), 0), srcBuffer.size());
 
         std::vector<uint8_t> destData(1000);
-        destBuffer->copyTo(destData.data(), 0, destData.size());
+        destBuffer.copyTo(destData.data(), 0, destData.size());
         EXPECT_EQ(sourceData, destData);
     }
 
@@ -378,32 +377,32 @@ TEST(PoolBuffer, writeFromPoolBuffer)
     {
         SCOPED_TRACE("Case 2: Offsets and boundary crossing");
         std::vector<uint8_t> zeros(1000, 0);
-        destBuffer->copyFrom(zeros.data(), zeros.size());
+        destBuffer.copyFrom(zeros.data(), zeros.size());
 
         const size_t srcOffset = 50;   // start in 1st chunk of src
         const size_t destOffset = 150; // start in 2nd chunk of dest
         const size_t len = 300;        // will cross boundaries for both
 
-        size_t bytesWritten = destBuffer->copyFrom(*srcBuffer, srcOffset, len, destOffset);
+        size_t bytesWritten = destBuffer.copyFrom(srcBuffer, srcOffset, len, destOffset);
         EXPECT_EQ(bytesWritten, len);
 
         // Check area before write
         std::vector<uint8_t> beforeData(destOffset);
-        destBuffer->copyTo(beforeData.data(), 0, destOffset);
+        destBuffer.copyTo(beforeData.data(), 0, destOffset);
         EXPECT_TRUE(std::all_of(beforeData.begin(), beforeData.end(), [](uint8_t i) { return i == 0; }));
 
         // Check written data
         std::vector<uint8_t> writtenData(len);
-        destBuffer->copyTo(writtenData.data(), destOffset, len);
+        destBuffer.copyTo(writtenData.data(), destOffset, len);
         EXPECT_TRUE(std::equal(sourceData.begin() + srcOffset, sourceData.begin() + srcOffset + len, writtenData.begin()));
 
         // Check area after write
         const size_t afterOffset = destOffset + len;
-        if (destBuffer->size() > afterOffset)
+        if (destBuffer.size() > afterOffset)
         {
-            const size_t afterLen = destBuffer->size() - afterOffset;
+            const size_t afterLen = destBuffer.size() - afterOffset;
             std::vector<uint8_t> afterData(afterLen);
-            destBuffer->copyTo(afterData.data(), afterOffset, afterLen);
+            destBuffer.copyTo(afterData.data(), afterOffset, afterLen);
             EXPECT_TRUE(std::all_of(afterData.begin(), afterData.end(), [](uint8_t i) { return i == 0; }));
         }
     }
@@ -412,16 +411,16 @@ TEST(PoolBuffer, writeFromPoolBuffer)
     {
         SCOPED_TRACE("Case 3: Partial copy");
         std::vector<uint8_t> zeros(1000, 0);
-        destBuffer->copyFrom(zeros.data(), zeros.size());
+        destBuffer.copyFrom(zeros.data(), zeros.size());
         const size_t srcOffset = 10;
         const size_t destOffset = 20;
         const size_t len = 50;
 
-        size_t bytesWritten = destBuffer->copyFrom(*srcBuffer, srcOffset, len, destOffset);
+        size_t bytesWritten = destBuffer.copyFrom(srcBuffer, srcOffset, len, destOffset);
         EXPECT_EQ(bytesWritten, len);
 
         std::vector<uint8_t> destData(len);
-        destBuffer->copyTo(destData.data(), destOffset, len);
+        destBuffer.copyTo(destData.data(), destOffset, len);
         EXPECT_TRUE(std::equal(sourceData.begin() + srcOffset, sourceData.begin() + srcOffset + len, destData.begin()));
     }
 
@@ -433,11 +432,11 @@ TEST(PoolBuffer, writeFromPoolBuffer)
         const size_t len = 200; // only 100 bytes available in src
         const size_t expectedWrite = 100;
 
-        size_t bytesWritten = destBuffer->copyFrom(*srcBuffer, srcOffset, len, destOffset);
+        size_t bytesWritten = destBuffer.copyFrom(srcBuffer, srcOffset, len, destOffset);
         EXPECT_EQ(bytesWritten, expectedWrite);
 
         std::vector<uint8_t> destData(expectedWrite);
-        destBuffer->copyTo(destData.data(), destOffset, expectedWrite);
+        destBuffer.copyTo(destData.data(), destOffset, expectedWrite);
         EXPECT_TRUE(std::equal(sourceData.begin() + srcOffset, sourceData.end(), destData.begin()));
     }
 
@@ -449,11 +448,11 @@ TEST(PoolBuffer, writeFromPoolBuffer)
         const size_t len = 100; // only 50 bytes available in dest
         const size_t expectedWrite = 50;
 
-        size_t bytesWritten = destBuffer->copyFrom(*srcBuffer, srcOffset, len, destOffset);
+        size_t bytesWritten = destBuffer.copyFrom(srcBuffer, srcOffset, len, destOffset);
         EXPECT_EQ(bytesWritten, expectedWrite);
 
         std::vector<uint8_t> destData(expectedWrite);
-        destBuffer->copyTo(destData.data(), destOffset, expectedWrite);
+        destBuffer.copyTo(destData.data(), destOffset, expectedWrite);
         EXPECT_TRUE(
             std::equal(sourceData.begin() + srcOffset, sourceData.begin() + srcOffset + expectedWrite, destData.begin()));
     }
@@ -461,32 +460,32 @@ TEST(PoolBuffer, writeFromPoolBuffer)
     // Case 6: Zero-length copy
     {
         SCOPED_TRACE("Case 6: Zero-length copy");
-        EXPECT_EQ(destBuffer->copyFrom(*srcBuffer, 10, 0, 10), 0);
+        EXPECT_EQ(destBuffer.copyFrom(srcBuffer, 10, 0, 10), 0);
     }
 
     // Case 7: Out-of-bounds offsets
     {
         SCOPED_TRACE("Case 7: Out-of-bounds offsets");
-        EXPECT_EQ(destBuffer->copyFrom(*srcBuffer, srcBuffer->size(), 1, 0), 0);
-        EXPECT_EQ(destBuffer->copyFrom(*srcBuffer, 0, 1, destBuffer->size()), 0);
-        EXPECT_EQ(destBuffer->copyFrom(*srcBuffer, srcBuffer->size() + 1, 1, 0), 0);
-        EXPECT_EQ(destBuffer->copyFrom(*srcBuffer, 0, 1, destBuffer->size() + 1), 0);
+        EXPECT_EQ(destBuffer.copyFrom(srcBuffer, srcBuffer.size(), 1, 0), 0);
+        EXPECT_EQ(destBuffer.copyFrom(srcBuffer, 0, 1, destBuffer.size()), 0);
+        EXPECT_EQ(destBuffer.copyFrom(srcBuffer, srcBuffer.size() + 1, 1, 0), 0);
+        EXPECT_EQ(destBuffer.copyFrom(srcBuffer, 0, 1, destBuffer.size() + 1), 0);
     }
 
     // Case 8: Copy from empty source buffer
     {
         SCOPED_TRACE("Case 8: Empty source");
-        auto emptySrc = memory::makeUniquePoolBuffer(srcAllocator, 0);
-        ASSERT_TRUE(emptySrc);
-        EXPECT_EQ(destBuffer->copyFrom(*emptySrc, 0, 1, 0), 0);
+        memory::PoolBuffer<decltype(srcAllocator)> emptySrc(srcAllocator);
+        emptySrc.allocate(0);
+        EXPECT_EQ(destBuffer.copyFrom(emptySrc, 0, 1, 0), 0);
     }
 
     // Case 9: Copy to empty dest buffer
     {
         SCOPED_TRACE("Case 9: Empty destination");
-        auto emptyDest = memory::makeUniquePoolBuffer(destAllocator, 0);
-        ASSERT_TRUE(emptyDest);
-        EXPECT_EQ(emptyDest->copyFrom(*srcBuffer, 0, 1, 0), 0);
+        memory::PoolBuffer<decltype(destAllocator)> emptyDest(destAllocator);
+        emptyDest.allocate(0);
+        EXPECT_EQ(emptyDest.copyFrom(srcBuffer, 0, 1, 0), 0);
     }
 }
 

@@ -87,7 +87,7 @@ public:
 
     MOCK_METHOD(uint64_t, getLastReceivedPacketTimestamp, (), (const override));
 
-    using SctpBuffer = memory::UniquePoolBuffer<memory::PacketPoolAllocator>;
+    using SctpBuffer = memory::PoolBuffer<memory::PacketPoolAllocator>;
     MOCK_METHOD(bool, sendSctp, (uint16_t streamId, uint32_t protocolId, SctpBuffer buffer), (override));
 
     MOCK_METHOD(uint16_t, allocateOutboundSctpStream, (), (override));

@@ -492,18 +492,18 @@ void MixerManager::freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_
     mixerItr->second->freeVideoPacketCache(ssrc, endpointIdHash);
 }
 
-void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<memory::PacketPoolAllocator> message, size_t endpointIdHash)
+void MixerManager::sctpReceived(EngineMixer& mixer, memory::PoolBuffer<memory::PacketPoolAllocator> message, size_t endpointIdHash)
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
     // Need to get full message instead of first chunk only to form JSON from it.
     constexpr size_t MAX_BUFFER_SIZE = 8192;
-    if (message->size() > MAX_BUFFER_SIZE) {
-        logger::warn("Received large SCTP message(size = %zu, max allowed = %zu). Dropping.", "MixerManager", message->getLength(), MAX_BUFFER_SIZE);
+    if (message.size() > MAX_BUFFER_SIZE) {
+        logger::warn("Received large SCTP message(size = %zu, max allowed = %zu). Dropping.", "MixerManager", message.getLength(), MAX_BUFFER_SIZE);
         return;
     }
 
-    char continousBuffer[message->size()];
-    message->copyTo(continousBuffer, 0, message->size());
+    char continousBuffer[message.size()];
+    message.copyTo(continousBuffer, 0, message.size());
 
     auto& sctpHeader = *reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continousBuffer);
 
@@ -516,10 +516,10 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<mem
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
     {
-        std::string body(sctpHeader.getMessage(), message->getLength() - sizeof(sctpHeader));
+        std::string body(sctpHeader.getMessage(), message.getLength() - sizeof(sctpHeader));
         try
         {
-            auto json = utils::SimpleJson::create(sctpHeader.getMessage(), message->getLength() - sizeof(sctpHeader));
+            auto json = utils::SimpleJson::create(sctpHeader.getMessage(), message.getLength() - sizeof(sctpHeader));
 
             if (api::DataChannelMessageParser::isPinnedEndpointsChanged(json))
             {
@@ -583,7 +583,7 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::UniquePoolBuffer<mem
         logger::debug("received unexpected DataChannel payload protocol, %u, len %zu",
             "MixerManager",
             sctpHeader.payloadProtocol,
-            message->getLength());
+            message.getLength());
     }
 }
 

@@ -123,7 +123,9 @@ struct ClientPair : public transport::DataReceiver
             ++_messagesSent;
             _messageBytesSent += std::strlen(theMessage);
 
-            auto buffer = memory::makeUniquePoolBuffer(_sendAllocator, theMessage, std::strlen(theMessage));
+            memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_sendAllocator);
+            buffer.allocate(std::strlen(theMessage));
+            buffer.copyFrom(theMessage, std::strlen(theMessage));
             _transport1->sendSctp(_streamId,webrtc::DataChannelPpid::WEBRTC_STRING, std::move(buffer));
         }
 

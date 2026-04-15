@@ -1845,7 +1845,13 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
     }
 
     auto& packetAllocator = _engineMixer->getMainAllocator();
-    auto buffer = memory::makeUniquePoolBuffer(packetAllocator, message.jsonBegin(), message.size());
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(packetAllocator);
+    if (!buffer.allocate(message.size()))
+    {
+        logger::warn("Failed to allocate buffer for endpoint message", "Mixer");
+        return;
+    }
+    buffer.copyFrom(message.jsonBegin(), message.size());
 
     std::lock_guard<std::mutex> locker(_configurationLock);
 

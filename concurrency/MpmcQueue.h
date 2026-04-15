@@ -132,6 +132,12 @@ public:
 
     bool pop(T& target)
     {
+        return pop([&target](T& item) { target = std::move(item); });
+    }
+
+    template <typename TAction>
+    bool pop(TAction&& action)
+    {
         for (auto pos = _readCursor.load(std::memory_order_consume);;)
         {
             if (!isReadable(pos))
@@ -155,7 +161,7 @@ public:
                 // A reader that wrapped will not pass readable test because the readcursor version does not match cell
                 // state version
                 auto& entry = _elements[indexTransform(pos)];
-                target = std::move(entry.value());
+                action(entry.value());
                 entry.value().~T();
                 entry.state.store(CellState{pos.version + 1, CellState::emptySlot}, std::memory_order_release);
                 return true;

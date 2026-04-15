@@ -657,7 +657,7 @@ public:
         const void* data,
         size_t length) override
     {
-        auto buffer = webrtc::makeUniqueSctpMessage(streamId, payloadProtocol, data, length, _allocator);
+        auto buffer = webrtc::makeSctpMessage(streamId, payloadProtocol, data, length, _allocator);
         _dataStream->onSctpMessageBuffer(sender, buffer);
     }
 

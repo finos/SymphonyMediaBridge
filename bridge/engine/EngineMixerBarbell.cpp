@@ -415,7 +415,7 @@ void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* m
 }
 
 void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> message)
+    memory::PoolBuffer<memory::PacketPoolAllocator> message)
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
     auto barbell = _engineBarbells.getItem(barbellIdHash);
@@ -509,27 +509,26 @@ SsrcInboundContext* EngineMixer::emplaceBarbellInboundSsrcContext(const uint32_t
 
 void EngineMixer::processBarbellSctp(const uint64_t timestamp)
 {
-    for (IncomingSctpMessageInfo messageInfo; _incomingBarbellSctp.pop(messageInfo);)
-    {
+    while (_incomingBarbellSctp.pop([this, timestamp](IncomingSctpMessageInfo& messageInfo) {
         _lastReceiveTimeOnBarbellTransports = timestamp;
         auto& buffer = messageInfo.packet();
-        if (!buffer || buffer->empty())
+        if (buffer.empty())
         {
-            continue;
+            return;
         }
-        if (buffer->getLength() < sizeof(webrtc::SctpStreamMessageHeader))
+        if (buffer.getLength() < sizeof(webrtc::SctpStreamMessageHeader))
         {
-            continue;
+            return;
         }
 
         constexpr size_t MAX_BUFFER_SIZE = 8192;
-        if (buffer->size() > MAX_BUFFER_SIZE) {
-            logger::warn("Large barbell SCTP message (size = %zu, max allowed = %zu). Dropping.", _loggableId.c_str(), buffer->getLength(), MAX_BUFFER_SIZE);
-            continue;
+        if (buffer.size() > MAX_BUFFER_SIZE) {
+            logger::warn("Large barbell SCTP message (size = %zu, max allowed = %zu). Dropping.", _loggableId.c_str(), buffer.getLength(), MAX_BUFFER_SIZE);
+            return;
         }
 
-        char continousBuffer[buffer->size()];
-        buffer->copyTo(continousBuffer, 0, buffer->size());
+        char continousBuffer[buffer.size()];
+        buffer.copyTo(continousBuffer, 0, buffer.size());
 
         auto* sctpHeader = const_cast<webrtc::SctpStreamMessageHeader*>(
             reinterpret_cast<const webrtc::SctpStreamMessageHeader*>(continousBuffer));
@@ -537,10 +536,10 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
         if (sctpHeader->payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)
         {
             const char* message = reinterpret_cast<const char*>(sctpHeader->data());
-            const auto messageLength = buffer->getLength() - sizeof(*sctpHeader);
+            const auto messageLength = buffer.getLength() - sizeof(*sctpHeader);
             if (messageLength == 0)
             {
-                continue;
+                return;
             }
 
             auto messageJson = utils::SimpleJson::create(message, messageLength);
@@ -559,6 +558,8 @@ void EngineMixer::processBarbellSctp(const uint64_t timestamp)
             onBarbellDataChannelEstablish(messageInfo.transport()->getEndpointIdHash(),
                 std::move(buffer));
         }
+    }))
+    {
     }
 }
 

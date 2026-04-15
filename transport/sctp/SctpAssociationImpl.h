@@ -45,7 +45,7 @@ class SctpAssociationImpl : public SctpAssociation
             bool fragmentBegin,
             bool fragmentEnd,
             uint32_t transmissionSequenceNumber,
-            memory::UniquePoolBuffer<memory::PacketPoolAllocator>& buffer,
+            memory::PoolBuffer<memory::PacketPoolAllocator>& buffer,
             size_t offset,
             size_t size);
 
@@ -121,7 +121,7 @@ public:
     uint16_t allocateStream() override;
     bool sendMessage(uint16_t streamId,
         uint32_t payloadProtocol,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
+        memory::PoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
         uint64_t timestamp) override;
     size_t outboundPendingSize() const override;
     int64_t nextTimeout(uint64_t timestamp) override;

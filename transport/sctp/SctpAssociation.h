@@ -48,7 +48,7 @@ public:
     virtual uint16_t allocateStream() = 0;
     virtual bool sendMessage(uint16_t streamId,
         uint32_t payloadProtocol,
-        memory::UniquePoolBuffer<memory::PacketPoolAllocator>& payloadData,
+        memory::PoolBuffer<memory::PacketPoolAllocator>& payloadData,
         uint64_t timestamp) = 0;
     virtual size_t outboundPendingSize() const = 0;
     virtual int64_t nextTimeout(uint64_t timestamp) = 0;

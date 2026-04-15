@@ -535,7 +535,7 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
 }
 
 void EngineMixer::handleSctpControl(const size_t endpointIdHash,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> message)
+    memory::PoolBuffer<memory::PacketPoolAllocator> message)
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
@@ -559,7 +559,7 @@ void EngineMixer::handleSctpControl(const size_t endpointIdHash,
 
 void EngineMixer::sendEndpointMessageTo(EngineDataStream* toDataStream,
     const EngineDataStream* fromDataStream,
-    const memory::UniquePoolBuffer<memory::PacketPoolAllocator>& payload,
+    const memory::PoolBuffer<memory::PacketPoolAllocator>& payload,
     bool shouldLog)
 {
     if (!toDataStream || !toDataStream->stream.isOpen())
@@ -568,8 +568,8 @@ void EngineMixer::sendEndpointMessageTo(EngineDataStream* toDataStream,
     }
 
     auto endpointMessageBuffer =
-        api::DataChannelMessage::makeUniqueEndpointMessageBuffer(toDataStream->endpointId, fromDataStream->endpointId, payload);
-    const int length = endpointMessageBuffer->getLength();
+        api::DataChannelMessage::makeEndpointMessageBuffer(toDataStream->endpointId, fromDataStream->endpointId, payload);
+    const int length = endpointMessageBuffer.getLength();
 
     if (length > 0 && (size_t)length < _config.sctp.maxMessageSize)
     {
@@ -596,9 +596,9 @@ void EngineMixer::sendEndpointMessageTo(EngineDataStream* toDataStream,
 
 void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer)
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer)
 {
-    if (!fromEndpointIdHash || !buffer)
+    if (!fromEndpointIdHash || buffer.empty())
     {
         assert(false);
         return;
@@ -664,8 +664,8 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
 {
     assert(sender);
 
-    auto buffer = webrtc::makeUniqueSctpMessage(streamId, payloadProtocol, data, length, _sendAllocator);
-    if (!buffer)
+    auto buffer = webrtc::makeSctpMessage(streamId, payloadProtocol, data, length, _sendAllocator);
+    if (buffer.empty())
     {
         logger::error("Unable to allocate sctp message, sender %p, length %lu", _loggableId.c_str(), sender, length);
         return;
@@ -1686,7 +1686,7 @@ bool EngineMixer::asyncAddDataSteam(EngineDataStream* engineDataStream)
 }
 
 bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash,
-    memory::UniquePoolBuffer<memory::PacketPoolAllocator>& message)
+    memory::PoolBuffer<memory::PacketPoolAllocator>& message)
 {
     return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(message)));
 }

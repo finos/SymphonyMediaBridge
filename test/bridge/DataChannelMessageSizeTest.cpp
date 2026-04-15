@@ -175,9 +175,10 @@ protected:
             "\x74\x63\x2d\x64\x61\x74\x61\x63\x68\x61\x6e\x6e\x65\x6c\x00\x00";
 
         webrtc::SctpStreamMessageHeader header = {webrtc::DataChannelPpid::WEBRTC_ESTABLISH, 0, 0};
-        auto buffer = memory::makeUniquePoolBuffer<memory::PacketPoolAllocator>(_testScope->mainPacketAllocator, sizeof(webrtc::SctpStreamMessageHeader) + sizeof(webRtcOpen));
-        buffer->copyFrom(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
-        buffer->copyFrom(webRtcOpen, sizeof(webRtcOpen) - 1, sizeof(webrtc::SctpStreamMessageHeader));
+        memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_testScope->mainPacketAllocator);
+        buffer.allocate(sizeof(webrtc::SctpStreamMessageHeader) + sizeof(webRtcOpen));
+        buffer.copyFrom(&header, sizeof(webrtc::SctpStreamMessageHeader), 0);
+        buffer.copyFrom(webRtcOpen, sizeof(webRtcOpen) - 1, sizeof(webrtc::SctpStreamMessageHeader));
 
         auto* dataStream = mixer.getEngineDataStream(endpointsId);
         ASSERT_NE(nullptr, dataStream);
@@ -321,10 +322,10 @@ TEST_P(DataChannelSendMessageSizeTest, sendLargeEndpointMessage)
     if (param.expectedSendSctpCalls > 0)
     {
         expect.WillOnce(Invoke(
-            [&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
-                char continuousBuffer[buffer->getLength()];
-                buffer->copyTo(continuousBuffer, 0, buffer->getLength());
-                std::string sentData(continuousBuffer, buffer->getLength());
+            [&](uint16_t streamId, uint32_t protocolId, memory::PoolBuffer<memory::PacketPoolAllocator> buffer) {
+                char continuousBuffer[buffer.getLength()];
+                buffer.copyTo(continuousBuffer, 0, buffer.getLength());
+                std::string sentData(continuousBuffer, buffer.getLength());
 
                 EXPECT_EQ(std::string(expectedJson.jsonBegin(), expectedJson.size()), sentData);
                 return true;
@@ -424,10 +425,10 @@ TEST_P(DataChannelForwardMessageSizeTest, forwardLargeEndpointMessage)
         .Times(param.expectedSendSctpCalls);
     if (param.expectedSendSctpCalls > 0)
     {
-        expect.WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, memory::UniquePoolBuffer<memory::PacketPoolAllocator> buffer) {
-            char continuousBuffer[buffer->getLength()];
-            buffer->copyTo(continuousBuffer, 0, buffer->getLength());
-            std::string sentData(continuousBuffer, buffer->getLength());
+        expect.WillOnce(Invoke([&](uint16_t streamId, uint32_t protocolId, memory::PoolBuffer<memory::PacketPoolAllocator> buffer) {
+            char continuousBuffer[buffer.getLength()];
+            buffer.copyTo(continuousBuffer, 0, buffer.getLength());
+            std::string sentData(continuousBuffer, buffer.getLength());
 
             EXPECT_EQ(message, sentData);
             return true;
@@ -468,8 +469,9 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_smallBufferEllipsis)
 
     // Test with T = 3, payload "abcde"
     memory::Array<char, 3> outArray3;
-    auto payload = memory::makeUniquePoolBuffer(testAllocator, 5);
-    payload->copyFrom("abcde", 5, 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> payload(testAllocator);
+    payload.allocate(5);
+    payload.copyFrom("abcde", 5, 0);
 
     // Call the function - it should not crash
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray3, payload);
@@ -480,15 +482,17 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_smallBufferEllipsis)
 
     // Test with T = 2, payload "abcde"
     memory::Array<char, 2> outArray2;
-    auto payload2 = memory::makeUniquePoolBuffer(testAllocator, 5);
-    payload2->copyFrom("abcde", 5, 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> payload2(testAllocator);
+    payload2.allocate(5);
+    payload2.copyFrom("abcde", 5, 0);
 
-    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray2, payload);
+    api::DataChannelMessage::makeLoggableStringFromBuffer(outArray2, payload2);
     ASSERT_EQ(outArray2.size(), 2);
     ASSERT_EQ(std::string(outArray2.data()), "a");
 
     // Test with T = 1, payload "abcde"
     memory::Array<char, 1> outArray1;
+    // payload is still in scope from previous test for its content
 
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray1, payload);
     ASSERT_EQ(outArray1.size(), 1);
@@ -502,8 +506,9 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_bigBufferEllipsis)
 
     // Test with T = 10
     memory::Array<char, 10> outArray10;
-    auto payload = memory::makeUniquePoolBuffer(testAllocator, payloadString.length());
-    payload->copyFrom(payloadString.c_str(), payloadString.length(), 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> payload(testAllocator);
+    payload.allocate(payloadString.length());
+    payload.copyFrom(payloadString.c_str(), payloadString.length(), 0);
 
     // Call the function - it should not crash
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray10, payload);

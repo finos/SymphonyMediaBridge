@@ -48,17 +48,6 @@ public:
           _masterChunk(nullptr),
           _size(0),
           _numChunks(0),
-          _externalMasterChunkSize(0),
-          _firstChunkSize(0),
-          _firstChunkIsInMaster(false)
-    {}
-
-    explicit PoolBuffer(TPoolAllocator& allocator, void* preallocatedMasterChunk, size_t _masterChunkSize)
-        : _allocator(allocator),
-          _masterChunk(preallocatedMasterChunk),
-          _size(0),
-          _numChunks(0),
-          _externalMasterChunkSize(_masterChunkSize), // This buffer does NOT own masterChunk
           _firstChunkSize(0),
           _firstChunkIsInMaster(false)
     {}
@@ -68,7 +57,6 @@ public:
           _masterChunk(other._masterChunk),
           _size(other._size),
           _numChunks(other._numChunks),
-          _externalMasterChunkSize(other._externalMasterChunkSize),
           _firstChunkSize(other._firstChunkSize),
           _firstChunkIsInMaster(other._firstChunkIsInMaster)
     {
@@ -85,14 +73,12 @@ public:
         {
             clear();
             _masterChunk = other._masterChunk;
-            _externalMasterChunkSize = other._externalMasterChunkSize;
             _size = other._size;
             _numChunks = other._numChunks;
             _firstChunkSize = other._firstChunkSize;
             _firstChunkIsInMaster = other._firstChunkIsInMaster;
 
             other._masterChunk = nullptr;
-            other._externalMasterChunkSize = 0;
             other._size = 0;
             other._numChunks = 0;
             other._firstChunkSize = 0;
@@ -112,7 +98,7 @@ public:
         {
             clear();
             const auto elementSize = _allocator.getElementSize();
-            auto masterChunkCapacity = _externalMasterChunkSize > 0 ? _externalMasterChunkSize : elementSize;
+            auto masterChunkCapacity = elementSize;
 
             if (size == 0)
             {
@@ -120,14 +106,13 @@ public:
                 return true;
             }
 
-            if (0 == _externalMasterChunkSize || !_masterChunk)
+            if (!_masterChunk)
             {
                 _masterChunk = _allocator.allocate();
                 if (!_masterChunk)
                 {
                     return false;
                 }
-                _externalMasterChunkSize = 0;
                 masterChunkCapacity = elementSize;
             }
 
@@ -174,7 +159,7 @@ public:
                     masterChunkCapacity,
                     _numChunks * sizeof(void*));
                 _numChunks = 0;
-                if (_masterChunk && !_externalMasterChunkSize)
+                if (_masterChunk)
                 {
                     _allocator.free(_masterChunk);
                     _masterChunk = nullptr;
@@ -199,10 +184,7 @@ public:
                     {
                         _allocator.free(chunkPointers[j]);
                     }
-                    if (0 == _externalMasterChunkSize)
-                    {
-                        _allocator.free(_masterChunk);
-                    }
+                    _allocator.free(_masterChunk);
                     _masterChunk = nullptr;
                     _numChunks = 0;
                     return false;
@@ -225,15 +207,9 @@ public:
                     _allocator.free(chunkPointers[i]);
                 }
             }
-            if (0 == _externalMasterChunkSize)
-            {
-                _allocator.free(_masterChunk);
-            }
+            _allocator.free(_masterChunk);
         }
-        if (0 == _externalMasterChunkSize)
-        {
-            _masterChunk = nullptr;
-        }
+        _masterChunk = nullptr;
 
         _numChunks = 0;
         _size = 0;
@@ -421,73 +397,7 @@ private:
     void* _masterChunk;
     size_t _size;
     size_t _numChunks;
-    size_t _externalMasterChunkSize;
     size_t _firstChunkSize;
     bool _firstChunkIsInMaster;
 };
-
-template <typename TPoolAllocator>
-using UniquePoolBuffer = std::unique_ptr<PoolBuffer<TPoolAllocator>, typename PoolBuffer<TPoolAllocator>::Deleter>;
-
-template <typename TPoolAllocator>
-inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& allocator,
-    size_t length)
-{
-    auto pointer = allocator.allocate();
-    assert(pointer);
-    if (!pointer)
-    {
-        logger::error("Unable to allocate pool buffer, no space left in pool %s",
-            "PoolBuffer",
-            allocator.getName().c_str());
-        return UniquePoolBuffer<TPoolAllocator>();
-    }
-
-    constexpr auto poolBufferAlignment = alignof(PoolBuffer<TPoolAllocator>);
-    const auto alignedPoolBufferSize =
-        (sizeof(PoolBuffer<TPoolAllocator>) + poolBufferAlignment - 1) & ~(poolBufferAlignment - 1);
-
-    const auto elementSize = allocator.getElementSize();
-    const auto storageSize = elementSize > alignedPoolBufferSize ? elementSize - alignedPoolBufferSize : 0;
-    const auto maxChunkCount = elementSize > sizeof(void*) ? elementSize / sizeof(void*) : 0;
-    const auto optChunkCount = storageSize > sizeof(void*) ? storageSize / sizeof(void*) : 0;
-
-    // Check that we can theoretically fit enough pointers to chunk into master chunk to accomodate all data.
-    if (maxChunkCount * elementSize < length) {
-        logger::error("Unable to allocate pool buffer, master chunk it too small %s",
-            "PoolBuffer",
-            allocator.getName().c_str());
-        allocator.free(pointer);
-        return UniquePoolBuffer<TPoolAllocator>();
-    }
-
-    // Try to fit master chunk in already allocated pointer right after PoolBuffer*.
-    void* masterChunk = reinterpret_cast<char*>(pointer) + alignedPoolBufferSize;
-    auto buffer = (optChunkCount * elementSize >= length)
-        ? new (pointer) PoolBuffer<TPoolAllocator>(allocator, masterChunk, storageSize)
-        : new (pointer) PoolBuffer<TPoolAllocator>(allocator);
-
-    auto smartBuffer =
-        UniquePoolBuffer<TPoolAllocator>(buffer, typename PoolBuffer<TPoolAllocator>::Deleter(allocator));
-
-    if (!smartBuffer->allocate(length))
-    {
-        return UniquePoolBuffer<TPoolAllocator>();
-    }
-    return smartBuffer;
-}
-
-template <typename TPoolAllocator>
-inline UniquePoolBuffer<TPoolAllocator> makeUniquePoolBuffer(TPoolAllocator& allocator,
-    const void* data,
-    size_t length)
-{
-    auto buffer = makeUniquePoolBuffer(allocator, length);
-    if (buffer && data && buffer->copyFrom(data, length) != length)
-    {
-        return nullptr;
-    }
-
-    return buffer;
-}
-}
+} // namespace memory
