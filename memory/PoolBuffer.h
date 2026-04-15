@@ -52,6 +52,21 @@ public:
           _firstChunkIsInMaster(false)
     {}
 
+    PoolBuffer(TPoolAllocator& allocator, const void* data, size_t len)
+        : _allocator(allocator),
+          _masterChunk(nullptr),
+          _size(0),
+          _numChunks(0),
+          _firstChunkSize(0),
+          _firstChunkIsInMaster(false)
+    {
+        allocate(len);
+        if (data && len > 0)
+        {
+            copyFrom(data, len, 0);
+        }
+    }
+
     PoolBuffer(PoolBuffer&& other) noexcept
         : _allocator(other._allocator),
           _masterChunk(other._masterChunk),

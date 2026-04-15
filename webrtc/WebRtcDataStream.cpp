@@ -28,9 +28,7 @@ uint16_t WebRtcDataStream::open(const std::string& label)
     auto& message = DataChannelOpenMessage::create(data, label);
     _state = State::OPENING;
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator());
-    buffer.allocate(message.size());
-    buffer.copyFrom(data, message.size());
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator(), data, message.size());
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_ESTABLISH, std::move(buffer));
 
     return _streamId;
@@ -38,17 +36,13 @@ uint16_t WebRtcDataStream::open(const std::string& label)
 
 void WebRtcDataStream::sendString(const char* string, const size_t length)
 {
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator());
-    buffer.allocate(length);
-    buffer.copyFrom(string, length);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator(), string, length);
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_STRING, std::move(buffer));
 }
 
 void WebRtcDataStream::sendData(const void* data, size_t length)
 {
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator());
-    buffer.allocate(length);
-    buffer.copyFrom(data, length);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator(), data, length);
     _transport.sendSctp(_streamId, DataChannelPpid::WEBRTC_BINARY, std::move(buffer));
 }
 
@@ -104,9 +98,7 @@ void WebRtcDataStream::onSctpMessageBuffer(webrtc::DataStreamTransport* sender,
             _streamId = streamId;
             _label = msg->getLabel();
             uint8_t ack[] = {webrtc::DATA_CHANNEL_ACK};
-            memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator());
-            buffer.allocate(1);
-            buffer.copyFrom(ack, 1);
+            memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_transport.getAllocator(), ack, 1);
             sender->sendSctp(streamId, DataChannelPpid::WEBRTC_ESTABLISH, std::move(buffer));
             logger::info("Data channel open. stream %u", _loggableId, streamId);
         }

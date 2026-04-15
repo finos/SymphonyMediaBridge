@@ -469,9 +469,7 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_smallBufferEllipsis)
 
     // Test with T = 3, payload "abcde"
     memory::Array<char, 3> outArray3;
-    memory::PoolBuffer<memory::PacketPoolAllocator> payload(testAllocator);
-    payload.allocate(5);
-    payload.copyFrom("abcde", 5, 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> payload(testAllocator, "abcde", 5);
 
     // Call the function - it should not crash
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray3, payload);
@@ -482,9 +480,7 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_smallBufferEllipsis)
 
     // Test with T = 2, payload "abcde"
     memory::Array<char, 2> outArray2;
-    memory::PoolBuffer<memory::PacketPoolAllocator> payload2(testAllocator);
-    payload2.allocate(5);
-    payload2.copyFrom("abcde", 5, 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> payload2(testAllocator, "abcde", 5);
 
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray2, payload2);
     ASSERT_EQ(outArray2.size(), 2);
@@ -506,9 +502,7 @@ TEST(DataChannelMessageTest, makeLoggableStringFromBuffer_bigBufferEllipsis)
 
     // Test with T = 10
     memory::Array<char, 10> outArray10;
-    memory::PoolBuffer<memory::PacketPoolAllocator> payload(testAllocator);
-    payload.allocate(payloadString.length());
-    payload.copyFrom(payloadString.c_str(), payloadString.length(), 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> payload(testAllocator, payloadString.c_str(), payloadString.length());
 
     // Call the function - it should not crash
     api::DataChannelMessage::makeLoggableStringFromBuffer(outArray10, payload);

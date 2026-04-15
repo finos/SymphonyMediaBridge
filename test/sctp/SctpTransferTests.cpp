@@ -74,9 +74,7 @@ TEST_F(SctpTransferTestFixture, send250K)
     std::memset(data.data(), 0xAA, DATA_SIZE);
     const auto startTime = _timestamp;
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator);
-	buffer.allocate(DATA_SIZE);
-	buffer.copyFrom(data.data(), DATA_SIZE);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator, data.data(), DATA_SIZE);
 
     A._session->sendMessage(A.getStreamId(), webrtc::DataChannelPpid::WEBRTC_BINARY, buffer, _timestamp);
     for (int i = 0; i < 280000 && B.getReceivedSize() < DATA_SIZE; ++i)
@@ -115,9 +113,7 @@ TEST_F(SctpTransferTestFixture, sendMany)
             totalSent += toSend;
             ++totalSentCount;
 
-            memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator);
-			buffer.allocate(toSend);
-			buffer.copyFrom(data.data(), toSend);
+            memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator, data.data(), toSend);
 
             A._session->sendMessage(A.getStreamId(),
                 webrtc::DataChannelPpid::WEBRTC_BINARY,
@@ -159,9 +155,7 @@ TEST_F(SctpTransferTestFixture, withLoss20)
     std::memset(data.data(), 0xcd, DATA_SIZE);
     const auto startTime = _timestamp;
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator);
-	buffer.allocate(DATA_SIZE);
-	buffer.copyFrom(data.data(), DATA_SIZE);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator, data.data(), DATA_SIZE);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_BINARY,
@@ -221,9 +215,7 @@ TEST_F(SctpTransferTestFixture, lostSacks)
     std::memset(data.data(), 0xcd, DATA_SIZE);
     // const auto startTime = _timestamp;
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator);
-	buffer.allocate(DATA_SIZE);
-	buffer.copyFrom(data.data(), DATA_SIZE);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator, data.data(), DATA_SIZE);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_BINARY,
@@ -262,9 +254,7 @@ TEST_F(SctpTransferTestFixture, zeroRecvWindow)
     std::array<uint8_t, DATA_SIZE> data;
     std::memset(data.data(), 0xcd, DATA_SIZE);
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator);
-	buffer.allocate(DATA_SIZE);
-	buffer.copyFrom(data.data(), DATA_SIZE);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(_mainPacketAllocator, data.data(), DATA_SIZE);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_BINARY,
@@ -349,9 +339,7 @@ TEST_F(SctpTransferTestFixture, sendMtuMessage)
     std::array<uint8_t, mtu * 2> data;
     std::memset(data.data(), 0xdd, data.size());
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer0(_mainPacketAllocator);
-	buffer0.allocate(mtu);
-	buffer0.copyFrom(data.data(), mtu);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer0(_mainPacketAllocator, data.data(), mtu);
 
     const bool sendResult =
         A._session->sendMessage(A.getStreamId(), webrtc::DataChannelPpid::WEBRTC_STRING, buffer0, _timestamp);
@@ -370,9 +358,7 @@ TEST_F(SctpTransferTestFixture, sendMtuMessage)
     EXPECT_EQ(B.getReceivedSize(), mtu);
     EXPECT_EQ(B.getReceivedMessageCount(), 1);
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer1(_mainPacketAllocator);
-	buffer1.allocate(mtu * 2);
-	buffer1.copyFrom(data.data(), mtu*2);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer1(_mainPacketAllocator, data.data(), mtu * 2);
 
     EXPECT_TRUE(A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
@@ -448,27 +434,21 @@ TEST_F(SctpTransferTestFixture, sctpReorder)
                                                 "\x34\x64\x32\x38\x2d\x62\x65\x36\x35\x2d\x39\x30\x33\x65\x39\x38"
                                                 "\x63\x62\x37\x65\x66\x32\x22\x5d\x7d\x00\x00\x00";
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer0(_mainPacketAllocator);
-	buffer0.allocate(sizeof(webRtcOpen));
-    buffer0.copyFrom(webRtcOpen, sizeof(webRtcOpen) - 1, 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer0(_mainPacketAllocator, webRtcOpen, sizeof(webRtcOpen) - 1);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_ESTABLISH,
         buffer0,
         _timestamp);
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer1(_mainPacketAllocator);
-	buffer1.allocate(sizeof(msg1));
-    buffer1.copyFrom(msg1, sizeof(msg1) - 1, 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer1(_mainPacketAllocator, msg1, sizeof(msg1) - 1);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
         buffer1,
         _timestamp);
 
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer2(_mainPacketAllocator);
-	buffer2.allocate(sizeof(msg2));
-    buffer2.copyFrom(msg2, sizeof(msg2) - 1, 0);
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer2(_mainPacketAllocator, msg2, sizeof(msg2) - 1);
 
     A._session->sendMessage(A.getStreamId(),
         webrtc::DataChannelPpid::WEBRTC_STRING,
