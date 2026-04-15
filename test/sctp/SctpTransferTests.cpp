@@ -392,7 +392,7 @@ public:
 
     bool sendSctp(uint16_t streamId,
         uint32_t protocolId,
-        memory::PoolBuffer<memory::PacketPoolAllocator> buffer) override
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer) override
     {
         _sendQueue.push(SctpInfo{streamId, protocolId, std::move(buffer)});
         return true;

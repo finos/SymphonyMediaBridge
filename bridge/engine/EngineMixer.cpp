@@ -535,7 +535,7 @@ void EngineMixer::onConnected(transport::RtcTransport* sender)
 }
 
 void EngineMixer::handleSctpControl(const size_t endpointIdHash,
-    memory::PoolBuffer<memory::PacketPoolAllocator> message)
+    memory::PoolBuffer<memory::PacketPoolAllocator>&& message)
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
     auto* dataStream = _engineDataStreams.getItem(endpointIdHash);
@@ -596,7 +596,7 @@ void EngineMixer::sendEndpointMessageTo(EngineDataStream* toDataStream,
 
 void EngineMixer::sendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
-    memory::PoolBuffer<memory::PacketPoolAllocator> buffer)
+    memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer)
 {
     if (!fromEndpointIdHash || buffer.empty())
     {
@@ -677,7 +677,7 @@ void EngineMixer::onSctpMessage(transport::RtcTransport* sender,
         return;
     }
 
-    _messageListener.asyncSctpReceived(*this, buffer, sender->getEndpointIdHash());
+    _messageListener.asyncSctpReceived(*this, std::move(buffer), sender->getEndpointIdHash());
 }
 
 /**
@@ -1686,7 +1686,7 @@ bool EngineMixer::asyncAddDataSteam(EngineDataStream* engineDataStream)
 }
 
 bool EngineMixer::asyncHandleSctpControl(const size_t endpointIdHash,
-    memory::PoolBuffer<memory::PacketPoolAllocator>& message)
+    memory::PoolBuffer<memory::PacketPoolAllocator>&& message)
 {
     return post(utils::bind(&EngineMixer::handleSctpControl, this, endpointIdHash, utils::moveParam(message)));
 }

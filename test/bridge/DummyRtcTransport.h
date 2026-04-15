@@ -103,7 +103,7 @@ public:
 
     bool sendSctp(uint16_t streamId,
         uint32_t protocolId,
-        memory::PoolBuffer<memory::PacketPoolAllocator> buffer) override
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer) override
     {
         return true;
     }

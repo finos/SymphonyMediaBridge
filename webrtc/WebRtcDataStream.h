@@ -36,7 +36,7 @@ public:
     bool isOpen() const { return _state == State::OPEN; }
     void sendString(const char* string, const size_t length);
     void sendData(const void* data, size_t length);
-    void sendMessage(uint32_t protocolId, memory::PoolBuffer<memory::PacketPoolAllocator> message);
+    void sendMessage(uint32_t protocolId, memory::PoolBuffer<memory::PacketPoolAllocator>&& message);
 
     uint16_t getStreamId() const { return _streamId; };
     std::string getLabel() const { return _label; }

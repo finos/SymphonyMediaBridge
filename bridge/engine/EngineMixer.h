@@ -183,7 +183,7 @@ public: // EngineMixer async interface. Will execute on engine thread
     bool asyncPinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     bool asyncSendEndpointMessage(const size_t toEndpointIdHash,
         const size_t fromEndpointIdHash,
-        memory::PoolBuffer<memory::PacketPoolAllocator>& buffer);
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer);
     bool asyncAddRecordingStream(EngineRecordingStream* engineRecordingStream);
     bool asyncAddTransportToRecordingStream(const size_t streamIdHash,
         transport::RecordingTransport& transport,
@@ -200,7 +200,7 @@ public: // EngineMixer async interface. Will execute on engine thread
     bool asyncAddBarbell(EngineBarbell* barbell);
     bool asyncRemoveBarbell(size_t idHash);
     bool asyncHandleSctpControl(const size_t endpointIdHash,
-        memory::PoolBuffer<memory::PacketPoolAllocator>& message);
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& message);
     bool asyncRemoveRecordingStream(const EngineRecordingStream& engineRecordingStream);
 
 private: // impl async interface
@@ -223,7 +223,7 @@ private: // impl async interface
     void pinEndpoint(const size_t endpointIdHash, const size_t targetEndpointIdHash);
     void sendEndpointMessage(const size_t toEndpointIdHash,
         const size_t fromEndpointIdHash,
-        memory::PoolBuffer<memory::PacketPoolAllocator> buffer);
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer);
     void sendEndpointMessageTo(EngineDataStream* toDataStream,
         const EngineDataStream* fromDataStream,
         const memory::PoolBuffer<memory::PacketPoolAllocator>& payload,
@@ -241,7 +241,7 @@ private: // impl async interface
     void removeTransportFromRecordingStream(const size_t streamIdHash, const size_t endpointIdHash);
     void addBarbell(EngineBarbell* barbell);
     void removeBarbell(size_t idHash);
-    void handleSctpControl(const size_t endpointIdHash, memory::PoolBuffer<memory::PacketPoolAllocator> message);
+    void handleSctpControl(const size_t endpointIdHash, memory::PoolBuffer<memory::PacketPoolAllocator>&& message);
 
 public: // private but called from helper method
     void removeStream(const EngineVideoStream* engineVideoStream);
@@ -525,7 +525,7 @@ protected:
     void onBarbellUserMediaMap(size_t barbellIdHash, const char* message, size_t messageLength);
     void onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* message, size_t messageLength);
     void onBarbellDataChannelEstablish(size_t barbellIdHash,
-        memory::PoolBuffer<memory::PacketPoolAllocator> message);
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& message);
 
     ////
 

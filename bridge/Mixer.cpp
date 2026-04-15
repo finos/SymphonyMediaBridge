@@ -1866,7 +1866,7 @@ void Mixer::sendEndpointMessage(const std::string& toEndpointId,
         toEndpointIdHash = dataStreamItr->second->endpointIdHash;
     }
 
-    _engineMixer->asyncSendEndpointMessage(toEndpointIdHash, fromEndpointIdHash, buffer);
+    _engineMixer->asyncSendEndpointMessage(toEndpointIdHash, fromEndpointIdHash, std::move(buffer));
 }
 
 RecordingStream* Mixer::findRecordingStream(const std::string& recordingId)

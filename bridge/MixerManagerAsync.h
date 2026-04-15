@@ -46,7 +46,7 @@ protected:
     virtual void allocateRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) = 0;
     virtual void videoStreamRemoved(EngineMixer& engineMixer, const EngineVideoStream& videoStream) = 0;
     virtual void sctpReceived(EngineMixer& mixer,
-        memory::PoolBuffer<memory::PacketPoolAllocator> message,
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& message,
         size_t endpointIdHash) = 0;
     virtual void dataStreamRemoved(EngineMixer& mixer, const EngineDataStream& dataStream) = 0;
     virtual void freeRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) = 0;
@@ -65,7 +65,7 @@ public:
     bool asyncAllocateRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash);
     bool asyncVideoStreamRemoved(EngineMixer& engineMixer, const EngineVideoStream& videoStream);
     bool asyncSctpReceived(EngineMixer& mixer,
-        memory::PoolBuffer<memory::PacketPoolAllocator>& msgBuffer,
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& msgBuffer,
         size_t endpointIdHash);
     bool asyncDataStreamRemoved(EngineMixer& mixer, const EngineDataStream& dataStream);
     bool asyncFreeRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash);

@@ -129,7 +129,7 @@ SctpAssociationImpl::SentDataChunk::SentDataChunk(uint16_t streamId_,
     bool fragmentBegin_,
     bool fragmentEnd_,
     uint32_t transmissionSequenceNumber,
-    memory::PoolBuffer<memory::PacketPoolAllocator>& buffer,
+    const memory::PoolBuffer<memory::PacketPoolAllocator>& buffer,
     size_t offset,
     size_t size_)
     : transmitTime(0),
@@ -382,7 +382,7 @@ void SctpAssociationImpl::onCookieEcho(const SctpPacket& cookieEcho, const uint6
 
 bool SctpAssociationImpl::sendMessage(uint16_t streamId,
     uint32_t payloadProtocol,
-    memory::PoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
+    const memory::PoolBuffer<memory::PacketPoolAllocator>& sctpMessage,
     uint64_t timestamp)
 {
     auto streamIt = _streams.find(streamId);

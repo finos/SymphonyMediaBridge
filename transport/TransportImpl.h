@@ -181,7 +181,7 @@ public: // Transport
 
     bool sendSctp(uint16_t streamId,
         uint32_t protocolId,
-        memory::PoolBuffer<memory::PacketPoolAllocator> message) override;
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& message) override;
     uint16_t allocateOutboundSctpStream() override;
     void setSctp(uint16_t localPort, uint16_t remotePort) override;
     void connectSctp() override;

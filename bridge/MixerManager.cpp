@@ -492,7 +492,7 @@ void MixerManager::freeVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_
     mixerItr->second->freeVideoPacketCache(ssrc, endpointIdHash);
 }
 
-void MixerManager::sctpReceived(EngineMixer& mixer, memory::PoolBuffer<memory::PacketPoolAllocator> message, size_t endpointIdHash)
+void MixerManager::sctpReceived(EngineMixer& mixer, memory::PoolBuffer<memory::PacketPoolAllocator>&& message, size_t endpointIdHash)
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
     // Need to get full message instead of first chunk only to form JSON from it.
@@ -511,7 +511,7 @@ void MixerManager::sctpReceived(EngineMixer& mixer, memory::PoolBuffer<memory::P
     {
         // create command with this packet to send the binary data -> engine -> WebRtcDataStream belonging to this
         // transport
-        mixer.asyncHandleSctpControl(endpointIdHash, message);
+        mixer.asyncHandleSctpControl(endpointIdHash, std::move(message));
         return; // do not free packet as we passed it on
     }
     else if (sctpHeader.payloadProtocol == webrtc::DataChannelPpid::WEBRTC_STRING)

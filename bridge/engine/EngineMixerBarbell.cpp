@@ -415,7 +415,7 @@ void EngineMixer::onBarbellMinUplinkEstimate(size_t barbellIdHash, const char* m
 }
 
 void EngineMixer::onBarbellDataChannelEstablish(size_t barbellIdHash,
-    memory::PoolBuffer<memory::PacketPoolAllocator> message)
+    memory::PoolBuffer<memory::PacketPoolAllocator>&& message)
 {
     // HEADER: SctpStreamMessageHeader prepended to payload
     auto barbell = _engineBarbells.getItem(barbellIdHash);

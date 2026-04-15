@@ -2214,7 +2214,7 @@ uint16_t TransportImpl::allocateOutboundSctpStream()
 
 bool TransportImpl::sendSctp(uint16_t streamId,
     uint32_t protocolId,
-    memory::PoolBuffer<memory::PacketPoolAllocator> message)
+    memory::PoolBuffer<memory::PacketPoolAllocator>&& message)
 {
     if (!_remoteSctpPort.isSet() || !_sctpAssociation)
     {

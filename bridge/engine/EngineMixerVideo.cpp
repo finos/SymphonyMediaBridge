@@ -938,7 +938,7 @@ bool EngineMixer::asyncPinEndpoint(const size_t endpointIdHash, const size_t tar
 
 bool EngineMixer::asyncSendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
-    memory::PoolBuffer<memory::PacketPoolAllocator>& buffer)
+    memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer)
 {
     return post(utils::bind(&EngineMixer::sendEndpointMessage,
         this,
