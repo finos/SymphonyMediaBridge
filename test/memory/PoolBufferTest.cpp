@@ -26,7 +26,7 @@ TEST(PoolBuffer, allocateSmall)
     EXPECT_EQ(buffer.size(), 64);
 
     // We expect 64 bytes totall fit into master chunk
-    EXPECT_EQ(buffer.capacity(), 128 - sizeof(void*)); 
+    EXPECT_EQ(buffer.capacity(), 128);
 #if ENABLE_ALLOCATOR_METRICS
     EXPECT_EQ(allocator.countAllocatedItems(), 1);
 #endif
@@ -34,9 +34,8 @@ TEST(PoolBuffer, allocateSmall)
 
 TEST(PoolBuffer, allocateExact)
 {
-    // Leave space for single pointer to chunk[0] in the master chunk -
-    // all data than should fit into the single buffer.
-    memory::PoolAllocator<128 + sizeof(void*)> allocator(10, "test");
+    // All data than should fit into the single buffer.
+    memory::PoolAllocator<128> allocator(10, "test");
     memory::PoolBuffer<decltype(allocator)> buffer(allocator);
 
     EXPECT_TRUE(buffer.allocate(128));
@@ -55,7 +54,8 @@ TEST(PoolBuffer, allocateMultipleChunks)
     EXPECT_TRUE(buffer.allocate(300));
     EXPECT_EQ(buffer.size(), 300);
     // 3 chunks needed: 2 full + 1 in the master chunk, slightly smaller
-    EXPECT_EQ(buffer.capacity(), (3 - 1) * 128 + (128 - sizeof(void*) * 3));
+    // master chunk will hold pointers to 2 additional chunks
+    EXPECT_EQ(buffer.capacity(), (3 - 1) * 128 + (128 - sizeof(void*) * 2));
 #if ENABLE_ALLOCATOR_METRICS
     EXPECT_EQ(allocator.countAllocatedItems(), 3);
 #endif
@@ -146,46 +146,30 @@ TEST(PoolBuffer, move)
     EXPECT_EQ(allocator.countAllocatedItems(), 3);
     EXPECT_EQ(buffer1.size(), 0); // NOLINT
 
-    buffer2.clear();
+    buffer2.free();
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 }
 
-TEST(PoolBuffer, isNullTerminated)
+TEST(PoolBuffer, moveOperator)
 {
-    memory::PoolAllocator<128 + sizeof(void*)> allocator(10, "test");
-    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+// This test use allocator.countAllocatedItems extensively.
+#if !ENABLE_ALLOCATOR_METRICS
+    GTEST_SKIP();
+#endif
+    memory::PoolAllocator<128> allocator(10, "test");
+    memory::PoolBuffer<decltype(allocator)> buffer1(allocator);
+    EXPECT_TRUE(buffer1.allocate(300));
+    EXPECT_EQ(allocator.countAllocatedItems(), 3);
 
-    // Empty buffer
-    EXPECT_TRUE(buffer.allocate(0));
-    EXPECT_FALSE(buffer.isNullTerminated());
-    buffer.clear();
-    EXPECT_FALSE(buffer.isNullTerminated());
+    memory::PoolBuffer<decltype(allocator)> buffer2(allocator);
+    buffer2 = std::move(buffer1);
+    EXPECT_EQ(buffer2.size(), 300);
+    EXPECT_GE(buffer2.capacity(), 300);
+    EXPECT_EQ(allocator.countAllocatedItems(), 3);
+    EXPECT_EQ(buffer1.size(), 0); // NOLINT
 
-    // Non-null terminated
-    const std::string s1 = "123456789a";
-    EXPECT_TRUE(buffer.allocate(s1.length()));
-    buffer.copyFrom(s1.c_str(), s1.length());
-    EXPECT_FALSE(buffer.isNullTerminated());
-
-    // Null terminated
-    const std::string s2 = "123456789";
-    EXPECT_TRUE(buffer.allocate(s2.length() + 1));
-    buffer.copyFrom(s2.c_str(), s2.length() + 1);
-    EXPECT_TRUE(buffer.isNullTerminated());
-
-    // Null at end of chunk
-    std::vector<char> testData3(128, 'a');
-    testData3[127] = '\0';
-    EXPECT_TRUE(buffer.allocate(128));
-    EXPECT_FALSE(buffer.isMultiChunk());
-    buffer.copyFrom(testData3.data(), 128);
-    EXPECT_TRUE(buffer.isNullTerminated());
-
-    // Subview from larger buffer
-    char testData4[] = {'1', '2', '3', '4', '5', '\0', '6', '7', '8', '\0', 'A'};
-    EXPECT_TRUE(buffer.allocate(sizeof(testData4)));
-    buffer.copyFrom(testData4, sizeof(testData4));
-    EXPECT_FALSE(buffer.isNullTerminated());
+    buffer2.free();
+    EXPECT_EQ(allocator.countAllocatedItems(), 0);
 }
 
 TEST(PoolBuffer, deleter)
@@ -221,7 +205,7 @@ TEST(PoolBuffer, deleter)
     EXPECT_EQ(allocator.countAllocatedItems(), 3 + 1); // 3 chunks of 128 bytes + 1 'master chunk'
 }
 
-TEST(PoolBuffer, copyToAndNullTermination)
+TEST(PoolBuffer, copyTo)
 {
     memory::PoolAllocator<128> allocator(10, "test");
     memory::PoolBuffer<decltype(allocator)> buffer(allocator);
@@ -229,7 +213,6 @@ TEST(PoolBuffer, copyToAndNullTermination)
     // Empty buffer
     {
         EXPECT_TRUE(buffer.allocate(0));
-        EXPECT_FALSE(buffer.isNullTerminated());
         EXPECT_FALSE(buffer.isMultiChunk());
         EXPECT_EQ(buffer.getLength(), 0);
     }
@@ -239,7 +222,6 @@ TEST(PoolBuffer, copyToAndNullTermination)
         const std::string testData = "single chunk test";
         EXPECT_TRUE(buffer.allocate(testData.length()));
         buffer.copyFrom(testData.c_str(), testData.length());
-        EXPECT_FALSE(buffer.isNullTerminated());
 
         char readData[buffer.getLength()];
         EXPECT_EQ(buffer.getLength(), testData.length());
@@ -252,7 +234,6 @@ TEST(PoolBuffer, copyToAndNullTermination)
         const std::string testData = "single chunk nullterm";
         EXPECT_TRUE(buffer.allocate(testData.length() + 1));
         buffer.copyFrom(testData.c_str(), testData.length() + 1);
-        EXPECT_TRUE(buffer.isNullTerminated());
 
         char readData[buffer.getLength()];
         EXPECT_EQ(buffer.getLength(), testData.length() + 1);
@@ -265,7 +246,6 @@ TEST(PoolBuffer, copyToAndNullTermination)
         std::vector<char> testData(150, 'm');
         EXPECT_TRUE(buffer.allocate(testData.size()));
         buffer.copyFrom(testData.data(), testData.size());
-        EXPECT_FALSE(buffer.isNullTerminated());
 
         char readData[buffer.getLength()];
         EXPECT_EQ(buffer.getLength(), testData.size());
@@ -279,7 +259,7 @@ TEST(PoolBuffer, copyToAndNullTermination)
         testData.back() = '\0';
         EXPECT_TRUE(buffer.allocate(testData.size()));
         buffer.copyFrom(testData.data(), testData.size());
-        EXPECT_TRUE(buffer.isNullTerminated());
+
 
         char readData[buffer.getLength()];
         EXPECT_EQ(buffer.getLength(), testData.size());
