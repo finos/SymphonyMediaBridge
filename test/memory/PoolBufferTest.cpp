@@ -61,6 +61,54 @@ TEST(PoolBuffer, allocateMultipleChunks)
 #endif
 }
 
+TEST(PoolBuffer, allocateZero)
+{
+    memory::PoolAllocator<128> allocator(10, "test");
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+
+    EXPECT_TRUE(buffer.allocate(0));
+    EXPECT_TRUE(buffer.empty());
+    EXPECT_EQ(buffer.size(), 0);
+    EXPECT_EQ(buffer.capacity(), 0);
+#if ENABLE_ALLOCATOR_METRICS
+    EXPECT_EQ(allocator.countAllocatedItems(), 0);
+#endif
+}
+
+TEST(PoolBuffer, allocateTooSmallChunkSize)
+{
+    // Chunk size is exactly sizeof(void*), so it can't hold any pointers to grow.
+    memory::PoolAllocator<sizeof(void*)> allocator(10, "test");
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+
+    EXPECT_FALSE(buffer.allocate(sizeof(void*) + 1));
+    EXPECT_TRUE(buffer.empty());
+    EXPECT_EQ(buffer.size(), 0);
+    EXPECT_EQ(buffer.capacity(), 0);
+#if ENABLE_ALLOCATOR_METRICS
+    EXPECT_EQ(allocator.countAllocatedItems(), 0);
+#endif
+}
+
+TEST(PoolBuffer, allocateTooManyChunks)
+{
+    // Chunk size is 16. It can hold at most 2 pointers (if pointer is 8 bytes).
+    // Each additional chunk adds a net capacity of 16 - 8 = 8 bytes.
+    // Master + 2 chunks = 32 bytes.
+    // Master + 3 chunks is impossible because it needs 3 pointers (24 bytes) > 16 bytes.
+    // So asking for 33 bytes should fail.
+    memory::PoolAllocator<16> allocator(10, "test");
+    memory::PoolBuffer<decltype(allocator)> buffer(allocator);
+
+    EXPECT_FALSE(buffer.allocate(33));
+    EXPECT_TRUE(buffer.empty());
+    EXPECT_EQ(buffer.size(), 0);
+    EXPECT_EQ(buffer.capacity(), 0);
+#if ENABLE_ALLOCATOR_METRICS
+    EXPECT_EQ(allocator.countAllocatedItems(), 0);
+#endif
+}
+
 TEST(PoolBuffer, allocateFail)
 {
     memory::PoolAllocator<128> allocator(2, "test");

@@ -119,23 +119,30 @@ public:
 
             _firstChunkDataOffset = 0;
             _numAdditionalChunks = 0;
-            size_t availableSpace  = chunkSize;
 
-            while (availableSpace < size) {
-                size_t additionalSpaceNeeded = size - availableSpace;
-                size_t newAdditionaChunks = (additionalSpaceNeeded + chunkSize - 1)  / chunkSize;
-                _firstChunkDataOffset += sizeof(void*) * newAdditionaChunks;
-                _numAdditionalChunks += newAdditionaChunks;
+            if (size > chunkSize) {
+                // Each additional chunk adds `chunkSize` bytes of capacity but consumes
+                // `sizeof(void*)` bytes in the master chunk for its pointer.
+                // The net capacity increase per additional chunk is `chunkSize - sizeof(void*)`.
+                const size_t pointerSize = sizeof(void*);
+                if (chunkSize <= pointerSize) {
+                    logger::error("master chunk is too small to hold chunk pointers and grow.", "PoolBuffer");
+                    return false;
+                }
+
+                const size_t netCapacityIncrease = chunkSize - pointerSize;
+                const size_t additionalSpaceNeeded = size - chunkSize;
+
+                _numAdditionalChunks = (additionalSpaceNeeded + netCapacityIncrease - 1) / netCapacityIncrease;
+                _firstChunkDataOffset = _numAdditionalChunks * pointerSize;
 
                 if (_firstChunkDataOffset > chunkSize) {
                     logger::error("master chunk is too small to hold chunk pointers. capacity %zu, required %zu",
                                     "PoolBuffer",
                                     chunkSize,
-                                    (_numAdditionalChunks + 1) * sizeof(void*));
+                                    _firstChunkDataOffset);
                     return false;
                 }
-                assert(chunkSize - _firstChunkDataOffset >= 0);
-                availableSpace = (chunkSize - _firstChunkDataOffset) + _numAdditionalChunks * chunkSize;
             }
 
             if (!_masterChunk && !(_masterChunk = _allocator.allocate()))
