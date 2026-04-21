@@ -938,12 +938,12 @@ bool EngineMixer::asyncPinEndpoint(const size_t endpointIdHash, const size_t tar
 
 bool EngineMixer::asyncSendEndpointMessage(const size_t toEndpointIdHash,
     const size_t fromEndpointIdHash,
-    memory::UniqueAudioPacket& packet)
+    memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer)
 {
     return post(utils::bind(&EngineMixer::sendEndpointMessage,
         this,
         toEndpointIdHash,
         fromEndpointIdHash,
-        utils::moveParam(packet)));
+        utils::moveParam(buffer)));
 }
 } // namespace bridge

@@ -5,6 +5,7 @@
 #include "bridge/Stats.h"
 #include "bridge/engine/EngineMixer.h"
 #include "bridge/engine/EngineStats.h"
+#include "bridge/engine/Engine.h"
 #include "concurrency/MpmcQueue.h"
 #include "memory/PacketPoolAllocator.h"
 #include "utils/Pacer.h"
@@ -13,11 +14,6 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
-
-namespace bridge
-{
-class Engine;
-}
 
 namespace utils
 {
@@ -122,7 +118,9 @@ protected:
     void allocateVideoPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
     void allocateRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
     void videoStreamRemoved(EngineMixer& engineMixer, const EngineVideoStream& videoStream) override;
-    void sctpReceived(EngineMixer& mixer, memory::UniquePacket msgPacket, size_t endpointIdHash) override;
+    void sctpReceived(EngineMixer& mixer,
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& message,
+        size_t endpointIdHash) override;
     void dataStreamRemoved(EngineMixer& mixer, const EngineDataStream& dataStream) override;
     void freeRecordingRtpPacketCache(EngineMixer& mixer, uint32_t ssrc, size_t endpointIdHash) override;
     void barbellRemoved(EngineMixer& mixer, const EngineBarbell& barbell) override;

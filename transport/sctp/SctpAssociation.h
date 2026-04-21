@@ -2,6 +2,7 @@
 #include <atomic>
 #include <memory>
 #include <tuple>
+#include "memory/PoolBuffer.h"
 namespace sctp
 {
 struct SctpConfig;
@@ -47,8 +48,7 @@ public:
     virtual uint16_t allocateStream() = 0;
     virtual bool sendMessage(uint16_t streamId,
         uint32_t payloadProtocol,
-        const void* payloadData,
-        size_t length,
+        const memory::PoolBuffer<memory::PacketPoolAllocator>& payloadData,
         uint64_t timestamp) = 0;
     virtual size_t outboundPendingSize() const = 0;
     virtual int64_t nextTimeout(uint64_t timestamp) = 0;

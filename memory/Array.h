@@ -80,6 +80,7 @@ public:
 
     size_t capacity() const { return _capacity; }
     size_t size() const { return _size; }
+    size_t resize(size_t size) { if (size > _capacity) { return _size; } _size = size; return _size; }
     bool empty() const { return _size == 0; }
 
     void clear()

@@ -167,7 +167,7 @@ struct MixerTestScope
           timeQueue(64),
           wtJobManagerProcessor(timeQueue),
           backgroundJobManagerProcessor(timeQueue),
-          packetAllocator(4096, "MixerTestPoolAllocator"),
+          mainPacketAllocator(4096, "MixerTestPoolAllocator"),
           audioPacketAllocator(4096, "MixerTestAudioPoolAllocator")
     {
     }
@@ -179,7 +179,7 @@ struct MixerTestScope
     jobmanager::TimerQueue timeQueue;
     JobManagerProcessor wtJobManagerProcessor;
     JobManagerProcessor backgroundJobManagerProcessor;
-    memory::PacketPoolAllocator packetAllocator;
+    memory::PacketPoolAllocator mainPacketAllocator;
     memory::AudioPacketPoolAllocator audioPacketAllocator;
 };
 
@@ -207,9 +207,9 @@ protected:
             _testScope->mixerManagerAsyncMock,
             LOCAL_VIDEO_SRC,
             _config,
-            _testScope->packetAllocator,
+            _testScope->mainPacketAllocator,
             _testScope->audioPacketAllocator,
-            _testScope->packetAllocator,
+            _testScope->mainPacketAllocator,
             audioSsrc,
             videoSsrcs,
             LAST_N);

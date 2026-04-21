@@ -577,6 +577,7 @@ set(TEST_FILES
     test/api/ParserTest.cpp
     test/memory/MapTest.cpp
     test/memory/PoolAllocatorTest.cpp
+    test/memory/PoolBufferTest.cpp
     test/memory/RingAllocatorTest.cpp
     test/utils/StringTokenizerTest.cpp
     test/utils/TrackerTest.cpp
@@ -651,6 +652,7 @@ set(TEST_FILES
     test/memory/StackMapTest.cpp
     test/bridge/ActiveMediaListTestLevels.h
     test/bridge/MixerTest.cpp
+    test/bridge/DataChannelMessageSizeTest.cpp
     test/bridge/VideoNackReceiveJobTest.cpp
     test/utils/LogSpamTest.cpp
     test/utils/FunctionTest.cpp

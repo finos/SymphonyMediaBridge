@@ -88,7 +88,8 @@ private:
         _timers = std::make_unique<jobmanager::TimerQueue>(4096 * 8);
         _jobManager = std::make_unique<jobmanager::JobManager>(*_timers);
         _jobQueue = std::make_unique<jobmanager::JobQueue>(*_jobManager);
-        _transport = std::make_unique<DummyRtcTransport>(*_jobQueue);
+        _allocator = std::make_unique<memory::PacketPoolAllocator>(16, "dummy");
+        _transport = std::make_unique<DummyRtcTransport>(*_jobQueue, *_allocator);
 
         _activeMediaList =
             std::make_unique<bridge::ActiveMediaList>(1, _audioSsrcs, _videoSsrcs, defaultLastN, audioLastN, 18);
@@ -131,6 +132,7 @@ protected:
     std::unique_ptr<jobmanager::JobManager> _jobManager;
     std::unique_ptr<jobmanager::JobQueue> _jobQueue;
     std::unique_ptr<DummyRtcTransport> _transport;
+    std::unique_ptr<memory::PacketPoolAllocator> _allocator;
     concurrency::MpmcHashmap32<size_t, bridge::EngineAudioStream*> _engineAudioStreams;
     concurrency::MpmcHashmap32<size_t, bridge::EngineVideoStream*> _engineVideoStreams;
 

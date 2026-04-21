@@ -5,7 +5,15 @@
 class DummyRtcTransport : public transport::RtcTransport
 {
 public:
-    DummyRtcTransport(jobmanager::JobQueue& jobQueue) : _loggableId(""), _endpointIdHash(1), _jobQueue(jobQueue) {}
+    DummyRtcTransport(jobmanager::JobQueue& jobQueue, memory::PacketPoolAllocator& allocator)
+        : _loggableId(""),
+          _endpointIdHash(1),
+          _jobQueue(jobQueue),
+          _allocator(allocator)
+    {
+    }
+
+    memory::PacketPoolAllocator& getAllocator() override { return _allocator; }
 
     bool isInitialized() const override { return true; }
     const logger::LoggableId& getLoggableId() const override { return _loggableId; }
@@ -93,7 +101,12 @@ public:
 
     void getReportSummary(std::unordered_map<uint32_t, transport::ReportSummary>& outReportSummary) const override {}
 
-    bool sendSctp(uint16_t streamId, uint32_t protocolId, const void* data, uint16_t length) override { return true; }
+    bool sendSctp(uint16_t streamId,
+        uint32_t protocolId,
+        memory::PoolBuffer<memory::PacketPoolAllocator>&& buffer) override
+    {
+        return true;
+    }
     uint16_t allocateOutboundSctpStream() override { return 0; }
     const transport::SocketAddress& getRemotePeer() const override { return _socketAddress; }
 
@@ -117,6 +130,7 @@ public:
     logger::LoggableId _loggableId;
     size_t _endpointIdHash;
     jobmanager::JobQueue& _jobQueue;
+    memory::PacketPoolAllocator& _allocator;
     std::atomic_uint32_t _jobCounter;
 
 private:

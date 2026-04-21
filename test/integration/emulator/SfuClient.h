@@ -657,7 +657,8 @@ public:
         const void* data,
         size_t length) override
     {
-        _dataStream->onSctpMessage(sender, streamId, streamSequenceNumber, payloadProtocol, data, length);
+        auto buffer = webrtc::makeSctpMessage(streamId, payloadProtocol, data, length, _allocator);
+        _dataStream->onSctpMessageBuffer(sender, buffer);
     }
 
     void onRecControlReceived(transport::RecordingTransport* sender,

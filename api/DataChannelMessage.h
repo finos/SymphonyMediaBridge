@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+#include "memory/PoolBuffer.h"
 #include "utils/StringBuilder.h"
 
 #if ENABLE_LEGACY_API
@@ -12,7 +14,8 @@ namespace api
 namespace DataChannelMessage
 {
 
-inline void makeEndpointMessage(utils::StringBuilder<2048>& outMessage,
+template <size_t T>
+inline void makeEndpointMessage(utils::StringBuilder<T>& outMessage,
     const std::string& toEndpointId,
     const std::string& fromEndpointId,
     const char* message)
@@ -31,6 +34,70 @@ inline void makeEndpointMessage(utils::StringBuilder<2048>& outMessage,
     outMessage.append(message);
     outMessage.append("}");
 #endif
+}
+
+inline memory::PoolBuffer<memory::PacketPoolAllocator> makeEndpointMessageBuffer(const std::string& toEndpointId,
+    const std::string& fromEndpointId,
+    const memory::PoolBuffer<memory::PacketPoolAllocator>& payload)
+{
+#if ENABLE_LEGACY_API
+    return legacyapi::DataChannelMessage::makeEndpointMessageBuffer(toEndpointId, fromEndpointId, payload);
+#else
+    constexpr const char* TO_STRING = "{\"type\":\"EndpointMessage\",\"to\":\"";
+    constexpr const char* FROM_STRING = "\",\"from\":\"";
+    constexpr const char* MSG_STRING = "\",\"payload\":";
+    constexpr const char* TAIL_STRING = "}";
+
+    constexpr std::size_t overhead_len = std::char_traits<char>::length(TO_STRING) +
+        std::char_traits<char>::length(FROM_STRING) + std::char_traits<char>::length(MSG_STRING) +
+        std::char_traits<char>::length(TAIL_STRING);
+
+    const std::size_t extraLen = toEndpointId.length() + fromEndpointId.length() + payload.getLength();
+    auto& allocator = payload.getAllocator();
+    memory::PoolBuffer<memory::PacketPoolAllocator> buffer(allocator);
+
+    if (!buffer.allocate(overhead_len + extraLen))
+    {
+        return buffer;
+    }
+
+    auto written = buffer.copyFrom(TO_STRING, std::char_traits<char>::length(TO_STRING), 0);
+    written += buffer.copyFrom(toEndpointId.c_str(), toEndpointId.length(), written);
+    written += buffer.copyFrom(FROM_STRING, std::char_traits<char>::length(FROM_STRING), written);
+    written += buffer.copyFrom(fromEndpointId.c_str(), fromEndpointId.length(), written);
+    written += buffer.copyFrom(MSG_STRING, std::char_traits<char>::length(MSG_STRING), written);
+    written += buffer.copyFrom(payload, written);
+    written += buffer.copyFrom(TAIL_STRING, std::char_traits<char>::length(TAIL_STRING), written);
+
+    assert(written == buffer.getLength());
+    return buffer;
+#endif
+}
+
+template <size_t T>
+inline void makeLoggableStringFromBuffer(memory::Array<char, T>& outArray,
+    const memory::PoolBuffer<memory::PacketPoolAllocator>& payload)
+{
+    if (payload.empty())
+    {
+        return;
+    }
+    outArray.clear();
+    bool ellipsisNeeded = payload.getLength() > T - 1;
+
+    const size_t maxCStrLength = std::min(payload.getLength(), T - 1);
+    outArray.resize(maxCStrLength + 1);
+    const auto read = payload.copyTo(const_cast<void*>(reinterpret_cast<const void*>(outArray.data())), 0, maxCStrLength);
+    assert(read == maxCStrLength);
+    outArray[maxCStrLength] = '\0';
+
+    // Indicate that message was incompletely logged
+    if (ellipsisNeeded && T >= 4)
+    {
+        outArray[T - 2] = '.';
+        outArray[T - 3] = '.';
+        outArray[T - 4] = '.';
+    }
 }
 
 inline void makeDominantSpeaker(utils::StringBuilder<256>& outMessage, const char* endpointId)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "memory/PacketPoolAllocator.h"
+#include "memory/PoolBuffer.h"
 #include <cstdint>
 #include <string>
 
@@ -35,16 +36,13 @@ public:
     bool isOpen() const { return _state == State::OPEN; }
     void sendString(const char* string, const size_t length);
     void sendData(const void* data, size_t length);
+    void sendMessage(uint32_t protocolId, memory::PoolBuffer<memory::PacketPoolAllocator>&& message);
 
     uint16_t getStreamId() const { return _streamId; };
     std::string getLabel() const { return _label; }
 
-    void onSctpMessage(webrtc::DataStreamTransport* sender,
-        uint16_t streamId,
-        uint16_t streamSequenceNumber,
-        uint32_t payloadProtocol,
-        const void* data,
-        size_t length);
+    void onSctpMessageBuffer(webrtc::DataStreamTransport* sender,
+        const memory::PoolBuffer<memory::PacketPoolAllocator>& message);
 
     State getState() const { return _state; }
 
@@ -72,12 +70,8 @@ struct SctpStreamMessageHeader
 };
 static_assert(sizeof(SctpStreamMessageHeader) == 8, "Misalignment of SctpStreamMessageHeader");
 
-inline const SctpStreamMessageHeader& streamMessageHeader(const memory::Packet& p)
-{
-    return reinterpret_cast<const SctpStreamMessageHeader&>(*p.get());
-}
-
-memory::UniquePacket makeUniquePacket(uint16_t streamId,
+// Creates sctp message with SctpStreamMessageHeader
+memory::PoolBuffer<memory::PacketPoolAllocator> makeSctpMessage(uint16_t streamId,
     uint32_t payloadProtocol,
     const void* message,
     size_t messageSize,

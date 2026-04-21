@@ -28,14 +28,15 @@ class Engine
 public:
     Engine(jobmanager::JobManager& backgroundJobQueue);
     Engine(jobmanager::JobManager& backgroundJobQueue, std::thread&& externalThread);
+    virtual ~Engine() = default;
 
-    void setMessageListener(MixerManagerAsync* messageListener);
+    virtual void setMessageListener(MixerManagerAsync* messageListener);
     void stop();
     void run();
 
-    bool post(utils::Function&& task) { return _tasks.push(std::move(task)); }
+    virtual bool post(utils::Function&& task) { return _tasks.push(std::move(task)); }
 
-    concurrency::SynchronizationContext getSynchronizationContext()
+    virtual concurrency::SynchronizationContext getSynchronizationContext()
     {
         return concurrency::SynchronizationContext(_tasks);
     }
@@ -62,8 +63,8 @@ private:
     void updateStats(uint64_t& statsPollTime, EngineStats::EngineStats& currentStatSample, uint64_t timestamp);
 
 public:
-    bool asyncAddMixer(EngineMixer* engineMixer);
-    bool asyncRemoveMixer(EngineMixer* engineMixer);
+    virtual bool asyncAddMixer(EngineMixer* engineMixer);
+    virtual bool asyncRemoveMixer(EngineMixer* engineMixer);
 
 private:
     void addMixer(EngineMixer* engineMixer);
