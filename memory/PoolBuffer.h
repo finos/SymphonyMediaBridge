@@ -71,22 +71,7 @@ public:
         other._firstChunkDataOffset = 0;
     }
 
-    PoolBuffer& operator=(PoolBuffer&& other) noexcept
-    {
-        if (this != &other)
-        {
-            free();
-            _masterChunk = other._masterChunk;
-            _size = other._size;
-            _numAdditionalChunks = other._numAdditionalChunks;
-            _firstChunkDataOffset = other._firstChunkDataOffset;
-            other._masterChunk = nullptr;
-            other._size = 0;
-            other._numAdditionalChunks = 0;
-            other._firstChunkDataOffset = 0;
-        }
-        return *this;
-    }
+    PoolBuffer& operator=(PoolBuffer&& other) = delete;
 
     ~PoolBuffer() { free(); }
 

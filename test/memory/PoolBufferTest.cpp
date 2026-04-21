@@ -198,28 +198,6 @@ TEST(PoolBuffer, move)
     EXPECT_EQ(allocator.countAllocatedItems(), 0);
 }
 
-TEST(PoolBuffer, moveOperator)
-{
-// This test use allocator.countAllocatedItems extensively.
-#if !ENABLE_ALLOCATOR_METRICS
-    GTEST_SKIP();
-#endif
-    memory::PoolAllocator<128> allocator(10, "test");
-    memory::PoolBuffer<decltype(allocator)> buffer1(allocator);
-    EXPECT_TRUE(buffer1.allocate(300));
-    EXPECT_EQ(allocator.countAllocatedItems(), 3);
-
-    memory::PoolBuffer<decltype(allocator)> buffer2(allocator);
-    buffer2 = std::move(buffer1);
-    EXPECT_EQ(buffer2.size(), 300);
-    EXPECT_GE(buffer2.capacity(), 300);
-    EXPECT_EQ(allocator.countAllocatedItems(), 3);
-    EXPECT_EQ(buffer1.size(), 0); // NOLINT
-
-    buffer2.free();
-    EXPECT_EQ(allocator.countAllocatedItems(), 0);
-}
-
 TEST(PoolBuffer, deleter)
 {
 // This test use allocator.countAllocatedItems extensively.
