@@ -5,6 +5,8 @@
 #include "math/helpers.h"
 #include "memory/Allocator.h"
 #include "rtp/RtpHeader.h"
+#include <algorithm>
+#include <iterator>
 
 #define DEBUG_JB 0
 
@@ -439,7 +441,7 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
     size_t bufferLevel = _pcmData.size() / _config.channels;
 
     for (; _jitterEmergency.counter == 0 && !_jitterBuffer.empty() && bufferLevel < _samplesPerPacket;
-         bufferLevel = _pcmData.size() / _config.channels)
+        bufferLevel = _pcmData.size() / _config.channels)
     {
         const auto header = _jitterBuffer.getFrontRtp();
         const int16_t sequenceAdvance =
@@ -483,7 +485,7 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
         {
             decodedSamples = std::max(480u, _metrics.receivedRtpCyclesPerPacket);
             _decoder.onUnusedPacketReceived(extendedSequenceNumber);
-            std::memset(audioData, 0, decodedSamples);
+            std::fill(audioData, std::next(audioData, decodedSamples * _config.channels), int16_t(0));
         }
         else
         {
@@ -541,7 +543,9 @@ void AudioReceivePipeline::process(const uint64_t timestamp)
 void AudioReceivePipeline::flush()
 {
     _pcmData.clear();
-    while (_jitterBuffer.pop()) {}
+    while (_jitterBuffer.pop())
+    {
+    }
     _targetDelay = 0; // will cause start over on seqno, rtp timestamp and jitter assessment
     _jitterEmergency.counter = 0;
     _bufferAtTwoFrames = 0;
