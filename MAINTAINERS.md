@@ -6,12 +6,8 @@ This file lists the maintainers of this repository.
 
 | GitHub Username | Name | Organization | Email |
 |----------------|------|--------------|-------|
-| @RicardoMDomingues | Ricardo Domingues | *please add organization* | *please add email* |
-| @marcusspangenberg | Marcus Spangenberg | *please add organization* | *please add email* |
-| @olofkallander | Olof Kallander | *please add organization* | *please add email* |
-| @pcarlsym | Pontus Carlsson | *please add organization* | *please add email* |
+| @RicardoMDomingues | Ricardo Domingues | @Symphony | ricardo.domingues@symphony.com |
 | @reddvl1980 | Victor Klykov | @Symphony | victor.klykov@outlook.com |
-| @stepanaksenov | Stepan Aksenov | *please add organization* | *please add email* |
 
 For information about maintainer responsibilities and resources, see the [FINOS Maintainers Cheatsheet](https://community.finos.org/docs/finos-maintainers-cheatsheet).
 
