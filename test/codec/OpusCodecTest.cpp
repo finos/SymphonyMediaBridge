@@ -13,8 +13,8 @@ int computeAudioLevel(const int16_t* payload, int samples);
 
 namespace
 {
-static const double sampleFrequency = 48000;
-static const int samples = sampleFrequency / 50;
+constexpr double sampleFrequency = 48000;
+constexpr int samples = sampleFrequency / 50;
 
 } // namespace
 struct OpusTest : testing::Test

@@ -9,14 +9,14 @@ option(ENABLE_LEGACY_API "ENABLE_LEGACY_API" OFF)
 option(ENABLE_LIBATOMIC "ENABLE_LIBATOMIC" OFF)
 option(ENABLE_ALLOCATOR_METRICS "Force enable the allocator metrics. It will be active by default in DEBUG" OFF)
 
-set(ADDITIONAL_CXX_FLAGS, "")
+include(CheckCXXCompilerFlag)
+check_cxx_compiler_flag("-Wno-vla-cxx-extension" HAS_WNO_VLA_CXX_EXTENSION)
 
-if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-    if (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 18_0)
-        # disable variable-length arrays as they are not part of C++ standard
-        # We should consider not using variable-length arrays instead of suppressing the waring
-        set(ADDITIONAL_CXX_FLAGS "${ADDITIONAL_CXX_FLAGS} -Wno-vla-cxx-extension")
-    endif()
+set(ADDITIONAL_CXX_FLAGS "")
+
+if (HAS_WNO_VLA_CXX_EXTENSION)
+    # disable variable-length arrays as they are not part of C++ standard
+    set(ADDITIONAL_CXX_FLAGS "${ADDITIONAL_CXX_FLAGS} -Wno-vla-cxx-extension")
 endif()
 
 

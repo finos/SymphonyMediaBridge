@@ -13,7 +13,7 @@ class SampleDataUtils
 {
 public:
     // returns array of first 9 packets of valid RTP stream with Opus payload with ssrc 1491699885.
-    static const std::vector<const memory::Packet>& getOpusRtpSamplePackets() { return _opusRtpSamplePackets; }
+    static const std::vector<memory::Packet>& getOpusRtpSamplePackets() { return _opusRtpSamplePackets; }
 
     // Time span duration measured in EngineMixer::iterationDurationMs
     typedef size_t DurationIterations;
@@ -79,5 +79,5 @@ public:
     static bool dumpPayload(FILE* h, const int16_t* audio, size_t samples);
 
 private:
-    static const std::vector<const memory::Packet> _opusRtpSamplePackets;
+    static const std::vector<memory::Packet> _opusRtpSamplePackets;
 };

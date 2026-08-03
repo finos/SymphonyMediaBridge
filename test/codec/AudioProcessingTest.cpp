@@ -8,9 +8,9 @@ int computeAudioLevel(const int16_t* payload, int samples);
 
 TEST(AudioProcess, audiolevel)
 {
-    const double PI = 3.14159;
-    const double sampleFrequency = 48000;
-    const int samples = sampleFrequency / 50;
+    static constexpr double PI = 3.14159;
+    static constexpr double sampleFrequency = 48000;
+    static constexpr int samples = sampleFrequency / 50;
     int16_t data[samples * 2];
     const double amplitude = 2000;
 
