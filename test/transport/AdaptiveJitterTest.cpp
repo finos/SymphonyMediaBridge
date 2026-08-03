@@ -1,4 +1,3 @@
-
 #include "codec/AudioReceivePipeline.h"
 #include "codec/AudioTools.h"
 #include "logger/Logger.h"
@@ -128,6 +127,49 @@ INSTANTIATE_TEST_SUITE_P(AudioPipelineRerun,
         "Transport-14-wifi",
         "Transport-48_50_3G",
         "Transport-86_tcp_1ploss"));
+
+TEST_F(AudioPipelineTest, DiscardedPacketFillsZeros)
+{
+    const uint32_t rtpFrequency = 48000;
+    memory::PacketPoolAllocator allocator(4096 * 4, "JitterTest");
+    auto pipeline = std::make_unique<codec::AudioReceivePipeline>(48000, 20, 100, 1);
+
+    uint32_t extendedSequenceNumber = 0;
+    uint32_t timestampCounter = 4000;
+    const auto samplesPerPacket = rtpFrequency / 50;
+
+    // 1. Inject a non-empty packet first
+    auto normalPacket = memory::makeUniquePacket(allocator);
+    normalPacket->setLength(20);
+    auto normalHeader = reinterpret_cast<rtp::RtpHeader*>(normalPacket->get());
+    normalHeader->sequenceNumber = extendedSequenceNumber++ & 0xFFFFu;
+    normalHeader->timestamp = timestampCounter;
+    normalHeader->version = 2;
+    pipeline->onRtpPacket(extendedSequenceNumber, std::move(normalPacket), _timeTurner.getAbsoluteTime());
+
+    // 2. Inject zero-payload packet (triggers isDiscardedPacket path)
+    auto packet = memory::makeUniquePacket(allocator);
+    packet->setLength(12); // 12 header + 0 payload
+    auto header = reinterpret_cast<rtp::RtpHeader*>(packet->get());
+    header->sequenceNumber = extendedSequenceNumber++ & 0xFFFFu;
+    header->timestamp = timestampCounter + samplesPerPacket;
+    header->version = 2;
+
+    bool result =
+        pipeline->onSilencedRtpPacket(extendedSequenceNumber, std::move(packet), _timeTurner.getAbsoluteTime());
+    EXPECT_TRUE(result);
+
+    // 3. Process
+    pipeline->process(_timeTurner.getAbsoluteTime());
+
+    // 4. Verify the buffer is zeroed out by the fill operation
+    pipeline->fetchStereo(samplesPerPacket);
+    const int16_t* audio = pipeline->getAudio();
+    for (size_t i = 0; i < samplesPerPacket * 2; ++i)
+    {
+        EXPECT_EQ(audio[i], 0) << "Audio sample at index " << i << " is not zero";
+    }
+}
 
 TEST_F(AudioPipelineTest, DTX)
 {
