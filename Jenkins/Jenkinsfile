@@ -10,38 +10,51 @@ properties([
 node('be-integration') {
     def artifactoryServer = Artifactory.server 'Symphony-Production-Artifactory'
     def baseName = "rtc-smb"
-    def version = "0.0.2-${currentBuild.number}"
-    def masterVersion = "2.4.0-${currentBuild.number}"
+    def devVersion = "0.0.2"
+    def masterVersion = "2.4.0"
     def promotion = true
     def buildInfo
     def scmVars
     def isReleaseBuild = false
+    def version
     try {
         cleanWs()
+
+        env.GIT_COMMITTER_NAME = "Jenkins deployment job"
+        env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
 
         stage('Checkout') {
             scmVars = checkout scm
             env.GIT_COMMIT = scmVars.GIT_COMMIT
             env.GIT_BRANCH = scmVars.GIT_BRANCH
 
+            def versionPrefix = devVersion
             if (env.GIT_BRANCH.equals("master")) {
-                version = masterVersion
+                versionPrefix = masterVersion
                 isReleaseBuild = true
             } else if (env.GIT_BRANCH ==~ /\d+\.\d+\.\d+/) {
-                version = "${env.GIT_BRANCH}-${currentBuild.number}"
+                versionPrefix = env.GIT_BRANCH
                 isReleaseBuild = !env.GIT_BRANCH.startsWith("0");
             }
 
+            // The short commit sha is appended as a separate, dot-delimited semver pre-release
+            // identifier (2.4.0-619.g1a2b3c4) so that the version alone identifies the exact source
+            // state it was built from: https://github.com/finos/SymphonyMediaBridge/tree/<short sha>
+            // Keeping the build number as its own numeric identifier preserves numeric ordering in
+            // both semver and dpkg comparisons, which "2.4.0-619-g1a2b3c4" would have degraded to a
+            // string compare that breaks when the build number gains a digit.
+            version = "${versionPrefix}-${currentBuild.number}.g${scmVars.GIT_COMMIT.take(7)}"
+
             // Set the version env variable so that it's picked up by versioninfo.sh run as part of the build
             env.VERSION=version
+
+            currentBuild.displayName = "#${currentBuild.number} ${version}"
         }
 
         sh "gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet"
 
         docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-el8:latest').inside {
             stage('Build RHEL 8') {
-                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
-                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
                 sh "docker/el8/buildscript.sh Release"
             }
 
@@ -52,8 +65,6 @@ node('be-integration') {
 
         docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-ubuntu-jammy:latest').inside {
             stage('Build Ubuntu Jammy') {
-                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
-                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
                 sh "docker/ubuntu-jammy/buildscript.sh Release"
             }
 
@@ -64,8 +75,6 @@ node('be-integration') {
 
         docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-ubuntu-focal-deb:latest').inside {
             stage('Build Ubuntu Focal deb release') {
-                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
-                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
                 sh "docker/ubuntu-focal-deb/buildscript.sh Release $version"
             }
 
@@ -76,8 +85,6 @@ node('be-integration') {
 
         docker.image('europe-west1-docker.pkg.dev/sym-dev-rtc/rtc-jenkins-tools/buildsmb-aws-linux:latest').inside {
             stage('Build AWS linux2 release') {
-                env.GIT_COMMITTER_NAME = "Jenkins deployment job"
-                env.GIT_COMMITTER_EMAIL = "jenkinsauto@symphony.com"
                 sh "docker/aws-linux/buildscript.sh Release $version"
             }
 
@@ -144,23 +151,19 @@ node('be-integration') {
             }
         }
 
-        if (isReleaseBuild) {
-            stage('Publish Git Tag') {
-                withGitCredentials('githubaccess') {
-                    sh "git tag ${version} -m \"Tag created by jenkins build: ${BUILD_URL}\""
-                    sh "git push origin ${version}"
-                }
-            }
-        }
-
+        // No git tag is published: origin here is the finos/SymphonyMediaBridge repo, which we cannot
+        // push tags to. The version pinned below identifies the source state on its own, since it
+        // carries the short commit sha it was built from.
         if (env.GIT_BRANCH.equals("master")) {
             withGitCredentials('github-app-symphony') {
                 dir ("rtc-media-bridge") {
                     git url: "https://github.com/SymphonyOSF/rtc-media-bridge/", credentialsId: "github-app-symphony", branch: "master"
                     def versionFilePath = "tools/scripts/get-smb-deps.sh"
-                    sh "sed -i 's/^SMB_VERSION=.*\$/SMB_VERSION=${version}/g' ${versionFilePath}"
+                    sh "sed -i 's|^SMB_VERSION=.*\$|SMB_VERSION=${version}|g' ${versionFilePath}"
+                    // Fail loudly rather than pushing a stale pin if the sed silently matched nothing
+                    sh "grep -qxF 'SMB_VERSION=${version}' ${versionFilePath}"
                     sh "git add ${versionFilePath}"
-                    sh "git commit -m \"Automatic update of smb to '${version}'\""
+                    sh "git commit -m \"Automatic update of smb to '${version}'\" -m \"SMB source: https://github.com/finos/SymphonyMediaBridge/commit/${scmVars.GIT_COMMIT}\" -m \"Jenkins build: ${BUILD_URL}\""
                     sh "git push origin HEAD:master"
                 }
             }
