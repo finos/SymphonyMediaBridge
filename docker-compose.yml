@@ -1,0 +1,45 @@
+# Symphony Media Bridge — container orchestration.
+#
+# SMB is a WebRTC SFU: it advertises its own reachable IP in ICE candidates and
+# carries media over UDP. Host networking is the recommended, best-performing
+# topology for a media server. See docker/CONTAINER.md for the bridged
+# (published-ports) alternative and for setting the public IP.
+
+services:
+  smb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smb:latest
+    container_name: smb
+
+    # Recommended: host networking. The container shares the host network
+    # stack, so all API/ICE/media ports are reachable with no port mapping and
+    # ICE candidates carry the host's real addresses.
+    network_mode: host
+
+    # Real-time thread scheduling (SCHED_FIFO). SMB runs fine without it (logs a
+    # warning, uses normal priority). NOTE: the default non-root user cannot use
+    # this capability from cap_add alone — to actually get real-time priority,
+    # also run as root by uncommenting `user: "0:0"` below. See CONTAINER.md.
+    cap_add:
+      - SYS_NICE
+    # user: "0:0"
+
+    # Mount your own config to override the baked-in default. At minimum set
+    # "ice.publicIpv4" to the IP remote clients use to reach this host.
+    volumes:
+      - ./docker/runtime-config.json:/etc/smb/config.json:ro
+
+    restart: unless-stopped
+
+    # ---------------------------------------------------------------------
+    # Bridged alternative (comment out `network_mode: host` above to use it).
+    # Media is collapsed onto the single ICE port thanks to ice.sharedPorts=1,
+    # so only a few ports need publishing. You MUST set "ice.publicIpv4" in the
+    # config to the host's public IP for ICE to work through the NAT.
+    # ---------------------------------------------------------------------
+    # ports:
+    #   - "8080:8080/tcp"      # HTTP API
+    #   - "10000:10000/udp"    # ICE / media (shared single port)
+    #   - "10500:10500/udp"    # recording

@@ -1,0 +1,12 @@
+{
+  "logStdOut": true,
+  "logStdErr": true,
+  "logLevel": "INFO",
+  "address": "0.0.0.0",
+  "port": 8080,
+  "ice.singlePort": 10000,
+  "ice.sharedPorts": 1,
+  "recording.singlePort": 10500,
+  "ice.publicIpv4": "",
+  "ice.enableIpv6": false
+}

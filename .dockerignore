@@ -1,0 +1,31 @@
+# Keep the build context small and reproducible.
+# NOTE: .git is intentionally NOT ignored — version/CheckGit.cmake needs it
+# to stamp git_version.h during the build.
+
+# In-source CMake artifacts (README documents running `cmake .` in-tree)
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+build/
+out/
+*.o
+*.a
+*.so
+*.so.*
+
+# Prebuilt binaries / test executables
+smb
+UnitTest
+UnitTest2
+LoadTest
+
+# Editor / OS cruft
+.vscode/
+.idea/
+.DS_Store
+*.log
+_bwelogs/
+
+# CI/agent state
+.omc/
