@@ -1,19 +1,91 @@
 @Library('SFE-RTC-pipeline') _
 
+// Node + GAR npm auth. GAR access tokens are short-lived, so create a private
+// user-level npm config from the active gcloud identity for each invocation.
+// Registry routing remains in the committed project-level .npmrc.
+def withNodeGar(String nodeVersion, Closure body) {
+    nvm(nodeVersion) {
+        def npmrc = "${env.WORKSPACE}/.npmrc.ci"
+        withEnv([
+                "NPM_CONFIG_USERCONFIG=${npmrc}",
+                "NPM_CONFIG_CACHE_MIN=9999999",
+                "NPM_CONFIG_NO_PROGRESS=1",
+                "NPM_CONFIG_NETWORK_TIMEOUT=9999999"]) {
+            // The explicit shebang avoids Jenkins' `sh -xe`, which would expose
+            // the token assignment in the build log.
+            sh(label: "Write GAR npm credentials", script: """#!/bin/bash
+set -e
+umask 077
+TOKEN=\$(gcloud auth print-access-token)
+cat > ${npmrc} <<EOF
+//us-east4-npm.pkg.dev/sym-prod-mr-tools-01/sym-npmjs-virtual/:_authToken=\${TOKEN}
+//us-east4-npm.pkg.dev/sym-prod-mr-tools-01/c9-npm-us-east4/:_authToken=\${TOKEN}
+EOF
+""")
+            body()
+        }
+    }
+}
+
+def withPublishGar(String repository, Closure body) {
+    def project = "sym-prod-mr-tools-01"
+    def location = "us-east4"
+
+    withCredentials([
+        [$class: "FileBinding",
+         credentialsId: "sym-rtc-dev-jenkins-deploy-creds",
+         variable: "GOOGLE_APPLICATION_CREDENTIALS"]
+    ]) {
+        sh(label: "Authenticate to GAR", script: '''#!/bin/bash
+set -e
+gcloud auth activate-service-account \
+    --key-file="$GOOGLE_APPLICATION_CREDENTIALS"
+''')
+
+        def publish = { Map artifact ->
+            if (!artifact.package || !artifact.version || !artifact.source) {
+                error("GAR publication requires package, version, and source")
+            }
+
+            if (!fileExists(artifact.source as String)) {
+                error("GAR source does not exist: ${artifact.source}")
+            }
+
+            withEnv([
+                "GAR_PROJECT=${project}",
+                "GAR_LOCATION=${location}",
+                "GAR_REPOSITORY=${repository}",
+                "GAR_PACKAGE=${artifact.package}",
+                "GAR_VERSION=${artifact.version}",
+                "GAR_SOURCE=${artifact.source}"
+            ]) {
+                sh(label: "Publish ${artifact.package} ${artifact.version} to GAR",
+                   script: '''#!/bin/bash
+set -e
+gcloud artifacts generic upload \
+    --quiet \
+    --project="$GAR_PROJECT" \
+    --location="$GAR_LOCATION" \
+    --repository="$GAR_REPOSITORY" \
+    --package="$GAR_PACKAGE" \
+    --version="$GAR_VERSION" \
+    --source="$GAR_SOURCE"
+''')
+            }
+        }
+
+        body(publish)
+    }
+}
+
 properties([
-    buildDiscarder(logRotator(artifactNumToKeepStr: "15", numToKeepStr: "15")),
-    parameters([
-        string(name: "ARTIFACTORY_CREDENTIALS_ID", defaultValue: "jenkins-artifactory-credentials", description: "Id of credentials for artifactory access for mt scripts")
-    ])
+    buildDiscarder(logRotator(artifactNumToKeepStr: "15", numToKeepStr: "15"))
 ])
 
 node('be-integration') {
-    def artifactoryServer = Artifactory.server 'Symphony-Production-Artifactory'
     def baseName = "rtc-smb"
     def devVersion = "0.0.2"
     def masterVersion = "2.4.0"
-    def promotion = true
-    def buildInfo
     def scmVars
     def isReleaseBuild = false
     def version
@@ -34,7 +106,7 @@ node('be-integration') {
                 isReleaseBuild = true
             } else if (env.GIT_BRANCH ==~ /\d+\.\d+\.\d+/) {
                 versionPrefix = env.GIT_BRANCH
-                isReleaseBuild = !env.GIT_BRANCH.startsWith("0");
+                isReleaseBuild = !env.GIT_BRANCH.startsWith("0")
             }
 
             // The short commit sha is appended as a separate, dot-delimited semver pre-release
@@ -102,6 +174,7 @@ node('be-integration') {
         stage ("npm publish") {
             sh "mkdir npm-publish"
             dir("npm-publish") {
+                sh "cp ../.npmrc ."
                 sh "cp -R ../aws-linux/smb/libs ."
                 sh "cp ../aws-linux/smb/smb ."
                 sh "cp ../aws-linux/smb/versioninfo.txt ."
@@ -110,44 +183,28 @@ node('be-integration') {
                     version: version,
                     description: "Symphony media bridge binaries for linux",
                     publishConfig: [
-                        registry: "https://repo.symphony.com/artifactory/api/npm/npm-virtual-dev/"
+                        registry: "https://us-east4-npm.pkg.dev/sym-prod-mr-tools-01/c9-npm-us-east4/"
                     ]
                 ])
-                withNvm("v16.16.0", "npmrcFile") {
+                withNodeGar("v16.16.0") {
                     sh "npm publish --access public"
                 }
             }
         }
 
-        withCredentials([
-            [$class: "UsernamePasswordMultiBinding", credentialsId: "jenkins-artifactory-credentials", usernameVariable: "ARTIFACTORY_USERNAME", passwordVariable: "ARTIFACTORY_PASSWORD"]
-        ]) {
-            stage('Publish Artifactory [rtc-local-dev]') {
-                def uploadSpec = """
-                { "files": [
-                {
-                    "pattern" : "${baseName}-${version}.zip",
-                    "target"  : "rtc-local-dev/${baseName}/"
-                }
-                ]}"""
-
-                buildInfo = artifactoryServer.upload(uploadSpec)
-                artifactoryServer.publishBuildInfo(buildInfo)
+        stage('Publish Artifactory [rtc-local-dev]') {
+            withPublishGar('c9-generic-us-east4') { publish ->
+                publish(
+                    package: baseName,
+                    version: version,
+                    source: "${baseName}-${version}.zip"
+                )
             }
+        }
 
-            if (promotion && isReleaseBuild) {
-                stage('Publish Artifactory [services]') {
-                    def uploadSpec = """
-                    { "files": [
-                        {
-                            "pattern" : "${baseName}-${version}.zip",
-                            "target"  : "services/${baseName}/"
-                        }
-                    ]}"""
-
-                    buildInfo = artifactoryServer.upload(uploadSpec)
-                    artifactoryServer.publishBuildInfo(buildInfo)
-                }
+        if (isReleaseBuild) {
+            stage('Publish Artifactory [services]') {
+                echo "${baseName} ${version} was published to the immutable GAR repository in the preceding publication stage"
             }
         }
 
